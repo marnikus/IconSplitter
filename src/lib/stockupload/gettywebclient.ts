@@ -1,8 +1,6 @@
-// gettywebclient.ts — browser client for the loopback helper's Getty web routes
-// (`/getty-web/upload`, `/getty-web/finish`, `/getty-web/test`, `/getty-web/close`).
-// Credentials go
-// only into the loopback request; every returned reason is scrubbed before it
-// can reach the log or the UI.
+// gettywebclient.ts — the loopback helper's Getty web routes (`/getty-web/upload`,
+// `/finish`, `/test`, `/close`). Credentials go only into the loopback request;
+// every returned reason is scrubbed before it can reach the log or the UI.
 
 import { isRecord } from "../isrecord";
 import { DEFAULT_FTP_BRIDGE_URL, BRIDGE_FIX_HINT } from "./bridgeclient";
@@ -14,23 +12,12 @@ const NO_BROWSER_REASON = "No Google Chrome or Microsoft Edge was found on this 
 
 export type GettyWebErrorCode = "helper-down" | "bad-request" | "auth" | "browser" | "page" | "timeout" | "cancelled" | "network";
 
-export interface GettyWebMetadataPayload {
-  title: string;
-  description: string;
-  keywords: string[];
-}
+export interface GettyWebMetadataPayload { title: string; description: string; keywords: string[] }
 
-export interface GettyWebFileReport {
-  name: string;
-  status: string;
-  fields?: Record<string, boolean>;
-}
+export interface GettyWebFileReport { name: string; status: string; fields?: Record<string, boolean> }
 
 /** A contribution Getty itself answered with "Upload failed". */
-export interface GettyWebRejection {
-  name: string;
-  id: string | null;
-}
+export interface GettyWebRejection { name: string; id: string | null }
 
 export type GettyWebResult =
   | {
@@ -39,29 +26,31 @@ export type GettyWebResult =
     accepted: string[];
     /** Names Getty answered with "Upload failed" — never counted as uploaded. */
     failed?: GettyWebRejection[];
-    /**
-     * Contributions Getty never marked "Ready to submit" (by stem). They may have
-     * arrived, but they are not submittable, so they are not counted as uploaded.
-     */
+    /** Names Getty received but never validated: not submittable, not uploaded. */
     notReady?: string[];
+    /** Every name the batch page listed, so "unproven" can be told from "absent". */
+    seen?: string[];
     completed: boolean;
-    /**
-     * Every contribution carried Getty's own "Ready to submit" validation icon,
-     * so the batch is finished even when the page offers no Complete/Submit
-     * control to click. Nothing else — a thumbnail least of all — sets this.
-     */
+    /** Every card carried Getty's "Ready to submit" icon: finished even with no
+     *  Complete control. A thumbnail never sets this. */
     ready?: boolean;
     completion: { clicked: boolean; label: string | null; confirmed: boolean } | null;
     metadata: GettyWebFileReport[];
-    /** Set when this upload only filled the batch; the run submits it at the end. */
+    /** Set when this upload only filled the batch; the run finishes it later. */
     deferCompletion?: boolean;
   }
-  | { ok: false; code: GettyWebErrorCode; reason: string };
+  | {
+    ok: false; code: GettyWebErrorCode; reason: string;
+    /** Names the page had already accepted / rejected / listed. Without them a
+     *  timed-out batch is re-sent whole, duplicating everything Getty took. */
+    accepted?: string[];
+    failed?: GettyWebRejection[];
+    /** Names the page listed but never marked "Ready to submit". */
+    notReady?: string[];
+    seen?: string[];
+  };
 
-export interface GettyWebFile {
-  name: string;
-  bytes: Uint8Array;
-}
+export interface GettyWebFile { name: string; bytes: Uint8Array }
 
 export interface GettyWebIcon {
   /** The icon's JPEG first, its matching EPS second. */
@@ -74,31 +63,27 @@ export interface GettyWebUploadInput {
   bridgeUrl: string;
   preset: StockFtpPreset;
   creds: FtpCredentials;
-  /**
-   * Every icon the run uploads, sent in **one** request so the page gets all
-   * pairs in one attach. One icon is `[{ files: [jpg, eps?] }]`.
-   */
+  /** Every icon of this batch, sent in **one** request so the page gets all pairs
+   *  in one attach. One icon is `[{ files: [jpg, eps?] }]`. */
   icons: GettyWebIcon[];
   batchName: string;
   submissionType: string;
-  /**
-   * Click the batch's Complete/Submit control after uploading. Uploads of a run
-   * must leave this false: the run calls `finishBridgeGettyWeb` once, at the end.
-   */
+  /** Click Complete after uploading. A run leaves this false: it finishes each
+   *  batch itself, between batches. */
   complete?: boolean;
+  /** Create a **new** batch instead of reusing the session's open one — one
+   *  batch per chunk of a run above 100 icons. */
+  newBatch?: boolean;
   sessionKey?: string;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
 }
 
-function trimSlash(url: string): string {
-  return url.trim().replace(/\/+$/, "") || DEFAULT_FTP_BRIDGE_URL;
-}
+function trimSlash(url: string): string { return url.trim().replace(/\/+$/, "") || DEFAULT_FTP_BRIDGE_URL; }
 
 function encodeBase64Utf8(text: string): string {
-  const bytes = new TextEncoder().encode(text);
   let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
+  for (const b of new TextEncoder().encode(text)) bin += String.fromCharCode(b);
   return btoa(bin);
 }
 
@@ -112,6 +97,7 @@ function uploadConfig(input: GettyWebUploadInput): string {
     batchName: input.batchName,
     submissionType: input.submissionType,
     complete: input.complete === true,
+    newBatch: input.newBatch === true,
     icons: input.icons.map((icon) => ({
       metadata: icon.metadata ?? null,
       files: icon.files.map((file) => ({ name: file.name, bytes: file.bytes.byteLength })),
@@ -124,19 +110,45 @@ function uploadBody(input: GettyWebUploadInput): Blob {
   return new Blob(input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart)));
 }
 
+/** The reason a failed request reports, with the credentials scrubbed out. */
+function failureReason(raw: unknown, creds: FtpCredentials, status: number): string {
+  const text = isRecord(raw) && typeof raw.reason === "string" ? raw.reason.trim() : "";
+  return text !== "" ? redactCredentials(text, creds) : `Getty web upload failed (HTTP ${status})`;
+}
+
+interface PageLists { accepted: string[]; failed: GettyWebRejection[]; notReady: string[]; seen: string[] }
+
+/** The name lists a page reading reports; an absent one is empty, never a claim. */
+function pageLists(raw: Record<string, unknown>): PageLists {
+  return {
+    accepted: nameList(raw.accepted), failed: failedEntries(raw),
+    notReady: nameList(raw.notReady), seen: nameList(raw.seen),
+  };
+}
+
+/** Only lists that carry names travel: an absent one never claims anything. */
+function presentLists(lists: PageLists) {
+  return {
+    ...(lists.accepted.length > 0 ? { accepted: lists.accepted } : {}),
+    ...(lists.failed.length > 0 ? { failed: lists.failed } : {}),
+    ...(lists.notReady.length > 0 ? { notReady: lists.notReady } : {}),
+    ...(lists.seen.length > 0 ? { seen: lists.seen } : {}),
+  };
+}
+
 function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok: false; code: GettyWebErrorCode; reason: string } {
   const code = isRecord(raw) && typeof raw.code === "string" ? raw.code as GettyWebErrorCode : "page";
-  const reason = isRecord(raw) && typeof raw.reason === "string" && raw.reason.trim() !== ""
-    ? redactCredentials(raw.reason.trim(), creds)
-    : `Getty web upload failed (HTTP ${status})`;
-  return { ok: false, code, reason };
+  const reason = failureReason(raw, creds, status);
+  // A failed batch still says what it accepted: those icons are not re-sent.
+  return isRecord(raw)
+    ? { ok: false, code, reason, ...presentLists(pageLists(raw)) }
+    : { ok: false, code, reason };
 }
 
 function metadataEntries(raw: Record<string, unknown>) {
   if (!Array.isArray(raw.metadata)) return [];
   return raw.metadata.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-    name: String(entry.name),
-    status: typeof entry.status === "string" ? entry.status : "unknown",
+    name: String(entry.name), status: typeof entry.status === "string" ? entry.status : "unknown",
     ...(isRecord(entry.fields) ? { fields: entry.fields as Record<string, boolean> } : {}),
   }));
 }
@@ -144,17 +156,16 @@ function metadataEntries(raw: Record<string, unknown>) {
 function failedEntries(raw: Record<string, unknown>) {
   if (!Array.isArray(raw.failed)) return [];
   return raw.failed.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-    name: String(entry.name),
-    id: typeof entry.id === "string" ? entry.id : null,
+    name: String(entry.name), id: typeof entry.id === "string" ? entry.id : null,
   }));
 }
 
 function completionOf(raw: Record<string, unknown>) {
   if (!isRecord(raw.completion)) return null;
+  const { clicked, label, confirmed } = raw.completion;
   return {
-    clicked: raw.completion.clicked === true,
-    label: typeof raw.completion.label === "string" ? raw.completion.label : null,
-    confirmed: raw.completion.confirmed === true,
+    clicked: clicked === true, confirmed: confirmed === true,
+    label: typeof label === "string" ? label : null,
   };
 }
 
@@ -164,16 +175,16 @@ function nameList(value: unknown): string[] {
 
 function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
   if (!isRecord(raw) || raw.ok !== true) return { ok: false, code: "page", reason: "unexpected helper response" };
-  const notReady = nameList(raw.notReady);
+  const lists = pageLists(raw);
   return {
     ok: true,
     batchId: typeof raw.batchId === "string" ? raw.batchId : null,
-    accepted: nameList(raw.accepted).length > 0 ? nameList(raw.accepted) : fallback,
-    failed: failedEntries(raw),
-    // Absent means "nothing was left unvalidated", never a claim of success.
-    ...(notReady.length > 0 ? { notReady } : {}),
+    accepted: lists.accepted.length > 0 ? lists.accepted : fallback,
+    failed: lists.failed,
+    // Absent means "nothing was left unvalidated / not proven ready", never a claim.
+    ...(lists.notReady.length > 0 ? { notReady: lists.notReady } : {}),
+    ...(lists.seen.length > 0 ? { seen: lists.seen } : {}),
     completed: raw.completed === true,
-    // Absent means "not proven ready", never "ready".
     ...(raw.ready === true ? { ready: true } : {}),
     completion: completionOf(raw),
     metadata: metadataEntries(raw),
@@ -185,10 +196,8 @@ export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<
   const fetchFn = input.fetchImpl ?? globalThis.fetch;
   try {
     const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/getty-web/upload`, {
-      method: "POST",
+      method: "POST", signal: input.signal, body: uploadBody(input),
       headers: { "content-type": "application/octet-stream", "x-getty-web-config": uploadConfig(input) },
-      body: uploadBody(input),
-      signal: input.signal,
     });
     const body: unknown = await res.json();
     if (res.ok) return parseSuccess(body, input.icons.flatMap((icon) => icon.files.map((file) => file.name)));
@@ -209,9 +218,7 @@ export async function testBridgeGettyWeb(
   const config = encodeBase64Utf8(JSON.stringify({ ...preset, username: creds.username, password: creds.password, sessionKey: "test" }));
   try {
     const res = await fetchImpl(`${trimSlash(bridgeUrl)}/getty-web/test`, {
-      method: "POST",
-      headers: { "content-type": "text/plain" },
-      body: config,
+      method: "POST", headers: { "content-type": "text/plain" }, body: config,
     });
     const body: unknown = await res.json();
     return res.ok ? { ok: true } : parseFailure(body, creds, res.status);
@@ -234,14 +241,11 @@ async function finishFailure(res: Response, creds: FtpCredentials): Promise<Gett
   return parseFailure(await res.json(), creds, res.status);
 }
 
-/**
- * Submits the run's single batch after the last icon. The helper refuses while a
- * contribution of the run is missing, so a half-uploaded batch is never locked.
- */
+/** Submits the batch just filled; the helper refuses while one of its
+ *  contributions is missing, so a half-uploaded batch is never locked. */
 export async function finishBridgeGettyWeb(input: GettyWebFinishInput): Promise<GettyWebResult> {
   const config = encodeBase64Utf8(JSON.stringify({
-    ...input.preset, username: input.creds.username, password: input.creds.password,
-    sessionKey: input.sessionKey,
+    ...input.preset, username: input.creds.username, password: input.creds.password, sessionKey: input.sessionKey,
   }));
   const fetchFn = input.fetchImpl ?? globalThis.fetch;
   try {
@@ -262,8 +266,7 @@ export async function closeBridgeGettyWeb(
 ): Promise<void> {
   try {
     await fetchImpl(`${trimSlash(bridgeUrl)}/getty-web/close`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ sessionKey }),
     });
   } catch {

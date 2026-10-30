@@ -10,7 +10,10 @@ import path from "node:path";
 import { connectBrowser } from "./browser.mjs";
 import { openCdp } from "./cdp.mjs";
 import { restoreSessionCookies, saveSessionCookies } from "./sessioncookies.mjs";
-import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage, reattachFiles } from "./contribute.mjs";
+import {
+  attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage,
+  reattachFiles, runDriverStep,
+} from "./contribute.mjs";
 
 const LOGIN_TIMEOUT_MS = 120000;
 const UPLOAD_TIMEOUT_MS = 180000;
@@ -91,6 +94,18 @@ export function repairCapability(connection, sessionId, files, paths, options = 
     const done = await reattachFiles(connection, sessionId, wanted, options);
     return { ok: done.ok === true };
   };
+}
+
+/**
+ * The per-batch state a new batch must start from: batch 1's id, its file names
+ * and its counts would otherwise make Getty refuse to finish batch 2.
+ */
+export function resetBatchState(state) {
+  state.batchId = null;
+  state.expected = [];
+  state.progress = null;
+  state.reloads = 0;
+  return state;
 }
 
 /** The readiness pacing a caller may inject; production keeps the real windows. */
@@ -245,6 +260,15 @@ function buildSession(ctx) {
   // still shows a card without Getty's "Ready to submit" icon.
   const staged = { files: [], paths: [] };
   let closed = false;
+  const createOwnBatch = async (input) => {
+    const created = await createBatch(connection, page.sessionId, {
+      batchName: input.batchName, submissionType: input.submissionType,
+      briefCode: input.briefCode, onProgress: options.onProgress, signal: options.signal,
+      timeoutMs: options.batchTimeoutMs,
+    });
+    if (created.ok) state.batchId = created.batchId;
+    return created;
+  };
   const dropTemp = () => {
     try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp already gone */ }
   };
@@ -253,13 +277,25 @@ function buildSession(ctx) {
     /** Creates the batch once for the whole run. */
     async ensureBatch(input) {
       if (state.batchId !== null) return { ok: true, batchId: state.batchId };
-      const created = await createBatch(connection, page.sessionId, {
-        batchName: input.batchName, submissionType: input.submissionType,
-        briefCode: input.briefCode, onProgress: options.onProgress, signal: options.signal,
-        timeoutMs: options.batchTimeoutMs,
-      });
-      if (created.ok) state.batchId = created.batchId;
-      return created;
+      return createOwnBatch(input);
+    },
+    /**
+     * Starts the **next** batch of a long run in this same signed-in session. The
+     * previous batch was completed, so its id, its file names and its progress
+     * must not leak into the new one: Getty would refuse to finish a batch whose
+     * cards belong to another. One sign-in, N batches.
+     */
+    async startBatch(input) {
+      resetBatchState(state);
+      // The previous batch's staged copies belong to a finished batch; the repair
+      // hook must only ever re-attach files of the batch that is open now.
+      staged.files = [];
+      staged.paths = [];
+      // The completed batch is still on screen; Create Batch lives on the
+      // contributor page, so go back there before opening the dialog.
+      await openContributePage(connection, page.sessionId, options.url).catch(() => null);
+      await runDriverStep(connection, page.sessionId, "dismissPageDialogs").catch(() => null);
+      return createOwnBatch(input);
     },
     /**
      * Stages every icon of the run, then hands them to Getty in one attach — all

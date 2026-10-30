@@ -79,10 +79,19 @@ async function performAcceptMeta(c: OpsCtx, item: ExportedItem): Promise<void> {
   c.say(`Metadata embedded into ${item.stem}`);
 }
 
+/** The re-upload list, said out loud instead of hiding in the failure count. */
+function reuploadNote(summary: UploadBatchSummary): string {
+  const icons = summary.reuploadIcons ?? 0;
+  return icons > 0 ? ` — ${icons} icon(s) need re-upload` : "";
+}
+
 function summarizeBatch(summary: UploadBatchSummary, targetCount: number): { text: string; err: boolean } {
-  if (summary.cancelled) return { text: `Upload cancelled (${summary.uploadedFiles} file(s) sent)`, err: false };
+  const reupload = reuploadNote(summary);
+  if (summary.cancelled) {
+    return { text: `Upload cancelled (${summary.uploadedFiles} file(s) sent)${reupload}`, err: false };
+  }
   if (summary.failedFiles > 0) {
-    return { text: `Uploaded ${summary.uploadedFiles} file(s), ${summary.failedFiles} failed: ${summary.lastError ?? ""}`, err: true };
+    return { text: `Uploaded ${summary.uploadedFiles} file(s), ${summary.failedFiles} failed: ${summary.lastError ?? ""}${reupload}`, err: true };
   }
   if (summary.stagedDir) {
     return {

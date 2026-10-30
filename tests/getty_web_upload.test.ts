@@ -268,3 +268,54 @@ describe("Getty web finish call", () => {
     if (!result.ok) expect(result.reason).toContain("restart run_ftp_bridge.bat");
   });
 });
+
+describe("Getty web batch requests", () => {
+  it("asks the helper for a new batch, so a run can exceed one batch's 100 icons", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {
+      ok: true, batchId: "9", accepted: ["icon_a.jpeg"], completed: false, completion: null, metadata: [],
+    }));
+    await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "IconSplitter 2026-10-30 2/3 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      newBatch: true, sessionKey: "run-8", fetchImpl,
+    });
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
+    expect(header).toMatchObject({ newBatch: true, batchName: "IconSplitter 2026-10-30 2/3 (1 icon)" });
+  });
+
+  it("keeps what a failed batch had already accepted, rejected and listed", async () => {
+    // A 100-icon chunk that timed out after 95 cards: re-sending the whole chunk
+    // would upload those 95 a second time.
+    const fetchImpl = vi.fn(async () => jsonResponse(504, {
+      ok: false, code: "timeout",
+      reason: "Getty listed 98 of 100 file(s) in 180 s",
+      accepted: ["icon_a.jpeg", "icon_a.eps"],
+      failed: [{ name: "icon_b.eps", id: "FSPID9" }],
+      seen: ["icon_a.eps", "icon_b.eps"],
+    }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("timeout");
+      expect(result.accepted).toEqual(["icon_a.jpeg", "icon_a.eps"]);
+      expect(result.failed).toEqual([{ name: "icon_b.eps", id: "FSPID9" }]);
+      expect(result.seen).toEqual(["icon_a.eps", "icon_b.eps"]);
+    }
+  });
+
+  it("leaves those lists out when the helper could not report them", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(503, { ok: false, code: "browser", reason: "no browser" }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(result).toEqual({ ok: false, code: "browser", reason: "no browser" });
+  });
+});

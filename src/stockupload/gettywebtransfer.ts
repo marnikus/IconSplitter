@@ -1,28 +1,27 @@
-// gettywebtransfer.ts — the whole run in **one** call into the loopback helper's
-// Getty web session: read each icon's JPEG (+ optional EPS), apply the
-// in-memory title/description copy when enabled, and let the contributor page's
-// own uploader take all pairs at once.
+// gettywebtransfer.ts — the whole run as **batches**. Getty takes at most 100
+// uploads per batch and one icon (JPEG, plus its EPS when it has one) is one
+// upload, so a bigger selection is chunked: each chunk is uploaded, given its
+// metadata and completed on the web before the next batch exists. An icon Getty
+// did not accept is retried **once** — in a later batch with room, or in the
+// run's final retry batch — and only then reported as failed.
 
-import { readBytesAt, type DirHandleLike } from "../lib/fs";
+import type { DirHandleLike } from "../lib/fs";
 import {
-  gettyWebFileOrder, gettyWebMetadataOf, gettyWebStem, validateGettyWebTasks,
+  GETTY_WEB_MAX_ATTEMPTS, gettyWebBatchLabel, gettyWebBatchName, planGettyWebBatches,
+  type GettyWebBatchSlot,
 } from "../lib/stockupload/gettyweb";
-import { gettyWebProgress, type GettyWebProgress } from "../lib/stockupload/gettyprogress";
 import {
-  uploadBridgeGettyWeb, type GettyWebFile, type GettyWebIcon, type GettyWebRejection,
+  finishBridgeGettyWeb, uploadBridgeGettyWeb, type GettyWebErrorCode, type GettyWebFinishInput,
   type GettyWebResult, type GettyWebUploadInput,
 } from "../lib/stockupload/gettywebclient";
+import { prepareGettyWebIcon, type GettyWebIconInput } from "../lib/stockupload/gettywebprep";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
-import type { PlannedTransfer, SkippedFormat } from "../lib/stockupload/plan";
-import { prepareMetadataCopy } from "../lib/stockupload/sendmeta";
-import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
+import type { StockFtpPreset } from "../lib/stockupload/types";
+import {
+  createState, failIcon, finalOutcome, settleBatch, type PreparedIcon, type RunState,
+} from "./gettywebstate";
 
-/** One icon of the run: the tasks the plan gives it and the row it came from. */
-export interface GettyWebIconInput {
-  tasks: PlannedTransfer[];
-  missing: readonly SkippedFormat[];
-  item?: ExportedItem;
-}
+export type { GettyWebIconInput } from "../lib/stockupload/gettywebprep";
 
 export interface GettyWebRunInput {
   icons: readonly GettyWebIconInput[];
@@ -30,12 +29,27 @@ export interface GettyWebRunInput {
   target: StockFtpPreset;
   creds: FtpCredentials;
   combine: boolean;
-  batchName: string;
   submissionType: string;
   sessionKey: string;
   bridgeUrl: string;
   signal: AbortSignal;
+  /** The date the batch names carry; the run's own clock by default. */
+  now?: Date;
+  /** Batch size; the real cap unless a test injects a smaller one. */
+  maxIcons?: number;
   uploadFn?: (input: GettyWebUploadInput) => Promise<GettyWebResult>;
+  finishFn?: (input: GettyWebFinishInput) => Promise<GettyWebResult>;
+  /** The batch a request belongs to, so the panel's line can name it. */
+  onBatch?: (label: string) => void;
+  /** One batch's outcome, for the log trail — counts only, never a name. */
+  onBatchFinished?: (info: BatchFinished) => void;
+}
+
+export interface BatchFinished {
+  label: string;
+  uploaded: number;
+  submitted: boolean;
+  ready: boolean;
 }
 
 /** What one icon of the run is worth: uploaded, or the reason it is not. */
@@ -46,205 +60,139 @@ export interface GettyWebIconOutcome {
 
 export interface GettyWebRunOutcome {
   ok: boolean;
-  /** Non-empty when an icon (or the whole call) did not upload. */
+  /** Non-empty when an icon (or the whole run) did not upload. */
   reason: string;
   icons: GettyWebIconOutcome[];
-  /** Set on success: the batch is only filled, the run submits it at the end. */
-  deferCompletion?: boolean;
+  /** Batches created, and how many of them were completed on the web. */
+  batches: number;
+  completed: number;
+  /** Icons still not uploaded after their retry — the re-upload list. */
+  failed: number;
+  /** A batch that uploaded but could not be completed, with Getty's reason. */
+  batchError: string | null;
 }
 
-function failed(input: GettyWebRunInput, reason: string): GettyWebRunOutcome {
-  return { ok: false, reason, icons: input.icons.map(() => ({ ok: false, reason })) };
-}
-
-/** Reads one icon's pair from disk; null when a file vanished since the plan. */
-async function readIcon(input: GettyWebRunInput, icon: GettyWebIconInput): Promise<GettyWebFile[] | null> {
-  const files: GettyWebFile[] = [];
-  for (const task of gettyWebFileOrder(icon.tasks)) {
-    const bytes = task.relPath ? await readBytesAt(input.root, task.relPath) : null;
-    if (!bytes?.byteLength) return null;
-    files.push({ name: task.fileName, bytes });
-  }
-  return files;
-}
-
-/** Applies the upload-only "Title + description" copy to one icon's files. */
-async function combined(input: GettyWebRunInput, files: GettyWebFile[], item?: ExportedItem): Promise<GettyWebFile[] | string> {
-  if (!input.combine) return files;
-  if (!item) return "Item no longer present";
-  try {
-    const copies = [];
-    for (const file of files) copies.push({ name: file.name, bytes: await prepareMetadataCopy(item, file.name, file.bytes) });
-    return copies;
-  } catch (err) {
-    return (err as Error).message || "Could not prepare upload metadata";
-  }
-}
-
-/** Reads and prepares every icon before anything is sent. */
-async function prepareIcons(input: GettyWebRunInput): Promise<GettyWebIcon[] | string> {
-  const prepared: GettyWebIcon[] = [];
-  for (const icon of input.icons) {
-    const invalid = validateGettyWebTasks(icon.tasks, icon.missing);
-    if (invalid !== null) return invalid;
-    const read = await readIcon(input, icon);
-    if (!read) return "Getty illustration file could not be read.";
-    const files = await combined(input, read, icon.item);
-    if (typeof files === "string") return files;
-    prepared.push({ files, metadata: icon.item ? gettyWebMetadataOf(icon.item) : null });
+/** Reads and prepares the icons of one batch; an unreadable one fails on its own. */
+async function prepareMembers(state: RunState, members: readonly number[]): Promise<PreparedIcon[]> {
+  const prepared: PreparedIcon[] = [];
+  for (const index of members) {
+    const icon = await prepareGettyWebIcon(state.input.root, state.input.icons[index], state.input.combine);
+    if (typeof icon === "string") { failIcon(state, index, icon); continue; }
+    prepared.push({ index, icon });
   }
   return prepared;
 }
 
+/** Sends the batch; the request itself is one attach for the whole chunk. */
+function sendBatch(state: RunState, prepared: readonly PreparedIcon[], batchName: string): Promise<GettyWebResult> {
+  const send = state.input.uploadFn ?? uploadBridgeGettyWeb;
+  return send({
+    bridgeUrl: state.input.bridgeUrl, preset: state.input.target, creds: state.input.creds,
+    icons: prepared.map((entry) => entry.icon), batchName,
+    submissionType: state.input.submissionType, complete: false, newBatch: true,
+    sessionKey: state.input.sessionKey, signal: state.input.signal,
+  });
+}
+
+/** Only the batches Getty closed are counted, and only its own reading says so. */
+async function completeBatch(state: RunState, uploaded: number, label: string): Promise<void> {
+  const finish = state.input.finishFn ?? finishBridgeGettyWeb;
+  const res = await finish({
+    bridgeUrl: state.input.bridgeUrl, preset: state.input.target,
+    creds: state.input.creds, sessionKey: state.input.sessionKey,
+  });
+  if (!res.ok) state.lastError = [state.lastError, res.reason].filter(Boolean).join(" — ");
+  else {
+    const note = completionNote(res);
+    if (note !== null) state.lastError = note;
+  }
+  const submitted = res.ok && res.completed !== false;
+  const ready = res.ok && res.ready === true;
+  if (submitted || ready) state.completed += 1;
+  state.input.onBatchFinished?.({ label, uploaded, submitted, ready });
+}
+
+/** Session-level codes cannot be fixed by retrying: they end the run. */
+const SESSION_LEVEL_CODES: ReadonlySet<GettyWebErrorCode> = new Set(["auth", "browser", "helper-down"]);
+
+function noteFailureCode(state: RunState, res: GettyWebResult): void {
+  if (res.ok || !SESSION_LEVEL_CODES.has(res.code)) return;
+  state.stopReason = res.reason;
+}
+
+async function runBatch(state: RunState, members: readonly number[], slot: GettyWebBatchSlot): Promise<void> {
+  const prepared = await prepareMembers(state, members);
+  if (prepared.length === 0) return;
+  const input = state.input;
+  const label = gettyWebBatchLabel(slot);
+  const name = gettyWebBatchName(input.now ?? new Date(), prepared.length, slot);
+  state.batches += 1;
+  for (const entry of prepared) state.attempts[entry.index] = (state.attempts[entry.index] ?? 0) + 1;
+  input.onBatch?.(label);
+  const res = await sendBatch(state, prepared, name);
+  settleBatch(state, prepared, res);
+  noteFailureCode(state, res);
+  const accepted = prepared.filter((entry) => state.outcomes[entry.index]?.ok === true).length;
+  // An empty batch is never created or completed: there is nothing to submit.
+  if (accepted > 0) await completeBatch(state, accepted, label);
+}
+
+function stopped(state: RunState): boolean {
+  return state.stopReason !== null || state.input.signal.aborted;
+}
+
+/** The chunk, plus whatever is queued and still fits in this batch's room. */
+function membersWithRetries(state: RunState, chunk: readonly number[]): number[] {
+  const room = Math.max(0, state.maxIcons - chunk.length);
+  const extra = room > 0 ? state.queue.splice(0, room) : [];
+  return [...chunk, ...extra];
+}
+
+async function runPrimaryPass(state: RunState): Promise<void> {
+  const indexes = state.input.icons.map((_icon, index) => index);
+  const chunks = planGettyWebBatches(indexes, state.maxIcons);
+  for (let k = 0; k < chunks.length; k += 1) {
+    if (stopped(state)) return;
+    await runBatch(state, membersWithRetries(state, chunks[k]), { index: k + 1, total: chunks.length });
+  }
+}
+
+/** What is left after the last primary batch goes into retry batches. */
+async function runRetryPass(state: RunState): Promise<void> {
+  for (let pass = 0; pass < GETTY_WEB_MAX_ATTEMPTS && state.queue.length > 0; pass += 1) {
+    if (stopped(state)) return;
+    const queued = state.queue.splice(0, state.queue.length);
+    const chunks = planGettyWebBatches(queued, state.maxIcons);
+    for (let k = 0; k < chunks.length; k += 1) {
+      if (stopped(state)) return;
+      await runBatch(state, chunks[k], { index: k + 1, total: chunks.length, retry: true });
+    }
+  }
+}
+
 /**
- * Only a card carrying Getty's own "Ready to submit" icon proves the file was
- * uploaded; a card reading "Upload failed" is named as such, and anything else is
- * not claimed as uploaded. A thumbnail proves nothing.
+ * Uploads **the whole run**, one batch at a time: plan the chunks, send each
+ * one, complete it on the web, then start the next from the same signed-in
+ * session. Icons Getty did not accept are retried once before the run ends.
  */
-function outcomeOf(
-  icon: GettyWebIconInput, res: { accepted: readonly string[]; failed: readonly GettyWebRejection[]; notReady: readonly string[] },
-): GettyWebIconOutcome {
-  const stems = gettyWebFileOrder(icon.tasks).map((task) => gettyWebStem(task.fileName));
-  const stemOf = (name: string) => gettyWebStem(name);
-  const rejected = res.failed.find((entry) => stems.includes(stemOf(entry.name)));
-  if (rejected) {
-    const id = rejected.id ? ` (${rejected.id})` : "";
-    return { ok: false, reason: `Getty reports "Upload failed" for ${rejected.name}${id}` };
-  }
-  if (res.accepted.some((name) => stems.includes(stemOf(name)))) return { ok: true, reason: "" };
-  // Getty has the bytes but has not validated the card: that is not an upload.
-  const unvalidated = res.notReady.find((name) => stems.includes(stemOf(name)));
-  if (unvalidated) {
-    return { ok: false, reason: `Getty does not show its "Ready to submit" icon for ${unvalidated} — not counted as uploaded` };
-  }
-  return { ok: false, reason: `Getty does not show its "Ready to submit" icon for ${stems[0] ?? "this icon"} — not counted as uploaded` };
+export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyWebRunOutcome> {
+  const state = createState(input);
+  await runPrimaryPass(state);
+  await runRetryPass(state);
+  return finalOutcome(state);
 }
 
 const GETTY_WEB_NOT_COMPLETED_NOTE =
   "files uploaded but the batch was not completed — submit it on the Getty contributor page";
 
 /**
- * A Getty web upload that uploaded but stopped before Complete needs a manual
- * finish. Per-file work defers completion on purpose (`deferCompletion`), so
- * this only speaks for the single finish call at the end of the run. A batch
- * whose every card carries Getty's "Ready to submit" icon is finished too: the
- * page simply had no Complete/Submit control to click.
+ * A batch that uploaded but stopped before Complete needs a manual finish. One
+ * whose every card carries "Ready to submit" is finished too: the page simply
+ * had no Complete control to click.
  */
 export function completionNote(
   res: { ok: boolean; completed?: boolean; deferCompletion?: boolean; ready?: boolean },
 ): string | null {
   if (!res.ok || res.completed || res.deferCompletion || res.ready === true) return null;
   return GETTY_WEB_NOT_COMPLETED_NOTE;
-}
-
-/**
- * Uploads **every** icon of the run in one helper request, so Getty receives all
- * pairs in one attach instead of one pair per page visit. The batch is not
- * submitted here: the run finishes it once, after the last icon is listed.
- */
-export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyWebRunOutcome> {
-  const icons = await prepareIcons(input);
-  if (typeof icons === "string") return failed(input, icons);
-  const send = input.uploadFn ?? uploadBridgeGettyWeb;
-  const res = await send({
-    bridgeUrl: input.bridgeUrl, preset: input.target, creds: input.creds, icons,
-    batchName: input.batchName, submissionType: input.submissionType,
-    complete: false, sessionKey: input.sessionKey, signal: input.signal,
-  });
-  if (!res.ok) return failed(input, res.reason);
-  const outcomes = input.icons.map((icon) => outcomeOf(icon, {
-    accepted: res.accepted ?? [], failed: res.failed ?? [], notReady: res.notReady ?? [],
-  }));
-  const reason = outcomes.find((entry) => !entry.ok)?.reason ?? "";
-  return { ok: reason === "", reason, icons: outcomes, deferCompletion: true };
-}
-
-/**
- * The panel line for a live upload reading. While the bytes are moving it counts
- * the files Getty already has (its picture is on the page); once the metadata is
- * being saved it counts the cards that turned "Ready to submit", which is what
- * actually finishes the run, and says how many are still missing.
- */
-export function progressLabel(progress: GettyWebProgress, targetName: string): string {
-  const of = progress.total > 0 ? ` of ${progress.total}` : "";
-  const failed = progress.failed > 0 ? `, ${progress.failed} failed` : "";
-  const reloaded = progress.reloads > 0 ? " — page reloaded to get it moving" : "";
-  if (progress.phase === "uploading") {
-    if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
-    return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}${reloaded}`;
-  }
-  const ready = progress.ready ?? 0;
-  const pending = Math.max(0, progress.total - ready - progress.failed);
-  if (progress.total === 0) return `${targetName}: saving metadata${reloaded}`;
-  const left = pending > 0 ? `, ${pending} not ready yet` : "";
-  return `${targetName}: ${ready}${of} file(s) ready to submit${failed}${left}${reloaded}`;
-}
-
-/**
- * Files the bar may count as done. In the upload stage that is what Getty
- * received; from the moment the metadata is saved it is **only** the cards that
- * turned "Ready to submit" (plus Getty's own rejections), so a batch whose cards
- * are still not ready can never show a finished bar.
- */
-export function settledFiles(progress: GettyWebProgress): number {
-  const done = progress.phase === "uploading" ? progress.uploaded : (progress.ready ?? 0);
-  return done + progress.failed;
-}
-
-/** The bar stage this reading belongs to. */
-export function progressPhase(progress: GettyWebProgress): "uploading" | "verifying" {
-  return progress.phase === "uploading" ? "uploading" : "verifying";
-}
-
-const PROGRESS_POLL_MS = 1000;
-// The helper answers 404 until its upload request is being handled, and a helper
-// that dies mid-run says nothing at all: neither may kill the live progress.
-const PROGRESS_MAX_MISSES = 60;
-
-type ProgressPoll = (bridgeUrl: string, sessionKey: string) => Promise<GettyWebProgress | null>;
-
-interface WatchState {
-  input: { bridgeUrl: string; sessionKey: string };
-  report: (progress: GettyWebProgress) => void;
-  poll: ProgressPoll;
-  stopped: boolean;
-  misses: number;
-  timer: ReturnType<typeof setTimeout> | null;
-}
-
-/** One reading, then the next poll — a missing helper is retried, not fatal. */
-async function progressTick(state: WatchState): Promise<void> {
-  if (state.stopped) return;
-  const progress = await state.poll(state.input.bridgeUrl, state.input.sessionKey).catch(() => null);
-  if (state.stopped) return;
-  if (progress === null) state.misses += 1;
-  else {
-    state.misses = 0;
-    state.report(progress);
-    if (progress.phase === "done" || progress.phase === "failed") return;
-  }
-  if (state.misses <= PROGRESS_MAX_MISSES) {
-    state.timer = setTimeout(() => void progressTick(state), PROGRESS_POLL_MS);
-  }
-}
-
-/**
- * Polls the helper while the one upload request is in flight, so the panel shows
- * Getty's own per-file progress instead of sitting still until the batch lands.
- * Every reading (validated count included) is reported at once. Returns its stop
- * function; the first reading is taken immediately.
- */
-export function watchGettyProgress(
-  input: { bridgeUrl: string; sessionKey: string; targetName: string },
-  onProgress: (progress: GettyWebProgress) => void,
-  poll: ProgressPoll = gettyWebProgress,
-): () => void {
-  const state: WatchState = {
-    input, report: onProgress, poll, stopped: false, misses: 0, timer: null,
-  };
-  state.timer = setTimeout(() => void progressTick(state), 0);
-  return () => {
-    state.stopped = true;
-    if (state.timer !== null) clearTimeout(state.timer);
-  };
 }

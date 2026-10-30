@@ -2,7 +2,8 @@
 
 Date: 2026-10-30
 Branch: `arena/02f71097-iconsplitter`
-Status: **Problem analysis and step-by-step plan only — no production or test code changed.**
+Status: **Implemented 2026-10-30** (steps 1–10 done; see §11). The shipped
+behaviour is owned by [stock-upload-getty-web](../../current/sor/stock-upload-getty-web.md).
 
 Current owner page for the shipped behaviour: [stock-upload-getty-web](../../current/sor/stock-upload-getty-web.md).
 
@@ -530,3 +531,24 @@ Each step is a coherent commit; a step is not done until its focused test is gre
 - It changes no `src/` or `tools/` file: the feature is planned, not implemented.
 - It does not update the current SOR pages, because today's behaviour is still "one batch
   per run" — those pages change in Step 10, when the behaviour changes (RULE 17).
+
+---
+
+## 11. Implementation record (2026-10-30)
+
+| Step | Where it landed |
+|---|---|
+| 1–3 rules | `src/lib/stockupload/gettyweb.ts`: `GETTY_WEB_MAX_BATCH_ICONS = 100`, `planGettyWebBatches`, `gettyWebBatchName/Label/Summary`, `GETTY_WEB_MAX_ATTEMPTS = 2`; helper `tools/bridge/gettyweb/routes.mjs` `MAX_ICONS = 100`. |
+| 4 helper batch lifecycle | `routes.mjs` `newBatch: true` + `failurePayload` (`accepted`/`failed`/`seen`); `upload` no longer completes; `finish` closes one batch; `mayReleaseSession` keeps a busy session; `session.mjs` `resetBatchState`/`startBatch`. |
+| 5 transfer loop | `src/stockupload/gettywebtransfer.ts` (`runPrimaryPass`, `runRetryPass`, `membersWithRetries`, `completionNote`), state in `gettywebstate.ts`, progress in `gettywebprogress.ts`, runner plumbing in `runupload.ts` (`recordIconOutcomes`), per-batch reads in `gettywebprep.ts`. |
+| 6 UI | `StockUploadDialogs.tsx` `stock-upload-getty-batches` line; `panelops.ts` `reuploadNote`; `batchtypes.ts` `reuploadIcons`/`gettyWebMaxIcons`. |
+| 7 tests | `tests/getty_web_chunk.test.ts` (new), plus run-loop, helper, session and bridge cases in `stockupload_getty_web`, `getty_web_upload`, `bridge_getty_web`, `getty_web_session`. |
+| 8 gates | `npm run verify` (all lanes) and `npm run quality:changed` green; files ≤ 300 lines, ≤ 30 lines/fn. |
+| 9 cleanup | `src/stockupload/gettywebfinish.ts` deleted (unused `submitGettyBatch`). |
+| 10 docs | SOR page rewritten to the batched flow; `selectors/stock-upload.md` gained `stock-upload-getty-batches`; invariant I-82 added. |
+
+Notes from the build: the helper counts one icon per `stem` (JPEG+EPS = one
+upload), so the chunk unit is the icon and a pair is never split; retries fold
+into a later batch's free room before a run gets a trailing `retry 1/1` batch;
+a refused `finish` names its reason and leaves the batch open rather than
+pretending it was completed.

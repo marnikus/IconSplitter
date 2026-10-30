@@ -8,3 +8,8 @@ export function handleGettyWebFinish(req: any, res: any, post: any, json: any): 
 export function handleGettyWebClose(req: any, res: any, post: any, json: any): Promise<any>;
 export function handleGettyWebProgress(req: any, res: any, json: any): any;
 export function sanitizeMetadata(raw: unknown): { title: string; description: string; keywords: string[] } | null;
+export function mayReleaseSession(entry: any): boolean;
+export function failurePayload(result: any, config: any): {
+  ok: boolean; code: string; reason: string; state: any;
+  accepted: string[]; failed: Array<{ name: string; id: string | null }>; seen: string[];
+};

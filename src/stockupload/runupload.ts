@@ -4,16 +4,18 @@
 import {
   closeBridgeFtpsSession, uploadBridgeFtps, type BridgeUploadResult,
 } from "../lib/stockupload/bridgeclient";
-import { GETTY_WEB_SUBMISSION_TYPE, gettyWebBatchName } from "../lib/stockupload/gettyweb";
+import { GETTY_WEB_SUBMISSION_TYPE } from "../lib/stockupload/gettyweb";
 import { closeBridgeGettyWeb, type GettyWebResult } from "../lib/stockupload/gettywebclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
 import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 import type { ItemTracker, RunCounters, UploadBatchDeps, UploadBatchSummary } from "./batchtypes";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
-import { finishGettyWebRun } from "./gettywebfinish";
 import {
-  completionNote, progressLabel, progressPhase, settledFiles, uploadGettyWebRun, watchGettyProgress,
+  progressLabel, progressPhase, settledFiles, watchGettyProgress,
+} from "./gettywebprogress";
+import {
+  completionNote, uploadGettyWebRun, type GettyWebIconInput, type GettyWebRunOutcome,
 } from "./gettywebtransfer";
 import { markUploadInFlight } from "./journal";
 import {
@@ -121,52 +123,57 @@ async function runNetworkGroups(ctx: NetworkCtx): Promise<number> {
 
 /**
  * Wires Getty's live counts into the panel: each card Getty marks "Ready to
- * submit" (or its own "Upload failed") moves the bar at once, instead of only at
- * the end of the run.
+ * submit" (or its own "Upload failed") moves the bar at once instead of only at
+ * the end of the run, re-based on every batch so the counts of batch 2 do not
+ * stack onto batch 1.
  */
-function liveGettyProgress(ctx: NetworkCtx): () => void {
-  const base = ctx.counters.done;
-  let reloads = 0;
-  return watchGettyProgress(
+function liveGettyProgress(ctx: NetworkCtx): { stop: () => void; onBatch: (label: string) => void } {
+  const bound = { base: ctx.counters.done, batch: "", reloads: 0 };
+  const stop = watchGettyProgress(
     { bridgeUrl: ctx.deps.bridgeUrl, sessionKey: ctx.sessionKey, targetName: ctx.target.name },
     (progress) => {
       // A reload is a fact worth keeping: it explains a long silence in the run.
-      const reload = reloadNoteOf(reloads, progress.reloads);
+      const reload = reloadNoteOf(bound.reloads, progress.reloads);
       if (reload !== null) {
-        reloads = reload;
+        bound.reloads = reload;
         ctx.deps.logFn?.(pageReloadedSpec({ target: ctx.target.name, reloads: reload }));
       }
       ctx.deps.onProgress?.({
-        done: Math.min(ctx.counters.total, base + settledFiles(progress)),
+        done: Math.min(ctx.counters.total, bound.base + settledFiles(progress)),
         total: ctx.counters.total,
         // The bar may only say "complete" once Getty validated every card, so the
         // stage travels with the counts: bytes in, or chips flipping.
         phase: progressPhase(progress),
-        label: progressLabel(progress, ctx.target.name),
+        label: progressLabel(progress, ctx.target.name, bound.batch),
       });
     },
     ctx.deps.gettyWebProgressFn,
   );
+  return {
+    stop,
+    // A new batch owns the page now: its counts start from what is already done.
+    onBatch: (label) => { bound.batch = label; bound.base = ctx.counters.done; },
+  };
+}
+
+/** One log line per closed batch; a batch name is a count, never a file name. */
+function logBatchFinished(
+  ctx: NetworkCtx, info: { label: string; uploaded: number; submitted: boolean; ready: boolean },
+): void {
+  const where = info.label === "" ? ctx.target.name : `${ctx.target.name} ${info.label}`;
+  if (info.submitted) { ctx.deps.logFn?.(batchSubmittedSpec(where)); return; }
+  if (info.ready) ctx.deps.logFn?.(batchReadySpec({ target: where, files: info.uploaded }));
 }
 
 /**
- * The Getty web target sends **all** selected icons in one request, so Getty
- * receives every pair in one attach; per-icon HTTP calls used to stop after one.
+ * The Getty web target uploads in batches of at most 100 icons: each chunk is
+ * one request, completed on the web before the next one, and an icon Getty did
+ * not take is retried once before it is called failed.
  */
-async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
-  const icons = groupEspTasks(ctx.targetTasks).map((tasks) => ({
-    tasks, missing: ctx.plan.skippedMissing, item: ctx.itemsById.get(tasks[0].itemId),
-  }));
-  for (const icon of icons) markUploadInFlight(icon.tasks[0].itemId, ctx.target.id);
-  // Getty reports each file while the one request is in flight; show that live.
-  const stop = liveGettyProgress(ctx);
-  const res = await uploadGettyWebRun({
-    icons, root: ctx.deps.root, target: ctx.target, creds: ctx.creds,
-    combine: ctx.plan.combineTitleDescription,
-    batchName: gettyWebBatchName(new Date(), ctx.plan.selectedRows.length),
-    submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey: ctx.sessionKey,
-    bridgeUrl: ctx.deps.bridgeUrl, signal: ctx.deps.signal, uploadFn: ctx.deps.gettyWebUploadFn,
-  }).finally(stop);
+/** One terminal outcome per icon: uploaded, or the reason it needs a re-upload. */
+function recordIconOutcomes(
+  ctx: NetworkCtx, icons: readonly GettyWebIconInput[], res: GettyWebRunOutcome,
+): number {
   let uploaded = 0;
   icons.forEach((icon, index) => {
     const outcome = res.icons[index] ?? { ok: false, reason: res.reason };
@@ -179,28 +186,32 @@ async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
   return uploaded;
 }
 
-/** Submits the run's one batch once the last icon is in it, and says so. */
-async function submitGettyBatch(
-  target: StockFtpPreset, creds: FtpCredentials, deps: UploadBatchDeps,
-  run: { counters: RunCounters; sessionKey: string; uploaded: number },
-): Promise<void> {
-  const { counters, sessionKey, uploaded } = run;
-  if (target.protocol !== "getty-web" || deps.signal.aborted) return;
-  const fin = await finishGettyWebRun({
-    bridgeUrl: deps.bridgeUrl, preset: target, creds, sessionKey, uploaded, finishFn: deps.finishGettyWebFn,
-  });
-  // Keep both: the per-icon reason names the file, the finish reason the batch.
-  if (fin.error) counters.lastError = [counters.lastError, fin.error].filter(Boolean).join(" — ");
-  else if (fin.note) counters.lastError = fin.note;
-  if (fin.submitted) {
-    deps.logFn?.(batchSubmittedSpec(target.name));
-    deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: batch submitted` });
-  } else if (fin.ready) {
-    // Getty has no Complete/Submit control here; every icon is ready to submit,
-    // so the run is finished — an info line, not an error on a finished job.
-    deps.logFn?.(batchReadySpec({ target: target.name, files: counters.uploadedFiles }));
-    deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: ready to submit` });
+async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
+  const icons = groupEspTasks(ctx.targetTasks).map((tasks) => ({
+    tasks, missing: ctx.plan.skippedMissing, item: ctx.itemsById.get(tasks[0].itemId),
+  }));
+  for (const icon of icons) markUploadInFlight(icon.tasks[0].itemId, ctx.target.id);
+  // Getty reports each file while the batch is in flight; show that live.
+  const progress = liveGettyProgress(ctx);
+  const res = await uploadGettyWebRun({
+    icons, root: ctx.deps.root, target: ctx.target, creds: ctx.creds,
+    combine: ctx.plan.combineTitleDescription,
+    submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey: ctx.sessionKey,
+    bridgeUrl: ctx.deps.bridgeUrl, signal: ctx.deps.signal,
+    uploadFn: ctx.deps.gettyWebUploadFn, finishFn: ctx.deps.finishGettyWebFn,
+    maxIcons: ctx.deps.gettyWebMaxIcons,
+    onBatch: progress.onBatch,
+    onBatchFinished: (info) => logBatchFinished(ctx, info),
+  }).finally(progress.stop);
+  const uploaded = recordIconOutcomes(ctx, icons, res);
+  // A batch that could not be completed speaks for the whole run, after the
+  // per-icon reasons (which name the files).
+  if (res.batchError !== null) {
+    ctx.counters.lastError = [ctx.counters.lastError, res.batchError].filter(Boolean).join(" — ");
   }
+  // The icons still missing after their retry are the tab's re-upload list.
+  ctx.counters.reuploadIcons = res.failed;
+  return uploaded;
 }
 
 async function runNetworkTargetGroup(
@@ -221,8 +232,8 @@ async function runNetworkTargetGroup(
   const sessionKey = `${target.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const ctx: NetworkCtx = { plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById };
   try {
-    const uploaded = target.protocol === "getty-web" ? await runGettyWebIcons(ctx) : await runNetworkGroups(ctx);
-    await submitGettyBatch(target, creds, deps, { counters, sessionKey, uploaded });
+    if (target.protocol === "getty-web") await runGettyWebIcons(ctx);
+    else await runNetworkGroups(ctx);
   } finally {
     const close = target.protocol === "getty-web"
       ? (deps.closeGettyWebFn ?? closeBridgeGettyWeb)
@@ -250,7 +261,8 @@ export async function executeStockUploadBatch(
   deps: UploadBatchDeps,
 ): Promise<UploadBatchSummary> {
   const counters: RunCounters = {
-    done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0, lastError: null, stagedDir: null,
+    done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0, reuploadIcons: 0,
+    lastError: null, stagedDir: null,
   };
   deps.logFn?.(runStartedSpec({ targets: plan.targets.map((t) => t.name), files: plan.tasks.length }));
   for (const target of plan.targets) {
@@ -267,5 +279,6 @@ export async function executeStockUploadBatch(
     cancelled: deps.signal.aborted,
     lastError: counters.lastError,
     stagedDir: counters.stagedDir,
+    reuploadIcons: counters.reuploadIcons,
   };
 }
