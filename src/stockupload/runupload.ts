@@ -23,7 +23,8 @@ import {
   flushTargetStatuses, recordMissingCreds, recordTaskResult, reportNetworkCertificate,
 } from "./statusflush";
 import {
-  batchReadySpec, batchSubmittedSpec, pageReloadedSpec, reloadNoteOf, runFinishedSpec, runStartedSpec,
+  batchReadySpec, batchSplitSpec, batchSubmittedSpec, pageReloadedSpec, reloadNoteOf, runFinishedSpec,
+  runStartedSpec,
 } from "./stockuploadlog";
 import { resolveTransferBytes } from "./transferpayload";
 
@@ -214,6 +215,7 @@ async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
     randomizeBatches: ctx.deps.gettyWebRandomBatches, rng: ctx.deps.gettyWebRandomFn,
     onBatch: progress.onBatch,
     onBatchFinished: (info) => logBatchFinished(ctx, info),
+    onNote: (note) => ctx.deps.logFn?.(batchSplitSpec({ target: ctx.target.name, note })),
   }).finally(progress.stop);
   const uploaded = recordIconOutcomes(ctx, icons, res);
   // A batch that could not be completed speaks for the whole run, after the

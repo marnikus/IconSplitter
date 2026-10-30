@@ -665,7 +665,7 @@ describe("Getty web batches above the cap", () => {
   const doneBatch = { ok: true as const, batchId: "b", accepted: [], completed: true, completion: null, metadata: [] };
 
   async function runWith(
-    config: { count: number; eps?: boolean; cap: number },
+    config: { count: number; eps?: boolean; cap: number; notes?: string[] },
     upload: (input: GettyWebUploadInput, call: number) => Promise<unknown>,
     finish: (call: number) => Promise<unknown>,
   ) {
@@ -682,6 +682,7 @@ describe("Getty web batches above the cap", () => {
       signal: new AbortController().signal,
       loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
       gettyWebMaxIcons: config.cap,
+      logFn: (spec) => config.notes?.push(String(spec.detail ?? "")),
       gettyWebUploadFn: async (input) => {
         uploads += 1;
         sent.push(input);
@@ -757,6 +758,20 @@ describe("Getty web batches above the cap", () => {
     // The dropped request is never "completed": no finish for a batch Getty lacks.
     expect(sentAt).toEqual(["upload:1", "upload:2", "finish:1", "upload:3", "finish:2"]);
     expect(summary).toMatchObject({ uploadedFiles: 8, failedFiles: 0 });
+  });
+
+  it("sends a batch the helper refused as too large again in halves", async () => {
+    // A 413/431 answer carried nothing either, so the same icons over two smaller
+    // requests is what fits — no icon is lost to the size of one body.
+    const notes: string[] = [];
+    const { summary, sent } = await runWith({ count: 4, cap: 4, notes }, async (input, call) => {
+      if (call === 1) return { ok: false, code: "too-large", reason: "the local helper answered HTTP 413" };
+      return { ok: true, batchId: `b${call}`, accepted: accepted(input), completed: false, completion: null, metadata: [] };
+    }, async () => doneBatch);
+    expect(sent.map((input) => input.icons.length)).toEqual([4, 2, 2]);
+    expect(summary).toMatchObject({ uploadedFiles: 8, failedFiles: 0, lastError: null });
+    // The split is logged, so a big batch never looks like a silent stall.
+    expect(notes.some((note) => /smaller/i.test(note))).toBe(true);
   });
 
   it("retries a rejected icon inside the last batch, which still had room", async () => {

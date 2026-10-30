@@ -11,7 +11,7 @@ import type { StockFtpPreset } from "./types";
 const OUTDATED_GETTY_WEB_REASON = "Local helper on 127.0.0.1:47391 predates the Getty web upload — restart run_ftp_bridge.bat to enable it";
 const NO_BROWSER_REASON = "No Google Chrome or Microsoft Edge was found on this machine — install one, or start Chrome with --remote-debugging-port=9222 and set GETTY_WEB_CDP";
 
-export type GettyWebErrorCode = "helper-down" | "bad-request" | "auth" | "browser" | "page" | "timeout" | "cancelled" | "network";
+export type GettyWebErrorCode = "helper-down" | "too-large" | "bad-request" | "auth" | "browser" | "page" | "timeout" | "cancelled" | "network";
 
 export interface GettyWebMetadataPayload { title: string; description: string; keywords: string[] }
 

@@ -4357,3 +4357,14 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 - Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
   PASSED; `verify:fast` ALL LANES PASSED; `tests/stockupload*` 14 files / 102
   tests green; docs 4/4 (soR 8,997 B).
+- 2026-10-30 — A request the helper refuses as too large is now answered the
+  same way a dropped one is: `unreadableAnswer`/`parseFailure` map HTTP 413/431
+  to the new `too-large` code (never "cannot reach the local helper"), and
+  `sendRequest` halves the batch on `helper-down` **or** `too-large` (twice, so
+  one 51.6 MB body becomes 25.8 + 12.9 MB requests), logging what happened
+  (`batch-split`: "a request of 51.6 MB (100 icons) was larger than the helper
+  takes — sending it as two smaller batches"). `too-large` is deliberately not
+  session-level, so one oversized batch no longer ends a 209-icon run.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; helper+bridge+stockupload 15 files /
+  130 tests green; focused 5 files / 80 tests green; docs 4/4 (soR 8,999 B).

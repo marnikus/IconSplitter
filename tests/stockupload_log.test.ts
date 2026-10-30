@@ -13,19 +13,22 @@ import { SHUTTERSTOCK_PRESET } from "../src/lib/stockupload/presets";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import {
-  STOCKUPLOAD_FEATURE, STOCKUPLOAD_LOG_ACTIONS, batchReadySpec, batchSubmittedSpec, failedSpec, pageReloadedSpec,
+  STOCKUPLOAD_FEATURE, STOCKUPLOAD_LOG_ACTIONS, batchReadySpec, batchSplitSpec, batchSubmittedSpec,
+  failedSpec, pageReloadedSpec,
   reloadNoteOf, runFinishedSpec, runStartedSpec, uploadedSpec,
 } from "../src/stockupload/stockuploadlog";
 
 describe("stock upload log vocabulary", () => {
   it("keeps one closed set of actions and never a data field", () => {
     expect([...STOCKUPLOAD_LOG_ACTIONS]).toEqual([
-      "run-started", "uploaded", "failed", "page-reloaded", "batch-submitted", "batch-ready", "run-finished",
+      "run-started", "uploaded", "failed", "page-reloaded", "batch-submitted", "batch-ready", "batch-split",
+      "run-finished",
     ]);
     for (const spec of [
       runStartedSpec({ targets: ["Getty"], files: 4 }), uploadedSpec({ target: "Getty", file: "a.jpg" }),
       failedSpec({ target: "Getty", file: "a.jpg", reason: "no answer" }), pageReloadedSpec({ target: "Getty", reloads: 1 }),
       batchSubmittedSpec("Getty"), batchReadySpec({ target: "Getty", files: 4 }),
+      batchSplitSpec({ target: "Getty", note: "a request of 51.6 MB (100 icons) was larger than the helper takes — sending it as two smaller batches" }),
       runFinishedSpec({ uploaded: 1, failed: 1, cancelled: false, lastError: "x" }),
     ]) {
       expect(spec.feature).toBe(STOCKUPLOAD_FEATURE);

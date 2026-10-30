@@ -49,6 +49,8 @@ export interface GettyWebRunInput {
   onBatch?: (label: string) => void;
   /** One batch's outcome, for the log trail — counts only, never a name. */
   onBatchFinished?: (info: BatchFinished) => void;
+  /** A batch the helper could not take as one request, and how it was sent instead. */
+  onNote?: (text: string) => void;
 }
 
 export interface BatchFinished {
@@ -129,6 +131,21 @@ function noteFailureCode(state: RunState, res: GettyWebResult): void {
 /** How far one batch may be halved when the helper never answered its request. */
 const MAX_SPLITS = 2;
 
+/** Answers that carried nothing: the same icons may travel as two requests. */
+const SEND_AGAIN_CODES: ReadonlySet<GettyWebErrorCode> = new Set(["helper-down", "too-large"]);
+
+/** The staged bytes of one request, for the line that explains a split. */
+function requestBytesOf(state: RunState, prepared: readonly PreparedIcon[]): number {
+  return prepared.reduce((sum, entry) => sum + bytesOfIcon(state, entry.index), 0);
+}
+
+/** Why one request was cut in two, in the run's log — size first, never a name. */
+function splitNote(state: RunState, prepared: readonly PreparedIcon[], code: string): string {
+  const megabytes = (requestBytesOf(state, prepared) / (1024 * 1024)).toFixed(1);
+  const why = code === "too-large" ? "was larger than the helper takes" : "never got an answer";
+  return `a request of ${megabytes} MB (${prepared.length} icons) ${why} — sending it as two smaller batches`;
+}
+
 /**
  * Sends one request; a batch the helper never answered carried nothing, so it is
  * sent again **in halves** instead of losing every icon in it to one dropped
@@ -144,7 +161,8 @@ async function sendRequest(
   for (const entry of prepared) state.attempts[entry.index] = (state.attempts[entry.index] ?? 0) + 1;
   input.onBatch?.(label);
   const res = await sendBatch(state, prepared, name);
-  if (!res.ok && res.code === "helper-down" && depth < MAX_SPLITS && prepared.length > 1) {
+  if (!res.ok && SEND_AGAIN_CODES.has(res.code) && depth < MAX_SPLITS && prepared.length > 1) {
+    input.onNote?.(splitNote(state, prepared, res.code));
     const half = Math.ceil(prepared.length / 2);
     await sendRequest(state, prepared.slice(0, half), slot, depth + 1);
     await sendRequest(state, prepared.slice(half), slot, depth + 1);

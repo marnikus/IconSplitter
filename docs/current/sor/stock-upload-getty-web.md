@@ -20,8 +20,8 @@ browser.
    `uploadGettyWebRun`.
 3. **The run is N batches of ≤ 100 icons** (`planGettyWebBatches`, mirrored by
    `MAX_ICONS`): one icon is one upload (JPEG plus EPS) — Getty lists
-   a pair once under the EPS name — so 100 pairs
-   (200 files) are one batch, 101 icons two. A batch also ends early at the request
+   a pair once under the EPS name — so 100 pairs are
+   one batch, 101 icons two. A batch also ends early at the request
    budget: `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) capped at 64 MB,
    or 16 MB for a helper reporting none. A batch name is
    date, place and size — `2026-10-30 2/3 (100 icons)` — no product
@@ -36,12 +36,13 @@ browser.
    dialog blocks it, so dialogs are dismissed first. The per-icon manifest is the
    **body's tail** (`manifestBytes` in the header), never a header: Node answers
    431 above 16 KB, before any route runs (I-83).
-5. An oversized body is drained, answered 413; a request never answered is
-   retried **in halves** (twice), since it carried nothing. **If nothing new appears for 30 s** the page is
+5. An oversized body is drained and answered 413; a request never answered, or
+   refused as too large (`too-large`), is retried **in halves** (twice, logged),
+   since it carried nothing. **If nothing new appears for 30 s** the page is
    reloaded and the missing files re-attached; a timed-out read, or a card with no
    **picture** for that window, is the same stall (twice per batch, then it fails). It waits until every file is listed, then for
    each card's picture or `pending-icon` chip — a thumbnail
-   arms the metadata step; the chip appears **only after** a save. `invalid-file-media` ("Upload failed") is a rejection
+   arms the metadata step; the chip needs a save. `invalid-file-media` ("Upload failed") is a rejection
    named with Getty's id. `GET /getty-web/progress` (1 s) counts **arrivals**, so
    the bar says "uploaded", never "complete".
 6. **Metadata:** per contribution it selects the card by stem (twice if Getty
@@ -63,7 +64,7 @@ browser.
 7. **Complete each batch, then start the next:** after its last card carries
    "Ready to submit" the run posts `/getty-web/finish` **for that batch only**. It
    refuses, naming what is wrong, while one of *that* batch's contributions is
-   missing or says "Upload failed" (rejected files are re-uploaded once).
+   missing or says "Upload failed" (rejections are re-uploaded once).
    **No Complete/Submit control is not an error:** every card carrying
    "Ready to submit" *is* the finished state (`ok: true`, `ready: true`,
    `completed: false`); `accepted` is the chip list, so the app badges only
@@ -77,7 +78,7 @@ browser.
    with that reason.
 9. `/getty-web/close` releases the browser, deletes staged files; an idle
     session closes after 5 min, but one **with a request in flight is never swept**
-    (`mayReleaseSession`): a batch outlives it.
+    (`mayReleaseSession`).
 
 ## 3. Browser, profile and self-check
 
@@ -138,8 +139,8 @@ an unvalidated file), `cancelled` 499, `page` 502; no credentials in a reason.
   deleted on close.
 - Tests (`tests/`): `getty_web_chunk` (budgets, names), `getty_web_driver`
   (arrival vs ready), `getty_web_signin`, `getty_web_browser` (locks, launch,
-  reset, kept window), `getty_web_batch` (dialog, batch id, uploader),
-  `getty_web_upload` (sizes), `getty_web_cdp`, `bridge_getty_web` (routes, flags,
-  413, cap), `getty_web_finalize` (metadata, skeleton restart, re-save, re-upload,
-  complete), `stockupload_getty_web` (grouping, chunking, random order, retry,
-  folding, sign-out, cancel).
+  reset, kept window), `getty_web_batch` (dialog, uploader), `getty_web_upload`
+  (sizes, split codes), `getty_web_cdp`, `bridge_getty_web` (routes, 413, cap),
+  `getty_web_finalize` (metadata, skeleton restart, re-save, re-upload, complete),
+  `stockupload_getty_web` (grouping, chunking, random order, split retry, folding,
+  sign-out, cancel).

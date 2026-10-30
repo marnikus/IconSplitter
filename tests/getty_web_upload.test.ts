@@ -226,7 +226,8 @@ describe("Getty web loopback client", () => {
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.code).toBe("bad-request");
+      // A refused size is its own code: the run can answer it by halving the batch.
+      expect(result.code).toBe("too-large");
       expect(result.reason).toContain("HTTP 413");
       expect(result.reason).not.toContain("cannot reach the local helper");
     }

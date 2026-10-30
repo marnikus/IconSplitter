@@ -33,7 +33,7 @@ function presentLists(lists: PageLists) {
 }
 
 export function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok: false; code: GettyWebErrorCode; reason: string } {
-  const code = isRecord(raw) && typeof raw.code === "string" ? raw.code as GettyWebErrorCode : "page";
+  const code = refusedSize(status) ? "too-large" : isRecord(raw) && typeof raw.code === "string" ? raw.code as GettyWebErrorCode : "page";
   const reason = failureReason(raw, creds, status);
   // A failed batch still says what it accepted: those icons are not re-sent.
   return isRecord(raw)
@@ -89,9 +89,18 @@ export function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
 
 
 /** A helper answer that is not JSON still has a status worth reporting. */
+/**
+ * 413/431 is the helper refusing the request's **size**, not its content: the run
+ * answers it by sending the same icons as two smaller batches.
+ */
+function refusedSize(status: number): boolean {
+  return status === 413 || status === 431;
+}
+
 export function unreadableAnswer(status: number): GettyWebResult {
-  const tooLarge = status === 413 ? " — the batch is larger than the helper's upload limit (GETTY_WEB_MAX_BYTES)" : "";
-  return { ok: false, code: status === 413 ? "bad-request" : "page", reason: `the local helper answered HTTP ${status}${tooLarge}` };
+  const tooLarge = refusedSize(status) ? " — the batch is larger than the helper's upload limit (GETTY_WEB_MAX_BYTES)" : "";
+  const code = refusedSize(status) ? "too-large" : "page";
+  return { ok: false, code, reason: `the local helper answered HTTP ${status}${tooLarge}` };
 }
 
 /** Reads the helper's JSON answer; null when it sent something else (an error page). */
