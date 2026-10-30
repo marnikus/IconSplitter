@@ -67,6 +67,10 @@ export function finishBatch(connection: any, sessionId: string, options?: {
   readyRepairs?: number;
   /** How many times a stuck batch page is reloaded (default 2; 0 only in tests). */
   readyReloads?: number;
+  /** One counter shared by the walk and the readiness gate, for the panel's total. */
+  reloadMeter?: { count: number };
+  /** Told the running reload count of this batch, so the panel can show it. */
+  onReload?: (count: number) => void;
   /**
    * Re-uploads the named contributions from their staged copies. Without it the
    * run reports them instead of retrying.
@@ -101,6 +105,13 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
   }>;
   /** Names Getty itself marked "Upload failed": the batch is then not submitted. */
   failed?: string[];
+  /**
+   * Names whose card already shows its picture. A file without one has no drawer
+   * to fill, so the metadata walk jumps over it instead of reloading for it.
+   */
+  uploaded?: string[];
+  /** How many times the metadata walk may restart from the first file (default 1). */
+  metadataRestarts?: number;
   complete?: boolean;
   /** How long one clicked card's drawer may stay disabled before it is reported. */
   editorTimeoutMs?: number;

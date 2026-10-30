@@ -716,6 +716,18 @@ describe("Getty batch page as captured", () => {
     expect(clicked).toBe(1);
   });
 
+  it("tells apart a drawer that is still a loading skeleton from one that is loaded", () => {
+    // Getty renders the drawer as MUI skeleton placeholders while the file is
+    // still being processed; nothing can be typed into that, and it is the page,
+    // not the file, that has to be reloaded.
+    mount(`<div data-cy="metadata-drawer"><div data-cy="metadata-skeleton">
+      <span class="MuiSkeleton-root MuiSkeleton-text MuiSkeleton-pulse"></span>
+    </div></div>`);
+    expect(driver.metadataEditorReady()).toEqual({ ready: false, present: false, skeleton: true });
+    mount(CARD_PAGE.replace(/disabled/g, ""));
+    expect(driver.metadataEditorReady()).toEqual({ ready: true, present: true, skeleton: false });
+  });
+
   it("reports the metadata editor as not ready while its fields are still disabled", () => {
     mount(CARD_PAGE);
     expect(driver.metadataEditorReady()).toMatchObject({ ready: false, present: true });

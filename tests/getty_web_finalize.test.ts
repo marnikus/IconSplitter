@@ -332,15 +332,21 @@ describe("Getty web automatic finalize", () => {
       ...successQueue(),
       openFileMetadata: [
         { opened: true, method: "card", label: "star_01.jpg" }, { opened: true, method: "card", label: "star_01.jpg" },
+        { opened: true, method: "card", label: "star_01.jpg" }, { opened: true, method: "card", label: "star_01.jpg" },
       ],
-      metadataEditorReady: [{ ready: false, present: true }, { ready: false, present: true }],
+      metadataEditorReady: [
+        { ready: false, present: true }, { ready: false, present: true },
+        { ready: false, present: true }, { ready: false, present: true },
+      ],
     };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
       editorPollMs: 0, editorTimeoutMs: 0, signal: new AbortController().signal,
     });
-    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(2);
+    // Two clicks, then the page is reloaded and the walk starts again.
+    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(4);
+    expect(cdp.calls).toContain("Page.reload");
     expect(cdp.steps).not.toContain("fillMetadataFields");
     if (result.ok) {
       expect(result.report.metadata).toEqual([{ name: "star_01.jpg", status: "editor-not-ready" }]);
@@ -349,9 +355,97 @@ describe("Getty web automatic finalize", () => {
     }
   });
 
+  it("reloads the page when a drawer is still a loading skeleton and starts the files again", async () => {
+    // Getty renders the drawer as MUI skeleton placeholders while the file it
+    // belongs to is still being processed. The run used to step over that file
+    // and carry on, which left the files before it without their Date Created.
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: true, method: "button" }, { opened: true, method: "button" },
+        { opened: true, method: "button" }, { opened: true, method: "button" },
+      ],
+      metadataEditorReady: [
+        { ready: true, present: true }, { ready: false, present: false, skeleton: true },
+        { ready: true, present: true }, { ready: true, present: true },
+      ],
+      fillMetadataFields: [
+        { filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } },
+        { filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } },
+        { filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } },
+      ],
+      saveMetadataEditor: [
+        { saved: true, label: "Save" }, { saved: true, label: "Save" },
+        { saved: true, label: "Save" }, { saved: true, label: "Save metadata" },
+      ],
+      closeMetadataEditor: [{ closed: true }, { closed: true }, { closed: true }],
+      selectAllContributions: [{ selected: 2, method: "select-all" }],
+    };
+    const cdp = connection(queue);
+    const progress: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      complete: false, settleMs: 0, bulkSaveSettleMs: 0,
+      onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // A drawer that is only skeletons is the page's problem, so it is reloaded.
+    expect(cdp.calls).toContain("Page.reload");
+    // …and the walk starts again at the FIRST file instead of the next one.
+    const opened = cdp.expressions.filter((expression) => expression.includes("openFileMetadata"))
+      .map((expression) => /"fileName":"([^"]+)"/.exec(expression)?.[1]);
+    expect(opened).toEqual(["star_01.jpg", "moon_02.jpg", "star_01.jpg", "moon_02.jpg"]);
+    expect(progress.some((line) => /loading skeleton/.test(line))).toBe(true);
+    if (result.ok) {
+      expect(result.report.metadata).toEqual([
+        { name: "star_01.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
+        { name: "moon_02.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
+      ]);
+    }
+  });
+
+  it("skips a file whose card never got its picture instead of reloading for it", async () => {
+    // "Jump over only files that have no thumbnail": there is no drawer to fill
+    // for a card whose bytes never arrived, and reloading cannot create one.
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [{ opened: true, method: "button" }],
+      metadataEditorReady: [{ ready: true, present: true }],
+      fillMetadataFields: [{ filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } }],
+      saveMetadataEditor: [{ saved: true, label: "Save" }, { saved: true, label: "Save metadata" }],
+      closeMetadataEditor: [{ closed: true }],
+      selectAllContributions: [{ selected: 1, method: "select-all" }],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      uploaded: ["star_01.jpg"], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    expect(cdp.calls).not.toContain("Page.reload");
+    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(1);
+    if (result.ok) {
+      expect(result.report.metadata).toEqual([
+        { name: "star_01.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
+        { name: "moon_02.jpg", status: "no-thumbnail" },
+      ]);
+    }
+  });
+
   it("reports a drawer that never unlocks instead of claiming the file is ready", async () => {
-    // Both clicks land on a drawer Getty keeps disabled.
-    const queue = { ...successQueue(), metadataEditorReady: [{ ready: false, present: true }, { ready: false, present: true }] };
+    // Both clicks land on a drawer Getty keeps disabled, on both walks.
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: true, method: "button" }, { opened: true, method: "button" },
+        { opened: true, method: "button" }, { opened: true, method: "button" },
+      ],
+      metadataEditorReady: [
+        { ready: false, present: true }, { ready: false, present: true },
+        { ready: false, present: true }, { ready: false, present: true },
+      ],
+    };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,

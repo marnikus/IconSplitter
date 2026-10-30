@@ -38,6 +38,10 @@ const REPAIR_TIMEOUT_MS = 120000;
 // (and attaching only what is still missing) is the recovery that works there.
 const STALL_MS = 30000;
 const MAX_RELOADS = 2;
+// A drawer that is only skeleton bars, or one that never unlocks, means the page
+// stopped answering — not that this one file is wrong. The page is reloaded and
+// the metadata walk starts again at the first file, once.
+const METADATA_RESTARTS = 1;
 const NAV_RETRY_MS = 5000;
 // Never use the first generic file input: Getty also renders release uploaders.
 // This contribution input is deliberately hidden and accepts the vector pair.
@@ -524,6 +528,13 @@ function tagsChangedOf(filled) {
     : null;
 }
 
+/** What a drawer that never accepted input is reported as, per its own shape. */
+function drawerReason(status) {
+  if (status === "row-not-found") return "Getty does not list this file";
+  if (status === "editor-skeleton") return "the drawer is still a loading skeleton, so nothing was typed";
+  return "the metadata drawer never unlocked after two clicks, so nothing was typed";
+}
+
 /** Opens one file's metadata editor, types the accepted text, and saves it. */
 function wasRejected(file, options) {
   const stem = stemOf(file.name);
@@ -539,6 +550,9 @@ async function waitForEditor(connection, sessionId, options) {
   let state = await runDriverStep(connection, sessionId, "metadataEditorReady");
   while (state?.ready === false && Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false };
+    // Skeleton bars are the page still fetching this file's data: no poll window
+    // can fill them, and a second click on the card does not either.
+    if (state?.skeleton === true) return { ok: false, skeleton: true };
     await sleep(options.editorPollMs ?? EDITOR_POLL_MS);
     state = await runDriverStep(connection, sessionId, "metadataEditorReady");
   }
@@ -556,6 +570,7 @@ async function openDrawer(connection, sessionId, file, options) {
     const ready = await waitForEditor(connection, sessionId, options);
     if (ready.ok) return { ok: true };
     await runDriverStep(connection, sessionId, "closeMetadataEditor").catch(() => null);
+    if (ready.skeleton === true) return { ok: false, status: "editor-skeleton" };
     if (options.signal?.aborted) break;
   }
   return { ok: false, status: "editor-not-ready" };
@@ -565,8 +580,7 @@ async function openDrawer(connection, sessionId, file, options) {
 async function fillOneFileMetadata(connection, sessionId, file, options) {
   const drawer = await openDrawer(connection, sessionId, file, options);
   if (!drawer.ok) {
-    options.onProgress?.(`${file.name}: ${drawer.status === "row-not-found"
-      ? "Getty does not list this file" : "the metadata drawer never unlocked after two clicks, so nothing was typed"}`);
+    options.onProgress?.(`${file.name}: ${drawerReason(drawer.status)}`);
     return { name: file.name, status: drawer.status };
   }
   const filled = await runDriverStep(connection, sessionId, "fillMetadataFields", {
@@ -597,18 +611,38 @@ async function saveEverySelected(connection, sessionId, options) {
   return { selected: selection.selected, method: selection.method ?? "none", saved: saved.saved === true, label: saved.label ?? null };
 }
 
-async function fillEveryFileMetadata(connection, sessionId, options) {
+/** The files a walk jumps over, and why: nothing to fill, or no picture yet. */
+function skipEntry(file, options) {
+  // A file Getty rejected has no editor to fill, whatever metadata it carries.
+  if (wasRejected(file, options)) return { name: file.name, status: "upload-failed" };
+  if (!file.metadata) return { name: file.name, status: "embedded-only" };
+  // A card without its picture has no drawer to type into; only a re-upload,
+  // never a page reload, can give it one.
+  const uploaded = options.uploaded;
+  const pictured = Array.isArray(uploaded) && uploaded.length > 0
+    && uploaded.some((name) => stemOf(name) === stemOf(file.name));
+  if (Array.isArray(uploaded) && uploaded.length > 0 && !pictured) {
+    return { name: file.name, status: "no-thumbnail" };
+  }
+  return null;
+}
+
+/** A drawer that is a skeleton, or never unlocks, is the page's fault. */
+const PAGE_TROUBLE = new Set(["editor-skeleton", "editor-not-ready"]);
+
+/**
+ * One walk over the batch's files. `stopAtProblem` stops it at the first drawer
+ * the page failed to open, so the caller reloads and starts again from the first
+ * file instead of stepping over it and leaving the earlier files unfixed.
+ */
+async function fillWalk(connection, sessionId, options, stopAtProblem) {
   const report = [];
   const done = new Set();
   for (const file of options.files) {
-    if (options.signal?.aborted) return { aborted: true, report };
-    // A file Getty rejected has no editor to fill, whatever metadata it carries.
-    if (wasRejected(file, options)) {
-      report.push({ name: file.name, status: "upload-failed" });
-      continue;
-    }
-    if (!file.metadata) {
-      report.push({ name: file.name, status: "embedded-only" });
+    if (options.signal?.aborted) return { aborted: true, report, problem: null };
+    const skip = skipEntry(file, options);
+    if (skip !== null) {
+      report.push(skip);
       continue;
     }
     // A vector pair is one contribution: its drawer is filled once, not twice.
@@ -618,9 +652,34 @@ async function fillEveryFileMetadata(connection, sessionId, options) {
       continue;
     }
     done.add(stem);
-    report.push(await fillOneFileMetadata(connection, sessionId, file, options));
+    const entry = await fillOneFileMetadata(connection, sessionId, file, options);
+    report.push(entry);
+    if (stopAtProblem && PAGE_TROUBLE.has(entry.status)) {
+      return { aborted: false, report, problem: entry.status };
+    }
   }
-  return { aborted: false, report };
+  return { aborted: false, report, problem: null };
+}
+
+/**
+ * Fills every file's drawer, and restarts the whole walk from the first file when
+ * the page stops opening drawers: the files before the failure are exactly the
+ * ones a "carry on with the next file" run leaves without their Date Created.
+ * The last walk never stops early, so one stubborn file cannot cost the rest.
+ */
+async function fillEveryFileMetadata(connection, sessionId, options) {
+  const restarts = options.metadataRestarts ?? METADATA_RESTARTS;
+  let walk = await fillWalk(connection, sessionId, options, true);
+  let used = 0;
+  while (!walk.aborted && walk.problem !== null && used < restarts) {
+    used += 1;
+    options.onProgress?.(walk.problem === "editor-skeleton"
+      ? "a file's metadata drawer is still a loading skeleton — reloading the Getty page and starting the files again from the first one"
+      : "a file's metadata drawer never unlocked — reloading the Getty page and starting the files again from the first one");
+    await reloadBatchPage(connection, sessionId, options);
+    walk = await fillWalk(connection, sessionId, options, used < restarts);
+  }
+  return { aborted: walk.aborted, report: walk.report, restarts: used };
 }
 
 /** One contribution per distinct file stem — Getty lists a JPEG/EPS pair once. */
@@ -689,7 +748,7 @@ function waitForReadyToSubmit(connection, sessionId, expected, options, first) {
   const total = contributionCount(expected);
   const ctx = {
     connection, sessionId, expected, options, total, state: first ?? null,
-    resaves: 0, repairs: 0, meter: { count: 0 },
+    resaves: 0, repairs: 0, meter: options.reloadMeter ?? { count: 0 },
     plan: readyPlan(options), nextAt: Date.now() + (options.readyRetryMs ?? READY_RETRY_MS),
   };
   return readFirst(ctx).then((ready) => ready ?? awaitReady(ctx));
@@ -973,7 +1032,7 @@ async function finishValidated(connection, sessionId, options, report, readiness
  */
 export async function finalizeBatch(connection, sessionId, options) {
   const filled = await fillEveryFileMetadata(connection, sessionId, options);
-  const report = { metadata: filled.report, bulkSave: null, readiness: null, completion: null, state: null };
+  const report = { metadata: filled.report, metadataRestarts: filled.restarts ?? 0, bulkSave: null, readiness: null, completion: null, state: null };
   if (filled.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", report };
   // The dates and text are in every drawer, so one save now covers all the files.
   if (anyDrawerSaved(filled.report)) report.bulkSave = await saveEverySelected(connection, sessionId, options);

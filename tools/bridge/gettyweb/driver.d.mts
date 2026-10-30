@@ -20,7 +20,12 @@ export const labelTextOf: (el: any) => string;
 export const fillMetadataFields: (arg: { title?: string; description?: string; keywords?: string[]; dateCreated?: string; overwrite?: boolean }) => any;
 export const openFileMetadata: (arg: { fileName: string }) => any;
 /** True once the clicked card's drawer accepts input; disabled fields drop typed text. */
-export const metadataEditorReady: () => { ready: boolean; present: boolean };
+/**
+ * Whether the open drawer accepts input. `skeleton` is Getty's own
+ * `[data-cy="metadata-skeleton"]` loading state: the page has not fetched the
+ * file's data at all, so nothing can be typed and the page has to be reloaded.
+ */
+export const metadataEditorReady: () => { ready: boolean; present: boolean; skeleton: boolean };
 /** Clicks the drawer's captured `[data-cy="save-metadata"]` control (label "Save metadata"). */
 export const saveMetadataEditor: () => { saved: boolean; label: string | null };
 /**

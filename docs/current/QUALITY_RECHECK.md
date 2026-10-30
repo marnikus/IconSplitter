@@ -4331,3 +4331,18 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   PASSED; `verify:fast` ALL LANES PASSED; focused 7 files / 107 tests green;
   `tests/stockupload*` 14 files / 101 tests green; docs 4/4 (soR 8,992 B,
   selectors 8,994 B).
+- 2026-10-30 — A metadata drawer that is only skeleton bars (or never unlocks)
+  is now treated as the page's fault, not the file's: `metadataEditorReady`
+  reports `[data-cy="metadata-skeleton"]` as `skeleton`, the editor wait stops
+  at once instead of polling 15 s and re-clicking, and the helper reloads the
+  Getty page immediately and walks the metadata **again from the first file**
+  (once; the last walk never stops early, so one stubborn file cannot cost the
+  rest). Files whose card never got its picture are skipped (`no-thumbnail`)
+  instead of being retried through a drawer that cannot exist. New tests:
+  `getty_web_driver` (skeleton vs loaded drawer), `getty_web_finalize`
+  (skeleton → `Page.reload` → the first file is opened again; a picture-less
+  file is skipped without a reload; the never-unlocks ladder now reloads).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; full suite 3,445 / 3,446 (only
+  `algo_efficiency` 209.6 ms vs its 200 ms budget, environmental); helper 11
+  files / 258 tests green; docs 4/4 (soR 8,998 B, selectors 8,994 B).

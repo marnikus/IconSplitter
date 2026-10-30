@@ -346,7 +346,13 @@ function buildSession(ctx) {
       };
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
+        // Cards without a picture have no drawer to fill: the walk jumps over
+        // them and the readiness ladder's re-upload is what brings them back.
+        uploaded: result.state?.uploaded ?? [],
         onProgress: options.onProgress, signal: options.signal, onState, onReload, ...readyOptionsOf(options),
+        // One counter for the whole batch: a reload during the metadata walk and
+        // one during the readiness gate both show up in the panel's total.
+        reloadMeter: { count: 0 },
         // A card Getty never validates (or rejected) is re-uploaded from its own
         // staged copy instead of being reported as uploaded.
         repair: repairCapability(connection, page.sessionId, files, paths, { onState, onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs }),

@@ -529,7 +529,10 @@ export function metadataEditorReady() {
   const fields = [...(form ?? document).querySelectorAll("input, textarea, [contenteditable=true]")].filter(shown);
   const present = fields.length > 0;
   const editable = fields.some((el) => !el.disabled && !el.readOnly && seenField(el));
-  return { ready: present && editable, present };
+  // Getty paints the drawer as MUI skeleton bars while it still fetches the
+  // file's data; nothing can be typed into that, and no poll window helps.
+  const loading = document.querySelector('[data-cy="metadata-skeleton"]') !== null;
+  return { ready: present && editable, present, skeleton: loading && !editable };
 }
 
 /** One of the drawer fields the run fills (title, caption, date, keywords). */
