@@ -91,11 +91,11 @@ export function isGettyWebPreset(preset: StockFtpPreset): boolean {
   return preset.protocol === "getty-web";
 }
 
-/** Batch name the bridge types into Getty's Create Batch dialog. */
+/** Batch name the bridge types into Getty's Create Batch dialog: date, place, size. */
 export function gettyWebBatchName(now: Date, itemCount: number, slot?: GettyWebBatchSlot): string {
   const stamp = now.toISOString().slice(0, 10);
   const plural = itemCount === 1 ? "icon" : "icons";
-  return `IconSplitter ${stamp}${batchPlaceOf(slot)} (${Math.max(itemCount, 0)} ${plural})`
+  return `${stamp}${batchPlaceOf(slot)} (${Math.max(itemCount, 0)} ${plural})`
     .slice(0, GETTY_WEB_MAX_BATCH_NAME);
 }
 

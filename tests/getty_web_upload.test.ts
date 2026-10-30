@@ -43,8 +43,9 @@ async function decodeManifest(init: RequestInit): Promise<Record<string, unknown
 describe("Getty web upload rules", () => {
   it("builds a dated batch name from the plan size", () => {
     const now = new Date("2026-10-29T12:00:00Z");
-    expect(gettyWebBatchName(now, 1)).toBe("IconSplitter 2026-10-29 (1 icon)");
-    expect(gettyWebBatchName(now, 3)).toBe("IconSplitter 2026-10-29 (3 icons)");
+    // Getty's batch name carries no product name — just the date and the size.
+    expect(gettyWebBatchName(now, 1)).toBe("2026-10-29 (1 icon)");
+    expect(gettyWebBatchName(now, 3)).toBe("2026-10-29 (3 icons)");
     expect(gettyWebBatchName(now, 3).length).toBeLessThanOrEqual(60);
   });
 
@@ -89,7 +90,7 @@ describe("Getty web loopback client", () => {
     const result = await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
       icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1, 2, 3]) }, { name: "icon_a.eps", bytes: new Uint8Array([4, 5]) }], metadata }],
-      batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      batchName: "2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       complete: true, fetchImpl,
     });
     // `failed` is normalized even when the helper reports none.
@@ -99,7 +100,7 @@ describe("Getty web loopback client", () => {
     const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
     expect(header).toMatchObject({
       protocol: "getty-web", host: "esp.gettyimages.com", username: CREDS.username, password: CREDS.password,
-      batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      batchName: "2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       complete: true,
     });
     expect(await decodeManifest(init)).toMatchObject({
@@ -119,7 +120,7 @@ describe("Getty web loopback client", () => {
     await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
       icons: [icon("icon_a", 3), icon("icon_b", 2)],
-      batchName: "IconSplitter 2026-10-29 (2 icons)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      batchName: "2026-10-29 (2 icons)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       sessionKey: "run-7", fetchImpl,
     });
     // One call for the whole run: no per-icon request can stop after the first pair.
@@ -362,12 +363,12 @@ describe("Getty web batch requests", () => {
     await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
       icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
-      batchName: "IconSplitter 2026-10-30 2/3 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      batchName: "2026-10-30 2/3 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       newBatch: true, sessionKey: "run-8", fetchImpl,
     });
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
-    expect(header).toMatchObject({ newBatch: true, batchName: "IconSplitter 2026-10-30 2/3 (1 icon)" });
+    expect(header).toMatchObject({ newBatch: true, batchName: "2026-10-30 2/3 (1 icon)" });
   });
 
   it("keeps what a failed batch had already accepted, rejected and listed", async () => {

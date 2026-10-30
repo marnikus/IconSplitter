@@ -36,7 +36,7 @@ const DIALOG_PAGE = `${BATCHES_PAGE}
 // The captured batch detail page: a vector pair is listed once, by its EPS name,
 // and the JPEG only ever appears as the "Raster file" row of the metadata drawer.
 const CARD_PAGE = `
-  <header><h6 data-cy="batch-detail-header">IconSplitter 2026-10-29 (2 icons)</h6></header>
+  <header><h6 data-cy="batch-detail-header">2026-10-29 (2 icons)</h6></header>
   <button data-cy="open-upload-dialog-button">Upload</button>
   <p>1 file</p>
   <div data-cy="grid-row"><div>
@@ -263,9 +263,9 @@ describe("Getty contributor page steps", () => {
     expect(clicked).not.toHaveBeenCalled(); // the dialog is already open
     expect(driver.readPageInfo().dialogOpen).toBe(true);
 
-    expect(driver.fillBatchDetails({ batchName: "IconSplitter 2026-10-29 (3 icons)" })).toEqual({ filled: true, reason: null });
+    expect(driver.fillBatchDetails({ batchName: "2026-10-29 (3 icons)" })).toEqual({ filled: true, reason: null });
     expect(document.querySelector<HTMLInputElement>('input[name="submission_name"]')!.value)
-      .toBe("IconSplitter 2026-10-29 (3 icons)");
+      .toBe("2026-10-29 (3 icons)");
 
     const confirm = vi.fn();
     document.querySelector('[data-cy="create-batch-confirm-button"]')!.addEventListener("click", confirm);

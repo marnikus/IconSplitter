@@ -4311,3 +4311,12 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   PASSED (`runupload.ts` 296 lines); `verify:fast` ALL LANES PASSED; focused 8
   files / 91 tests green; full suite green except the environmental
   `algo_efficiency` budget; docs 4/4 (process-progress 8,998 B).
+
+## 2026-10-30 — Getty batch names carry no product name
+
+- `gettyWebBatchName` now builds `2026-10-30 2/3 (100 icons)` (date, place,
+  size) instead of `IconSplitter 2026-10-30 2/3 (100 icons)`; the 60-character
+  cap and the retry form (`2026-10-30 retry 1/1 (7 icons)`) are unchanged.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 7 files / 147 tests green;
+  docs 4/4 (soR 9,000 B).

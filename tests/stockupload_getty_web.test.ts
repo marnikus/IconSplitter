@@ -109,7 +109,8 @@ describe("Getty web upload in the batch runner", () => {
       ["star_01.jpg", "star_01.eps"], ["moon_02.jpg", "moon_02.eps"],
     ]);
     expect(sent[0].submissionType).toBe(GETTY_WEB_SUBMISSION_TYPE);
-    expect(sent[0].batchName).toMatch(/^IconSplitter \d{4}-\d{2}-\d{2} \(2 icons\)$/);
+    // Getty's batch name is the date and the size — no product name in it.
+    expect(sent[0].batchName).toMatch(/^\d{4}-\d{2}-\d{2} \(2 icons\)$/);
     // One batch for all icons: nobody submits per icon, the run finishes once.
     expect(sent[0].complete).toBe(false);
     expect(finished).toEqual([sent[0].sessionKey]);

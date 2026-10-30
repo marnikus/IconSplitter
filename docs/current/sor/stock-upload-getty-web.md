@@ -23,9 +23,9 @@ browser.
    plus its EPS — since Getty lists a pair once under the EPS name, so 100 pairs
    (200 files) are one batch and 101 icons are two. A batch also ends early at
    the request budget: `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) capped
-   at this build's 64 MB, or 16 MB for a helper that reports none. Names carry
-   their place:
-   `IconSplitter 2026-10-30 2/3 (100 icons)`.
+   at this build's 64 MB, or 16 MB for a helper that reports none. A batch name is
+   the date, its place and the size — `2026-10-30 2/3 (100 icons)` — no product
+   name.
 4. `/getty-web/upload` runs **once per batch** with `newBatch: true`: the helper
    stages that chunk, signs in once per run, returns to the contributor page,
    creates the batch (`session.startBatch` resets the last id, names and counts)
@@ -70,11 +70,11 @@ browser.
    (`GETTY_WEB_MAX_ATTEMPTS = 2`). Queued icons fill a later batch's room, so a
    250-icon run carries rejections in batch 3; the rest becomes the final
    `… retry 1/1 (7 icons)` batch(es), and only a terminal outcome reaches the row.
-   A sign-out, dead browser or dead helper stops the run, failing what it never
-   reached with that reason.
+   A sign-out, dead browser or dead helper stops the run; what it never reached
+   fails with that reason.
 9. `/getty-web/close` releases the browser and deletes staged files; an idle
     session closes after 5 min, but one **with a request in flight is never
-    swept** (`mayReleaseSession`): a 100-icon batch outlives five minutes.
+    swept** (`mayReleaseSession`): a batch outlives five minutes.
 
 ## 3. Browser, profile and self-check
 
@@ -84,7 +84,7 @@ browser.
   so Getty's sign-in survives (ten idle minutes close it), `--restore-last-session`
   revives a session-only login, and cookies live in `iconsplitter-session.json`
   (0600, never logged) so a killed window starts signed in.
-- `--getty-check` prints `browser:`, `launch:`, `socket:`; `--getty-reset
+- `--getty-check` shows `browser:`, `launch:`, `socket:`; `--getty-reset
   --getty-profile <folder>` ends that browser; `--getty-cdp` (`GETTY_WEB_CDP`)
   attaches to `--remote-debugging-port=9222`. `GETTY_WEB_BROWSER` overrides the
   executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS` (180 s),
@@ -134,11 +134,11 @@ an unvalidated file), `cancelled` 499, `page` 502. No credentials in a reason.
   `https://<…>.gettyimages.com` contributor paths are contacted (`..`, queries and
   other hosts are refused by `contributeUrlOf`); staged files use sanitized names,
   deleted on close.
-- Tests (`tests/`): `getty_web_chunk` (icon and byte budgets, names),
+- Tests (`tests/`): `getty_web_chunk` (icon and byte budgets, batch names),
   `getty_web_driver` (arrival vs ready), `getty_web_signin`, `getty_web_browser`
   (locks, launch, reset, kept window), `getty_web_batch` (dialog, batch id,
   uploader), `getty_web_upload` (header, sizes, failure reasons),
-  `getty_web_cdp`, `bridge_getty_web` (routes, flags, 413, advertised cap),
+  `getty_web_cdp`, `bridge_getty_web` (routes, flags, 413, cap),
   `getty_web_finalize` (metadata, re-save, re-upload, complete),
-  `stockupload_getty_web` (grouping, chunking, half-split retry, retry folding,
-  sign-out, cancel, no creds).
+  `stockupload_getty_web` (grouping, chunking, half-split retry, folding,
+  sign-out, cancel).

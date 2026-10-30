@@ -44,11 +44,11 @@ describe("Getty web batch planning", () => {
 
   it("names each batch with its place in the run, inside Getty's 60 characters", () => {
     const now = new Date("2026-10-30T12:00:00Z");
-    // A run that fits in one batch keeps the plain name it always had.
-    expect(gettyWebBatchName(now, 2, { index: 1, total: 1 })).toBe("IconSplitter 2026-10-30 (2 icons)");
-    expect(gettyWebBatchName(now, 100, { index: 2, total: 3 })).toBe("IconSplitter 2026-10-30 2/3 (100 icons)");
+    // The app's name is not part of Getty's batch name: date, place and size only.
+    expect(gettyWebBatchName(now, 2, { index: 1, total: 1 })).toBe("2026-10-30 (2 icons)");
+    expect(gettyWebBatchName(now, 100, { index: 2, total: 3 })).toBe("2026-10-30 2/3 (100 icons)");
     expect(gettyWebBatchName(now, 7, { index: 1, total: 1, retry: true }))
-      .toBe("IconSplitter 2026-10-30 retry 1/1 (7 icons)");
+      .toBe("2026-10-30 retry 1/1 (7 icons)");
     expect(gettyWebBatchName(now, 100, { index: 3, total: 3 }).length).toBeLessThanOrEqual(60);
   });
 
