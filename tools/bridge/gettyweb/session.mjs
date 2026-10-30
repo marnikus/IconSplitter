@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { connectBrowser } from "./browser.mjs";
 import { openCdp } from "./cdp.mjs";
+import { restoreSessionCookies, saveSessionCookies } from "./sessioncookies.mjs";
 import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage } from "./contribute.mjs";
 
 const LOGIN_TIMEOUT_MS = 120000;
@@ -120,13 +121,24 @@ export async function openGettySession(options) {
   });
   if (!browser.ok) return browser;
   const connection = openCdp(browser.socket);
-  const cleanup = (closing = {}) => {
-    connection.close();
-    // A visible sign-in window belongs to the user: disconnect automation, but
-    // leave the page open for inspection or manual verification. A named profile
-    // keeps its browser between runs either way, which is what remembers Getty's
-    // sign-in; only a failure or a reset closes it (politely, so cookies land).
+  // A killed or relaunched window comes back logged out, so keep the cookies in
+  // the profile folder: restoring them before the first navigation is what makes
+  // a rerun start signed in.
+  const remember = async () => {
+    const kept = await saveSessionCookies(connection, options.profileDir);
+    if (kept.saved > 0) options.onProgress?.(`kept ${kept.saved} Getty sign-in cookie(s) for the next run`);
+    return kept;
+  };
+  // A visible sign-in window belongs to the user: disconnect automation, but
+  // leave the page open for inspection or manual verification. A named profile
+  // keeps its browser between runs either way, which is what remembers Getty's
+  // sign-in; only a failure or a reset closes it (politely, so cookies land).
+  const closeBrowserNow = (closing = {}) => {
     browser.stop({ keepOpen: options.headed === true, force: closing.force === true });
+  };
+  const cleanup = (closing = {}) => {
+    // Save before letting go: this is the last moment the cookies are readable.
+    void remember().finally(() => closeBrowserNow(closing));
   };
   const fail = (code, reason) => {
     const outcome = failureOutcome(options.headed, reason);
@@ -138,12 +150,18 @@ export async function openGettySession(options) {
     const readyFailure = await connection.ready.then(() => null).catch((err) => err);
     if (readyFailure !== null) return fail("browser", cdpFailureReason(readyFailure, browser));
     const page = await openPage(connection);
+    const remembered = await restoreSessionCookies(connection, options.profileDir);
+    if (remembered.restored > 0) {
+      options.onProgress?.(`restored ${remembered.restored} saved Getty sign-in cookie(s)`);
+    }
     const info = await openContributePage(connection, page.sessionId, options.url);
     const signedIn = info.signedIn ? { ok: true } : await ensureSignedIn(connection, page.sessionId, {
       creds: options.creds, url: options.url, timeoutMs: options.loginTimeoutMs ?? LOGIN_TIMEOUT_MS,
       onProgress: options.onProgress, signal: options.signal,
     });
     if (!signedIn.ok) return fail(signedIn.code, signedIn.reason);
+    // Signing in is when Getty sets the cookies that keep this device trusted.
+    await remember();
     return { ok: true, session: buildSession({ connection, page, browser, options, cleanup }) };
   } catch (err) {
     return fail("browser", String(err?.message ?? "").trim());
@@ -238,8 +256,10 @@ function buildSession(ctx) {
     detach() {
       if (closed) return;
       closed = true;
-      connection.close();
-      dropTemp();
+      void saveSessionCookies(connection, options.profileDir).finally(() => {
+        connection.close();
+        dropTemp();
+      });
     },
   };
 }

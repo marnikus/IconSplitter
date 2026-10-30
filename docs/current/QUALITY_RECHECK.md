@@ -4015,3 +4015,13 @@ coverage 98.7 s · Build 7.0 s → ALL LANES PASSED. `getty_web_browser` 26,
 `getty_web_signin`, `getty_web_cdp`, `bridge_getty_web`, `getty_web_finalize`,
 `getty_web_batch`, `getty_web_driver`, `getty_web_upload`,
 `stockupload_getty_web` = 165 focused passed. SOR 8,996 B.
+
+## 2026-10-30 — Getty web: cookie snapshot so a relaunched window starts signed in
+Measured after the cookie snapshot (`iconsplitter-session.json`, mode 0600,
+restored only for cookies the live browser lacks) and its wiring before the first
+navigation and after a successful sign-in:
+`verify:fast` Types 3.8 s · Lint 1.2 s (0/21) · Quality gate 0.6 s · Tests +
+coverage 109.5 s · Build 7.8 s → ALL LANES PASSED (one re-run: the ported
+`upload_rowbadge_ui` bulk test is load-sensitive and passes alone). Focused:
+`getty_web_session` 6, `getty_web_browser` 26, `getty_web_signin` 9 = 41.
+SOR 8,999 B.

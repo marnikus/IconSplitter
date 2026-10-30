@@ -16,16 +16,16 @@ a real browser.
 2. `panelops.ts` probes `/health` (`gettyWeb.ready`, `gettyWeb.browser`); a missing
    browser or an old helper fails with a hint.
 3. `runupload.ts` groups tasks **per icon** (JPEG + optional EPS), one `sessionKey`
-   per target. `getty-web` is the one protocol that does not send one request per
-   icon: `uploadGettyWebRun` posts every icon together.
+   per target. `getty-web` does not send one request per icon:
+   `uploadGettyWebRun` posts every icon together.
 4. `/getty-web/upload` takes the whole run (`icons: [{files, metadata}]`, up to
    200 icons); the
    helper stages it, signs in once, creates **one** batch and hands **all** files
    to the page uploader in a single `DOM.setFileInputFiles`. Stray dialogs and
    snackbars are dismissed first — one blocks Getty's uploader.
 5. Getty's uploader transfers. **If nothing new appears for 30 s** the helper
-   reloads the batch page and re-attaches only the files still missing (twice at
-   most, then it fails honestly). It waits until every file is listed, then until
+   reloads the batch page and re-attaches only the files still missing (twice,
+   then it fails honestly). It waits until every file is listed, then until
    each card proves its outcome: **a thumbnail means uploaded**,
    `invalid-file-media` ("Upload failed") means not — a listed row proves nothing,
    and a card that never renders a picture fails the wait (300 s) instead of being
@@ -42,30 +42,31 @@ a real browser.
    says "Upload failed"**, then waits
    (bounded) for Getty to enable Complete — every card carries
    `not_ready_to_submit` while ingesting — clicks it and accepts the confirmation.
-8. `/getty-web/close` shuts the browser and deletes the staged files; an idle
+8. `/getty-web/close` lets the browser go and deletes the staged files; an idle
    session closes after five minutes. A visible window is only let go.
 
 **Sign-in is typed, not assigned.** Each poll focuses the identifier (then the
 password), inserts the saved text with real input events (`Input.insertText`) and
 writes through `angular.element(el)` too: the page is `ng-app="SignInApp"` and
 AngularJS ignores `.value =`, which submits an empty form. It then presses submit
-or Enter / `form.requestSubmit()`, takes a "sign in with password" option on an
-SSO screen and returns to `/contribute`. A stalled run names the step and the
-screen, never a value.
+or Enter, takes a "sign in with password" option on an SSO screen and returns to
+`/contribute`. A stalled run names the step, never a value.
 
 ## 3. Background, headed, attach, profile and self-check
 
 - Default: `chrome --headless=new` with a throwaway profile (never steals focus).
-- `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window for watching a run
-  or clearing a verification. A visible window is never killed: a failed run
+- `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window for watching a run. A visible window is never killed: a failed run
   leaves it up.
 - `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) is what remembers the
-  sign-in: the browser is kept on that folder between runs (the next upload
-  attaches to it, and it closes politely after ten idle minutes), every close is a
-  real `Browser.close` so cookies reach the disk, and `--restore-last-session`
-  brings back a session-only login. The helper never deletes the folder.
-- `--getty-check` launches once and prints `browser:`, `launch:`, `socket:`.
-- `--getty-reset --getty-profile <folder>` ends the browser on that folder.
+  sign-in: the browser is kept between runs (the next upload attaches, and it
+  closes politely after ten idle minutes), every close is a real `Browser.close`,
+  `--restore-last-session` revives a session-only login, and the helper snapshots
+  the browser's cookies into `iconsplitter-session.json` in that folder (mode
+  0600, never logged) so a killed or relaunched window still starts signed in —
+  only cookies the live browser is missing are put back. The folder is never
+  deleted by the helper.
+- `--getty-check` prints `browser:`, `launch:`, `socket:`.
+- `--getty-reset --getty-profile <folder>` ends that browser.
 - `--getty-cdp` (= `GETTY_WEB_CDP`) attaches to a browser started with
   `--remote-debugging-port=9222` (loopback only).
 - `GETTY_WEB_BROWSER` overrides the executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS`
@@ -122,24 +123,23 @@ of identifier and password.
 ## 6. Honest limits
 
 - Built against captured markup plus a local helper, **not** a live account:
-  selector drift is a `page` failure naming the step. Only the hidden uploader is
-  used, never a release input.
+  selector drift is a `page` failure naming the step; only the hidden uploader is
+  used.
 - A thumbnail means Getty took the file, not that it accepted it.
-- An interrupted run can leave a batch short; a duplicate is the recovery.
+- An interrupted run can leave a batch short; a duplicate recovers it.
 - Arkose/funCaptcha **cannot** be automated: solve it once headed (it then lives in
   the profile). Typing and the Angular bridge are proven against a fake CDP.
 - The helper types the saved identifier only.
 - Metadata editors and Complete use **label keywords**, `data-cy` and row
-  proximity — guesses **not** seen live; a missing editor is reported per file.
-- `completed: true` means the control was clicked and confirmed, not that Getty
-  passed the files.
+  proximity — guesses **not** seen live; a missing editor is reported.
+- `completed: true` means the control was clicked, not that Getty took them.
 
 ## 7. Invariants and tests
 
 - Credentials live only in the vault ([I-81](invariants/upload.md#i-81)), go only
-  to the loopback helper and are never logged or echoed.
-- Only `https://<…>.gettyimages.com` contributor paths are contacted; `..`,
-  query strings and non-GETTY hosts are refused (`contributeUrlOf`).
+  to the loopback helper, and are never logged or echoed.
+- Only `https://<…>.gettyimages.com` contributor paths are contacted; `..`, query
+  strings and non-GETTY hosts are refused (`contributeUrlOf`).
 - Files are staged in a temp folder as sanitized names, deleted on close.
 - Tests (`tests/`): `getty_web_driver` (page steps in a DOM), `getty_web_signin`
   (typing order, SSO choice, reasons), `getty_web_browser` (locks, launch, reset,
