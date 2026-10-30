@@ -39,6 +39,11 @@ export type GettyWebResult =
     accepted: string[];
     /** Names Getty answered with "Upload failed" — never counted as uploaded. */
     failed?: GettyWebRejection[];
+    /**
+     * Contributions Getty never marked "Ready to submit" (by stem). They may have
+     * arrived, but they are not submittable, so they are not counted as uploaded.
+     */
+    notReady?: string[];
     completed: boolean;
     /**
      * Every contribution carried Getty's own "Ready to submit" validation icon,
@@ -153,13 +158,20 @@ function completionOf(raw: Record<string, unknown>) {
   };
 }
 
+function nameList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry !== "") : [];
+}
+
 function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
   if (!isRecord(raw) || raw.ok !== true) return { ok: false, code: "page", reason: "unexpected helper response" };
+  const notReady = nameList(raw.notReady);
   return {
     ok: true,
     batchId: typeof raw.batchId === "string" ? raw.batchId : null,
-    accepted: Array.isArray(raw.accepted) ? raw.accepted.filter((n): n is string => typeof n === "string") : fallback,
+    accepted: nameList(raw.accepted).length > 0 ? nameList(raw.accepted) : fallback,
     failed: failedEntries(raw),
+    // Absent means "nothing was left unvalidated", never a claim of success.
+    ...(notReady.length > 0 ? { notReady } : {}),
     completed: raw.completed === true,
     // Absent means "not proven ready", never "ready".
     ...(raw.ready === true ? { ready: true } : {}),

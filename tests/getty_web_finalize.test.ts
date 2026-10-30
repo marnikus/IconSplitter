@@ -392,6 +392,76 @@ describe("Getty web automatic finalize", () => {
     if (result.ok) expect(result.report.metadata[0]).not.toHaveProperty("keywords");
   });
 
+  it("re-uploads a rejected card instead of giving up on the batch", async () => {
+    // The user's batch had one "Upload failed" card and one card stuck on
+    // not_ready_to_submit; both must go back to the uploader, not be reported as
+    // finished and not end the run on the spot.
+    const queue = {
+      ...successQueue(),
+      // After the re-upload the card is validated: the reading says so.
+      readUploadState: [{ cardsPresent: true, readyToSubmit: ["star_01.jpg", "broken_02.jpg"], awaitingReady: [], failed: [] }],
+    };
+    const cdp = connection(queue);
+    const repaired: string[][] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "broken_02.jpg", metadata: META }],
+      failed: ["broken_02.jpg"], complete: true, settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1,
+      repair: async (names: string[]) => { repaired.push(names); return { ok: true }; },
+      signal: new AbortController().signal,
+    });
+    expect(repaired).toEqual([["broken_02.jpg"]]);
+    expect(result.ok).toBe(true);
+    expect(cdp.steps).toContain("completeBatch");
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, notReady: [] });
+  });
+
+  it("keeps refusing when the re-uploaded card stays Upload failed", async () => {
+    const queue = {
+      ...successQueue(),
+      readUploadState: [{ cardsPresent: true, readyToSubmit: [], awaitingReady: [], failed: ["broken_02.jpg"] }],
+    };
+    const cdp = connection(queue);
+    let repairs = 0;
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "broken_02.jpg", metadata: META }],
+      failed: ["broken_02.jpg"], complete: true, settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1,
+      repair: async () => { repairs += 1; return { ok: true }; },
+      signal: new AbortController().signal,
+    });
+    expect(repairs).toBe(1);
+    expect(result).toMatchObject({ ok: false, code: "page" });
+    if (!result.ok) expect(result.reason).toContain("Upload failed");
+    expect(cdp.steps).not.toContain("completeBatch");
+  });
+
+  it("re-uploads a card that never turns Ready to submit, then finishes", async () => {
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      // Two re-saves change nothing; the card only validates after the re-upload.
+      readUploadState: [
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] },
+      ],
+    };
+    const cdp = connection(queue);
+    const repaired: string[][] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0, readyTimeoutMs: 60000,
+      repair: async (names: string[]) => { repaired.push(names); return { ok: true }; },
+      signal: new AbortController().signal,
+    });
+    // The re-saves come first, then the file itself is sent back to Getty.
+    expect(repaired).toEqual([["star_01"]]);
+    expect(cdp.steps.filter((step: string) => step === "selectAllContributions").length).toBeGreaterThan(2);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, resaves: 2, repairs: 1 });
+  });
+
   it("refuses to submit while Getty reports an Upload failed card", async () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {

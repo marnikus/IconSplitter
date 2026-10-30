@@ -10,7 +10,7 @@ import path from "node:path";
 import { connectBrowser } from "./browser.mjs";
 import { openCdp } from "./cdp.mjs";
 import { restoreSessionCookies, saveSessionCookies } from "./sessioncookies.mjs";
-import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage } from "./contribute.mjs";
+import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage, reattachFiles } from "./contribute.mjs";
 
 const LOGIN_TIMEOUT_MS = 120000;
 const UPLOAD_TIMEOUT_MS = 180000;
@@ -40,11 +40,57 @@ export function progressOf(read, reloads = 0) {
 /**
  * What the run may call uploaded. The last reading of the run wins: it is taken
  * after the grid-wide metadata save, so it is the one that can show Getty's
- * "Ready to submit" icon. A file without that icon is never in this list.
+ * "Ready to submit" icon — and a file without that icon is never in this list.
+ * A page that renders no contribution cards cannot report the icon at all; only
+ * then does the arrived count stand in, and the answer is already marked
+ * unverified.
  */
 export function acceptedOf(done, attachResult) {
   const settled = done?.report?.readiness?.state ?? attachResult?.state ?? null;
-  return Array.isArray(settled?.uploaded) ? settled.uploaded : [];
+  if (settled === null) return [];
+  const unverified = done?.report?.readiness?.verified === false;
+  if (unverified) return Array.isArray(settled.uploaded) ? settled.uploaded : [];
+  return Array.isArray(settled.readyToSubmit) ? settled.readyToSubmit : [];
+}
+
+/** The run's contributions Getty did not validate, by stem. */
+export function notReadyOf(done) {
+  const notReady = done?.report?.readiness?.notReady;
+  return Array.isArray(notReady) ? notReady.filter((name) => typeof name === "string" && name !== "") : [];
+}
+
+/** A file name without its folder or extension, for matching against the page. */
+function stemOf(fileName) {
+  const leaf = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  return (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
+}
+
+/**
+ * The repair the readiness gate may call: it re-attaches the staged copy of the
+ * files Getty never validated, matched by **stem** (a JPEG/EPS pair is one card).
+ * Nothing is re-staged and no drawer is re-typed here — `contribute` saves the
+ * metadata again after the files are back on the page.
+ */
+export function repairTargets(files, paths, names) {
+  const wanted = [];
+  for (const name of Array.isArray(names) ? names : []) {
+    const stem = stemOf(name);
+    const index = Array.isArray(files) ? files.findIndex((file) => stemOf(file?.name) === stem) : -1;
+    const staged = index >= 0 && Array.isArray(paths) ? paths[index] : undefined;
+    if (typeof staged === "string") wanted.push({ name: files[index].name, path: staged });
+  }
+  return wanted;
+}
+
+export function repairCapability(connection, sessionId, files, paths, options = {}) {
+  if (!Array.isArray(files) || files.length === 0 || !Array.isArray(paths)) return undefined;
+  return async (names) => {
+    const wanted = repairTargets(files, paths, names);
+    if (wanted.length === 0) return { ok: false };
+    const done = await reattachFiles(connection, sessionId, wanted, options);
+    return { ok: done.ok === true };
+  };
 }
 
 /** The readiness pacing a caller may inject; production keeps the real windows. */
@@ -195,6 +241,9 @@ function buildSession(ctx) {
   const { connection, page, options, cleanup } = ctx;
   const tempDir = mkdtempSync(path.join(tmpdir(), "getty-web-files-"));
   const state = { batchId: null, expected: [], progress: null, reloads: 0 };
+  // Kept for the finish call: the same staged copies are re-uploaded if the page
+  // still shows a card without Getty's "Ready to submit" icon.
+  const staged = { files: [], paths: [] };
   let closed = false;
   const dropTemp = () => {
     try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp already gone */ }
@@ -226,6 +275,8 @@ function buildSession(ctx) {
         }
       }
       const paths = stageIcons(tempDir, icons).flat();
+      staged.files = files;
+      staged.paths = paths;
       state.reloads = 0;
       state.progress = { phase: "uploading", total: files.length, uploaded: 0, failed: 0, listed: 0, reloads: 0 };
       const result = await attachFiles(connection, page.sessionId, {
@@ -242,11 +293,14 @@ function buildSession(ctx) {
         return { ...result, batchId: state.batchId };
       }
       state.progress = { ...progressOf(result.state, state.reloads), phase: "metadata" };
+      // Every card that turns "Ready to submit" after the save moves the bar.
+      const onState = (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "metadata" }; };
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
-        onProgress: options.onProgress, signal: options.signal, ...readyOptionsOf(options),
-        // Every card that turns "Ready to submit" after the save moves the bar.
-        onState: (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "metadata" }; },
+        onProgress: options.onProgress, signal: options.signal, onState, ...readyOptionsOf(options),
+        // A card Getty never validates (or rejected) is re-uploaded from its own
+        // staged copy instead of being reported as uploaded.
+        repair: repairCapability(connection, page.sessionId, files, paths, { onState, onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs }),
       });
       // The phase says whether Getty validated every card, not just that the
       // request returned: a failed readiness leaves the run unfinished.
@@ -257,7 +311,7 @@ function buildSession(ctx) {
       return {
         ...done, state: { ...result.state, ...done.report?.state }, report: done.report,
         accepted: acceptedOf(done, result), failed: settledState?.failures ?? result.state?.failures ?? [],
-        batchId: state.batchId,
+        notReady: notReadyOf(done), batchId: state.batchId,
       };
     },
     /**
@@ -268,6 +322,9 @@ function buildSession(ctx) {
       const result = await finishBatch(connection, page.sessionId, {
         expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
         onProgress: options.onProgress, ...readyOptionsOf(options),
+        repair: repairCapability(connection, page.sessionId, staged.files, staged.paths, {
+          onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs,
+        }),
       });
       state.progress = { ...(state.progress ?? progressOf(null, state.reloads)), phase: result.ok ? "done" : "failed" };
       return result;

@@ -1,7 +1,7 @@
 // Real serialized driver steps and CDP expressions against the supplied MUI
 // dialog shape. No queued success replies that could hide selector errors.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { attachFiles, createBatch, finishBatch } from "../tools/bridge/gettyweb/contribute.mjs";
+import { attachFiles, createBatch, finishBatch, reattachFiles } from "../tools/bridge/gettyweb/contribute.mjs";
 
 const TYPE = "iStock creative illustration";
 const DIALOG = `<div role="dialog" aria-labelledby="create-batch-dialog" aria-modal="true">
@@ -426,6 +426,50 @@ describe("Getty web upload verification", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("re-uploads only the file Getty never marked ready, from its staged copy", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new DomConnection();
+      const original = page.send.bind(page);
+      page.send = async (method: string, params: Record<string, unknown>) => {
+        const answer = await original(method, params);
+        if (method === "DOM.setFileInputFiles") {
+          // Getty lists the re-uploaded contribution again, this time validated.
+          document.body.insertAdjacentHTML("beforeend", card("icon-map-pin_6_03_v4.eps"));
+        }
+        return answer;
+      };
+      const progress: string[] = [];
+      const pending = reattachFiles(page, "page", [
+        { name: "icon-map-pin_6_03_v4.eps", path: "/staged/1/icon-map-pin_6_03_v4.eps" },
+        { name: "icon-map-pin_6_03_v4.jpg", path: "/staged/1/icon-map-pin_6_03_v4.jpg" },
+      ], { pollMs: 5, retryTimeoutMs: 2000, onProgress: (line: string) => progress.push(line) });
+      await vi.advanceTimersByTimeAsync(3000);
+      const done = await pending;
+      expect(done.ok).toBe(true);
+      // Only the stuck pair went back to the uploader — not the whole batch.
+      expect(page.attached).toEqual(["/staged/1/icon-map-pin_6_03_v4.eps", "/staged/1/icon-map-pin_6_03_v4.jpg"]);
+      expect(page.attachmentCalls).toBe(1);
+      expect(progress.some((line) => /re-uploading 2 file\(s\)/.test(line))).toBe(true);
+      // Both files of the pair are covered by the one re-validated card.
+      expect(done.state.readyToSubmit).toEqual(["icon-map-pin_6_03_v4.eps", "icon-map-pin_6_03_v4.jpg"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says so when Getty's uploader is not there for the re-upload", async () => {
+    const page = new DomConnection();
+    // The page that comes back after the retry has no contribution uploader.
+    document.body.innerHTML = "<p>no uploader on this page</p>";
+    const done = await reattachFiles(page, "page", [
+      { name: "a.eps", path: "/staged/a.eps" },
+    ], { pollMs: 1, uploaderTimeoutMs: 1, retryTimeoutMs: 10 });
+    expect(done).toMatchObject({ ok: false, code: "page" });
+    expect(done.reason).toContain("did not come back for the retry");
   });
 
   it("fails with the count when a card never appears", async () => {

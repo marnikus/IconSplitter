@@ -230,6 +230,9 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
       // Only a card carrying Getty's "Ready to submit" icon counts: "Upload failed" is reported, never accepted.
       accepted: result.accepted ?? result.state?.uploaded ?? [],
       failed: result.failed ?? result.state?.failures ?? [],
+      // Contributions Getty never marked "Ready to submit": named, so the app can
+      // say which file is not submittable instead of counting it as uploaded.
+      notReady: result.notReady ?? result.report?.readiness?.notReady ?? [],
       chips: result.state?.chips ?? null,
       completed: result.report?.completion?.clicked === true,
       // Every card carried Getty's "Ready to submit" icon: the batch is finished
@@ -313,6 +316,7 @@ export async function handleGettyWebFinish(req, res, post, json) {
     const report = result.report ?? {};
     return json(res, 200, {
       ok: true, batchId: entry.session.batchId ?? null, accepted: [], completed: report.completion?.clicked === true,
+      notReady: report.readiness?.notReady ?? [],
       ready: report.readiness?.ok === true && report.readiness?.verified !== false,
       completion: report.completion ?? null, metadata: [], contributions: report.contributions ?? null,
       submitted: report.state?.submitted === true,

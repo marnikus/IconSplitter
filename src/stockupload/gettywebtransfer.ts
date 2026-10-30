@@ -102,16 +102,21 @@ async function prepareIcons(input: GettyWebRunInput): Promise<GettyWebIcon[] | s
  * not claimed as uploaded. A thumbnail proves nothing.
  */
 function outcomeOf(
-  icon: GettyWebIconInput, accepted: readonly string[], failed: readonly GettyWebRejection[],
+  icon: GettyWebIconInput, res: { accepted: readonly string[]; failed: readonly GettyWebRejection[]; notReady: readonly string[] },
 ): GettyWebIconOutcome {
   const stems = gettyWebFileOrder(icon.tasks).map((task) => gettyWebStem(task.fileName));
   const stemOf = (name: string) => gettyWebStem(name);
-  const rejected = failed.find((entry) => stems.includes(stemOf(entry.name)));
+  const rejected = res.failed.find((entry) => stems.includes(stemOf(entry.name)));
   if (rejected) {
     const id = rejected.id ? ` (${rejected.id})` : "";
     return { ok: false, reason: `Getty reports "Upload failed" for ${rejected.name}${id}` };
   }
-  if (accepted.some((name) => stems.includes(stemOf(name)))) return { ok: true, reason: "" };
+  if (res.accepted.some((name) => stems.includes(stemOf(name)))) return { ok: true, reason: "" };
+  // Getty has the bytes but has not validated the card: that is not an upload.
+  const unvalidated = res.notReady.find((name) => stems.includes(stemOf(name)));
+  if (unvalidated) {
+    return { ok: false, reason: `Getty does not show its "Ready to submit" icon for ${unvalidated} — not counted as uploaded` };
+  }
   return { ok: false, reason: `Getty does not show its "Ready to submit" icon for ${stems[0] ?? "this icon"} — not counted as uploaded` };
 }
 
@@ -147,7 +152,9 @@ export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyW
     complete: false, sessionKey: input.sessionKey, signal: input.signal,
   });
   if (!res.ok) return failed(input, res.reason);
-  const outcomes = input.icons.map((icon) => outcomeOf(icon, res.accepted ?? [], res.failed ?? []));
+  const outcomes = input.icons.map((icon) => outcomeOf(icon, {
+    accepted: res.accepted ?? [], failed: res.failed ?? [], notReady: res.notReady ?? [],
+  }));
   const reason = outcomes.find((entry) => !entry.ok)?.reason ?? "";
   return { ok: reason === "", reason, icons: outcomes, deferCompletion: true };
 }
@@ -156,29 +163,37 @@ export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyW
  * The panel line for a live upload reading. While the bytes are moving it counts
  * the files Getty already has (its picture is on the page); once the metadata is
  * being saved it counts the cards that turned "Ready to submit", which is what
- * actually finishes the run.
+ * actually finishes the run, and says how many are still missing.
  */
 export function progressLabel(progress: GettyWebProgress, targetName: string): string {
   const of = progress.total > 0 ? ` of ${progress.total}` : "";
   const failed = progress.failed > 0 ? `, ${progress.failed} failed` : "";
   const reloaded = progress.reloads > 0 ? " — page reloaded to get it moving" : "";
-  const ready = progress.ready ?? 0;
   if (progress.phase === "uploading") {
     if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
     return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}${reloaded}`;
   }
-  if (ready === 0 && progress.failed === 0) return `${targetName}: saving metadata ${progress.listed}${of} file(s)${reloaded}`;
-  return `${targetName}: ${ready}${of} file(s) ready to submit${failed}${reloaded}`;
+  const ready = progress.ready ?? 0;
+  const pending = Math.max(0, progress.total - ready - progress.failed);
+  if (progress.total === 0) return `${targetName}: saving metadata${reloaded}`;
+  const left = pending > 0 ? `, ${pending} not ready yet` : "";
+  return `${targetName}: ${ready}${of} file(s) ready to submit${failed}${left}${reloaded}`;
 }
 
 /**
- * Files the bar may count as done: the ones whose picture rendered (Getty has
- * them) or, once the metadata is being saved, the ones that turned "Ready to
- * submit" — whichever is further, so the count never runs backwards while the
- * run finishes. Rejected files count straight away.
+ * Files the bar may count as done. In the upload stage that is what Getty
+ * received; from the moment the metadata is saved it is **only** the cards that
+ * turned "Ready to submit" (plus Getty's own rejections), so a batch whose cards
+ * are still not ready can never show a finished bar.
  */
 export function settledFiles(progress: GettyWebProgress): number {
-  return Math.max(progress.uploaded, progress.ready ?? 0) + progress.failed;
+  const done = progress.phase === "uploading" ? progress.uploaded : (progress.ready ?? 0);
+  return done + progress.failed;
+}
+
+/** The bar stage this reading belongs to. */
+export function progressPhase(progress: GettyWebProgress): "uploading" | "verifying" {
+  return progress.phase === "uploading" ? "uploading" : "verifying";
 }
 
 const PROGRESS_POLL_MS = 1000;

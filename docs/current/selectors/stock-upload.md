@@ -29,7 +29,8 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   Two stages: the card's picture (`[data-cy="image-thumbnail"]`) means the file
   **arrived**, which is what starts the metadata step; the ready icon is what
   **finishes** the run, and it only appears after Save metadata, so the helper
-  re-saves after 30 s for the cards that still lack it.
+  re-saves after 30 s and then re-uploads the file (same hidden uploader) for the
+  cards that still lack it.
 - Getty web Complete: the control is matched by label among *enabled* buttons only;
   `completionState` reports presence/enabled so the finish waits for Getty instead
   of clicking a disabled control. Files are matched to a card by **stem**, since a JPEG/EPS pair

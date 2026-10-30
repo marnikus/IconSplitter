@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SESSION_COOKIE_FILE, restoreSessionCookies, saveSessionCookies, sessionCookiePath,
 } from "../tools/bridge/gettyweb/sessioncookies.mjs";
-import { acceptedOf } from "../tools/bridge/gettyweb/session.mjs";
+import { acceptedOf, notReadyOf, repairTargets } from "../tools/bridge/gettyweb/session.mjs";
 
 const COOKIE = {
   name: "esp_session", value: "s3cr3t-token", domain: ".gettyimages.com", path: "/",
@@ -133,22 +133,52 @@ describe("Getty web remembered cookies", () => {
 describe("Getty web accepted files", () => {
   const attach = { uploaded: ["star_01.jpg", "star_01.eps"], failed: [], namesSeen: ["star_01.jpg", "star_01.eps"] };
 
-  it("takes the post-save reading, not the attach-phase one", () => {
+  it("counts only the cards carrying Ready to submit, after the save", () => {
+    // Every file arrived (pictures rendered), but Getty validated one card: the
+    // other is not submittable and must not be reported as uploaded.
     const done = {
-      ok: false, code: "timeout", reason: "Getty does not show its \"Ready to submit\" icon for moon_02.eps",
-      report: { readiness: { ok: false, state: { ...attach, uploaded: ["star_01.jpg", "star_01.eps"] } } },
+      ok: false, code: "timeout", reason: "Getty does not show its \"Ready to submit\" icon for moon_02",
+      report: {
+        readiness: {
+          ok: false, notReady: ["moon_02"],
+          state: { ...attach, uploaded: ["star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps"], readyToSubmit: ["star_01.jpg", "star_01.eps"] },
+        },
+      },
     };
-    expect(acceptedOf(done, { state: { ...attach, uploaded: ["star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps"] } }))
-      .toEqual(["star_01.jpg", "star_01.eps"]);
+    expect(acceptedOf(done, { state: attach })).toEqual(["star_01.jpg", "star_01.eps"]);
+    expect(notReadyOf(done)).toEqual(["moon_02"]);
   });
 
   it("is empty when no card showed the icon, even though every file was listed", () => {
-    const done = { ok: false, report: { readiness: { ok: false, state: { ...attach, uploaded: [] } } } };
+    const done = { ok: false, report: { readiness: { ok: false, state: { ...attach, uploaded: [], readyToSubmit: [] } } } };
     expect(acceptedOf(done, { state: attach })).toEqual([]);
   });
 
-  it("falls back to the attach reading only when the run never reached a later one", () => {
-    expect(acceptedOf({ ok: false, report: null }, { state: attach })).toEqual(attach.uploaded);
+  it("falls back to the arrived count only on a page that cannot report the chips", () => {
+    // No contribution cards: readiness is unverified, so nothing better exists.
+    const done = { ok: true, report: { readiness: { ok: true, verified: false, state: attach } } };
+    expect(acceptedOf(done, { state: attach })).toEqual(attach.uploaded);
     expect(acceptedOf(undefined, undefined)).toEqual([]);
+  });
+});
+
+// Re-uploading is the repair for a card Getty never validates: only the named
+// contributions are handed back, each from its own staged copy, and a JPEG/EPS
+// pair is matched by stem (Getty lists the pair once).
+describe("Getty web re-upload targets", () => {
+  const files = [
+    { name: "star_01.jpg" }, { name: "star_01.eps" },
+    { name: "moon_02.jpg" }, { name: "moon_02.eps" },
+  ];
+  const paths = ["/staged/0/star_01.jpg", "/staged/0/star_01.eps", "/staged/1/moon_02.jpg", "/staged/1/moon_02.eps"];
+
+  it("picks the staged copy of the contribution Getty did not validate", () => {
+    expect(repairTargets(files, paths, ["moon_02"])).toEqual([{ name: "moon_02.jpg", path: "/staged/1/moon_02.jpg" }]);
+  });
+
+  it("re-uploads nothing it has no staged copy of", () => {
+    expect(repairTargets(files, paths, ["ghost_09"])).toEqual([]);
+    expect(repairTargets([], [], ["star_01"])).toEqual([]);
+    expect(repairTargets(files, paths, null)).toEqual([]);
   });
 });

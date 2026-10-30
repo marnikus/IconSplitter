@@ -63,7 +63,35 @@ export function finishBatch(connection: any, sessionId: string, options?: {
   readyTimeoutMs?: number;
   /** How many times Save metadata may be pressed again (default 2). */
   readyResaves?: number;
+  /** How many times the unvalidated files may be re-uploaded (default 1). */
+  readyRepairs?: number;
+  /**
+   * Re-uploads the named contributions from their staged copies. Without it the
+   * run reports them instead of retrying.
+   */
+  repair?: (names: string[]) => Promise<{ ok: boolean }>;
 }): Promise<any>;
+/**
+ * Re-attaches already-staged files to Getty's uploader. This is the repair for a
+ * contribution that never turned "Ready to submit" (or that Getty rejected):
+ * only the named files go back, and the caller re-saves their metadata after.
+ */
+export function reattachFiles(
+  connection: any,
+  sessionId: string,
+  files: Array<{ name: string; path: string }>,
+  options?: {
+    pollMs?: number;
+    /** How long the re-attached files may take to come back on the page. */
+    retryTimeoutMs?: number;
+    /** How long Getty's uploader may take to reappear for the retry. */
+    uploaderTimeoutMs?: number;
+    onProgress?: (note: string) => void;
+    onState?: (state: any) => void;
+    signal?: AbortSignal;
+  },
+): Promise<{ ok: boolean; code?: string; reason?: string; state: any }>;
+
 export function finalizeBatch(connection: any, sessionId: string, options: {
   files: Array<{
     name: string;
@@ -87,6 +115,13 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
   readyTimeoutMs?: number;
   /** How many times Save metadata may be pressed again (default 2). */
   readyResaves?: number;
+  /** How many times the unvalidated files may be re-uploaded (default 1). */
+  readyRepairs?: number;
+  /**
+   * Re-uploads the named contributions from their staged copies. Without it the
+   * run reports them instead of retrying.
+   */
+  repair?: (names: string[]) => Promise<{ ok: boolean }>;
   /** Every fresh page reading, so a panel bar can follow the chips as they land. */
   onState?: (state: any) => void;
   onProgress?: (note: string) => void;

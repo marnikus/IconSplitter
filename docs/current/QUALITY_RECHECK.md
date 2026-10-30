@@ -4206,3 +4206,13 @@ or budget changed. Docs: `sor/stock-upload-getty-web.md` (arrival vs finish),
 `selectors/stock-upload.md` (picture starts metadata, chip finishes),
 `sor/stock-upload.md` (bar counting) — 8 964 / 8 568 / 8 067 B. `dist/` and
 `node_modules/` restored, not committed.
+
+## 2026-10-30 — Getty progress truth + re-upload of unvalidated cards
+
+Measured this round: `npx tsc --noEmit` clean; `npm run lint` 0 errors (22
+pre-existing warnings); `npm run quality:changed` GATE PASSED (largest touched
+file `gettywebtransfer.ts` 251 lines / 24 fns); `npm run verify:fast` ALL LANES
+PASSED (build 1,951.06 kB). Focused vitest: `stockupload_progress_ui` 6/6,
+`stockupload_getty_web` 17/17, `getty_web_session` 11/11, `getty_web_finalize`
+26/26, `getty_web_batch` 32/32, `docs_navigation` 4/4 after the SOR page was
+reflowed 9220 B → 8985 B.

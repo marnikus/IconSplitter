@@ -13,7 +13,7 @@ import type { ItemTracker, RunCounters, UploadBatchDeps, UploadBatchSummary } fr
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
 import { finishGettyWebRun } from "./gettywebfinish";
 import {
-  completionNote, progressLabel, settledFiles, uploadGettyWebRun, watchGettyProgress,
+  completionNote, progressLabel, progressPhase, settledFiles, uploadGettyWebRun, watchGettyProgress,
 } from "./gettywebtransfer";
 import { markUploadInFlight } from "./journal";
 import {
@@ -139,6 +139,9 @@ function liveGettyProgress(ctx: NetworkCtx): () => void {
       ctx.deps.onProgress?.({
         done: Math.min(ctx.counters.total, base + settledFiles(progress)),
         total: ctx.counters.total,
+        // The bar may only say "complete" once Getty validated every card, so the
+        // stage travels with the counts: bytes in, or chips flipping.
+        phase: progressPhase(progress),
         label: progressLabel(progress, ctx.target.name),
       });
     },

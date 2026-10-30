@@ -25,7 +25,11 @@ const VERIFY_TIMEOUT_MS = 300000;
 // save is pressed again after this window — the re-apply that flips it.
 const READY_RETRY_MS = 30000;
 const READY_RESAVES = 2;
-const READY_TIMEOUT_MS = 75000;
+// The gate must leave room for the two re-saves **and** for re-uploading the
+// cards that still refuse to validate, so it is a whole-run window, not a teaser.
+const READY_TIMEOUT_MS = 180000;
+const READY_REPAIRS = 1;
+const REPAIR_TIMEOUT_MS = 120000;
 // Getty's page sometimes simply stops reacting to its own uploader. Reloading it
 // (and attaching only what is still missing) is the recovery that works there.
 const STALL_MS = 30000;
@@ -418,6 +422,51 @@ export async function attachFiles(connection, sessionId, options) {
   return waitForFileNames(connection, sessionId, options.names, options);
 }
 
+/**
+ * Hands already-staged files back to Getty's uploader. This is the repair for a
+ * contribution that never turned "Ready to submit" (or that Getty answered with
+ * "Upload failed"): a second attach is what the page accepts, and re-saving the
+ * same drawer would keep it stuck. Only the named files are re-attached.
+ */
+export async function reattachFiles(connection, sessionId, files, options = {}) {
+  const list = (Array.isArray(files) ? files : []).filter((file) => typeof file?.path === "string" && file.path !== "");
+  if (list.length === 0) return { ok: false, code: "bad-request", reason: "no staged copy of the file(s) left to re-upload", state: null };
+  const names = list.map((file) => file.name);
+  options.onProgress?.(`re-uploading ${list.length} file(s) Getty has not marked Ready to submit`);
+  await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
+  const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
+    sessionId, timeoutMs: options.uploaderTimeoutMs ?? 60000, intervalMs: pollMsOf(options),
+  }).catch(() => ({ ok: false }));
+  if (!input.ok) {
+    return { ok: false, code: "page", reason: "Getty's uploader did not come back for the retry — re-upload those files by hand", state: null };
+  }
+  const attached = await setFiles(connection, list.map((file) => file.path), { sessionId, selector: CONTRIBUTION_FILE_INPUT });
+  if (!attached.ok) return { ok: false, code: "page", reason: attached.reason, state: null };
+  options.onProgress?.(`${list.length} file(s) re-attached to the batch page`);
+  return waitForReupload(connection, sessionId, names, options);
+}
+
+/** Waits until the re-attached files are back on the page (a picture or a chip). */
+async function waitForReupload(connection, sessionId, names, options) {
+  const deadline = Date.now() + (options.retryTimeoutMs ?? REPAIR_TIMEOUT_MS);
+  let state = null;
+  const arrived = (read) => names.every((name) => read.uploaded.includes(name) || read.failed.includes(name));
+  while (Date.now() < deadline) {
+    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state };
+    const read = await readStateSafe(connection, sessionId, names);
+    if (read.ok) {
+      state = read.state;
+      options.onState?.(state);
+      if (arrived(state)) return { ok: true, state };
+    }
+    await sleep(pollMsOf(options));
+  }
+  return {
+    ok: false, code: "timeout", state,
+    reason: `the re-uploaded file(s) did not come back on Getty's page (${names.slice(0, 3).join(", ")})`,
+  };
+}
+
 /** The tag count before and after a fill, only when it moved — never expected. */
 function tagsChangedOf(filled) {
   const before = filled?.keywordsBefore;
@@ -559,10 +608,25 @@ export function notReadyContributions(expected, state) {
 }
 
 /** Why a file Getty never marked ready is reported — named, never counted only. */
-function notReadyReason(pending, resaves) {
+function notReadyReason(pending, resaves, repairs) {
   const named = pending.slice(0, 3).join(", ");
-  const again = resaves > 0 ? ` after saving the metadata ${resaves + 1} times` : "";
+  const saved = resaves > 0 ? ` and saving the metadata ${resaves + 1} times` : "";
+  const again = repairs > 0 ? `${saved}, not even after re-uploading` : saved;
   return `Getty does not show its "Ready to submit" icon for ${pending.length} file(s) (${named})${again} — the upload is not complete`;
+}
+
+/**
+ * Re-uploads the cards Getty still will not validate. Saving the same drawer a
+ * third time changes nothing; a second attach is what the page responds to, and
+ * its metadata is typed again right after.
+ */
+async function repairPending(connection, sessionId, pending, options) {
+  if (typeof options.repair !== "function") return false;
+  options.onProgress?.(`${pending.length} file(s) still not ready to submit — re-uploading them`);
+  const done = await options.repair(pending).catch(() => null);
+  if (done?.ok !== true) return false;
+  await saveEverySelected(connection, sessionId, options).catch(() => null);
+  return true;
 }
 
 /**
@@ -577,8 +641,10 @@ async function waitForReadyToSubmit(connection, sessionId, expected, options, fi
   const retryMs = options.readyRetryMs ?? READY_RETRY_MS;
   const deadline = Date.now() + (options.readyTimeoutMs ?? READY_TIMEOUT_MS);
   const maxResaves = options.readyResaves ?? READY_RESAVES;
+  const maxRepairs = options.readyRepairs ?? READY_REPAIRS;
   const total = contributionCount(expected);
   let resaves = 0;
+  let repairs = 0;
   let nextSaveAt = Date.now() + retryMs;
   let state = first ?? null;
   if (state === null) {
@@ -588,20 +654,35 @@ async function waitForReadyToSubmit(connection, sessionId, expected, options, fi
   // A page that renders no contribution cards (or did not answer) cannot state
   // readiness: report it unverified rather than guess either way.
   if (state === null || state.cardsPresent === false) {
-    return { ok: true, verified: false, ready: 0, total, notReady: [], resaves, state };
+    return { ok: true, verified: false, ready: 0, total, notReady: [], resaves, repairs, state };
   }
   for (;;) {
     const pending = notReadyContributions(expected, state);
     if (pending.length === 0) {
-      return { ok: true, verified: true, ready: total, total, notReady: [], resaves, state };
+      return { ok: true, verified: true, ready: total, total, notReady: [], resaves, repairs, state };
     }
-    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", notReady: pending, total, resaves, state };
-    if (Date.now() >= deadline) return { ok: false, code: "timeout", reason: notReadyReason(pending, resaves), notReady: pending, total, resaves, state };
+    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", notReady: pending, total, resaves, repairs, state };
+    if (Date.now() >= deadline) {
+      return { ok: false, code: "timeout", reason: notReadyReason(pending, resaves, repairs), notReady: pending, total, resaves, repairs, state };
+    }
     if (resaves < maxResaves && Date.now() >= nextSaveAt) {
       resaves += 1;
       nextSaveAt = Date.now() + retryMs;
       options.onProgress?.(`${pending.length} file(s) are not ready to submit — saving the metadata again (${resaves}/${maxResaves})`);
       await saveEverySelected(connection, sessionId, options).catch(() => null);
+      const reread = await readStateSafe(connection, sessionId, expected);
+      if (reread.ok) {
+        state = reread.state;
+        options.onState?.(state);
+      }
+      continue;
+    }
+    // Two re-saves were not enough: re-upload the cards instead of sitting on a
+    // drawer Getty clearly will not validate. Its metadata is re-applied after.
+    if (resaves >= maxResaves && repairs < maxRepairs && Date.now() >= nextSaveAt) {
+      repairs += 1;
+      nextSaveAt = Date.now() + retryMs;
+      await repairPending(connection, sessionId, pending, options);
       const reread = await readStateSafe(connection, sessionId, expected);
       if (reread.ok) {
         state = reread.state;
@@ -625,7 +706,7 @@ function readinessReport(readiness) {
   return {
     ok: readiness.ok === true, verified: readiness.verified !== false,
     ready: readiness.ready ?? 0, total: readiness.total ?? 0,
-    notReady: readiness.notReady ?? [], resaves: readiness.resaves ?? 0,
+    notReady: readiness.notReady ?? [], resaves: readiness.resaves ?? 0, repairs: readiness.repairs ?? 0,
   };
 }
 
@@ -756,6 +837,23 @@ export async function finishBatch(connection, sessionId, options = {}) {
   return { ok: true, report: { metadata: [], ...done, contributions: { expected: total, listed } } };
 }
 
+/**
+ * Re-uploads the cards Getty answered with "Upload failed" and reports the ones
+ * that stay rejected. A rejected card has no editor to save, so re-attaching the
+ * file is the only thing that can turn it into a submittable contribution.
+ */
+async function repairRejected(connection, sessionId, rejected, options) {
+  if (rejected.length === 0) return [];
+  if (typeof options.repair !== "function") return rejected;
+  options.onProgress?.(`Getty rejected ${rejected.length} file(s) — re-uploading them instead of giving up`);
+  const done = await options.repair(rejected).catch(() => null);
+  if (done?.ok !== true) return rejected;
+  const read = await readStateSafe(connection, sessionId, rejected);
+  const state = read.ok ? read.state : null;
+  options.onState?.(state);
+  return state === null ? rejected : rejected.filter((name) => failedContributions([name], state) > 0);
+}
+
 /** Whether any drawer was filled, i.e. whether a grid-wide save is worth it. */
 function anyDrawerSaved(report) {
   return report.some((entry) => entry.status === "saved" || entry.status === "filled-unsaved");
@@ -798,11 +896,12 @@ export async function finalizeBatch(connection, sessionId, options) {
   // The dates and text are in every drawer, so one save now covers all the files.
   if (anyDrawerSaved(filled.report)) report.bulkSave = await saveEverySelected(connection, sessionId, options);
   const rejected = namesOf(options.failed);
-  if (rejected.length > 0) {
+  const stillRejected = await repairRejected(connection, sessionId, rejected, options);
+  if (stillRejected.length > 0) {
     // Submitting a batch that still shows "Upload failed" cards locks those icons out.
     return {
       ok: false, code: "page", report,
-      reason: `Getty reports "Upload failed" for ${rejected.length} file(s) (${rejected.slice(0, 3).join(", ")}) — the batch is not completed`,
+      reason: `Getty reports "Upload failed" for ${stillRejected.length} file(s) (${stillRejected.slice(0, 3).join(", ")}) — the batch is not completed`,
     };
   }
   const names = namesOf((options.files ?? []).map((file) => file?.name));

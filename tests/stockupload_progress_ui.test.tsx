@@ -17,7 +17,7 @@ let ui: Root;
 
 function api(overrides: Partial<StockUploadApi> = {}): StockUploadApi {
   return {
-    model: { dialog: null, uploading: true, progress: { done: 14, total: 14, label: "Getty Images: 14 of 14 file(s) uploaded" } },
+    model: { dialog: null, uploading: true, progress: { done: 14, total: 14, phase: "verifying", label: "Getty Images: 14 of 14 file(s) ready to submit" } },
     confirmUpload: vi.fn(),
     closeDialog: vi.fn(),
     cancelUpload: vi.fn(),
@@ -64,6 +64,37 @@ describe("stock upload progress bar", () => {
     expect(dismiss).not.toBeNull();
     await click(dismiss);
     expect(g.dismissProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call a bar finished while its files are only uploaded", async () => {
+    // What the user saw on a real batch: every file arrived, two cards still showed
+    // not_ready_to_submit, and the bar already said "100 % · Upload complete".
+    const g = api({
+      model: {
+        dialog: null, uploading: true,
+        progress: { done: 7, total: 7, phase: "uploading", label: "Getty Images: 7 of 7 file(s) uploaded" },
+      },
+    } as Partial<StockUploadApi>);
+    await render(g);
+    const bar = mount.querySelector('[data-testid="stock-upload-progress-header"]') as HTMLElement;
+    expect(bar.className).not.toContain("complete");
+    expect(mount.querySelector('[data-testid="stock-upload-progress-title"]')!.textContent).toBe("Uploading to stock sites");
+    // Cancel still works, and there is no ✕ on a run that is still verifying.
+    expect(mount.querySelector('[data-testid="stock-progress-cancel"]')).not.toBeNull();
+    expect(mount.querySelector('[data-testid="stock-progress-dismiss"]')).toBeNull();
+  });
+
+  it("says it is verifying Ready to submit while the chips flip", async () => {
+    const g = api({
+      model: {
+        dialog: null, uploading: true,
+        progress: { done: 5, total: 7, phase: "verifying", label: "Getty Images: 5 of 7 file(s) ready to submit" },
+      },
+    } as Partial<StockUploadApi>);
+    await render(g);
+    expect(mount.querySelector('[data-testid="stock-upload-progress-title"]')!.textContent).toBe("Verifying Ready to submit");
+    expect(mount.querySelector('[data-testid="stock-upload-progress-percent"]')!.textContent).toBe("71%");
+    expect(mount.querySelector('[data-testid="stock-upload-progress-header"]')!.className).not.toContain("complete");
   });
 
   it("keeps Cancel while files are still going up", async () => {

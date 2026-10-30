@@ -156,6 +156,21 @@ describe("Getty web upload in the batch runner", () => {
     expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) uploaded"))).toBe(true);
   });
 
+  it("counts a bar as finished only on the chips, not on the files arriving", () => {
+    // The user's batch: every file had arrived, Getty had validated 5 of 7, and
+    // the bar still showed 7 of 7 done — the arrival count is not progress.
+    const arrived = { phase: "uploading", total: 7, uploaded: 7, failed: 0, listed: 7, reloads: 0 };
+    expect(settledFiles(arrived)).toBe(7);
+    const verifying = { ...arrived, phase: "metadata", ready: 5 };
+    expect(settledFiles(verifying)).toBe(5);
+    // A rejected file counts at once: it will never turn ready.
+    expect(settledFiles({ ...verifying, failed: 1 })).toBe(6);
+    expect(progressLabel(verifying, "Getty Images (web upload)"))
+      .toBe("Getty Images (web upload): 5 of 7 file(s) ready to submit, 2 not ready yet");
+    expect(progressLabel({ ...arrived, failed: 1 }, "Getty Images (web upload)"))
+      .toBe("Getty Images (web upload): 7 of 7 file(s) uploaded, 1 failed");
+  });
+
   it("says so when Getty's page had to be reloaded to get moving", () => {
     const base = { phase: "uploading", total: 14, uploaded: 5, failed: 2, listed: 14 };
     expect(progressLabel({ ...base, reloads: 0 }, "Getty Images (web upload)"))
@@ -170,7 +185,7 @@ describe("Getty web upload in the batch runner", () => {
     addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
     addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
     const found = await discoverExportedItems(root);
-    const steps: Array<{ done: number; total: number; label: string }> = [];
+    const steps: Array<{ done: number; total: number; label: string; phase?: string }> = [];
     let release: (() => void) | null = null;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     let polls = 0;
@@ -205,10 +220,11 @@ describe("Getty web upload in the batch runner", () => {
     await vi.advanceTimersByTimeAsync(6000);
     release!();
     await run;
-    // The bar keeps the files Getty already has (4), while the line verifies the
-    // cards turning "Ready to submit" — 1 of 4, then 2 of 4.
-    expect(steps.some((step) => step.done === 4 && step.label.includes("1 of 4 file(s) ready to submit"))).toBe(true);
-    expect(steps.some((step) => step.done === 4 && step.label.includes("2 of 4 file(s) ready to submit"))).toBe(true);
+    // The bar verifies the cards turning "Ready to submit" — 1 of 4, then 2 of 4 —
+    // and says how many are still not ready instead of counting the arrival twice.
+    expect(steps.some((step) => step.done === 1 && step.label.includes("1 of 4 file(s) ready to submit, 3 not ready yet"))).toBe(true);
+    expect(steps.some((step) => step.done === 2 && step.label.includes("2 of 4 file(s) ready to submit, 2 not ready yet"))).toBe(true);
+    expect(steps.some((step) => step.phase === "verifying")).toBe(true);
     // And the misses before the helper's session did not stop the watching.
     expect(polls).toBeGreaterThan(3);
   });
@@ -277,6 +293,33 @@ describe("Getty web upload in the batch runner", () => {
     expect(summary).toMatchObject({ uploadedFiles: 2, failedFiles: 2 });
     expect(summary.lastError).toContain('"Ready to submit" icon for moon_02');
     expect(finishes).toBe(1);
+  });
+
+  it("never counts a file Getty received but never validated as uploaded", async () => {
+    // The user's batch: every file arrived, two cards kept not_ready_to_submit.
+    // Arrival is not an upload, so those icons fail and name the reason.
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "icon-map-pin_6_03_v4", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebUploadFn: async () => ({
+        ok: true, batchId: "68565609",
+        accepted: ["star_01.jpg", "star_01.eps"], notReady: ["icon-map-pin_6_03_v4"],
+        completed: false, completion: null, metadata: [],
+      }),
+      finishGettyWebFn: async () => ({
+        ok: false, code: "timeout",
+        reason: 'Getty does not show its "Ready to submit" icon for 1 file(s) (icon-map-pin_6_03_v4) — the upload is not complete',
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(summary).toMatchObject({ uploadedFiles: 2, failedFiles: 2 });
+    expect(summary.lastError).toContain('"Ready to submit" icon for icon-map-pin_6_03_v4');
   });
 
   it("never marks a pair Getty answered with Upload failed as uploaded", async () => {

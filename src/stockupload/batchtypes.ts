@@ -11,10 +11,19 @@ import type {
 } from "../lib/stockupload/gettywebclient";
 import type { UploadFormatKey } from "../lib/stockupload/types";
 
+/** Which half of a run the bar is showing: bytes in, or chips validated. */
+export type UploadProgressPhase = "uploading" | "verifying";
+
 export interface UploadProgressStep {
   done: number;
   total: number;
   label: string;
+  /**
+   * The stage the counts belong to. `uploading` counts files Getty received;
+   * `verifying` counts the cards that turned "Ready to submit". A full upload
+   * phase is not a finished run, so the bar may not say "complete" there.
+   */
+  phase?: UploadProgressPhase;
   /** The run has returned: the bar stays as the finished state until closed. */
   complete?: boolean;
   /** Files that did not upload, so a finished bar can say so. */
