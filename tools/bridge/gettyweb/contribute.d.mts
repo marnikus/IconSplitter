@@ -57,6 +57,8 @@ export function finishBatch(connection: any, sessionId: string, options?: {
   pollMs?: number;
   /** Pause after clicking Complete, before the confirmation dialog is read. */
   settleMs?: number;
+  /** Pause after the grid-wide Save metadata; Getty needs a beat to persist it. */
+  bulkSaveSettleMs?: number;
   /** Wait between re-applying Save metadata for a card Getty has not validated. */
   readyRetryMs?: number;
   /** How long the readiness wait may run before the file is reported. */
@@ -65,11 +67,24 @@ export function finishBatch(connection: any, sessionId: string, options?: {
   readyResaves?: number;
   /** How many times the unvalidated files may be re-uploaded (default 1). */
   readyRepairs?: number;
+  /** How often the page may be reloaded to make Getty validate (default 1). */
+  readyReloads?: number;
+  /** How long the reloaded page gets to answer, before the gate reports (30 s). */
+  readyReloadMs?: number;
   /**
    * Re-uploads the named contributions from their staged copies. Without it the
    * run reports them instead of retrying.
    */
   repair?: (names: string[]) => Promise<{ ok: boolean }>;
+  /** Every fresh page reading, so a panel bar can follow the chips as they land. */
+  onState?: (state: any) => void;
+  /** A page reload was spent (with the wait's running count). */
+  onReload?: (reloads: number) => void;
+  /** The staged copies, so a reload can type a pending drawer again. */
+  files?: Array<{
+    name: string;
+    metadata: { title: string; description: string; keywords: string[]; dateCreated?: string } | null;
+  }>;
 }): Promise<any>;
 /**
  * Re-attaches already-staged files to Getty's uploader. This is the repair for a
@@ -117,11 +132,17 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
   readyResaves?: number;
   /** How many times the unvalidated files may be re-uploaded (default 1). */
   readyRepairs?: number;
+  /** How often the page may be reloaded to make Getty validate (default 1). */
+  readyReloads?: number;
+  /** How long the reloaded page gets to answer, before the gate reports (30 s). */
+  readyReloadMs?: number;
   /**
    * Re-uploads the named contributions from their staged copies. Without it the
    * run reports them instead of retrying.
    */
   repair?: (names: string[]) => Promise<{ ok: boolean }>;
+  /** A page reload was spent (with the wait's running count). */
+  onReload?: (reloads: number) => void;
   /** Every fresh page reading, so a panel bar can follow the chips as they land. */
   onState?: (state: any) => void;
   onProgress?: (note: string) => void;

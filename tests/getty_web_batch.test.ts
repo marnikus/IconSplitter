@@ -286,6 +286,45 @@ function mountBatchPage() {
   document.body.innerHTML = UPLOADER;
 }
 
+/** A card Getty rejected: no picture, its "Upload failed" node, and its own id. */
+const rejectedCard = (name: string) => `
+  <div data-cy="grid-row"><div data-cy="item-card">
+    <div data-cy="image-card"><p data-cy="invalid-file-media">Upload failed</p></div>
+    <p data-cy="contribution-file-name">${name}</p><p>ID: 2302602220</p>
+  </div></div>`;
+
+/**
+ * A batch page whose cards come back "Upload failed" until the page is reloaded —
+ * the state the contributor page is left in when its uploader lost the batch. A
+ * reload plus a fresh attach is what clears it, so the helper must try that
+ * before it reports the files as rejected. A page that never recovers (`false`)
+ * keeps answering "Upload failed" whatever the helper does.
+ */
+class RejectedPage extends DomConnection {
+  reloads = 0;
+  attachments: string[][] = [];
+  constructor(private readonly recover = true) {
+    super();
+  }
+  override async send(method: string, params: Record<string, unknown>) {
+    if (method === "Page.reload") {
+      this.reloads += 1;
+      document.body.innerHTML = UPLOADER;
+      return {};
+    }
+    if (method === "DOM.setFileInputFiles") {
+      this.attachments.push(params.files as string[]);
+      const healed = this.recover && this.reloads > 0;
+      for (const file of params.files as string[]) {
+        const leaf = String(file).split("/").pop() ?? "";
+        document.body.insertAdjacentHTML("beforeend", healed ? card(leaf) : rejectedCard(leaf));
+      }
+      return {};
+    }
+    return super.send(method, params);
+  }
+}
+
 describe("Getty web upload verification", () => {
   it("counts a pair listed under one name as both files uploaded, and waits for the card", async () => {
     vi.useFakeTimers();
@@ -612,7 +651,7 @@ describe("completing one batch for several icons", () => {
       + readyCard("icon-map-pin_5_01.eps") + readyCard("icon-map-pin_5_02.eps", false);
     const started = Date.now();
     const result = await finishBatch(new DomConnection(), "page", {
-      pollMs: 5, settleMs: 0, expected: EXPECTED, readyRetryMs: 100, readyTimeoutMs: 200,
+      pollMs: 5, settleMs: 0, bulkSaveSettleMs: 0, expected: EXPECTED, readyRetryMs: 100, readyTimeoutMs: 200,
     });
     expect(Date.now() - started).toBeLessThan(2000);
     expect(result.ok).toBe(false);
@@ -668,7 +707,9 @@ describe("completing one batch for several icons", () => {
       let saves = 0;
       document.querySelector('[data-cy="save-metadata"]')!.addEventListener("click", () => { saves += 1; });
       const pending = finishBatch(new DomConnection(), "page", {
-        pollMs: 500, settleMs: 0, expected: EXPECTED, readyTimeoutMs: 70000,
+        // The batch's own page reload is covered by its own test; here the window
+        // must end so the refusal can be reported.
+        pollMs: 500, settleMs: 0, expected: EXPECTED, readyTimeoutMs: 70000, readyReloadMs: 0,
       });
       await vi.advanceTimersByTimeAsync(90000);
       const result = await pending;
@@ -779,6 +820,45 @@ describe("completing one batch for several icons", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("reloads the page and re-attaches the files Getty answered with Upload failed", async () => {
+    // Getty's own page stopped taking the batch: every card reads "Upload failed".
+    // The reload plus a fresh attach is what the contributor page answers, so the
+    // run must try it instead of reporting every file as rejected at once.
+    mountBatchPage();
+    const page = new RejectedPage();
+    const notes: string[] = [];
+    const result = await attachFiles(page, "page", {
+      paths: ["/staged/a.jpg", "/staged/a.eps"], names: ["a.jpg", "a.eps"],
+      pollMs: 1, stallMs: 1000, readyTimeoutMs: 5000,
+      onProgress: (note: string) => notes.push(note),
+    });
+    expect(result.ok).toBe(true);
+    expect(page.reloads).toBe(1);
+    expect(page.attachments).toEqual([
+      ["/staged/a.jpg", "/staged/a.eps"],
+      ["/staged/a.jpg", "/staged/a.eps"],
+    ]);
+    expect(notes.some((note) => /Upload failed/.test(note))).toBe(true);
+    expect(result.state.uploaded).toEqual(["a.jpg", "a.eps"]);
+    expect(result.state.failed).toEqual([]);
+  });
+
+  it("tries one reload for a rejected batch, then reports the rejection", async () => {
+    mountBatchPage();
+    const page = new RejectedPage(false);
+    const started = Date.now();
+    const result = await attachFiles(page, "page", {
+      paths: ["/staged/a.jpg"], names: ["a.jpg"], pollMs: 1, stallMs: 200, readyTimeoutMs: 4000,
+    });
+    // One reload is the documented answer to a rejected batch; a page that keeps
+    // refusing is reported by name instead of being reloaded until the bound ends.
+    expect(result.ok).toBe(true);
+    expect(page.reloads).toBe(1);
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(result.state.failed).toEqual(["a.jpg"]);
+    expect(result.state.uploaded).toEqual([]);
   });
 
   it("refuses to submit while a card says Upload failed", async () => {

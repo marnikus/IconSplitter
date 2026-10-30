@@ -11,7 +11,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findBrowser, parseCdpEndpoint, resolveProfileDir } from "../tools/bridge/gettyweb/browser.mjs";
 import { contributeUrlOf, failurePayload, iconsFromBody, iconsFromConfig, mayReleaseSession } from "../tools/bridge/gettyweb/routes.mjs";
-import { resetBatchState, safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
+import { readyOptionsOf, resetBatchState, safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
 
 const SERVER = path.resolve("tools/bridge/server.mjs");
@@ -327,6 +327,14 @@ describe("Getty web batch limits in the helper", () => {
     // card of *its* batch is missing, so a stale name would block batch 2.
     const state = { batchId: "68445204", expected: ["icon_1.jpeg"], progress: { phase: "done" }, reloads: 2 };
     expect(resetBatchState(state)).toEqual({ batchId: null, expected: [], progress: null, reloads: 0 });
+  });
+
+  it("carries the validation gate's own pacing, including its page reload", () => {
+    // A caller may shorten every window the gate waits with — the reload included,
+    // or a test that ran out of time would still wait a whole batch's window.
+    expect(readyOptionsOf({ readyResaves: 1, readyRepairs: 0, readyReloads: 1, readyReloadMs: 0, files: [] }))
+      .toEqual({ readyResaves: 1, readyRepairs: 0, readyReloads: 1, readyReloadMs: 0 });
+    expect(readyOptionsOf({})).toEqual({});
   });
 
   it("tells the app what one upload request may weigh", async () => {

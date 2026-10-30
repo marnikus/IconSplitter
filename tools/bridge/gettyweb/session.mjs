@@ -110,7 +110,10 @@ export function resetBatchState(state) {
 
 /** The readiness pacing a caller may inject; production keeps the real windows. */
 export function readyOptionsOf(options = {}) {
-  const keys = ["readyRetryMs", "readyTimeoutMs", "readyResaves", "pollMs", "settleMs", "bulkSaveSettleMs"];
+  const keys = [
+    "readyRetryMs", "readyTimeoutMs", "readyResaves", "readyRepairs", "readyReloadMs", "readyReloads",
+    "pollMs", "settleMs", "bulkSaveSettleMs",
+  ];
   const out = {};
   for (const key of keys) if (typeof options[key] === "number") out[key] = options[key];
   return out;
@@ -321,7 +324,9 @@ function buildSession(ctx) {
         readyTimeoutMs: options.readyTimeoutMs,
         // Polled by the app, so the panel shows what Getty reports while it runs.
         onState: (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "uploading" }; },
-        onReload: (count) => { state.reloads = count; },
+        // Every reload — the upload wait's or the validation gate's — is one more
+        // fact the panel and the log trail keep for this batch.
+        onReload: () => { state.reloads += 1; },
         onProgress: options.onProgress, signal: options.signal,
       });
       if (!result.ok) {
@@ -333,7 +338,8 @@ function buildSession(ctx) {
       const onState = (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "metadata" }; };
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
-        onProgress: options.onProgress, signal: options.signal, onState, ...readyOptionsOf(options),
+        onProgress: options.onProgress, signal: options.signal, onState,
+        onReload: () => { state.reloads += 1; }, ...readyOptionsOf(options),
         // A card Getty never validates (or rejected) is re-uploaded from its own
         // staged copy instead of being reported as uploaded.
         repair: repairCapability(connection, page.sessionId, files, paths, { onState, onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs }),
@@ -357,7 +363,9 @@ function buildSession(ctx) {
     async finish(input = {}) {
       const result = await finishBatch(connection, page.sessionId, {
         expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
-        onProgress: options.onProgress, ...readyOptionsOf(options),
+        // The staged copies let the gate type a pending drawer again after a reload.
+        files: staged.files, onProgress: options.onProgress,
+        onReload: () => { state.reloads += 1; }, ...readyOptionsOf(options),
         repair: repairCapability(connection, page.sessionId, staged.files, staged.paths, {
           onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs,
         }),

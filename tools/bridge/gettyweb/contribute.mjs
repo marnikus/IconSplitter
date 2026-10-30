@@ -34,6 +34,11 @@ const REPAIR_TIMEOUT_MS = 120000;
 // (and attaching only what is still missing) is the recovery that works there.
 const STALL_MS = 30000;
 const MAX_RELOADS = 2;
+// The same page also stops flipping its own "Ready to submit" icon. That reload
+// is the gate's last recovery and is kept for the end of every batch, with its
+// own window after it, so no batch is left behind without that one try.
+const READY_RELOAD_MS = 30000;
+const READY_RELOADS = 1;
 const NAV_RETRY_MS = 5000;
 // Never use the first generic file input: Getty also renders release uploaders.
 // This contribution input is deliberately hidden and accepts the vector pair.
@@ -50,6 +55,27 @@ const settle = (options, key, fallback) => sleep(typeof options?.[key] === "numb
 
 /** The poll cadence of the upload waits: 1 s for Getty, injectable so a test can run at 1 ms. */
 const pollMsOf = (options) => (typeof options?.pollMs === "number" ? options.pollMs : UPLOAD_POLL_MS);
+
+/**
+ * The page reloads one wait may spend. A reload is the recovery for a page that
+ * stopped reacting to its own uploader, so every wait gets a small budget and
+ * stops reloading when it is gone instead of looping on the same broken page.
+ */
+function reloadBudget(limit = MAX_RELOADS) {
+  return { used: 0, limit };
+}
+
+/** The budget a wait runs with — its own, unless a caller hands in a shared one. */
+function withReloads(options, limit) {
+  return options.reloads ? options : { ...options, reloads: reloadBudget(limit) };
+}
+
+/** Counts one reload; false when this wait has no reload left to spend. */
+function spendReload(reloads) {
+  if (reloads.used >= reloads.limit) return false;
+  reloads.used += 1;
+  return true;
+}
 
 /** Runs one named page step; unknown names fail loudly instead of silently. */
 export function runDriverStep(connection, sessionId, name, arg) {
@@ -264,7 +290,6 @@ async function waitForFileNames(connection, sessionId, names, options) {
   let last = null;
   let seen = 0;
   let movedAt = Date.now();
-  let reloads = 0;
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
     const read = await readStateSafe(connection, sessionId, names);
@@ -283,14 +308,11 @@ async function waitForFileNames(connection, sessionId, names, options) {
     } else {
       options.onProgress?.("the Getty page stopped answering — it is given another chance before the reload");
     }
-    if (Date.now() - movedAt >= stallMs) {
+    const line = stalledLine(movedAt, stallMs);
+    if (line !== null) {
       // Nothing has arrived for a while: reload, then re-attach only the rest.
-      if (reloads >= MAX_RELOADS) return { ok: false, code: "page", reason: PAGE_STOPPED, state: last };
-      reloads += 1;
-      options.onProgress?.(`no file for ${Math.round(stallMs / 1000)} s — reloading the Getty page and retrying the rest`);
-      const recovered = await reloadAndRetry(connection, sessionId, last, options).catch(() => false);
-      options.onReload?.(reloads);
-      if (!recovered) options.onProgress?.("the reload did not take — waiting for the page to answer again");
+      if (options.reloads.used >= options.reloads.limit) return { ok: false, code: "page", reason: PAGE_STOPPED, state: last };
+      await reloadForRetry(connection, sessionId, last, options, line);
       movedAt = Date.now();
       continue;
     }
@@ -308,22 +330,25 @@ async function waitForFileNames(connection, sessionId, names, options) {
   return waitForVerified(connection, sessionId, names, options, last);
 }
 
-/**
- * Reloads the batch page and hands it only the files it is still missing. A
- * reload is the documented recovery when the page stops reacting to its uploader.
- */
-async function reloadAndRetry(connection, sessionId, last, options) {
-  const reloaded = await reloadPage(connection, sessionId).catch(() => ({ ok: false }));
-  if (!reloaded.ok) return false;
-  // A page that never answered tells us nothing: hand it every file again.
-  const missing = last ? new Set((last.missing ?? []).map((name) => String(name))) : null;
+/** The staged copies of the named files, in the order the page was given them. */
+function stagedPathsOf(names, options) {
+  const wanted = new Set((names ?? []).map(String));
   const paths = [];
   options.names.forEach((name, index) => {
     const path = options.paths?.[index];
-    if (typeof path !== "string") return;
-    if (missing !== null && !missing.has(name)) return;
-    paths.push(path);
+    if (typeof path === "string" && wanted.has(String(name))) paths.push(path);
   });
+  return paths;
+}
+
+/**
+ * Reloads the batch page and hands it back only the files that still need it. A
+ * reload is the documented recovery when the page stops reacting to its uploader.
+ */
+async function reloadAndReattach(connection, sessionId, names, options) {
+  const reloaded = await reloadPage(connection, sessionId).catch(() => ({ ok: false }));
+  if (!reloaded.ok) return false;
+  const paths = stagedPathsOf(names, options);
   if (paths.length === 0) return true;
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
   const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
@@ -334,6 +359,52 @@ async function reloadAndRetry(connection, sessionId, last, options) {
   if (!attached.ok) return false;
   options.onProgress?.(`re-attached ${paths.length} file(s) after the reload`);
   return true;
+}
+
+/**
+ * The recovery for a page that stopped reacting: reload it and hand it back the
+ * files it still has no picture for. A reload that does not take is only
+ * reported — the wait keeps going instead of failing the run on the spot.
+ */
+async function reloadForRetry(connection, sessionId, state, options, line) {
+  if (!spendReload(options.reloads)) return false;
+  options.onProgress?.(line);
+  const files = withoutPicture(state, options.names);
+  const recovered = await reloadAndReattach(connection, sessionId, files, options).catch(() => false);
+  options.onReload?.(options.reloads.used);
+  if (!recovered) options.onProgress?.("the reload did not take — waiting for the page to answer again");
+  return recovered;
+}
+
+/** The files Getty shows no picture for yet — missing, still coming, or rejected. */
+function withoutPicture(state, names) {
+  if (state === null) return [...names];
+  return names.filter((name) => !state.uploaded.includes(name));
+}
+
+/** True when every file Getty still owes a picture for is one it rejected. */
+function rejectedOnly(state, names) {
+  const missing = withoutPicture(state, names);
+  return missing.length > 0 && missing.every((name) => state.failed.includes(name));
+}
+
+/** What a wait says when it reloads a page Getty answered with "Upload failed". */
+function rejectedLine(state) {
+  return `Getty answered "Upload failed" for ${state.failed.length} file(s) — reloading the page and re-attaching them`;
+}
+
+/** What a stalled wait says, or null while its pictures are still arriving. */
+function stalledLine(movedAt, stallMs) {
+  if (Date.now() - movedAt < stallMs) return null;
+  return `no file for ${Math.round(stallMs / 1000)} s — reloading the Getty page and retrying the rest`;
+}
+
+/** The page's reading after a recovery, or the one before it if it did not answer. */
+async function readAfterRecovery(connection, sessionId, names, options, before) {
+  const read = await readStateSafe(connection, sessionId, names);
+  if (!read.ok) return before;
+  options.onState?.(read.state);
+  return read.state;
 }
 
 async function readState(connection, sessionId, names) {
@@ -363,23 +434,55 @@ function settled(state, names) {
 /**
  * Waits for every file to arrive, bounded, then hands the run to the metadata
  * step — which starts the moment the last picture is on the page. A file that
- * never arrives (or is rejected) is reported, never called uploaded.
+ * never arrives (or is rejected) is reported, never called uploaded. A page that
+ * stops showing pictures, or answers the whole batch with "Upload failed", is
+ * reloaded and given the missing files again before anything is reported.
  */
 async function waitForVerified(connection, sessionId, names, options, first) {
   const deadline = Date.now() + (options.readyTimeoutMs ?? VERIFY_TIMEOUT_MS);
-  let last = first;
+  const stallMs = options.stallMs ?? STALL_MS;
+  const probe = { last: first, shown: first?.uploaded?.length ?? 0, movedAt: Date.now(), triedReject: false };
   // A page that renders no contribution cards cannot show a picture at all:
   // waiting would only burn the bound, so the metadata/readiness steps report it.
-  const readable = () => last?.cardsPresent !== false;
-  while (readable() && !settled(last, names) && Date.now() < deadline) {
-    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
-    options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)`);
+  while (probe.last?.cardsPresent !== false && Date.now() < deadline) {
+    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: probe.last };
+    if (withoutPicture(probe.last, names).length === 0) break;
+    probe.movedAt = probe.last.uploaded.length === probe.shown ? probe.movedAt : Date.now();
+    probe.shown = probe.last.uploaded.length;
+    options.onProgress?.(`Getty uploaded ${probe.shown}/${names.length} file(s)`);
+    if (await reloadIfOwed(probe, connection, sessionId, options, stallMs)) {
+      probe.last = await readAfterRecovery(connection, sessionId, names, options, probe.last);
+      probe.movedAt = Date.now();
+      continue;
+    }
+    // Everything left is a card Getty itself rejected: the run reports it.
+    if (settled(probe.last, names)) break;
     await sleep(pollMsOf(options));
     const read = await readStateSafe(connection, sessionId, names);
     if (!read.ok) continue; // a frozen tab is waited out, never reported as uploaded
-    last = read.state;
-    options.onState?.(last);
+    probe.last = read.state;
+    options.onState?.(probe.last);
   }
+  return verifiedResult(names, probe.last, options);
+}
+
+/**
+ * Reloads the page when this wait owes it one, and reports whether it did. A
+ * rejected batch is retried at once, because that is the state a reload clears;
+ * a stall reloads only once the pictures have stopped arriving.
+ */
+async function reloadIfOwed(probe, connection, sessionId, options, stallMs) {
+  const rejected = rejectedOnly(probe.last, options.names);
+  if (rejected && probe.triedReject) return false;
+  const line = rejected ? rejectedLine(probe.last) : stalledLine(probe.movedAt, stallMs);
+  if (line === null || options.reloads.used >= options.reloads.limit) return false;
+  if (rejected) probe.triedReject = true;
+  await reloadForRetry(connection, sessionId, probe.last, options, line);
+  return true;
+}
+
+/** What the picture wait reports: every file pictured, or the ones that never were. */
+function verifiedResult(names, last, options) {
   const rejected = last.failed.length > 0 ? `, ${last.failed.length} rejected` : "";
   options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)${rejected}`);
   const waiting = names.filter((name) => !last.uploaded.includes(name) && !last.failed.includes(name));
@@ -408,7 +511,9 @@ export function gettyCreatedDate(now = new Date()) {
 }
 
 /** Hands the staged files to the page's uploader and waits until they appear. */
-export async function attachFiles(connection, sessionId, options) {
+export async function attachFiles(connection, sessionId, request) {
+  // One attach owns one reload budget: the two waits below share it.
+  const options = withReloads(request, MAX_RELOADS);
   // Getty may still show the error snackbar or a dialog from the previous icon;
   // that blocks its uploader, which is how a 2-icon run stalled after the first.
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
@@ -608,10 +713,11 @@ export function notReadyContributions(expected, state) {
 }
 
 /** Why a file Getty never marked ready is reported — named, never counted only. */
-function notReadyReason(pending, resaves, repairs) {
+function notReadyReason(pending, used) {
   const named = pending.slice(0, 3).join(", ");
-  const saved = resaves > 0 ? ` and saving the metadata ${resaves + 1} times` : "";
-  const again = repairs > 0 ? `${saved}, not even after re-uploading` : saved;
+  const saved = used.resaves > 0 ? ` and saving the metadata ${used.resaves + 1} times` : "";
+  const reloaded = used.reloads > 0 ? `${saved}, not even after reloading the page` : saved;
+  const again = used.repairs > 0 ? `${reloaded}, not even after re-uploading` : reloaded;
   return `Getty does not show its "Ready to submit" icon for ${pending.length} file(s) (${named})${again} — the upload is not complete`;
 }
 
@@ -629,23 +735,87 @@ async function repairPending(connection, sessionId, pending, options) {
   return true;
 }
 
+/** Types the metadata of the named files again after a reload — once per contribution. */
+async function refillPending(connection, sessionId, pending, options) {
+  const wanted = new Set(pending.map(stemOf));
+  const done = new Set();
+  for (const file of options.files ?? []) {
+    const stem = stemOf(file.name);
+    if (!wanted.has(stem) || done.has(stem) || !file.metadata) continue;
+    done.add(stem);
+    await fillOneFileMetadata(connection, sessionId, file, options);
+  }
+}
+
+/**
+ * The validation gate's own page reload. Getty stops flipping its "Ready to
+ * submit" icon when the page's state went stale, and reloading it — then typing
+ * the pending drawers again and saving the grid once — is what its cards answer.
+ */
+async function reloadAndReapply(connection, sessionId, pending, options) {
+  if (!spendReload(options.reloads)) return false;
+  options.onProgress?.(`Getty has not validated ${pending.length} file(s) — reloading the page and applying their metadata again`);
+  const reloaded = await reloadPage(connection, sessionId).catch(() => ({ ok: false }));
+  options.onReload?.(options.reloads.used);
+  if (!reloaded.ok) return false;
+  await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
+  await refillPending(connection, sessionId, pending, options);
+  await saveEverySelected(connection, sessionId, options).catch(() => null);
+  return true;
+}
+
+/** The recoveries one stuck card is given, in the order the gate tries them. */
+const READINESS_STAGES = ["resaves", "repairs", "reloads"];
+
+/**
+ * What the gate does next with the cards Getty has not validated: `wait` for the
+ * next window, one of {@link READINESS_STAGES}, or `give-up`. A wait whose window
+ * ran out still spends the batch's own page reload first — that is the one try no
+ * batch is left without.
+ */
+function nextReadinessStep(used, limits, timing) {
+  if (timing.now >= timing.deadline) return used.reloads < limits.reloads ? "reloads" : "give-up";
+  if (timing.now < timing.nextActionAt) return "wait";
+  return READINESS_STAGES.find((name) => used[name] < limits[name]) ?? "wait";
+}
+
+/** How long the page may take to answer a reload, before the gate gives up. */
+function reloadWindowMs(options) {
+  if (typeof options.readyReloadMs === "number") return options.readyReloadMs;
+  return typeof options.readyTimeoutMs === "number" ? options.readyTimeoutMs : READY_RELOAD_MS;
+}
+
+/** Spends one recovery: the metadata again, the file again, or the page again. */
+async function runReadinessStep(stage, ctx) {
+  const { connection, sessionId, pending, options, used, limits } = ctx;
+  if (stage === "resaves") {
+    options.onProgress?.(`${pending.length} file(s) are not ready to submit — saving the metadata again (${used.resaves}/${limits.resaves})`);
+    return saveEverySelected(connection, sessionId, options).catch(() => null);
+  }
+  if (stage === "repairs") return repairPending(connection, sessionId, pending, options);
+  return reloadAndReapply(connection, sessionId, pending, options);
+}
+
 /**
  * Waits until every contribution shows Getty's own "Ready to submit" icon, the
  * only proof that a file may be submitted. A card that stays unvalidated gets the
- * grid-wide Save metadata pressed again (only the pending ones matter), because
- * that second save is what flips it. A page that cannot report readiness at all
- * (no contribution cards, or a reading that failed) is reported as unverified
- * instead of being guessed either way.
+ * grid-wide Save metadata pressed again (only the pending ones matter), then its
+ * file re-uploaded, and finally the page itself reloaded with the metadata applied
+ * again — the same recovery the upload wait uses, kept for the end of every batch.
+ * A page that cannot report readiness at all (no contribution cards, or a reading
+ * that failed) is reported as unverified instead of being guessed either way.
  */
 async function waitForReadyToSubmit(connection, sessionId, expected, options, first) {
   const retryMs = options.readyRetryMs ?? READY_RETRY_MS;
-  const deadline = Date.now() + (options.readyTimeoutMs ?? READY_TIMEOUT_MS);
-  const maxResaves = options.readyResaves ?? READY_RESAVES;
-  const maxRepairs = options.readyRepairs ?? READY_REPAIRS;
+  const limits = {
+    resaves: options.readyResaves ?? READY_RESAVES,
+    repairs: options.readyRepairs ?? READY_REPAIRS,
+    reloads: options.readyReloads ?? READY_RELOADS,
+  };
+  const used = { resaves: 0, repairs: 0, reloads: 0 };
+  let deadline = Date.now() + (options.readyTimeoutMs ?? READY_TIMEOUT_MS);
+  let nextActionAt = Date.now() + retryMs;
   const total = contributionCount(expected);
-  let resaves = 0;
-  let repairs = 0;
-  let nextSaveAt = Date.now() + retryMs;
   let state = first ?? null;
   if (state === null) {
     const read = await readStateSafe(connection, sessionId, expected);
@@ -654,35 +824,23 @@ async function waitForReadyToSubmit(connection, sessionId, expected, options, fi
   // A page that renders no contribution cards (or did not answer) cannot state
   // readiness: report it unverified rather than guess either way.
   if (state === null || state.cardsPresent === false) {
-    return { ok: true, verified: false, ready: 0, total, notReady: [], resaves, repairs, state };
+    return { ok: true, verified: false, ready: 0, total, notReady: [], ...used, state };
   }
   for (;;) {
     const pending = notReadyContributions(expected, state);
-    if (pending.length === 0) {
-      return { ok: true, verified: true, ready: total, total, notReady: [], resaves, repairs, state };
-    }
-    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", notReady: pending, total, resaves, repairs, state };
-    if (Date.now() >= deadline) {
-      return { ok: false, code: "timeout", reason: notReadyReason(pending, resaves, repairs), notReady: pending, total, resaves, repairs, state };
-    }
-    if (resaves < maxResaves && Date.now() >= nextSaveAt) {
-      resaves += 1;
-      nextSaveAt = Date.now() + retryMs;
-      options.onProgress?.(`${pending.length} file(s) are not ready to submit — saving the metadata again (${resaves}/${maxResaves})`);
-      await saveEverySelected(connection, sessionId, options).catch(() => null);
-      const reread = await readStateSafe(connection, sessionId, expected);
-      if (reread.ok) {
-        state = reread.state;
-        options.onState?.(state);
-      }
-      continue;
-    }
-    // Two re-saves were not enough: re-upload the cards instead of sitting on a
-    // drawer Getty clearly will not validate. Its metadata is re-applied after.
-    if (resaves >= maxResaves && repairs < maxRepairs && Date.now() >= nextSaveAt) {
-      repairs += 1;
-      nextSaveAt = Date.now() + retryMs;
-      await repairPending(connection, sessionId, pending, options);
+    if (pending.length === 0) return { ok: true, verified: true, ready: total, total, notReady: [], ...used, state };
+    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", notReady: pending, total, ...used, state };
+    const now = Date.now();
+    const stage = nextReadinessStep(used, limits, { now, nextActionAt, deadline });
+    if (stage === "give-up") return { ok: false, code: "timeout", reason: notReadyReason(pending, used), notReady: pending, total, ...used, state };
+    if (stage !== "wait") {
+      used[stage] += 1;
+      nextActionAt = now + retryMs;
+      // The reload is the batch's last recovery, so it buys its own window.
+      // The reload is the batch's last recovery, so it buys its own window — the
+      // caller's injected window when a test shortened the whole wait.
+      if (stage === "reloads") deadline = Math.max(deadline, now + reloadWindowMs(options));
+      await runReadinessStep(stage, { connection, sessionId, pending, options, used, limits });
       const reread = await readStateSafe(connection, sessionId, expected);
       if (reread.ok) {
         state = reread.state;
@@ -707,6 +865,7 @@ function readinessReport(readiness) {
     ok: readiness.ok === true, verified: readiness.verified !== false,
     ready: readiness.ready ?? 0, total: readiness.total ?? 0,
     notReady: readiness.notReady ?? [], resaves: readiness.resaves ?? 0, repairs: readiness.repairs ?? 0,
+    reloads: readiness.reloads ?? 0,
   };
 }
 
@@ -811,7 +970,9 @@ function finishRefusal(expected, state, total, listed) {
  * page without a Complete/Submit control the cards' own "Ready to submit" icons
  * decide: all ready means the run is finished, so no control is not an error.
  */
-export async function finishBatch(connection, sessionId, options = {}) {
+export async function finishBatch(connection, sessionId, input = {}) {
+  // One finish owns one reload budget, shared by both readiness waits it may use.
+  const options = withReloads(input, READY_RELOADS);
   if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
   const expected = namesOf(options.expected);
   const total = contributionCount(expected);
@@ -889,7 +1050,9 @@ async function finishValidated(connection, sessionId, options, report, readiness
  * grid once, then wait for Getty's own "Ready to submit" icon on every card —
  * that icon, not the thumbnail, is what proves the file may be submitted.
  */
-export async function finalizeBatch(connection, sessionId, options) {
+export async function finalizeBatch(connection, sessionId, input) {
+  // One batch owns one reload budget: the readiness gate spends it at most once.
+  const options = withReloads(input, READY_RELOADS);
   const filled = await fillEveryFileMetadata(connection, sessionId, options);
   const report = { metadata: filled.report, bulkSave: null, readiness: null, completion: null, state: null };
   if (filled.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", report };

@@ -4273,3 +4273,27 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   full suite 3,434/3,435 — the only miss is `algo_efficiency`
   "synthetic 1000px 4-icon grid < 200 ms" at 265 ms (environmental, budget kept);
   docs 4/4 (soR 8,998 B, selectors 8,933 B, invariants 8,762 B).
+
+## 2026-10-30 — Getty web: the page reload that unsticks a stalled batch
+
+- Symptom: a 100-icon batch sat on blank/`Upload failed` cards and the helper
+  never reloaded the page, although a reload is the recovery that clears it there.
+  Root cause: the stall reload lived only in the *listing* wait; once every name
+  was listed the picture wait and the validation gate had no reload at all.
+- Change: `waitForVerified` reloads when no new picture lands for 30 s, and at
+  once when the remaining cards all read `Upload failed` (the files without a
+  picture are attached again); both attach waits share one two-reload budget.
+  The validation gate gained a final `reloads` stage: page reload, every pending
+  drawer typed again, one grid-wide save, and a 30 s window of its own — spent
+  even when the gate's own window ran out, so **every batch gets at least one
+  page reload before it is left for the next 100**. `state.reloads` now counts
+  both phases, so the panel line and the `page-reloaded` log line stay honest.
+- Measured: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 4 files / 90 tests green
+  (`getty_web_batch`, `getty_web_finalize`, `bridge_getty_web`,
+  `getty_web_session`); docs 4/4 (soR split into
+  `stock-upload-getty-web.md` 8,752 B + `-browser.md` 1,210 B, stock-upload
+  8,343 B).
+- Budget note: the Getty web page was at 8,998 B of its 9,000 B limit, so its
+  browser/profile section moved to `stock-upload-getty-web-browser.md` (RULE 18)
+  instead of shaving facts out of the flow contract.

@@ -16,6 +16,11 @@ export function repairTargets(files: any, paths: any, names: any): Array<{ name:
 export function repairCapability(
   connection: any, sessionId: string, files: any, paths: any, options?: any,
 ): ((names: string[]) => Promise<{ ok: boolean }>) | undefined;
+/**
+ * The readiness pacing a caller may inject — the reload window included, so a
+ * test does not wait a whole batch's window after the page was reloaded.
+ */
+export function readyOptionsOf(options?: any): Record<string, number>;
 /** How long the page may take to list `fileCount` attached files. */
 export function uploadTimeoutFor(fileCount: number, baseMs?: number): number;
 export function openGettySession(options: any): Promise<any>;

@@ -13,13 +13,20 @@ const META = { title: "Charity hand icon", description: "Open palm holding a hea
 class FakeConnection {
   steps: string[] = [];
   expressions: string[] = [];
+  reloads = 0;
   queue: Record<string, unknown[]>;
   constructor(queue: Record<string, unknown[]>) {
     this.queue = queue;
   }
   send(method: string, params: Record<string, unknown>): Promise<unknown> {
+    // A reloaded page has to report itself usable before the run may go on.
+    if (method === "Page.reload") {
+      this.reloads += 1;
+      return Promise.resolve({});
+    }
     if (method !== "Runtime.evaluate") return Promise.resolve({});
     const expression = String(params.expression);
+    if (expression.includes("readyState")) return Promise.resolve({ result: { value: true } });
     this.expressions.push(expression);
     const tail = expression.slice(expression.lastIndexOf("\n;return ("));
     const name = /\(function (\w+)/.exec(tail)?.[1] ?? "unknown";
@@ -30,6 +37,28 @@ class FakeConnection {
 }
 
 const connection = (queue: Record<string, unknown[]>) => new FakeConnection(queue) as unknown as CdpConnection & FakeConnection;
+
+/**
+ * A batch page that keeps refusing to validate its cards until the page has been
+ * reloaded: every step the gate may take again (drawer, grid save, reload) has
+ * enough replies for the second pass.
+ */
+function reloadQueue(reads: unknown[]): Record<string, unknown[]> {
+  const saved = { saved: true, label: "Save metadata" };
+  return {
+    ...successQueue(),
+    openFileMetadata: Array.from({ length: 4 }, () => ({ opened: true, method: "button", label: "Edit metadata" })),
+    metadataEditorReady: Array.from({ length: 4 }, () => ({ ready: true, present: true })),
+    fillMetadataFields: Array.from({ length: 3 }, () => ({
+      filled: { title: true, description: true, keywords: true },
+      present: { title: true, description: true, keywords: true },
+    })),
+    closeMetadataEditor: Array.from({ length: 4 }, () => ({ closed: true, label: "Close" })),
+    saveMetadataEditor: Array.from({ length: 8 }, () => saved),
+    selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+    readUploadState: reads,
+  };
+}
 
 function successQueue(): Record<string, unknown[]> {
   return {
@@ -188,7 +217,9 @@ describe("Getty web automatic finalize", () => {
     const progress: string[] = [];
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      // The page reload the gate also knows is covered by its own tests below.
       settleMs: 0, bulkSaveSettleMs: 0, pollMs: 20, readyRetryMs: 0, readyTimeoutMs: 100, readyResaves: 1,
+      readyReloads: 0,
       onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
     });
     expect(result.ok).toBe(false);
@@ -460,6 +491,43 @@ describe("Getty web automatic finalize", () => {
     expect(cdp.steps.filter((step: string) => step === "selectAllContributions").length).toBeGreaterThan(2);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, resaves: 2, repairs: 1 });
+  });
+
+  it("reloads the page and applies the metadata again when no card turns Ready to submit", async () => {
+    // The grid simply stops flipping the icon. Reloading the page and applying the
+    // metadata on it again is the recovery a contributor sees working, so the gate
+    // tries it before the files are reported as not submittable.
+    const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
+    const queue = reloadQueue([
+      notReady, notReady,
+      { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] },
+    ]);
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 0, readyRetryMs: 0, readyResaves: 1, readyRepairs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    expect(cdp.reloads).toBe(1);
+    // The drawer is typed into a second time, on the page the reload brought back.
+    expect(cdp.steps.filter((step) => step === "fillMetadataFields")).toHaveLength(2);
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, reloads: 1 });
+  });
+
+  it("keeps every batch's one page reload even when the verification window ran out", async () => {
+    const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
+    const cdp = connection(reloadQueue([notReady, notReady]));
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 0, readyRetryMs: 0, readyResaves: 2, readyRepairs: 1,
+      readyTimeoutMs: 0, readyReloadMs: 0, signal: new AbortController().signal,
+    });
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
+    // No batch is left behind without that try, and it is tried exactly once.
+    expect(cdp.reloads).toBe(1);
+    if (!result.ok) expect(result.reason).toContain("Ready to submit");
+    expect(cdp.steps).not.toContain("completeBatch");
   });
 
   it("refuses to submit while Getty reports an Upload failed card", async () => {
