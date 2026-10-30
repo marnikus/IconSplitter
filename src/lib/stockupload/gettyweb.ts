@@ -16,6 +16,12 @@ export const GETTY_WEB_MAX_BATCH_NAME = 60;
  * file count: 100 pairs are fine, 101 are not.
  */
 export const GETTY_WEB_MAX_BATCH_ICONS = 100;
+/**
+ * One request carries one batch, so it must also stay inside the helper's body
+ * cap — a 100-icon chunk of big pairs can be hundreds of megabytes. The planner
+ * cuts a batch early when the bytes would cross this budget.
+ */
+export const GETTY_WEB_MAX_BATCH_BYTES = 64 * 1024 * 1024;
 /** One upload plus one retry: an icon is never sent a third time. */
 export const GETTY_WEB_MAX_ATTEMPTS = 2;
 export const GETTY_WEB_ERROR_HINT =
@@ -90,18 +96,51 @@ function batchPlaceOf(slot?: GettyWebBatchSlot): string {
   return slot.total > 1 ? ` ${slot.index}/${slot.total}` : "";
 }
 
+/** The limits one batch obeys: Getty's 100 uploads, and the request's bytes. */
+export interface GettyWebBatchOptions<T> {
+  maxIcons?: number;
+  maxBytes?: number;
+  /** The bytes one icon sends — its JPEG plus optional EPS; unknown counts as 0. */
+  bytesOf?: (icon: T) => number;
+}
+
+function batchOptionsOf<T>(
+  maxIconsOrOptions: number | GettyWebBatchOptions<T>,
+): Required<Omit<GettyWebBatchOptions<T>, "bytesOf">> & Pick<GettyWebBatchOptions<T>, "bytesOf"> {
+  const options = typeof maxIconsOrOptions === "number" ? { maxIcons: maxIconsOrOptions } : maxIconsOrOptions;
+  return {
+    maxIcons: Math.max(1, Math.floor(options.maxIcons ?? GETTY_WEB_MAX_BATCH_ICONS)),
+    maxBytes: Math.max(1, Math.floor(options.maxBytes ?? GETTY_WEB_MAX_BATCH_BYTES)),
+    bytesOf: options.bytesOf,
+  };
+}
+
 /**
- * Splits ordered icons into batches of at most `maxIcons`. The icon is the unit,
- * so a JPEG/EPS pair can never be split across two batches; order is preserved,
- * which is what makes "the first 100 pairs" mean something.
+ * Splits ordered icons into batches obeying both limits: at most `maxIcons` and
+ * at most `maxBytes` per request. The icon is the unit, so a JPEG/EPS pair can
+ * never be split across two batches; order is preserved, which is what makes
+ * "the first 100 pairs" mean something. An icon larger than the whole budget
+ * travels alone rather than being dropped.
  */
 export function planGettyWebBatches<T>(
   icons: readonly T[],
-  maxIcons = GETTY_WEB_MAX_BATCH_ICONS,
+  maxIconsOrOptions: number | GettyWebBatchOptions<T> = GETTY_WEB_MAX_BATCH_ICONS,
 ): T[][] {
-  const size = Math.max(1, Math.floor(maxIcons));
+  const { maxIcons, maxBytes, bytesOf } = batchOptionsOf(maxIconsOrOptions);
   const out: T[][] = [];
-  for (let i = 0; i < icons.length; i += size) out.push(icons.slice(i, i + size));
+  let batch: T[] = [];
+  let bytes = 0;
+  for (const icon of icons) {
+    const size = Math.max(0, bytesOf?.(icon) ?? 0);
+    if (batch.length >= maxIcons || (batch.length > 0 && bytes + size > maxBytes)) {
+      out.push(batch);
+      batch = [];
+      bytes = 0;
+    }
+    batch.push(icon);
+    bytes += size;
+  }
+  if (batch.length > 0) out.push(batch);
   return out;
 }
 
@@ -113,9 +152,34 @@ export function gettyWebBatchLabel(slot: GettyWebBatchSlot): string {
 
 /** One line for the confirm dialog: how many Getty batches the selection needs. */
 export function gettyWebBatchSummary(iconCount: number, maxIcons = GETTY_WEB_MAX_BATCH_ICONS): string {
-  const batches = Math.max(1, Math.ceil(Math.max(iconCount, 0) / Math.max(1, maxIcons)));
+  return gettyWebBatchSummaryOf(Array.from({ length: Math.max(0, iconCount) }, () => 0), maxIcons);
+}
+
+/**
+ * The same line, but honest about the request size: the bytes of each icon of the
+ * selection are known before Upload, so the dialog can say that 209 pairs of big
+ * files take more than two batches — a batch is cut early when it would outgrow
+ * one request.
+ */
+export function gettyWebBatchSummaryOf(
+  sizes: readonly number[],
+  maxIcons = GETTY_WEB_MAX_BATCH_ICONS,
+  maxBytes = GETTY_WEB_MAX_BATCH_BYTES,
+): string {
+  const chunks = planGettyWebBatches(sizes.map((_size, index) => index), { maxIcons, maxBytes, bytesOf: (index) => sizes[index] });
+  const batches = Math.max(1, chunks.length);
   const plural = batches === 1 ? "batch" : "batches";
-  return `${iconCount} icon(s) → ${batches} ${plural} (Getty takes ${maxIcons} uploads per batch; a JPEG + EPS pair counts once)`;
+  return `${sizes.length} icon(s) → ${batches} ${plural} (Getty takes ${maxIcons} uploads per batch; a JPEG + EPS pair counts once)`;
+}
+
+/** The bytes of each icon of one Getty target, in plan order (a pair is one icon). */
+export function gettyWebIconSizes(tasks: readonly PlannedTransfer[], targetIds: ReadonlySet<string>): number[] {
+  const byItem = new Map<string, number>();
+  for (const task of tasks) {
+    if (!targetIds.has(task.targetId)) continue;
+    byItem.set(task.itemId, (byItem.get(task.itemId) ?? 0) + Math.max(0, task.estimatedBytes));
+  }
+  return [...byItem.values()];
 }
 
 /**

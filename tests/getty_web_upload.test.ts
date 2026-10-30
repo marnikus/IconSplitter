@@ -157,6 +157,45 @@ describe("Getty web loopback client", () => {
     }
   });
 
+  it("says how big the batch was when the helper drops the connection", async () => {
+    // A 209-icon run saw only "cannot reach the local helper" — the helper was
+    // there all along and had refused the size. The reason now carries the size.
+    const twoMB = new Uint8Array(1024 * 1024);
+    const dropped = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [
+        { files: [{ name: "icon_a.jpeg", bytes: twoMB }, { name: "icon_a.eps", bytes: twoMB }] },
+        { files: [{ name: "icon_b.jpeg", bytes: twoMB }] },
+      ],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl: dropped,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("helper-down");
+      // 3 MB of staged bytes, named as such, plus the way out.
+      expect(result.reason).toContain("3.0 MB");
+      expect(result.reason).toContain("GETTY_WEB_MAX_BYTES");
+      expect(result.reason).toContain("run_ftp_bridge.bat");
+    }
+  });
+
+  it("reports an answer that is not JSON with its HTTP status, not as a dead helper", async () => {
+    // The helper's own 413 body must never be read as "the helper is not running".
+    const plain = vi.fn(async () => new Response("payload too large", { status: 413 }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl: plain,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("bad-request");
+      expect(result.reason).toContain("HTTP 413");
+      expect(result.reason).not.toContain("cannot reach the local helper");
+    }
+  });
+
   it("probes the helper for the Getty web capability and a browser", async () => {
     const okFetch = vi.fn(async () => jsonResponse(200, { gettyWeb: { ready: true, browser: "found" } }));
     expect(await probeBridgeGettyWeb("http://127.0.0.1:47391", okFetch)).toEqual({ ok: true });

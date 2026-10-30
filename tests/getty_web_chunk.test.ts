@@ -5,8 +5,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_ICONS, gettyWebBatchLabel, gettyWebBatchName,
-  gettyWebBatchSummary, planGettyWebBatches,
+  GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_BYTES, GETTY_WEB_MAX_BATCH_ICONS, gettyWebBatchLabel,
+  gettyWebBatchName, gettyWebBatchSummary, gettyWebBatchSummaryOf, planGettyWebBatches,
 } from "../src/lib/stockupload/gettyweb";
 
 const icons = (n: number) => Array.from({ length: n }, (_v, i) => ({ id: `icon-${i}` }));
@@ -63,6 +63,32 @@ describe("Getty web batch planning", () => {
     expect(gettyWebBatchSummary(100)).toContain("1 batch");
     expect(gettyWebBatchSummary(101)).toContain("2 batches");
     expect(gettyWebBatchSummary(0)).toContain("1 batch");
+  });
+
+  it("splits on bytes too, so one request never outgrows the helper", () => {
+    const MB = 1024 * 1024;
+    const sized = (n: number, bytes: number) => Array.from({ length: n }, (_v, i) => ({ id: `big-${i}`, bytes }));
+    // 100 icons of 40 MB would be a 4 GB request: the byte budget cuts the batch.
+    const chunks = planGettyWebBatches(sized(5, 40 * MB), { maxBytes: 100 * MB, bytesOf: (icon) => icon.bytes });
+    expect(chunks.map((batch) => batch.length)).toEqual([2, 2, 1]);
+    // Small files still travel 100 at a time: the icon cap is unaffected.
+    expect(planGettyWebBatches(icons(250), { bytesOf: () => 4096 }).map((batch) => batch.length))
+      .toEqual([100, 100, 50]);
+    // An icon bigger than the whole budget goes alone; it is never dropped.
+    const huge = [{ id: "huge", bytes: 300 * MB }, { id: "small", bytes: MB }];
+    expect(planGettyWebBatches(huge, { maxBytes: 64 * MB, bytesOf: (icon) => icon.bytes })
+      .map((batch) => batch.map((icon) => icon.id))).toEqual([["huge"], ["small"]]);
+    // The budget defaults to a size the helper can take in one piece.
+    expect(GETTY_WEB_MAX_BATCH_BYTES).toBeLessThan(120 * MB);
+  });
+
+  it("counts the batches of a heavy selection by its bytes in the confirm dialog", () => {
+    const MB = 1024 * 1024;
+    // 209 icons of 1.5 MB are 3 batches by count but 313 MB of bytes: a batch is
+    // cut at 42 icons, so the dialog must say 5 before anything is sent.
+    expect(gettyWebBatchSummaryOf(Array.from({ length: 209 }, () => 1.5 * MB))).toContain("5 batches");
+    expect(gettyWebBatchSummaryOf(Array.from({ length: 7 }, () => 0.6 * MB))).toContain("1 batch");
+    expect(gettyWebBatchSummaryOf([])).toContain("1 batch");
   });
 
   it("keeps the cap where Getty put it", () => {

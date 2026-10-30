@@ -199,7 +199,7 @@ async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
     submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey: ctx.sessionKey,
     bridgeUrl: ctx.deps.bridgeUrl, signal: ctx.deps.signal,
     uploadFn: ctx.deps.gettyWebUploadFn, finishFn: ctx.deps.finishGettyWebFn,
-    maxIcons: ctx.deps.gettyWebMaxIcons,
+    maxIcons: ctx.deps.gettyWebMaxIcons, maxBytes: ctx.deps.gettyWebMaxBytes,
     onBatch: progress.onBatch,
     onBatchFinished: (info) => logBatchFinished(ctx, info),
   }).finally(progress.stop);

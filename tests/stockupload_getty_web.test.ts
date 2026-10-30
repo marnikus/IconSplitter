@@ -572,6 +572,32 @@ describe("Getty web batches above the cap", () => {
     expect(summary).toMatchObject({ uploadedFiles: 10, failedFiles: 0, reuploadIcons: 0, lastError: null });
   });
 
+  it("cuts a batch early when its files would outgrow one helper request", async () => {
+    // Each icon here is 30 bytes (14 JPEG + 16 EPS); a 60-byte request budget is
+    // the same shape as the real one: 209 big pairs must not travel in one body.
+    const root = new FakeDir("ws");
+    addIcons(root, 5, true);
+    const found = await discoverExportedItems(root);
+    const sent: GettyWebUploadInput[] = [];
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebMaxIcons: 100,
+      gettyWebMaxBytes: 60,
+      gettyWebUploadFn: async (input) => {
+        sent.push(input);
+        return { ok: true, batchId: "b", accepted: accepted(input), completed: false, completion: null, metadata: [] } as never;
+      },
+      finishGettyWebFn: async () => doneBatch as never,
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(sent.map((input) => input.icons.length)).toEqual([2, 2, 1]);
+    expect(sent.every((input) => input.icons.flatMap((icon) => icon.files).length <= 4)).toBe(true);
+    expect(summary).toMatchObject({ uploadedFiles: 10, failedFiles: 0 });
+  });
+
   it("retries a rejected icon inside the last batch, which still had room", async () => {
     const { summary, sent } = await runWith({ count: 5, cap: 2 }, async (input, call) => {
       if (call === 1) {

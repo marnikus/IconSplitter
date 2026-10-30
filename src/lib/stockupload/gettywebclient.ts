@@ -4,7 +4,8 @@
 
 import { isRecord } from "../isrecord";
 import { DEFAULT_FTP_BRIDGE_URL, BRIDGE_FIX_HINT } from "./bridgeclient";
-import { redactCredentials, type FtpCredentials } from "./credvault";
+import { answerOf, parseFailure, parseSuccess, unreadableAnswer } from "./gettywebparse";
+import type { FtpCredentials } from "./credvault";
 import type { StockFtpPreset } from "./types";
 
 const OUTDATED_GETTY_WEB_REASON = "Local helper on 127.0.0.1:47391 predates the Getty web upload — restart run_ftp_bridge.bat to enable it";
@@ -105,90 +106,27 @@ function uploadConfig(input: GettyWebUploadInput): string {
   }));
 }
 
+/** The staged bytes one request carries, so a failure can say how big it was. */
+function stagedBytesOf(input: GettyWebUploadInput): number {
+  return input.icons.reduce((sum, icon) => sum + icon.files.reduce((bytes, file) => bytes + file.bytes.byteLength, 0), 0);
+}
+
+function megabytesOf(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * A batch the helper could not take is not a helper that is missing: the size is
+ * named, with the knob that changes it, so a 209-icon run is diagnosable.
+ */
+function uploadTransportReason(input: GettyWebUploadInput): string {
+  return `the local helper did not answer while taking ${megabytesOf(stagedBytesOf(input))} of files — `
+    + `a batch the helper cannot take answers 413; raise GETTY_WEB_MAX_BYTES on it, and ${BRIDGE_FIX_HINT}`;
+}
+
 /** Every staged byte of every icon, in the order the config lists them. */
 function uploadBody(input: GettyWebUploadInput): Blob {
   return new Blob(input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart)));
-}
-
-/** The reason a failed request reports, with the credentials scrubbed out. */
-function failureReason(raw: unknown, creds: FtpCredentials, status: number): string {
-  const text = isRecord(raw) && typeof raw.reason === "string" ? raw.reason.trim() : "";
-  return text !== "" ? redactCredentials(text, creds) : `Getty web upload failed (HTTP ${status})`;
-}
-
-interface PageLists { accepted: string[]; failed: GettyWebRejection[]; notReady: string[]; seen: string[] }
-
-/** The name lists a page reading reports; an absent one is empty, never a claim. */
-function pageLists(raw: Record<string, unknown>): PageLists {
-  return {
-    accepted: nameList(raw.accepted), failed: failedEntries(raw),
-    notReady: nameList(raw.notReady), seen: nameList(raw.seen),
-  };
-}
-
-/** Only lists that carry names travel: an absent one never claims anything. */
-function presentLists(lists: PageLists) {
-  return {
-    ...(lists.accepted.length > 0 ? { accepted: lists.accepted } : {}),
-    ...(lists.failed.length > 0 ? { failed: lists.failed } : {}),
-    ...(lists.notReady.length > 0 ? { notReady: lists.notReady } : {}),
-    ...(lists.seen.length > 0 ? { seen: lists.seen } : {}),
-  };
-}
-
-function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok: false; code: GettyWebErrorCode; reason: string } {
-  const code = isRecord(raw) && typeof raw.code === "string" ? raw.code as GettyWebErrorCode : "page";
-  const reason = failureReason(raw, creds, status);
-  // A failed batch still says what it accepted: those icons are not re-sent.
-  return isRecord(raw)
-    ? { ok: false, code, reason, ...presentLists(pageLists(raw)) }
-    : { ok: false, code, reason };
-}
-
-function metadataEntries(raw: Record<string, unknown>) {
-  if (!Array.isArray(raw.metadata)) return [];
-  return raw.metadata.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-    name: String(entry.name), status: typeof entry.status === "string" ? entry.status : "unknown",
-    ...(isRecord(entry.fields) ? { fields: entry.fields as Record<string, boolean> } : {}),
-  }));
-}
-
-function failedEntries(raw: Record<string, unknown>) {
-  if (!Array.isArray(raw.failed)) return [];
-  return raw.failed.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-    name: String(entry.name), id: typeof entry.id === "string" ? entry.id : null,
-  }));
-}
-
-function completionOf(raw: Record<string, unknown>) {
-  if (!isRecord(raw.completion)) return null;
-  const { clicked, label, confirmed } = raw.completion;
-  return {
-    clicked: clicked === true, confirmed: confirmed === true,
-    label: typeof label === "string" ? label : null,
-  };
-}
-
-function nameList(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry !== "") : [];
-}
-
-function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
-  if (!isRecord(raw) || raw.ok !== true) return { ok: false, code: "page", reason: "unexpected helper response" };
-  const lists = pageLists(raw);
-  return {
-    ok: true,
-    batchId: typeof raw.batchId === "string" ? raw.batchId : null,
-    accepted: lists.accepted.length > 0 ? lists.accepted : fallback,
-    failed: lists.failed,
-    // Absent means "nothing was left unvalidated / not proven ready", never a claim.
-    ...(lists.notReady.length > 0 ? { notReady: lists.notReady } : {}),
-    ...(lists.seen.length > 0 ? { seen: lists.seen } : {}),
-    completed: raw.completed === true,
-    ...(raw.ready === true ? { ready: true } : {}),
-    completion: completionOf(raw),
-    metadata: metadataEntries(raw),
-  };
 }
 
 /** Sends every icon of the run (JPEG + optional EPS each) to the Getty page. */
@@ -199,12 +137,13 @@ export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<
       method: "POST", signal: input.signal, body: uploadBody(input),
       headers: { "content-type": "application/octet-stream", "x-getty-web-config": uploadConfig(input) },
     });
-    const body: unknown = await res.json();
+    const body = await answerOf(res);
     if (res.ok) return parseSuccess(body, input.icons.flatMap((icon) => icon.files.map((file) => file.name)));
+    if (body === null) return unreadableAnswer(res.status);
     return parseFailure(body, input.creds, res.status);
   } catch (err) {
     if ((err as Error)?.name === "AbortError") return { ok: false, code: "cancelled", reason: "upload cancelled" };
-    return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${BRIDGE_FIX_HINT}` };
+    return { ok: false, code: "helper-down", reason: uploadTransportReason(input) };
   }
 }
 
