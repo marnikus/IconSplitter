@@ -227,7 +227,7 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
     }
     return json(res, 200, {
       ok: true, batchId: result.batchId ?? null,
-      // Only a card with a picture counts: "Upload failed" is reported, never accepted.
+      // Only a card carrying Getty's "Ready to submit" icon counts: "Upload failed" is reported, never accepted.
       accepted: result.accepted ?? result.state?.uploaded ?? [],
       failed: result.failed ?? result.state?.failures ?? [],
       chips: result.state?.chips ?? null,

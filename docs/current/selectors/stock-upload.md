@@ -22,14 +22,14 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   `Sign in|Log in|Continue|Next|Submit`, else Enter / `form.requestSubmit()`;
   disabled fields stay candidates, because the page hydrates late.
 - Getty web cards (captured after a real upload): `[data-cy="contribution-file-name"]`
-  names the contribution; the card's picture (`[data-cy="image-thumbnail"]`, any
-  loaded/remote `img`) is the proof it uploaded; `[data-cy="invalid-file-media"]`
-  ("Upload failed") is a rejection, reported with its `ID: …` text. Every card
-  carries `[data-cy="not-ready-icon"]` (`not_ready_to_submit`) while Getty ingests
-  and `[data-cy="pending-icon"]` (`Ready to submit`) once it validated the file:
-  **that ready icon decides completion**, so `readUploadState` counts a card as
-  uploaded on its thumbnail *or* its ready icon, and the finish requires every
-  card to be ready.
+  names the contribution; `[data-cy="invalid-file-media"]` ("Upload failed") is a
+  rejection, reported with its `ID: …` text. Every card carries
+  `[data-cy="not-ready-icon"]` (`not_ready_to_submit`) while Getty ingests and
+  `[data-cy="pending-icon"]` (`Ready to submit`) once it validated the file:
+  **only that ready icon is proof of an upload**, so a card's picture
+  (`[data-cy="image-thumbnail"]`) never decides anything — `readUploadState`
+  counts a card as uploaded on its ready icon alone, and the finish requires
+  every card to be ready.
 - Getty web Complete: the control is matched by label among *enabled* buttons only;
   `completionState` reports presence/enabled so the finish waits for Getty instead
   of clicking a disabled control. Files are matched to a card by **stem**, since a JPEG/EPS pair

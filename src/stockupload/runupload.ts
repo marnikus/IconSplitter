@@ -120,8 +120,9 @@ async function runNetworkGroups(ctx: NetworkCtx): Promise<number> {
 }
 
 /**
- * Wires Getty's live counts into the panel: each thumbnail (or Getty's own
- * "Upload failed") moves the bar at once, instead of only at the end of the run.
+ * Wires Getty's live counts into the panel: each card Getty marks "Ready to
+ * submit" (or its own "Upload failed") moves the bar at once, instead of only at
+ * the end of the run.
  */
 function liveGettyProgress(ctx: NetworkCtx): () => void {
   const base = ctx.counters.done;

@@ -248,9 +248,9 @@ export async function createBatch(connection, sessionId, options) {
 
 /**
  * Waits until the batch page lists every file of this call, then until each card
- * proves its outcome: a thumbnail means Getty took the file, "Upload failed"
- * means it did not. Only those two states are terminal — a listed row without a
- * picture is still on its way.
+ * proves its outcome: Getty's own "Ready to submit" icon means it took the file,
+ * "Upload failed" means it did not. Nothing else counts — not a picture, not the
+ * mere arrival of the row.
  */
 async function waitForFileNames(connection, sessionId, names, options) {
   const timeoutMs = options.timeoutMs ?? 180000;
@@ -350,40 +350,39 @@ async function readStateSafe(connection, sessionId, names) {
 /** The reason a page that neither answers nor accepts its files is given. */
 const PAGE_STOPPED = "the Getty batch page stopped answering and did not accept the remaining files after a reload";
 
+/** Nothing is uploaded until Getty's own validation icon says so. */
 function settled(state, names) {
   return names.every((name) => state.uploaded.includes(name) || state.failed.includes(name));
 }
 
 /**
- * Recognition plus the thumbnail take a moment; a failed card is terminal at
- * once. Anything unresolved after the bound is reported, never called uploaded.
+ * Waits for Getty's "Ready to submit" icon on every card, bounded. A file that
+ * is still processing when the bound passes is **not** claimed as uploaded: the
+ * run goes on to the metadata step, which is what makes Getty validate a card,
+ * and the readiness gate after that save decides. Only the icon (or Getty's own
+ * "Upload failed") ever settles a file.
  */
 async function waitForVerified(connection, sessionId, names, options, first) {
   const deadline = Date.now() + (options.readyTimeoutMs ?? VERIFY_TIMEOUT_MS);
   let last = first;
-  while (!settled(last, names) && Date.now() < deadline) {
+  // A page that renders no contribution cards cannot show the icon at all:
+  // waiting would only burn the bound, so the metadata/readiness steps report it.
+  const readable = () => last?.cardsPresent !== false;
+  while (readable() && !settled(last, names) && Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
-    options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)`);
+    options.onProgress?.(`Getty marked ${last.uploaded.length}/${names.length} file(s) ready to submit`);
     await sleep(pollMsOf(options));
     const read = await readStateSafe(connection, sessionId, names);
     if (!read.ok) continue; // a frozen tab is waited out, never reported as uploaded
     last = read.state;
     options.onState?.(last);
   }
-  const stuck = names.length - last.uploaded.length - last.failed.length;
   const rejected = last.failed.length > 0 ? `, ${last.failed.length} rejected` : "";
-  options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)${rejected}`);
-  if (stuck > 0) {
-    options.onProgress?.(`${stuck} file(s) are still processing — the upload is not complete`);
-    // A listed card with no thumbnail is not an upload: reporting success here is
-    // what left cards stuck at "not ready to submit" while the run said it was done.
-    const waiting = names.filter((name) => !last.uploaded.includes(name) && !last.failed.includes(name));
-    return {
-      ok: false, code: "timeout", state: last,
-      reason: `Getty listed ${stuck} of ${names.length} file(s) without a thumbnail after ${Math.round((options.readyTimeoutMs ?? VERIFY_TIMEOUT_MS) / 1000)} s (${waiting.slice(0, 3).join(", ")}) — the upload is not complete`,
-    };
-  }
-  return { ok: true, state: last };
+  options.onProgress?.(`Getty marked ${last.uploaded.length}/${names.length} file(s) ready to submit${rejected}`);
+  const waiting = names.filter((name) => !last.uploaded.includes(name) && !last.failed.includes(name));
+  if (waiting.length === 0) return { ok: true, state: last };
+  options.onProgress?.(`${waiting.length} file(s) are not ready to submit yet — saving the metadata next, which is what makes Getty validate them`);
+  return { ok: true, state: last, pending: waiting };
 }
 
 /** The contribution a file belongs to; a vector pair shares one. */
@@ -730,8 +729,16 @@ export async function finishBatch(connection, sessionId, options = {}) {
   const refusal = finishRefusal(expected, state, total, listed);
   if (refusal !== null) return refusal;
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
+  // A file Getty never validated may not be submitted, whatever the control says:
+  // the icon, not a button being enabled, is what proves the run is done.
   const control = await runDriverStep(connection, sessionId, "completionState");
   if (!control?.present) return finishOnIcons(connection, sessionId, expected, options, state);
+  if (state?.cardsPresent !== false && notReadyContributions(expected, state).length > 0) {
+    const readiness = await waitForReadyToSubmit(connection, sessionId, expected, options, state);
+    if (!readiness.ok) {
+      return { ok: false, code: readiness.code ?? "timeout", reason: readiness.reason, state: readiness.state ?? state };
+    }
+  }
   const ready = await waitForCompletionEnabled(connection, sessionId, options);
   if (!ready.ok) return { ...ready, state };
   const done = await clickComplete(connection, sessionId, options);

@@ -29,10 +29,20 @@ export function progressOf(read, reloads = 0) {
   const failed = Array.isArray(read?.failed) ? read.failed.length : 0;
   const listed = Array.isArray(read?.namesSeen) ? read.namesSeen.length : 0;
   const total = listed + (Array.isArray(read?.missing) ? read.missing.length : 0);
-  // Getty's own "Ready to submit" validation, the only proof a file may be sent;
+  // Getty's own "Ready to submit" validation, the only proof a file was uploaded;
   // reported only once it exists, so a reading without it stays the old shape.
   const ready = Array.isArray(read?.readyToSubmit) ? read.readyToSubmit.length : 0;
   return { total, uploaded, failed, listed, ...(ready > 0 ? { ready } : {}), reloads };
+}
+
+/**
+ * What the run may call uploaded. The last reading of the run wins: it is taken
+ * after the grid-wide metadata save, so it is the one that can show Getty's
+ * "Ready to submit" icon. A file without that icon is never in this list.
+ */
+export function acceptedOf(done, attachResult) {
+  const settled = done?.report?.readiness?.state ?? attachResult?.state ?? null;
+  return Array.isArray(settled?.uploaded) ? settled.uploaded : [];
 }
 
 /** The readiness pacing a caller may inject; production keeps the real windows. */
@@ -237,9 +247,13 @@ function buildSession(ctx) {
       // The phase says whether Getty validated every card, not just that the
       // request returned: a failed readiness leaves the run unfinished.
       state.progress = { ...progressOf(done.report?.readiness?.state ?? result.state, state.reloads), phase: done.ok ? "done" : "failed" };
+      // What counts as uploaded is the last reading, taken after the metadata was
+      // saved: a file is accepted only when its card shows "Ready to submit".
+      const settledState = done.report?.readiness?.state ?? result.state;
       return {
         ...done, state: { ...result.state, ...done.report?.state }, report: done.report,
-        accepted: result.state?.uploaded ?? [], failed: result.state?.failures ?? [], batchId: state.batchId,
+        accepted: acceptedOf(done, result), failed: settledState?.failures ?? result.state?.failures ?? [],
+        batchId: state.batchId,
       };
     },
     /**

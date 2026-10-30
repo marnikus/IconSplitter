@@ -35,7 +35,7 @@ export interface GettyWebRejection {
 export type GettyWebResult =
   | {
     ok: true; batchId: string | null;
-    /** Names whose card shows a thumbnail: Getty took these files. */
+    /** Names whose card carries Getty's "Ready to submit" icon: the upload proof. */
     accepted: string[];
     /** Names Getty answered with "Upload failed" — never counted as uploaded. */
     failed?: GettyWebRejection[];
@@ -43,7 +43,7 @@ export type GettyWebResult =
     /**
      * Every contribution carried Getty's own "Ready to submit" validation icon,
      * so the batch is finished even when the page offers no Complete/Submit
-     * control to click. A thumbnail alone never sets this.
+     * control to click. Nothing else — a thumbnail least of all — sets this.
      */
     ready?: boolean;
     completion: { clicked: boolean; label: string | null; confirmed: boolean } | null;

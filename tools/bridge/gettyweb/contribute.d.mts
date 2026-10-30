@@ -27,7 +27,13 @@ export function attachFiles(connection: any, sessionId: string, options: {
   pollMs?: number;
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
-}): Promise<{ ok: boolean; code?: string; reason?: string | null; state: any }>;
+  /**
+   * Files still without Getty's "Ready to submit" icon when the wait's bound
+   * passed. They are not claimed as uploaded; the metadata save is what makes
+   * Getty validate them, so the run goes on to it.
+   */
+  pending?: string[];
+}): Promise<{ ok: boolean; code?: string; reason?: string | null; state: any; pending?: string[] }>;
 /** Getty's own Date Created rendering, e.g. "10/10/2026 00:00:00 +0000". */
 export function gettyCreatedDate(now?: Date): string;
 export function contributionCount(names: string[]): number;

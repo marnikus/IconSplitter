@@ -23,16 +23,16 @@ real browser.
    files to the uploader in one `DOM.setFileInputFiles`; stray dialogs (one blocks
    Getty's uploader) are dismissed first.
 5. Getty's uploader transfers. **If nothing new appears for 30 s** the helper
-   reloads the batch page and re-attaches only the missing files (twice, then it
-   fails honestly); a read that times out is that same stall, retried, not a
-   socket error. It waits until every file is listed, then until each card proves
-   its outcome: **Getty's `pending-icon` "Ready to submit"** is the final
-   proof, a **thumbnail** the earlier one (a validated card counts before its
-   picture renders), `invalid-file-media` ("Upload failed") is not — a listed row
-   proves nothing, and a card with neither proof fails the wait (300 s). A
-   rejected file is named with Getty's id. `GET /getty-web/progress` feeds the
-   live counts, so **the bar moves with each thumbnail and validated card**
-   (1 s poll).
+   reloads the batch page and re-attaches only the missing files (twice, then
+   fails honestly); a read that times out is that stall, retried, not a socket
+   error. It waits until every file is listed, then for each card's own
+   verdict: **only `data-cy="pending-icon"` / `aria-label="Ready to submit"`
+   counts as uploaded** — a thumbnail, a listed row or a rendering card proves
+   nothing, and `invalid-file-media` ("Upload failed") is a rejection named with
+   Getty's id. A card that is still unvalidated when the bound (300 s) passes is
+   not claimed: the run moves to the metadata step, which is what makes Getty
+   validate a card, and the gate there decides. `GET /getty-web/progress` feeds
+   the live counts, so **the bar moves with each validated card** (1 s poll).
 6. **Metadata:** per contribution it selects the card by stem (clicking twice if
    Getty drops the first), waits for the drawer to unlock (disabled fields drop
    typed text), types title and description and writes **today's date** into Date
@@ -41,7 +41,7 @@ real browser.
    touched**: keywords Getty lists are left alone and only the keyword field ever
    gets Enter. Every drawer saved, it selects **all** cards and presses **Save
    metadata** once (`bulkSave`; nothing is claimed if nothing could be selected).
-   **Then it waits for the icons, not the thumbnails:** every card must show `data-cy="pending-icon"` /
+   **Then it waits for the icons:** every card must show `data-cy="pending-icon"` /
    `aria-label="Ready to submit"` before the run is done. A card still showing
    `not-ready-icon` gets **Save metadata pressed again after 30 s** (twice at
    most) and only the not-ready files are re-checked; one that stays unvalidated
@@ -54,7 +54,7 @@ real browser.
    not an error: every card carrying "Ready to submit" *is* the finished state, so
    the answer is `ok: true`, `ready: true`, `completed: false` and the run logs
    `batch-ready` (info) — nothing is waited for. Only a card that never validates,
-   or a page with no cards, is a refusal, reported with the names.
+   or a page with no cards, is a refusal, named.
 8. `/getty-web/close` lets the browser go and deletes staged files; an idle
    session closes after 5 min.
 
@@ -78,7 +78,7 @@ never a value.
   still starts signed in — only missing cookies are put back.
 - `--getty-check` prints `browser:`, `launch:`, `socket:`; `--getty-reset
   --getty-profile <folder>` ends that browser; `--getty-cdp` (= `GETTY_WEB_CDP`)
-  attaches to one started with `--remote-debugging-port=9222` (loopback only).
+  attaches to one started with `--remote-debugging-port=9222`.
 - `GETTY_WEB_BROWSER` overrides the executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS`
   (180 s), `GETTY_WEB_READY_TIMEOUT_MS` (300 s) bound the waits.
 
@@ -113,14 +113,14 @@ Codes map to HTTP: `bad-request` 400 (config, host, file rules, no open batch),
 launch failure, busy profile, refused socket), `timeout` 504 (no batch page /
 names missing / control never ready / a file absent or unvalidated at `finish`),
 `cancelled` 499, `page` 502 (selector not found). A refused socket names its port
-and says to retry; reasons never carry identifier or password.
+and says to retry; reasons never carry credentials.
 
 ## 6. Honest limits
 
 - Built against captured markup plus a local helper, **not** a live account:
   drift is a `page` failure naming the step.
-- A thumbnail means Getty took the file, not that it accepted it; only the
-  "Ready to submit" icon says so.
+- A thumbnail proves nothing at all — Getty renders one for files it rejects;
+  only the "Ready to submit" icon says a file was uploaded.
 - Arkose/funCaptcha **cannot** be automated: solve it once headed (it then lives
   in the profile). Typing is proven against a fake CDP; only the saved identifier
   is typed.

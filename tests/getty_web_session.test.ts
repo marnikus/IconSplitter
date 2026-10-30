@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SESSION_COOKIE_FILE, restoreSessionCookies, saveSessionCookies, sessionCookiePath,
 } from "../tools/bridge/gettyweb/sessioncookies.mjs";
+import { acceptedOf } from "../tools/bridge/gettyweb/session.mjs";
 
 const COOKIE = {
   name: "esp_session", value: "s3cr3t-token", domain: ".gettyimages.com", path: "/",
@@ -122,5 +123,32 @@ describe("Getty web remembered cookies", () => {
       log.mockRestore();
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+// A file counts as uploaded only when its card carries Getty's own "Ready to
+// submit" icon. The reading that decides is the last one — taken after the
+// grid-wide metadata save — so the attach-phase counts can never claim a file
+// that Getty has not validated.
+describe("Getty web accepted files", () => {
+  const attach = { uploaded: ["star_01.jpg", "star_01.eps"], failed: [], namesSeen: ["star_01.jpg", "star_01.eps"] };
+
+  it("takes the post-save reading, not the attach-phase one", () => {
+    const done = {
+      ok: false, code: "timeout", reason: "Getty does not show its \"Ready to submit\" icon for moon_02.eps",
+      report: { readiness: { ok: false, state: { ...attach, uploaded: ["star_01.jpg", "star_01.eps"] } } },
+    };
+    expect(acceptedOf(done, { state: { ...attach, uploaded: ["star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps"] } }))
+      .toEqual(["star_01.jpg", "star_01.eps"]);
+  });
+
+  it("is empty when no card showed the icon, even though every file was listed", () => {
+    const done = { ok: false, report: { readiness: { ok: false, state: { ...attach, uploaded: [] } } } };
+    expect(acceptedOf(done, { state: attach })).toEqual([]);
+  });
+
+  it("falls back to the attach reading only when the run never reached a later one", () => {
+    expect(acceptedOf({ ok: false, report: null }, { state: attach })).toEqual(attach.uploaded);
+    expect(acceptedOf(undefined, undefined)).toEqual([]);
   });
 });

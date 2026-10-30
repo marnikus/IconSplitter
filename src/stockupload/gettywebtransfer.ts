@@ -97,8 +97,9 @@ async function prepareIcons(input: GettyWebRunInput): Promise<GettyWebIcon[] | s
 }
 
 /**
- * Only a card that shows a thumbnail proves Getty took the file; a card reading
- * "Upload failed" is named as such, and anything else is not claimed as uploaded.
+ * Only a card carrying Getty's own "Ready to submit" icon proves the file was
+ * uploaded; a card reading "Upload failed" is named as such, and anything else is
+ * not claimed as uploaded. A thumbnail proves nothing.
  */
 function outcomeOf(
   icon: GettyWebIconInput, accepted: readonly string[], failed: readonly GettyWebRejection[],
@@ -111,7 +112,7 @@ function outcomeOf(
     return { ok: false, reason: `Getty reports "Upload failed" for ${rejected.name}${id}` };
   }
   if (accepted.some((name) => stems.includes(stemOf(name)))) return { ok: true, reason: "" };
-  return { ok: false, reason: `Getty shows no thumbnail for ${stems[0] ?? "this icon"} — not counted as uploaded` };
+  return { ok: false, reason: `Getty does not show its "Ready to submit" icon for ${stems[0] ?? "this icon"} — not counted as uploaded` };
 }
 
 const GETTY_WEB_NOT_COMPLETED_NOTE =
@@ -151,19 +152,20 @@ export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyW
   return { ok: reason === "", reason, icons: outcomes, deferCompletion: true };
 }
 
-/** The panel line for a live upload reading: what Getty has taken so far. */
+/**
+ * The panel line for a live upload reading. The count is Getty's "Ready to
+ * submit" one: a file is not called uploaded until its card carries that icon.
+ */
 export function progressLabel(progress: GettyWebProgress, targetName: string): string {
   const of = progress.total > 0 ? ` of ${progress.total}` : "";
   const failed = progress.failed > 0 ? `, ${progress.failed} failed` : "";
   const reloaded = progress.reloads > 0 ? " — page reloaded to get it moving" : "";
-  const ready = progress.ready ?? 0;
-  if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
-  // Readiness is what makes a file submittable, so it is said out loud.
-  if (ready > 0) return `${targetName}: ${ready}${of} file(s) ready to submit${failed}${reloaded}`;
-  return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}${reloaded}`;
+  const ready = Math.max(progress.ready ?? 0, progress.uploaded);
+  if (ready === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
+  return `${targetName}: ${ready}${of} file(s) ready to submit${failed}${reloaded}`;
 }
 
-/** Files Getty has already settled: a thumbnail, or its own "Upload failed". */
+/** Files Getty has already settled: its "Ready to submit" icon, or "Upload failed". */
 export function settledFiles(progress: GettyWebProgress): number {
   return progress.uploaded + progress.failed;
 }
@@ -203,7 +205,7 @@ async function progressTick(state: WatchState): Promise<void> {
 /**
  * Polls the helper while the one upload request is in flight, so the panel shows
  * Getty's own per-file progress instead of sitting still until the batch lands.
- * Every reading (thumbnail count included) is reported at once. Returns its stop
+ * Every reading (validated count included) is reported at once. Returns its stop
  * function; the first reading is taken immediately.
  */
 export function watchGettyProgress(

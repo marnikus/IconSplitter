@@ -152,18 +152,18 @@ describe("Getty web upload in the batch runner", () => {
     await vi.advanceTimersByTimeAsync(2100);
     release!();
     await run;
-    expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) uploaded"))).toBe(true);
+    expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) ready to submit"))).toBe(true);
   });
 
   it("says so when Getty's page had to be reloaded to get moving", () => {
     const base = { phase: "uploading", total: 14, uploaded: 5, failed: 2, listed: 14 };
     expect(progressLabel({ ...base, reloads: 0 }, "Getty Images (web upload)"))
-      .toBe("Getty Images (web upload): 5 of 14 file(s) uploaded, 2 failed");
+      .toBe("Getty Images (web upload): 5 of 14 file(s) ready to submit, 2 failed");
     expect(progressLabel({ ...base, reloads: 1 }, "Getty Images (web upload)"))
       .toContain("page reloaded");
   });
 
-  it("moves the bar as each thumbnail appears, not only when the run ends", async () => {
+  it("moves the bar as each file turns Ready to submit, not only when the run ends", async () => {
     vi.useFakeTimers();
     const root = new FakeDir("ws");
     addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
@@ -202,9 +202,9 @@ describe("Getty web upload in the batch runner", () => {
     await vi.advanceTimersByTimeAsync(6000);
     release!();
     await run;
-    // One thumbnail lands => the bar is already at 1 of 4, then 2 of 4.
+    // One card turns ready => the bar is already at 1 of 4, then 2 of 4.
     expect(steps.some((step) => step.done === 1 && step.total === 4)).toBe(true);
-    expect(steps.some((step) => step.done === 2 && step.label.includes("2 of 4 file(s) uploaded"))).toBe(true);
+    expect(steps.some((step) => step.done === 2 && step.label.includes("2 of 4 file(s) ready to submit"))).toBe(true);
     // And the misses before the helper's session did not stop the watching.
     expect(polls).toBeGreaterThan(3);
   });
@@ -270,7 +270,7 @@ describe("Getty web upload in the batch runner", () => {
       closeGettyWebFn: async () => undefined,
     });
     expect(summary).toMatchObject({ uploadedFiles: 2, failedFiles: 2 });
-    expect(summary.lastError).toContain("no thumbnail for moon_02");
+    expect(summary.lastError).toContain('"Ready to submit" icon for moon_02');
     expect(finishes).toBe(1);
   });
 

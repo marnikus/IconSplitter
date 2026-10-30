@@ -3,6 +3,11 @@ export function safeStagedName(fileName: string): string;
 export function progressOf(read: any, reloads?: number): {
   total: number; uploaded: number; failed: number; listed: number; reloads: number;
 };
+/**
+ * What the run may call uploaded: the last reading (after the metadata save),
+ * where a file counts only if its card carries Getty's "Ready to submit" icon.
+ */
+export function acceptedOf(done: any, attachResult: any): string[];
 /** How long the page may take to list `fileCount` attached files. */
 export function uploadTimeoutFor(fileCount: number, baseMs?: number): number;
 export function openGettySession(options: any): Promise<any>;

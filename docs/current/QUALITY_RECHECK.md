@@ -4122,3 +4122,44 @@ icon), `sor/stock-upload.md` (bar + `batch-ready`), `selectors/stock-upload.md`
 (ready chip, bar handles); every `docs/current` page stays under 9 000 B
 (8 966 / 7 724 / 8 558 B). `dist/` and `node_modules/` were restored, not
 committed.
+
+## 2026-10-30 — Getty uploads are verified by "Ready to submit", never a thumbnail
+
+Correction of the entry above, on the user's instruction: a rendered thumbnail is
+not evidence of an upload at all (Getty draws one for files it later rejects), so
+the ready icon is now the **only** proof.
+
+`driver.mjs` dropped `cardHasThumbnail`/`CARD_THUMBNAIL` and the card's
+`thumbnail` field: `fileStatus` returns `uploaded` only for a card carrying
+`[data-cy="pending-icon"][aria-label="Ready to submit"]`, `failed` for
+`invalid-file-media`, `processing` for anything else, and a page without cards
+can only prove a row is listed (never `uploaded`). `readUploadState.uploaded`
+therefore means "Getty validated this file"; `processingNames` is every listed
+file without the icon.
+
+`contribute.mjs`: `waitForVerified` waits for the icon on every card and, when
+the bound passes, returns `ok` with the still-pending names instead of claiming
+them — the following metadata save is what makes Getty validate a card, and the
+readiness gate (`waitForReadyToSubmit`, retry 30 s ×2 then 75 s) is the single
+judge. `finishBatch` now reads the icons before pressing Complete too: a card
+without the icon gets the readiness wait and, if it stays unvalidated, the batch
+is refused with the file named instead of submitted.
+
+`session.mjs` gained `acceptedOf`: the upload answer's `accepted` list comes from
+the **last** reading — the one taken after the grid-wide save — never from the
+attach phase, so a thumbnail-only card can no longer be reported as uploaded.
+`progressOf` keeps counting the same icon, and the panel line reads "N of M
+file(s) ready to submit".
+
+Focused runs: 24 files / **275 tests** passing — `getty_web_driver` 45 (incl. the
+new "never counts a rendered thumbnail as an upload on its own"), `getty_web_batch`
+30 (incl. a not-ready card kept out of `uploaded`, a listed-but-unvalidated card
+handed to the metadata step, and `finishBatch` refusing to submit it),
+`getty_web_session` 9 (3 new `acceptedOf` cases: post-save reading wins, empty
+when nothing was validated, attach fallback), plus finalize/upload/cdp/signin/
+browser/bridge and the stock-upload UI suites. `npx tsc --noEmit` clean;
+`npm run quality:changed` GATE PASSED; `npm run verify:fast` ALL LANES PASSED.
+No test removed, skipped or loosened; no threshold, budget or harness change.
+Docs: `sor/stock-upload-getty-web.md` (icon-only proof, `pending`, `acceptedOf`),
+`selectors/stock-upload.md` (thumbnails decide nothing); both stay under 9 000 B
+(8 996 / 8 527 B). `dist/` and `node_modules/` restored, not committed.

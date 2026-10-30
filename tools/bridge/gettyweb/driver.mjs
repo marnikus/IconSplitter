@@ -123,34 +123,24 @@ function fileStem(name) {
 
 const CARD_NAME = '[data-cy="contribution-file-name"]';
 /**
- * Getty's own validation icon is the ONLY proof that a file may be submitted: the
+ * Getty's own validation icon is the ONLY proof that a file was uploaded: the
  * captured page renders a `pending-icon` labelled "Ready to submit" once the
- * metadata is saved, and a `not-ready-icon` before that. A thumbnail says Getty
- * took the bytes; it never says the contribution passed validation.
+ * metadata is saved, and a `not-ready-icon` before that. A thumbnail says nothing
+ * — the page draws one for files it later rejects.
  */
 const CARD_READY = '[data-cy="pending-icon"][aria-label="Ready to submit"], [aria-label="Ready to submit"]';
 const CARD_PROCESSING = '[data-cy="not-ready-icon"], [aria-label="not_ready_to_submit"]';
-// The captured batch page shows "Upload failed" instead of a picture, and a
-// successful contribution renders its thumbnail. That picture, not the arrival of
-// the row, is the proof that Getty accepted the file.
+// Getty rejects a contribution by replacing its card with "Upload failed"; that
+// node (and its text) is the only other terminal state a card can show.
 const CARD_FAILED = /upload failed|failed to upload|upload error/i;
 // The captured page marks a rejected contribution with this node, whose text is
 // "Upload failed"; the text alone is also matched, for a layout that drops it.
 const CARD_FAILED_NODE = '[data-cy="invalid-file-media"], [data-cy*="invalid-file"], [data-cy*="upload-failed"]';
-const CARD_THUMBNAIL = '[data-cy="image-thumbnail"], [data-cy="image-card"] img, img';
 
 /** The contribution id Getty prints under a name (`ID: FSPID51446`). */
 function cardIdOf(scope) {
   const match = /ID:\s*([A-Za-z0-9_-]{3,})/.exec(textOf(scope));
   return match ? match[1] : null;
-}
-
-/** A real picture in the card: a loaded/remote/embedded image, not a placeholder. */
-function cardHasThumbnail(scope) {
-  const img = scope.querySelector(CARD_THUMBNAIL);
-  if (!img) return false;
-  const src = String(img.currentSrc || img.getAttribute("src") || "");
-  return img.naturalWidth > 0 || /^(https?:|data:|blob:)/.test(src);
 }
 
 /** One entry per contribution card the batch page lists, with what it shows. */
@@ -163,7 +153,6 @@ function uploadCards() {
       ready: Boolean(scope.querySelector(CARD_READY)),
       processing: Boolean(scope.querySelector(CARD_PROCESSING)),
       failed: Boolean(scope.querySelector(CARD_FAILED_NODE)) || CARD_FAILED.test(textOf(scope)),
-      thumbnail: cardHasThumbnail(scope),
       el, scope,
     };
   });
@@ -181,15 +170,14 @@ function mentionsStem(text, stem) {
 
 /**
  * How one file of this call stands right now: not on the page yet, failed on
- * Getty's side, uploaded (its card shows a picture) or still processing.
+ * Getty's side, uploaded (its card carries Getty's "Ready to submit" icon) or
+ * still processing. Nothing else proves an upload — not a picture, not the row.
  */
 function fileStatus(cards, name) {
   const card = cards.find((entry) => entry.stem === fileStem(name)) ?? null;
   if (!card) return "pending";
   if (card.failed) return "failed";
-  // Getty's own "Ready to submit" validation means the bytes arrived and were
-  // processed, so a validated card counts even before its picture renders.
-  return card.thumbnail || card.ready ? "uploaded" : "processing";
+  return card.ready ? "uploaded" : "processing";
 }
 
 /**
@@ -399,19 +387,19 @@ export function submitBatchCreation() {
 
 /**
  * What the batch page shows for the files just handed to it. A contribution
- * counts as uploaded the moment its card is listed, even while Getty is still
- * processing it (`processing`), because the bytes are already on Getty's side.
+ * counts as uploaded only when its card carries Getty's "Ready to submit" icon;
+ * a listed card without that icon is still processing, whatever it renders.
  */
 export function readUploadState({ names }) {
   const body = textOf(document.body).slice(0, 200000);
   const wanted = Array.isArray(names) ? names.filter((n) => typeof n === "string" && n !== "") : [];
   const cards = uploadCards();
   const lower = body.toLowerCase();
-  // A page without cards (older layout) has no thumbnail to check: a name in the
-  // text is all the proof there is, so it keeps the old "listed means uploaded".
+  // A page without cards (older layout) has no validation icon to read: a name in
+  // the text proves the row is listed, never that Getty accepted the file.
   const statusOf = (name) => (cards.length > 0
     ? fileStatus(cards, name)
-    : (mentionsStem(lower, fileStem(name)) ? "uploaded" : "pending"));
+    : (mentionsStem(lower, fileStem(name)) ? "processing" : "pending"));
   const listed = (name) => statusOf(name) !== "pending";
   const byStatus = (status) => wanted.filter((name) => statusOf(name) === status);
   // Readiness is read from the card's own validation icon, so a card that is
@@ -430,11 +418,14 @@ export function readUploadState({ names }) {
     url: location.href,
     namesSeen: wanted.filter(listed),
     missing: wanted.filter((name) => !listed(name)),
-    /** Names whose card shows a picture: Getty took them, and the app may say so. */
+    /**
+     * Names whose card carries Getty's own "Ready to submit" icon. This is the
+     * only proof of an upload: a picture or a listed row never sets it.
+     */
     uploaded: byStatus("uploaded"),
     /** Names Getty answered with "Upload failed" — never counted as uploaded. */
     failed: byStatus("failed"),
-    /** Listed, no picture yet: recognition or the thumbnail is still coming. */
+    /** Listed, no "Ready to submit" icon yet: Getty is still ingesting it. */
     processingNames: byStatus("processing"),
     /** Names whose card shows Getty's "Ready to submit" validation icon. */
     readyToSubmit: wanted.filter(readyName),
@@ -733,7 +724,7 @@ export function readCompletionState() {
  */
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
-  fileStem, mentionsStem, uploadCards, cardIdOf, cardHasThumbnail, fileStatus, inputFields, loginFields,
+  fileStem, mentionsStem, uploadCards, cardIdOf, fileStatus, inputFields, loginFields,
   submitControl, pageSignals, labelTextOf, setFieldValue, dateFieldOf, seenField, existingKeywordCount,
 ]
   .map((fn) => fn.toString()).join("\n")
@@ -743,7 +734,6 @@ export const PAGE_PRELUDE = [
   + `\nconst CARD_READY = ${JSON.stringify(CARD_READY)};`
   + `\nconst CARD_PROCESSING = ${JSON.stringify(CARD_PROCESSING)};`
   + `\nconst CARD_FAILED = ${CARD_FAILED.toString()};`
-  + `\nconst CARD_THUMBNAIL = ${JSON.stringify(CARD_THUMBNAIL)};`
   + `\nconst CARD_FAILED_NODE = ${JSON.stringify(CARD_FAILED_NODE)};`
   + `\nconst COMPLETE_LABEL = ${COMPLETE_LABEL.toString()};`
   + `\n${usable.toString()}`;

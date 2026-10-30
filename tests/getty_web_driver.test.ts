@@ -452,7 +452,7 @@ describe("Getty batch page as captured", () => {
   // `not-ready-icon` once the metadata is saved.
   const READY_ICON = '<svg data-cy="pending-icon" aria-label="Ready to submit"></svg>';
 
-  it("reads the captured Ready-to-submit validation icon, not just the thumbnail", () => {
+  it("reads the captured Ready-to-submit validation icon as the upload proof", () => {
     mount(CARD_PAGE
       .replace('<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', READY_ICON)
       .replace('<img data-cy="image-thumbnail" alt="Location pinpointing">',
@@ -461,24 +461,25 @@ describe("Getty batch page as captured", () => {
     // Both files of the pair belong to the one contribution Getty marked ready.
     expect(state.readyToSubmit).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
     expect(state.awaitingReady).toEqual([]);
-    // A thumbnail alone is not readiness: it is proof Getty took the bytes.
     expect(state.uploaded).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
   });
 
-  it("keeps a card with a thumbnail but no Ready-to-submit icon out of the ready list", () => {
+  it("never counts a rendered thumbnail as an upload on its own", () => {
+    // The user's rule: a picture proves nothing — Getty lists one even for files
+    // it later rejects — so only its own "Ready to submit" icon counts.
     mount(CARD_PAGE.replace(
       '<img data-cy="image-thumbnail" alt="Location pinpointing">',
       '<img data-cy="image-thumbnail" alt="Location pinpointing" src="https://media.gettyimages.com/id/1/icon.jpg">',
     ));
     const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] });
-    expect(state.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
+    expect(state.uploaded).toEqual([]);
+    expect(state.processingNames).toEqual(["icon-map-pin_5_01.jpg"]);
     expect(state.readyToSubmit).toEqual([]);
     expect(state.awaitingReady).toEqual(["icon-map-pin_5_01.jpg"]);
   });
 
   it("counts a card Getty marked Ready to submit as uploaded even without a picture", () => {
-    // Getty's own validation icon implies the bytes arrived and were processed,
-    // so the upload no longer depends on the thumbnail alone.
+    // The icon alone is the proof: the row may still be rendering its picture.
     mount(CARD_PAGE.replace(
       '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', READY_ICON,
     ));
@@ -498,11 +499,10 @@ describe("Getty batch page as captured", () => {
     expect(state.awaitingReady).toEqual([]);
   });
 
-  it("reads each card's own outcome: a thumbnail is uploaded, Upload failed is not", () => {
+  it("reads each card's own outcome: Ready to submit is uploaded, Upload failed is not", () => {
     const uploaded = CARD_PAGE.replace(
-      '<img data-cy="image-thumbnail" alt="Location pinpointing">',
-      '<img data-cy="image-thumbnail" alt="Location pinpointing" src="https://media.gettyimages.com/id/1/icon.jpg">',
-    ).replace('<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', "");
+      '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', READY_ICON,
+    );
     mount(uploaded);
     const good = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] });
     expect(good.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
@@ -515,22 +515,23 @@ describe("Getty batch page as captured", () => {
     ).replace("ID: 2302596512", "ID: FSPID51446");
     mount(failed);
     const bad = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"] });
-    // A listed row without a picture is not proof of an upload.
+    // A rejected card is never an upload, whatever else it renders.
     expect(bad.uploaded).toEqual([]);
     expect(bad.failed).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
     expect(bad.failures).toEqual([{ name: "icon-map-pin_5_01.eps", id: "FSPID51446" }]);
   });
 
-  it("reads the captured page: thumbnail = uploaded, invalid-file-media = failed", () => {
-    // Trimmed from the real batch page: every card carries the BlockIcon
-    // (not_ready_to_submit) while ingestion runs, so the icon proves nothing —
-    // the thumbnail or the "Upload failed" node is what decides.
+  it("reads the captured page: Ready to submit = uploaded, invalid-file-media = failed", () => {
+    // Trimmed from the real batch page: a card carries the BlockIcon
+    // (not_ready_to_submit) while ingestion runs and the ReplyIcon
+    // (Ready to submit) once Getty validated it — only that second icon counts,
+    // even though every card also renders a thumbnail.
     const card = (name: string, id: string, body: string) => `
       <div data-cy="grid-row"><div>
         <div data-cy="item-card">
           <div data-cy="image-card" style="margin: 10px; height: 111px;">${body}</div>
           <div data-cy="item-info">
-            <svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>
+            <svg data-cy="pending-icon" aria-label="Ready to submit"></svg>
             <p data-cy="contribution-file-name">${name}</p>
             <p data-cy="contribution-id-x">ID: ${id}</p>
           </div>
@@ -557,15 +558,15 @@ describe("Getty batch page as captured", () => {
       "icon-sync-arrows_10_01.jpg", "icon-sync-arrows_10_01.eps",
     ];
     const state = driver.readUploadState({ names });
-    // Only the two cards with a picture are uploads.
+    // Only the two cards carrying Getty's validation icon are uploads, although
+    // all three render a picture (the failed one replaced it).
     expect(state.uploaded).toEqual([
       "icon-steps-to-goal_8_01_v2.jpg", "icon-steps-to-goal_8_01_v2.eps",
       "icon-sync-arrows_10_01.jpg", "icon-sync-arrows_10_01.eps",
     ]);
     expect(state.failed).toEqual(["icon-steps-to-goal_9_03_v3.jpg", "icon-steps-to-goal_9_03_v3.eps"]);
     expect(state.failures).toEqual([{ name: "icon-steps-to-goal_9_03_v3.eps", id: "2302602220" }]);
-    // The BlockIcon is on every card, so it never decides an upload.
-    expect(state.processing).toBe(true);
+    expect(state.processingNames).toEqual([]);
   });
 
   it("selects a card by stem so the metadata drawer wakes up", () => {
