@@ -5,7 +5,11 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 ## Shell & source bar
 - `tab-stock-upload` — top navigation button (`"Upload"`).
 - `stock-upload-shell`, `stock-upload-panel`, `stock-upload-unsupported`, `stock-pick-root` — panel containers.
-- `stock-upload-progress-mount` — cross-tab portal mount for in-flight upload progress.
+- `stock-upload-progress-mount` — cross-tab portal mount for the upload bar
+  (`stock-upload-progress-{header,title,file,track,completed,remaining,percent}`),
+  with `complete` on the header once every file is settled; `stock-progress-cancel`
+  while files move, `stock-progress-dismiss` (✕, "Close upload progress") once the
+  bar is finished or the run returned.
 - `stock-open-folder`, `stock-rescan`, `stock-folder-path`, `stock-scope-copy`, `stock-audit` — folder picker, rescan, and full root path bar.
 
 ## Stock presets, Getty ESP CSV & local-only credentials (`StockFtpPanel.tsx`, `StockFtpCredentials.tsx`)
@@ -21,8 +25,11 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   names the contribution; the card's picture (`[data-cy="image-thumbnail"]`, any
   loaded/remote `img`) is the proof it uploaded; `[data-cy="invalid-file-media"]`
   ("Upload failed") is a rejection, reported with its `ID: …` text. Every card
-  carries `[data-cy="not-ready-icon"]` (`not_ready_to_submit`) while Getty ingests,
-  so that icon never decides an upload.
+  carries `[data-cy="not-ready-icon"]` (`not_ready_to_submit`) while Getty ingests
+  and `[data-cy="pending-icon"]` (`Ready to submit`) once it validated the file:
+  **that ready icon decides completion**, so `readUploadState` counts a card as
+  uploaded on its thumbnail *or* its ready icon, and the finish requires every
+  card to be ready.
 - Getty web Complete: the control is matched by label among *enabled* buttons only;
   `completionState` reports presence/enabled so the finish waits for Getty instead
   of clicking a disabled control. Files are matched to a card by **stem**, since a JPEG/EPS pair

@@ -4079,3 +4079,46 @@ isolation canaries; threads/V8 pools, group merges, optimizer pre-bundling and
 semi-space tuning were all neutral or slower. Reaching 40 % needs smaller or
 fewer rendering-scale tests, or 4 vCPU — see
 `docs/archive/2026-10-30-harness-speed/README.md`.
+
+## 2026-10-30 — Getty finish at 100 % with a close control
+
+Reported: a real 14-file Getty batch reached 100 % / "14 completed · 0 remaining"
+and the bar still offered Cancel; a minute later the run ended as an error
+("Getty does not show a Complete/Submit control on this batch") although the job
+was done.
+
+Measured, in this order. Completion is now decided by the per-file chip, not the
+thumbnail: a card counts as uploaded on its thumbnail **or** Getty's
+`[data-cy="pending-icon"][aria-label="Ready to submit"]` (`driver.mjs`
+`fileStatus`), and `contribute.mjs` `waitForReadyToSubmit` requires **every** card
+to show it after "Save metadata"; files still on `not_ready-icon` get Save
+metadata pressed again after `readyRetryMs` 30 s (at most `readyResaves` 2,
+`readyTimeoutMs` 75 s) and only those files are re-checked. `finalizeBatch`
+reports `readiness {ok, verified, ready, total, notReady, resaves}`; the gateway
+returns `ready: true` and `completed: false` for an all-ready batch with no
+Complete control, and `runupload.ts` logs `batch-ready` at `info` instead of the
+`error` closing line observed live. `progressOf` gained `ready` (emitted only
+when > 0), `GettyWebProgress.ready` is optional and absent unless proven.
+
+The bar itself moved to `src/stockupload/progressmodel.ts` (`uploadBar`): 100 %
+means finished, so at 100 % it forces the percentage, swaps Cancel for the ✕
+close (`stock-progress-dismiss`, "Close upload progress") and keeps a
+`complete` header until dismissed (`panelops.dismissProgress`); `panelops.ts`
+keeps the finished bar after the run returns with `complete: true` and
+`failed: summary.failedFiles`, titled "Upload complete" / "Upload finished with
+errors".
+
+Focused runs: `getty_web_*`, `bridge_getty_web`, `stockupload_getty_web(+_ui)`,
+`stockupload_log`, `stockupload_progress_ui`, `docs_navigation` — **220 tests in
+14 files, all passing** (44 driver, 49 batch+finalize, 15 stockupload_getty_web,
+10 log, 4 progress UI, 4 docs). `npx tsc --noEmit` clean, `npm run lint` 0 errors
+(22 pre-existing warnings), `npm run quality:changed` GATE PASSED after splitting
+`panelops.performConfirmUpload`/`buildMetaAndUploadOps` and
+`gettywebclient.parseSuccess` under RULE 16 again. `npm run verify:fast`: **ALL
+LANES PASSED** (build 8.3 s). No test deleted, skipped or loosened; no threshold,
+budget, harness or dependency change. Docs updated:
+`sor/stock-upload-getty-web.md` (readiness gate, no-control success, driver ready
+icon), `sor/stock-upload.md` (bar + `batch-ready`), `selectors/stock-upload.md`
+(ready chip, bar handles); every `docs/current` page stays under 9 000 B
+(8 966 / 7 724 / 8 558 B). `dist/` and `node_modules/` were restored, not
+committed.

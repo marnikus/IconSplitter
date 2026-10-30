@@ -122,6 +122,13 @@ function fileStem(name) {
 }
 
 const CARD_NAME = '[data-cy="contribution-file-name"]';
+/**
+ * Getty's own validation icon is the ONLY proof that a file may be submitted: the
+ * captured page renders a `pending-icon` labelled "Ready to submit" once the
+ * metadata is saved, and a `not-ready-icon` before that. A thumbnail says Getty
+ * took the bytes; it never says the contribution passed validation.
+ */
+const CARD_READY = '[data-cy="pending-icon"][aria-label="Ready to submit"], [aria-label="Ready to submit"]';
 const CARD_PROCESSING = '[data-cy="not-ready-icon"], [aria-label="not_ready_to_submit"]';
 // The captured batch page shows "Upload failed" instead of a picture, and a
 // successful contribution renders its thumbnail. That picture, not the arrival of
@@ -153,6 +160,7 @@ function uploadCards() {
     const scope = el.closest('[data-cy="item-card"]') ?? el.closest('[data-cy="grid-row"]') ?? el.parentElement ?? el;
     return {
       name, stem: fileStem(name), id: cardIdOf(scope),
+      ready: Boolean(scope.querySelector(CARD_READY)),
       processing: Boolean(scope.querySelector(CARD_PROCESSING)),
       failed: Boolean(scope.querySelector(CARD_FAILED_NODE)) || CARD_FAILED.test(textOf(scope)),
       thumbnail: cardHasThumbnail(scope),
@@ -179,7 +187,9 @@ function fileStatus(cards, name) {
   const card = cards.find((entry) => entry.stem === fileStem(name)) ?? null;
   if (!card) return "pending";
   if (card.failed) return "failed";
-  return card.thumbnail ? "uploaded" : "processing";
+  // Getty's own "Ready to submit" validation means the bytes arrived and were
+  // processed, so a validated card counts even before its picture renders.
+  return card.thumbnail || card.ready ? "uploaded" : "processing";
 }
 
 /**
@@ -404,6 +414,17 @@ export function readUploadState({ names }) {
     : (mentionsStem(lower, fileStem(name)) ? "uploaded" : "pending"));
   const listed = (name) => statusOf(name) !== "pending";
   const byStatus = (status) => wanted.filter((name) => statusOf(name) === status);
+  // Readiness is read from the card's own validation icon, so a card that is
+  // listed but shows neither icon counts as awaiting — never as ready.
+  const cardOf = (name) => cards.find((card) => card.stem === fileStem(name)) ?? null;
+  const readyName = (name) => {
+    const card = cardOf(name);
+    return card !== null && card.ready && !card.failed;
+  };
+  const awaitingName = (name) => {
+    const card = cardOf(name);
+    return card !== null && !card.ready && !card.failed;
+  };
   const count = (re) => Number((re.exec(body) ?? [])[1] ?? 0);
   return {
     url: location.href,
@@ -415,6 +436,12 @@ export function readUploadState({ names }) {
     failed: byStatus("failed"),
     /** Listed, no picture yet: recognition or the thumbnail is still coming. */
     processingNames: byStatus("processing"),
+    /** Names whose card shows Getty's "Ready to submit" validation icon. */
+    readyToSubmit: wanted.filter(readyName),
+    /** Uploaded, not rejected, but still without that icon — not submittable yet. */
+    awaitingReady: wanted.filter(awaitingName),
+    /** Cards were rendered, so readiness could be read at all. */
+    cardsPresent: cards.length > 0,
     failures: cards.filter((card) => card.failed).map((card) => ({ name: card.name, id: card.id })).slice(0, 50),
     contributions: cards.map((card) => card.name).slice(0, 50),
     fileCount: cards.length,
@@ -713,6 +740,7 @@ export const PAGE_PRELUDE = [
   + `\nconst NON_TEXT_INPUTS = ${JSON.stringify(NON_TEXT_INPUTS)};`
   + `\nconst CREATE_BATCH_DIALOG_SELECTOR = ${JSON.stringify(CREATE_BATCH_DIALOG_SELECTOR)};`
   + `\nconst CARD_NAME = ${JSON.stringify(CARD_NAME)};`
+  + `\nconst CARD_READY = ${JSON.stringify(CARD_READY)};`
   + `\nconst CARD_PROCESSING = ${JSON.stringify(CARD_PROCESSING)};`
   + `\nconst CARD_FAILED = ${CARD_FAILED.toString()};`
   + `\nconst CARD_THUMBNAIL = ${JSON.stringify(CARD_THUMBNAIL)};`

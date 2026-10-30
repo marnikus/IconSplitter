@@ -12,6 +12,8 @@ export interface GettyWebProgress {
   uploaded: number;
   failed: number;
   listed: number;
+  /** Cards carrying Getty's "Ready to submit" icon — the submission proof. */
+  ready?: number;
   /** How many times the helper had to reload Getty's page to get it moving. */
   reloads: number;
 }
@@ -26,7 +28,10 @@ function readProgress(raw: Record<string, unknown>): GettyWebProgress {
   return {
     phase: typeof raw.phase === "string" ? raw.phase : "uploading",
     total: countOf(raw.total), uploaded: countOf(raw.uploaded),
-    failed: countOf(raw.failed), listed: countOf(raw.listed), reloads: countOf(raw.reloads),
+    failed: countOf(raw.failed), listed: countOf(raw.listed),
+    // Readiness is reported only once the helper has seen it.
+    ...(countOf(raw.ready) > 0 ? { ready: countOf(raw.ready) } : {}),
+    reloads: countOf(raw.reloads),
   };
 }
 

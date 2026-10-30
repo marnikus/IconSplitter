@@ -20,7 +20,7 @@ import {
   flushTargetStatuses, recordMissingCreds, recordTaskResult, reportNetworkCertificate,
 } from "./statusflush";
 import {
-  batchSubmittedSpec, pageReloadedSpec, reloadNoteOf, runFinishedSpec, runStartedSpec,
+  batchReadySpec, batchSubmittedSpec, pageReloadedSpec, reloadNoteOf, runFinishedSpec, runStartedSpec,
 } from "./stockuploadlog";
 import { resolveTransferBytes } from "./transferpayload";
 
@@ -191,6 +191,11 @@ async function submitGettyBatch(
   if (fin.submitted) {
     deps.logFn?.(batchSubmittedSpec(target.name));
     deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: batch submitted` });
+  } else if (fin.ready) {
+    // Getty has no Complete/Submit control here; every icon is ready to submit,
+    // so the run is finished — an info line, not an error on a finished job.
+    deps.logFn?.(batchReadySpec({ target: target.name, files: counters.uploadedFiles }));
+    deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: ready to submit` });
   }
 }
 

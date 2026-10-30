@@ -13,6 +13,8 @@ export interface GettyFinishInput extends GettyWebFinishInput {
 
 export interface GettyFinishOutcome {
   submitted: boolean;
+  /** Every card carried Getty's "Ready to submit" icon — the run is finished. */
+  ready: boolean;
   note: string | null;
   error: string | null;
 }
@@ -23,10 +25,10 @@ export interface GettyFinishOutcome {
  */
 export async function finishGettyWebRun(input: GettyFinishInput): Promise<GettyFinishOutcome> {
   const { uploaded, finishFn, ...request } = input;
-  if (uploaded === 0) return { submitted: false, note: null, error: null };
+  if (uploaded === 0) return { submitted: false, ready: false, note: null, error: null };
   const res = await (finishFn ?? finishBridgeGettyWeb)(request);
   // A refused finish keeps its own reason: it names what is missing on the page.
-  if (!res.ok) return { submitted: false, note: null, error: res.reason };
+  if (!res.ok) return { submitted: false, ready: false, note: null, error: res.reason };
   const note = completionNote(res);
-  return { submitted: res.completed !== false, note, error: null };
+  return { submitted: res.completed !== false, ready: res.ready === true, note, error: null };
 }
