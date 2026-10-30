@@ -4122,3 +4122,11 @@ icon), `sor/stock-upload.md` (bar + `batch-ready`), `selectors/stock-upload.md`
 (ready chip, bar handles); every `docs/current` page stays under 9 000 B
 (8 966 / 7 724 / 8 558 B). `dist/` and `node_modules/` were restored, not
 committed.
+
+## 2026-10-30 — Getty web batch chunking (100 uploads per batch + one retry)
+
+- `npx vitest run` — 322 files / 3404 tests passed (0 failed).
+- `npx tsc --noEmit` — clean. `npx eslint src tests tools` — 0 errors, 21 pre-existing warnings, none in the changed files.
+- `npm run quality:changed` — GATE PASSED: `gettywebtransfer` split into `gettywebstate` / `gettywebprogress` / `gettywebprep`; every touched file ≤ 300 lines, ≤ 30 lines/function, ≤ 4 params.
+- `npm run verify` (all lanes, including build) and `npm run verify:fast` — ALL LANES PASSED.
+- Residual risk: no live Getty account was used; the batch boundary, finish refusal and retry paths are covered by recorded markup and unit tests only.
