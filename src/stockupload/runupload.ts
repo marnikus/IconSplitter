@@ -160,9 +160,9 @@ function logBatchFinished(
 }
 
 /**
- * The Getty web target uploads in batches of at most 100 icons: each chunk is
- * one request, completed on the web before the next one, and an icon Getty did
- * not take is retried once before it is called failed.
+ * The Getty web target uploads in batches of at most 100 icons, each batch sent
+ * as byte-bounded requests and completed on the web before the next one; an icon
+ * Getty did not take is retried once before it is called failed.
  */
 /** One terminal outcome per icon: uploaded, or the reason it needs a re-upload. */
 function recordIconOutcomes(

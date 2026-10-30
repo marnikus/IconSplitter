@@ -11,5 +11,7 @@ export function cdpFailureReason(err: unknown, browser: { port?: number; profile
 export function failureOutcome(headed: boolean, reason: unknown): { keepOpen: boolean; reason: string };
 /** Detaches from a visible window (kept) or closes a hidden one. */
 export function releaseSession(session: any, headed: boolean): "kept" | "closed";
+/** The "Upload failed" cards of this request only, never an earlier part's. */
+export function ownFailures(failures: any, files: any): { name: string; id: string | null }[];
 /** The per-batch state a new batch starts from. */
 export function resetBatchState(state: any): any;

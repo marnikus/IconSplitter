@@ -1,14 +1,16 @@
 // gettywebtransfer.ts — the whole run as **batches**. Getty takes at most 100
 // uploads per batch and one icon (JPEG, plus its EPS when it has one) is one
 // upload, so a bigger selection is chunked: each chunk is uploaded, given its
-// metadata and completed on the web before the next batch exists. An icon Getty
-// did not accept is retried **once** — in a later batch with room, or in the
-// run's final retry batch — and only then reported as failed.
+// metadata and completed on the web before the next batch exists. One batch
+// crosses the loopback in **parts** (a body of bounded bytes), because the helper
+// buffers a whole request and refuses more than its cap. An icon Getty did not
+// accept is retried **once** — in a later batch with room, or in the run's final
+// retry batch — and only then reported as failed.
 
 import type { DirHandleLike } from "../lib/fs";
 import {
   GETTY_WEB_MAX_ATTEMPTS, gettyWebBatchLabel, gettyWebBatchName, planGettyWebBatches,
-  type GettyWebBatchSlot,
+  planGettyWebRequests, validateGettyWebTasks, type GettyWebBatchSlot,
 } from "../lib/stockupload/gettyweb";
 import {
   finishBridgeGettyWeb, uploadBridgeGettyWeb, type GettyWebErrorCode, type GettyWebFinishInput,
@@ -18,7 +20,7 @@ import { prepareGettyWebIcon, type GettyWebIconInput } from "../lib/stockupload/
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { StockFtpPreset } from "../lib/stockupload/types";
 import {
-  createState, failIcon, finalOutcome, settleBatch, type PreparedIcon, type RunState,
+  createState, failIcon, finalOutcome, queueIcon, settleBatch, type PreparedIcon, type RunState,
 } from "./gettywebstate";
 
 export type { GettyWebIconInput } from "../lib/stockupload/gettywebprep";
@@ -37,6 +39,13 @@ export interface GettyWebRunInput {
   now?: Date;
   /** Batch size; the real cap unless a test injects a smaller one. */
   maxIcons?: number;
+  /**
+   * Bytes one loopback request may carry — the batch's own body budget, so the
+   * helper never buffers a whole 100-icon batch. Tests inject a tiny one.
+   */
+  maxRequestBytes?: number;
+  /** And the icons one request may carry. */
+  maxRequestIcons?: number;
   uploadFn?: (input: GettyWebUploadInput) => Promise<GettyWebResult>;
   finishFn?: (input: GettyWebFinishInput) => Promise<GettyWebResult>;
   /** The batch a request belongs to, so the panel's line can name it. */
@@ -72,7 +81,28 @@ export interface GettyWebRunOutcome {
   batchError: string | null;
 }
 
-/** Reads and prepares the icons of one batch; an unreadable one fails on its own. */
+/** The bytes an icon declares: the plan's own estimate, so nothing is read yet. */
+function iconBytes(icon: GettyWebIconInput): number {
+  return icon.tasks.reduce((sum, task) => sum + (Number(task.estimatedBytes) || 0), 0);
+}
+
+/**
+ * The icons of a batch that can be sent at all. This is the cheap half of the
+ * preparation (names and formats only), so the batch's name counts the icons it
+ * really carries before any file is read.
+ */
+function sendableMembers(state: RunState, members: readonly number[]): number[] {
+  const out: number[] = [];
+  for (const index of members) {
+    const icon = state.input.icons[index];
+    const invalid = validateGettyWebTasks(icon.tasks, icon.missing);
+    if (invalid !== null) { failIcon(state, index, invalid); continue; }
+    out.push(index);
+  }
+  return out;
+}
+
+/** Reads and prepares the icons of one request; an unreadable one fails on its own. */
 async function prepareMembers(state: RunState, members: readonly number[]): Promise<PreparedIcon[]> {
   const prepared: PreparedIcon[] = [];
   for (const index of members) {
@@ -83,13 +113,18 @@ async function prepareMembers(state: RunState, members: readonly number[]): Prom
   return prepared;
 }
 
-/** Sends the batch; the request itself is one attach for the whole chunk. */
-function sendBatch(state: RunState, prepared: readonly PreparedIcon[], batchName: string): Promise<GettyWebResult> {
+/**
+ * Sends one request of a batch. The **first** one creates the batch; every later
+ * one continues it, so 100 icons still make exactly one Getty batch.
+ */
+function sendBatch(
+  state: RunState, prepared: readonly PreparedIcon[], batchName: string, newBatch: boolean,
+): Promise<GettyWebResult> {
   const send = state.input.uploadFn ?? uploadBridgeGettyWeb;
   return send({
     bridgeUrl: state.input.bridgeUrl, preset: state.input.target, creds: state.input.creds,
     icons: prepared.map((entry) => entry.icon), batchName,
-    submissionType: state.input.submissionType, complete: false, newBatch: true,
+    submissionType: state.input.submissionType, complete: false, newBatch,
     sessionKey: state.input.sessionKey, signal: state.input.signal,
   });
 }
@@ -120,19 +155,68 @@ function noteFailureCode(state: RunState, res: GettyWebResult): void {
   state.stopReason = res.reason;
 }
 
-async function runBatch(state: RunState, members: readonly number[], slot: GettyWebBatchSlot): Promise<void> {
-  const prepared = await prepareMembers(state, members);
-  if (prepared.length === 0) return;
-  const input = state.input;
-  const label = gettyWebBatchLabel(slot);
-  const name = gettyWebBatchName(input.now ?? new Date(), prepared.length, slot);
-  state.batches += 1;
+/**
+ * One request of the batch, from reading its bytes to settling its icons. A
+ * request that never reached the page leaves its icons unspent, which is what
+ * lets them go on to the retry batch instead of being reported failed.
+ */
+async function sendRequest(
+  state: RunState, part: readonly number[], name: string, newBatch: boolean,
+): Promise<{ res: GettyWebResult; accepted: number } | null> {
+  const prepared = await prepareMembers(state, part);
+  if (prepared.length === 0) return null;
   for (const entry of prepared) state.attempts[entry.index] = (state.attempts[entry.index] ?? 0) + 1;
-  input.onBatch?.(label);
-  const res = await sendBatch(state, prepared, name);
+  const res = await sendBatch(state, prepared, name, newBatch);
   settleBatch(state, prepared, res);
   noteFailureCode(state, res);
   const accepted = prepared.filter((entry) => state.outcomes[entry.index]?.ok === true).length;
+  return { res, accepted };
+}
+
+type GettyWebFailure = Extract<GettyWebResult, { ok: false }>;
+
+interface PartsSent {
+  accepted: number;
+  /** Icons behind a request, whether or not it answered. */
+  sent: number;
+  /** The request that stopped the batch; null when all of them answered. */
+  refused: GettyWebFailure | null;
+}
+
+/** Sends the parts of one batch in order, stopping at the first refusal. */
+async function sendParts(
+  state: RunState, parts: readonly (readonly number[])[], name: string,
+): Promise<PartsSent> {
+  let accepted = 0;
+  let sent = 0;
+  for (let p = 0; p < parts.length; p += 1) {
+    if (stopped(state)) break;
+    const answered = await sendRequest(state, parts[p], name, p === 0);
+    sent += parts[p].length;
+    if (answered === null) continue;
+    accepted += answered.accepted;
+    if (!answered.res.ok) return { accepted, sent, refused: answered.res };
+  }
+  return { accepted, sent, refused: null };
+}
+
+async function runBatch(state: RunState, members: readonly number[], slot: GettyWebBatchSlot): Promise<void> {
+  const sendable = sendableMembers(state, members);
+  if (sendable.length === 0) return;
+  const input = state.input;
+  const label = gettyWebBatchLabel(slot);
+  // The name counts the icons the batch carries, not the size of one request.
+  const name = gettyWebBatchName(input.now ?? new Date(), sendable.length, slot);
+  state.batches += 1;
+  input.onBatch?.(label);
+  const parts = planGettyWebRequests(
+    sendable, (index) => iconBytes(input.icons[index]), input.maxRequestBytes, input.maxRequestIcons,
+  );
+  const { accepted, sent, refused } = await sendParts(state, parts, name);
+  // The icons behind a dropped request were never shown to Getty: re-upload them.
+  if (refused !== null && !stopped(state)) {
+    for (const index of sendable.slice(sent)) queueIcon(state, index, refused.reason);
+  }
   // An empty batch is never created or completed: there is nothing to submit.
   if (accepted > 0) await completeBatch(state, accepted, label);
 }

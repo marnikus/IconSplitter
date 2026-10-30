@@ -4130,3 +4130,12 @@ committed.
 - `npm run quality:changed` — GATE PASSED: `gettywebtransfer` split into `gettywebstate` / `gettywebprogress` / `gettywebprep`; every touched file ≤ 300 lines, ≤ 30 lines/function, ≤ 4 params.
 - `npm run verify` (all lanes, including build) and `npm run verify:fast` — ALL LANES PASSED.
 - Residual risk: no live Getty account was used; the batch boundary, finish refusal and retry paths are covered by recorded markup and unit tests only.
+
+## 2026-10-30 — Getty web: a 100-icon batch is sent in bounded parts
+
+- Symptom fixed: a 209-icon Getty web run failed with "cannot reach the local helper" — one batch (100 pairs, hundreds of MB) exceeded the helper's 120 MB body cap and the client misread the dropped socket as a missing helper.
+- `planGettyWebRequests` (≤ 24 MB and ≤ 25 icons a request, never splitting an icon), first part `newBatch: true`, the rest continuing the batch; per-part read/attach/metadata/settle; a dropped part leaves its icons' attempt unspent for the retry batch; `ownFailures` keeps an earlier part's rejection out of this part's metadata step; the client probes `/health` and reports `network` ("dropped the upload (N MB)") instead of `helper-down`.
+- Files: `gettyweb.ts`, `gettywebclient.ts`, the new `gettywebparse.ts` (the answer parser, split out at 269 + 73 lines), `gettywebtransfer.ts` (283), `gettywebstate.ts` (`queueIcon` exported), `tools/bridge/gettyweb/session.mjs` + `.d.mts`.
+- Docs: `sor/stock-upload-getty-web.md` trimmed to 8,870 bytes with the batch mechanics moved to the new `sor/stock-upload-getty-web-batches.md` (5,926 bytes), invariant I-82 restated for parts, archive plan §12.
+- `npx tsc --noEmit` clean; `npx eslint src tests tools` 0 errors; `npm run quality:changed` GATE PASSED; `npx vitest run` 322 files / 3413 tests passed.
+- `npm run verify`: every lane passed except the native perf budget, which fails in this sandbox on the BASE commit too (synthetic 1000px detect 213.8 ms there vs 221 ms here, budget 200 ms) — this box runs 2 cores under load; nothing in this change touches `detect`.

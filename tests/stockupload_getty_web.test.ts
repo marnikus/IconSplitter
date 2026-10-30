@@ -15,6 +15,8 @@ import { progressLabel, settledFiles, watchGettyProgress } from "../src/stockupl
 import { resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import type { GettyWebUploadInput } from "../src/lib/stockupload/gettywebclient";
+import type { PlannedTransfer } from "../src/lib/stockupload/plan";
+import { uploadGettyWebRun, type GettyWebIconInput } from "../src/stockupload/gettywebtransfer";
 
 function addExported(root: FakeDir, id: string, dir: string, stem: string, formats: { jpg: boolean; eps: boolean }): void {
   const exportDir = `${dir}/export`;
@@ -638,5 +640,108 @@ describe("Getty web batches above the cap", () => {
       .toBe("Getty Images (web upload): batch 2/3 · 2 of 4 file(s) uploaded");
     expect(progressLabel(base, "Getty Images (web upload)"))
       .toBe("Getty Images (web upload): 2 of 4 file(s) uploaded");
+  });
+});
+
+/** One icon of a run, with its two files already written under `export/`. */
+function iconInput(root: FakeDir, stem: string, dir: string): GettyWebIconInput {
+  const exportDir = `${dir}/export`;
+  let cur = root;
+  for (const seg of exportDir.split("/")) {
+    const next = (cur.children.get(seg) as FakeDir | undefined) ?? new FakeDir(seg);
+    cur.children.set(seg, next);
+    cur = next;
+  }
+  cur.children.set(`${stem}.jpg`, new FakeFile(`${stem}.jpg`, 14, 1000, "jpeg-bytes-123"));
+  cur.children.set(`${stem}.eps`, new FakeFile(`${stem}.eps`, 16, 1000, "%!PS-Adobe-3.0\n"));
+  const task = (format: "raster" | "eps", ext: string, bytes: number): PlannedTransfer => ({
+    itemId: stem, stem, targetId: GETTY_WEB_PRESET.id, targetName: GETTY_WEB_PRESET.name,
+    format, fileName: `${stem}${ext}`, relPath: `${exportDir}/${stem}${ext}`, estimatedBytes: bytes,
+  });
+  return { tasks: [task("raster", ".jpg", 14), task("eps", ".eps", 16)], missing: [] };
+}
+
+const namesOf = (input: GettyWebUploadInput) => input.icons.flatMap((icon) => icon.files.map((file) => file.name));
+
+describe("Getty web: one batch, several loopback requests", () => {
+  it("sends a 100-icon batch in parts — created once, continued, finished once", async () => {
+    // A whole batch in one body is what the helper dropped: 100 pairs of real
+    // sizes are hundreds of megabytes, past its 120 MB cap (and its memory).
+    const root = new FakeDir("ws");
+    const icons = [iconInput(root, "star_01", "a"), iconInput(root, "moon_02", "b"), iconInput(root, "sun_03", "c")];
+    const sent: GettyWebUploadInput[] = [];
+    const finished: string[] = [];
+    const run = await uploadGettyWebRun({
+      icons, root, target: GETTY_WEB_PRESET,
+      creds: { username: "contributor@example.com", password: "GettyPass!42" },
+      combine: false, submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey: "run-1",
+      bridgeUrl: "http://127.0.0.1:47391", signal: new AbortController().signal,
+      // 30 bytes per icon: a 40-byte budget is one icon a request.
+      maxRequestBytes: 40,
+      uploadFn: async (input) => {
+        sent.push(input);
+        return {
+          ok: true, batchId: "68565609", accepted: namesOf(input),
+          completed: false, completion: null, metadata: [],
+        };
+      },
+      finishFn: async (input) => {
+        finished.push(input.sessionKey);
+        return {
+          ok: true, batchId: "68565609", accepted: [], completed: true,
+          completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+        };
+      },
+    });
+
+    expect(sent.map((input) => input.icons.length)).toEqual([1, 1, 1]);
+    // The first request creates the batch; the rest continue it. Never a second one.
+    expect(sent.map((input) => input.newBatch)).toEqual([true, false, false]);
+    expect(sent.every((input) => input.complete === false)).toBe(true);
+    expect(new Set(sent.map((input) => input.batchName)).size).toBe(1);
+    // The batch still names every icon it carries, not the part size.
+    expect(sent[0].batchName).toContain("(3 icons)");
+    // One finish for the batch, after its last part — not one per request.
+    expect(finished).toEqual(["run-1"]);
+    expect(run).toMatchObject({ ok: true, failed: 0, batches: 1, completed: 1 });
+  });
+
+  it("stops a batch when a part is dropped and keeps the rest for the retry batch", async () => {
+    const root = new FakeDir("ws");
+    const icons = ["a", "b", "c", "d"].map((dir) => iconInput(root, `icon_${dir}`, dir));
+    const sent: GettyWebUploadInput[] = [];
+    let calls = 0;
+    const finishes: string[] = [];
+    const run = await uploadGettyWebRun({
+      icons, root, target: GETTY_WEB_PRESET,
+      creds: { username: "contributor@example.com", password: "GettyPass!42" },
+      combine: false, submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey: "run-2",
+      bridgeUrl: "http://127.0.0.1:47391", signal: new AbortController().signal,
+      maxRequestBytes: 40,
+      uploadFn: async (input) => {
+        calls += 1;
+        sent.push(input);
+        // The second request of the batch is lost: the helper never answered.
+        if (calls === 2) return { ok: false, code: "network", reason: "the helper dropped the upload" };
+        return {
+          ok: true, batchId: "68565609", accepted: namesOf(input),
+          completed: false, completion: null, metadata: [],
+        };
+      },
+      finishFn: async () => {
+        finishes.push("done");
+        return {
+          ok: true, batchId: "68565609", accepted: [], completed: true,
+          completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+        };
+      },
+    });
+
+    // Part 3 and 4 were never sent: they wait for the retry batch, unspent.
+    expect(sent.map((input) => input.newBatch)).toEqual([true, false, true, false, false]);
+    expect(sent[2].batchName).toContain("retry 1/1 (3 icons)");
+    // Batch 1 held one accepted icon, the retry batch the other three.
+    expect(finishes).toHaveLength(2);
+    expect(run).toMatchObject({ ok: true, failed: 0, batches: 2, completed: 2 });
   });
 });

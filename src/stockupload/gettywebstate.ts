@@ -67,7 +67,7 @@ function preferReason(previous: string, next: string): string {
  * Queues an icon for its one retry; the retry already spent is what makes the
  * outcome final, so an icon can never bounce between batches for ever.
  */
-function queueIcon(state: RunState, index: number, reason: string): void {
+export function queueIcon(state: RunState, index: number, reason: string): void {
   const kept = preferReason(state.outcomes[index]?.reason ?? "", reason);
   state.outcomes[index] = { ok: false, reason: kept };
   if ((state.attempts[index] ?? 0) >= GETTY_WEB_MAX_ATTEMPTS) {

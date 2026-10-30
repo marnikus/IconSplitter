@@ -105,6 +105,49 @@ export function planGettyWebBatches<T>(
   return out;
 }
 
+/**
+ * How many staged bytes **one loopback request** may carry. The helper buffers a
+ * whole request in memory and refuses more than `BRIDGE_FTP_MAX_BYTES` (120 MB by
+ * default), so a full batch — 100 icons, up to 200 files, often hundreds of
+ * megabytes — is sent in parts. The batch is still one batch: the parts only
+ * split the bytes of the body, never the icon.
+ */
+export const GETTY_WEB_MAX_REQUEST_BYTES = 24 * 1024 * 1024;
+/** And no request carries more icons than this, however small they are. */
+export const GETTY_WEB_MAX_REQUEST_ICONS = 25;
+
+/**
+ * Groups the icons of **one batch** into the requests that carry them: at most
+ * `maxBytes` staged bytes and `maxIcons` icons each, in the plan's order. An icon
+ * bigger than the whole budget still travels whole, alone in its request — a
+ * pair is never split across two bodies.
+ */
+export function planGettyWebRequests<T>(
+  icons: readonly T[],
+  bytesOf: (icon: T) => number,
+  maxBytes = GETTY_WEB_MAX_REQUEST_BYTES,
+  maxIcons = GETTY_WEB_MAX_REQUEST_ICONS,
+): T[][] {
+  const byteLimit = Math.max(1, Math.floor(maxBytes));
+  const countLimit = Math.max(1, Math.floor(maxIcons));
+  const out: T[][] = [];
+  let current: T[] = [];
+  let bytes = 0;
+  for (const icon of icons) {
+    const size = Math.max(0, Math.floor(Number(bytesOf(icon)) || 0));
+    const full = current.length > 0 && (bytes + size > byteLimit || current.length >= countLimit);
+    if (full) {
+      out.push(current);
+      current = [];
+      bytes = 0;
+    }
+    current.push(icon);
+    bytes += size;
+  }
+  if (current.length > 0) out.push(current);
+  return out;
+}
+
 /** The batch a request belongs to, for the panel's progress line. */
 export function gettyWebBatchLabel(slot: GettyWebBatchSlot): string {
   if (slot.retry === true) return `retry batch ${slot.index}/${slot.total}`;

@@ -552,3 +552,27 @@ upload), so the chunk unit is the icon and a pair is never split; retries fold
 into a later batch's free room before a run gets a trailing `retry 1/1` batch;
 a refused `finish` names its reason and leaves the batch open rather than
 pretending it was completed.
+
+---
+
+## 12. Follow-up (2026-10-30, after the first real run): a batch is too big for one body
+
+**Symptom:** a 2-7 icon run uploaded, a 209-icon run (418 files: every icon had a
+JPEG and an EPS) failed with *"Uploaded 0 file(s), 418 failed: cannot reach the
+local helper — start run_ftp_bridge.bat"* — while the helper was running.
+
+**Cause:** one batch was still **one HTTP body**. 100 icons of real exports are
+hundreds of megabytes, past the helper's `BRIDGE_FTP_MAX_BYTES` (120 MB) and far
+past what it can buffer; it answers before the body is consumed and closes the
+socket, so the browser's `fetch` rejects and the client blamed a helper that was
+listening all along.
+
+**Fix:** the batch stays 100 icons, the **body** is split. `planGettyWebRequests`
+cuts a batch into requests of ≤ 24 MB and ≤ 25 icons (never splitting an icon),
+the first part creating the batch (`newBatch: true`) and the rest continuing it;
+each part is read, attached, given its metadata and settled before the next, so
+the tab never holds a whole batch either. The helper hands a part only **its own**
+"Upload failed" cards (`ownFailures`), and a dropped part ends the batch with its
+icons' attempt unspent so they go on to the retry batch. The client now probes
+`/health` when the upload itself fails: a helper that answers means "the helper
+dropped the upload (N MB)", not "start run_ftp_bridge.bat".

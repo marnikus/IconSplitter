@@ -4,7 +4,8 @@
 
 import { isRecord } from "../isrecord";
 import { DEFAULT_FTP_BRIDGE_URL, BRIDGE_FIX_HINT } from "./bridgeclient";
-import { redactCredentials, type FtpCredentials } from "./credvault";
+import type { FtpCredentials } from "./credvault";
+import { parseFailure, parseSuccess } from "./gettywebparse";
 import type { StockFtpPreset } from "./types";
 
 const OUTDATED_GETTY_WEB_REASON = "Local helper on 127.0.0.1:47391 predates the Getty web upload — restart run_ftp_bridge.bat to enable it";
@@ -125,70 +126,31 @@ function uploadBody(input: GettyWebUploadInput): Blob {
   return new Blob(input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart)));
 }
 
-function nameList(raw: unknown): string[] {
-  return Array.isArray(raw) ? raw.filter((name): name is string => typeof name === "string") : [];
+/**
+ * Is the helper listening at all? A body it threw away is **not** a missing
+ * helper, and saying so sends the user hunting a bridge that is running.
+ */
+async function helperAnswers(bridgeUrl: string, fetchImpl: typeof fetch): Promise<boolean> {
+  try {
+    const res = await fetchImpl(`${trimSlash(bridgeUrl)}/health`);
+    return res.ok === true;
+  } catch {
+    return false;
+  }
 }
 
-function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok: false; code: GettyWebErrorCode; reason: string } {
-  const code = isRecord(raw) && typeof raw.code === "string" ? raw.code as GettyWebErrorCode : "page";
-  const reason = isRecord(raw) && typeof raw.reason === "string" && raw.reason.trim() !== ""
-    ? redactCredentials(raw.reason.trim(), creds)
-    : `Getty web upload failed (HTTP ${status})`;
-  if (!isRecord(raw)) return { ok: false, code, reason };
-  // A failed batch still says what it accepted: those icons are not re-sent.
-  const accepted = nameList(raw.accepted);
-  const failed = failedEntries(raw);
-  const seen = nameList(raw.seen);
-  return {
-    ok: false, code, reason,
-    ...(accepted.length > 0 ? { accepted } : {}),
-    ...(failed.length > 0 ? { failed } : {}),
-    ...(seen.length > 0 ? { seen } : {}),
-  };
+function megabytes(bytes: number): string {
+  return `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB`;
 }
 
-function metadataEntries(raw: Record<string, unknown>) {
-  if (!Array.isArray(raw.metadata)) return [];
-  return raw.metadata.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-    name: String(entry.name),
-    status: typeof entry.status === "string" ? entry.status : "unknown",
-    ...(isRecord(entry.fields) ? { fields: entry.fields as Record<string, boolean> } : {}),
-  }));
+/** The exact bytes this request would put on the loopback socket. */
+function stagedBytes(input: GettyWebUploadInput): number {
+  return input.icons.reduce(
+    (total, icon) => total + icon.files.reduce((sum, file) => sum + file.bytes.byteLength, 0), 0,
+  );
 }
 
-function failedEntries(raw: Record<string, unknown>) {
-  if (!Array.isArray(raw.failed)) return [];
-  return raw.failed.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-    name: String(entry.name),
-    id: typeof entry.id === "string" ? entry.id : null,
-  }));
-}
-
-function completionOf(raw: Record<string, unknown>) {
-  if (!isRecord(raw.completion)) return null;
-  return {
-    clicked: raw.completion.clicked === true,
-    label: typeof raw.completion.label === "string" ? raw.completion.label : null,
-    confirmed: raw.completion.confirmed === true,
-  };
-}
-
-function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
-  if (!isRecord(raw) || raw.ok !== true) return { ok: false, code: "page", reason: "unexpected helper response" };
-  return {
-    ok: true,
-    batchId: typeof raw.batchId === "string" ? raw.batchId : null,
-    accepted: Array.isArray(raw.accepted) ? raw.accepted.filter((n): n is string => typeof n === "string") : fallback,
-    failed: failedEntries(raw),
-    completed: raw.completed === true,
-    // Absent means "not proven ready", never "ready".
-    ...(raw.ready === true ? { ready: true } : {}),
-    completion: completionOf(raw),
-    metadata: metadataEntries(raw),
-  };
-}
-
-/** Sends every icon of the run (JPEG + optional EPS each) to the Getty page. */
+/** Sends every icon of one batch (JPEG + optional EPS each) to the Getty page. */
 export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<GettyWebResult> {
   const fetchFn = input.fetchImpl ?? globalThis.fetch;
   try {
@@ -203,6 +165,13 @@ export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<
     return parseFailure(body, input.creds, res.status);
   } catch (err) {
     if ((err as Error)?.name === "AbortError") return { ok: false, code: "cancelled", reason: "upload cancelled" };
+    // The helper dropped the body: it is running, so name the transfer, not the bridge.
+    if (await helperAnswers(input.bridgeUrl, fetchFn)) {
+      return {
+        ok: false, code: "network",
+        reason: `the helper dropped the upload (${megabytes(stagedBytes(input))}) before it answered — retry; if it repeats, that body is larger than this helper takes (BRIDGE_FTP_MAX_BYTES)`,
+      };
+    }
     return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${BRIDGE_FIX_HINT}` };
   }
 }

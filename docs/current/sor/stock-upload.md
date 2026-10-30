@@ -1,6 +1,6 @@
 # Upload (`stockUpload`) — Stock FTPS, SFTP & Getty ESP Uploader
 
-Handles: [selectors/stock-upload](../selectors/stock-upload.md) · Invariants: [I-80, I-81](invariants/upload.md#i-80) · Getty website automation: [Getty web upload](stock-upload-getty-web.md).
+Handles: [selectors/stock-upload](../selectors/stock-upload.md) · Invariants: [I-80, I-81](invariants/upload.md#i-80) · Getty website automation: [Getty web upload](stock-upload-getty-web.md) — batches, parts and the re-upload list: [Getty web batches](stock-upload-getty-web-batches.md).
 
 ## 1. Strict `export/` + `export.json` discovery (`src/lib/stockupload/discovery.ts`)
 

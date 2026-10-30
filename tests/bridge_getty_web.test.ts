@@ -11,7 +11,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findBrowser, parseCdpEndpoint, resolveProfileDir } from "../tools/bridge/gettyweb/browser.mjs";
 import { contributeUrlOf, failurePayload, iconsFromBody, iconsFromConfig, mayReleaseSession } from "../tools/bridge/gettyweb/routes.mjs";
-import { resetBatchState, safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
+import { ownFailures, resetBatchState, safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
 
 const SERVER = path.resolve("tools/bridge/server.mjs");
@@ -324,6 +324,17 @@ describe("Getty web batch limits in the helper", () => {
     // card of *its* batch is missing, so a stale name would block batch 2.
     const state = { batchId: "68445204", expected: ["icon_1.jpeg"], progress: { phase: "done" }, reloads: 2 };
     expect(resetBatchState(state)).toEqual({ batchId: null, expected: [], progress: null, reloads: 0 });
+  });
+
+  it("only hands a request its own Upload failed cards", () => {
+    // A batch sent in parts keeps the earlier parts' cards on the page. Their
+    // rejections belong to another request: they must not stop this part from
+    // typing its own metadata (and would otherwise fail every later part).
+    const failed = [{ name: "star_01.eps", id: "FSPID51446" }, { name: "moon_02.eps", id: null }];
+    expect(ownFailures(failed, [{ name: "moon_02.jpg" }, { name: "moon_02.eps" }]))
+      .toEqual([{ name: "moon_02.eps", id: null }]);
+    expect(ownFailures(failed, [{ name: "sun_03.jpg" }])).toEqual([]);
+    expect(ownFailures(undefined, [{ name: "star_01.jpg" }])).toEqual([]);
   });
 
   it("never sweeps a session that has a request in flight", () => {

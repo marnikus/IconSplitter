@@ -61,6 +61,23 @@ export function uploadTimeoutFor(fileCount, baseMs = UPLOAD_TIMEOUT_MS) {
   return baseMs + extra;
 }
 
+/** The name one contribution is known by: a pair shares its stem. */
+function stemOfName(fileName) {
+  const leaf = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  return (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
+}
+
+/**
+ * The "Upload failed" cards that belong to **this** request. A batch sent in
+ * parts keeps the earlier parts' cards on the page; their rejections are another
+ * request's business and must not stop this one from typing its own metadata.
+ */
+export function ownFailures(failures, files) {
+  const stems = new Set((Array.isArray(files) ? files : []).map((file) => stemOfName(file?.name)));
+  return (Array.isArray(failures) ? failures : []).filter((entry) => stems.has(stemOfName(entry?.name)));
+}
+
 /** Keeps the page file name but never a path segment from the user's disk. */
 export function safeStagedName(fileName) {
   const leaf = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
@@ -260,7 +277,7 @@ function buildSession(ctx) {
       }
       state.progress = { ...progressOf(result.state, state.reloads), phase: "metadata" };
       const done = await finalizeBatch(connection, page.sessionId, {
-        files, failed: result.state?.failed ?? [], complete: input.complete === true,
+        files, failed: ownFailures(result.state?.failed, files), complete: input.complete === true,
         onProgress: options.onProgress, signal: options.signal, ...readyOptionsOf(options),
       });
       // The phase says whether Getty validated every card, not just that the

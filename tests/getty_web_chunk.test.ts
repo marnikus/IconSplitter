@@ -5,8 +5,9 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_ICONS, gettyWebBatchLabel, gettyWebBatchName,
-  gettyWebBatchSummary, planGettyWebBatches,
+  GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_ICONS, GETTY_WEB_MAX_REQUEST_BYTES,
+  GETTY_WEB_MAX_REQUEST_ICONS, gettyWebBatchLabel, gettyWebBatchName,
+  gettyWebBatchSummary, planGettyWebBatches, planGettyWebRequests,
 } from "../src/lib/stockupload/gettyweb";
 
 const icons = (n: number) => Array.from({ length: n }, (_v, i) => ({ id: `icon-${i}` }));
@@ -69,5 +70,42 @@ describe("Getty web batch planning", () => {
     expect(GETTY_WEB_MAX_BATCH_ICONS).toBe(100);
     // One upload plus one retry: an icon is never sent a third time.
     expect(GETTY_WEB_MAX_ATTEMPTS).toBe(2);
+  });
+});
+
+describe("Getty web request parts inside one batch", () => {
+  const MB = 1024 * 1024;
+  const sized = (sizes: readonly number[]) => sizes.map((bytes, i) => ({ id: `icon-${i}`, bytes }));
+  const bytesOf = (icon: { bytes: number }) => icon.bytes;
+
+  it("keeps every request far below the helper's body cap", () => {
+    // The helper buffers a whole request (BRIDGE_FTP_MAX_BYTES, 120 MB by
+    // default); a 100-icon batch of 3 MB icons used to be ~300 MB in one body.
+    expect(GETTY_WEB_MAX_REQUEST_BYTES).toBeLessThanOrEqual(32 * MB);
+    expect(GETTY_WEB_MAX_REQUEST_ICONS).toBeGreaterThan(0);
+    expect(GETTY_WEB_MAX_REQUEST_ICONS).toBeLessThanOrEqual(GETTY_WEB_MAX_BATCH_ICONS);
+  });
+
+  it("splits a 100-icon batch into byte-bounded parts, never splitting an icon", () => {
+    const parts = planGettyWebRequests(sized(Array(100).fill(3 * MB)), bytesOf, 24 * MB);
+    expect(parts.map((part) => part.length)).toEqual([8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 4]);
+    // Every icon is in exactly one part, in the plan's order.
+    expect(parts.flat().map((icon) => icon.id)).toEqual(sized(Array(100).fill(0)).map((icon) => icon.id));
+  });
+
+  it("gives an icon bigger than the whole budget a request of its own", () => {
+    const parts = planGettyWebRequests(sized([30 * MB, 1 * MB, 1 * MB]), bytesOf, 24 * MB);
+    expect(parts.map((part) => part.map((icon) => icon.id))).toEqual([["icon-0"], ["icon-1", "icon-2"]]);
+  });
+
+  it("also caps the icon count, so tiny icons cannot fill one request", () => {
+    const parts = planGettyWebRequests(sized(Array(60).fill(1024)), bytesOf, 24 * MB, 25);
+    expect(parts.map((part) => part.length)).toEqual([25, 25, 10]);
+  });
+
+  it("asks for nothing when there is nothing to send", () => {
+    expect(planGettyWebRequests([], bytesOf)).toEqual([]);
+    // A nonsense budget can never produce an empty part or an endless loop.
+    expect(planGettyWebRequests(sized([1, 1, 1]), bytesOf, 0).map((part) => part.length)).toEqual([1, 1, 1]);
   });
 });

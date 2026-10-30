@@ -157,6 +157,33 @@ describe("Getty web loopback client", () => {
     }
   });
 
+  it("blames the dropped upload, not a missing helper, when the helper still answers", async () => {
+    // A batch the helper's body cap threw away used to read "cannot reach the
+    // local helper — start run_ftp_bridge.bat", which sent the user hunting a
+    // helper that was running all along.
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith("/health")) return jsonResponse(200, { ok: true });
+      throw new TypeError("Failed to fetch");
+    });
+    const dropped = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{
+        files: [
+          { name: "icon_a.jpeg", bytes: new Uint8Array(3 * 1024 * 1024) },
+          { name: "icon_a.eps", bytes: new Uint8Array(3 * 1024 * 1024) },
+        ],
+      }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(dropped.ok).toBe(false);
+    if (!dropped.ok) {
+      expect(dropped.code).toBe("network");
+      expect(dropped.reason).toContain("dropped");
+      expect(dropped.reason).toContain("6 MB");
+      expect(dropped.reason).not.toContain("run_ftp_bridge.bat");
+    }
+  });
+
   it("probes the helper for the Getty web capability and a browser", async () => {
     const okFetch = vi.fn(async () => jsonResponse(200, { gettyWeb: { ready: true, browser: "found" } }));
     expect(await probeBridgeGettyWeb("http://127.0.0.1:47391", okFetch)).toEqual({ ok: true });
