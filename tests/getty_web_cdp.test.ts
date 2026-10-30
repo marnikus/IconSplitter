@@ -6,7 +6,7 @@ import { createContext, runInContext } from "node:vm";
 import { PAGE_PRELUDE } from "../tools/bridge/gettyweb/driver.mjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  evaluate, openCdp, runStep, setFiles, stepExpression, waitFor,
+  evaluate, openCdp, reloadPage, runStep, setFiles, stepExpression, waitFor,
 } from "../tools/bridge/gettyweb/cdp.mjs";
 
 type Listener = (event: { data?: string }) => void;
@@ -118,6 +118,20 @@ describe("DevTools protocol client", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     socket.reply(2, { result: { value: true } });
     await expect(waiting).resolves.toEqual({ ok: true, value: true });
+  });
+
+  it("reloads the page without the cache and waits for it to be usable", async () => {
+    const { connection, socket } = connect();
+    await connection.ready;
+    const reloading = reloadPage(connection, "s1");
+    expect(socket.sent[0]).toMatchObject({ method: "Page.enable", sessionId: "s1" });
+    socket.reply(1, {});
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    expect(socket.sent[1]).toMatchObject({ method: "Page.reload", params: { ignoreCache: true }, sessionId: "s1" });
+    socket.reply(2, {});
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    socket.reply(3, { result: { value: true } });
+    await expect(reloading).resolves.toEqual({ ok: true });
   });
 
   it("attaches files by object id and reports a missing input honestly", async () => {

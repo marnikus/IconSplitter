@@ -162,6 +162,16 @@ function uploadCards() {
 }
 
 /**
+ * Whether the page text names this stem at all. A bare `includes` would match the
+ * "a" of "Upload", so the stem must sit on its own word boundary.
+ */
+function mentionsStem(text, stem) {
+  if (stem === "") return false;
+  const escaped = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(text);
+}
+
+/**
  * How one file of this call stands right now: not on the page yet, failed on
  * Getty's side, uploaded (its card shows a picture) or still processing.
  */
@@ -391,7 +401,7 @@ export function readUploadState({ names }) {
   // text is all the proof there is, so it keeps the old "listed means uploaded".
   const statusOf = (name) => (cards.length > 0
     ? fileStatus(cards, name)
-    : (fileStem(name) !== "" && lower.includes(fileStem(name)) ? "uploaded" : "pending"));
+    : (mentionsStem(lower, fileStem(name)) ? "uploaded" : "pending"));
   const listed = (name) => statusOf(name) !== "pending";
   const byStatus = (status) => wanted.filter((name) => statusOf(name) === status);
   const count = (re) => Number((re.exec(body) ?? [])[1] ?? 0);
@@ -608,7 +618,7 @@ export function readCompletionState() {
  */
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
-  fileStem, uploadCards, cardIdOf, cardHasThumbnail, fileStatus, inputFields, loginFields,
+  fileStem, mentionsStem, uploadCards, cardIdOf, cardHasThumbnail, fileStatus, inputFields, loginFields,
   submitControl, pageSignals, labelTextOf, setFieldValue,
 ]
   .map((fn) => fn.toString()).join("\n")

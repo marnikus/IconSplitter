@@ -23,13 +23,14 @@ a real browser.
    helper stages it, signs in once, creates **one** batch and hands **all** files
    to the page uploader in a single `DOM.setFileInputFiles`. Stray dialogs and
    snackbars are dismissed first — one blocks Getty's uploader.
-5. Getty's uploader transfers. The helper waits until every file is listed, then
-   until each card proves its own outcome: **a thumbnail means uploaded**,
+5. Getty's uploader transfers. **If nothing new appears for 30 s** the helper
+   reloads the batch page and re-attaches only the files still missing (twice at
+   most, then it fails honestly). It waits until every file is listed, then until
+   each card proves its outcome: **a thumbnail means uploaded**,
    `invalid-file-media` ("Upload failed") means not — a listed row proves nothing.
-   The app marks an icon uploaded only when the response lists its stem, and names
-   a rejected file with Getty's id. `GET /getty-web/progress` feeds the panel the
-   live counts while the one request is in flight, so **the bar moves with each
-   thumbnail** (1 s poll; the helper's 404 before its session exists is retried).
+   An icon is uploaded only if the response lists its stem; a rejected file is
+   named with Getty's id. `GET /getty-web/progress` feeds the panel the live
+   counts, so **the bar moves with each thumbnail** (1 s poll, 404 retried).
 6. **Metadata:** per contribution it selects the card by stem, types the accepted
    title, description, keywords and **today's date** into Date Created, and saves —
    never overwriting Getty's IPTC/XMP prefill.
@@ -57,8 +58,8 @@ summarizes the screen (`page "Sign in - ESP"; 2 input(s)`), never a value.
 - `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) reuses one profile between
   runs, so a first sign-in's cookies survive. It holds Getty cookies and is never
   deleted by the helper.
-- `--getty-check` launches once, verifies the DevTools socket, prints
-  `browser:`, `launch:`, `devtools:`, `socket:`.
+- `--getty-check` launches once, verifies the DevTools socket and prints
+  `browser:`, `launch:`, `socket:`.
 - `--getty-reset --getty-profile <folder>` ends the browser holding that folder.
 - `--getty-cdp` (= `GETTY_WEB_CDP`) attaches to a browser started with
   `--remote-debugging-port=9222` (loopback only).
@@ -66,7 +67,7 @@ summarizes the screen (`page "Sign in - ESP"; 2 input(s)`), never a value.
   (180 s) and `GETTY_WEB_READY_TIMEOUT_MS` (120 s) bound the two waits.
 
 **A vector pair is one contribution.** Getty lists the EPS name only, so files are
-matched by **stem** (`.jpg` + `.eps` = one card, one drawer).
+matched by **stem** (`.jpg` + `.eps` = one card).
 
 **One profile, one browser — freed by the helper.** A browser answering on the
 folder's port is attached to. A locked folder without a port means a leftover
@@ -128,7 +129,7 @@ of identifier and password.
 - Metadata editors and Complete use **label keywords** and row proximity — guesses
   **not** seen live; a missing editor is reported per file.
 - `completed: true` means the control was clicked and confirmed, not that Getty
-  passed the files; an incomplete run says so and leaves the batch to finish.
+  passed the files; an incomplete run says so.
 
 ## 7. Invariants and tests
 

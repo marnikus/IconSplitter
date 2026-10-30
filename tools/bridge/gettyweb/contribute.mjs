@@ -5,7 +5,7 @@
 // driver.mjs; this file only sequences steps and waits.
 
 import * as driver from "./driver.mjs";
-import { insertText, navigate, runStep, setFiles, waitFor } from "./cdp.mjs";
+import { insertText, navigate, reloadPage, runStep, setFiles, waitFor } from "./cdp.mjs";
 
 const STEP_SOURCES = new Map(
   Object.entries(driver).filter(([name]) => driver.DRIVER_STEPS.includes(name)).map(([name, fn]) => [name, fn.toString()]),
@@ -14,6 +14,10 @@ const STEP_SOURCES = new Map(
 const LOGIN_POLL_MS = 1500;
 const UPLOAD_POLL_MS = 1000;
 const CONFIRM_SETTLE_MS = 700;
+// Getty's page sometimes simply stops reacting to its own uploader. Reloading it
+// (and attaching only what is still missing) is the recovery that works there.
+const STALL_MS = 30000;
+const MAX_RELOADS = 2;
 const NAV_RETRY_MS = 5000;
 // Never use the first generic file input: Getty also renders release uploaders.
 // This contribution input is deliberately hidden and accepts the vector pair.
@@ -228,7 +232,11 @@ export async function createBatch(connection, sessionId, options) {
 async function waitForFileNames(connection, sessionId, names, options) {
   const timeoutMs = options.timeoutMs ?? 180000;
   const deadline = Date.now() + timeoutMs;
+  const stallMs = options.stallMs ?? STALL_MS;
   let last = null;
+  let seen = 0;
+  let movedAt = Date.now();
+  let reloads = 0;
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
     last = await readState(connection, sessionId, names);
@@ -236,8 +244,24 @@ async function waitForFileNames(connection, sessionId, names, options) {
     if (last.signInRequired) {
       return { ok: false, code: "auth", reason: "Getty signed the browser out during the upload", state: last };
     }
-    if (last.namesSeen.length === names.length) break;
-    options.onProgress?.(`Getty listed ${last.namesSeen.length}/${names.length} file(s) — waiting for the rest`);
+    if (last.namesSeen.length !== seen) {
+      seen = last.namesSeen.length;
+      movedAt = Date.now();
+    }
+    if (seen === names.length) break;
+    options.onProgress?.(`Getty listed ${seen}/${names.length} file(s) — waiting for the rest`);
+    if (Date.now() - movedAt >= stallMs) {
+      // Nothing has arrived for a while: reload, then re-attach only the rest.
+      const stuckReason = "the Getty batch page stopped reacting and did not accept the remaining files after a reload";
+      if (reloads >= MAX_RELOADS) return { ok: false, code: "page", reason: stuckReason, state: last };
+      reloads += 1;
+      options.onProgress?.(`no file for ${Math.round(stallMs / 1000)} s — reloading the Getty page and retrying the rest`);
+      const recovered = await reloadAndRetry(connection, sessionId, last, options);
+      if (!recovered) return { ok: false, code: "page", reason: stuckReason, state: last };
+      options.onReload?.(reloads);
+      movedAt = Date.now();
+      continue;
+    }
     await sleep(UPLOAD_POLL_MS);
   }
   if (!last || last.namesSeen.length < names.length) {
@@ -249,6 +273,33 @@ async function waitForFileNames(connection, sessionId, names, options) {
   }
   options.onProgress?.(`Getty listed ${names.length}/${names.length} file(s)`);
   return waitForVerified(connection, sessionId, names, options, last);
+}
+
+/**
+ * Reloads the batch page and hands it only the files it is still missing. A
+ * reload is the documented recovery when the page stops reacting to its uploader.
+ */
+async function reloadAndRetry(connection, sessionId, last, options) {
+  const reloaded = await reloadPage(connection, sessionId);
+  if (!reloaded.ok) return false;
+  const missing = new Set((last?.missing ?? []).map((name) => String(name)));
+  const paths = [];
+  const names = [];
+  options.names.forEach((name, index) => {
+    const path = options.paths?.[index];
+    if (!missing.has(name) || typeof path !== "string") return;
+    paths.push(path); names.push(name);
+  });
+  if (paths.length === 0) return true;
+  await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
+  const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
+    sessionId, timeoutMs: 60000, intervalMs: 1000,
+  });
+  if (!input.ok) return false;
+  const attached = await setFiles(connection, paths, { sessionId, selector: CONTRIBUTION_FILE_INPUT });
+  if (!attached.ok) return false;
+  options.onProgress?.(`re-attached ${paths.length} file(s) after the reload`);
+  return true;
 }
 
 async function readState(connection, sessionId, names) {

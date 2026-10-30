@@ -184,10 +184,10 @@ describe("Getty web loopback client", () => {
 describe("Getty web live progress", () => {
   it("reads the per-file counts the helper reports for a running upload", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, {
-      ok: true, progress: { phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4 },
+      ok: true, progress: { phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4, reloads: 1 },
     }));
     const progress = await gettyWebProgress("http://127.0.0.1:47391", "run 7", fetchImpl as unknown as typeof fetch);
-    expect(progress).toEqual({ phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4 });
+    expect(progress).toEqual({ phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4, reloads: 1 });
     const [url] = fetchImpl.mock.calls[0] as unknown as [string];
     expect(url).toBe("http://127.0.0.1:47391/getty-web/progress?sessionKey=run%207");
   });

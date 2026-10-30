@@ -12,6 +12,8 @@ export interface GettyWebProgress {
   uploaded: number;
   failed: number;
   listed: number;
+  /** How many times the helper had to reload Getty's page to get it moving. */
+  reloads: number;
 }
 
 function trimSlash(url: string): string {
@@ -24,7 +26,7 @@ function readProgress(raw: Record<string, unknown>): GettyWebProgress {
   return {
     phase: typeof raw.phase === "string" ? raw.phase : "uploading",
     total: countOf(raw.total), uploaded: countOf(raw.uploaded),
-    failed: countOf(raw.failed), listed: countOf(raw.listed),
+    failed: countOf(raw.failed), listed: countOf(raw.listed), reloads: countOf(raw.reloads),
   };
 }
 

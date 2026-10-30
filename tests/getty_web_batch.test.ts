@@ -212,6 +212,35 @@ class LateCardPage extends DomConnection {
   }
 }
 
+/**
+ * A batch page that lists the first pair, then goes silent — the state a real
+ * run stalls in — and answers a reload with the cards of the second attach.
+ */
+class SilentPageThenCards extends DomConnection {
+  reloads = 0;
+  attachments: string[][] = [];
+  constructor(private readonly recover = true) {
+    super();
+  }
+  override async send(method: string, params: Record<string, unknown>) {
+    if (method === "Page.reload") this.reloads += 1;
+    if (method === "DOM.setFileInputFiles") {
+      this.attachments.push(params.files as string[]);
+      if (!this.recover) return {};
+      if (this.attachments.length === 1) {
+        // The first pair lands; the rest never do until the page is reloaded.
+        document.body.insertAdjacentHTML("beforeend", card("a.eps"));
+        return {};
+      }
+      for (const file of params.files as string[]) {
+        document.body.insertAdjacentHTML("beforeend", card(String(file).split("/").pop() ?? ""));
+      }
+      return {};
+    }
+    return super.send(method, params);
+  }
+}
+
 const PAIR = ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"];
 const UPLOADER = `<button data-cy="open-upload-dialog-button">Upload</button>
   <input type="file" multiple data-cy="upload-button-file-input" style="display:none">`;
@@ -415,6 +444,51 @@ describe("completing one batch for several icons", () => {
     expect(result).toMatchObject({ ok: false, code: "timeout" });
     expect(result.reason).toContain("has not enabled its SUBMIT control");
     expect(clicks).toBe(0);
+  });
+
+  it("reloads the page after 30 s without progress and re-attaches only what is missing", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new SilentPageThenCards();
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg", "/staged/a.eps", "/staged/b.jpg"],
+        names: ["a.jpg", "a.eps", "b.jpg"],
+        timeoutMs: 60000, readyTimeoutMs: 2000, stallMs: 5000,
+      });
+      await vi.advanceTimersByTimeAsync(12000);
+      const settled = await result;
+      expect(settled.ok).toBe(true);
+      // One reload, and the retry carried only the files the page still missed.
+      expect(page.reloads).toBe(1);
+      expect(page.attachments).toEqual([
+        ["/staged/a.jpg", "/staged/a.eps", "/staged/b.jpg"],
+        ["/staged/b.jpg"],
+      ]);
+      // The a.eps card covers the whole first pair; b.jpg has its own.
+      expect(settled.state.uploaded).toEqual(["a.jpg", "a.eps", "b.jpg"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up honestly when a reload does not wake the page", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new SilentPageThenCards(false);
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg"], names: ["a.jpg"],
+        timeoutMs: 120000, readyTimeoutMs: 1000, stallMs: 1000,
+      });
+      await vi.advanceTimersByTimeAsync(6000);
+      const failed = await result;
+      expect(failed).toMatchObject({ ok: false, code: "page" });
+      expect(failed.reason).toContain("did not accept the remaining files after a reload");
+      expect(page.reloads).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("refuses to submit while a card says Upload failed", async () => {

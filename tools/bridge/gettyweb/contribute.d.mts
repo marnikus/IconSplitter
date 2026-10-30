@@ -16,6 +16,9 @@ export function signInFailure(
 export function describeSignInPage(diagnostic: any): string;
 export function createBatch(connection: any, sessionId: string, options: any): Promise<any>;
 export function attachFiles(connection: any, sessionId: string, options: {
+  /** How long the page may stay silent before it is reloaded and retried. */
+  stallMs?: number;
+  onReload?: (reloads: number) => void;
   paths: string[];
   names: string[];
   timeoutMs?: number;

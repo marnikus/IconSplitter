@@ -3977,3 +3977,21 @@ Measured: Types PASS (18.3 s), Lint PASS (15.7 s, 0 errors / 21 warnings), Quali
 gate (changed) PASS (0.7 s), Tests + coverage PASS (129.6 s), Build PASS (8.2 s).
 Focused: stockupload_getty_web 13, getty_web_upload 16, getty_web_batch 19.
 Docs: SOR 8,989 B / 9,000 B, selectors 6,822 B.
+
+## 2026-10-30 — Reload the Getty page when it stops reacting (30 s)
+
+Getty's batch page sometimes stops reacting to its own uploader mid-run. The
+helper now watches for a stall: no newly listed file for 30 s (`stallMs`) sends
+`Page.reload` (cache ignored), waits for `readyState === "complete"`, dismisses
+dialogs and re-attaches **only** the files the page still misses, through the same
+contribution uploader. Two reloads at most, then the run fails with "the Getty
+batch page stopped reacting and did not accept the remaining files after a
+reload". The reload counter rides along in the progress payload
+(`{…, reloads}`), so the panel line says `— page reloaded to get it moving`.
+Also fixed a loose fallback: the no-card text match now needs a word boundary
+(a stem `a` no longer matches the "a" of "Upload").
+Measured: Types PASS (6.5 s), Lint PASS (2.4 s, 0 errors / 21 warnings), Quality
+gate (changed) PASS (0.7 s), Tests + coverage PASS (120.4 s), Build PASS (8.3 s).
+Focused: getty_web_batch 21, getty_web_driver 32, getty_web_cdp 11,
+getty_web_upload 16, stockupload_getty_web 14. Docs: SOR 8,992 B / 9,000 B,
+selectors 7,204 B.
