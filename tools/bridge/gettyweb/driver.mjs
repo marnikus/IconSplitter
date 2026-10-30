@@ -442,17 +442,36 @@ function labelTextOf(el) {
   return parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
-/** Writes a value the way React/MUI observes it, then commits chip-style keys. */
-function setFieldValue(el, value) {
+/**
+ * Writes a value the way React/MUI observes it. `commit` presses Enter for a
+ * chip field only: MUI commits whatever text an autocomplete holds on Enter, so
+ * pressing it in the date or title field turned a pending keyword into a new tag.
+ */
+function setFieldValue(el, value, commit = false) {
   if (el.isContentEditable) {
     el.focus();
     el.textContent = value;
     el.dispatchEvent(new Event("input", { bubbles: true }));
+    if (commit) el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     return;
   }
   setNativeValue(el, value);
+  if (!commit) return;
   el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   el.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+}
+
+/**
+ * How many keywords the drawer already lists. Getty renders the file's own
+ * XMP/IPTC keywords as chips while the text input stays empty, and the counter
+ * proves it even before the chips paint — adding ours again doubled the tags.
+ */
+function existingKeywordCount() {
+  const scope = document.querySelector('[data-cy="metadata-form"]') ?? document;
+  const chips = scope.querySelectorAll('[data-cy="metadata-keyword-chip"]').length;
+  const raw = String(scope.querySelector('[data-cy="metadata-keyword-current-count"]')?.textContent ?? "");
+  const counted = Number.parseInt(raw.replace(/\D+/g, ""), 10);
+  return Math.max(chips, Number.isFinite(counted) ? counted : 0);
 }
 
 /**
@@ -493,6 +512,7 @@ function seenField(el) {
  * embedded XMP/IPTC, so an upload never silently rewrites accepted text.
  */
 export function fillMetadataFields({ title, description, keywords, dateCreated, overwrite }) {
+  const keywordsBefore = existingKeywordCount();
   const fields = [...document.querySelectorAll("input, textarea, [contenteditable=true]")].filter(visible);
   const find = (pattern) => fields.find((el) => pattern.test(labelTextOf(el))) ?? null;
   const targets = {
@@ -510,14 +530,19 @@ export function fillMetadataFields({ title, description, keywords, dateCreated, 
     if (!el) continue;
     const current = el.isContentEditable ? (el.textContent ?? "") : String(el.value ?? "");
     // The run's Date Created is required and is today: it replaces Getty's guess.
-    if (!overwrite && key !== "dateCreated" && current.trim() !== "") continue;
+    if (!overwrite && key !== "dateCreated") {
+      if (current.trim() !== "") continue;
+      // The tags are the file's own: never add a second copy of them.
+      if (key === "keywords" && existingKeywordCount() > 0) continue;
+    }
     const value = key === "keywords" ? (Array.isArray(keywords) ? keywords.join(", ") : "")
       : (key === "title" ? title : key === "dateCreated" ? dateCreated : description);
     if (typeof value !== "string" || value.trim() === "") continue;
-    setFieldValue(el, value);
+    setFieldValue(el, value, key === "keywords");
     filled[key] = true;
   }
-  return { filled, present };
+  // Reported so a run can never silently change how many tags a file carries.
+  return { filled, present, keywordsBefore, keywordsAfter: existingKeywordCount() };
 }
 
 /** Opens the metadata editor for one uploaded file (row button, else the row). */
@@ -652,7 +677,7 @@ export function readCompletionState() {
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
   fileStem, mentionsStem, uploadCards, cardIdOf, cardHasThumbnail, fileStatus, inputFields, loginFields,
-  submitControl, pageSignals, labelTextOf, setFieldValue, dateFieldOf, seenField,
+  submitControl, pageSignals, labelTextOf, setFieldValue, dateFieldOf, seenField, existingKeywordCount,
 ]
   .map((fn) => fn.toString()).join("\n")
   + `\nconst NON_TEXT_INPUTS = ${JSON.stringify(NON_TEXT_INPUTS)};`

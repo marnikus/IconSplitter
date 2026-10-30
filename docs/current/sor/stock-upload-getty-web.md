@@ -19,24 +19,23 @@ a real browser.
    per target. `getty-web` does not send one request per icon:
    `uploadGettyWebRun` posts every icon together.
 4. `/getty-web/upload` takes the whole run (`icons: [{files, metadata}]`, up to
-   200 icons); the
-   helper stages it, signs in once, creates **one** batch and hands **all** files
-   to the page uploader in a single `DOM.setFileInputFiles`. Stray dialogs and
-   snackbars are dismissed first — one blocks Getty's uploader.
+   200 icons): the helper stages it, signs in once, creates **one** batch and
+   hands **all** files to the page uploader in a single `DOM.setFileInputFiles`.
+   Stray dialogs are dismissed first — one blocks Getty's uploader.
 5. Getty's uploader transfers. **If nothing new appears for 30 s** the helper
    reloads the batch page and re-attaches only the files still missing (twice,
-   then it fails honestly). It waits until every file is listed, then until
-   each card proves its outcome: **a thumbnail means uploaded**,
-   `invalid-file-media` ("Upload failed") means not — a listed row proves nothing,
-   and a card that never renders a picture fails the wait (300 s) instead of being
-   called uploaded. An icon is uploaded only if the response lists its stem; a
+   then it fails honestly). It waits until every file is listed, then until each
+   card proves its outcome: **a thumbnail means uploaded**, `invalid-file-media`
+   ("Upload failed") means not — a listed row proves nothing, and a card that
+   never renders a picture fails the wait (300 s) rather than counting. A
    rejected file is named with Getty's id. `GET /getty-web/progress` feeds the
    panel the live counts, so **the bar moves with each thumbnail** (1 s poll).
 6. **Metadata:** per contribution it selects the card by stem, waits for that
-   drawer to unlock (disabled fields drop typed text), types the accepted title,
-   description and keywords, writes **today's date** into Date Created as Getty
-   renders it — `MM/DD/YYYY 00:00:00 +0000` — and saves. Prefilled prose is kept;
-   the date is always replaced.
+   drawer to unlock (disabled fields drop typed text), types the accepted title and
+   description, writes **today's date** into Date Created as Getty renders it —
+   `MM/DD/YYYY 00:00:00 +0000` — and saves. Prefilled prose is kept and the date is
+   always replaced, but **tags are never touched**: keywords Getty already lists
+   are left exactly as they are, and only the keyword field ever gets Enter.
 7. **Complete once:** after the last icon the run posts `/getty-web/finish`. It
    refuses (and so does the inline tail) while a contribution is missing **or
    says "Upload failed"**, then waits
@@ -77,10 +76,10 @@ or Enter, takes a "sign in with password" option on an SSO screen and returns to
 
 **One profile, one browser — freed by the helper.** A browser answering on the
 folder's port is attached to. A locked folder without a port means a leftover
-window owns it, so the helper ends the browsers whose command line carries that
-exact `--user-data-dir`, clears the stale locks and launches again — no manual
-"close every window" step, no other browser touched. Only a failed reset stops the
-run, naming the folder. Stale `DevToolsActivePort` files go first, every port is
+window owns it, so the helper ends the browsers carrying that exact
+`--user-data-dir`, clears the stale locks and launches again — no manual "close
+every window" step, no other browser touched. Only a failed reset stops the run,
+naming the folder. Stale `DevToolsActivePort` files go first, every port is
 verified over HTTP, and closing kills the browser tree; a visible window is only
 let go.
 
@@ -90,8 +89,7 @@ let go.
 - Title, description and keywords travel inside the exported JPEG/EPS
   (IPTC/XMP/RDF) *and* as a `metadata` field, so the helper can type them into the
   drawer. Only `accepted` icons are sent (`gettyWebMetadataOf`), capped (title 200,
-  description 2000, keywords 49 × 64, deduped); prefilled prose is kept, the date
-  replaced with today's.
+  description 2000, keywords 49 × 64, deduped). The file's own tags are kept.
 - Batch name `IconSplitter <UTC date> (<n> icons)`; submission type
   `iStock creative illustration`. Completion is attempted (`complete: true`) and
   reported as `completed`/`completion`; `GETTY_WEB_COMPLETE=0` stops after upload.

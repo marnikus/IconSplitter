@@ -30,7 +30,10 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   `md-headline`/`md-caption`/`md-created_date`/`metadata-keyword-multiselect` and
   `save-metadata`, and only enables its fields once a card is selected — a
   `metadataEditorReady` poll waits for that unlock, and Date Created
-  (`textarea[name="created_date"]`) takes `MM/DD/YYYY 00:00:00 +0000`.
+  (`textarea[name="created_date"]`) takes `MM/DD/YYYY 00:00:00 +0000`. Existing
+  tags show as `[data-cy="metadata-keyword-chip"]` (or
+  `[data-cy="metadata-keyword-current-count"]`): when any are there the keyword
+  input is left alone, so an upload never adds a duplicate tag.
 - Getty web waits: the Create Batch control, `input[name="submission_name"]` and
   `[data-cy="create-batch-confirm-button"]` must render enabled within 60 s (else a
   `timeout` failure naming the control); an open dialog or an already-chosen

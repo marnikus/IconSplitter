@@ -307,7 +307,7 @@ describe("Getty contributor page steps", () => {
     const result = driver.fillMetadataFields({
       title: "Charity hand icon", description: "Open palm holding a heart.", keywords: ["charity", "care", "heart"], overwrite: false,
     });
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       filled: { title: true, description: true, keywords: true },
       present: { title: true, description: true, keywords: true },
     });
@@ -566,6 +566,69 @@ describe("Getty batch page as captured", () => {
     const filled = driver.fillMetadataFields({ dateCreated: "12/31/2026 00:00:00 +0000" });
     expect(filled.present.dateCreated).toBe(true);
     expect(document.querySelector<HTMLTextAreaElement>('textarea[name="created_date"]')!.value).toBe("12/31/2026 00:00:00 +0000");
+  });
+
+  it("leaves the keywords Getty already lists alone instead of doubling them", () => {
+    // Getty shows the file's own XMP keywords as chips while the input stays empty,
+    // so typing the accepted keywords again is what added extra tags.
+    mount(`<div data-cy="metadata-form">
+      <div data-cy="md-headline"><label>Title</label><textarea name="headline"></textarea></div>
+      <div data-cy="md-created_date"><label>Date Created</label><textarea name="created_date"></textarea></div>
+      <div data-cy="metadata-keyword-multiselect">
+        <span data-cy="metadata-keyword-current-count">3</span>
+        <span data-cy="metadata-keyword-chip">map</span>
+        <span data-cy="metadata-keyword-chip">pin</span>
+        <span data-cy="metadata-keyword-chip">route</span>
+        <textarea id="keywords" placeholder="Add keywords, separated by commas"></textarea>
+      </div></div>`);
+    const keywords = document.querySelector<HTMLTextAreaElement>("#keywords")!;
+    const typed: string[] = [];
+    keywords.addEventListener("input", () => typed.push(keywords.value));
+    const filled = driver.fillMetadataFields({
+      title: "Foldable paper map", description: "", keywords: ["map", "pin", "route"],
+      dateCreated: "10/30/2026 00:00:00 +0000",
+    });
+    expect(filled.filled.keywords).toBe(false);
+    expect(keywords.value).toBe("");
+    expect(typed).toEqual([]);
+    expect(document.querySelectorAll('[data-cy="metadata-keyword-chip"]')).toHaveLength(3);
+    // Same number of tags before and after the run, which is the requirement.
+    expect(filled).toMatchObject({ keywordsBefore: 3, keywordsAfter: 3 });
+    // The date and title are still written.
+    expect(filled.filled).toMatchObject({ title: true, dateCreated: true });
+    expect(document.querySelector<HTMLTextAreaElement>('textarea[name="created_date"]')!.value)
+      .toBe("10/30/2026 00:00:00 +0000");
+  });
+
+  it("treats the keyword counter as pre-existing tags too", () => {
+    mount(`<div data-cy="metadata-form">
+      <div data-cy="metadata-keyword-multiselect">
+        <span data-cy="metadata-keyword-current-count">6 keywords</span>
+        <textarea id="keywords"></textarea>
+      </div></div>`);
+    const filled = driver.fillMetadataFields({ keywords: ["charity", "care"] });
+    expect(filled.filled.keywords).toBe(false);
+    expect(document.querySelector<HTMLTextAreaElement>("#keywords")!.value).toBe("");
+  });
+
+  it("only presses Enter in the keyword field, so no stray tag is committed elsewhere", () => {
+    mount(`<div data-cy="metadata-form">
+      <div data-cy="md-headline"><label>Title</label><textarea name="headline"></textarea></div>
+      <div data-cy="md-caption"><label>Description</label><textarea name="caption"></textarea></div>
+      <div data-cy="md-created_date"><label>Date Created</label><textarea name="created_date"></textarea></div>
+      <div data-cy="metadata-keyword-multiselect"><textarea id="keywords"></textarea></div>
+      </div>`);
+    const enters: string[] = [];
+    for (const field of document.querySelectorAll<HTMLTextAreaElement>("textarea")) {
+      field.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") enters.push(field.name || field.id);
+      });
+    }
+    driver.fillMetadataFields({
+      title: "Foldable paper map", description: "Pin marking a spot.",
+      keywords: ["map"], dateCreated: "10/30/2026 00:00:00 +0000",
+    });
+    expect(enters).toEqual(["keywords"]);
   });
 
   it("reports the metadata editor as not ready while its fields are still disabled", () => {

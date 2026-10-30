@@ -4025,3 +4025,10 @@ coverage 109.5 s · Build 7.8 s → ALL LANES PASSED (one re-run: the ported
 `upload_rowbadge_ui` bulk test is load-sensitive and passes alone). Focused:
 `getty_web_session` 6, `getty_web_browser` 26, `getty_web_signin` 9 = 41.
 SOR 8,999 B.
+
+## 2026-10-30 — Getty web: never change a file's tags while filling metadata
+Measured after skipping the keyword field when the drawer already lists chips (or
+its counter proves them) and after sending Enter only to the keyword field:
+`verify:fast` Types 8.4 s · Lint 1.8 s (0/21) · Quality gate 0.4 s · Tests +
+coverage 101.6 s · Build 7.0 s → ALL LANES PASSED. `getty_web_driver` 38,
+`getty_web_finalize` 13. SOR 8,994 B, selectors 7,651 B.

@@ -375,6 +375,15 @@ export async function attachFiles(connection, sessionId, options) {
   return waitForFileNames(connection, sessionId, options.names, options);
 }
 
+/** The tag count before and after a fill, only when it moved — never expected. */
+function tagsChangedOf(filled) {
+  const before = filled?.keywordsBefore;
+  const after = filled?.keywordsAfter;
+  return typeof before === "number" && typeof after === "number" && after !== before
+    ? { before, after }
+    : null;
+}
+
 /** Opens one file's metadata editor, types the accepted text, and saves it. */
 function wasRejected(file, options) {
   const stem = stemOf(file.name);
@@ -412,8 +421,9 @@ async function fillOneFileMetadata(connection, sessionId, file, options) {
   });
   const saved = (await runDriverStep(connection, sessionId, "saveMetadataEditor")) ?? { saved: false, label: null };
   await runDriverStep(connection, sessionId, "closeMetadataEditor").catch(() => null);
-  options.onProgress?.(`${file.name}: metadata ${saved.saved ? "saved" : "filled but no Save button"}`);
-  return { name: file.name, status: saved.saved ? "saved" : "filled-unsaved", fields: filled.filled };
+  const tags = tagsChangedOf(filled);
+  options.onProgress?.(`${file.name}: metadata ${saved.saved ? "saved" : "filled but no Save button"}${tags ? ` (keywords ${tags.before} → ${tags.after})` : ""}`);
+  return { name: file.name, status: saved.saved ? "saved" : "filled-unsaved", fields: filled.filled, ...(tags ? { keywords: tags } : {}) };
 }
 
 async function fillEveryFileMetadata(connection, sessionId, options) {

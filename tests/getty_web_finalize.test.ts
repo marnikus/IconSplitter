@@ -145,6 +145,37 @@ describe("Getty web automatic finalize", () => {
     if (result.ok) expect(result.report.metadata).toEqual([{ name: "star_01.jpg", status: "embedded-only" }]);
   });
 
+  it("names the file when a fill ever changes its number of tags", async () => {
+    const queue = successQueue();
+    queue.fillMetadataFields = [{
+      filled: { title: true, description: true, keywords: false },
+      present: { title: true, description: true, keywords: true }, keywordsBefore: 5, keywordsAfter: 7,
+    }];
+    const progress: string[] = [];
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.report.metadata[0]).toMatchObject({ keywords: { before: 5, after: 7 } });
+    expect(progress.some((line) => /keywords 5 → 7/.test(line))).toBe(true);
+  });
+
+  it("keeps a fill that left the tags alone free of any tag note", async () => {
+    const queue = successQueue();
+    queue.fillMetadataFields = [{
+      filled: { title: true, description: true, keywords: false },
+      present: { title: true, description: true, keywords: true }, keywordsBefore: 5, keywordsAfter: 5,
+    }];
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.report.metadata[0]).not.toHaveProperty("keywords");
+  });
+
   it("refuses to submit while Getty reports an Upload failed card", async () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {
