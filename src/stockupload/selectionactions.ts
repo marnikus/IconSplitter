@@ -8,7 +8,7 @@ import {
 import { selectionPayloads } from "../lib/selectiondelta";
 import type { ExportedItem } from "../lib/stockupload/types";
 import {
-  addBadge, applyBadgeToIds, recolorBadge, removeBadge, renameBadge, statesEqual,
+  addBadge, applyBadgeToIds, recolorBadge, removeBadge, removeBadgeFromIds, renameBadge, statesEqual,
   toggleBadgeOn, type RowBadgeState,
 } from "../lib/upload/rowbadge";
 import type { HistoryActions } from "../state/HistoryProvider";
@@ -32,6 +32,7 @@ export interface StockBadgeApi {
   renameRowBadge: (id: string, name: string) => void;
   recolorRowBadge: (id: string, color: string) => void;
   toggleRowBadge: (pairId: string, badgeId: string) => void;
+  removeRowBadgeSelected: (badgeId: string) => void;
   applyRowBadgeSelected: (ids: string[], badgeId: string) => void;
 }
 
@@ -111,6 +112,11 @@ export function useStockRowBadgeActions(
     renameRowBadge: (id, name) => commitBadgeChange(ref.current.hist, ref.current.say, { before: getRowBadgeState(), after: renameBadge(getRowBadgeState(), id, name), label: "Rename badge", ids: [id], gesture: true }),
     recolorRowBadge: (id, color) => commitBadgeChange(ref.current.hist, ref.current.say, { before: getRowBadgeState(), after: recolorBadge(getRowBadgeState(), id, color), label: "Recolour badge", ids: [id], gesture: true }),
     toggleRowBadge: (pairId, badgeId) => commitBadgeChange(ref.current.hist, ref.current.say, { before: getRowBadgeState(), after: toggleBadgeOn(getRowBadgeState(), pairId, badgeId), label: "Toggle badge", ids: [pairId] }),
+    removeRowBadgeSelected: (badgeId) => {
+      const ids = currentSelection().checked;
+      const before = getRowBadgeState();
+      commitBadgeChange(ref.current.hist, ref.current.say, { before, after: removeBadgeFromIds(before, ids, badgeId), label: "Remove badge from selected", ids });
+    },
     applyRowBadgeSelected: (ids, badgeId) => commitBadgeChange(ref.current.hist, ref.current.say, { before: getRowBadgeState(), after: applyBadgeToIds(getRowBadgeState(), ids, badgeId), label: "Apply badge to selected", ids }),
   }), []);
 }

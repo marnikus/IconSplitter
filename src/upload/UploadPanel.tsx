@@ -71,6 +71,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
     requestMetadata: g.requestMetadata, acceptMetadata: g.acceptMetadata,
     editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow,
     openLocation: g.openLocation, rowBadges: g.rowBadges, toggleRowBadge: g.toggleRowBadge,
+    removeRowBadgeSelected: g.removeRowBadgeSelected,
   };
   return (
     <>

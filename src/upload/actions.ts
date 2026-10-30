@@ -107,6 +107,7 @@ export interface UploadActions extends PromptActions {
   renameRowBadge: (id: string, name: string) => void;
   recolorRowBadge: (id: string, color: string) => void;
   toggleRowBadge: (pairId: string, badgeId: string) => void;
+  removeRowBadgeSelected: (badgeId: string) => void;
   applyRowBadgeSelected: (ids: string[], badgeId: string) => void;
   dismissDialog: () => void;
   requestMetadata: (ids: string[]) => void;

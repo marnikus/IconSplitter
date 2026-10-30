@@ -72,9 +72,12 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   named coloured badges on SVG-to-upload rows are independent of the corner
   badge. The catalog and per-pair assignments persist in
   `iconSplitter.upload.rowBadges.v1` and validate on read; a row may hold one
-  or more ids; multi-apply toggles one catalog badge on the checked ids; the
-  list filter is All / none / any / one id. They are never exported or sent.
-  Pinned by `upload_rowbadge`, `upload_rowbadge_store`, `upload_rowbadge_ui`.
+  or more ids; multi-apply toggles one catalog badge on checked ids, while Ctrl
+  + left-click on a chip removes that badge from all checked rows (plain
+  left-click removes from one row); successful stock re-uploads reassign the
+  target badge. The list filter is All / none / any / one id. Labels are never
+  exported or sent. Pinned by `upload_rowbadge`, `upload_rowbadge_store`,
+  `upload_rowbadge_ui`, `stockupload_runner`, and `stockupload_ui`.
 
 <a id="i-80"></a>
 * **I-80 (Stock Upload lists only recorded `export/` artifacts, RULE 4/13 —

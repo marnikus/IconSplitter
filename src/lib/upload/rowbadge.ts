@@ -156,6 +156,12 @@ export function applyBadgeToIds(state: RowBadgeState, ids: readonly string[], ba
   return ids.reduce((next, pairId) => setBadgeOn(next, pairId, badgeId, !remove), state);
 }
 
+/** Removes one catalog badge from the specified rows, regardless of mixed state. */
+export function removeBadgeFromIds(state: RowBadgeState, ids: readonly string[], badgeId: string): RowBadgeState {
+  if (!state.catalog.some((b) => b.id === badgeId) || ids.length === 0) return state;
+  return ids.reduce((next, pairId) => setBadgeOn(next, pairId, badgeId, false), state);
+}
+
 export function setBadgeOn(state: RowBadgeState, pairId: string, badgeId: string, on: boolean): RowBadgeState {
   if (!state.catalog.some((b) => b.id === badgeId)) return state;
   const have = new Set(badgesOf(state, pairId));

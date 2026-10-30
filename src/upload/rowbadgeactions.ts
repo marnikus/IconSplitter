@@ -1,7 +1,7 @@
 // rowbadgeactions.ts — catalog CRUD and apply/toggle for upload row badges (I-79).
 import { useCallback, useRef } from "react";
 import {
-  addBadge, applyBadgeToIds, removeBadge, renameBadge, recolorBadge, statesEqual,
+  addBadge, applyBadgeToIds, removeBadge, removeBadgeFromIds, renameBadge, recolorBadge, statesEqual,
   toggleBadgeOn, type RowBadgeState,
 } from "../lib/upload/rowbadge";
 import { getAppState } from "../state/appstore";
@@ -10,7 +10,7 @@ import { getRowBadgeState, setRowBadgeState } from "./rowbadgestore";
 import type { UploadActions, UploadCtx } from "./actions";
 
 export type RowBadgeActions = Pick<UploadActions,
-  "openRowBadges" | "addRowBadge" | "removeRowBadge" | "renameRowBadge" | "recolorRowBadge" | "toggleRowBadge" | "applyRowBadgeSelected"
+  "openRowBadges" | "addRowBadge" | "removeRowBadge" | "renameRowBadge" | "recolorRowBadge" | "toggleRowBadge" | "removeRowBadgeSelected" | "applyRowBadgeSelected"
 >;
 
 type Latest = { current: UploadCtx };
@@ -25,6 +25,7 @@ export function useRowBadgeActions(ctx: UploadCtx): RowBadgeActions {
     renameRowBadge: useRename(latest),
     recolorRowBadge: useRecolor(latest),
     toggleRowBadge: useToggle(latest),
+    removeRowBadgeSelected: useRemoveSelected(latest),
     applyRowBadgeSelected: useApply(latest),
   };
 }
@@ -67,6 +68,15 @@ function useToggle(latest: Latest) {
   return useCallback((pairId: string, badgeId: string) => {
     const before = getRowBadgeState();
     commit({ ctx: latest.current, before, after: toggleBadgeOn(before, pairId, badgeId), label: "Toggle badge", ids: [pairId] });
+  }, [latest]);
+}
+
+function useRemoveSelected(latest: Latest) {
+  return useCallback((badgeId: string) => {
+    const ctx = latest.current;
+    const before = getRowBadgeState();
+    const ids = ctx.checked;
+    commit({ ctx, before, after: removeBadgeFromIds(before, ids, badgeId), label: "Remove badge from selected", ids });
   }, [latest]);
 }
 

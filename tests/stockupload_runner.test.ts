@@ -8,7 +8,8 @@ import type { StockFtpPreset } from "../src/lib/stockupload/types";
 import { loadStockHistory, resetStockHistory } from "../src/stockupload/historystore";
 import { markUploadInFlight, recoverInterruptedUploads, resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
-import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
+import { getRowBadgeState, resetRowBadges, setRowBadgeState } from "../src/upload/rowbadgestore";
+import { removeBadge, toggleBadgeOn } from "../src/lib/upload/rowbadge";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
 function addExported(root: FakeDir, id: string, dir: string, stem: string, formats: { jpg?: boolean; svg?: boolean; eps?: boolean }) {
@@ -222,6 +223,32 @@ describe("stock upload planner, batch runner and crash journal", () => {
       icon1Badges: ["shutterstock", "adobe-stock"],
       icon2Badges: ["shutterstock"],
     });
+
+    // Removing a site's row label is temporary: another successful upload restores it.
+    setRowBadgeState(toggleBadgeOn(getRowBadgeState(), "icon-1", "shutterstock"));
+    expect(getRowBadgeState().assigned["icon-1"]).not.toContain("shutterstock");
+    await executeStockUploadBatch(plan, {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "u", password: "p" }),
+      uploadFn: async () => ({ ok: true, bytes: 10 }),
+      closeSessionFn: async () => undefined,
+    });
+    expect(getRowBadgeState().assigned["icon-1"]).toContain("shutterstock");
+
+    // Even if the catalog entry itself was removed, the next success restores it and assigns it.
+    setRowBadgeState(removeBadge(getRowBadgeState(), "shutterstock"));
+    await executeStockUploadBatch(plan, {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "u", password: "p" }),
+      uploadFn: async () => ({ ok: true, bytes: 10 }),
+      closeSessionFn: async () => undefined,
+    });
+    expect(getRowBadgeState().catalog.some((badge) => badge.id === "shutterstock")).toBe(true);
+    expect(getRowBadgeState().assigned["icon-1"]).toContain("shutterstock");
   });
 });
 

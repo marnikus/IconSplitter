@@ -4004,3 +4004,4 @@ coverage 99.4 s (3325 passed) · Build 7.1 s → ALL LANES PASSED. Focused:
 `getty_web_driver` 35, `getty_web_finalize` 11, `getty_web_batch` 22,
 `getty_web_upload` 17, `getty_web_cdp` 11, `bridge_getty_web` 20,
 `stockupload_getty_web` 14 = 130 passed. SOR 8,966 B, selectors 7,349 B.
+- 2026-10-30 — row badge Ctrl-click removal and successful re-upload behavior: focused badge/selection tests passed; `npm run verify` passed all lanes, including typecheck, lint, quality, full tests/coverage, and build.

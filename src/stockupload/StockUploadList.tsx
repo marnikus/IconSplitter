@@ -17,6 +17,7 @@ function toRowPresentation(g: StockUploadApi): StockRowPresentation {
     selectRow: g.selectRow,
     openLocation: g.openLocation,
     toggleRowBadge: g.toggleRowBadge,
+    removeRowBadgeSelected: g.removeRowBadgeSelected,
     metaDraftOf: g.metaDraftOf,
     editMeta: g.editMeta,
     acceptMeta: g.acceptMeta,

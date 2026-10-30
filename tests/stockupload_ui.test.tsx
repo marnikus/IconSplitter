@@ -117,6 +117,23 @@ describe("Upload (stockUpload) tab UI", () => {
     vi.unstubAllGlobals();
   });
 
+  it("Ctrl-click removes an applied site badge from all checked Stock Upload rows", async () => {
+    stored.set("__stock_upload__", { source: makeWorkspace() });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
+    await clickEl(q("stock-check-item-star")!);
+    await clickEl(q("upload-rowbadge-toggle-item-star")!);
+    await clickEl(q("upload-rowbadge-option-item-star-shutterstock")!);
+    expect(getRowBadgeState().assigned["item-star"]).toContain("shutterstock");
+    await act(async () => {
+      q("upload-rowbadge-chip-item-star-shutterstock")!.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, button: 0, ctrlKey: true }),
+      );
+    });
+    await settle(0);
+    expect(getRowBadgeState().assigned["item-star"] ?? []).not.toContain("shutterstock");
+  });
+
   it("offers an opt-in combined title and discloses it before upload", async () => {
     stored.set("__stock_upload__", { source: makeWorkspace() });
     act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });

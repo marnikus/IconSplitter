@@ -18,7 +18,7 @@
   (restart → interrupted, corrupt → empty)
 * `upload_discovery.test.ts` — item-approval gates; [accepted source identity](../version-acceptance.md),
   legacy newest-valid fallback, missing/unreadable accepted files and exclusions.
-* Named row labels: [domain/store/UI/style tests](../upload-row-badges.md).
+* Named row labels: [contract](../upload-row-badges.md); Ctrl-click/undo UI coverage is in `upload_rowbadge_ui.test.tsx`, and retry re-assignment in `stockupload_runner.test.ts`.
 * `upload_rowmodel.test.ts` — row assembly from a real export.json + source
   hash, exact staleness (source/settings/metadata fingerprints), the metadata
   state a record carries, filters/sort/header/counts (incl. a failed run with
