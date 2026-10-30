@@ -31,7 +31,7 @@ real browser.
    outcome (a thumbnail, or Getty's "Ready to submit"), a stalled page is
    reloaded once, and each icon's metadata is typed before the batch is finished
    — the waits, the reload rule and the metadata order are in
-   [the batch page](stock-upload-getty-web-batches.md#3-what-happens-inside-a-batch).
+   [the batch page](stock-upload-getty-web-batches.md#4-what-happens-inside-a-batch).
 8. **Complete each batch, then start the next:** after the batch's last card
    carries "Ready to submit" the run posts `/getty-web/finish` **for that batch
    only**. It refuses while a contribution of *that* batch is missing or says

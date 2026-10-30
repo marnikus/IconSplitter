@@ -576,3 +576,28 @@ the tab never holds a whole batch either. The helper hands a part only **its own
 icons' attempt unspent so they go on to the retry batch. The client now probes
 `/health` when the upload itself fails: a helper that answers means "the helper
 dropped the upload (N MB)", not "start run_ftp_bridge.bat".
+
+---
+
+## 13. Follow-up 2 (2026-10-30, second real run): the config was in the header
+
+**Symptom:** after §12's split, every part still failed — now with *"the helper
+dropped the upload (13 MB) before it answered"* — even 12 MB parts, while a 2-7
+icon run worked.
+
+**Cause:** the split fixed the body, not the header. `POST /getty-web/upload`
+carried its config in `x-getty-web-config`, base64 of every icon's title (200),
+description (2000) and 49 × 64 keywords. Node caps **request headers at 16 KB**:
+a 25-icon config is ~186 KB, so Node answered 431 and destroyed the socket, and
+the browser reported a dropped connection. Reproduced locally: a 186 KB header
+gives `ECONNRESET`, a 7.8 KB one gets a normal answer — the body's size never
+mattered.
+
+**Fix:** the config travels **in the body** — `[uint32 length][config JSON][staged
+bytes]` — so there is no header limit to hit and no credential in a header at
+all (RULE 20). The helper reads the prefix, falls back to the old header only for
+a header-only request, and drains an over-cap body before answering 413 (an
+answer mid-body is the same dropped socket). The client now separates "the
+request never got an answer" from "the helper answered without JSON" (it reports
+the HTTP status) and turns an old helper's "this route drives the Getty web
+upload only" into *restart run_ftp_bridge.bat*.

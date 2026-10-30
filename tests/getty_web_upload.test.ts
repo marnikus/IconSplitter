@@ -32,6 +32,14 @@ function decodeHeader(value: string): Record<string, unknown> {
   return JSON.parse(atob(value)) as Record<string, unknown>;
 }
 
+/** The config an upload carried in its body: [uint32 length][JSON][files]. */
+async function bodyConfig(init: RequestInit): Promise<{ config: Record<string, unknown>; bytes: number }> {
+  const body = new Uint8Array(await (init.body as Blob).arrayBuffer());
+  const size = new DataView(body.buffer, body.byteOffset, 4).getUint32(0, false);
+  const config = JSON.parse(new TextDecoder().decode(body.subarray(4, 4 + size))) as Record<string, unknown>;
+  return { config, bytes: body.length - 4 - size };
+}
+
 describe("Getty web upload rules", () => {
   it("builds a dated batch name from the plan size", () => {
     const now = new Date("2026-10-29T12:00:00Z");
@@ -70,7 +78,7 @@ describe("Getty web upload rules", () => {
 });
 
 describe("Getty web loopback client", () => {
-  it("sends both files in order with credentials only inside the loopback header", async () => {
+  it("sends both files in order with credentials only inside the loopback body", async () => {
     const reply = {
       ok: true, batchId: "68445204", accepted: ["icon_a.jpeg", "icon_a.eps"],
       completed: true, completion: { clicked: true, label: "Complete", confirmed: true },
@@ -88,8 +96,8 @@ describe("Getty web loopback client", () => {
     expect(result).toEqual({ ...reply, failed: [] });
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:47391/getty-web/upload");
-    const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
-    expect(header).toMatchObject({
+    const { config } = await bodyConfig(init);
+    expect(config).toMatchObject({
       protocol: "getty-web", host: "esp.gettyimages.com", username: CREDS.username, password: CREDS.password,
       batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       complete: true,
@@ -115,10 +123,10 @@ describe("Getty web loopback client", () => {
     // One call for the whole run: no per-icon request can stop after the first pair.
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
-    const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
-    expect(header.icons).toHaveLength(2);
-    expect(header).toMatchObject({ sessionKey: "run-7", complete: false });
-    expect((init.body as Blob).size).toBe(10);
+    const { config, bytes } = await bodyConfig(init);
+    expect(config.icons).toHaveLength(2);
+    expect(config).toMatchObject({ sessionKey: "run-7", complete: false });
+    expect(bytes).toBe(10);
   });
 
   it("scrubs a password echoed by the helper and keeps the failure code", async () => {
@@ -157,6 +165,68 @@ describe("Getty web loopback client", () => {
     }
   });
 
+  it("sends the config inside the body, never as a request header", async () => {
+    // A 100-icon batch of real metadata is a ~180 KB header. Node caps headers
+    // at 16 KB, answers 431, and the browser reports a dropped connection.
+    const seen: { headers: Record<string, string>; body: Uint8Array }[] = [];
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      seen.push({
+        headers: init?.headers as Record<string, string>,
+        body: new Uint8Array(await (init?.body as Blob).arrayBuffer()),
+      });
+      return jsonResponse(200, { ok: true, accepted: [], completed: false, completion: null, metadata: [] });
+    });
+    await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1, 2, 3]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].headers["x-getty-web-config"]).toBeUndefined();
+    // [uint32 config length][config JSON][file bytes]
+    const body = seen[0].body;
+    const size = new DataView(body.buffer, body.byteOffset, 4).getUint32(0, false);
+    const config = JSON.parse(new TextDecoder().decode(body.subarray(4, 4 + size))) as Record<string, unknown>;
+    expect(config).toMatchObject({ protocol: "getty-web", batchName: "b", newBatch: false });
+    expect([...body.subarray(4 + size)]).toEqual([1, 2, 3]);
+  });
+
+  it("reports the helper's HTTP status when its answer carries no JSON", async () => {
+    // A 413/431 used to fall into the network branch and read as "cannot reach
+    // the local helper", which is what sent a 209-icon run hunting the bridge.
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith("/health")) return jsonResponse(200, { ok: true });
+      return new Response("", { status: 413 });
+    });
+    const res = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe("bad-request");
+      expect(res.reason).toContain("413");
+      expect(res.reason).not.toContain("cannot reach the local helper");
+    }
+  });
+
+  it("asks for a helper restart when the helper predates the body upload", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(400, {
+      ok: false, code: "bad-request", reason: "this route drives the Getty web upload only",
+    }));
+    const res = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe("bad-request");
+      expect(res.reason).toContain("run_ftp_bridge.bat");
+    }
+  });
+
   it("blames the dropped upload, not a missing helper, when the helper still answers", async () => {
     // A batch the helper's body cap threw away used to read "cannot reach the
     // local helper — start run_ftp_bridge.bat", which sent the user hunting a
@@ -180,7 +250,8 @@ describe("Getty web loopback client", () => {
       expect(dropped.code).toBe("network");
       expect(dropped.reason).toContain("dropped");
       expect(dropped.reason).toContain("6 MB");
-      expect(dropped.reason).not.toContain("run_ftp_bridge.bat");
+      // The helper answered /health, so it is not missing: never say it is.
+      expect(dropped.reason).not.toContain("cannot reach the local helper");
     }
   });
 
@@ -308,8 +379,8 @@ describe("Getty web batch requests", () => {
       newBatch: true, sessionKey: "run-8", fetchImpl,
     });
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
-    const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
-    expect(header).toMatchObject({ newBatch: true, batchName: "IconSplitter 2026-10-30 2/3 (1 icon)" });
+    const { config } = await bodyConfig(init);
+    expect(config).toMatchObject({ newBatch: true, batchName: "IconSplitter 2026-10-30 2/3 (1 icon)" });
   });
 
   it("keeps what a failed batch had already accepted, rejected and listed", async () => {

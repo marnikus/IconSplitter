@@ -4139,3 +4139,11 @@ committed.
 - Docs: `sor/stock-upload-getty-web.md` trimmed to 8,870 bytes with the batch mechanics moved to the new `sor/stock-upload-getty-web-batches.md` (5,926 bytes), invariant I-82 restated for parts, archive plan §12.
 - `npx tsc --noEmit` clean; `npx eslint src tests tools` 0 errors; `npm run quality:changed` GATE PASSED; `npx vitest run` 322 files / 3413 tests passed.
 - `npm run verify`: every lane passed except the native perf budget, which fails in this sandbox on the BASE commit too (synthetic 1000px detect 213.8 ms there vs 221 ms here, budget 200 ms) — this box runs 2 cores under load; nothing in this change touches `detect`.
+
+## 2026-10-30 — Getty web: the upload config travels in the body, not a header
+
+- Second failure on a real 209-icon run: every part died as "the helper dropped the upload (13 MB)". Cause: `x-getty-web-config` was ~186 KB for 25 icons of metadata, past Node's 16 KB header cap — Node answers 431 and resets the socket. Reproduced: 186 KB header → `ECONNRESET`, 7.8 KB → a normal 503. Body size was never the issue.
+- Fix: `[uint32 length][config JSON][files]` in the body (`uploadConfigJson` + `uploadBody`, `splitConfigBody` in the helper), header fallback kept for header-only requests, over-cap bodies drained before the 413, and the client's answer handling split into "no answer" (`gettywebdrop.droppedUpload`), "answered without JSON" (`unreadableAnswer`, names the status) and "old helper" (`legacyUploadAnswer`, restart hint).
+- Files: `gettywebclient.ts` (252 lines), new `gettywebdrop.ts` (63), `tools/bridge/gettyweb/routes.mjs` + `.d.mts`, `tools/bridge/server.mjs` (`readBinaryBody` no longer pauses past the limit).
+- Tests: `bridge_getty_web` (a real 25-icon metadata upload reaches the route, an over-cap body gets a readable 413, `splitConfigBody` round-trip), `getty_web_upload` (config in the body, no header, HTTP status without JSON, legacy restart hint).
+- `npx tsc --noEmit` clean; `npx eslint src tests tools` 0 errors; `npm run quality:changed` GATE PASSED; `npx vitest run` 322 files / 3419 tests passed.

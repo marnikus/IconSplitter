@@ -37,7 +37,33 @@ attempt (`GETTY_WEB_MAX_ATTEMPTS = 2`), never a third.
 them, so they **stop** the run and every icon the run never reached is reported
 failed with that reason. A cancel stops at the next batch boundary.
 
-## 3. What happens inside a batch
+## 3. The loopback body: the config travels with the bytes
+
+`POST /getty-web/upload` carries its config **in the body**, not in a header:
+`[uint32 length][config JSON][staged bytes]`. The config of one request holds its
+icons' title, description and up to 49 keywords — 25 icons is already ~130 KB,
+and as a base64 header Node caps request headers at 16 KB: it answers 431 and
+resets the socket, which a browser reports as a dropped connection ("the helper
+dropped the upload"), not as anything a user can act on. In the body there is no
+such limit, and no credential has to travel in a header at all.
+
+The helper therefore reads the config from the body prefix and falls back to the
+old `x-getty-web-config` header only for a request that has no prefix. A helper
+older than this app build answers the prefix form with "this route drives the
+Getty web upload only"; the app turns that into **restart run_ftp_bridge.bat**
+rather than a mystery failure.
+
+Two rules keep a failed request honest:
+
+- A body over `BRIDGE_FTP_MAX_BYTES` is **drained** before the helper answers 413
+  with the limit in the reason — answering mid-body and closing the socket is
+  what looked like a helper that had vanished.
+- An answer without JSON is reported with its **HTTP status**; only a request
+  that never got an answer, while `/health` still answers, is called a dropped
+  upload, and only one that cannot even be probed says "cannot reach the local
+  helper".
+
+## 4. What happens inside a batch
 
 1. **Plan the parts.** A batch is too much for one loopback body: the helper
    buffers a whole request and refuses more than `BRIDGE_FTP_MAX_BYTES` (120 MB
@@ -79,7 +105,7 @@ A dropped part ends that batch: the icons behind it are queued for the retry
 batch with their attempt unspent, and the batch still counts as completed if any
 of its icons were accepted.
 
-## 4. Helper side
+## 5. Helper side
 
 - `POST /getty-web/upload` takes one part; `newBatch` chooses create-vs-continue,
   `complete` is always false (the run finishes each batch itself).
@@ -91,7 +117,7 @@ of its icons were accepted.
 - `MAX_FILES_PER_ICON = 2`, `MAX_SESSIONS = 2`; staged files live in a temp
   folder deleted on close.
 
-## 5. Tests
+## 6. Tests
 
 `getty_web_chunk` (the 100-upload cap, the request parts, batch names/labels) and
 `stockupload_getty_web` (one batch per chunk, parts created once and continued,

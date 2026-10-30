@@ -10,9 +10,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findBrowser, parseCdpEndpoint, resolveProfileDir } from "../tools/bridge/gettyweb/browser.mjs";
-import { contributeUrlOf, failurePayload, iconsFromBody, iconsFromConfig, mayReleaseSession } from "../tools/bridge/gettyweb/routes.mjs";
+import {
+  contributeUrlOf, failurePayload, iconsFromBody, iconsFromConfig, mayReleaseSession, splitConfigBody,
+} from "../tools/bridge/gettyweb/routes.mjs";
 import { ownFailures, resetBatchState, safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
+import { GETTY_WEB_SUBMISSION_TYPE } from "../src/lib/stockupload/gettyweb";
+import { uploadBridgeGettyWeb } from "../src/lib/stockupload/gettywebclient";
 
 const SERVER = path.resolve("tools/bridge/server.mjs");
 const NO_BROWSER = "/nonexistent/getty-web-browser";
@@ -20,10 +24,10 @@ const NO_BROWSER = "/nonexistent/getty-web-browser";
 interface Helper { url: string; child: ChildProcess; log: string[]; tmp: string }
 const live: Helper[] = [];
 
-async function startHelper(extraArgs: string[] = []): Promise<Helper> {
+async function startHelper(extraArgs: string[] = [], extraEnv: Record<string, string> = {}): Promise<Helper> {
   const tmp = mkdtempSync(path.join(tmpdir(), "getty-web-bridge-test-"));
   const child = spawn(process.execPath, [SERVER, "--port", "0", ...extraArgs], {
-    env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", BRIDGE_TMP: tmp, GETTY_WEB_BROWSER: NO_BROWSER },
+    env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", BRIDGE_TMP: tmp, GETTY_WEB_BROWSER: NO_BROWSER, ...extraEnv },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const log: string[] = [];
@@ -343,5 +347,66 @@ describe("Getty web batch limits in the helper", () => {
     expect(mayReleaseSession({ busy: true })).toBe(false);
     expect(mayReleaseSession({ busy: false })).toBe(true);
     expect(mayReleaseSession(undefined)).toBe(true);
+  });
+});
+
+/** 25 icons of complete metadata: the header form of this is ~180 KB. */
+function fullMetadataIcons(count: number) {
+  return Array.from({ length: count }, (_v, i) => ({
+    metadata: {
+      title: "Icon title ".repeat(18).slice(0, 200),
+      description: "A drawn illustration of the subject. ".repeat(55).slice(0, 2000),
+      keywords: Array.from({ length: 49 }, (_k, k) => `keyword ${k} of the icon`.padEnd(64, " x")),
+    },
+    files: [{ name: `icon_${i}.jpg`, bytes: new Uint8Array([1, 2, 3, 4]) }],
+  }));
+}
+
+describe("Getty web upload transport", () => {
+  it("carries the config in the body, so a full metadata set cannot blow the header limit", async () => {
+    // Node's own header cap is 16 KB; 25 icons of real metadata is ~180 KB of
+    // base64 header, which Node answers with 431 and a socket reset — the
+    // "helper dropped the upload" a big run used to fail with.
+    const helper = await startHelper();
+    const res = await uploadBridgeGettyWeb({
+      bridgeUrl: helper.url, preset: GETTY_WEB_PRESET,
+      creds: { username: "contributor@example.com", password: "GettyPass!42" },
+      icons: fullMetadataIcons(25), batchName: "IconSplitter 2026-10-30 1/3 (25 icons)",
+      submissionType: GETTY_WEB_SUBMISSION_TYPE,
+    });
+    // It reached the route (which answers for the missing browser), so nothing
+    // in the transport refused a request this size.
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.code).toBe("browser");
+  });
+
+  it("answers a body over its cap with a readable 413 instead of a dropped socket", async () => {
+    const helper = await startHelper([], { BRIDGE_FTP_MAX_BYTES: String(64 * 1024) });
+    const res = await uploadBridgeGettyWeb({
+      bridgeUrl: helper.url, preset: GETTY_WEB_PRESET,
+      creds: { username: "contributor@example.com", password: "GettyPass!42" },
+      icons: [{ files: [{ name: "icon_a.jpg", bytes: new Uint8Array(200 * 1024) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.code).toBe("bad-request");
+      expect(res.reason).toMatch(/limit/i);
+      expect(res.reason).not.toContain("cannot reach the local helper");
+    }
+  });
+
+  it("splits a config-carrying body from its files, and refuses a malformed one", () => {
+    const config = Buffer.from(JSON.stringify(gettyConfig()), "utf8");
+    const head = Buffer.alloc(4);
+    head.writeUInt32BE(config.length, 0);
+    const body = Buffer.concat([head, config, Buffer.from([9, 8, 7])]);
+    const split = splitConfigBody(body);
+    expect(split?.cfg).toMatchObject({ protocol: "getty-web" });
+    expect([...split!.bytes]).toEqual([9, 8, 7]);
+    expect(splitConfigBody(Buffer.from([0, 0]))).toBeNull();
+    const lying = Buffer.alloc(8);
+    lying.writeUInt32BE(9999, 0);
+    expect(splitConfigBody(lying)).toBeNull();
   });
 });

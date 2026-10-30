@@ -104,7 +104,9 @@ function readBody(req, limit) {
     let size = 0;
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > limit) { req.pause(); resolve(null); return; }
+      // Keep consuming past the limit: the 413 can then be a real answer instead
+      // of a reset socket the browser reports as a dropped connection.
+      if (size > limit) { chunks.length = 0; return; }
       chunks.push(chunk);
     });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));

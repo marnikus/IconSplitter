@@ -82,11 +82,50 @@ function cleanPath(dir) {
 function parseConfig(header) {
   if (typeof header !== "string" || header === "") return null;
   try {
-    const parsed = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
+    return configOf(Buffer.from(header, "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function configOf(text) {
+  try {
+    const parsed = JSON.parse(text);
     return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
+}
+
+// A batch's config carries 25 icons of title/description/49 keywords: as a
+// request header that is ~180 KB, past Node's 16 KB header cap (431 + a reset
+// socket, which the browser reports as a dropped connection). So the upload's
+// config travels **in the body**: [uint32 length][JSON][staged bytes].
+const CONFIG_LENGTH_BYTES = 4;
+
+/** Splits a config-carrying body; null when it does not hold one. */
+export function splitConfigBody(body) {
+  if (!Buffer.isBuffer(body) || body.length < CONFIG_LENGTH_BYTES) return null;
+  const size = body.readUInt32BE(0);
+  if (size <= 0 || CONFIG_LENGTH_BYTES + size > body.length) return null;
+  const cfg = configOf(body.subarray(CONFIG_LENGTH_BYTES, CONFIG_LENGTH_BYTES + size).toString("utf8"));
+  if (cfg === null) return null;
+  return { cfg, bytes: body.subarray(CONFIG_LENGTH_BYTES + size) };
+}
+
+/** Reads and discards the rest of a body so the answer can be a real response. */
+function drain(req) {
+  return new Promise((resolve) => {
+    if (typeof req.resume !== "function") { resolve(); return; }
+    req.on("end", resolve);
+    req.on("error", resolve);
+    req.on("data", () => undefined);
+    req.resume();
+  });
+}
+
+function megabytes(bytes) {
+  return `${Math.max(1, Math.round(Number(bytes ?? 0) / (1024 * 1024)))} MB`;
 }
 
 function validConfig(cfg) {
@@ -241,16 +280,23 @@ export function failurePayload(result, cfg) {
  * upload byte cap. Returns the bytes written, like the other bridge routes.
  */
 export async function handleGettyWebUpload(req, res, post, json, limit) {
-  const cfg = parseConfig(req.headers["x-getty-web-config"]);
-  const invalid = validConfig(cfg);
-  if (invalid !== null) return json(res, 400, { ok: false, code: "bad-request", reason: invalid });
+  const tooLarge = {
+    ok: false, code: "bad-request",
+    reason: `this upload is over the helper's request limit (${megabytes(limit)}) — the batch is sent in parts, so retry; raise BRIDGE_FTP_MAX_BYTES if it repeats`,
+  };
   if (Number(req.headers["content-length"] ?? 0) > limit) {
-    res.setHeader("connection", "close");
-    return json(res, 413, { ok: false, code: "bad-request", reason: `the staged files exceed the helper's limit (${limit} bytes)` });
+    // Drain first: answering mid-body and closing is a dropped socket in the
+    // browser, which reads as "the helper is gone" instead of this reason.
+    await drain(req);
+    return json(res, 413, tooLarge);
   }
   const body = await post(req, limit);
-  if (body === null) return json(res, 413, { ok: false, code: "bad-request", reason: "the request body was too large" });
-  const icons = iconsFromBody(body, cfg);
+  if (body === null) return json(res, 413, tooLarge);
+  const inline = splitConfigBody(body);
+  const cfg = parseConfig(req.headers["x-getty-web-config"]) ?? inline?.cfg ?? null;
+  const invalid = validConfig(cfg);
+  if (invalid !== null) return json(res, 400, { ok: false, code: "bad-request", reason: invalid });
+  const icons = iconsFromBody(inline?.bytes ?? body, cfg);
   if (!icons) return json(res, 400, { ok: false, code: "bad-request", reason: "the upload must contain a JPEG (and optional matching EPS) per icon" });
   const url = contributeUrlOf(cfg);
   try {

@@ -5,6 +5,7 @@
 import { isRecord } from "../isrecord";
 import { DEFAULT_FTP_BRIDGE_URL, BRIDGE_FIX_HINT } from "./bridgeclient";
 import type { FtpCredentials } from "./credvault";
+import { droppedUpload, legacyUploadAnswer, stagedBytes, unreadableAnswer } from "./gettywebdrop";
 import { parseFailure, parseSuccess } from "./gettywebparse";
 import type { StockFtpPreset } from "./types";
 
@@ -103,9 +104,9 @@ function encodeBase64Utf8(text: string): string {
   return btoa(bin);
 }
 
-/** The loopback header: preset shape + credentials + staged file sizes. */
-function uploadConfig(input: GettyWebUploadInput): string {
-  return encodeBase64Utf8(JSON.stringify({
+/** The upload's config: preset shape + credentials + staged file sizes. */
+function uploadConfigJson(input: GettyWebUploadInput): string {
+  return JSON.stringify({
     ...input.preset,
     username: input.creds.username,
     password: input.creds.password,
@@ -118,62 +119,44 @@ function uploadConfig(input: GettyWebUploadInput): string {
       metadata: icon.metadata ?? null,
       files: icon.files.map((file) => ({ name: file.name, bytes: file.bytes.byteLength })),
     })),
-  }));
-}
-
-/** Every staged byte of every icon, in the order the config lists them. */
-function uploadBody(input: GettyWebUploadInput): Blob {
-  return new Blob(input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart)));
+  });
 }
 
 /**
- * Is the helper listening at all? A body it threw away is **not** a missing
- * helper, and saying so sends the user hunting a bridge that is running.
+ * `[uint32 config length][config JSON][staged bytes]`. The config carries 25
+ * icons of title/description/49 keywords — ~180 KB, past Node's 16 KB header cap
+ * (431 and a reset socket, which reads as "the helper is gone"). In the body it
+ * has no limit worth naming, and no credential travels in a header.
  */
-async function helperAnswers(bridgeUrl: string, fetchImpl: typeof fetch): Promise<boolean> {
-  try {
-    const res = await fetchImpl(`${trimSlash(bridgeUrl)}/health`);
-    return res.ok === true;
-  } catch {
-    return false;
-  }
-}
-
-function megabytes(bytes: number): string {
-  return `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB`;
-}
-
-/** The exact bytes this request would put on the loopback socket. */
-function stagedBytes(input: GettyWebUploadInput): number {
-  return input.icons.reduce(
-    (total, icon) => total + icon.files.reduce((sum, file) => sum + file.bytes.byteLength, 0), 0,
-  );
+function uploadBody(input: GettyWebUploadInput): Blob {
+  const config = new TextEncoder().encode(uploadConfigJson(input));
+  const head = new Uint8Array(4);
+  new DataView(head.buffer).setUint32(0, config.byteLength, false);
+  const files = input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart));
+  return new Blob([head, config, ...files]);
 }
 
 /** Sends every icon of one batch (JPEG + optional EPS each) to the Getty page. */
 export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<GettyWebResult> {
   const fetchFn = input.fetchImpl ?? globalThis.fetch;
+  let res: Response;
   try {
-    const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/getty-web/upload`, {
+    res = await fetchFn(`${trimSlash(input.bridgeUrl)}/getty-web/upload`, {
       method: "POST",
-      headers: { "content-type": "application/octet-stream", "x-getty-web-config": uploadConfig(input) },
+      headers: { "content-type": "application/octet-stream" },
       body: uploadBody(input),
       signal: input.signal,
     });
-    const body: unknown = await res.json();
-    if (res.ok) return parseSuccess(body, input.icons.flatMap((icon) => icon.files.map((file) => file.name)));
-    return parseFailure(body, input.creds, res.status);
   } catch (err) {
     if ((err as Error)?.name === "AbortError") return { ok: false, code: "cancelled", reason: "upload cancelled" };
-    // The helper dropped the body: it is running, so name the transfer, not the bridge.
-    if (await helperAnswers(input.bridgeUrl, fetchFn)) {
-      return {
-        ok: false, code: "network",
-        reason: `the helper dropped the upload (${megabytes(stagedBytes(input))}) before it answered — retry; if it repeats, that body is larger than this helper takes (BRIDGE_FTP_MAX_BYTES)`,
-      };
-    }
-    return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${BRIDGE_FIX_HINT}` };
+    return droppedUpload(trimSlash(input.bridgeUrl), fetchFn, stagedBytes(input));
   }
+  const body: unknown = await res.text().then((text) => {
+    try { return JSON.parse(text) as unknown; } catch { return null; }
+  });
+  if (body === null) return unreadableAnswer(res.status, stagedBytes(input));
+  if (res.ok) return parseSuccess(body, input.icons.flatMap((icon) => icon.files.map((file) => file.name)));
+  return legacyUploadAnswer(parseFailure(body, input.creds, res.status));
 }
 
 /** Signs the helper's browser in without creating a batch or sending files. */

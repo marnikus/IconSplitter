@@ -105,9 +105,11 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   never 200 icons; `GETTY_WEB_MAX_BATCH_ICONS` and the helper's `MAX_ICONS` must
   agree and the pair is never split across batches **or across requests**. One
   batch crosses the loopback in **parts** (`planGettyWebRequests`: at most 24 MB
-  and 25 icons each, by the plan's own estimates): the first part creates the
-  batch (`newBatch: true`), every later one continues it, and a part that is
-  dropped ends the batch with its icons' attempt unspent. Each batch is
+  and 25 icons each, by the plan's own estimates), and each part carries its
+  config **in the body** (`[uint32 length][JSON][files]`), never in a request
+  header — a header would hit Node's 16 KB cap and reset the socket: the first
+  part creates the batch (`newBatch: true`), every later one continues it, and a
+  part that is dropped ends the batch with its icons' attempt unspent. Each batch is
   **completed before the next is created**; a refused finish leaves its batch
   open and claims nothing. An icon with no thumbnail or "Upload failed" is
   **re-queued, not reported**, for at most two attempts: queued icons fill a

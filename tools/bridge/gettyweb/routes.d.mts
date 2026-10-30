@@ -8,6 +8,8 @@ export function handleGettyWebFinish(req: any, res: any, post: any, json: any): 
 export function handleGettyWebClose(req: any, res: any, post: any, json: any): Promise<any>;
 export function handleGettyWebProgress(req: any, res: any, json: any): any;
 export function sanitizeMetadata(raw: unknown): { title: string; description: string; keywords: string[] } | null;
+/** A body that carries its own config: [uint32 length][JSON][files]. */
+export function splitConfigBody(body: any): { cfg: any; bytes: any } | null;
 export function mayReleaseSession(entry: any): boolean;
 export function failurePayload(result: any, config: any): {
   ok: boolean; code: string; reason: string; state: any;
