@@ -205,9 +205,12 @@ describe("Getty web upload in the batch runner", () => {
     };
     // Off: the list order, first icon first.
     expect((await send(false))[0]).toEqual(["star_01.jpg", "star_01.eps"]);
-    // On: a shuffle of the whole selection decides who goes into batch 1.
+    // On: a shuffle of the whole selection decides who goes into batch 1. A batch
+    // of one icon has nothing to sort, so it carries the first rank.
     const shuffled = await send(true, () => 0);
-    expect(shuffled).toEqual([["moon_02.jpg", "moon_02.eps"], ["star_01.jpg", "star_01.eps"]]);
+    expect(shuffled).toEqual([
+      ["0001-moon_02.jpg", "0001-moon_02.eps"], ["0001-star_01.jpg", "0001-star_01.eps"],
+    ]);
   });
 
   it("also mixes the icons inside a random batch, not just between batches", async () => {
@@ -248,9 +251,11 @@ describe("Getty web upload in the batch runner", () => {
       "star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps", "sun_03.jpg", "sun_03.eps",
     ]]);
     // On: one draw picks the members ([b, c, a]), the next draw mixes them inside
-    // the batch ([c, a, b]) — never the drawn order itself.
+    // the batch ([c, a, b]) — never the drawn order itself — and each icon leaves
+    // with a rank in front of its name so the page's own sort cannot undo it.
     expect(await send(true, () => 0)).toEqual([[
-      "sun_03.jpg", "sun_03.eps", "star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps",
+      "0003-sun_03.jpg", "0003-sun_03.eps", "0001-star_01.jpg", "0001-star_01.eps",
+      "0002-moon_02.jpg", "0002-moon_02.eps",
     ]]);
   });
 
@@ -264,7 +269,7 @@ describe("Getty web upload in the batch runner", () => {
     addExported(root, "icon-4", "d", "wheel_02", { jpg: true, eps: true });
     const found = await discoverExportedItems(root);
     const sent: string[][] = [];
-    await executeStockUploadBatch(planFor(found.items), {
+    const summary = await executeStockUploadBatch(planFor(found.items), {
       root,
       bridgeUrl: "http://127.0.0.1:47391",
       signal: new AbortController().signal,
@@ -285,8 +290,19 @@ describe("Getty web upload in the batch runner", () => {
       }),
       closeGettyWebFn: async () => undefined,
     });
-    // Same four icons, but no two sizes of one picture side by side.
-    expect(sent[0]).toEqual(["wheel_01.jpg", "snow_01.jpg", "wheel_02.jpg", "snow_02.jpg"]);
+    // Getty lists a batch by file name, so the batch travels ranked: sorted by
+    // name it is the spread order, and no two sizes of one picture are neighbours.
+    expect(sent[0]).toEqual([
+      "0004-wheel_01.jpg", "0001-snow_01.jpg", "0002-wheel_02.jpg", "0003-snow_02.jpg",
+    ]);
+    const byName = [...sent[0]].sort();
+    expect(byName).toEqual([
+      "0001-snow_01.jpg", "0002-wheel_02.jpg", "0003-snow_02.jpg", "0004-wheel_01.jpg",
+    ]);
+    // Getty's answer names the staged files; every icon is still read by its own
+    // real name, so nothing is reported as "never listed".
+    expect(summary.uploadedFiles).toBe(8);
+    expect(summary.lastError).toBeNull();
   });
 
   it("keeps the bar's total across batches instead of restarting at every 100 icons", async () => {

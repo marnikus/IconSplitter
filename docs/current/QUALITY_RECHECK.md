@@ -4382,3 +4382,17 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 - Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
   PASSED; `verify:fast` ALL LANES PASSED; focused 3 files / 49 tests green;
   docs 4/4 (soR 8,996 B).
+- 2026-10-30 — A random batch is uploaded under **shuffled names**, because Getty
+  orders the batch page by file name: `stagedRanks` deals a request's names with
+  `randomBatchOrder` + `spreadSimilar`, `stagedFileName` puts the rank in front
+  (`0007-icon-snowflake_2_01.jpg`), so the site's own sort cannot put two sizes of
+  one picture side by side. `withRealNames` maps the answer back to the real names
+  before an icon's fate is settled, so a ranked card is never read as "never
+  listed". With `Random batches` off the names go out untouched.
+  New tests: `getty_web_names` (rank format, one rank per icon, spread, a batch of
+  one picture, the answer restored on both branches) and `stockupload_getty_web`
+  (ranked names on the wire, `0001-…` for a one-icon batch, 8 files uploaded).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED (`gettywebnames.ts` 10 fns / 64 lines, `gettywebtransfer.ts` 31 fns /
+  296 lines); `verify:fast` ALL LANES PASSED; focused 3 files / 51 tests green;
+  docs tests 4/4 (soR 8,986 B).

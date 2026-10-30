@@ -24,12 +24,12 @@ browser.
    one batch, 101 icons two. A batch also ends early at the request
    budget: `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) capped at 64 MB,
    or 16 MB for a helper reporting none. A batch name is
-   date, place and size — `2026-10-30 2/3 (100 icons)` — no product
-   name. The opt-in `Random batches` (`stock-random-batches`, persisted) draws
-   each batch from the icons not yet sent: `randomBatchOrder` shuffles the indexes
-   once, so every icon still goes once and the last batch holds the rest, and each
-   batch is mixed inside itself with two sizes of one picture pushed apart
-   (`spreadSimilar`), so similar stems do not go up side by side.
+   date, place and size — `2026-10-30 2/3 (100 icons)`. The opt-in `Random batches` (`stock-random-batches`, persisted) draws
+   each batch from the icons not yet sent (`randomBatchOrder`: every icon once, the
+   rest last), mixes it with two sizes of one picture pushed apart (`spreadSimilar`),
+   and — Getty lists a batch by **name**, not request order — uploads each icon under
+   a shuffled rank in front of its real name (`0007-icon-snowflake_2_01`,
+   `stagedRanks`), which `withRealNames` maps back before any answer is read.
 4. `/getty-web/upload` runs **once per batch** with `newBatch: true`: the helper
    stages that chunk, signs in once per run, returns to the contributor page,
    creates the batch (`session.startBatch` resets its id, names and counts)
@@ -37,31 +37,30 @@ browser.
    dialog blocks it, so dialogs are dismissed first. The per-icon manifest is the
    **body's tail** (`manifestBytes` in the header), never a header: Node answers
    431 above 16 KB, before any route runs (I-83).
-5. An oversized body is drained and answered 413; a request never answered, or
-   refused as too large (`too-large`), is retried **in halves** (twice, logged),
-   since it carried nothing. **If nothing new appears for 30 s** the page is
+5. An oversized body is drained and answered 413; a request never answered or
+   refused `too-large` is retried **in halves** (twice, logged) — it carried nothing. **If nothing new appears for 30 s** the page is
    reloaded and the missing files re-attached; a timed-out read, or a card with no
-   **picture** for that window, is the same stall (twice per batch, then it fails). It waits until every file is listed, then for
-   each card's picture or `pending-icon` chip — a thumbnail
-   arms the metadata step; the chip needs a save. `invalid-file-media` ("Upload failed") is a rejection
+   **picture** for that window, is the same stall (twice per batch, then it fails).
+   It waits until every file is listed, then for each card's picture or
+   `pending-icon` chip — a thumbnail arms the metadata step; the chip needs a save. `invalid-file-media` ("Upload failed") is a rejection
    named with Getty's id. `GET /getty-web/progress` (1 s) counts **arrivals**, so
    the bar says "uploaded", never "complete".
 6. **Metadata:** per contribution it selects the card by stem (twice if Getty
    drops the click), types title and description and writes **today's date** into
    Date Created as Getty renders it (`MM/DD/YYYY 00:00:00 +0000`). Prefilled prose
-   stays, the date is replaced, but **tags are never touched** (the keyword field
-   only gets Enter). Every drawer saved, it selects **all** cards and presses
+   stays, the date is replaced, **tags are never touched** (the keyword field only
+   gets Enter). Every drawer saved, it selects **all** cards and presses
    **Save metadata** (`bulkSave`). A `metadata-skeleton` drawer, or
    one that never unlocks, reloads the page at once and walks again from the
    **first** file (once), skipping picture-less cards.
    **Then it verifies:** every card must show `pending-icon` /
-   `aria-label="Ready to submit"`, and the bar climbs with them. A card
+   `aria-label="Ready to submit"`, the bar climbs with them. A card
    still showing `not-ready-icon` follows a 30 s ladder: **Save metadata again**,
    then **reload and save again** (twice each — a fresh load turns these cards),
    then **re-upload the file from its staged copy** (`reattachFiles`); every step
    re-reads the chips, and a batch always gets its own reloads before it is given
    up. An unvalidated file is named (`timeout`); verifying counts **chips**, so
-   100 % is submittable. `readiness`: `ok`, `notReady`, `resaves`, `repairs`.
+   100 % is submittable.
 7. **Complete each batch, then start the next:** after its last card carries
    "Ready to submit" the run posts `/getty-web/finish` **for that batch only**. It
    refuses, naming what is wrong, while one of *that* batch's contributions is
@@ -75,10 +74,9 @@ browser.
    (`GETTY_WEB_MAX_ATTEMPTS = 2`). Queued icons fill a later batch's room, so a
    250-icon run carries them in batch 3; the rest becomes the final
    `… retry 1/1 (7 icons)` batch, and only a terminal outcome reaches the row.
-   A dead browser, session or helper stops the run; unreached icons fail with
-   that reason.
+   A dead browser, session or helper stops the run; unreached icons fail with it.
 9. `/getty-web/close` releases the browser, deletes staged files; an idle
-    session closes after 5 min, but one **with a request in flight is never swept**
+    session closes after 5 min, one **with a request in flight is never swept**
     (`mayReleaseSession`).
 
 ## 3. Browser, profile and self-check
@@ -94,8 +92,8 @@ browser.
   attaches to `--remote-debugging-port=9222`. `GETTY_WEB_BROWSER` overrides it; `GETTY_WEB_UPLOAD_TIMEOUT_MS` (180 s),
   `GETTY_WEB_READY_TIMEOUT_MS` (300 s) bound waits
 
-**One profile, one browser, freed by the helper.** A browser answering on the
-folder's port is attached to; a locked folder without one is freed by ending its
+**One profile, one browser, freed by the helper.** A browser on the folder's port is
+attached to; a locked folder without one is freed by ending its
 browsers, clearing locks, relaunching.
 
 ## 4. What is sent
@@ -142,5 +140,5 @@ an unvalidated file), `cancelled` 499, `page` 502; no credentials in a reason.
   reset, kept window), `getty_web_batch` (dialog, uploader), `getty_web_upload`
   (sizes, split codes), `getty_web_cdp`, `bridge_getty_web` (routes, 413, cap),
   `getty_web_finalize` (metadata, skeleton restart, re-save, re-upload, complete),
-  `stockupload_getty_web` (grouping, chunking, random order, spread, split retry,
-  folding, cancel).
+  `getty_web_names` (ranks), `stockupload_getty_web` (grouping, chunking, draws,
+  spread, names, split retry, cancel).

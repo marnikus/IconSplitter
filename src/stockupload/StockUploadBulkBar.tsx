@@ -118,7 +118,7 @@ function CombinedTitleOption({ g }: { g: StockUploadApi }) {
 function RandomBatchesOption({ g }: { g: StockUploadApi }) {
   return (
     <label className="svg-chip" style={{ cursor: "pointer" }}
-      title="Getty web takes 100 icons per batch: draw each batch at random from the remaining icons and mix the files inside the batch, so similar icons are not uploaded side by side">
+      title="Getty web takes 100 icons per batch: draw each batch at random from the remaining icons, mix the files inside it, and upload each under a shuffled number in front of its name (0001-icon-snowflake.jpg) so the site's own name sort cannot put similar icons side by side">
       <input type="checkbox" data-testid="stock-random-batches"
         checked={g.model.prefs.randomBatches}
         onChange={(e) => g.setPrefs({ randomBatches: e.target.checked })} />
