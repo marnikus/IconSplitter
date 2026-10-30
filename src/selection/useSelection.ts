@@ -4,15 +4,17 @@
 // store above the tabs, so a restart and an undo pressed on another tab can see
 // it; each decision stays in the pair's OWN file, which is its source of truth.
 
+import { startCompletionSound, withCompletionSound } from "../ui/completionSound";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { applyFilters, filterLabel, type Decision, type ListFilter } from "../lib/reviewfilter";
+import { applyFilters, filterLabel, type Decision, type ListFilter, type ViewPair } from "../lib/reviewfilter";
 import { sortLabel, sortPairs, type SortState } from "../lib/reviewsort";
 import { bulkMessage } from "../lib/reviewbulk";
 import type { ReviewRecord } from "../lib/reviewfile";
 import type { DirHandleLike } from "../lib/fs";
 import { fsSupported } from "../batch/picker";
+import { useSortChecks } from "../state/useSortChecks";
 import { useAppView } from "../state/useAppState";
-import { useHistory, type HistoryApi } from "../state/HistoryProvider";
+import { useHistoryActions, type HistoryActions } from "../state/HistoryProvider";
 import { getAppState, patchView } from "../state/appstore";
 import { SCAN_IDLE } from "../lib/scanseq";
 import { bindDecisionApplier, type DecisionPatch } from "./offline";
@@ -29,7 +31,7 @@ const ACTION_WORD: Record<Decision, string> = { pending: "Reset", approved: "App
 
 /** View toggles `patch()` may carry; the rest of SelState stays local. */
 const VIEW_TOGGLES: Record<string, string> = {
-  collapsed: "Sidebar", zoom: "Detail zoom", sync: "Sync selection", autoNext: "Auto-advance",
+  zoom: "Detail zoom", sync: "Sync selection", autoNext: "Auto-advance",
 };
 
 import { boot, chooseRoot, rescan, type Ctx, type Setter } from "./rootsource";
@@ -37,43 +39,64 @@ import { boot, chooseRoot, rescan, type Ctx, type Setter } from "./rootsource";
 export function useSelection() {
   const view = useAppView();
   const [core, setCore] = useState(initialSelState);
-  const hist = useHistory();
+  const hist = useHistoryActions();
   const ctx = useCtx(useMerged(core, view), hist);
   useEffect(() => { void boot(ctx, setCore); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useToastClear(ctx.state.current.toast, setCore);
   useDecisionApplier(ctx, setCore);
   const s = ctx.state.current;
-  const visible = useMemo(() => sortPairs(applyFilters(s.pairs, s.filter), s.sort), [s.pairs, s.filter, s.sort]);
+  const visible = useVisiblePairs(s);
   const say = useCallback((msg: string, err = false) => setCore((p) => ({ ...p, toast: { msg, err } })), []);
-  return {
-    s, visible, say, supported: fsSupported(), rootRef: ctx.root,
-    chooseRoot: useCallback(() => chooseRoot(ctx, setCore, say), [ctx, say]),
-    rescan: useCallback(() => rescan(ctx, setCore, say), [ctx, say]),
-    decide: useCallback((id: string, d: Decision) => decide(ctx, setCore, id, d), [ctx]),
-    decideBulk: useCallback((ids: string[], d: Decision) => decideBulk(ctx, setCore, ids, d), [ctx]),
-    resetBulk: useCallback((ids: string[]) => resetBulk(ctx, setCore, ids), [ctx]),
-    retryWrite: useCallback(() => retryWrite(ctx, setCore), [ctx]),
-    select: useCallback((id: string) => selectRow(ctx, id), [ctx]),
-    setFilter: useCallback((f: ListFilter, gesture = false) => editView(ctx, { patch: { filter: f }, label: filterLabel(f), id: "filter", gesture }), [ctx]),
-    setSort: useCallback((so: SortState) => editView(ctx, { patch: { sort: so }, label: sortLabel(so), id: "sort", gesture: false }), [ctx]),
-    patch: useCallback((part: Partial<SelState>) => patchState(ctx, setCore, part), [ctx]),
-  };
+  const actions = useSelectionActions(ctx, setCore, say);
+  const supported = fsSupported();
+  return useMemo(() => ({
+    s, visible, say, supported, rootRef: ctx.root, ...actions,
+  }), [s, visible, say, supported, ctx.root, actions]);
+}
+
+/** Stable action identities: consumers memoize on this bag (D7). */
+function useSelectionActions(ctx: Ctx, setCore: Setter, say: (m: string, e?: boolean) => void) {
+  const onChooseRoot = useCallback(() => chooseRoot(ctx, setCore, say), [ctx, say, setCore]);
+  const onRescan = useCallback(() => rescan(ctx, setCore, say, true), [ctx, say, setCore]);
+  const onDecide = useCallback((id: string, d: Decision) => decide(ctx, setCore, id, d), [ctx, setCore]);
+  const onDecideBulk = useCallback((ids: string[], d: Decision) => decideBulk(ctx, setCore, ids, d), [ctx, setCore]);
+  const onResetBulk = useCallback((ids: string[]) => resetBulk(ctx, setCore, ids), [ctx, setCore]);
+  const onRetryWrite = useCallback(() => retryWrite(ctx, setCore), [ctx, setCore]);
+  const onSelect = useCallback((id: string) => selectRow(ctx, id), [ctx]);
+  const onSetFilter = useCallback((f: ListFilter, gesture = false) => editView(ctx, { patch: { filter: f }, label: filterLabel(f), id: "filter", gesture }), [ctx]);
+  const onSetSort = useCallback((so: SortState) => editView(ctx, { patch: { sort: so }, label: sortLabel(so), id: "sort", gesture: false }), [ctx]);
+  const onPatch = useCallback((part: Partial<SelState>) => patchState(ctx, setCore, part), [ctx, setCore]);
+  return useMemo(() => ({
+    chooseRoot: onChooseRoot, rescan: onRescan, decide: onDecide, decideBulk: onDecideBulk,
+    resetBulk: onResetBulk, retryWrite: onRetryWrite, select: onSelect,
+    setFilter: onSetFilter, setSort: onSetSort, patch: onPatch,
+  }), [onChooseRoot, onRescan, onDecide, onDecideBulk, onResetBulk, onRetryWrite, onSelect, onSetFilter, onSetSort, onPatch]);
+}
+
+function useVisiblePairs(s: SelState): ViewPair[] {
+  const checked = useSortChecks("v2", s.sort.by === "selected");
+  return useMemo(() => sortPairs(applyFilters(s.pairs, s.filter), s.sort, checked), [s.pairs, s.filter, s.sort, checked]);
 }
 
 function useMerged(core: SelState, view: ReturnType<typeof useAppView>): SelState {
   return useMemo(() => ({ ...core, ...view }), [core, view]);
 }
 
-function useCtx(s: SelState, hist: HistoryApi): Ctx {
+/** One identity for the whole panel: every action depends on `ctx`, so a fresh
+ *  object per render rebound every callback and every effect that consumed it. */
+function useCtx(s: SelState, hist: HistoryActions): Ctx {
   const stateRef = useRef(s);
   stateRef.current = s; // render-mirror for async callbacks (RULE 24)
-  return { root: useRef(null), state: stateRef, hist, seq: useRef(SCAN_IDLE) };
+  const root = useRef(null);
+  const seq = useRef(SCAN_IDLE);
+  return useMemo(() => ({ root, state: stateRef, hist, seq }), [hist]);
 }
 
 function decide(ctx: Ctx, setS: Setter, id: string, d: Decision): void {
   const before = ctx.state.current;
   const merged = withDecision(before, id, d, new Date().toISOString());
-  const rolled = merged.autoNext ? nextPendingId(merged.pairs, id) : null;
+  const visible = sortPairs(applyFilters(before.pairs, before.filter), before.sort, getAppState().v2.checked);
+  const rolled = merged.autoNext ? nextPendingId(visible, id) : null;
   const next = rolled ? { ...merged, selectedId: rolled } : merged;
   setS(next);
   if (rolled) patchView({ selectedId: rolled });
@@ -173,9 +196,11 @@ function nothingApplied(setS: Setter, out: BulkOut, d: Decision): void {
 }
 
 async function reportBulk(ctx: Ctx, setS: Setter, out: BulkOut, d: Decision): Promise<void> {
+  const finish = startCompletionSound();
   const saved = await persist(ctx, setS, out.state, out.applied);
   const msg = bulkMessage({ decision: d, applied: out.applied.length, skipped: out.skipped.length, saved });
   setS((p) => ({ ...p, toast: { msg, err: !saved } }));
+  finish();
 }
 
 /**
@@ -234,7 +259,9 @@ async function writeChanged(root: DirHandleLike, s: SelState, changed: readonly 
 /** Retry rewrites exactly the pairs whose file failed, never the whole tree. */
 async function retryWrite(ctx: Ctx, setS: Setter): Promise<void> {
   const ids = ctx.state.current.retryIds;
-  await persist(ctx, setS, ctx.state.current, ids.length > 0 ? ids : ctx.state.current.pairs.map((p) => p.pairId));
+  await withCompletionSound(async () => {
+    await persist(ctx, setS, ctx.state.current, ids.length > 0 ? ids : ctx.state.current.pairs.map((p) => p.pairId));
+  });
 }
 
 function useToastClear(toast: SelState["toast"], setS: Setter): void {

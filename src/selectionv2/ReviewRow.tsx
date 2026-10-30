@@ -4,26 +4,35 @@
 // the active-row target (`aria-current`) and stays visually distinct from a
 // merely checked row.
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useState } from "react";
+import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
 import { attentionInfo } from "../lib/pairing";
 import type { Decision, ViewPair } from "../lib/reviewfilter";
 import { statusInfo } from "../lib/reviewmeta";
 import { fmtBytes, fmtDate, fmtFormat, fmtTime } from "../selection/fmt";
+import { isRowGestureClick } from "../ui/rowgesture";
 import ThumbPair, { type Dims } from "./ThumbPair";
-import type { ReviewListProps } from "./ReviewList";
+import type { ReviewPresentation } from "./ReviewList";
 
-export default function ReviewRow({ row, p }: { row: ViewPair; p: ReviewListProps }) {
-  const active = row.pairId === p.activeId;
-  const checked = p.checked.includes(row.pairId);
-  const [dims, setDims] = useState<Dims | null>(null);
-  const ref = useActiveScroll(active);
+function ReviewRow({ row, p, register }: { row: ViewPair; p: ReviewPresentation; register: RegisterCheckedRow }) {
+  const ref = useRowBinding(row.pairId, register);
   return (
-    <div ref={ref} role="listitem" data-testid={`v2-row-${row.pairId}`} tabIndex={active ? 0 : -1}
-      aria-current={active ? "true" : undefined} className={rowClass(row.decision, active, checked)}
-      onClick={(e) => p.onRowClick(row.pairId, { shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey })}>
-      <input type="checkbox" className="v2-check" data-testid={`v2-check-${row.pairId}`} checked={checked}
+    <div ref={ref} role="listitem" data-testid={`v2-row-${row.pairId}`} tabIndex={-1} className={rowClass(row.decision)}
+      onClick={(e) => { if (isRowGestureClick(e)) p.onRowClick(row.pairId, e); }}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); p.onRowClick(row.pairId, { shiftKey: false, ctrlKey: false, altKey: false, metaKey: false }); } }}>
+      <input type="checkbox" className="v2-check" data-testid={`v2-check-${row.pairId}`}
         aria-label={`Select ${row.base}`} title="Ctrl+click a row to add it, Shift+click to select a range"
         onClick={(e) => e.stopPropagation()} onChange={() => p.toggleCheck(row.pairId)} />
+      <RowContent row={row} p={p} />
+    </div>
+  );
+}
+
+export default memo(ReviewRow);
+
+const RowContent = memo(function RowContent({ row, p }: { row: ViewPair; p: ReviewPresentation }) {
+  const [dims, setDims] = useState<Dims | null>(null);
+  return <>
       <ThumbPair row={row} maxH={p.thumb} thumbFor={p.thumbFor} onDims={setDims} />
       <FileCell row={row} />
       <div className="v2-cell" data-testid={`v2-created-${row.pairId}`}>{fmtDate(row.created)}<small>{fmtTime(row.created)} local</small></div>
@@ -36,22 +45,13 @@ export default function ReviewRow({ row, p }: { row: ViewPair; p: ReviewListProp
         <button type="button" className="v2-btn tiny success" data-testid={`v2-approve-row-${row.pairId}`}
           onClick={() => p.decide(row.pairId, "approved")}>✓ Approve</button>
       </div>
-    </div>
-  );
+  </>;
+});
+
+function rowClass(decision: Decision): string {
+  return `v2-row ${decision}`;
 }
 
-function rowClass(decision: Decision, active: boolean, checked: boolean): string {
-  return `v2-row ${decision}${active ? " active" : ""}${checked ? " selected" : ""}`;
-}
-
-/** Keeps the active row in view while arrow keys walk the list (spec V2 §7). */
-function useActiveScroll(active: boolean) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (active) ref.current?.scrollIntoView?.({ block: "nearest" });
-  }, [active]);
-  return ref;
-}
 
 function FileCell({ row }: { row: ViewPair }) {
   const name = (row.source ?? row.ai)?.relPath.split("/").pop() ?? row.base;

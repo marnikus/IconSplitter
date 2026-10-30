@@ -1,0 +1,481 @@
+{
+  "date": "2026-10-22",
+  "referenceCommit": "ecc5ffad93d912c21d760c9308c8ef336a7c3710",
+  "sourceTree": "baf04095ddd8a7d2670d7dbad37648fae72d1379",
+  "baselineNormalization": "Original runner/config/setup/tests; native maxWorkers 4 -> 1 only. Same source/toolchain/machine; six sequential gates. Config/setup absolute paths rebased for ignored replay. Static type/lint lanes also see new regression files in both architectures.",
+  "baseline": {
+    "schema": 1,
+    "label": "original six-gate architecture and original tests; native serial calibration",
+    "command": [
+      "node",
+      "/home/user/harness-bench/reference-verify.mjs",
+      "--full",
+      "--base",
+      "ecc5ffa"
+    ],
+    "environment": {
+      "node": "v22.22.3",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 2,
+      "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+      "memoryBytes": 4131278848,
+      "kernel": "6.1.158+",
+      "host": "e2b.local"
+    },
+    "seconds": 254.946340851,
+    "exitCode": 0,
+    "signal": null
+  },
+  "warmCandidates": [
+    {
+      "schema": 1,
+      "label": "redesigned final six-gate verification; warm caches; repeat 1",
+      "command": [
+        "npm",
+        "run",
+        "verify",
+        "--",
+        "--base",
+        "ecc5ffa"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 80.30608379099999,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "schema": 1,
+      "label": "redesigned final six-gate verification; warm caches; repeat 2",
+      "command": [
+        "npm",
+        "run",
+        "verify",
+        "--",
+        "--base",
+        "ecc5ffa"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 79.478741579,
+      "exitCode": 0,
+      "signal": null
+    }
+  ],
+  "coldCandidate": {
+    "schema": 1,
+    "label": "redesigned final six-gate verification; static and transform caches bypassed",
+    "command": [
+      "npm",
+      "run",
+      "verify",
+      "--",
+      "--cold",
+      "--base",
+      "ecc5ffa"
+    ],
+    "environment": {
+      "node": "v22.22.3",
+      "platform": "linux",
+      "arch": "x64",
+      "cpus": 2,
+      "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+      "memoryBytes": 4131278848,
+      "kernel": "6.1.158+",
+      "host": "e2b.local"
+    },
+    "seconds": 117.343201256,
+    "exitCode": 0,
+    "signal": null
+  },
+  "warmComparison": {
+    "beforeSeconds": 254.946340851,
+    "afterSeconds": 79.892412685,
+    "reductionPct": 68.66304791105354,
+    "requiredReductionPct": 60,
+    "passed": true
+  },
+  "coldComparison": {
+    "beforeSeconds": 254.946340851,
+    "afterSeconds": 117.343201256,
+    "reductionPct": 53.97337303829764,
+    "requiredReductionPct": 60,
+    "passed": false
+  },
+  "testInventory": {
+    "baselineTests": 2373,
+    "redesignedTests": 2390,
+    "baselineFiles": 237,
+    "redesignedFiles": 244,
+    "missing": [],
+    "added": [
+      [
+        "tests/harness_benchmark.test.ts",
+        "main",
+        "records a real command wall time and propagates nonzero exits instead of blessing failed tests"
+      ],
+      [
+        "tests/harness_benchmark.test.ts",
+        "main",
+        "accepts exactly 60% reduction and rejects a miss using the median of repeated candidate runs"
+      ],
+      [
+        "tests/harness_benchmark.test.ts",
+        "main",
+        "rejects failed, malformed, zero-duration or different-machine evidence"
+      ],
+      [
+        "tests/harness_benchmark.test.ts",
+        "main",
+        "records enough machine identity to reject different hardware and invalid CPU evidence"
+      ],
+      [
+        "tests/harness_coverage.test.ts",
+        "main",
+        "rejects a real uncovered function and branch at the unchanged 100% canary threshold"
+      ],
+      [
+        "tests/harness_coverage.test.ts",
+        "main",
+        "passes only after every canary function and branch executes"
+      ],
+      [
+        "tests/harness_isolation_a.test.tsx",
+        "main",
+        "starts in a fresh realm/module/storage and leaves a tracked root deliberately mounted"
+      ],
+      [
+        "tests/harness_isolation_a.test.tsx",
+        "main",
+        "unmounts leaked roots, clears the body, and keeps bounded timer settling working"
+      ],
+      [
+        "tests/harness_isolation_b.test.ts",
+        "main",
+        "gets its own realm/module/storage regardless of the other canary file order"
+      ],
+      [
+        "tests/harness_node.test.ts",
+        "main",
+        "keeps pure Node bootstrap free of DOM/React setup"
+      ],
+      [
+        "tests/harness_policy.test.ts",
+        "main",
+        "resource-aware, isolated harness policy > uses both available sandbox CPUs, caps large hosts and respects memory/single-core limits"
+      ],
+      [
+        "tests/harness_policy.test.ts",
+        "main",
+        "resource-aware, isolated harness policy > keeps the native set exclusive and every discovered test in exactly one project"
+      ],
+      [
+        "tests/harness_policy.test.ts",
+        "main",
+        "resource-aware, isolated harness policy > instruments the complete existing lib scope without changing thresholds or removing V8 audits"
+      ],
+      [
+        "tests/harness_static_cache.test.ts",
+        "main",
+        "content-based lint caching catches edits even with the original timestamp restored"
+      ],
+      [
+        "tests/harness_static_cache.test.ts",
+        "main",
+        "incremental no-emit typechecking catches a new error instead of reusing cached success"
+      ],
+      [
+        "tests/verify_runner.test.ts",
+        "main",
+        "honest incremental static checks and explicit cold verification > uses compiler-owned incremental checking and content-keyed lint cache, never a cached test success"
+      ],
+      [
+        "tests/verify_runner.test.ts",
+        "main",
+        "honest incremental static checks and explicit cold verification > cold mode bypasses static and transform caches but keeps every gate"
+      ]
+    ],
+    "discoveryCaveat": "Vitest list does not expand all parameterized runtime cases.",
+    "baselineRuntimeTests": 2544,
+    "redesignedRuntimeTests": 2561
+  },
+  "coverage": {
+    "files": 167,
+    "missingFiles": [],
+    "extraFiles": [],
+    "perFileLineFunctionStatementDifferences": [],
+    "v8Total": {
+      "lines": {
+        "total": 5746,
+        "covered": 5633,
+        "skipped": 0,
+        "pct": 98.03
+      },
+      "statements": {
+        "total": 7861,
+        "covered": 7467,
+        "skipped": 0,
+        "pct": 94.98
+      },
+      "functions": {
+        "total": 1820,
+        "covered": 1784,
+        "skipped": 0,
+        "pct": 98.02
+      },
+      "branches": {
+        "total": 5486,
+        "covered": 4902,
+        "skipped": 0,
+        "pct": 89.35
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "istanbulTotal": {
+      "lines": {
+        "total": 5746,
+        "covered": 5633,
+        "skipped": 0,
+        "pct": 98.03
+      },
+      "statements": {
+        "total": 7861,
+        "covered": 7467,
+        "skipped": 0,
+        "pct": 94.98
+      },
+      "functions": {
+        "total": 1820,
+        "covered": 1784,
+        "skipped": 0,
+        "pct": 98.02
+      },
+      "branches": {
+        "total": 5486,
+        "covered": 4898,
+        "skipped": 0,
+        "pct": 89.28
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    },
+    "branchDifferences": [
+      {
+        "file": "src/lib/selectshortcuts.ts",
+        "v8": {
+          "total": 32,
+          "covered": 30,
+          "skipped": 0,
+          "pct": 93.75
+        },
+        "istanbul": {
+          "total": 32,
+          "covered": 29,
+          "skipped": 0,
+          "pct": 90.62
+        }
+      },
+      {
+        "file": "src/lib/svgregen.ts",
+        "v8": {
+          "total": 42,
+          "covered": 41,
+          "skipped": 0,
+          "pct": 97.61
+        },
+        "istanbul": {
+          "total": 42,
+          "covered": 40,
+          "skipped": 0,
+          "pct": 95.23
+        }
+      },
+      {
+        "file": "src/lib/upload/cleandom.ts",
+        "v8": {
+          "total": 88,
+          "covered": 84,
+          "skipped": 0,
+          "pct": 95.45
+        },
+        "istanbul": {
+          "total": 88,
+          "covered": 83,
+          "skipped": 0,
+          "pct": 94.31
+        }
+      },
+      {
+        "file": "src/lib/upload/xmp.ts",
+        "v8": {
+          "total": 28,
+          "covered": 22,
+          "skipped": 0,
+          "pct": 78.57
+        },
+        "istanbul": {
+          "total": 28,
+          "covered": 21,
+          "skipped": 0,
+          "pct": 75
+        }
+      }
+    ]
+  },
+  "fullLaneTimings": {
+    "reference-full-corrected": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 15.4
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 12.8
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.6
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 4.6
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 214.5
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 7.0
+      }
+    ],
+    "redesigned-final-cold": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 14.0
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 12.1
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.6
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 4.1
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 78.9
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 7.6
+      }
+    ],
+    "redesigned-final-warm2": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 3.9
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 1.5
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.6
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 3.9
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 62.7
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 7.6
+      }
+    ],
+    "redesigned-final-warm3": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 3.7
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 1.4
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.6
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 4.0
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 62.4
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 7.2
+      }
+    ]
+  }
+}

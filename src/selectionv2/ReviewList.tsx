@@ -2,10 +2,14 @@
 // comparison panel, one pair per row, column header and footer summary. Row
 // height follows the zoom slider through the --v2-thumb custom property.
 
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
 import type { Decision, ViewPair } from "../lib/reviewfilter";
 import type { SideThumbFor } from "../selection/thumbs";
 import ReviewRow from "./ReviewRow";
+import { useCheckedRows } from "../ui/checkedrows";
+import { useRowPresentation } from "../ui/rowpresentation";
+
+export type ReviewPresentation = Pick<ReviewListProps, "thumb" | "thumbFor" | "onRowClick" | "toggleCheck" | "decide" | "openSide">;
 
 /** The modifier keys of a row click — see lib/reviewselect.selectIntent. */
 export interface RowMods {
@@ -37,7 +41,15 @@ const COLUMNS = [
 ];
 
 export default function ReviewList(p: ReviewListProps) {
+  // checked AND active are projected into the registry, so neither is a row prop:
+  // one element array survives every selection/arrow change.
+  const register = useCheckedRows(p.checked, p.activeId, true);
+  const presentation = useRowPresentation({ thumb: p.thumb, thumbFor: p.thumbFor, onRowClick: p.onRowClick,
+    toggleCheck: p.toggleCheck, decide: p.decide, openSide: p.openSide }, ["thumbFor"]);
   const style = { "--v2-thumb": `${p.thumb}px` } as CSSProperties;
+  const rows = useMemo(() => p.rows.map((row) => (
+    <ReviewRow key={row.pairId} row={row} p={presentation} register={register} />
+  )), [p.rows, presentation, register]);
   return (
     <section className="v2-panel" data-testid="v2-list" style={style}>
       <ListHead shown={p.rows.length} total={p.total} autoNext={p.autoNext} setAutoNext={p.setAutoNext} />
@@ -48,12 +60,12 @@ export default function ReviewList(p: ReviewListProps) {
         <div className="v2-rows" role="list" aria-label="Image review pairs" data-testid="v2-rows">
           {p.rows.length === 0
             ? <ListEmpty total={p.total} clearFilters={p.clearFilters} />
-            : p.rows.map((row) => <ReviewRow key={row.pairId} row={row} p={p} />)}
+            : rows}
         </div>
       </div>
       <footer className="v2-list-footer">
         <span data-testid="v2-footer">Showing {p.rows.length} of {p.total} pairs</span>
-        <span className="v2-hints"><kbd>A</kbd> approve · <kbd>D</kbd> decline · <kbd>↑ ↓</kbd> move the active row</span>
+        <span className="v2-hints"><kbd>A</kbd> approve · <kbd>D</kbd> decline · ↑↓ active · E/Q check/uncheck · Shift range · Ctrl toggle</span>
       </footer>
     </section>
   );

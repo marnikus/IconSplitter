@@ -115,6 +115,21 @@ describe("visibleBounds — geometry including strokes, caps, joins, transforms"
     expect(visibleBounds(rootOf(`<rect x="0" y="0" width="24" height="24" fill="none" stroke="none"/>`))).toBeNull();
   });
 
+  it("excludes opacity-zero fills and strokes, including an ancestor group", () => {
+    const root = rootOf(`<rect x="40" y="40" width="20" height="20"/>
+      <rect x="0" y="0" width="100" height="100" fill-opacity="0" stroke="none"/>
+      <g opacity="0"><rect x="0" y="0" width="100" height="100" opacity="1"/></g>
+      <g style="opacity:0"><rect x="0" y="0" width="100" height="100"/></g>
+      <path d="M0 0h100" fill="none" stroke="black" stroke-width="5" stroke-opacity="0"/>`);
+    expect(at(visibleBounds(root)!.bounds)).toEqual([40, 40, 20, 20]);
+    expect(visibleBounds(rootOf(`<g opacity="0"><rect width="24" height="24"/></g>`))).toBeNull();
+  });
+
+  it("keeps a visible stroke when only its fill has zero opacity", () => {
+    const stroke = rootOf(`<rect x="5" y="5" width="10" height="10" fill-opacity="0" stroke="black" stroke-width="2" stroke-linejoin="bevel"/>`);
+    expect(at(visibleBounds(stroke)!.bounds)).toEqual([4, 4, 12, 12]);
+  });
+
   it("covers plain shapes without stroke", () => {
     const r = visibleBounds(rootOf(`<rect x="2" y="4" width="10" height="6"/>`));
     expect(r?.bounds && at(r.bounds)).toEqual([2, 4, 10, 6]);

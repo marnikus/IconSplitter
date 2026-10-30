@@ -1,3 +1,6 @@
+import { cloneElement, useMemo } from "react";
+import { useCheckedRows } from "../ui/checkedrows";
+import { useRowPresentation } from "../ui/rowpresentation";
 // UploadList.tsx — the icon list of the "SVG to upload" tab (design §4.2): head
 // with the row count and the attention counters, the column header, the
 // scrolling rows, and the footer line. The list holds no state of its own:
@@ -13,13 +16,27 @@ export interface UploadListProps {
 }
 
 export default function UploadList({ g, actions }: UploadListProps) {
+  const { checked, activeId, ...presentation } = actions;
+  const a = useRowPresentation(presentation);
+  const register = useCheckedRows(checked, activeId, true);
+  const base = useMemo(() => g.visible.map((row) => (
+    <UploadRowView key={row.source.id} row={row} a={a} register={register} />
+  )), [g.visible, a, register]);
+  // Only the active row gets a new element (it mounts its metadata fields).
+  const rows = useMemo(() => {
+    const at = g.visible.findIndex((row) => row.source.id === activeId);
+    if (at < 0) return base;
+    const out = base.slice();
+    out[at] = cloneElement(base[at], { active: true });
+    return out;
+  }, [base, g.visible, activeId]);
   return (
     <div className="svg-panel" data-testid="upload-list">
       <ListHead g={g} />
       <div className="pair-table">
         <Columns />
         <div className="svg-rows" role="listbox" aria-label="Approved SVGs to export" data-testid="upload-rows">
-          {g.visible.map((row) => <UploadRowView key={row.source.id} row={row} a={actions} />)}
+          {rows}
           {g.visible.length === 0 && <p className="svg-empty" data-testid="upload-empty">No approved SVG matches these filters.</p>}
         </div>
       </div>
@@ -67,7 +84,7 @@ function ListFooter({ g }: { g: UploadApi }) {
   return (
     <footer className="svg-list-footer">
       <span data-testid="upload-footer-summary">{`Showing ${g.visible.length} of ${g.rows.length} approved SVGs`}</span>
-      <span className="svg-hints">click a row for its metadata fields · <kbd>Export</kbd> writes the package into the pair's export folder</span>
+      <span className="svg-hints">↑↓ active · E/Q check/uncheck · click a row for metadata fields · Export writes into the pair's folder</span>
     </footer>
   );
 }

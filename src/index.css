@@ -286,7 +286,13 @@
   font-size: 10px;
 }
 
+/* Pin the complete Selection toolbar while .app-main scrolls. Its workspace
+   also contains the full list, outside the nested panel/table scrollers.
+   Match the other tabs: above row headers (2), below overlays (30). */
 .v2-bulk {
+  position: sticky;
+  top: 0;
+  z-index: 6;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -407,7 +413,7 @@
   min-height: calc(var(--v2-thumb) + 22px);
   padding: 9px 12px;
   border-bottom: 1px solid #192138;
-  transition: background 0.15s, min-height 0.15s;
+  transition: min-height 0.15s;
 }
 
 .v2-row:hover { background: #10182b; }
@@ -417,11 +423,19 @@
 .batch-row:hover { background: #10182b; }
 .batch-row.selected:not(.active) { background: #111a31; }
 .batch-row.active { background: #1d1944; box-shadow: inset 3px 0 0 var(--v2-purple); }
+.batch-row.warning-row { box-shadow: inset -3px 0 0 #facc15; }
+.batch-row.warning { box-shadow: inset -3px 0 0 #facc15; }
+.svg-row.warning::after,
+.svg-row.batch-row.warning::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 3px; background: #facc15; }
+.svg-row.warning-row::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 3px; background: #facc15; }
+
 
 .batch-columns,
 .batch-row {
   display: grid;
-  grid-template-columns: 34px 140px max-content minmax(300px, 1fr) 110px 90px 130px;
+  /* 9-col flex: only checkbox fixed 34px, rest minmax fr to use full row space
+     thumb+info = 1fr min 160, detection min 380 1.2fr one-row, preview 2fr, review 0.6fr, decision 0.7fr, created 0.6fr, status 0.5fr, open 0.7fr */
+  grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(100px, 0.7fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr);
   align-items: center;
   column-gap: 12px;
   width: 100%;
@@ -444,15 +458,18 @@
   min-height: calc(var(--svg-thumb, 84px) + 22px);
   padding: 9px 12px;
   border-bottom: 1px solid #192138;
-  transition: background 0.15s, min-height 0.15s;
+  transition: min-height 0.15s;
   width: 100%;
   min-width: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: 0 110px;
 }
 
 .batch-row > * {
   min-width: 0;
 }
 
+.batch-row > :nth-child(3),
 .batch-row > :nth-child(4) {
   justify-self: stretch;
   width: 100%;
@@ -964,6 +981,8 @@
   align-items: end;
 }
 
+.up .svg-filters { grid-template-columns: 150px 140px 165px 150px 150px auto 1fr auto; }
+
 .svg-result-copy { color: var(--v2-muted); font-size: 10px; white-space: nowrap; }
 
 /* bulk bar, buttons, zoom ───────────────────────────────────────────────── */
@@ -1003,7 +1022,22 @@
   background: var(--v2-surface);
 }
 
+/* Pinned bulk bar (2026-10-19, user screenshot): selection, preview background,
+   zoom and the bulk actions stay on screen while the rows scroll — the Batch
+   tab's .batch-bulkbar-pin precedent. The scroll container is .app-main and the
+   pin is a direct child of the full-height .svg column, so sticky spans the
+   list. z-index 6 sits above rows and the sticky column header (2) and below
+   modals (30); the progress header lives outside .app-main. .svg-bulk paints an
+   opaque surface, so rows never show through. */
+.svg-bulkbar-pin {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
 .svg-bulk-left, .svg-bulk-right { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.up-shadow-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.up-shadow-fields:disabled { opacity: 0.6; }
 .svg-selected-copy { font-size: 11px; font-weight: 700; }
 .svg-scope-copy { color: var(--v2-muted); font-size: 10px; }
 .svg-divider { width: 1px; height: 25px; background: var(--v2-line); }
@@ -1028,8 +1062,9 @@
 /* batch strip ──────────────────────────────────────────────────────────── */
 
 
-/* Persistent progress bar pinned above tab header (2026-10-11) */
-#svg-progress-mount { position: relative; z-index: 55; }
+/* Persistent progress bars pinned above tab header (2026-10-11 svg, 2026-10-13 batch) */
+#svg-progress-mount, #batch-progress-mount { position: relative; z-index: 55; flex: none; }
+.progress-mounts { display: flex; flex-direction: column; gap: 1px; }
 .svg-progress-header {
   display: grid;
   grid-template-columns: 260px 1fr 180px;
@@ -1049,16 +1084,51 @@
 .svg-progress-text { display: grid; gap: 2px; min-width: 0; }
 .svg-progress-text strong { font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .svg-progress-text strong.success { color: #7ee3b6; }
+.svg-progress-text strong.error { color: #ff9aa5; }
 .svg-progress-file { color: var(--v2-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .svg-progress-center { display: grid; gap: 4px; }
 .svg-progress-track { height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
 .svg-progress-fill { height: 100%; background: #745cff; transition: width 0.3s; }
 .svg-progress-header.complete .svg-progress-fill { background: #32d68b; }
+/* A run that lost files is never green: red track, red title, red percent. */
+.svg-progress-header.failed { background: #1c1418; }
+.svg-progress-header.failed .svg-progress-fill { background: #f0596a; }
+.svg-progress-header.failed .svg-progress-percent { color: #ff9aa5; }
+.svg-progress-header.failed .svg-progress-check { background: #3a1720; color: #ff9aa5; }
 .svg-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
 .svg-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 .svg-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
 .svg-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }
 .svg-progress-close:hover { color: var(--v2-text); }
+.batch-progress-header {
+  display: grid;
+  grid-template-columns: 260px 1fr 180px;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  background: #0c1222;
+  border-bottom: 1px solid var(--v2-line);
+  color: var(--v2-text);
+  font-size: 11px;
+}
+.batch-progress-header.complete { background: #0f172a; }
+.batch-progress-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.batch-progress-thumb { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; border: 1px solid var(--v2-line); background: #fff; flex: none; }
+.batch-progress-thumb.empty { display: grid; place-items: center; background: var(--v2-surface-2); color: var(--v2-muted); font-size: 10px; }
+.batch-progress-check { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 6px; background: #12362d; color: var(--v2-green); font-weight: 800; flex: none; }
+.batch-progress-text { display: grid; gap: 2px; min-width: 0; }
+.batch-progress-text strong { font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.batch-progress-text strong.success { color: #7ee3b6; }
+.batch-progress-file { color: var(--v2-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.batch-progress-center { display: grid; gap: 4px; }
+.batch-progress-track { height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
+.batch-progress-fill { height: 100%; background: #32d68b; transition: width 0.3s; }
+.batch-progress-header.complete .batch-progress-fill { background: #32d68b; }
+.batch-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
+.batch-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.batch-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
+.batch-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }
+.batch-progress-close:hover { color: var(--v2-text); }
 .svg-cancel-current { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--v2-line); border-radius: 8px; background: var(--v2-surface); margin: 12px 0; }
 .svg-cancel-current small { display: block; color: var(--v2-purple-2); font-size: 9px; }
 .svg-cancel-current strong { display: block; margin-top: 2px; font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
@@ -1112,6 +1182,52 @@
 
 /* The paginated confirmation: one page per request. */
 .svg-modal.wide { width: min(760px, 94vw); }
+
+/* AI source regeneration dialog (2026-10-19): a roomy reading surface. The modal
+   is wider than the SVG confirm and never taller than the browser; the controls
+   come first, the prompt last at full width, its box fitted to the whole text by
+   SvgImgConfirm (no inner scroll) until it reaches the viewport cap. */
+.svg-modal.img-regen {
+  width: min(980px, 96vw);
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.svg-img-body { min-height: 0; overflow-y: auto; display: grid; gap: 12px; align-content: start; }
+/* Generate stays reachable when the prompt hits the viewport cap and the body scrolls. */
+.svg-img-body .svg-modal-actions { position: sticky; bottom: -16px; margin: 0 -16px -16px; padding: 10px 16px; background: #0d1425; border-top: 1px solid var(--v2-line); }
+.svg-img-meta { display: flex; flex-wrap: wrap; gap: 10px; }
+.svg-img-meta .svg-field { flex: 1 1 260px; }
+.svg-img-meta .svg-img-count { flex: 0 0 140px; }
+.svg-img-prompt-block { display: grid; gap: 12px; }
+.svg-img-prompt-block .svg-field { width: 100%; }
+.svg-img-prompt {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  max-height: calc(94vh - 340px);
+  overflow-y: auto;
+  resize: none;
+  font-size: 12px;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+/* The uploaded sheet and the returned cells must remain readable at 2×2 and 3×3. */
+.svg-img-count-control { display: grid; gap: 5px; max-width: 280px; }
+.svg-img-count-control input { width: 100%; box-sizing: border-box; }
+.svg-img-count-control [role="alert"] { color: var(--v2-red); }
+.svg-img-composite { display: grid; gap: 8px; min-width: 0; }
+.svg-img-composite > img { display: block; max-width: 100%; max-height: 340px; object-fit: contain; border: 1px solid var(--v2-line-strong); border-radius: 7px; }
+.svg-img-composite ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 4px 12px; margin: 0; padding: 0 0 0 20px; font-size: 11px; }
+.svg-img-composite .svg-modal-actions { position: static; margin: 0; padding: 0; border: 0; background: none; }
+.svg-img-effective { max-height: 180px; margin: 0; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--v2-line); }
+.svg-modal.img-regen > .svg-modal-body { min-height: 0; overflow-y: auto; }
+.svg-img-result-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; max-height: 60vh; overflow: auto; }
+.svg-img-result-grid figure { min-width: 0; margin: 0; font-size: 11px; overflow-wrap: anywhere; }
+.svg-img-result-grid img { display: block; max-width: 100%; max-height: 360px; object-fit: contain; border: 1px solid var(--v2-line-strong); }
+.svg-img-result-cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; align-content: start; }
+@media (max-width: 700px) { .svg-img-result-grid { grid-template-columns: minmax(0, 1fr); } }
 .svg-batch-pager { display: grid; gap: 7px; margin: 10px 0; }
 .svg-confirm-prompt { display: grid; gap: 6px; margin: 14px 0; padding: 10px; border: 1px solid var(--v2-line); border-radius: 7px; background: var(--v2-surface); }
 .svg-confirm-prompt .svg-field-label { font-size: 9px; color: var(--v2-muted); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -1222,12 +1338,29 @@
 .svg-bg input[type="color"] { width: 20px; height: 18px; padding: 0; border: 1px solid #35405e; border-radius: 4px; background: none; }
 .svg-bg-value { color: var(--v2-muted); font-size: 9px; white-space: nowrap; }
 
+/* preview stroke width (2026-10-19): a field, "px", the applied value, Reset */
+.svg-stroke { display: flex; align-items: center; gap: 4px; color: var(--v2-muted); font-size: 9px; }
+.svg-stroke > label { color: var(--v2-muted-2); font-size: 8px; font-weight: 800; letter-spacing: 0.07em; }
+.svg-stroke input {
+  width: 52px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid #35405e;
+  border-radius: 4px;
+  background: #0c1222;
+  color: inherit;
+  font-size: 10px;
+}
+.svg-stroke input[aria-invalid="true"] { border-color: #d14b4b; }
+.svg-stroke-value { white-space: nowrap; min-width: 40px; }
+.svg-stroke .svg-btn { padding: 2px 8px; }
+
 .svg-row {
   position: relative;
   min-height: calc(var(--svg-thumb) + 22px);
   padding: 9px 12px;
   border-bottom: 1px solid #192138;
-  transition: background 0.15s, min-height 0.15s;
+  transition: min-height 0.15s;
 }
 
 .svg-row:hover { background: #10182b; }
@@ -1336,6 +1469,15 @@
 .svg-cell .svg-error { color: var(--v2-red); overflow: hidden; text-overflow: ellipsis; }
 .svg-cell .svg-note { color: var(--v2-yellow); overflow: hidden; text-overflow: ellipsis; } /* the EPS auto-fix: a warning, not a failure */
 .svg-usage strong { color: var(--v2-purple-2); font-size: 11px; }
+/* "SVG gen." / "Image gen." halves of the usage column (2026-10-19) */
+.svg-usage .svg-usage-head {
+  margin: 0 0 2px;
+  color: var(--v2-muted-2);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+}
+.svg-usage-part.image { margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a3350; }
 
 .svg-badge {
   display: inline-flex;
@@ -1351,7 +1493,7 @@
 .svg-badge.generated, .svg-badge.approved { color: var(--v2-green); background: var(--v2-green-bg); border-color: #275c4c; }
 .svg-badge.generating { color: var(--v2-purple-2); background: #261e52; border-color: #514399; }
 .svg-badge.failed, .svg-badge.declined { color: var(--v2-red); background: var(--v2-red-bg); border-color: #693047; }
-.svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted, .svg-badge.needs-review { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
+.svg-badge.pending, .svg-badge.not-generated, .svg-badge.interrupted, .svg-badge.needs-review, .svg-badge.warning { color: var(--v2-yellow); background: var(--v2-yellow-bg); border-color: #665129; }
 /* Waiting in the queue (2026-10-08): grey — scheduled, nothing on disk changed yet. */
 .svg-badge.queued { color: var(--v2-muted); background: var(--v2-surface); border-color: var(--v2-line); }
 
@@ -1368,6 +1510,10 @@
 .svg-progress-mini span { display: block; height: 100%; width: 60%; background: var(--v2-purple); }
 
 .svg-file-actions, .svg-decision-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+/* Vector (SVG) buttons above, raster (image) button below: a full-width separator
+   breaks the line and leaves clear space between the two parts. The image button
+   is a normal primary button, the same size and colour as Regenerate. */
+.svg-decision-actions .svg-decision-sep { flex: 0 0 100%; height: 0; margin: 8px 0 4px; border-top: 1px solid var(--v2-line); }
 
 .svg-list-footer {
   display: flex;
@@ -1569,9 +1715,10 @@
   .svg-row { grid-template-columns: 32px max-content minmax(240px, 1fr) 112px 108px 120px 140px 180px; column-gap: 8px; }
 
   .batch-columns,
-  .batch-row { grid-template-columns: 34px 140px max-content minmax(300px, 1fr) 110px 90px 130px !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
+  .batch-row { grid-template-columns: 34px minmax(160px, 1fr) minmax(380px, 1.2fr) minmax(320px, 2fr) minmax(90px, 0.6fr) minmax(100px, 0.7fr) minmax(90px, 0.6fr) minmax(80px, 0.5fr) minmax(110px, 0.7fr) !important; column-gap: 12px; width: 100% !important; min-width: 0 !important; justify-items: start !important; }
 
   .svg-filters { grid-template-columns: 132px 126px 148px 136px 1fr auto; }
+  .up .svg-filters { grid-template-columns: 132px 126px 148px 136px 136px auto 1fr auto; }
   .svg-provider { flex-basis: 380px; }
 }
 
@@ -1684,6 +1831,11 @@
   column-gap: 12px;
 }
 
+.stock-up-columns,
+.stock-up-row {
+  grid-template-columns: 34px max-content minmax(260px, 1fr) 130px 130px 170px;
+}
+
 .up-columns {
   padding: 0 12px;
   border-bottom: 1px solid var(--v2-line);
@@ -1699,7 +1851,7 @@
   min-height: calc(var(--svg-thumb) + 22px);
   padding: 9px 12px;
   border-bottom: 1px solid #192138;
-  transition: background 0.15s, min-height 0.15s;
+  transition: min-height 0.15s;
 }
 
 .up-row:hover { background: #10182b; }
@@ -1752,7 +1904,57 @@
   margin: 12px 0;
 }
 
+/* Compact geometry/paint area: wrap groups, never hide controls or shrink their type. */
+.up-visual-settings {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.up-visual-settings > * { min-width: 0; }
+.up-visual-paints { display: grid; gap: 12px; align-content: start; }
+.up-stroke-width-row .svg-input { flex: 1; width: auto; }
+.up-visual-settings .up-hint { display: block; margin-top: 4px; }
+.up-padding-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.up-padding-head .svg-label { margin-bottom: 0; }
+.up-visual-settings .up-padding-sides { gap: 6px; margin-top: 4px; }
+.up-artboard-custom { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; margin-top: 6px; }
+.up-bg-row.up-artboard-scale { display: grid; grid-template-columns: minmax(0, auto) minmax(64px, 1fr) auto; gap: 4px 6px; margin-top: 6px; }
+.up-bg-row.up-artboard-scale > label { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 0; }
+.up-bg-row.up-artboard-scale > small { grid-column: 1 / -1; margin-top: 0; }
+
 .up-set-field .svg-input[type="number"] { height: 28px; font-size: 10px; }
+.up-shadow-dialog { grid-column: 1 / -1; border: 1px solid var(--v2-line); border-radius: 6px; padding: 10px; }
+/* Native summary keeps mouse, Enter/Space and disclosure semantics together. */
+.up-set-group-summary { cursor: pointer; font-weight: 600; color: var(--v2-text); }
+.up-set-group-summary::marker { color: var(--v2-muted); }
+.up-set-group-summary:focus-visible { outline: 2px solid var(--v2-purple-2); outline-offset: 4px; border-radius: 2px; }
+.up-set-group-content { padding-top: 12px; }
+.up-padding-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.up-padding-sides .svg-field { min-width: 0; }
+.up-shadow-controls { display: grid; gap: 8px; border-bottom: 1px solid var(--v2-line); padding-bottom: 10px; margin-bottom: 10px; }
+.up-shadow-check { display: flex; align-items: center; gap: 7px; }
+.up-shadow-dialog .up-shadow-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.up-shadow-dialog .up-shadow-fields .svg-input { width: 100%; }
+/* A note inside a decoration fieldset is a sentence for the whole block, not
+   one 160 px grid cell (2026-10-20 review: the fit notes wrapped in a column). */
+.up-shadow-dialog .up-shadow-fields > .up-hint,
+.up-shadow-dialog .up-shadow-fields > .svg-warning { grid-column: 1 / -1; margin-top: 0; }
+.up-shadow-dialog .svg-warning { margin-top: 8px; }
+/* The size guide reads as its placement and one block per logo: that logo's
+   width AND its own stroke width together, plus the spacing between them. */
+.up-guide-block {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 10px;
+  border: 1px solid var(--v2-line);
+  border-radius: 7px;
+  background: var(--v2-surface);
+}
+.up-guide-block > .svg-label { margin-bottom: 0; }
+.up-guide-block .up-hint { margin-top: 0; }
 .up-set-field input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 
 .up-marker {
@@ -1771,6 +1973,10 @@
 
 .up-bg-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .up-bg-row input[type="color"] { width: 20px; height: 18px; padding: 0; border: 1px solid #35405e; border-radius: 4px; background: none; }
+/* "Default" choices (2026-10-19, archive/2026-10-19-upload-default-settings): leave the source's own. */
+.up-default-btn.on, .up-set-footer .svg-btn.on { border-color: var(--v2-accent, #7c5cff); color: #fff; background: #2a2350; }
+.up .svg-preview-frame { position: relative; }
+.up-prev-note { position: absolute; left: 4px; right: 4px; bottom: 4px; padding: 2px 4px; border-radius: 3px; background: rgba(8, 12, 24, 0.82); color: #ffb4a8; }
 
 .up-set-footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
 
@@ -1806,3 +2012,87 @@
 .up-preview-card figcaption { color: var(--v2-muted); font-size: 9px; line-height: 1.45; text-align: center; word-break: break-word; }
 
 .up-overridden { color: var(--v2-purple-2); }
+
+/* Pinned split controls (2026-10-16, archive/2026-10-16-pinned-bulkbar): the bulk
+   bar stays on screen while the rows scroll. The scroll container is .app-main;
+   .batch-shell has no overflow, so sticky pins against it. z-index 6 sits above
+   row content (<=2) and below the progress header (55) and modals (30). The bar
+   itself (.svg-bulk) paints an opaque surface, so rows never show through. */
+.batch-bulkbar-pin {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+/* Connection profiles (2026-10-16, archive/2026-10-16-connections): both new
+   rows wrap inside the ~430px provider card instead of overflowing it — the
+   fixed 6-column .svg-filters grid and the .svg-provider-fields first-child
+   basis (118px) both clipped controls (RULE 14: no clipped controls). */
+.svg-conn-row { display: flex; flex-wrap: wrap; gap: 9px; align-items: end; }
+.svg-conn-row .svg-field { flex: 1 1 150px; }
+.svg-conn-row .svg-btn { flex: 0 0 auto; }
+.svg-image-grid { display: flex; flex-wrap: wrap; gap: 9px; }
+.svg-image-grid .svg-field { flex: 1 1 128px; }
+.svg-image-model { display: flex; }
+.svg-image-model .svg-field { flex: 1 1 100%; }
+
+/* AI source regeneration (2026-10-16): the strip under a row's pair. 2026-10-19:
+   the in-flight bar, the version chips and the last failure INSIDE the pair
+   cell — never a 9th grid cell — and `contain: inline-size` keeps it from
+   widening the max-content preview column: it takes the pair's width and wraps. */
+.svg-pair-with-bar { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* The strip under the pair (2026-10-19): one cell per preview, as wide as it and
+   with .pair-thumbs' gap, so each set of chips sits under the image it switches;
+   96 px keeps chips readable at the smallest zoom. */
+.svg-pair-bars { display: flex; align-items: flex-start; gap: 8px; }
+.svg-pair-bar { flex: none; min-width: 96px; }
+.svg-ai-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; contain: inline-size; }
+.svg-ai-bar .svg-progress-mini { width: 48px; margin-top: 0; }
+.svg-ai-bar .svg-progress-mini span { animation: v2-pulse 1.2s ease-in-out infinite; }
+.svg-ai-bar .svg-error { flex: 1 1 100%; overflow: hidden; color: var(--v2-red); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* One responsive header layout for all batch processes, including Upload. */
+@media (max-width: 760px) {
+  .process-progress-header { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .process-progress-header > :last-child { justify-content: flex-start; }
+}
+
+/* User badge template editor: code remains data, preview is an isolated SVG image. */
+.up-badge-template-backdrop { z-index: 60; }
+.up-badge-template-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
+.up-badge-template-code { min-height: 280px; font-family: ui-monospace, monospace; resize: vertical; }
+.up-badge-template-preview { display: grid; place-items: center; min-height: 220px; padding: 16px; border: 1px solid var(--v2-line); border-radius: 6px; background: #fff; color: #43506b; }
+.up-badge-template-preview img { display: block; width: 100%; height: 200px; object-fit: contain; }
+@media (max-width: 640px) { .up-badge-template-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Upload row badges (I-79): catalog chips, not the corner decoration. */
+.up-rowbadges { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 6px; }
+.up-rowbadge-chip, .up-rowbadge-option {
+  display: inline-flex; align-items: center; min-height: 18px; padding: 2px 7px;
+  border: 1px solid; border-radius: 999px; color: var(--v2-text); font-size: 8px; font-weight: 750;
+}
+.up-rowbadge-menu, .up-rowbadge-apply { position: relative; }
+.up-rowbadge-pop {
+  position: absolute; z-index: 8; top: 100%; left: 0; margin: 4px 0 0;
+  min-width: 160px; padding: 6px; list-style: none;
+  border: 1px solid var(--v2-line-strong); border-radius: 6px; background: #0d1425;
+}
+.up-rowbadge-pop li { margin: 0; }
+.up-rowbadge-option { width: 100%; justify-content: flex-start; margin: 2px 0; cursor: pointer; }
+.up-rowbadge-list { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.up-rowbadge-add, .up-rowbadge-edit { display: flex; gap: 8px; align-items: center; }
+.up-rowbadge-add .svg-input, .up-rowbadge-edit .svg-input { flex: 1; }
+.up-rowbadge-add input[type="color"], .up-rowbadge-edit input[type="color"] {
+  width: 36px; height: 32px; padding: 0; border: 1px solid var(--v2-line); background: transparent;
+}
+
+/* Stock FTPS/SFTP connection test banner: unmistakable status pill */
+.stock-test-banner {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 5px 10px; border-radius: 6px; border: 1px solid var(--v2-line);
+  font-size: 11px; font-weight: 600; line-height: 1.4;
+}
+.stock-test-banner.ok { background: rgba(45, 212, 139, 0.14); border-color: rgba(45, 212, 139, 0.5); color: #5ef0ad; }
+.stock-test-banner.err { background: rgba(255, 92, 92, 0.14); border-color: rgba(255, 92, 92, 0.55); color: #ff8585; }
+.stock-test-banner.busy { background: rgba(94, 158, 255, 0.14); border-color: rgba(94, 158, 255, 0.45); color: #9cc4ff; }
+

@@ -14,7 +14,7 @@ import { normalizeDash, type DashSpec } from "./geom/expand/dash";
 import { expandOutline } from "./geom/expand/assemble";
 import type { Cap, Join, Pen } from "./geom/expand/pen";
 import { outlineToPathData, shapeOutline } from "./geom/outline";
-import { stripStyleKeys, styleMap } from "./geom/stroke";
+import { inheritedPresentation, ownPresentation, stripStyleKeys } from "./geom/stroke";
 
 export const STROKE_PROPS = [
   "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit",
@@ -56,7 +56,7 @@ export function expandStrokes(root: Element): ExpandResult {
 function vetoOf(hit: StrokeHit): DashSpec | string {
   const tag = `<${hit.el.nodeName.toLowerCase()}>`;
   if (/^url\(/i.test(hit.stroke.paint)) return `a url(#…) stroke paint under Expand strokes on ${tag}`; // the id may already be renamed by the clean pass; the element is the honest name
-  const dash = normalizeDash(inherited(hit.el, "stroke-dasharray"), inherited(hit.el, "stroke-dashoffset"));
+  const dash = normalizeDash(inheritedPresentation(hit.el, "stroke-dasharray"), inheritedPresentation(hit.el, "stroke-dashoffset"));
   if (!dash.ok) return `${dash.reason} under Expand strokes on ${tag}`;
   return { pattern: dash.pattern, offset: dash.offset };
 }
@@ -72,10 +72,12 @@ function expandOne(job: Job): boolean {
     path.setAttribute("d", outlineToPathData(expanded));
     path.setAttribute("fill", job.hit.stroke.paint);
     path.setAttribute("fill-rule", "nonzero");
-    const opacity = inherited(el, "stroke-opacity");
-    if (opacity !== null && opacity.trim() !== "1") path.setAttribute("fill-opacity", opacity.trim());
-    const own = own_(el, "opacity");
-    if (own !== null) path.setAttribute("opacity", own);
+    // A stroke does not inherit fill-opacity; pin its effective opacity on the new fill.
+    path.setAttribute("fill-opacity", inheritedPresentation(el, "stroke-opacity")?.trim() ?? "1");
+    for (const prop of ["opacity", "display", "visibility"]) {
+      const value = ownPresentation(el, prop);
+      if (value !== null) path.setAttribute(prop, value);
+    }
     el.after(path);
   }
   if (effectiveFill(el).toLowerCase() === "none") el.remove();
@@ -88,23 +90,9 @@ function penOf(hit: StrokeHit): Pen {
   return { width: hit.stroke.width, cap, join, miter: hit.stroke.miter };
 }
 
-/** The element's own value of a presentation property: inline style first, then the attribute. */
-function own_(el: Element, key: string): string | null {
-  return styleMap(el.getAttribute("style"))[key] ?? el.getAttribute(key);
-}
-
-/** The value in effect: the nearest own value up the tree, else null. */
-function inherited(el: Element, key: string): string | null {
-  for (let node: Element | null = el; node !== null; node = node.parentElement) {
-    const value = own_(node, key);
-    if (value !== null && value.trim() !== "") return value;
-  }
-  return null;
-}
-
 /** The fill in effect (SVG's initial fill is black). */
 function effectiveFill(el: Element): string {
-  return inherited(el, "fill") ?? "#000";
+  return inheritedPresentation(el, "fill") ?? "#000";
 }
 
 function clearStrokeProps(el: Element): void {

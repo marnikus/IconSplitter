@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import JSZip from "jszip";
-import { analyze, detect, type Analysis, type Box } from "./lib/detect";
-import { canvasToBlob, renderIcon, squareInfo, type ExportOpts } from "./lib/render";
-import { download, loadImage } from "./lib/dom";
+import { detectAsync, type Box } from "./lib/detect";
+import { canvasToBlob, renderIcon, renderIconAsync, squareInfo, type ExportOpts } from "./lib/render";
+import { download } from "./lib/dom";
 import { useSheetsEdit } from "./ui/useSheetsEdit";
 import SheetsHeader from "./sheets/SheetsHeader";
 import DropzoneEmpty from "./sheets/DropzoneEmpty";
@@ -13,19 +13,8 @@ import BoundaryPreview from "./sheets/BoundaryPreview";
 import ResultGrid from "./sheets/ResultGrid";
 import { BusyOverlay, DragOverlay, ToastOverlay } from "./sheets/Overlays";
 
-interface Sheet {
-  id: string;
-  name: string;
-  base: string;
-  url: string;
-  img: HTMLImageElement;
-  an: Analysis;
-  boxes: Box[];
-  autoFrac: number;
-  usedFrac: number;
-  manual: boolean;
-  excluded: number[];
-}
+import { importSheets, type Sheet } from "./sheets/importSheets";
+import { startCompletionSound, withCompletionSound } from "./ui/completionSound";
 
 const checker =
   "bg-[length:16px_16px] bg-[linear-gradient(45deg,#e5e7eb_25%,transparent_25%,transparent_75%,#e5e7eb_75%),linear-gradient(45deg,#e5e7eb_25%,#fff_25%,#fff_75%,#e5e7eb_75%)] [background-position:0_0,8px_8px]";
@@ -54,43 +43,21 @@ export default function App() {
 
   const active = sheets.find((s) => s.id === activeId) ?? null;
 
-  const addFiles = useCallback(
-    async (files: FileList | File[]) => {
-      const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
-      if (!list.length) return say("Please choose image files (PNG, JPG, WEBP…)", true);
-      let lastId: string | null = null;
-      for (const f of list) {
-        setBusy(`Detecting icons in ${f.name}…`);
-        await sleep(30);
-        try {
-          const url = URL.createObjectURL(f);
-          const img = await loadImage(url);
-          const an = analyze(img);
-          const det = detect(an, null);
-          const id = crypto.randomUUID();
-          const base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_") || "sheet";
-          const sheet: Sheet = { id, name: f.name, base, url, img, an, boxes: det.boxes, autoFrac: det.autoFrac, usedFrac: det.usedFrac, manual: false, excluded: [] };
-          setSheets((p) => [...p, sheet]);
-          lastId = id;
-        } catch (e) {
-          say(`${f.name}: ${(e as Error).message}`, true);
-        }
-      }
-      setBusy(null);
-      if (lastId) setActiveId(lastId);
-    },
-    [say],
-  );
+  const addFiles = useCallback((files: FileList | File[]) => importSheets(files, {
+    busy: setBusy, add: (sheet) => setSheets((p) => [...p, sheet]), select: setActiveId, say,
+  }), [say]);
 
   const redetect = useCallback(async (id: string, frac: number | null) => {
+    const sheet = sheets.find((s) => s.id === id);
+    if (!sheet) return;
+    const d = await detectAsync(sheet.an, frac);
     setSheets((prev) =>
       prev.map((s) => {
         if (s.id !== id) return s;
-        const d = detect(s.an, frac);
         return { ...s, boxes: d.boxes, usedFrac: d.usedFrac, autoFrac: d.autoFrac, manual: frac != null, excluded: [] };
       }),
     );
-  }, []);
+  }, [sheets]);
 
   const toggleBox = (id: string, idx: number) =>
     setSheets((prev) => prev.map((s) => (s.id !== id ? s : { ...s, excluded: s.excluded.includes(idx) ? s.excluded.filter((i) => i !== idx) : [...s.excluded, idx] })));
@@ -115,21 +82,23 @@ export default function App() {
     return activeItems.map((it) => renderIcon(active.img, active.an, active.boxes, it.b, it.sq, opts, 260).toDataURL("image/png"));
   }, [active, activeItems, opts]);
 
-  const renderBlob = async (s: Sheet, box: Box, sq: ReturnType<typeof squareInfo>) => canvasToBlob(renderIcon(s.img, s.an, s.boxes, box, sq, opts));
+  const renderBlob = async (s: Sheet, box: Box, sq: ReturnType<typeof squareInfo>) => canvasToBlob(await renderIconAsync(s.img, s.an, s.boxes, box, sq, opts));
   const fileName = (s: Sheet, n: number) => `${s.base}-icon-${pad2(n + 1)}.png`;
 
   const copyIcon = async (s: Sheet, it: (typeof activeItems)[number]) => {
     try {
-      const blob = await renderBlob(s, it.b, it.sq);
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      say(`Icon ${it.n + 1} copied to clipboard`);
+      await withCompletionSound(async () => {
+        const blob = await renderBlob(s, it.b, it.sq);
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        say(`Icon ${it.n + 1} copied to clipboard`);
+      });
     } catch {
       say("Clipboard is blocked by the browser – use Download instead", true);
     }
   };
 
   const saveIcon = async (s: Sheet, it: (typeof activeItems)[number]) => {
-    download(await renderBlob(s, it.b, it.sq), fileName(s, it.n));
+    await withCompletionSound(async () => { download(await renderBlob(s, it.b, it.sq), fileName(s, it.n)); });
   };
 
   const collect = async (onProgress?: (d: number, t: number) => void) => {
@@ -152,16 +121,20 @@ export default function App() {
 
   const total = sheets.reduce((a, s) => a + s.boxes.length - s.excluded.length, 0);
 
-  const run = async (label: string, fn: () => Promise<void>) => {
+  const run = async (label: string, fn: () => Promise<void | false>) => {
     if (!total) return say("No icons to export", true);
+    const finish = startCompletionSound();
+    let cancelled = false;
     try {
       setBusy(label);
       await sleep(20);
-      await fn();
+      cancelled = (await fn()) === false;
     } catch (e) {
-      if ((e as Error).name !== "AbortError") say((e as Error).message || "Export failed", true);
+      cancelled = (e as Error).name === "AbortError";
+      if (!cancelled) say((e as Error).message || "Export failed", true);
     } finally {
       setBusy(null);
+      finish(cancelled);
     }
   };
 
@@ -188,13 +161,13 @@ export default function App() {
   const saveFolder = () =>
     run("Saving to folder…", async () => {
       const w = window as never as { showDirectoryPicker?: (o: { mode: string }) => Promise<never> };
-      if (!w.showDirectoryPicker) return say("Folder saving needs Chrome/Edge. Use “ZIP” instead.", true);
+      if (!w.showDirectoryPicker) { say("Folder saving needs Chrome/Edge. Use “ZIP” instead.", true); return false; }
       let dir: { name: string; getDirectoryHandle: (n: string, o: { create: boolean }) => Promise<never>; getFileHandle: (n: string, o: { create: boolean }) => Promise<{ createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> }> } & { name: string };
       try {
         dir = (await (w.showDirectoryPicker as (o: { mode: string }) => Promise<unknown>)({ mode: "readwrite" })) as never;
       } catch (e) {
-        if ((e as Error).name === "AbortError") return;
-        return say("Folder access isn't allowed here. Use “ZIP” instead.", true);
+        if ((e as Error).name === "AbortError") return false;
+        say("Folder access isn't allowed here. Use “ZIP” instead.", true); return false;
       }
       const files = await collect((d, t) => setBusy(`Saving ${d}/${t}…`));
       for (const f of files) {

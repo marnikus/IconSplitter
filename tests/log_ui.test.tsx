@@ -10,18 +10,19 @@ import { LOG_KEY, flushLog, getLogState, log, resetLogStore } from "../src/log/l
 import { readKey } from "../src/state/safestorage";
 import { resetAppStore } from "../src/state/appstore";
 import Workbench from "../src/ui/Workbench";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const KEY = ["rq", "live", "QwErTy7UiOpAsDfGh4JkLzXcVbNm2"].join("_");
-const TABS = ["tab-sheets", "tab-batch", "tab-selection", "tab-selection-v2", "tab-generate-svg"];
+const TABS = ["tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload"];
 
 let host: HTMLDivElement;
 let ui: Root;
 
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const rows = () => Array.from(host.querySelectorAll("[data-testid=log-entry]")).map((li) => li.textContent ?? "");
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 const click = async (sel: string) => {
   await act(async () => { (q(sel) as HTMLButtonElement).dispatchEvent(new MouseEvent("click", { bubbles: true })); });
   await settle();
@@ -91,7 +92,7 @@ describe("the log dock", () => {
     // same entries on every tab — one instance, one history (feature §2)
     const switches = getLogState().entries.filter((e) => e.action === "open-tab");
     expect(switches.map((e) => e.detail)).toEqual([
-      "tab=sheets", "tab=batch", "tab=selection", "tab=selectionV2", "tab=generateSvg",
+      "tab=sheets", "tab=batch", "tab=selectionV2", "tab=generateSvg", "tab=upload",
     ]);
   });
 

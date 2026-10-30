@@ -1,28 +1,31 @@
 // Workbench.tsx — top-level shell: mode switch, undo/redo bar, session autosave, activity log
 // Shell is ONE viewport column: nav, scrolling tab area (app-main), log dock last (not overlay).
 
+import { useEffect, useRef, useState } from "react";
 import App from "../App";
 import LogDock from "../log/LogDock";
 import { log } from "../log/logstore";
 import BatchPanel from "../batch/BatchPanel";
-import SelectionPanel from "../selection/SelectionPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
+import StockUploadPanel from "../stockupload/StockUploadPanel";
 import UploadPanel from "../upload/UploadPanel";
 import { setAppState, type AppState } from "../state/appstore";
 import { HistoryProvider } from "../state/HistoryProvider";
-import { useAppState } from "../state/useAppState";
+import { useAppSlice } from "../state/useAppState";
 import { usePrefsAutosave } from "../state/usePrefsAutosave";
 import { useSessionAutosave } from "../state/useSessionAutosave";
 import HistoryBar from "./HistoryBar";
+import { armCompletionSound } from "./completionSound";
+import ScrollTopButton from "./ScrollTopButton";
 
 const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "sheets", label: "Single sheets", testid: "tab-sheets" },
   { id: "batch", label: "Batch folders", testid: "tab-batch" },
-  { id: "selection", label: "Selection", testid: "tab-selection" },
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
   { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
   { id: "upload", label: "SVG to upload", testid: "tab-upload" },
+  { id: "stockUpload", label: "Upload", testid: "tab-stock-upload" },
 ];
 
 export default function Workbench() {
@@ -34,17 +37,25 @@ export default function Workbench() {
 }
 
 function Shell() {
-  const tab = useAppState().tab;
+  const tab = useAppSlice("tab");
+  const mainRef = useRef<HTMLElement | null>(null);
   useSessionAutosave();
   usePrefsAutosave();
   return (
-    <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell">
-      <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
+    <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell" onPointerDownCapture={armCompletionSound} onKeyDownCapture={armCompletionSound}>
+      <div className="progress-mounts flex flex-col gap-1">
+        <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
+        <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
+        <div id="upload-progress-mount" data-testid="upload-progress-mount"></div>
+        <div id="stock-upload-progress-mount" data-testid="stock-upload-progress-mount"></div>
+      </div>
       <Nav tab={tab} />
-      <main className="app-main" data-testid="app-main">
+      <main ref={mainRef} className="app-main" data-testid="app-main">
         <Panels tab={tab} />
       </main>
       <LogDock />
+      {/* Fixed float — kept after the layout rows so main and the dock stay adjacent (I-27). */}
+      <ScrollTopButton target={mainRef} />
     </div>
   );
 }
@@ -76,31 +87,38 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
   return (
     <>
       {tab === "sheets" && <App />}
-      {tab === "batch" && (
+      <div className="batch-shell-outer w-full" data-testid="batch-shell-outer" hidden={tab !== "batch"}>
         <TabWrapper>
-          <BatchPanel />
+          <BatchPanel active={tab === "batch"} />
         </TabWrapper>
-      )}
-      {tab === "selection" && (
-        <TabWrapper>
-          <SelectionPanel />
-        </TabWrapper>
-      )}
+      </div>
       {tab === "selectionV2" && (
-        <div className="v2-shell px-4 py-3">
+        <div className="v2-shell w-full px-4 py-3">
           <SelectionV2Panel />
         </div>
       )}
       <div className="svg-shell px-4 py-3" data-testid="svg-shell" hidden={tab !== "generateSvg"}>
         <SvgPanel active={tab === "generateSvg"} />
       </div>
-      {tab === "upload" && (
-        <div className="up-shell px-4 py-3">
-          <UploadPanel />
-        </div>
-      )}
+      <UploadWorkspace active={tab === "upload"} />
+      <StockUploadWorkspace active={tab === "stockUpload"} />
     </>
   );
+}
+
+/** Lazy on first visit; after that a hidden panel must not lose an in-flight run. */
+function UploadWorkspace({ active }: { active: boolean }) {
+  const [visited, setVisited] = useState(active);
+  useEffect(() => { if (active) setVisited(true); }, [active]);
+  if (!active && !visited) return null;
+  return <div className="up-shell px-4 py-3" data-testid="upload-shell" hidden={!active}><UploadPanel active={active} /></div>;
+}
+
+function StockUploadWorkspace({ active }: { active: boolean }) {
+  const [visited, setVisited] = useState(active);
+  useEffect(() => { if (active) setVisited(true); }, [active]);
+  if (!active && !visited) return null;
+  return <div className="up-shell px-4 py-3" data-testid="stock-upload-shell" hidden={!active}><StockUploadPanel active={active} /></div>;
 }
 
 function TabWrapper({ children }: { children: React.ReactNode }) {

@@ -12,7 +12,6 @@ import type { RunEvent, RunSummary } from "./runner";
 import { loadMetaAt } from "../selection/pairstore";
 import { loadSourceIndex, metaPathOfEntry } from "../state/sourceindex";
 import { toRow } from "./rowmodel";
-import { newestValid } from "../lib/svgfile";
 import type { RunProgress, SvgRefs, SvgRow } from "./types";
 import type { SvgSource } from "./sources";
 
@@ -33,7 +32,7 @@ const HANDLERS: Record<string, Handler> = {
     perRequest: e.perRequest, startedAt: e.startedAt, images: e.images, outcomes: prev?.outcomes ?? [],
   })),
   "batch-done": (e, s) => s.setProgressFn((prev) => prev ? { ...prev, saved: e.report.saved, failed: e.report.failed, missing: e.report.missing, outcomes: [...prev.outcomes, e.report] } : prev),
-  "item-saved": (e, s) => s.setRowsFn((rows) => rows.map((r) => r.source.id === e.sourceId ? { ...r, meta: e.meta, newest: newestValid(e.meta?.versions ?? []), status: "generated", running: false, error: null } : r)),
+  "item-saved": (e, s) => s.setRowsFn((rows) => rows.map((r) => r.source.id === e.sourceId ? toRow(r.source, e.meta, false) : r)),
   "item-failed": (e, s) => {
     const status = e.failure === "stalled" ? "unknown" : "failed";
     s.setRowsFn((rows) => rows.map((r) => r.source.id === e.sourceId ? { ...r, status, running: false, error: redact(e.error) } : r));

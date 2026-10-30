@@ -6,6 +6,9 @@
 import { describe, expect, it } from "vitest";
 import { outlineToPathData, pathOutline, shapeOutline, transformOutline, type Outline } from "../src/lib/upload/geom/outline";
 import { parseTransform } from "../src/lib/upload/geom/matrix";
+import { pathGeometry, tokenizePath } from "../src/lib/upload/geom/path";
+import { insideArtboard, shippedBounds } from "../src/lib/upload/place";
+import badgeSvg from "../src/svg/templates/editable-stroke-width.svg?raw";
 
 function el(markup: string): Element {
   const doc = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg">${markup}</svg>`, "image/svg+xml");
@@ -13,6 +16,22 @@ function el(markup: string): Element {
 }
 
 const ops = (o: Outline | null) => (o === null ? null : o.ops.map((op) => op.op).join(""));
+
+describe("the supplied seven-path editable-stroke badge", () => {
+  it("parses the exact SVG as measurable vector paint inside its own viewport", () => {
+    const root = new DOMParser().parseFromString(badgeSvg, "image/svg+xml").documentElement;
+    expect(root.getAttribute("viewBox")).toBe("0 0 412 20");
+    const paths = Array.from(root.querySelectorAll("path"));
+    expect(paths).toHaveLength(7);
+    expect(paths[0].getAttribute("fill")).toBe("black");
+    expect(paths[0].hasAttribute("stroke")).toBe(false);
+    expect(paths.slice(1).every((path) => path.getAttribute("stroke") === "black"
+      && path.getAttribute("stroke-width") === "1.5" && !path.hasAttribute("fill"))).toBe(true);
+    expect(paths.every((path) => (pathOutline(path.getAttribute("d"))?.ops.length ?? 0) > 0)).toBe(true);
+    expect(shippedBounds(root)).not.toBeNull();
+    expect(insideArtboard(root)).toBe(true);
+  });
+});
 
 describe("shapeOutline — every shape of the subset as ops", () => {
   it("rect → four lines closed; a degenerate rect has no outline", () => {
@@ -64,6 +83,14 @@ describe("shapeOutline — every shape of the subset as ops", () => {
 });
 
 describe("pathOutline — the full grammar, absolute and relative", () => {
+  it("keeps an exponent coordinate numeric through tokenization, outline and bounds", () => {
+    const d = "M0 0L1.9538e-05 2";
+    expect(tokenizePath(d)).toEqual([{ cmd: "M", nums: [0, 0] }, { cmd: "L", nums: [1.9538e-5, 2] }]);
+    const outline = pathOutline(d);
+    expect(outline?.ops.at(-1)).toEqual({ op: "L", x: 1.9538e-5, y: 2 });
+    expect(pathGeometry(d)?.hull).toEqual([0, 0, 1.9538e-5, 2]);
+  });
+
   it("M/L/H/V/Z with relative forms and a second subpath", () => {
     const o = pathOutline("M10 10 L20 20 H30 V5 Z M40 40 l5 5 m10 0 h10 v10 z");
     expect(outlineToPathData(o as Outline)).toBe("M10 10L20 20L30 20L30 5ZM40 40L45 45M55 45L65 45L65 55Z");

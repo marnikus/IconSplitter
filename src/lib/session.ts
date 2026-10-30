@@ -8,7 +8,7 @@
 // writers that can disagree.
 //
 // Also absent: root folder handles (IndexedDB, owned by batch/store) and
-// decisions (review-decisions.json, owned by selection/reviewstore).
+// decisions (pair sidecars, owned by selection/pairstore; legacy fallback read-only).
 
 import { isRecord } from "./isrecord";
 import { DEFAULT_SHEET_OPTS, parseSheetOpts, type SheetOpts } from "./exportopts";
@@ -18,23 +18,24 @@ import type { ZoomMode } from "./reviewprefs";
 
 export const SESSION_VERSION = 1;
 
-export type TabId = "sheets" | "batch" | "selection" | "selectionV2" | "generateSvg" | "upload";
+export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload" | "stockUpload";
 
-export const TAB_IDS: readonly TabId[] = ["sheets", "batch", "selection", "selectionV2", "generateSvg", "upload"];
+export const TAB_IDS: readonly TabId[] = [
+  "sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload",
+];
 
-/** Review list state shared by the Selection and Selection V2 tabs. */
+/** Selection V2 review state; the JSON slice name stays compatible with saved sessions. */
 export interface SessionSelection {
   filter: ListFilter;
   sort: SortState;
   /** Stable pair id — never a row index (I-10). */
   selectedId: string | null;
-  collapsed: boolean;
   zoom: ZoomMode;
   sync: boolean;
   autoNext: boolean;
 }
 
-/** What only the V2 layout adds on top of the shared review state. */
+/** Selection V2 checkbox and scroll state. */
 export interface SessionV2 {
   checked: string[];
   scrollY: number;
@@ -47,6 +48,7 @@ export interface SessionSvg {
   checked: string[];
   /** Stable source id of the active row — never a list index. */
   activeId: string | null;
+  anchorId: string | null;
 }
 
 /** What only the SVG to upload tab adds: its own selection and active row. */
@@ -54,6 +56,14 @@ export interface SessionUpload {
   checked: string[];
   /** Stable pair id of the active row — never a list index. */
   activeId: string | null;
+  anchorId: string | null;
+}
+
+/** What only the Upload (stock FTPS) tab adds: its own selection and active row. */
+export interface SessionStockUpload {
+  checked: string[];
+  activeId: string | null;
+  anchorId: string | null;
 }
 
 /** What only the Batch folders tab adds: its own selection, active row and anchor. */
@@ -72,24 +82,27 @@ export interface SessionState {
   selectionV2: SessionV2;
   svg: SessionSvg;
   upload: SessionUpload;
+  stockUpload?: SessionStockUpload;
   batch: SessionBatch;
 }
 
 export const DEFAULT_SELECTION: SessionSelection = {
   filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
-  collapsed: false, zoom: "fit", sync: true, autoNext: true,
+  zoom: "fit", sync: true, autoNext: true,
 };
 
-export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null };
+export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null, anchorId: null };
 
-export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null };
+export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null, anchorId: null };
+
+export const DEFAULT_STOCK_UPLOAD: SessionStockUpload = { checked: [], activeId: null, anchorId: null };
 
 export const DEFAULT_BATCH: SessionBatch = { checked: [], activeId: null, anchorId: null };
 
 export const DEFAULT_SESSION: SessionState = {
   tab: "sheets", sheets: DEFAULT_SHEET_OPTS,
   selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0, anchorId: null },
-  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, batch: DEFAULT_BATCH,
+  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, stockUpload: DEFAULT_STOCK_UPLOAD, batch: DEFAULT_BATCH,
 };
 
 /**
@@ -123,12 +136,14 @@ export function pruneIds(ids: readonly string[], knownIds: ReadonlySet<string>):
 function toSession(raw: unknown): SessionState {
   if (!isRecord(raw) || raw.v !== SESSION_VERSION) return DEFAULT_SESSION;
   return {
-    tab: TAB_IDS.includes(raw.tab as TabId) ? (raw.tab as TabId) : DEFAULT_SESSION.tab,
+    tab: raw.tab === "selection" ? "selectionV2"
+      : TAB_IDS.includes(raw.tab as TabId) ? (raw.tab as TabId) : DEFAULT_SESSION.tab,
     sheets: parseSheetOpts(raw.sheets),
     selection: parseSelection(raw.selection),
     selectionV2: parseV2(raw.selectionV2),
     svg: parseSvgSlice(raw.svg),
     upload: parseUploadSlice(raw.upload),
+    stockUpload: parseUploadSlice(raw.stockUpload),
     batch: parseBatchSlice(raw.batch),
   };
 }
@@ -147,6 +162,7 @@ function parseSvgSlice(raw: unknown): SessionSvg {
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
     activeId: typeof raw.activeId === "string" ? raw.activeId : null,
+    anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
   };
 }
 
@@ -155,6 +171,7 @@ function parseUploadSlice(raw: unknown): SessionUpload {
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
     activeId: typeof raw.activeId === "string" ? raw.activeId : null,
+    anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
   };
 }
 
@@ -164,7 +181,6 @@ function parseSelection(raw: unknown): SessionSelection {
     filter: parseFilter(raw.filter),
     sort: parseSort(raw.sort),
     selectedId: typeof raw.selectedId === "string" ? raw.selectedId : null,
-    collapsed: raw.collapsed === true,
     zoom: raw.zoom === "full" ? "full" : "fit",
     sync: raw.sync !== false,
     autoNext: raw.autoNext !== false,

@@ -6,7 +6,7 @@
 // same code path.
 
 import { loadHandles } from "../batch/store";
-import { withVersion, type PairMeta } from "../lib/pairmeta";
+import { withReview, type PairMeta } from "../lib/pairmeta";
 import type { ReviewStatus } from "../lib/svgmodel";
 import type { DirHandleLike } from "../lib/fs";
 import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
@@ -15,10 +15,12 @@ import { loadSourceIndex, metaPathOfEntry, type IndexEntry } from "../state/sour
 
 export const SVG_HANDLE_KEY = "__svg__";
 
-/** One decision a history entry carries: which version, and its review status. */
+/**
+ * One decision a history entry carries: which source, and the ITEM status it
+ * had (2026-10-20). No version: the status covers the whole row.
+ */
 export interface SvgReviewRec {
   id: string;
-  version: number;
   review: ReviewStatus;
 }
 
@@ -62,9 +64,8 @@ async function patchOne(root: DirHandleLike, entry: IndexEntry, rec: SvgReviewRe
   if (relPath === "") return false;
   const read = await loadMetaAt(root, relPath);
   const meta = read.meta ?? metaFromIndex(entry, rec);
-  const version = meta.versions.find((v) => v.version === rec.version);
-  if (!version || version.review === rec.review) return false;
-  await saveMetaAt(root, relPath, withVersion(meta, { ...version, review: rec.review }));
+  if (meta.review === rec.review) return false;
+  await saveMetaAt(root, relPath, withReview(meta, rec.review));
   return true;
 }
 
@@ -76,13 +77,12 @@ function metaFromIndex(entry: IndexEntry, rec: SvgReviewRec): PairMeta {
   });
 }
 
-/** The review status a version carries right now (a history entry's `before`). */
-export async function currentReview(root: DirHandleLike, source: { id: string }, version: number): Promise<ReviewStatus | null> {
+/** The item's review status right now (a history entry's `before`). */
+export async function currentReview(root: DirHandleLike, source: { id: string }): Promise<ReviewStatus | null> {
   const entry = loadSourceIndex().get(source.id);
   if (!entry) return null;
   const read = await loadMetaAt(root, metaPathOfEntry(entry));
-  const found = read.meta?.versions.find((v) => v.version === version);
-  return found ? found.review : null;
+  return read.meta ? read.meta.review : null;
 }
 
 export type { PairMeta };

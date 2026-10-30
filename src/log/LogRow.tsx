@@ -2,6 +2,7 @@
 // same body text Copy all hands over (lib/log owns that text, so the row and
 // the clipboard can never disagree).
 
+import { memo } from "react";
 import { formatEntryBody, type LogEntry } from "../lib/log";
 
 const LEVEL_TONE: Record<LogEntry["level"], string> = {
@@ -11,7 +12,8 @@ const LEVEL_TONE: Record<LogEntry["level"], string> = {
   error: "text-rose-300",
 };
 
-export default function LogRow({ entry }: { entry: LogEntry }) {
+/** Memoized: appending one line must not re-render the other 199. */
+function LogRowView({ entry }: { entry: LogEntry }) {
   return (
     <li data-testid="log-entry" data-level={entry.level}
       className="flex gap-2 border-b border-white/5 py-0.5 whitespace-pre-wrap break-words">
@@ -20,3 +22,5 @@ export default function LogRow({ entry }: { entry: LogEntry }) {
     </li>
   );
 }
+
+export default memo(LogRowView);

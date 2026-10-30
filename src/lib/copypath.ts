@@ -6,8 +6,9 @@
 // carry a same-named folder's path (the third report, 2026-10-09).
 
 import type { DirHandleLike } from "./fs";
+import { OUTPUT_DIR } from "./batchlayout";
 import { boundRootPathInfo } from "./knownroots";
-import { folderCopyText } from "./rootpath";
+import { folderCopyText, normalizeRootPath } from "./rootpath";
 
 export async function copyFolderText(
   handle: DirHandleLike | null, relPath: string, say: (msg: string, err?: boolean) => void,
@@ -24,4 +25,28 @@ export async function copyFolderText(
 /** The copy's base: this folder's captured path, else its name (I-29). */
 function baseOf(handle: DirHandleLike | null): string {
   return handle === null ? "" : boundRootPathInfo(handle).path || handle.name;
+}
+
+/** The split output folder's copyable base (I-29 honesty): a custom dest's own
+ *  bound path, else its name — except the auto dest, which is the app's own
+ *  `_split_output` under the root, so the root's base is what carries the path. */
+export function splitOutputBase(dest: DirHandleLike | null, root: DirHandleLike | null): string {
+  if (dest !== null && dest.name !== OUTPUT_DIR) return baseOf(dest) || dest.name;
+  const rootBase = root === null ? "" : baseOf(root) || root.name; // unbound root: its own name is the honest base (I-29)
+  return rootBase === "" ? OUTPUT_DIR : `${rootBase}\\${OUTPUT_DIR}`;
+}
+
+/** The processed-row "Location" action: copies the folder holding the item's
+ *  splits (`outRel`, relative to dest) and says exactly that (RULE 9). */
+export async function copySplitFolderText(
+  dest: DirHandleLike | null, root: DirHandleLike | null, outRel: string, say: (msg: string, err?: boolean) => void,
+): Promise<void> {
+  // outRel is already a FOLDER (not a file), so this is a plain join — folderCopyText would wrongly drop its last segment (I-56).
+  const text = normalizeRootPath(`${splitOutputBase(dest, root)}/${outRel}`);
+  try {
+    await navigator.clipboard.writeText(text);
+    say(`Split folder copied — browsers can't open Explorer directly: ${text}`);
+  } catch {
+    say("Could not copy the path", true);
+  }
 }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_uploadlog.test.ts — CP-1 (merge-report §9, T13): the tab's CLOSED log
 // vocabulary. Every entry the tab can emit is one of six outcomes, every entry
 // names the icon or the run it belongs to, and NONE has a `data` field — the
@@ -102,4 +103,9 @@ describe("the module lock — nobody else writes the tab's log", () => {
       }
     }
   });
+});
+
+it('does not claim failed/no-output rows were exported in a mixed or entirely failed batch', () => {
+  expect(exportBatchLine({done:2,total:2,aborted:false,fixed:0,failed:1})).toBe('Export finished: 1 exported · 1 failed — failed rows keep previous packages');
+  expect(exportBatchLine({done:1,total:1,aborted:false,fixed:0,failed:1})).toBe('Export finished: 0 exported · 1 failed — failed rows keep previous packages');
 });

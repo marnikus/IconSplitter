@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_cost.test.ts — the cost rules execute for real (RULE 8): the verified
 // rate card and its version, the ONE decision between a provider-reported
 // number and a calculated one, and the wording every surface shows. A provider
@@ -18,13 +19,25 @@ const tokensOnly: Usage = { input: 100_000, output: 20_000, total: 120_000, cost
 
 describe("svgpricing", () => {
   it("prices the configured model from the verified Requesty rate card", () => {
-    expect(PRICING_VERSION).toBe("requesty-2026-10-01");
+    expect(PRICING_VERSION).toBe("requesty-2026-10-19");
     expect(PROVIDER_MARKUP).toBe(1.05);
     expect(rateFor(MODEL)).toEqual({ input: 2, output: 10 });
     expect(rateFor("someone/unknown-model")).toBeNull();
     // 1M in + 1M out at $2 / $10 plus the 5% pay-as-you-go markup
     expect(estimateFromTokens(MODEL, { input: 1_000_000, output: 1_000_000 })).toBeCloseTo(12.6, 6);
     expect(estimateFromTokens(MODEL, { input: 0, output: 0 })).toBe(0);
+  });
+
+  it("prices the Sunburst image model: image input $8, image output $30 per 1M (user report 2026-10-19)", () => {
+    const IMAGE = "openai/gpt-image-2.5-sunburst";
+    expect(rateFor(IMAGE)).toEqual({ input: 8, output: 30 });
+    const whole: Usage = { input: 400, output: 1325, total: 1725, cost: null, currency: "USD" };
+    expect(costInfoFor(IMAGE, whole)).toMatchObject({ actual: null, basis: "rate-card" });
+    expect(costInfoFor(IMAGE, whole).estimated).toBeCloseTo(0.0450975, 9);
+    // one image cut into 3 icons: each icon carries a third of the image's cost
+    const share = costInfoFor(IMAGE, allocateUsage(whole, 3));
+    expect(share.basis).toBe("rate-card");
+    expect(share.estimated).toBeCloseTo(0.0450975 / 3, 9);
   });
 
   it("needs both token counts and a known model — anything less is unknown", () => {

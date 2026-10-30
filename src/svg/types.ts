@@ -2,7 +2,7 @@
 // Kept in one file so the hook, the row model, the scan and the dialogs all
 // speak the same language without importing each other.
 
-import type { SvgVersion } from "../lib/svgmodel";
+import type { ReviewStatus, SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import type { ScanSeq } from "../lib/scanseq";
 import type { BatchOutcome } from "../lib/svgbatch";
@@ -25,8 +25,11 @@ export interface SvgRow {
   newest: SvgVersion | null;
   /** The version the user chose (I-54), when it is still usable; else null. */
   preferred: SvgVersion | null;
-  /** The version currently carrying an approval, if any. */
-  approved: SvgVersion | null;
+  /**
+   * The ITEM's one review status (2026-10-20) — not the shown version's. Two
+   * versions of one row share it, so switching versions never changes the badge.
+   */
+  review: ReviewStatus;
   status: RowStatus;
   error: string | null;
   running: boolean;
@@ -72,11 +75,34 @@ export interface RunProgress {
 }
 
 import type { QueueItem } from "./runqueue";
+import type { PromptChoice } from "../lib/prompttasks";
+import type { RegenCode } from "./regencodes";
 
 export type { QueueItem } from "./runqueue";
 
+export interface ImageReview {
+  group: number;
+  total: number;
+  mosaic: string;
+  cells: { id: string; name: string; url: string }[];
+  busy: boolean;
+}
+
+/**
+ * What one confirmation hands the queue (2026-10-20): the prompt the popup
+ * showed, the icons-per-request size it planned with, and the exact current SVG
+ * code of every icon it previewed. Frozen, so the queue cannot drift from what
+ * the user approved (I-76).
+ */
+export interface ConfirmedBatch {
+  choice: PromptChoice;
+  size: number;
+  codes: ReadonlyMap<string, RegenCode>;
+}
+
 export type Dialog =
   | { kind: "confirm"; ids: string[]; operation: SvgOperation }
+  | { kind: "image-regen"; ids: string[] }
   | { kind: "code"; id: string; version: number }
   | { kind: "history"; id: string };
 

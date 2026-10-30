@@ -55,3 +55,15 @@ function square(px: number): ZoomBox {
 function boxWidth(height: number, ratio: number): number {
   return Math.max(1, Math.round(height * ratio));
 }
+
+/**
+ * The box for an EXPORT preview (SVG to upload, 2026-10-19 user request): the
+ * artboard's ratio fitted inside the zoom square — the long side is the zoom
+ * value — so a 2048 px or a 16 px artboard draws the same size, and only a
+ * changed aspect ratio changes the box (a 2:1 artboard is zoom × zoom/2).
+ */
+export function zoomBoxFit(max: number, ratio: number): ZoomBox {
+  if (!Number.isFinite(ratio) || ratio <= 0) return square(max);
+  if (ratio >= 1) return { width: max, height: Math.max(1, Math.round(max / ratio)) };
+  return { width: boxWidth(max, ratio), height: max };
+}

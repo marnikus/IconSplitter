@@ -3,12 +3,13 @@
 // layout), status bar, overlays and the shared A/D/arrow hotkeys. It owns no
 // rule of its own — decisions, filters and persistence come from useSelection.
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { keyToAction } from "../lib/reviewmeta";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { attentionInfo } from "../lib/pairing";
 import { ALL_FILTER, type ViewPair } from "../lib/reviewfilter";
 import { selectIntent } from "../lib/reviewselect";
+import { isNativeListKeyTarget } from "../ui/rowgesture";
 import CompareView from "../selection/CompareView";
 import { copyFolderText } from "../lib/copypath";
 import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
@@ -25,8 +26,9 @@ import { useSelectionV2, type SelectionV2Api } from "./useSelectionV2";
 export default function SelectionV2Panel() {
   const v = useSelectionV2();
   const thumbFor = useSideThumbs(v.core.rootRef);
-  useHotkeys(v);
-  useSelectShortcuts({ activeId: v.core.s.selectedId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, true);
+  const [bulkArmed, setBulkArmed] = useState(false);
+  useHotkeys(v, !bulkArmed);
+  useSelectShortcuts({ activeId: v.core.s.selectedId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, !bulkArmed);
   if (!v.core.supported) return <UnsupportedNote onPick={v.core.chooseRoot} />;
   return (
     <div className="v2" data-testid="v2-panel">
@@ -39,7 +41,7 @@ export default function SelectionV2Panel() {
         )}
       </section>
       <Banners v={v} />
-      <Body v={v} thumbFor={thumbFor} />
+      <Body v={v} thumbFor={thumbFor} onBulkArmed={setBulkArmed} />
       <StatusFooter s={v.core.s} className="v2-statusbar" />
       <Overlays s={v.core.s} toastTestid="v2-toast" busyTestid="v2-busy" />
     </div>
@@ -59,7 +61,7 @@ function Banners({ v }: { v: SelectionV2Api }) {
   );
 }
 
-function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
+function Body({ v, thumbFor, onBulkArmed }: { v: SelectionV2Api; thumbFor: SideThumbFor; onBulkArmed: (armed: boolean) => void }) {
   if (v.core.s.rootName === "") return <PickRootNote onPick={v.core.chooseRoot} />;
   if (v.prefs.mode === "compare") return <CompareBody v={v} />;
   return (
@@ -67,9 +69,10 @@ function Body({ v, thumbFor }: { v: SelectionV2Api; thumbFor: SideThumbFor }) {
       <BulkBar header={v.header} checkedCount={v.checked.length} affectedCount={v.affected.length}
         blockedCount={v.blockedCount} hiddenCount={v.hiddenCount} visibleCount={v.core.visible.length}
         thumb={v.prefs.thumbHeight}
-        onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckAll())} onSelectVisible={v.checkVisible}
+        onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckVisible())} onSelectVisible={v.checkVisible}
         onDeselectAll={v.uncheckAll} onThumb={v.setThumb}
-        onDecide={(d) => v.core.decideBulk(v.affected, d)} onReset={() => v.core.resetBulk(v.affected)} />
+        onDecide={(d) => v.core.decideBulk(v.affected, d)} onReset={() => v.core.resetBulk(v.affected)}
+        onArmedChange={onBulkArmed} />
       <ReviewList rows={v.core.visible} total={v.core.s.pairs.length} activeId={v.core.s.selectedId}
         checked={v.checked} thumb={v.prefs.thumbHeight} autoNext={v.core.s.autoNext} thumbFor={thumbFor}
         setAutoNext={(on) => v.core.patch({ autoNext: on })} onRowClick={(id, mods) => v.selectRow(id, selectIntent(mods))}
@@ -137,18 +140,27 @@ function UnsupportedNote({ onPick }: { onPick: () => void }) {
   );
 }
 
-function useHotkeys(v: SelectionV2Api): void {
+function useHotkeys(v: SelectionV2Api, enabled: boolean): void {
   const listMode = v.prefs.mode === "list";
+  // The api object is new on every render; reading it through a ref keeps ONE
+  // window listener for the life of the tab.
+  const latest = useRef(v); latest.current = v;
   useEffect(() => {
+    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      const act = keyToAction(e.key, isTextField(e.target));
+      const blocked = isTextField(e.target) || e.ctrlKey || e.metaKey || e.altKey;
+      const act = keyToAction(e.key, blocked);
       // Space belongs to the focused control in list mode; only the comparison
       // layout uses it as the fit/1:1 zoom toggle.
-      if (!act || (act === "zoom" && listMode)) return;
+      if (!act || (act === "zoom" && listMode) || nativeListAction(act, e.target)) return;
       e.preventDefault();
-      runHotAction(act, hotTarget(v.core));
+      runHotAction(act, hotTarget(latest.current.core));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [v, listMode]);
+  }, [listMode, enabled]);
+}
+
+function nativeListAction(action: NonNullable<ReturnType<typeof keyToAction>>, target: EventTarget | null): boolean {
+  return (action === "next" || action === "prev" || action === "zoom") && isNativeListKeyTarget(target);
 }

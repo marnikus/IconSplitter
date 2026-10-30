@@ -4,12 +4,13 @@
 // aborts, journal) and the shared history. The batch runners live in
 // metaactions/exportactions; the selection, dialog and clipboard actions in
 // uiactions. This file owns the source, view, settings, provider and key
-// actions. Undo policy (design §6): ONE entry type `uploadSettings` — the bulk
-// apply and the per-icon override set/reset are undoable; global defaults edits
-// are persisted but not undoable (the same class as presets).
+// actions. Selection uses `uploadChecked`; settings use `uploadSettings` for
+// bulk apply and per-icon overrides. Global defaults stay persisted but not
+// undoable (the same class as presets).
 
-import { useCallback, useRef, type Dispatch } from "react";
+import { useCallback, useMemo, useRef, type Dispatch } from "react";
 import type { DirHandleLike } from "../lib/fs";
+import type { SelectIntent } from "../lib/reviewselect";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { parsePreviewBackground } from "../lib/svgbackground";
 import type { GeminiConfig } from "../lib/upload/gemini";
@@ -18,7 +19,7 @@ import type { IconMetadata } from "../lib/upload/meta";
 import {
   normalizeSettings, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
-import type { HistoryApi } from "../state/HistoryProvider";
+import type { HistoryActions } from "../state/HistoryProvider";
 import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
 import { clearGeminiKey, saveGeminiKey } from "./keystore";
@@ -31,6 +32,12 @@ import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
 import { useDownloadActions } from "./downloadactions";
 import { useUiActions } from "./uiactions";
+import { useShadowActions } from "./shadowactions";
+import { useBadgeActions } from "./badgeactions";
+import { useRowBadgeActions } from "./rowbadgeactions";
+import { useSizeGuideActions } from "./sizeguideactions";
+import { useSelectedSettingsActions } from "./settingsreset";
+import { useOverrideActions, useOverrideResetActions } from "./overrideactions";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
   ALL_UPLOAD_FILTER,
@@ -42,7 +49,7 @@ export interface UploadCtx {
   m: UploadModel;
   dispatch: Dispatch<UploadAction>;
   refs: UploadRefs;
-  hist: HistoryApi;
+  hist: HistoryActions;
   rows: UploadRow[];
   visible: UploadRow[];
   checked: string[];
@@ -50,7 +57,7 @@ export interface UploadCtx {
   header: "none" | "some" | "all";
   counts: UploadCounts;
   say: (msg: string, err?: boolean) => void;
-  loadAll: () => void;
+  loadAll: (audible?: boolean) => void;
   setRootName: (name: string) => void;
   setDiscovery: (d: UploadDiscovery | null) => void;
   setBusy: (b: string | null) => void;
@@ -73,18 +80,35 @@ export interface UploadActions extends PromptActions {
   setDefaults: (patch: Partial<UploadSettings>) => void;
   setOverride: (id: string, patch: SettingsOverrides) => void;
   resetOverride: (id: string) => void;
-  applyDefaultsToSelected: (ids: string[]) => void;
+  /** Bulk: clear every checked icon's overrides — one undoable entry. */
+  resetOverridesSelected: (ids: string[]) => void;
+  /** Freeze current global settings as local pins on the checked batch. */
+  applySettingsSelected: (ids: string[]) => void;
+  toggleShadowSelected: (ids: string[]) => void;
+  setShadowSelected: (ids: string[], patch: Partial<Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">>) => void;
+  toggleBadgeSelected: (ids: string[]) => void;
+  toggleSizeGuideSelected: (ids: string[]) => void;
   setGemini: (patch: Partial<GeminiConfig>) => void;
   checkModel: () => void;
   saveKey: (key: string) => void;
   forgetKey: () => void;
   toggleCheck: (id: string) => void;
   selectVisible: () => void;
+  uncheckVisible: () => void;
   deselectAll: () => void;
   checkActive: () => void;
   uncheckActive: () => void;
+  selectRow: (id: string, intent: SelectIntent) => void;
   setActive: (id: string) => void;
   openSettings: (id: string | null) => void;
+  openRowBadges: () => void;
+  addRowBadge: (name: string, color?: string) => void;
+  removeRowBadge: (id: string) => void;
+  renameRowBadge: (id: string, name: string) => void;
+  recolorRowBadge: (id: string, color: string) => void;
+  toggleRowBadge: (pairId: string, badgeId: string) => void;
+  removeRowBadgeSelected: (badgeId: string) => void;
+  applyRowBadgeSelected: (ids: string[], badgeId: string) => void;
   dismissDialog: () => void;
   requestMetadata: (ids: string[]) => void;
   /** Bulk: every selected icon that still needs metadata gets one paid call. */
@@ -96,10 +120,13 @@ export interface UploadActions extends PromptActions {
   confirmMetadata: () => void;
   cancelMetadata: () => void;
   acceptMetadata: (id: string) => void;
+  /** Bulk: validate/accept selected drafts locally, then re-embed existing exports. */
+  acceptMetadataSelected: (ids: string[]) => void;
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;
   copyMeta: (id: string, field: "title" | "description" | "tags") => void;
   /** Bulk: the selection's committed SVG/JPG/EPS copied into one folder the user picks (2026-10-08). */
   downloadSelected: (ids: string[]) => void;
+  cancelDownload: () => void;
   exportRows: (ids: string[]) => void;
   exportRow: (id: string) => void;
   cancelExport: () => void;
@@ -110,22 +137,33 @@ export interface UploadActions extends PromptActions {
 export type Slice<K extends keyof UploadActions> = Pick<UploadActions, K>;
 
 export function useUploadActions(ctx: UploadCtx): UploadActions {
-  return {
-    ...useSourceActions(ctx),
-    ...useViewActions(ctx),
-    ...useDefaultsActions(ctx),
-    ...useOverrideActions(ctx),
-    ...useOverrideResetActions(ctx),
-    ...useOverrideApplyActions(ctx),
-    ...useGeminiActions(ctx),
-    ...useModelCheckActions(ctx),
-    ...useKeyActions(ctx),
-    ...useUiActions(ctx),
-    ...useMetaActions(ctx),
-    ...useExportActions(ctx),
-    ...useDownloadActions(ctx),
-    ...usePromptActions(ctx),
-  };
+  // Every slice reads `ctx` through a ref and returns stable callbacks, so the
+  // flattened bag only changes when the context does (D7). Hooks are called at
+  // the top level; the spread itself is memoized.
+  const source = useSourceActions(ctx);
+  const view = useViewActions(ctx);
+  const defaults = useDefaultsActions(ctx);
+  const overrides = useOverrideActions(ctx);
+  const resets = useOverrideResetActions(ctx);
+  const selected = useSelectedSettingsActions(ctx);
+  const shadow = useShadowActions(ctx);
+  const badge = useBadgeActions(ctx);
+  const rowBadge = useRowBadgeActions(ctx);
+  const sizeGuide = useSizeGuideActions(ctx);
+  const gemini = useGeminiActions(ctx);
+  const modelCheck = useModelCheckActions(ctx);
+  const key = useKeyActions(ctx);
+  const ui = useUiActions(ctx);
+  const meta = useMetaActions(ctx);
+  const exp = useExportActions(ctx);
+  const download = useDownloadActions(ctx);
+  const prompt = usePromptActions(ctx);
+  return useMemo(() => ({
+    ...source, ...view, ...defaults, ...overrides, ...resets, ...selected,
+    ...shadow, ...badge, ...rowBadge, ...sizeGuide, ...gemini, ...modelCheck,
+    ...key, ...ui, ...meta, ...exp, ...download, ...prompt,
+  }), [source, view, defaults, overrides, resets, selected, shadow, badge, rowBadge,
+    sizeGuide, gemini, modelCheck, key, ui, meta, exp, download, prompt]);
 }
 
 function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
@@ -140,7 +178,7 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
         void rememberRoot(h);
       });
       if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
-      c.loadAll();
+      c.loadAll(true);
       c.say(picked.message ?? `Approved SVGs scanned from ${picked.handle.name}`);
     })();
   }, []);
@@ -149,7 +187,7 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
     // before any await: the click's own gesture is what allows the read (I-52)
     const root = c.refs.root.current as DirHandleLike | null;
     void retryCapture(root).then((captured) => { if (captured !== null) c.say(captured); });
-    c.loadAll();
+    c.loadAll(true);
   }, []);
   return { chooseRoot, rescan };
 }
@@ -177,72 +215,6 @@ function useDefaultsActions(ctx: UploadCtx): Slice<"setDefaults"> {
     c.dispatch({ type: "defaults", defaults });
   }, []);
   return { setDefaults };
-}
-
-/** One field pinned per icon — a gesture-coalesced undo entry per drag. */
-function useOverrideActions(ctx: UploadCtx): Slice<"setOverride"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const setOverride = useCallback((id: string, patch: SettingsOverrides) => {
-    const c = latest.current;
-    const before = c.m.overrides[id] ?? null;
-    const after = Object.keys(patch).length === 0 ? null : patch;
-    if (before === after) return;
-    c.dispatch({ type: "override", id, patch: after });
-    // One gesture-coalesced entry: a slider drag is one undo, not forty.
-    c.hist.pushGesture({
-      type: "uploadSettings",
-      label: `Override settings — ${nameOf(c, id)}`,
-      origin: "upload", ids: [id],
-      before: { overrides: { [id]: before } }, after: { overrides: { [id]: after } },
-    });
-  }, []);
-  return { setOverride };
-}
-
-/** Reset one icon to the defaults — one undoable entry. */
-function useOverrideResetActions(ctx: UploadCtx): Slice<"resetOverride"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const resetOverride = useCallback((id: string) => {
-    const c = latest.current;
-    const before = c.m.overrides[id] ?? null;
-    if (before === null) return c.say("This icon already inherits the defaults");
-    c.dispatch({ type: "override", id, patch: null });
-    c.hist.push({
-      type: "uploadSettings",
-      label: `Reset to defaults — ${nameOf(c, id)}`,
-      origin: "upload", ids: [id],
-      before: { overrides: { [id]: before } }, after: { overrides: { [id]: null } },
-    });
-    c.say("Reset to defaults — the icon inherits the global settings again");
-  }, []);
-  return { resetOverride };
-}
-
-/** Apply the current defaults to the selection — ONE undoable entry. */
-function useOverrideApplyActions(ctx: UploadCtx): Slice<"applyDefaultsToSelected"> {
-  const latest = useRef(ctx);
-  latest.current = ctx;
-  const applyDefaultsToSelected = useCallback((ids: string[]) => {
-    const c = latest.current;
-    if (ids.length === 0) return c.say("Select at least one icon first", true);
-    const before: Record<string, SettingsOverrides | null> = {};
-    const after: Record<string, SettingsOverrides | null> = {};
-    for (const id of ids) {
-      before[id] = c.m.overrides[id] ?? null;
-      after[id] = { ...c.m.defaults };
-    }
-    c.dispatch({ type: "overrides-patch", overrides: after });
-    c.hist.push({
-      type: "uploadSettings",
-      label: `Apply settings to ${ids.length} icon${ids.length === 1 ? "" : "s"}`,
-      origin: "upload", ids,
-      before: { overrides: before }, after: { overrides: after },
-    });
-    c.say(`Settings applied to ${ids.length} icon${ids.length === 1 ? "" : "s"} — one undo reverses the whole batch`);
-  }, []);
-  return { applyDefaultsToSelected };
 }
 
 /** The provider config (persisted locally, validated on read). */
@@ -289,7 +261,3 @@ function useKeyActions(ctx: UploadCtx): Slice<"saveKey" | "forgetKey"> {
   return { saveKey, forgetKey };
 }
 
-/** The row's display name for history labels — its file name, else the id. */
-function nameOf(c: UploadCtx, id: string): string {
-  return c.rows.find((r) => r.source.id === id)?.source.svgName ?? id;
-}

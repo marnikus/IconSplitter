@@ -1,3 +1,4 @@
+import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 // selectionv2_ui.test.tsx — RULE 8: DOM-level tests for the V2 Selection
 // surface (spec V2 §16). Everything here drives the real panel: folder pick →
 // recursive scan → list review rows → zoom → selection → bulk approve →
@@ -16,10 +17,11 @@ import { LEGACY_FILE } from "../src/selection/pairstore";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { usePrefsAutosave } from "../src/state/usePrefsAutosave";
-import { resetAppStore } from "../src/state/appstore";
+import { getAppState, patchView, resetAppStore } from "../src/state/appstore";
 import { PREFS_KEY } from "../src/selectionv2/prefsstore";
 import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,6 +73,27 @@ function makeBatchRoot(): FakeDir {
 }
 
 describe("Selection V2 panel", () => {
+  it("sorts checked/approval groups live and auto-next uses the pre-decision checked order", async () => {
+    const { el } = await mount(makeRoot());
+    const ordered = () => rows(el).map((r) => r.getAttribute("data-testid")!.slice("v2-row-".length));
+    await choose(el, "[data-testid=v2-sort]", "selected");
+    await choose(el, "[data-testid=v2-dir]", "desc");
+    await check(q(el, `[data-testid=v2-check-${FOG}]`) as HTMLInputElement, true);
+    expect(ordered()).toEqual([FOG, COURT, DUNES, HARBOR]);
+    await choose(el, "[data-testid=v2-dir]", "asc");
+    expect(ordered()).toEqual([COURT, DUNES, HARBOR, FOG]);
+    await choose(el, "[data-testid=v2-dir]", "desc");
+    await click(q(el, `[data-testid=v2-row-${FOG}]`)!);
+    await key("a");
+    expect(q(el, `[data-testid=v2-row-${COURT}]`)?.getAttribute("aria-current")).toBe("true");
+    expect(getAppState().v2.checked).toEqual([FOG]);
+    await choose(el, "[data-testid=v2-sort]", "approval");
+    await choose(el, "[data-testid=v2-dir]", "asc");
+    expect(ordered()).toEqual([COURT, DUNES, HARBOR, FOG]);
+    await choose(el, "[data-testid=v2-dir]", "desc");
+    expect(ordered()).toEqual([FOG, COURT, DUNES, HARBOR]);
+  });
+
   beforeEach(async () => {
     localStorage.clear();
     resetAppStore(); // no checked rows / filters leaking between tests
@@ -84,6 +107,32 @@ describe("Selection V2 panel", () => {
     expect(rows(el).length).toBe(1);
     expect(text(el, "[data-testid='v2-scan-scope']")).toContain("Scope: split output only");
     expect(text(el, "[data-testid='v2-scan-scope']")).toContain("not listed");
+  });
+
+  it("never lists exported or version-folder media as phantom split rows", async () => {
+    const root = makeBatchRoot();
+    let split = root;
+    for (const name of ["_split_output", "2026-10", "2026-10-01_10-24-31", "icon-sheet_AI", "split_01"]) {
+      split = await split.getDirectoryHandle(name);
+    }
+    for (const name of ["export", "AI source regeneration versions", "SVG versions"]) {
+      const output = new FakeDir(name);
+      const nested = new FakeDir("nested");
+      for (const file of ["icon-handshake-heart7_01_v2.svg", "ghost.jpeg", "ghost.eps"]) {
+        output.children.set(file, new FakeFile(file));
+        nested.children.set(file, new FakeFile(file));
+      }
+      output.children.set("nested", nested);
+      split.children.set(name, output);
+    }
+    const { el } = await mount(root);
+    expect(rows(el)).toHaveLength(1);
+    expect(text(el, "[data-testid='v2-count-total']")).toContain("1");
+    expect(q(el, "[data-testid='v2-count-attention']")).toBeNull(); // zero hides this badge
+    expect(rows(el)[0].textContent).toContain("icon-sheet_AI_01.png");
+    expect(rows(el)[0].textContent).not.toContain("AI result missing");
+    expect(el.textContent).not.toContain("icon-handshake-heart7_01_v2.svg");
+    expect(text(el, "[data-testid='v2-scan-scope']")).toContain("1 pair(s) in the main folder not listed");
   });
 
   it("keeps the whole folder when no split output exists", async () => {
@@ -166,6 +215,34 @@ describe("Selection V2 panel", () => {
     expect(ai.alt).toBe("AI result thumbnail");
   });
 
+  it("pins the bulk bar at the scroll-container top, above rows and below overlays", () => {
+    const css = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
+    const rule = css.match(/\.v2-bulk\s*\{([^}]*)\}/)?.[1].replace(/\s/g, "") ?? "";
+    expect(rule).toContain("position:sticky;");
+    expect(rule).toContain("top:0;");
+    const z = Number(rule.match(/z-index:(\d+)/)?.[1]);
+    expect(z).toBeGreaterThan(2);
+    expect(z).toBeLessThan(30);
+    expect(rule).toContain("background:var(--v2-surface);");
+    for (const selector of ["v2-workspace", "v2", "v2-shell"]) {
+      const ancestor = css.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+      expect(ancestor).not.toMatch(/overflow(?:-[xy])?:\s*(?:auto|scroll|hidden|clip)/);
+    }
+  });
+
+  it("keeps the whole pinned toolbar alongside the full list, outside nested scrollers", async () => {
+    const { el } = await mount(makeRoot());
+    const bar = q(el, "[data-testid='v2-bulk']")!;
+    const list = q(el, "[data-testid='v2-list']")!;
+    expect(bar.parentElement?.className).toBe("v2-workspace");
+    expect(bar.parentElement).toBe(list.parentElement);
+    expect(bar.nextElementSibling).toBe(list);
+    expect(bar.closest(".v2-panel, .pair-table, .v2-controls")).toBeNull();
+    for (const id of ["v2-check-all", "v2-selected-count", "v2-select-visible", "v2-deselect", "v2-thumb", "v2-approve-selected", "v2-decline-selected", "v2-reset-selected"]) {
+      expect(bar.querySelector(`[data-testid='${id}']`)).not.toBeNull();
+    }
+  });
+
   it("switches between list review and comparison, and the list has no compare panel", async () => {
     const { el } = await mount(makeRoot());
     expect(q(el, "[data-testid='v2-list']")).toBeTruthy();
@@ -197,6 +274,91 @@ describe("Selection V2 panel", () => {
     await key("a");
     expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
     expect(q(el, "[aria-current='true']")?.getAttribute("data-testid")).not.toBe(`v2-row-${FOG}`);
+  });
+
+  it.each(["approved", "declined"] as const)("advances after %s in displayed date order, not scan order", async (decision) => {
+    const { el } = await mount(makeRoot());
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await key(decision === "approved" ? "a" : "d");
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+  });
+
+  it("uses pre-decision status-filtered order and never wraps to pending above", async () => {
+    const { el } = await mount(makeRoot());
+    await act(async () => patchView({
+      sort: { by: "status", dir: "asc" },
+      filter: { date: { mode: "all" }, status: "pending", search: "architecture", pairing: "all" },
+    }));
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await key("a"); // removes the reference from the pending-only list
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+    expect(rows(el)).toHaveLength(1);
+    await act(async () => patchView({ filter: { date: { mode: "all" }, status: "all", search: "architecture", pairing: "all" } }));
+    await click(q(el, `[data-testid='v2-decline-${COURT}']`)!);
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("does not wrap from the last displayed row to pending rows above", async () => {
+    const { el } = await mount(makeRoot());
+    await act(async () => patchView({ sort: { by: "name", dir: "desc" } }));
+    await click(q(el, `[data-testid='v2-row-${COURT}']`)!); // last in Z to A
+    await key("a");
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBe("true");
+  });
+
+  it("comparison skips reviewed rows below and preserves checked rows", async () => {
+    const { el } = await mount(makeRoot());
+    await check(q(el, "[data-testid='v2-autonext']") as HTMLInputElement, false);
+    await click(q(el, `[data-testid='v2-decline-${COURT}']`)!);
+    await check(q(el, "[data-testid='v2-autonext']") as HTMLInputElement, true);
+    await check(q(el, `[data-testid='v2-check-${HARBOR}']`) as HTMLInputElement, true);
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await click(q(el, "[data-testid='v2-mode-compare']")!);
+    await key("a");
+    expect(getAppState().view.selectedId).toBe(HARBOR);
+    expect(getAppState().v2.checked).toEqual([HARBOR]);
+  });
+
+  it("open-side child buttons never activate or check their parent row", async () => {
+    stubClipboard("");
+    const { el } = await mount(makeRoot());
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await click(q(el, `[data-testid='v2-open-src-${COURT}']`)!);
+    expect(q(el, `[data-testid='v2-row-${FOG}']`)?.getAttribute("aria-current")).toBe("true");
+    expect(q(el, `[data-testid='v2-row-${COURT}']`)?.getAttribute("aria-current")).toBeNull();
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+    expect((q(el, `[data-testid='v2-check-${COURT}']`) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("row decision child buttons do not check or re-activate the old row over auto-next", async () => {
+    const { el } = await mount(makeRoot());
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+    await click(q(el, `[data-testid='v2-approve-row-${FOG}']`)!);
+    expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
+    const next = q(el, "[data-testid^='v2-row-'][aria-current='true']")?.getAttribute("data-testid")?.slice("v2-row-".length);
+    expect(next).toBeTruthy();
+    expect(next).not.toBe(FOG);
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+    await click(q(el, `[data-testid='v2-decline-${next}']`)!);
+    expect(q(el, `[data-testid='v2-row-${next}']`)?.className).toContain("declined");
+    expect(q(el, `[data-testid='v2-row-${next}']`)?.getAttribute("aria-current")).toBeNull();
+    expect(text(el, "[data-testid='v2-selected-count']")).toBe("0 selected");
+  });
+
+  it("keeps list approval and Q/E shortcuts behind an armed bulk confirmation", async () => {
+    const { el } = await mount(makeRoot());
+    await click(q(el, `[data-testid='v2-row-${FOG}']`)!);
+    await click(q(el, `[data-testid='v2-check-${FOG}']`)!);
+    await click(q(el, "[data-testid='v2-approve-selected']")!); // arm, do not apply
+    await key("q");
+    await key("a");
+    expect((q(el, `[data-testid='v2-check-${FOG}']`) as HTMLInputElement).checked).toBe(true);
+    expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("◔ Pending");
+    await click(q(el, "[data-testid='v2-cancel-bulk']")!);
+    await key("a");
+    expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
   });
 
   it("moves the active row with the arrow keys", async () => {
@@ -287,17 +449,20 @@ describe("Selection V2 panel", () => {
 
   it("approves the checked rows in one operation with one summary toast", async () => {
     const { el } = await mount(makeRoot());
+    recordCompletionAudio();
     await check(q(el, `[data-testid='v2-check-${FOG}']`) as HTMLInputElement, true);
     await check(q(el, `[data-testid='v2-check-${COURT}']`) as HTMLInputElement, true);
     const btn = q(el, "[data-testid='v2-approve-selected']") as HTMLButtonElement;
     expect(btn.textContent).toBe("✓ Approve selected (2)");
     await click(btn);
     expect(btn.textContent).toBe("Confirm approve 2?"); // count shown before it applies
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(0);
     await click(q(el, "[data-testid='v2-approve-selected']")!);
     expect(text(el, `[data-testid='v2-status-${FOG}']`)).toBe("✓ Approved");
     expect(text(el, `[data-testid='v2-status-${COURT}']`)).toBe("✓ Approved");
     expect(text(el, "[data-testid='v2-toast']")).toBe("2 pairs approved");
     expect(text(el, "[data-testid='v2-count-approved']")).toContain("2");
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
   });
 
   it("declines the selected rows in one operation, and reports the blocked one", async () => {
@@ -658,8 +823,6 @@ function nativeValue(el: HTMLInputElement | HTMLSelectElement, value: string): v
   Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, value);
 }
 
-async function settle(): Promise<void> {
-  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
-}
+const settle = () => quietSettle(0);
 
 

@@ -1,6 +1,6 @@
 // VersionsDialog.tsx — the version chooser (I-54). Every recorded version of
 // one icon's SVG is listed as a tile with its OWN artwork, and any of them can
-// be made the one the row shows — not only the newest. The choice is written
+// be accepted for actual use/export — not only the newest. The choice is written
 // into the pair's own file beside the images (so it travels with the folder and
 // survives a reload), the row and its preview update immediately, and NOTHING is
 // deleted: the whole history stays here, so every choice stays re-choosable.
@@ -92,31 +92,41 @@ interface TileProps {
 function VersionTile({ row, v, shown, readCode, onUse, onShowCode }: TileProps) {
   const version = v.version;
   const usable = v.status === "generated" && v.validation.ok;
-  const code = useVersionDoc(readCode, row.source.id, version, usable);
   const isShown = shown?.version === version;
+  const accepted = row.review === "approved" && row.meta?.preferred === version;
   return (
     <article className={`svg-history-tile${isShown ? " shown" : ""}`} data-testid={`svg-history-v${version}`}>
       <header className="svg-history-head">
         <b>v{version}</b>
         <span data-testid={`svg-history-status-${version}`}>{statusText(v)}</span>
-        {isShown && <em>shown</em>}
+        {isShown && <em>{accepted ? "accepted" : "shown"}</em>}
       </header>
-      <div className="svg-history-art">
-        {usable && code !== null
-          ? <SvgPreviewBox code={code} box={{ width: 96, height: 96 }} version={version}
-            testid={`svg-history-art-${version}`} label={`${row.source.stem} version ${version}`} />
-          : <span className="svg-thumb missing" data-testid={`svg-history-art-${version}`}>{usable ? "Reading…" : v.error ?? v.status}</span>}
-      </div>
+      <VersionArtwork row={row} v={v} usable={usable} readCode={readCode} />
       <VersionFacts v={v} />
       <footer className="svg-history-pick">
         <button type="button" className="svg-btn tiny primary" data-testid={`svg-history-use-${version}`}
-          disabled={!usable || isShown} onClick={() => onUse(version)}>Use this version</button>
+          disabled={!usable || accepted} title="Use and approve this SVG version" onClick={() => onUse(version)}>Use this version</button>
         <button type="button" className="svg-btn tiny" data-testid={`svg-history-code-${version}`}
           disabled={v.status !== "generated"} onClick={() => onShowCode(row.source.id, version)}>Code</button>
       </footer>
     </article>
   );
 }
+
+/** Loading and fallback rendering belong to each version's own saved artwork. */
+function VersionArtwork({ row, v, usable, readCode }: Pick<TileProps, "row" | "v" | "readCode"> & { usable: boolean }) {
+  const version = v.version;
+  const code = useVersionDoc(readCode, row.source.id, version, usable);
+  return (
+    <div className="svg-history-art">
+      {usable && code !== null
+        ? <SvgPreviewBox code={code} box={{ width: 96, height: 96 }} version={version}
+          testid={`svg-history-art-${version}`} label={`${row.source.stem} version ${version}`} />
+        : <span className="svg-thumb missing" data-testid={`svg-history-art-${version}`}>{usable ? "Reading…" : v.error ?? v.status}</span>}
+    </div>
+  );
+}
+
 
 /** The facts of one version: review, tokens, cost and when it was saved. */
 function VersionFacts({ v }: { v: SvgVersion }) {

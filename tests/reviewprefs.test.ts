@@ -1,3 +1,4 @@
+// @vitest-environment node
 // reviewprefs.test.ts — RULE 13: persisted view prefs (mode + thumbnail zoom)
 // validate on read, clamp to the slider range and never throw (spec V2 §4).
 // The RANGE itself belongs to lib/zoom (I-55) and is tested there; these tests

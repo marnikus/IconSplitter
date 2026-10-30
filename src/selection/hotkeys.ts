@@ -3,6 +3,7 @@
 // toggles the comparison zoom. Kept free of React so the mapping is testable.
 
 import { type HotAction } from "../lib/reviewmeta";
+import { nextVisibleId } from "../lib/reviewselect";
 
 export interface HotTarget {
   selectedId: string | null;
@@ -36,17 +37,11 @@ export function hotTarget(api: HotSource): HotTarget {
 
 export function runHotAction(act: HotAction, t: HotTarget): void {
   const id = t.selectedId;
-  if (act === "approve" && id) return t.decide(id, "approved");
-  if (act === "decline" && id) return t.decide(id, "declined");
+  if (act === "approve") { if (id) t.decide(id, "approved"); return; }
+  if (act === "decline") { if (id) t.decide(id, "declined"); return; }
   if (act === "zoom") return t.patch({ zoom: t.zoom === "fit" ? "full" : "fit" });
-  const next = neighbour(t.visible, id, act === "next" ? 1 : -1);
-  if (next) t.select(next.pairId);
-}
-
-function neighbour(
-  visible: readonly { pairId: string }[], id: string | null, step: number,
-): { pairId: string } | undefined {
-  return visible[visible.findIndex((p) => p.pairId === id) + step];
+  const next = nextVisibleId(t.visible.map((p) => p.pairId), id, act === "next" ? 1 : -1);
+  if (next && next !== id) t.select(next);
 }
 
 /** Input types that hold text the user is composing — everything else is a control. */

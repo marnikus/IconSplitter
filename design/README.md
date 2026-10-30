@@ -13,8 +13,8 @@ reverse-engineer (O7 in `docs/archive/2026-10-07-env-setup-performance/design.md
 
 Folders that predate this convention (`SVG tab generation/`, `selection tab
 V2/`, `SVG to upload/`, `Arena setup analyze/`) keep their historical names
-and contents; what they produced is documented in
-`docs/current/SYSTEM_OF_RECORD.md` + `docs/current/UI_SELECTORS.md`.
+and contents; current behaviour and handles are linked by tab from
+[`docs/current/README.md`](../docs/current/README.md).
 
 ## What SPEC.md must state — anything missing will be guessed
 
@@ -30,6 +30,6 @@ and contents; what they produced is documented in
 ## Rules
 
 * New folders are named without spaces: `design/<tab>/`.
-* After implementation the current truth is `SYSTEM_OF_RECORD.md` +
-  `UI_SELECTORS.md`; a SPEC is never edited to catch up (RULE 17 in spirit —
-  it is the dated handoff, not a live doc).
+* After implementation the tab's current behaviour and selectors own the
+  truth (see [`docs/current/README.md`](../docs/current/README.md)); a SPEC is
+  never edited to catch up (RULE 17 — one current owner per contract).

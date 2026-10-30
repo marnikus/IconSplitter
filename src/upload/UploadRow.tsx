@@ -6,11 +6,17 @@
 // metadata readiness and package status are three independent flags — the
 // badges never merge them.
 
-import { useEffect, useRef } from "react";
+import { paddingLabel } from "../lib/upload/padding";
+import { memo } from "react";
+import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
+import { selectIntent, type SelectIntent } from "../lib/reviewselect";
+import { isRowGestureClick } from "../ui/rowgesture";
 import type { IconMetadata } from "../lib/upload/meta";
 import {
-  effectiveSettings, megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
+  megapixelTargetOf, overrideKeys, STROKE_COLOR_ARTWORK, type SettingsOverrides, type UploadSettings,
 } from "../lib/upload/settings";
+import { isAsIs } from "../lib/upload/asis";
+import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
 import { exportDirOf } from "../lib/upload/export";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -18,6 +24,8 @@ import { statusOf, type UploadCounts } from "./rowmodel";
 import UploadPreview from "./UploadPreview";
 import UploadMetaFields from "./UploadMetaFields";
 import type { UploadJobStatus, UploadRow } from "./types";
+import type { RowBadgeState } from "../lib/upload/rowbadge";
+import UploadRowBadges from "./UploadRowBadges";
 
 export interface UploadRowActions {
   activeId: string | null;
@@ -28,8 +36,10 @@ export interface UploadRowActions {
   rootRef: { current: DirHandleLike | null };
   defaults: UploadSettings;
   overrides: Record<string, SettingsOverrides>;
+  /** Decorations a global control applied — they are not pins. */
+  applied: AppliedMap;
   toggleCheck: (id: string) => void;
-  setActive: (id: string) => void;
+  selectRow: (id: string, intent: SelectIntent) => void;
   openSettings: (id: string | null) => void;
   openLocation: (id: string) => void;
   requestMetadata: (ids: string[]) => void;
@@ -37,37 +47,57 @@ export interface UploadRowActions {
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;
   copyMeta: (id: string, field: "title" | "description" | "tags") => void;
   exportRow: (id: string) => void;
+  rowBadges: RowBadgeState;
+  toggleRowBadge: (pairId: string, badgeId: string) => void;
+  removeRowBadgeSelected: (badgeId: string) => void;
 }
 
-export default function UploadRowView({ row, a }: { row: UploadRow; a: UploadRowActions }) {
-  const active = row.source.id === a.activeId;
-  const checked = a.checked.includes(row.source.id);
-  const ref = useActiveScroll(active);
+export type UploadRowPresentation = Omit<UploadRowActions, "checked" | "activeId">;
+
+/**
+ * `active` is the ONLY active-dependent part (the expanded metadata fields), and
+ * the list clones just that one row's element — so an arrow move re-renders one
+ * row instead of all of them. Its class/aria-current/tabIndex still come from
+ * the projection registry, never from this prop.
+ */
+function UploadRowView({ row, a, active = false, register }: { row: UploadRow; a: UploadRowPresentation; active?: boolean; register: RegisterCheckedRow }) {
+  const ref = useRowBinding(row.source.id, register);
   const id = row.source.id;
   const status = statusOf(row);
   return (
-    <div ref={ref} role="listitem" data-testid={`upload-row-${id}`} tabIndex={active ? 0 : -1}
-      aria-current={active ? "true" : undefined}
-      className={`up-row ${status}${active ? " active" : ""}${checked ? " selected" : ""}`}
-      onClick={() => a.setActive(id)}>
-      <input type="checkbox" className="up-check" data-testid={`upload-check-${id}`} checked={checked}
+    <div ref={ref} role="listitem" data-testid={`upload-row-${id}`} tabIndex={-1}
+      className={`up-row ${status}`}
+      onClick={(e) => { if (isRowGestureClick(e)) a.selectRow(id, selectIntent(e)); }}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); a.selectRow(id, "replace"); } }}>
+      <input type="checkbox" className="up-check" data-testid={`upload-check-${id}`}
         aria-label={`Select ${row.source.svgName}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
-      <UploadPreview rootRef={a.rootRef} rootToken={a.rootToken} path={row.source.svgPath}
-        thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
-        label={`${row.source.svgName} v${row.source.version}`} version={row.source.version} />
-      <FileCell row={row} />
-      <StatusCell row={row} status={status} />
-      <MetaCell row={row} />
-      <SettingsCell row={row} a={a} />
-      <ActionCell row={row} a={a} />
+      <RowContent row={row} a={a} />
       {active && <RowDetail id={id} row={row} a={a} />}
     </div>
   );
 }
 
+export default memo(UploadRowView);
+
+const RowContent = memo(function RowContent({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
+  const id = row.source.id;
+  const status = statusOf(row);
+  return <>
+      <UploadPreview rootRef={a.rootRef} rootToken={a.rootToken} path={row.source.svgPath}
+        thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
+        label={`${row.source.svgName} v${row.source.version}`} version={row.source.version}
+        settings={rowSettings(a.defaults, id, a.overrides, a.applied)} />
+      <FileCell row={row} a={a} />
+      <StatusCell row={row} status={status} />
+      <MetaCell row={row} />
+      <SettingsCell row={row} a={a} />
+      <ActionCell row={row} a={a} />
+  </>;
+});
+
 /** The expandable detail: text only — the editable, copiable metadata fields. */
-function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowActions }) {
+function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowPresentation }) {
   return (
     <div className="up-detail" data-testid={`upload-detail-${id}`}>
       <UploadMetaFields id={id} meta={row.meta}
@@ -79,17 +109,7 @@ function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowAct
   );
 }
 
-/** Keeps the active row in view while the list scrolls. */
-function useActiveScroll(active: boolean) {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (active) ref.current?.scrollIntoView?.({ block: "nearest" });
-  }, [active]);
-  return ref;
-}
-
-/** The file a row is about and the folder its package commits into. */
-function FileCell({ row }: { row: UploadRow }) {
+function FileCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
   const id = row.source.id;
   return (
     <div className="svg-file-main">
@@ -99,6 +119,8 @@ function FileCell({ row }: { row: UploadRow }) {
         export → {exportDirOf(row.source.dirPath)} · approved v{row.source.version}
         {row.source.approvedValid > 1 ? ` · ${row.source.approvedValid} approved versions` : ""}
       </div>
+      <UploadRowBadges pairId={id} state={a.rowBadges}
+        onToggle={a.toggleRowBadge} onRemoveSelected={a.removeRowBadgeSelected} />
     </div>
   );
 }
@@ -137,7 +159,7 @@ function strokeLine(s: UploadSettings): string {
 
 /** "eps on · inkscape", then "· strokes → fills" when the strokes are expanded (2026-10-09). */
 function epsLine(s: UploadSettings): string {
-  const eps = `eps ${s.includeEps ? "on" : "off"} · ${s.epsConverter}`;
+  const eps = `svg ${s.includeSvg !== false ? "on" : "off"} · jpeg ${s.includeJpeg !== false ? "on" : "off"} · eps ${s.includeEps ? "on" : "off"} · ${s.epsConverter}`;
   return s.expandStrokes ? `${eps} · strokes → fills` : eps;
 }
 
@@ -147,15 +169,32 @@ function artboardLine(s: UploadSettings): string {
   return mp === null ? "" : ` · artboard ${mp} MP`;
 }
 
+function shadowLine(s: UploadSettings): string {
+  return s.shadowEnabled ? ` · shadow ${s.shadowWidthPct}% · gap ${s.shadowGapPct}%` : "";
+}
+
+/**
+ * The artboard decorations this row will ship — the list has to say that the
+ * export adds something the artwork does not have (2026-10-20 review: a row
+ * with a badge or a size guide looked identical to one without).
+ */
+function decorationLine(s: UploadSettings): string {
+  const parts = [
+    ...(s.badgeEnabled ? ["badge"] : []),
+    ...(s.sizeGuideEnabled ? [`size guide ${s.sizeGuideSmallPct}/${s.sizeGuideLargePct}%`] : []),
+  ];
+  return parts.length === 0 ? "" : ` · ${parts.join(" · ")}`;
+}
+
 /** The effective settings, one line, plus how many fields this icon pins. */
-function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
+function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
   const id = row.source.id;
-  const effective = effectiveSettings(a.defaults, a.overrides[id] ?? {});
+  const effective = rowSettings(a.defaults, id, a.overrides, a.applied);
   const pinned = overrideKeys(a.overrides[id] ?? {}).length;
   return (
     <div className="svg-cell" data-testid={`upload-settings-${id}`}>
-      <small>pad {effective.paddingPct}% · {effective.background} · {strokeLine(effective)}</small>
-      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}</small>
+      <small>{isAsIs(effective) ? "as is — the approved SVG, unchanged" : `pad ${paddingLabel(effective.paddingPct)} · ${effective.background} · ${strokeLine(effective)}`}</small>
+      <small>{effective.jpegMegapixels} MP · q{effective.jpegQuality} · optimize {effective.optimizeSvg ? "on" : "off"} · {epsLine(effective)}{artboardLine(effective)}{shadowLine(effective)}{decorationLine(effective)}</small>
       <small className={pinned > 0 ? "up-overridden" : ""} data-testid={`upload-settings-pinned-${id}`}>
         {pinned === 0 ? "inherits defaults" : `${pinned} field${pinned === 1 ? "" : "s"} overridden`}
       </small>
@@ -164,7 +203,7 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
 }
 
 /** Metadata / Settings / Export — the row's own three actions. */
-function ActionCell({ row, a }: { row: UploadRow; a: UploadRowActions }) {
+function ActionCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
   const id = row.source.id;
   const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   return (

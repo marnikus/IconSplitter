@@ -8,6 +8,7 @@
 // No rule lives here — every value comes from the hook and every change goes
 // straight back to it.
 
+import { STATE_SORT_OPTIONS } from "../lib/statesort";
 import type { KeySource } from "../lib/keyvault";
 import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
 import type { DirHandleLike } from "../lib/fs";
@@ -19,7 +20,9 @@ import {
   type GeminiConfig,
 } from "../lib/upload/gemini";
 import type { ModelCheck, UploadListFilter, UploadSort } from "./types";
+import type { RowBadge } from "../lib/upload/rowbadge";
 import UploadPromptPanel, { type UploadPromptPanelProps } from "./UploadPromptPanel";
+import UploadRowBadgeFilter from "./UploadRowBadgeFilter";
 import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
@@ -54,6 +57,8 @@ export interface UploadControlsProps {
   onFilter: (patch: Partial<UploadListFilter>) => void;
   onSort: (sort: UploadSort) => void;
   onClearFilters: () => void;
+  badgeCatalog: readonly RowBadge[];
+  onOpenRowBadges: () => void;
 }
 
 export default function UploadControls(p: UploadControlsProps) {
@@ -225,8 +230,9 @@ function FilterLine({ p }: { p: UploadControlsProps }) {
         options={[["all", "All metadata"], ["empty", "Empty"], ["pending", "Generating"], ["generated", "Generated"], ["invalid", "Invalid"], ["accepted", "Accepted"], ["interrupted", "Interrupted"]]}
         onChange={(v) => p.onFilter({ metadata: v as UploadListFilter["metadata"] })} />
       <Select label="Sort by" testid="upload-sort" value={p.sort}
-        options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"]]}
+        options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"], ...STATE_SORT_OPTIONS]}
         onChange={(v) => p.onSort(v as UploadSort)} />
+      <UploadRowBadgeFilter filter={p.filter} catalog={p.badgeCatalog} onFilter={p.onFilter} onOpen={p.onOpenRowBadges} />
       <label className="svg-field">
         <span className="svg-label">Search</span>
         <input className="svg-input" data-testid="upload-search" type="search" aria-label="Search icons"

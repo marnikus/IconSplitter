@@ -1,3 +1,4 @@
+// @vitest-environment node
 // selection_reset.test.ts — RULE 8: "reset to pending" is a first-class
 // decision transition. A pending pair owns no stored record (I-13), the pair
 // itself and its file metadata are untouched, and a bulk reset is ONE

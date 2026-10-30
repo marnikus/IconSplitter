@@ -12,12 +12,15 @@ const BADGE: Record<SourceStatus, { label: string }> = {
   deleted: { label: "deleted" },
 };
 
-export default function ScanStatusCell({ r }: { r: Row }) {
+export default function ScanStatusCell({ r, locate }: { r: Row; locate?: (relPath: string) => void }) {
   const b = BADGE[r.status];
   return (
     <div className="svg-cell" data-testid={`batch-status-${r.relPath}`}>
       <span className={`svg-badge ${r.status}`}>{b.label}</span>
       {r.refRelPath === null && <small className="svg-error">ref missing</small>}
+      {r.outRel && locate && (
+        <button type="button" className="svg-btn tiny" data-testid={`batch-row-locate-${r.relPath}`} title={`Copy the splits folder: ${r.outRel}`} onClick={(e) => { e.stopPropagation(); locate(r.relPath); }}>📍 Location</button>
+      )}
     </div>
   );
 }

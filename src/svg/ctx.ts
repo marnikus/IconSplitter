@@ -3,19 +3,21 @@
 // toasts, the scan bridge, the boot/autosave effects and the derived lists.
 // Building it here keeps useSvgGen itself a five-line composition.
 
+import { isSelectionSort } from "../lib/statesort";
 import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
+import { checkedInView } from "../lib/reviewselect";
 import { providerLabel } from "../lib/svgconfig";
 import { SCAN_IDLE } from "../lib/scanseq";
 import { requestCount } from "../lib/svgbatch";
 import { clampImagesPerRequest } from "../lib/svgconfig";
 import { usageTotals } from "../lib/svglist";
-import { useAppState } from "../state/useAppState";
-import { useHistory } from "../state/HistoryProvider";
+import { useAppSlice } from "../state/useAppState";
+import { useHistoryActions } from "../state/HistoryProvider";
 import { readApiKey } from "./keystore";
 import { isStale, loadCatalog, refreshCatalog } from "./catalog";
 import { loadParamMap, paramsFor, saveParamMap, withParams } from "./paramstore";
 import { resetNote, resolveModelParams } from "./modelparams";
-import { saveConfig, savePrompt } from "./promptstore";
+import { saveConfig, saveConnections, savePrompt } from "./promptstore";
 import { saveSvgPrefs } from "./prefsstore";
 import { bootSources, scanSources, type ScanSetters } from "./scan";
 import { headerState, toListRow, visibleRows, withQueued } from "./rowmodel";
@@ -27,18 +29,21 @@ import type { RunProgress, SvgRefs, SvgRow } from "./types";
 
 export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCtx {
   const refs = useRef(newRefs()).current;
-  const hist = useHistory();
-  const app = useAppState();
+  const hist = useHistoryActions();
+  const svg = useAppSlice("svg");
   const say = useSay(dispatch);
   const bridge = useScanBridge(refs, dispatch, say);
   const setCatalog = useCallback((catalog: CatalogModel[] | null) => dispatch({ type: "catalog", catalog }), [dispatch]);
-  const derived = useDerived(model, app.svg.checked);
+  const derived = useDerived(model, svg.checked);
   useSvgBoot(refs, { ...bridge, setCatalog, baseUrl: model.config.baseUrl });
   useModelSync(model, dispatch, say);
   useSvgPersist(model);
-  return {
-    m: model, dispatch, refs, hist, provider: providerLabel(model.config),
-    rows: model.rows, checked: app.svg.checked, activeId: app.svg.activeId,
+  // D7: the tab's context value keeps its identity until a real input changes, so
+  // hotkey effects and memoized rows do not re-bind on an unrelated render.
+  const provider = providerLabel(model.config);
+  return useMemo(() => ({
+    m: model, dispatch, refs, hist, provider,
+    rows: model.rows, checked: svg.checked, activeId: svg.activeId,
     say, loadAll: bridge.loadAll, refreshKey: bridge.refreshKey,
     setRootName: bridge.setRootName,
     setDiscovery: bridge.setDiscovery, setBusy: bridge.setBusy, setRootToken: bridge.setRootToken,
@@ -46,7 +51,7 @@ export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCt
     setProgress: bridge.setProgress, setProgressFn: bridge.setProgressFn,
     setCurrent: bridge.setCurrent,
     ...derived,
-  };
+  }), [model, dispatch, refs, hist, provider, svg.checked, svg.activeId, say, bridge, derived]);
 }
 
 /** A toast lives for a few seconds and then clears itself (RULE 9). */
@@ -92,10 +97,13 @@ function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx
   const setProgressFn = useCallback((fn: (p: RunProgress | null) => RunProgress | null) => dispatch({ type: "progress-fn", fn }), [dispatch]);
   const setCurrent = useCallback((id: string | null) => dispatch({ type: "current", id }), [dispatch]);
   setters.current = { setRootName, setRows, setDiscovery, setBusy, setRootToken, say, setCurrent } as any;
-  return {
+  // One identity per dependency set: the boot effect depends on these members,
+  // and a fresh bag per render would re-run it (RULE 24, D7).
+  return useMemo(() => ({
     loadAll, refreshKey, say, setRootName, setDiscovery, setBusy, setRootToken,
     setRows, setRowsFn, setProgress, setProgressFn, setCurrent,
-  };
+  }), [loadAll, refreshKey, say, setRootName, setDiscovery, setBusy, setRootToken,
+    setRows, setRowsFn, setProgress, setProgressFn, setCurrent]);
 }
 
 /**
@@ -154,32 +162,34 @@ function useModelSync(model: SvgModel, dispatch: Dispatch<SvgAction>, say: SvgCt
   }, [key]);
 }
 
-/** Zoom, the card's minimized state, the preview background and the prompt are
+/** Zoom, the card's minimized state, the preview background/stroke and the prompt are
     remembered locally (RULE 6). */
 function useSvgPersist(model: SvgModel): void {
   useEffect(() => saveSvgPrefs({
-    thumbHeight: model.thumb, providerOpen: model.providerOpen, previewBg: model.bg,
-  }), [model.thumb, model.providerOpen, model.bg]);
+    thumbHeight: model.thumb, providerOpen: model.providerOpen, previewBg: model.bg, previewStroke: model.stroke,
+  }), [model.thumb, model.providerOpen, model.bg, model.stroke]);
   useEffect(() => saveConfig(model.config), [model.config]);
+  useEffect(() => saveConnections({ list: model.connections, activeId: model.activeConn }), [model.connections, model.activeConn]);
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
 }
 
 /** The filtered/sorted view, its totals and the request count, derived only. */
 function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" | "totals" | "header" | "affected" | "requests"> {
+  const sortChecks = isSelectionSort(model.sort) ? checked : undefined;
   const visible = useMemo(
-    () => withQueued(visibleRows(model.rows, model.filter, model.sort, model.order), model.queue),
-    [model.rows, model.filter, model.sort, model.order, model.queue],
+    () => withQueued(visibleRows(model.rows, model.filter, model.sort, { order: model.order, checked: sortChecks }), model.queue),
+    [model.rows, model.filter, model.sort, model.order, model.queue, sortChecks],
   );
   const totals = useMemo(() => usageTotals(visible.map(toListRow)), [visible]);
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
-  const affected = useMemo(() => visible.filter((r) => checked.includes(r.source.id)).map((r) => r.source.id), [visible, checked]);
+  const affected = useMemo(() => checkedInView(visible.map((r) => r.source.id), checked), [visible, checked]);
   // The same size the confirmation and the runner use — shown before any send.
   // The effort tier is deliberately absent: it never shrinks the batch.
   const requests = useMemo(
     () => requestCount(checked.length, clampImagesPerRequest(model.config.imagesPerRequest)),
     [checked.length, model.config.imagesPerRequest],
   );
-  return { visible, totals, header, affected, requests };
+  return useMemo(() => ({ visible, totals, header, affected, requests }), [visible, totals, header, affected, requests]);
 }
 
 function newRefs(): SvgRefs {

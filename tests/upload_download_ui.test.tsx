@@ -1,3 +1,4 @@
+import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 // upload_download_ui.test.tsx — "Download all" on the SVG to upload tab
 // (2026-10-08): the real panel over a fake folder that already holds two
 // committed packages. The button counts the selection's committed files, the
@@ -12,12 +13,13 @@ import { pairId } from "../src/lib/pairing";
 import { getLogState, resetLogStore } from "../src/log/logstore";
 import { forgetRestoreNote } from "../src/upload/jobstore";
 import UploadPanel from "../src/upload/UploadPanel";
-import { resetAppStore } from "../src/state/appstore";
+import { getAppState, setAppState, resetAppStore } from "../src/state/appstore";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { BinDir, BinFile } from "./helpers/binfakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { commitPackage, PACKAGE_EPS as EPS, PACKAGE_JPG as JPG, PACKAGE_SVG as SVG, type PackageKind } from "./helpers/uploadpackage";
+import { settle as quietSettle, waitUntil } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,15 +43,9 @@ let ui: Root;
 let picker: ReturnType<typeof vi.fn>;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const text = (sel: string) => q(sel)?.textContent ?? "";
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
-async function waitFor(fn: () => boolean, label: string, ms = 8000): Promise<void> {
-  const start = Date.now();
-  while (!fn()) {
-    if (Date.now() - start > ms) throw new Error(`timed out waiting for ${label}`);
-    await act(async () => { await new Promise((r) => setTimeout(r, 25)); });
-  }
-}
+const waitFor = (fn: () => boolean, label: string, ms = 8000) => waitUntil(fn, label, ms);
 async function click(sel: string): Promise<void> {
   await waitFor(() => q(sel) !== null && (q(sel) as HTMLButtonElement).disabled !== true, `${sel} enabled`);
   await act(async () => { q(sel)!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -112,7 +108,156 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Hold only destination readback, leaving actual writes/byte verification intact. */
+function holdReadback(dest: BinDir): (() => void)[] {
+  const releases: (() => void)[] = [];
+  const original = BinFile.prototype.getFile;
+  vi.spyOn(BinFile.prototype, "getFile").mockImplementation(async function (this: BinFile) {
+    if (dest.children.get(this.name) === this) await new Promise<void>((resolve) => releases.push(resolve));
+    return original.call(this);
+  });
+  return releases;
+}
+
 describe("Download all — the selection's packages, one folder", () => {
+  it("reports verified per-file progress from zero to complete, with one sound and dismissible results", async () => {
+    const dest = new BinDir("stock-drop"); const releases = holdReadback(dest);
+    picker.mockResolvedValue(dest); await mount(makeRoot()); await check(FOG); recordCompletionAudio();
+    await click("[data-testid=upload-download-selected]");
+    await waitFor(() => releases.length === 1, "first file awaiting verification");
+    const track = () => q("[data-testid=upload-download-progress-track]");
+    expect(track()).not.toBeNull();
+    expect(track()!.getAttribute("aria-valuenow")).toBe("0");
+    expect(text("[data-testid=upload-download-progress-file]")).toContain("fog.svg");
+    expect(text("[data-testid=upload-download-progress-completed]")).toContain("0 completed / 3");
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(0);
+    for (let i = 0; i < 2; i++) {
+      await act(async () => releases[i]());
+      await waitFor(() => releases.length === i + 2, "next file awaiting verification");
+      expect(track()!.getAttribute("aria-valuenow")).toBe(String(Math.round((i + 1) / 3 * 100)));
+      expect(text("[data-testid=upload-download-progress-completed]")).toContain(`${i + 1} completed / 3`);
+    }
+    await act(async () => releases[2]());
+    await waitFor(() => text("[data-testid=upload-download-progress-title]").includes("complete"), "download summary");
+    expect(track()!.getAttribute("aria-valuenow")).toBe("100");
+    expect(text("[data-testid=upload-download-progress-remaining]")).toContain("0 remaining");
+    expect(q("[data-testid=upload-download-progress-cancel]")).toBeNull();
+    expect(text("[data-testid=upload-toast]")).toContain("Saved 3 files");
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
+    await click("[data-testid=upload-download-progress-dismiss]");
+    expect(q("[data-testid=upload-download-progress-header]")).toBeNull();
+    expect(dest.children.size).toBe(3);
+  });
+
+  it.each(["header", "toolbar"])("keeps progress outside a hidden panel; %s cancellation stops after verifying the active copy", async (control) => {
+    const portal = document.createElement("div"); portal.id = "upload-progress-mount"; document.body.appendChild(portal);
+    const dest = new BinDir("stock-drop"); const releases = holdReadback(dest);
+    picker.mockResolvedValue(dest); await mount(makeRoot()); await check(FOG); recordCompletionAudio();
+    await click("[data-testid=upload-download-selected]");
+    await waitFor(() => releases.length === 1, "active copy readback");
+    host.hidden = true;
+    const find = (suffix: string) => portal.querySelector(`[data-testid=upload-download-progress-${suffix}]`) as HTMLElement | null;
+    expect(host.querySelector('[data-testid=upload-download-progress-header]')).toBeNull();
+    expect(find("track")).not.toBeNull();
+    await act(async () => { (control === "header" ? find("cancel") : q("[data-testid=upload-cancel-run]"))!.click(); });
+    expect(releases).toHaveLength(1); // current file must still finish readback
+    await act(async () => releases[0]());
+    await waitFor(() => find("title")?.textContent?.includes("cancelled") === true, "cancelled summary");
+    expect(find("track")!.getAttribute("aria-valuenow")).toBe("33");
+    expect(find("completed")!.textContent).toContain("1 completed / 3");
+    expect(find("remaining")!.textContent).toContain("2 remaining");
+    expect([...dest.children.keys()]).toEqual(["fog.svg"]);
+    expect(new TextDecoder().decode(bytesOf(dest, "fog.svg")!)).toBe(SVG);
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(0);
+    expect(text("[data-testid=upload-toast]")).toContain("cancelled");
+    await act(async () => { find("dismiss")!.click(); });
+    expect(find("header")).toBeNull(); portal.remove();
+  });
+
+
+  it("finishes and sounds once while hidden, and Review returns to Upload without copying again", async () => {
+    const portal = document.createElement("div"); portal.id = "upload-progress-mount"; document.body.appendChild(portal);
+    const dest = new BinDir("stock-drop"); const releases = holdReadback(dest);
+    picker.mockResolvedValue(dest); await mount(makeRoot()); await check(FOG); recordCompletionAudio();
+    await click("[data-testid=upload-download-selected]");
+    await waitFor(() => releases.length === 1, "first copy readback");
+    await act(async () => { setAppState({ tab: "generateSvg" }); }); host.hidden = true;
+    const find = (suffix: string) => portal.querySelector(`[data-testid=upload-download-progress-${suffix}]`) as HTMLElement | null;
+    for (let i = 0; i < 3; i++) {
+      await act(async () => releases[i]());
+      if (i < 2) await waitFor(() => releases.length === i + 2, "next hidden copy");
+    }
+    await waitFor(() => find("title")?.textContent?.includes("complete") === true, "hidden completion summary");
+    expect(find("track")!.getAttribute("aria-valuenow")).toBe("100");
+    expect(host.querySelector('[data-testid=upload-download-progress-header]')).toBeNull();
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
+    await act(async () => { find("review")!.click(); });
+    expect(getAppState().tab).toBe("upload");
+    expect(picker).toHaveBeenCalledTimes(1); expect(releases).toHaveLength(3);
+    expect(dest.children.size).toBe(3); portal.remove();
+  });
+
+  it("counts kept, missing and failed files as settled, continues copying and retains an error summary", async () => {
+    const root = makeRoot(); const dest = new BinDir("stock-drop");
+    dest.children.set("arch.svg", new BinFile("arch.svg", "keep me"));
+    const releases = holdReadback(dest); picker.mockResolvedValue(dest);
+    await mount(root); await check(FOG); await check(ARCH); recordCompletionAudio();
+    const archExport = (((root.children.get(DIR) as BinDir).children.get("arch") as BinDir).children.get("export") as BinDir);
+    archExport.children.delete("arch.jpg"); // disappeared after the source was assembled
+    await click("[data-testid=upload-download-selected]");
+    await waitFor(() => releases.length === 1, "first written file awaiting readback");
+    const file = dest.children.get("fog.svg") as BinFile;
+    file.bytes = new Uint8Array([0]); // destination corruption must fail real readback
+    await act(async () => releases[0]());
+    await waitFor(() => releases.length === 2, "copy continues after mismatch");
+    expect(dest.children.has("fog.svg")).toBe(false); // failed write cleaned up
+    await act(async () => releases[1]());
+    await waitFor(() => releases.length === 3, "final copy readback");
+    await act(async () => releases[2]());
+    await waitFor(() => text("[data-testid=upload-download-progress-title]").includes("errors"), "failed download summary");
+    expect(q("[data-testid=upload-download-progress-track]")!.getAttribute("aria-valuenow")).toBe("100");
+    expect(text("[data-testid=upload-download-progress-completed]")).toContain("5 completed / 5");
+    expect(text("[data-testid=upload-toast]")).toContain("2 files");
+    expect(text("[data-testid=upload-toast]")).toContain("1 kept");
+    expect(text("[data-testid=upload-toast]")).toContain("1 missing");
+    expect(text("[data-testid=upload-toast]")).toContain("1 failed");
+    expect(new TextDecoder().decode(bytesOf(dest, "arch.svg")!)).toBe("keep me");
+    expect(bytesOf(dest, "fog.jpg")).toEqual(JPG);
+    expect(new TextDecoder().decode(bytesOf(dest, "fog.eps")!)).toBe(EPS);
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
+  });
+
+  it("reserves the picker/run against duplicate clicks and replaces the previous summary on a new run", async () => {
+    const dest = new BinDir("stock-drop"); let choose: (d: BinDir) => void = () => undefined;
+    picker.mockImplementation(() => new Promise<BinDir>((resolve) => { choose = resolve; }));
+    await mount(makeRoot()); await check(FOG);
+    // Both callbacks observe the same React snapshot; the run reservation must guard them.
+    await act(async () => {
+      q("[data-testid=upload-download-selected]")!.click();
+      q("[data-testid=upload-download-selected]")!.click();
+    });
+    expect(picker).toHaveBeenCalledTimes(1);
+    expect(q("[data-testid=upload-download-progress-header]")).toBeNull(); // no copying before destination
+    await act(async () => choose(dest));
+    await waitFor(() => text("[data-testid=upload-download-progress-title]").includes("complete"), "first run complete");
+    picker.mockResolvedValue(dest);
+    await click("[data-testid=upload-download-selected]");
+    await waitFor(() => text("[data-testid=upload-toast]").includes("3 kept"), "new run completes without overwriting");
+    expect(picker).toHaveBeenCalledTimes(2);
+    expect(host.querySelectorAll('[data-testid=upload-download-progress-header]')).toHaveLength(1);
+    expect(text("[data-testid=upload-download-progress-completed]")).toContain("3 completed / 3");
+  });
+
+  it("does not create progress or sound for a selection without any exported files", async () => {
+    const dest = new BinDir("stock-drop"); picker.mockResolvedValue(dest);
+    await mount(makeRoot()); await check(COURT); recordCompletionAudio();
+    await click("[data-testid=upload-download-selected]");
+    await waitFor(() => text("[data-testid=upload-toast]").includes("not exported yet"), "empty download outcome");
+    expect(q("[data-testid=upload-download-progress-header]")).toBeNull();
+    expect(dest.children.size).toBe(0);
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(0);
+  });
+
   it("counts the selection's committed files, asks for a folder, and copies the bytes under the artifact names", async () => {
     const root = makeRoot();
     const dest = new BinDir("stock-drop");
@@ -127,9 +272,11 @@ describe("Download all — the selection's packages, one folder", () => {
     expect(btn().disabled).toBe(false);
     expect(btn().textContent).toContain("Download all (3 files)"); // fog's three; court has no package yet
 
+    recordCompletionAudio();
     await click("[data-testid=upload-download-selected]");
     await waitFor(() => text("[data-testid=upload-toast]").includes("Saved"), "the copy to finish");
     expect(picker).toHaveBeenCalledWith({ mode: "readwrite" });
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
     expect([...dest.children.keys()].sort()).toEqual(["fog.eps", "fog.jpg", "fog.svg"]);
     expect(bytesOf(dest, "fog.jpg")).toEqual(JPG); // byte for byte
     expect(new TextDecoder().decode(bytesOf(dest, "fog.svg")!)).toBe(SVG);
@@ -162,11 +309,14 @@ describe("Download all — the selection's packages, one folder", () => {
   it("a cancelled picker writes nothing and says so; nothing selected is refused before any dialog", async () => {
     const root = makeRoot();
     picker.mockRejectedValue(new DOMException("aborted", "AbortError"));
+    recordCompletionAudio();
     await mount(root);
     await check(FOG);
     await click("[data-testid=upload-download-selected]");
     await waitFor(() => text("[data-testid=upload-toast]") !== "", "the toast");
     expect(text("[data-testid=upload-toast]")).toContain("No folder chosen");
     expect(picker).toHaveBeenCalledTimes(1);
+    expect(q("[data-testid=upload-download-progress-header]")).toBeNull();
+    await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(0);
   });
 });

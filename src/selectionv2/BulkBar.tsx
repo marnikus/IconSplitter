@@ -29,6 +29,7 @@ export interface BulkBarProps {
   onThumb: (px: number) => void;
   onDecide: (decision: Decision) => void;
   onReset: () => void;
+  onArmedChange?: (armed: boolean) => void;
 }
 
 interface ActionSpec {
@@ -48,7 +49,12 @@ const ACTIONS: ActionSpec[] = [
 
 export default function BulkBar(p: BulkBarProps) {
   const [armed, setArmed] = useState<BulkAction | null>(null);
+  const onArmedChange = p.onArmedChange;
   useEscape(() => setArmed(null), armed !== null);
+  useEffect(() => {
+    onArmedChange?.(armed !== null);
+    return () => onArmedChange?.(false);
+  }, [armed, onArmedChange]);
   return (
     <div className="v2-bulk" data-testid="v2-bulk">
       <BulkLeft p={p} />

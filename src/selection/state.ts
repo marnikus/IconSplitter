@@ -3,6 +3,7 @@
 // useSelection hook only wires IO + React onto these reducers so the rules
 // stay unit-tested (RULE 8).
 
+import { nextPendingBelow } from "../lib/reviewselect";
 import { attentionInfo, type ReviewPair, type SideRef } from "../lib/pairing";
 import { planBulk } from "../lib/reviewbulk";
 import {
@@ -37,7 +38,6 @@ export interface SelState {
   retryIds: string[];
   writeWarn: string | null;
   awaitingRetry: number;
-  collapsed: boolean;
   zoom: "fit" | "full";
   sync: boolean;
   autoNext: boolean;
@@ -51,7 +51,7 @@ export function initialSelState(): SelState {
     lastDiff: { added: 0, removed: 0, renamed: 0, unchanged: 0 },
     lastRescanAt: 0, filter: ALL_FILTER, sort: DEFAULT_SORT, selectedId: null,
     corrupt: false, corruptFiles: [], retryIds: [], writeWarn: null, awaitingRetry: 0,
-    collapsed: false, zoom: "fit", sync: true, autoNext: true, busy: null, toast: null,
+    zoom: "fit", sync: true, autoNext: true, busy: null, toast: null,
   };
 }
 
@@ -211,14 +211,9 @@ function toRecorded(p: ViewPair, rec: ReviewRecord | undefined): ViewPair {
   return { ...p, decision: rec.decision, reviewedAt: rec.reviewed_at };
 }
 
-/** Next pending pair after fromId, wrapping; null when all reviewed. */
-export function nextPendingId(pairs: ViewPair[], fromId: string): string | null {
-  const at = pairs.findIndex((p) => p.pairId === fromId);
-  for (let step = 1; step <= pairs.length; step++) {
-    const p = pairs[(at + step + pairs.length) % pairs.length];
-    if (p.decision === "pending") return p.pairId;
-  }
-  return null;
+/** Closest pending pair below fromId in the caller's pre-decision visible order. */
+export function nextPendingId(pairs: readonly ViewPair[], fromId: string): string | null {
+  return nextPendingBelow(pairs, fromId, (p) => p.pairId, (p) => p.decision === "pending");
 }
 
 export interface Counters {

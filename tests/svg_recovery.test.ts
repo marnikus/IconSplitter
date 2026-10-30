@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_recovery.test.ts — what a restart is allowed to claim (prompt 2026-10-05,
 // D6). A row whose request never reported an outcome must come back as UNKNOWN
 // with its request id — never as "failed" (the provider may still be working

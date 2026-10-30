@@ -14,12 +14,12 @@ import { effectiveStallMs, EFFORT_RULES } from "../src/lib/effortlimits";
 import { clearInflight, inflightSummary, loadInflight } from "../src/svg/journal";
 import { compositeLayout } from "../src/lib/svgcomposite";
 import { runGeneration, type RunEvent, type RunSummary } from "../src/svg/runner";
-import { singlePrompt } from "../src/lib/svgprompt";
+import { loadRegenCodes, type RegenCode } from "../src/svg/regencodes";
+import { toRow } from "../src/svg/rowmodel";
 import type { RegenPlan } from "../src/lib/svgregen";
-import type { RunArgs } from "../src/svg/runtypes";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
-import { streamFrames, transport } from "./helpers/svgtransport";
+import { answerFor, streamFrames, transport } from "./helpers/svgtransport";
 import { pairMetaFor, svgPathFor, svgSource, svgVersion } from "./helpers/svgpair";
 
 // The contact sheet is the only browser-canvas step; its own pixel test lives
@@ -88,6 +88,7 @@ function runArgs(root: FakeDir, sources: SvgSource[], config: Partial<SvgConfig>
       params,
       prompt: "p",
       regen: { kind: "main" } as RegenPlan,
+      regenCodes: new Map<string, RegenCode>(),
       sources,
       metas: new Map(),
       onEvent: (e: RunEvent) => events.push(e),
@@ -391,25 +392,27 @@ describe("runGeneration — one request per batch", () => {
   });
 });
 
-describe("runGeneration — Regenerate from current SVG (one icon per request)", () => {
+describe("runGeneration — Regenerate from current SVG (batch, 2026-10-20)", () => {
   const PRESET = "Make the strokes bolder.";
   const codeOf = (i: number) => `<svg viewBox="0 0 24 24"><title>old ${i}</title></svg>`;
 
-  /** Three icons, each with a valid v1 SVG on disk and in its pair file. */
-  function regenFixture(): { args: RunArgs; sources: SvgSource[] } {
+  /** Three icons, each with a valid v1 SVG on disk, in its pair file and frozen as a code. */
+  async function regenFixture(size: number) {
     const { root, sources } = fixture(3);
     const arch = root.children.get("architecture") as FakeDir;
     sources.forEach((s, i) => {
       arch.children.set(`${s.stem}_v1.svg`, new FakeFile(`${s.stem}_v1.svg`, 10, 1, codeOf(i + 1)));
     });
     const run = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: "low" });
-    run.args.regen = { kind: "current-svg", presetName: "Bolder", presetText: PRESET };
+    run.args.regen = { kind: "current-svg", presetName: "Bolder", presetText: PRESET, size };
+    const rows = sources.map((s) => toRow(s, pairMetaFor(s, [svgVersion(svgPathFor(s, 1))]), false));
     for (const s of sources) run.args.metas.set(s.id, pairMetaFor(s, [svgVersion(svgPathFor(s, 1))]));
+    run.args.regenCodes = (await loadRegenCodes(root, rows, sources.map((s) => s.id))).codes;
     return { args: run.args, sources };
   }
 
-  it("sends every icon alone, at size 1, with its own SVG code and the saved prompt", async () => {
-    const run = regenFixture();
+  it("size 1 keeps today's request: one icon, its own code, the saved prompt", async () => {
+    const run = await regenFixture(1);
     const t = transport();
     vi.stubGlobal("fetch", t.fetch);
 
@@ -424,17 +427,251 @@ describe("runGeneration — Regenerate from current SVG (one icon per request)",
     });
   });
 
-  it("records the saved prompt in the new version, never the SVG code", async () => {
-    const run = regenFixture();
+  it("the default size 9 sends the whole selection as ONE request carrying all three codes", async () => {
+    const run = await regenFixture(9);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+
+    const summary = await runGeneration(run.args);
+
+    expect(summary.perRequest).toBe(9);
+    expect(t.calls).toHaveLength(1);
+    expect(t.calls[0].items).toHaveLength(3);
+    const prompt = t.calls[0].prompt;
+    expect(prompt).toContain("Here is a batch of 3 icons to regenerate");
+    expect(prompt).toContain("3 — ");
+    run.sources.forEach((_, i) => expect(prompt).toContain(codeOf(i + 1)));
+    expect(summary.saved).toBe(3);
+  });
+
+  it("a size of 2 plans 4/4/1-style pages: 3 icons become 2 requests of 2 and 1", async () => {
+    const run = await regenFixture(2);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+
+    const summary = await runGeneration(run.args);
+
+    expect(summary.perRequest).toBe(2);
+    expect(t.calls.map((c) => c.items.length)).toEqual([2, 1]);
+    expect(t.calls[0].prompt).toContain("Here is a batch of 2 icons to regenerate");
+  });
+
+  it("records the saved prompt and the position in each new version, never the SVG code", async () => {
+    const run = await regenFixture(9);
     vi.stubGlobal("fetch", transport().fetch);
 
     await runGeneration(run.args);
 
-    for (const s of run.sources) {
+    run.sources.forEach((s, i) => {
       const last = run.args.metas.get(s.id)?.versions.at(-1);
       expect(last?.version).toBe(2);
-      expect(last?.prompt).toBe(singlePrompt(PRESET, s.stem));
-      expect(last?.prompt).not.toContain("old ");
-    }
+      expect(last?.prompt).toContain(PRESET);
+      expect(last?.prompt).toContain(`position ${i + 1}/3`);
+      expect(last?.prompt).not.toContain("<svg");
+    });
   });
+
+  it("a request whose frozen code is missing fails alone, saying nothing was sent", async () => {
+    const run = await regenFixture(9);
+    const gone = run.sources[1];
+    run.args.regenCodes = new Map([...(run.args.regenCodes ?? new Map()).entries()].filter(([id]) => id !== gone.id));
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+
+    const summary = await runGeneration(run.args);
+
+    expect(t.calls).toHaveLength(0);
+    expect(summary.saved).toBe(0);
+    expect(summary.problems.join(" ")).toContain("could not be read");
+  });
+});
+
+// 2026-10-19 (archive/2026-10-19-image-regen-fix, RC8): a regenerated AI image
+// that the user made MAIN is what the SVG generation vectorizes — the row shows
+// it as "AI source", so the request must carry the same file.
+describe("runGeneration — the main AI image is the source", () => {
+  it("the composite reads each source's chosen regenerated image, else the original", async () => {
+    const { root, sources } = fixture(2);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: null });
+    const v1 = "architecture/AI source regeneration versions/icon-1_AI_v1.png";
+    const entry = { version: 1, file: v1, status: "done" as const, prompt: "p", model: "m", requestId: null, error: null, updatedAt: "2026-10-19T09:00:00.000Z" };
+    args.metas.set(sources[0].id, { ...pairMetaFor(sources[0]), imageVersions: [entry], imagePreferred: 1 });
+
+    await runGeneration(args);
+
+    const call = compositeCalls.mock.calls.slice(callsAtStart)[0] as unknown[];
+    const imageOf = call[2] as ((s: SvgSource) => string) | undefined;
+    expect(typeof imageOf).toBe("function");
+    expect(imageOf!(sources[0])).toBe(v1);
+    expect(imageOf!(sources[1])).toBe(sources[1].relPath);
+  });
+});
+
+// RC6 (field ownership): the image writer may land while an SVG is being saved —
+// between the save's read of the pair file and its write. The image history
+// must survive; the SVG writer owns the SVG fields only.
+describe("runGeneration — an image regeneration landing mid-save", () => {
+  it("keeps the image history that landed while the SVG file was being written", async () => {
+    const { root, sources } = fixture(1);
+    const t = transport();
+    vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8_000, effort: null });
+    const base = pairMetaFor(sources[0]);
+    args.metas.set(sources[0].id, base);
+    const v1 = "architecture/AI source regeneration versions/icon-1_AI_v1.png";
+    const entry = { version: 1, file: v1, status: "done" as const, prompt: "p", model: "m", requestId: null, error: null, updatedAt: "2026-10-19T09:00:00.000Z" };
+    const arch = root.children.get("architecture") as FakeDir;
+    const create = arch.getFileHandle.bind(arch);
+    arch.getFileHandle = async (n: string, opts?: { create?: boolean }) => {
+      // the image writer lands exactly while the SVG file is written
+      if (opts?.create === true && n.endsWith(".svg")) args.metas.set(sources[0].id, { ...base, imageVersions: [entry], imagePreferred: 1 });
+      return create(n, opts);
+    };
+
+    const summary = await runGeneration(args);
+
+    expect(summary.saved).toBe(1);
+    const saved = JSON.parse((arch.children.get(`${sources[0].stem}.svg.json`) as FakeFile).text);
+    expect(saved.versions).toHaveLength(1);
+    expect(saved.imageVersions).toHaveLength(1);
+    expect(saved.imagePreferred).toBe(1);
+    expect(args.metas.get(sources[0].id)?.imageVersions).toHaveLength(1);
+  });
+});
+
+
+describe("request-local SVG cancellation", () => {
+  it("keeps saved results, skips one streaming request, then saves the next with a fresh controller", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(3);
+    const t = transport({ mode: (call) => call === 2 ? "silent" : "sse" });
+    vi.stubGlobal("fetch", t.fetch);
+    const { args, events } = runArgs(root, sources, { imagesPerRequest: 1, retries: 3 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    const controllers: (AbortController | null)[] = [];
+    let done = false;
+    const pending = runGeneration({ ...args, onRequestController: (c) => controllers.push(c) }).then((s) => { done = true; return s; });
+    await settle(() => t.calls.length === 2);
+    controllers.at(-1)!.abort();
+    await settle(() => done);
+    const summary = await pending;
+    expect(summary).toMatchObject({ saved: 2, failed: 1, cancelled: false });
+    expect(summary.problems.join(" ")).toContain("skipped");
+    expect(t.calls.map((c) => c.items)).toEqual(sources.map((s) => [s.relPath]));
+    expect(await svgText(root, sources[0])).not.toBeNull();
+    expect(await svgText(root, sources[1])).toBeNull();
+    expect(await svgText(root, sources[2])).not.toBeNull();
+    expect(controllers).toHaveLength(6);
+    expect(controllers.filter((c) => c !== null)).toHaveLength(3);
+    expect(new Set(controllers.filter((c) => c !== null)).size).toBe(3);
+    expect(controllers.at(-1)).toBeNull();
+    expect(args.signal.aborted).toBe(false);
+    expect(events.filter((e) => e.kind === "cancelled")).toEqual([]);
+    expect(loadInflight()).toEqual([]);
+  });
+
+  it("can skip before sending without transmitting that request or cancelling the rest", async () => {
+    const { root, sources } = fixture(2);
+    const t = transport(); vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    let first = true;
+    const summary = await runGeneration({ ...args, onRequestController: (c) => { if (c && first) { first = false; c.abort(); } } });
+    expect(summary).toMatchObject({ saved: 1, failed: 1, cancelled: false });
+    expect(t.calls.map((c) => c.items)).toEqual([[sources[1].relPath]]);
+    expect(await svgText(root, sources[0])).toBeNull();
+    expect(loadInflight()).toEqual([]);
+  });
+
+  it("interrupts retry backoff immediately and never resends the skipped request", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(2);
+    const t = transport({ failAt: 1 }); vi.stubGlobal("fetch", t.fetch);
+    const { args, events } = runArgs(root, sources, { imagesPerRequest: 1, retries: 3 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    let request: AbortController | null = null;
+    let done = false;
+    const started = Date.now();
+    const pending = runGeneration({ ...args, onRequestController: (c) => { request = c; }, onEvent: (e) => {
+      events.push(e); if (e.kind === "request-retry") request!.abort();
+    } }).then((s) => { done = true; return s; });
+    await settle(() => done);
+    const summary = await pending;
+    expect(Date.now()).toBe(started);
+    expect(summary).toMatchObject({ saved: 1, failed: 1, cancelled: false });
+    expect(t.calls.map((c) => c.items)).toEqual(sources.map((s) => [s.relPath]));
+    expect(events.filter((e) => e.kind === "request-retry")).toHaveLength(1);
+  });
+
+  it("skips every member of a shared provider request but continues with subsequent groups", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(5);
+    const t = transport({ mode: (call) => call === 1 ? "silent" : "sse" }); vi.stubGlobal("fetch", t.fetch);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 2 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    let request: AbortController | null = null, done = false;
+    const pending = runGeneration({ ...args, onRequestController: (c) => { request = c; } }).then((s) => { done = true; return s; });
+    await settle(() => t.calls.length === 1); request!.abort();
+    await settle(() => done); const summary = await pending;
+    expect(summary).toMatchObject({ saved: 3, failed: 2, cancelled: false });
+    expect(t.calls.map((c) => c.items.length)).toEqual([2, 2, 1]);
+    for (const s of sources.slice(0, 2)) expect(await svgText(root, s)).toBeNull();
+    for (const s of sources.slice(2)) expect(await svgText(root, s)).not.toBeNull();
+  });
+
+  it("retains whole-run cancellation: no later planned request is sent", async () => {
+    vi.useFakeTimers();
+    const { root, sources } = fixture(3);
+    const t = transport({ mode: "silent" }); vi.stubGlobal("fetch", t.fetch);
+    const parent = new AbortController();
+    const { args } = runArgs(root, sources, { imagesPerRequest: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" }, parent.signal);
+    const controllers: (AbortController | null)[] = [];
+    let done = false;
+    const pending = runGeneration({ ...args, onRequestController: (c) => controllers.push(c) }).then((s) => { done = true; return s; });
+    await settle(() => t.calls.length === 1); parent.abort(); await settle(() => done);
+    expect(await pending).toMatchObject({ saved: 0, cancelled: true });
+    expect(t.calls).toHaveLength(1);
+    expect(controllers[0]!.signal.aborted).toBe(true);
+    expect(controllers.at(-1)).toBeNull();
+  });
+
+  it("clears request ownership and removes the parent listener even when event handling throws", async () => {
+    const { root, sources } = fixture(1);
+    const { args } = runArgs(root, sources, { imagesPerRequest: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" });
+    const remove = vi.spyOn(args.signal, "removeEventListener");
+    const controllers: (AbortController | null)[] = [];
+    await expect(runGeneration({ ...args, onRequestController: (c) => controllers.push(c), onEvent: (e) => {
+      if (e.kind === "batch-start") throw new Error("test event failure");
+    } })).rejects.toThrow("test event failure");
+    expect(controllers).toHaveLength(2);
+    expect(controllers.at(-1)).toBeNull();
+    expect(remove).toHaveBeenCalledWith("abort", expect.any(Function));
+  });
+});
+
+
+it.each(["request", "run"])("handles late answers after %s cancellation without saving cancelled artwork", async (scope) => {
+  vi.useFakeTimers();
+  const { root, sources } = fixture(2);
+  const response = answerFor([sources[0].relPath]);
+  const body = await response.text();
+  let deliver: ((text: string) => void) | null = null;
+  const late = answerFor([sources[0].relPath]);
+  late.text = () => new Promise<string>((resolve) => { deliver = resolve; });
+  let calls = 0;
+  vi.stubGlobal("fetch", async () => ++calls === 1 ? late : answerFor([sources[1].relPath]));
+  const parent = new AbortController();
+  const { args } = runArgs(root, sources, { imagesPerRequest: 1 }, { temperature: null, maxTokens: 8_000, effort: "low" }, parent.signal);
+  let request: AbortController | null = null, done = false;
+  const pending = runGeneration({ ...args, onRequestController: (c) => { request = c; } }).then((s) => { done = true; return s; });
+  await settle(() => deliver !== null);
+  if (scope === "run") parent.abort(); else request!.abort();
+  (deliver as unknown as (text: string) => void)(body);
+  await settle(() => done);
+  const summary = await pending;
+  expect(summary).toMatchObject({ saved: scope === "run" ? 0 : 1, failed: 1, cancelled: scope === "run" });
+  expect(summary.problems.join(" ")).toContain(scope === "run" ? "Run cancelled" : "skipped");
+  expect(calls).toBe(scope === "run" ? 1 : 2);
+  expect(await svgText(root, sources[0])).toBeNull();
+  expect((await svgText(root, sources[1])) !== null).toBe(scope !== "run");
+  expect(summary.usage.total).toBe(scope === "run" ? 300 : 600);
+  expect(summary.outcomes[0].usage.total).toBe(300);
 });

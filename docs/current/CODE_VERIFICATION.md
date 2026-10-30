@@ -4,6 +4,8 @@ Per `AGENT_RULES.md` RULE 16 + RULE 18, every production change must pass the
 quality gates before push. Adapted from `Process-Images-in-Areana/docs/current/CODE_VERIFICATION.md`
 to this TypeScript toolchain; thresholds are identical, tooling is the TS equivalent.
 
+**Detail pages:** [hook, ratchet, overrides, CI](VERIFICATION_RATCHET.md).
+
 ## Why
 
 The sister project enforces gates LOC 30/150, params 4, methods 15, CC 10,
@@ -86,6 +88,9 @@ node tools/quality.mjs --json           # machine-readable
 npm test                     # vitest run
 ```
 
+Projects, shared setup, `settle`/`waitUntil` and how to keep the run short:
+[test harness](TEST_HARNESS.md).
+
 Tests execute the real `analyze` / `detect` / `renderIcon` logic against
 synthetic pixels and recording canvas shims. If a test passes with the feature
 deleted, it is not a test.
@@ -102,7 +107,7 @@ fails, and always with `--reporter=verbose` for a single file you are chasing.
 ### 6. Coverage (RULE 16.3)
 
 ```bash
-npm run coverage             # vitest run --coverage (v8 provider)
+npm run coverage             # vitest run --coverage (Istanbul provider; V8 audit supported)
 ```
 
 - Thresholds enforced in `vitest.config.ts`: `src/lib` lines ≥ 80%.
@@ -122,18 +127,33 @@ Run before releases and after refactors; zero **new** findings on a diff.
 ### 8. Combined check — one cross-platform runner (lanes 1–6 + build)
 
 ```bash
-npm run verify:fast   # = node tools/verify.mjs — every commit (~2 min)
-npm run verify        # = node tools/verify.mjs --full — before push (~3 min)
+npm run verify:fast   # = node tools/verify.mjs — every commit (all tests + coverage)
+npm run verify        # = node tools/verify.mjs --full — before push (all gates)
 ```
 
 Fast lanes: tsc + eslint + quality gate (changed, ratchet) + **one** suite run
 (the coverage lane already executes every test — the old
 `tools/pre_push_check.sh` ran the suite twice, lanes 4+5) + `vite build`
-(single-file output must succeed). `--full` adds the standalone `vitest run`
-lane for pre-push parity with the historical bash script it replaced.
+(single-file output must succeed). `--full` adds the `native` project
+(wall-clock perf budgets) uninstrumented — coverage instrumentation would skew
+them — instead of a second full suite run.
 `node tools/verify.mjs --plan [--json]` prints the lane plan without running
 it — the contract `tests/verify_runner.test.ts` characterizes.
 `--base <ref>` is forwarded to the quality lane (shallow clones).
+The runner reuses TypeScript incremental and ESLint content caches under
+`node_modules/.cache/verify`; tests/coverage/build are never result-cached.
+`npm run verify -- --cold` bypasses these and Vitest filesystem transforms.
+Default coverage uses pinned official Istanbul; V8 audits remain available.
+Default execution remains serial. `--overlap` opts into resource-bounded static/
+build and complete-coverage pipelines after native alarms finish alone;
+`--serial` overrides it. Fallback: fewer than2CPUs or3GiB constrained memory.
+Plan JSON exposes execution groups and the selected serial/overlap mode. SIGINT/
+SIGTERM stop owned child trees; any failed/spawn-error lane fails verification.
+Fresh281edd6 reference: warm median94.00s →91.23s; cold129.92s →117.85s.
+**Additional40% full-system time reduction is NOT achieved** (target56.40s warm).
+No skipped tests, weaker budgets or scope reduction. Equivalent real geometry
+computation is optimized; worker pools/provider/lifecycle remain unchanged.
+Measurement caveats and isolation/cache contracts: [test harness](TEST_HARNESS.md).
 
 ### 9. Browser probes (optional)
 
@@ -143,97 +163,9 @@ puppeteer dependency is added to the repo for it; use a system browser and a
 throwaway script, and record what the probe showed in the change's archive
 doc. Never let a probe become a second, untested gate.
 
-## Git hook — automatic enforcement
-
-`tools/hooks/pre-push` execs `node tools/verify.mjs --full` before every push
-once installed (`npm run hooks:install`).
-
-- If any lane fails, the push is blocked.
-- Bypass only with `git push --no-verify` with an explicit reason and manual
-  verification done.
-- Uninstall: `rm .git/hooks/pre-push`.
-
-## Baseline ratchet — how it works
-
-`tools/quality_baseline.json` stores, per file: `file_lines`, `func_count` and
-per-function `{loc, params, cc, nesting}` offender records.
-
-- For each over-line function: not in baseline, or any metric grown vs its
-  recorded entry → **FAIL** (`[new/grown vs baseline]`).
-- Recorded offenders at or below their record → `[LEGACY]` warning with
-  `--allow-legacy`, failure without it.
-- File growth above recorded `file_lines` → **FAIL**.
-- `--allow-legacy` may suppress recorded values, never new growth.
-
-Negative tests (must stay red when tried): (i) adding a 44-LOC function to a
-baseline file fails; (ii) a new untracked file with a 44-LOC function fails;
-(iii) an over-line new function in a legacy file fails even with
-`--allow-legacy`.
-
-Regenerate baseline (integrator only, single writer):
-
-```bash
-node tools/quality.mjs --write-baseline
-```
-
-## Override format
-
-If a breach is unavoidable due to a real constraint, add:
-
-```ts
-function wideLegacyAdapter(a: A, b: B, c: C, d: D, e: E) {
-  // quality-override: params=5 reason=frozen export contract shared by ZIP, folder and clipboard paths
-}
-```
-
-- Strict: `quality-override: <metric>=<value> reason=<≥20 chars>`
-- metric ∈ `loc, params, cc, nesting, coverage, dup`
-- Reason must name a constraint (frozen contract, single string payload,
-  browser API shape), not "faster to ship"
-- One per metric per symbol; stale overrides must be deleted
-
-## Remediation order (RULE 19)
-
-1. **Nesting > 4** → guard clauses, early return, flatten
-2. **CC > 10** → lookup tables / strategies, not `fooPart1`
-3. **Cognitive > 15** → name predicates, simplify booleans
-4. **LOC > 30** → extract helper with a real responsibility name
-
-Verify after every step: `node tools/quality.mjs --changed` and `npm test` —
-steps 1–3 must be behaviour-preserving (suite stays green).
-
-## Files
-
-| File | Purpose |
-|---|---|
-| `tools/quality.mjs` | RULE 16 gate: TS AST metrics + ratchet + changed detection via merge-base, `--base`/`--files` for shallow clones + untracked files |
-| `tools/quality_baseline.json` | Baseline per-file/per-function offender records — ratchet, grandfathered |
-| `tools/verify.mjs` | Combined lanes (cross-platform, node): types + lint + gate + tests + coverage + build; `--full`, `--plan`, `--base` |
-| `tools/hooks/pre-push` | Hook exec-ing `node tools/verify.mjs --full` |
-| `tools/install_hooks.sh` | Installs the hook into .git/hooks |
-| `eslint.config.js` | Hygiene errors + complexity/nesting warns (flat config) |
-| `vitest.config.ts` | Test lane + coverage thresholds (src/lib ≥ 80% lines) |
-| `docs/current/AGENT_RULES.md` | Detailed rules, thresholds, anti-gaming, override format |
-| `docs/current/CODE_VERIFICATION.md` | This file |
-
-## CI equivalent
-
-A ready-to-paste GitHub workflow (checkout `fetch-depth: 0` so the gate finds
-the merge-base, Node from `.nvmrc`, npm cache, `npm ci`, `npm run verify:fast`)
-is staged at `docs/archive/2026-10-07-env-setup-performance/verify.yml`.
-Installing it into `.github/workflows/` needs the `workflows` token permission
-(an owner step — the agent push of 2026-10-07 was rejected without it).
-Locally, the same thing is:
-
-```bash
-node tools/quality.mjs --changed --allow-legacy --json > quality.json
-# fail the job if any failures are reported
-npm run verify
-```
-
 ## Quick checklist (RULE 16 §16.6)
 
-1. Read `SYSTEM_OF_RECORD.md` + `AGENT_RULES.md` rules 1–15 + 20–24 and RULE 18 ideals
+1. Read the task's read pack (`docs/current/README.md`), the rules it touches and RULE 18 ideals
 2. Design in `docs/archive/<date>-<topic>/` if complexity moves across files
 3. Tests first (RULE 8)
 4. Measure: `node tools/quality.mjs --changed --allow-legacy` — any fail → redesign per RULE 19

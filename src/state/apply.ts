@@ -12,30 +12,55 @@ import { parseFilter } from "../lib/reviewfilter";
 import { parsePrefsValue } from "../lib/reviewprefs";
 import { parseSort } from "../lib/reviewsort";
 import type { HistoryEntry } from "../lib/history";
+import { applySelectionOp, readSelectionPayload } from "../lib/selectiondelta";
 import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
-import { patchBatch, patchV2, patchView, setAppState } from "./appstore";
+import { applyRowBadgeState } from "../upload/rowbadgeundo";
+import { getAppState, patchBatch, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
+import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
-export const ENTRY_TYPES = ["decisions", "checked", "batchChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings"] as const;
+export const ENTRY_TYPES = [
+  "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
+  "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges",
+] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
 export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<boolean> {
+  const selection = applySelectionEntry(entry, value);
+  if (selection !== null) return selection;
+  return applyDomainEntry(entry, value);
+}
+
+function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> {
   switch (entry.type) {
     case "decisions": return applyDecisions(entry.ids, value);
-    case "checked": return applyChecked(value);
-    case "batchChecked": return applyBatchChecked(value);
     case "view": return applyView(value);
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
     case "svgReview": return applySvgReviewPatch(toReviewPatch(value));
-    case "uploadSettings": {
-      const patch = toUploadSettingsPatch(value);
-      return patch === null ? false : applyUploadSettingsPatch(patch);
-    }
+    case "uploadSettings": return applyUploadSettings(value);
+    case "uploadRowBadges": return applyRowBadgeState(value);
     default: return false; // an entry from a future schema: refuse, do not guess
+  }
+}
+
+function applyUploadSettings(value: unknown): boolean {
+  const patch = toUploadSettingsPatch(value);
+  return patch === null ? false : applyUploadSettingsPatch(patch);
+}
+
+/** Route checked state to its tab before considering domain-specific edits. */
+function applySelectionEntry(entry: HistoryEntry, value: unknown): boolean | null {
+  switch (entry.type) {
+    case "checked": return entry.origin === "generateSvg" ? applyLegacySvgChecked(value) : applyChecked(value);
+    case "batchChecked": return applyBatchChecked(value);
+    case "svgChecked": return applyTabChecked(value, () => getAppState().svg.checked, patchSvg, "generateSvg");
+    case "uploadChecked": return applyTabChecked(value, () => getAppState().upload.checked, patchUpload, "upload");
+    case "stockUploadChecked": return applyTabChecked(value, () => getAppState().stockUpload.checked, patchStockUpload, "stockUpload");
+    default: return null;
   }
 }
 
@@ -46,10 +71,14 @@ function toReviewPatch(value: unknown): SvgReviewPatch {
   return { recs };
 }
 
+/**
+ * One review record. A `version` key is ACCEPTED and ignored: entries recorded
+ * before the status became the item's (2026-10-20) still name one.
+ */
 function isReviewRec(value: unknown): value is SvgReviewPatch["recs"][number] {
   if (!isRecord(value)) return false;
-  return typeof value.id === "string" && Number.isInteger(value.version)
-    && (value.review === "pending" || value.review === "approved" || value.review === "declined");
+  return typeof value.id === "string"
+    && (value.review === "pending" || value.review === "approved" || value.review === "declined" || value.review === "needs-review");
 }
 
 async function applyDecisions(ids: readonly string[], value: unknown): Promise<boolean> {
@@ -65,18 +94,57 @@ interface SelectionPatch {
 }
 
 function applyChecked(value: unknown): boolean {
-  const sel = toSelection(value);
+  const sel = selectionValue(value, getAppState().v2.checked);
   if (!sel) return false;
-  patchV2({ checked: sel.ids, anchorId: sel.anchor });
-  patchView({ selectedId: sel.active }); // a row click carries its active row
+  patchV2Selection({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
   return true;
 }
 
 function applyBatchChecked(value: unknown): boolean {
-  const sel = toSelection(value);
+  const sel = selectionValue(value, getAppState().batch.checked);
   if (!sel) return false;
   patchBatch({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
   return true;
+}
+
+/** SVG entries saved before svgChecked existed carried only the checked ids. */
+function applyLegacySvgChecked(value: unknown): boolean {
+  const sel = toSelection(value);
+  if (!sel) return false;
+  const svg = getAppState().svg;
+  if (!selectionTargetsKnown("generateSvg", { checked: sel.ids, active: svg.activeId, anchor: svg.anchorId })) return false;
+  patchSvg({ checked: sel.ids });
+  return true;
+}
+
+function applyTabChecked(
+  value: unknown,
+  current: () => string[],
+  patch: (next: { checked: string[]; anchorId: string | null; activeId: string | null }) => void,
+  tab: CheckableList,
+): boolean {
+  if (!isRecord(value)) return false;
+  if (!(value.anchor === null || typeof value.anchor === "string")) return false;
+  if (!(value.active === null || typeof value.active === "string")) return false;
+  const sel = selectionValue(value, current());
+  if (!sel) return false;
+  if (!selectionTargetsKnown(tab, { checked: sel.ids, anchor: sel.anchor, active: sel.active })) return false;
+  patch({ checked: sel.ids, anchorId: sel.anchor, activeId: sel.active });
+  return true;
+}
+
+/**
+ * One entry side -> the selection it produces. A version-2 payload is a diff
+ * applied to the live selection (lib/selectiondelta); a version-1 payload is the
+ * recorded whole array. Both are validated; anything else leaves the cursor.
+ */
+function selectionValue(value: unknown, current: string[]): SelectionPatch | null {
+  const delta = readSelectionPayload(value);
+  if (delta !== null) {
+    const ids = applySelectionOp(current, delta.sel);
+    return ids === null ? null : { ids, anchor: delta.anchor, active: delta.active };
+  }
+  return toSelection(value);
 }
 
 /** Entries recorded before the shift anchor existed stored a bare id array. */
@@ -111,7 +179,6 @@ function viewPatch(v: Record<string, unknown>): Partial<SessionSelection> {
 
 function togglePatch(v: Record<string, unknown>): Partial<SessionSelection> {
   const patch: Partial<SessionSelection> = {};
-  if (typeof v.collapsed === "boolean") patch.collapsed = v.collapsed;
   if (v.zoom === "fit" || v.zoom === "full") patch.zoom = v.zoom;
   if (typeof v.sync === "boolean") patch.sync = v.sync;
   if (typeof v.autoNext === "boolean") patch.autoNext = v.autoNext;

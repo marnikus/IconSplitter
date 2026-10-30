@@ -72,8 +72,9 @@ export function Overlays(p: OverlayProps) {
         </div>
       )}
       {p.s.busy && (
-        <div data-testid={p.busyTestid ?? "sel-busy"} className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 backdrop-blur-sm">
-          <span className="rounded-2xl border border-white/10 bg-slate-900 px-6 py-4 text-sm">{p.s.busy}</span>
+        <div data-testid={p.busyTestid ?? "sel-busy"} className="fixed left-1/2 z-40 toast-above-dock -translate-x-1/2 flex items-center gap-2 rounded-full border border-white/10 bg-slate-900 px-4 py-2 text-sm shadow-xl">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+          <span>{p.s.busy}</span>
         </div>
       )}
     </>

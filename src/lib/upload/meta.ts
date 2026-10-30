@@ -16,6 +16,7 @@
 // punctuation and writes sentence case per sentence, so "X Y Z. Icon of Y and
 // Z." ships as "X y z. Icon of y and z".
 
+import { metadataRights, type MetadataRights } from "./rights";
 import { fnv1a32 } from "../pairing";
 
 /** The minimum number of tags an answer must carry (more is always fine). */
@@ -46,7 +47,7 @@ Hard rules:
 - Intellectual property: no brand names, no trademarks, no logos, no real people, no fictional characters, no artist names, and never "in the style of" anyone. Describe only the abstract idea.
 - One line per field, no numbering, no extra commentary, no markdown.`;
 
-export interface IconMetadata {
+export interface IconMetadata extends MetadataRights {
   title: string;
   description: string;
   tags: string[];
@@ -106,7 +107,7 @@ function sentenceCase(sentence: string): string {
 
 /** `cleanPhrase` over the title and the description; the tags are never touched. */
 export function cleanMetadata(meta: IconMetadata): IconMetadata {
-  return { ...meta, title: cleanPhrase(meta.title), description: cleanPhrase(meta.description) };
+  return { title: cleanPhrase(meta.title), description: cleanPhrase(meta.description), tags: meta.tags, ...metadataRights(meta) };
 }
 
 function labeled(text: string, label: string): string | null {
@@ -182,6 +183,9 @@ function restrictedWarnings(meta: IconMetadata): string[] {
 
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
 export function metadataFingerprint(meta: IconMetadata): string {
-  const canonical = JSON.stringify([meta.title.trim(), meta.description.trim(), meta.tags.map(normalizeTag).join(",")]);
+  const fields = [meta.title.trim(), meta.description.trim(), meta.tags.map(normalizeTag).join(",")];
+  const rights = metadataRights(meta);
+  if (Object.keys(rights).length) fields.push(JSON.stringify(rights));
+  const canonical = JSON.stringify(fields);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

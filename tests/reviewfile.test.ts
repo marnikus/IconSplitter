@@ -1,3 +1,4 @@
+// @vitest-environment node
 // reviewfile.test.ts — RULE 8/13: decision records, corrupt tolerance,
 // rename carry-over and rescan diffing for Selection review.
 import { describe, expect, it } from "vitest";

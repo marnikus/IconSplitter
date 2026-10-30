@@ -205,6 +205,42 @@ describe("the reviewable set is the split output (I-38/I-47)", () => {
   });
 });
 
+describe("image regeneration folder trees are not review pairs", () => {
+  it("skips all files and descendants in the version folder, but not lookalikes elsewhere", async () => {
+    const root = makeRoot();
+    const arch = root.children.get("architecture") as FakeDir;
+    const versions = new FakeDir("aI SoUrCe ReGeNeRaTiOn VeRsIoNs");
+    versions.children.set("court_AI_v1.png", new FakeFile("court_AI_v1.png"));
+    versions.children.set("ordinary_v2.png", new FakeFile("ordinary_v2.png"));
+    versions.children.set("court_AI_v0.png", new FakeFile("court_AI_v0.png"));
+    const nested = new FakeDir("nested");
+    nested.children.set("court_AI_v2.png", new FakeFile("court_AI_v2.png"));
+    versions.children.set("nested", nested);
+    arch.children.set(versions.name, versions);
+    arch.children.set("court_AI_v3.png", new FakeFile("court_AI_v3.png"));
+    const h = harness(root);
+    await rescan(h.ctx, h.set, h.say);
+    const paths = h.ctx.state.current.pairs.flatMap((p) => [p.source?.relPath, p.ai?.relPath]);
+    expect(paths).not.toContain(`architecture/${versions.name}/court_AI_v1.png`);
+    expect(paths).not.toContain(`architecture/${versions.name}/ordinary_v2.png`);
+    expect(paths).not.toContain(`architecture/${versions.name}/court_AI_v0.png`);
+    expect(paths).not.toContain(`architecture/${versions.name}/nested/court_AI_v2.png`);
+    expect(paths).toContain("architecture/court_AI_v3.png");
+  });
+
+  it("excludes a picked version folder itself and every descendant", async () => {
+    const root = new FakeDir("AI SOURCE REGENERATION VERSIONS");
+    root.children.set("fog_AI_9_01_v12.PNG", new FakeFile("fog_AI_9_01_v12.PNG"));
+    root.children.set("fog_AI_v0.png", new FakeFile("fog_AI_v0.png"));
+    const nested = new FakeDir("nested");
+    nested.children.set("fog_AI_v1.png", new FakeFile("fog_AI_v1.png"));
+    root.children.set("nested", nested);
+    const h = harness(root);
+    await rescan(h.ctx, h.set, h.say);
+    expect(h.ctx.state.current.pairs).toEqual([]);
+  });
+});
+
 describe("the decision's source of truth is the pair's own file (I-41/I-42)", () => {
   it("an approved pair file makes the pair approved, with no legacy file present", async () => {
     const h = harness(makeRoot());

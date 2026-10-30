@@ -1,3 +1,4 @@
+// @vitest-environment node
 // pairmeta.test.ts — the one JSON per image pair (I-41/I-42), TDD: the model
 // round-trips, a legacy v1 file keeps its versions and derives the pair it
 // belongs to, a decision never touches the SVG history (and vice versa), and the

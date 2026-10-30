@@ -16,7 +16,7 @@ export default function SvgQueue({ queue, onDrop }: SvgQueueProps) {
   return (
     <section className="svg-queue" data-testid="svg-queue" aria-label="Queued batches">
       <p className="svg-queue-head" data-testid="svg-queue-count">
-        {queue.length} queued — {queue.length === 1 ? "it starts" : "they start"} as soon as the run in flight ends.
+        {queue.length} queued — {queue.length === 1 ? "it starts" : "they start"} when their sources and a parallel slot are free.
         Adding more never interrupts it.
       </p>
       <ol className="svg-queue-list">

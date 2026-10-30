@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_pickorder.test.ts — the one rule that keeps the confirmation's contact
 // sheet and the sheet the runner SENDS the same picture: the selection is an
 // ORDER (the order the icons were picked), and every consumer — the dialog's

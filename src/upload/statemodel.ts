@@ -4,15 +4,18 @@
 // the rules testable without a DOM and keeps the hook itself tiny. Mirrors
 // svg/statemodel; the selection lives in the appstore upload slice (session).
 
+import { applyProcessUpdate, dismissProcess, type ProcessUpdate, type UploadProcessKind, type UploadProgressState } from "./processprogress";
 import type { KeySource } from "../lib/keyvault";
 import type { SentPreview } from "../lib/upload/sentpreview";
 import { useReducer, type Dispatch } from "react";
 import { maskKey } from "../lib/svgsecret";
 import type { GeminiConfig } from "../lib/upload/gemini";
 import type { PreviewBackground } from "../lib/svgbackground";
+import { mergeApplied, type AppliedMap, type DecorationValues } from "../lib/upload/decorations";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { UploadDiscovery } from "./discovery";
-import { staleOf } from "./rowmodel";
+import { patchSettingsMap } from "../lib/upload/settingspatch";
+import { restaleChanged, restaleDefaults, updateUploadRow, withStale } from "./staleprojection";
 import type { PromptPreset } from "../lib/upload/promptpresets";
 import type { OverridesMap, UploadSettingsState } from "./settingsstore";
 import type { UploadPrefs } from "./prefsstore";
@@ -23,7 +26,7 @@ import {
 } from "./types";
 
 /** Everything the upload panel shows, in one snapshot. */
-export interface UploadModel {
+export interface UploadModel extends UploadProgressState {
   rootName: string;
   rows: UploadRow[];
   discovery: UploadDiscovery | null;
@@ -33,6 +36,8 @@ export interface UploadModel {
   defaults: UploadSettings;
   /** Per-icon overrides (pair id → pinned fields); absent = inherited. */
   overrides: OverridesMap;
+  /** Decorations a global control applied — values, never row overrides. */
+  applied: AppliedMap;
   gemini: GeminiConfig;
   /** The last provider-verified model check (CP-8) — never a silent swap. */
   modelCheck: ModelCheck;
@@ -61,7 +66,6 @@ export interface UploadModel {
   runningMeta: number;
   /** Export runs in flight. */
   runningExport: number;
-  progress: { done: number; total: number } | null;
 }
 
 /** The fields one run updates on a row (status/stage/record/error/running/stale). */
@@ -76,8 +80,8 @@ export type UploadAction =
   | { type: "busy"; busy: string | null }
   | { type: "toast"; toast: Toast | null }
   | { type: "defaults"; defaults: UploadSettings }
-  | { type: "override"; id: string; patch: SettingsOverrides | null }
-  | { type: "overrides-patch"; overrides: Record<string, SettingsOverrides | null> }
+  | { type: "override"; id: string; patch: SettingsOverrides | null; applied?: DecorationValues | null }
+  | { type: "overrides-patch"; overrides: Record<string, SettingsOverrides | null>; applied?: Record<string, DecorationValues | null> }
   | { type: "gemini"; gemini: GeminiConfig }
   | { type: "model-check"; check: ModelCheck }
   | { type: "prompt"; prompt: string }
@@ -93,7 +97,8 @@ export type UploadAction =
   | { type: "previews"; previews: SentPreview[]; preparing: boolean }
   | { type: "meta"; id: string; meta: UploadMetaState }
   | { type: "run"; id: string; run: UploadRunUpdate }
-  | { type: "progress"; progress: { done: number; total: number } | null }
+  | ({ type: "process" } & ProcessUpdate)
+  | { type: "process-dismiss"; kind: UploadProcessKind; runId: string }
   | { type: "running"; kind: "metadata" | "export"; n: number };
 
 /** The previews land on the meta dialog they belong to — never on a new one. */
@@ -110,16 +115,21 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   discovery: (m, a) => ({ ...m, discovery: (a as { discovery: UploadDiscovery | null }).discovery }),
   busy: (m, a) => ({ ...m, busy: (a as { busy: string | null }).busy }),
   toast: (m, a) => ({ ...m, toast: (a as { toast: Toast | null }).toast }),
-  defaults: (m, a) => restaleAll({ ...m, defaults: (a as { defaults: UploadSettings }).defaults }, (a as { defaults: UploadSettings }).defaults),
+  defaults: (m, a) => restaleDefaults(m, (a as { defaults: UploadSettings }).defaults),
   override: (m, a) => {
-    const act = a as { id: string; patch: SettingsOverrides | null };
-    return restaleAll({ ...m, overrides: setOverride(m.overrides, act.id, act.patch) }, m.defaults);
+    const act = a as { id: string; patch: SettingsOverrides | null; applied?: DecorationValues | null };
+    const applied = act.applied === undefined ? m.applied : mergeApplied(m.applied, { [act.id]: act.applied });
+    return restaleChanged({ ...m, overrides: patchSettingsMap(m.overrides, { [act.id]: act.patch }), applied }, new Set([act.id]));
   },
   "overrides-patch": (m, a) => {
-    const overrides = (a as { overrides: Record<string, SettingsOverrides | null> }).overrides;
-    let map = m.overrides;
-    for (const [id, patch] of Object.entries(overrides)) map = setOverride(map, id, patch);
-    return restaleAll({ ...m, overrides: map }, m.defaults);
+    const act = a as {
+      overrides: Record<string, SettingsOverrides | null>;
+      applied?: Record<string, DecorationValues | null>;
+    };
+    const overrides = patchSettingsMap(m.overrides, act.overrides);
+    const applied = mergeApplied(m.applied, act.applied);
+    const changed = new Set([...Object.keys(act.overrides), ...Object.keys(act.applied ?? {})]);
+    return restaleChanged({ ...m, overrides, applied }, changed);
   },
   gemini: (m, a) => ({ ...m, gemini: (a as { gemini: GeminiConfig }).gemini }),
   "model-check": (m, a) => ({ ...m, modelCheck: (a as { check: ModelCheck }).check }),
@@ -140,13 +150,17 @@ const HANDLERS: Record<UploadAction["type"], (m: UploadModel, a: UploadAction) =
   previews: (m, a) => previewsOf(m, a as { previews: SentPreview[]; preparing: boolean }),
   meta: (m, a) => {
     const act = a as { id: string; meta: UploadMetaState };
-    return { ...m, rows: restaleRows(m.rows, m.defaults, m.overrides, (r) => r.source.id === act.id ? { ...r, meta: act.meta } : r) };
+    return updateUploadRow(m, act.id, (row) => ({ ...row, meta: act.meta }));
   },
   run: (m, a) => {
     const act = a as { id: string; run: UploadRunUpdate };
-    return { ...m, rows: restaleRows(m.rows, m.defaults, m.overrides, (r) => r.source.id === act.id ? withStale({ ...r, ...act.run }, act.run.stale ?? r.stale) : r) };
+    return updateUploadRow(m, act.id, (row) => withStale({ ...row, ...act.run }, act.run.stale ?? row.stale));
   },
-  progress: (m, a) => ({ ...m, progress: (a as { progress: { done: number; total: number } | null }).progress }),
+  process: (m, a) => ({ ...m, ...applyProcessUpdate(m, a as ProcessUpdate) }),
+  "process-dismiss": (m, a) => {
+    const act = a as { kind: UploadProcessKind; runId: string };
+    return { ...m, ...dismissProcess(m, act.kind, act.runId) };
+  },
   running: (m, a) => {
     const act = a as { kind: "metadata" | "export"; n: number };
     return act.kind === "metadata" ? { ...m, runningMeta: act.n } : { ...m, runningExport: act.n };
@@ -169,39 +183,6 @@ function keyModel(model: UploadModel, key: string | null, from?: KeySource): Upl
   return { ...model, keySet: key !== null, keyMask: key ? maskKey(key) : "not set", keySource: source };
 }
 
-/** One override set (or delete, on null/empty) — the caller's map is untouched. */
-function setOverride(map: OverridesMap, id: string, patch: SettingsOverrides | null): OverridesMap {
-  const next = { ...map };
-  if (patch === null || Object.keys(patch).length === 0) delete next[id];
-  else next[id] = patch;
-  return next;
-}
-
-/**
- * Re-projects stale after anything a fingerprint keys on moved (defaults,
- * overrides, metadata). A row mid-run keeps its run status; only its flag moves.
- */
-function restaleAll(m: UploadModel, defaults: UploadSettings): UploadModel {
-  return { ...m, rows: restaleRows(m.rows, defaults, m.overrides, (r) => r) };
-}
-
-function restaleRows(
-  rows: readonly UploadRow[], defaults: UploadSettings, overrides: OverridesMap,
-  update: (row: UploadRow) => UploadRow,
-): UploadRow[] {
-  return rows.map((row) => {
-    const next = update(row);
-    const effective = { ...defaults, ...(overrides[next.source.id] ?? {}) };
-    return withStale(next, staleOf({ record: next.record, source: next.source, effective, meta: next.meta, sourceHash: next.sourceHash }));
-  });
-}
-
-function withStale(row: UploadRow, stale: boolean): UploadRow {
-  if (row.stale === stale) return row;
-  if (row.running !== null) return { ...row, stale };
-  return { ...row, stale, status: stale ? "stale" : (row.record?.status ?? "discovered") };
-}
-
 export interface Boot {
   settings: UploadSettingsState;
   gemini: GeminiConfig;
@@ -214,12 +195,12 @@ export interface Boot {
 export function initialModel(boot: Boot): UploadModel {
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
-    defaults: boot.settings.defaults, overrides: boot.settings.overrides,
+    defaults: boot.settings.defaults, overrides: boot.settings.overrides, applied: boot.settings.applied,
     gemini: boot.gemini, modelCheck: IDLE_MODEL_CHECK, prompt: boot.prompt, presets: boot.presets,
     presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
     filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
-    runningMeta: 0, runningExport: 0, progress: null,
+    runningMeta: 0, runningExport: 0, progress: null, processes: { metadata: null, export: null, download: null },
   };
 }
 

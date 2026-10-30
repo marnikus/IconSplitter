@@ -3,6 +3,7 @@
 // planner's rebuild flags. The artifacts are built BEFORE any validation or
 // commit, so a failed stage never touches the last valid package.
 
+import { verifyEpsDocument } from "../lib/upload/eps";
 import { prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
 import { pinnedDimensions, targetDimensions } from "../lib/upload/geom";
 import { rasterizeJpeg, type RasterRecord } from "../lib/upload/raster";
@@ -77,7 +78,13 @@ async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
   const prepared = prepareExportSvg(ctx.sourceText, ctx.settings);
   if (!prepared.ok) throw new StageError("prepare", `${prepared.code}: ${prepared.detail}`);
   art.prepared = prepared;
-  const optimized = await optimizeSvg(prepared.svg, ctx.settings.optimizeSvg);
+  // As is (2026-10-19): the approved text ships untouched — no SVGO, no clean rewrite.
+  const optimized = await optimizeSvg(prepared.svg, ctx.settings.optimizeSvg && !prepared.asIs);
+  if (prepared.asIs) {
+    art.optimizedSvg = optimized.svg;
+    art.optimizeRecord = optimized.record;
+    return;
+  }
   // SVGO may not smuggle anything back in: check, rebuild if it did, and fail
   // honestly when even a rebuild cannot make the file clean (RULE 15).
   const clean = enforceExportSvg(optimized.svg);
@@ -101,8 +108,8 @@ async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifa
 /**
  * SVG → EPS 10, from the text the optimize/clean stages produced (never the
  * source): that is the "convert after the SVG was optimized" order. PostScript
- * has no alpha, so opacity mixes onto the flatten colour (white when the
- * background is transparent) — no background shape is painted either way.
+ * has no alpha: native gradient functions flatten onto a proven uniform
+ * backdrop, with no bitmap intermediate. Every final EPS is audited.
  */
 async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   const converter = CONVERTERS[ctx.settings.epsConverter]; // the setting's choice (2026-10-09)
@@ -112,9 +119,16 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
     art.epsText = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
+    const checked = verifyEpsDocument(art.epsText);
+    if (!checked.ok) {
+      art.epsText = null;
+      art.epsFailure = `EPS vector-only verification failed: ${checked.errors[0]}`;
+    }
     art.epsFixes = eps.fixes;
     art.epsWriter = eps.writer;
   } else art.epsFailure = describeFailure(eps); // honest: the EPS stage failed → partial
+  // EPS-only has no other deliverable: fail before commit, preserving the previous package.
+  if (ctx.settings.includeSvg === false && ctx.settings.includeJpeg === false && art.epsFailure !== null) throw new StageError("eps", art.epsFailure);
 }
 
 /** A fresh render, or the committed JPEG re-embedded (metadata edit only). */

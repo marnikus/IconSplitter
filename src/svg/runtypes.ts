@@ -11,6 +11,8 @@ import type { DirHandleLike } from "../lib/fs";
 import type { PairMeta } from "../lib/pairmeta";
 import type { SvgSource } from "./sources";
 import type { RegenPlan } from "../lib/svgregen";
+import type { PromptChoice } from "../lib/prompttasks";
+import type { RegenCode } from "./regencodes";
 
 export type RunEvent =
   /** `images` = the run's image total, so every reader can say "N of M done". */
@@ -37,13 +39,27 @@ export interface RunArgs {
   caps: ModelCaps;
   params: SamplingParams;
   prompt: string;
+  /**
+   * The prompt THIS batch sends: the stored main prompt or a saved preset's own
+   * text, frozen when the batch was confirmed (2026-10-20, I-76). Absent means
+   * the main prompt (every pre-existing caller).
+   */
+  promptChoice?: PromptChoice;
   /** The main prompt, or the saved prompt that regenerates from each icon's current SVG (2026-10-09). */
   regen: RegenPlan;
+  /**
+   * The current SVG code of every icon in a regeneration batch, read ONCE at
+   * confirmation so the previewed text is the sent text. A missing entry fails
+   * that request; it never falls back to the main prompt (2026-10-20).
+   */
+  regenCodes?: ReadonlyMap<string, RegenCode>;
   sources: readonly SvgSource[];
   /** Sidecars loaded before the run; refreshed in place as results are saved. */
   metas: Map<string, PairMeta | null>;
   onEvent: (event: RunEvent) => void;
   signal: AbortSignal;
+  /** Request-local cancellation never aborts the owning run. Cleared in finally. */
+  onRequestController?: (controller: AbortController | null) => void;
 }
 
 export interface RunSummary {

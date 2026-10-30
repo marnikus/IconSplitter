@@ -1,739 +1,88 @@
-# UI Selector Reference — Icon Splitter (verified against `src/`)
+# UI Selector Reference — compatibility letter index
 
-Adapted from `Process-Images-in-Areana/docs/current/DOM_SELECTORS.md`. That app
-automates a foreign site, so its selectors target someone else's DOM. Icon
-Splitter **is** the page, so this reference lists the app's own stable handles
-for tests (RULE 8) and any future UI automation. Every `data-testid` below
-exists in source — Sheets handles verified in `src/App.tsx` (2026-09-30);
-Workbench + Batch handles verified in `src/ui/Workbench.tsx`,
-`src/batch/BatchPanel.tsx`, `src/batch/ScanTable.tsx`, `src/batch/PresetBar.tsx`
-(2026-10-01).
-
-Priority per RULE 21: **semantic** (role / label / text) > **structural** >
-**class fragment** (Tailwind utilities are last resort, never primary).
+The selector descriptions now live in [task-specific pages](README.md). This
+page preserves the A–S heading anchors for existing links. Start with the
+owning tab page; the [shared page](selectors/shared.md) owns app shell, global
+activity log, history, and selector conventions. Per RULE 21, prefer
+**semantic** (role / label / text) > **structural** > **class fragment**
+(Tailwind utilities are a last resort, never primary).
 
 ## A. File input — primary entry point
 
-| | |
-|---|---|
-| Test id | `file-input` |
-| Element | hidden `<input type="file" accept="image/*" multiple>` |
-| Semantic fallback | `getByLabelText` once a visible label exists; today it is visually hidden |
-| Used for | feeding sheets into `addFiles()`; the app's only file entry (RULE 10 — one control) |
+[Single sheets](selectors/sheets.md#a-file-input--primary-entry-point).
 
 ## B. Upload triggers
 
-| | |
-|---|---|
-| Test id | `upload-button` (header), `dropzone` (empty-state card, click target) |
-| Semantic fallback | visible text "+ Upload images", "Drop your icon sheets here", "Choose images" |
-| Used for | clicking either opens the file dialog via the shared `file-input` ref |
+[Single sheets](selectors/sheets.md#b-upload-triggers).
 
 ## C. Export controls — header
 
-| Test id | Visible text | Notes |
-|---|---|---|
-| `export-zip` | `⬇ ZIP (N)` | primary; `N` = total included icons; disabled when 0 (RULE 4) |
-| `export-folder` | `📁 Save to folder` | Chrome/Edge File System Access; fails open to ZIP message (RULE 9) |
-| `export-download` | `Download files` | one blob download per icon |
-
-Semantic fallback: button role + visible text. All three are disabled exactly
-when `total === 0` — tests may assert disabled-state instead of toast.
+[Single sheets](selectors/sheets.md#c-export-controls--header).
 
 ## D. Sheets panel
 
-| | |
-|---|---|
-| Test id | `sheet-remove-{sheetId}` (per-row remove button) |
-| Semantic fallback | `title="Remove"` attribute, visible ✕ |
-| Notes | the row itself is a click target (selects the sheet); no testid on rows yet — add `sheet-row-{id}` when a test needs it (see §J) |
+[Single sheets](selectors/sheets.md#d-sheets-panel).
 
 ## E. Export settings panel
 
-| Test id | Control | Range / values |
-|---|---|---|
-| `padding-slider` | `<input type="range">` | 0–25 (% padding per side) |
-| `size-select` | `<select>` | `SIZES` — 0 (Native auto), 128, 256, 512, 1024, 2048 |
-| `transparent-checkbox` | `<input type="checkbox">` | transparent background on/off |
-
-Semantic fallback: labels "Padding on each side", "Square size", "Transparent background".
+[Single sheets](selectors/sheets.md#e-export-settings-panel).
 
 ## F. Detection panel (active sheet only)
 
-| Test id | Control | Notes |
-|---|---|---|
-| `merge-slider` | `<input type="range">` 0–0.15, step 0.0025 | merge distance fraction; triggers `redetect()` (debounced by React state) |
-| `merge-reset` | button "↺ Reset to auto" | disabled unless `active.manual` (RULE 4 — honest state) |
+[Single sheets](selectors/sheets.md#f-detection-panel-active-sheet-only).
 
 ## G. Boundary overlay — include/exclude
 
-| | |
-|---|---|
-| Test id | `box-toggle-{i}` on each `<g>` over the sheet preview (i = detection index) |
-| Semantic fallback | none (SVG overlay) — testid is the handle |
-| Behaviour | click toggles `excluded`; excluded boxes render grey/dashed, included green (RULE 11: boxes array intact) |
+[Single sheets](selectors/sheets.md#g-boundary-overlay--includeexclude).
 
 ## H. Status surfaces
 
-| Test id | Element | Notes |
-|---|---|---|
-| `busy-overlay` | full-screen progress overlay | present only while `busy` |
-| `busy-message` | progress text | e.g. `Rendering 3/12…` (RULE 5 — incremental) |
-| `toast` | bottom toast | green success / rose error (`toast.err`); text is the assertion target (RULE 2, RULE 4) |
+[Single sheets](selectors/sheets.md#h-status-surfaces).
 
 ## I. Selector object structure — for every element
 
-Same shape as the source project, adapted:
-
-```ts
-{
-  name: "export-zip",              // stable id, matches data-testid
-  testid: "export-zip",            // primary handle
-  semantic: 'button "⬇ ZIP"',      // role + text fallback (RULE 21 level 1)
-  state: "disabled when total === 0",
-  verified: "2026-09-30",          // date the handle was checked in src
-}
-```
-
-When a test needs a handle that is not listed here, add the `data-testid` to
-the owning component (`src/App.tsx` or `src/batch/*`) **and** a row to this
-doc in the same change (RULE 17).
-
-## K. Workbench tabs — mode switch
-
-| Test id | Visible text | Notes |
-|---|---|---|
-| `tab-sheets` | `Single sheets` | mounts the original `App` UI; one mounted at a time with the others |
-| `tab-batch` | `Batch folders` | mounts `BatchPanel`; batch state (`useBatch`) survives sheet tabs |
-| `tab-selection` | `Selection` | mounts the V1 `SelectionPanel` |
-| `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` (template design, §N) |
-| `tab-generate-svg` | `Generate SVG` | mounts `SvgPanel` (§P) |
-| `tab-upload` | `SVG to upload` | mounts `UploadPanel` (§R), after Generate SVG |
-
-Semantic fallback: button role + visible text.
-
-## L. Batch panel — `src/batch/*`
-
-Primary header controls:
-
-| Test id | Visible text | Notes |
-|---|---|---|
-| `batch-root` | `Choose source folder…` → `Root: {name}` | opens directory picker (`picker.ts`); Chrome/Edge File System Access; label mirrors state (RULE 24) |
-| `batch-refresh` | `↺ Rescan` | re-walks root; gated on handle + permission |
-| `batch-process` | `▶ Split selected` | disabled when 0 selected (RULE 4) |
-| `batch-cancel` | `✕ Stop` | shown only while busy; sets the stop signal |
-| `batch-dest` | `Choose destination…` | custom destination picker; null ⇒ `<root>/_split_output` |
-
-Status + warning surfaces:
-
-| Test id | Element | Notes |
-|---|---|---|
-| `fs-warning` | amber banner | File System Access unsupported (non-Chromium); honest degrade |
-| `ref-warnings` | amber paragraph | references missing for one or more sources |
-| `batch-busy` | fixed overlay | present only while a batch runs; message inside (RULE 5) |
-| `batch-toast` | bottom toast | green/rose; text is the assertion target (RULE 2, RULE 4) |
-
-PresetBar — `preset-bar` panel:
-
-| Test id | Control | Range / values |
-|---|---|---|
-| `preset-name` | preset name text input | current preset label |
-| `preset-save` | button `Save` | persists under `name.trim() || preset.name` |
-| `preset-list` | preset `<select>` | list of saved presets; first option is the `Load preset…` placeholder |
-| `preset-delete` | button `Delete` | removes preset by trimmed name |
-| `batch-padding` | range 0–25 | per-side padding %, shared with sheets |
-| `batch-size` | select | 0 (auto) / 128 / 256 / 512 / 1024 / 2048 |
-| `batch-transparent` | checkbox | transparent background on/off |
-| `batch-ignore` | comma list | directories/files skipped by the walk |
-
-Review window (scan table) — `scan-table` panel:
-
-| Test id | Element | Notes |
-|---|---|---|
-| `select-all` | button in header | toggles every eligible row; label reflects state (RULE 24) |
-| `row-select-{relPath}` | per-row checkbox | `relPath` is the scan-relative path |
-| `row-open-{relPath}` | per-row `copy path` button | clipboard-path fallback for "Open in Explorer" (honest, RULE 2) |
-
-Semantic fallbacks: button/select/input role + visible text; `row-*` ids use
-the data `relPath`, so tests should build handles from the scanned entry.
-
-## M. Selection review — `src/selection/*` (verified 2026-10-01)
-
-Header + status:
-
-| Test id | Element | Notes |
-|---|---|---|
-| `sel-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root |
-| `sel-folder-path` | read-only path row | the picked folder's **complete path** below the header, whole value in its `title`; names the state — *full path not captured* (I-46; *completed — check it* removed by I-59) |
-| `sel-rescan` | `↺ Rescan` | re-walks the root |
-| `sel-scope` | scope line | the folder scope the scan used (I-40), shown once a root is loaded: "Scope: split output only · N pair(s) in the main folder not listed" / "Scope: whole folder — no split output found" |
-| `sel-count-{total,pending,approved,declined}` | counter chips | live counts |
-| `sel-help` | `?` popover | keyboard reference |
-
-Filter bar (`sel-filterbar`): `sel-date-all` / `sel-date-month` / `sel-date-custom`,
-`sel-month` (month input), `sel-from` / `sel-to` (datetime-local, inclusive),
-`sel-status`, `sel-sort` (date/status/name/path), `sel-dir` (newest/oldest),
-`sel-clear`, `sel-shown` ("Showing N pairs").
-
-Review list (`sel-list`): `sel-search` (Ctrl+K focuses), `sel-attention`
-("N NEED ATTENTION"), `sel-expand` / `sel-collapse`, `sel-row-{pairId}`
-(rows carry text status chips — never colour alone), `sel-empty`,
-`sel-clear-empty`.
-
-Comparison (`sel-compare`): `sel-status` chip, `sel-zoom` (1:1 fit/full,
-Space), `sel-sync` (scroll sync), `sel-decline`, `sel-approve`,
-`sel-autonext`, `sel-open-src` / `sel-open-ai` (copy-path fallback),
-`sel-missing` (absent side / decode failure), `sel-discovery`
-(created/generated line).
-
-Surfaces: `sel-writewarn` + `sel-retry` (write-failure banner: it names the
-pair files — `<name>.svg.json` — and Retry rewrites exactly the pairs whose write
-failed, I-43), `sel-pairfiles` (the pair files this scan could not read, by
-name — their decisions are kept, I-43), `sel-corrupt` (the **legacy**
-`review-decisions.json` is unreadable; it is never written, I-42), `sel-toast`,
-`sel-busy`, `sel-footer` with `sel-rescan-age`,
-`sel-diff` (+new/renamed/removed/unchanged), `sel-retry-count`,
-`sel-progress`; the empty-root state's button is `sel-open-folder-empty` (the
-old `sel-root-empty` handle was that button and is gone), and `sel-unsupported`.
-
-## N. Selection review V2 — `src/selectionv2/*` (verified 2026-10-01)
-
-Source bar + layout switch:
-
-| Test id | Element | Notes |
-|---|---|---|
-| `v2-open-folder` | green `Open folder` button | the one folder control, labelled with the action in every state (I-44); opens the picker with or without a root (I-30) |
-| `v2-folder-path` | read-only path row | the picked folder's **complete path**, full-width directly below the toolbar, whole value in its `title`, selectable text only — no input, no button (I-46); *full path not captured* names the missing state (*completed — check it* removed by I-59) |
-| `v2-rescan` | `↻ Rescan` | re-walks the root, keeps decisions and zoom |
-| `v2-mode-list` / `v2-mode-compare` | segmented buttons | review layout; `aria-pressed` marks the active one |
-| `v2-count-{total,pending,approved,declined,attention}` | counter chips | live counts |
-
-Filter grid (`v2-filters`): `v2-date-all` / `v2-date-month` / `v2-date-range`,
-`v2-from` (month **or** datetime-local, disabled when the mode is All),
-`v2-to` (Range only), `v2-status`, `v2-pairing` (all / complete / missing
-pair), `v2-sort`, `v2-dir`, `v2-shown` ("Showing N pairs"), `v2-clear`.
-
-Bulk bar (`v2-bulk`):
-
-| Test id | Element | Notes |
-|---|---|---|
-| `v2-check-all` | header checkbox | checked / unchecked / **indeterminate** |
-| `v2-selected-count` | `N selected` | checked rows, independent of the filters |
-| `v2-scope` | `across N visible pairs` | the scope "Select visible" and bulk act on |
-| `v2-scan-scope` | `Scope: …` | the folder scope the scan used (I-40) — the same two states as `sel-scope`; shown once a root is loaded, replacing the static "Recursive · subfolders included" note |
-| `v2-blocked` | `N checked pairs incomplete` | shown only when > 0; never approved |
-| `v2-hidden` | `N checked but hidden by filters` | shown only when > 0; never applied |
-| `v2-select-visible` / `v2-deselect` | buttons | scope = the filtered list |
-| `v2-thumb` | `<input type="range">` | **48–800 px**, step 4; `aria-label="Thumbnail maximum height"`; sizes BOTH thumbnails of every row (I-55) |
-| `v2-thumb-value` | `<output>` | live `128 px` readout (RULE 24) |
-| `v2-approve-selected` / `v2-decline-selected` / `v2-reset-selected` | buttons | the only bulk actions; every label carries the affected count and arms first (`Confirm approve`); disabled at 0. **No bulk action touches the visible list** — `v2-approve-visible` and `v2-reset-visible` were removed |
-| `v2-cancel-bulk` | button | shown while one action is armed; Escape also disarms |
-
-List review (`v2-list`, rows in `v2-rows` with `role="list"`):
-
-| Test id | Element | Notes |
-|---|---|---|
-| `v2-row-{pairId}` | row (`role="listitem"`) | `aria-current="true"` + roving `tabIndex` on the active row |
-| `v2-check-{pairId}` | row checkbox | `aria-label="Select {base}"`; checking does not move the active row |
-| `v2-thumb-src` / `v2-thumb-ai` | thumbnail wrappers | each carries an `Original` / `AI result` tag; missing side or decode failure → `role="img"` placeholder with an aria-label |
-| `v2-status-{pairId}` | badge | glyph **and** text, or `⚠ AI result missing` / `⚠ Original missing` |
-| `v2-created-{pairId}` / `v2-dims-{pairId}` | cells | date + time, dimensions + format + size |
-| `v2-open-src-{pairId}` / `v2-open-ai-{pairId}` | buttons | disabled when that side is missing; copies the FOLDER of that side (`lib/copypath`), as the pasted full path when one is remembered (I-28) |
-| `v2-decline-{pairId}` / `v2-approve-row-{pairId}` | buttons | decide this row |
-| `v2-autonext` | checkbox | advance to the next pending after a decision |
-| `v2-footer`, `v2-empty`, `v2-nomatch`, `v2-clear-empty` | footer + empty states | "no images" and "no matches" stay distinct (RULE 4) |
-
-Comparison layout: `v2-pair-picker` (labelled `<select>` of the visible pairs)
-plus the V1 `sel-compare` handles (§M). Shared surfaces keep their `sel-*`
-handles in both tabs: `sel-footer`, `sel-diff`, `sel-rescan-age`,
-`sel-retry-count`, `sel-progress`; V2 skins its own banners and overlays with
-`v2-writewarn` / `v2-retry`, `v2-pairfiles`, `v2-corrupt`, `v2-toast`, `v2-busy`,
-and the empty-root states `v2-root-empty` (its button is
-`v2-open-folder-empty`) / `v2-unsupported`.
-Approving a pair writes `<dir>/<stem>.svg.json` beside its images and never a
-`review-decisions.json` (I-41/I-42; `tests/selectionv2_ui.test.tsx` asserts both).
-
-## Q. App shell and the global activity log (verified 2026-10-05)
-
-| Test id | Element | Notes |
-|---|---|---|
-| `app-shell` | the app's one viewport column | nav → `app-main` → `log-dock`; `height: 100dvh`, `overflow: hidden` |
-| `app-main` | the scrolling region | holds the active tab's panel; the window itself never scrolls |
-| `log-dock` | the docked log, the shell's last row | a layout row, never `fixed`/`sticky` — that overlay is what used to eat row-checkbox clicks (I-27) |
-| `log-head` | the dock's header | `log-count` ("120 of 200"), `log-autoscroll` ("following" / "paused"), `log-max` (select: 50/100/200/500/1000), `log-copy`, `log-clear`, `log-minimize` ("Minimize" / "Restore"), `log-note` (Copy/Clear feedback) |
-| `log-body` / `log-list` / `log-entry` / `log-empty` | the scrolling entries | one `log-entry` per line: level, `feature.action`, ids, detail; `role="log"` |
-| `--app-dock-h` | CSS custom property on `:root` | the dock's height (236 px open, 36 px minimized), published by `src/log/dockheight.ts`; the fixed floats (`svg-toast`, `svg-busy`, `.toast-above-dock`) read it |
+[Shared conventions](selectors/shared.md#i-selector-object-structure--for-every-element).
 
 ## J. Handles still needed (to be added on demand)
 
-| Handle | Where | Needed when |
-|---|---|---|
-| `sheet-row-{id}` | sheet list rows | first test that selects a sheet by click |
-| `icon-card-{n}` / `icon-copy-{n}` / `icon-save-{n}` | result grid cards | first test of per-icon export |
-| `empty-result-note` | "No icons selected…" paragraph | empty-state assertions |
-| `row-status-{relPath}` | scan table status cell | first test asserting per-row status text |
-| `ref-warn-{relPath}` | per-row missing-reference note | first test of per-row warning detail |
+[Shared discovery list](selectors/shared.md#j-handles-still-needed-to-be-added-on-demand) identifies unimplemented sheets/batch handles; do not assume they exist in the DOM.
 
-Nothing fetches these yet — they are the discovery list, kept honest like the
-source doc's "Missing Selectors" section.
+## K. Workbench tabs — mode switch
+
+[Shared Workbench](selectors/shared.md#k-workbench-tabs--mode-switch).
+
+## L. Batch panel — `src/batch/*`
+
+[Batch folders](selectors/batch.md#l-batch-panel--srcbatch).
+
+## M. Selection review — `src/selection/*` (verified 2026-10-01)
+
+[V2 shared comparison/status](selectors/selection.md#m-selection-review--srcselection-verified-2026-10-01).
+
+## N. Selection review V2 — `src/selectionv2/*` (verified 2026-10-01)
+
+[Selection V2](selectors/selection.md#n-selection-review-v2--srcselectionv2-verified-2026-10-01).
 
 ## O. Global history bar, reset actions (verified 2026-10-01)
 
-App-level, rendered by `ui/Workbench` above every panel (`ui/HistoryBar.tsx`):
-
-| testid | element | notes |
-|---|---|---|
-| `history-bar` | container | present on every tab |
-| `hist-undo` | button | `disabled` at the frontier; `title` = "Undo: <label> (Ctrl+Z)" |
-| `hist-redo` | button | `disabled` at the tip; `title` = "Redo: <label> (Ctrl+Shift+Z)" |
-| `hist-label` | text | "Undo: <label>" or "Nothing to undo" |
-| `hist-open` | button | `History (<n>)`; toggles the History window (`aria-expanded`) |
-| `hist-error` | span `role="alert"` | shown when an undo/redo could not be applied |
-
-The History window (`ui/HistoryPanel.tsx`), opened by `hist-open`:
-
-| testid | element | notes |
-|---|---|---|
-| `hist-panel` | `aside role="dialog"` | fixed, top-right, below the bar |
-| `hist-panel-count` | text | "<n> change(s)" |
-| `hist-close` | button | `aria-label="Close history"`; Escape closes too |
-| `hist-panel-undo` / `hist-panel-redo` | buttons | `title` names the entry they reverse; same disabled rules as the bar |
-| `hist-panel-items` | ul | newest first; the list is read-only — jumping to an entry would mean applying several changes at once, which is not reversible |
-| `hist-item-<entryId>` | li | `data-current` marks the entry under the cursor |
-| `hist-panel-error` | p `role="alert"` | same error as `hist-error`, inside the window |
-
-Reset to pending:
-
-| testid | element | notes |
-|---|---|---|
-| `sel-reset` | button | single pair, comparison view; `disabled` while pending |
-| `v2-reset-selected` | button | the selected, complete pairs; arms first, then "Confirm reset" |
-
-Row selection (`v2-row-{pairId}`, File-Explorer style — the checkbox is the
-authoritative state, the clicks only produce it):
-
-| click | result |
-|---|---|
-| plain | select this row only (the shift anchor moves here) |
-| Shift | select the contiguous range from the anchor to this row |
-| Ctrl/Alt/Cmd | add or remove just this row; the anchor stays, so the next Shift still extends from it |
-
-Every selection change is one undoable `checked` entry, carrying the ids, the
-anchor and the row a plain click also made active.
-
-Shortcuts: `Ctrl/Cmd+Z` undo, `Ctrl/Cmd+Shift+Z` or `Ctrl/Cmd+Y` redo. Ignored only
-while the focus is in a *text* surface — text-ish input, textarea, select or a
-contenteditable — so undo still works after using the zoom slider or a checkbox.
+[Shared global history](selectors/shared.md#o-global-history-bar-reset-actions-verified-2026-10-01); [Selection reset/row interactions](selectors/selection.md#selection-reset-and-row-interactions).
 
 ## P. Generate SVG — `src/svg/*` (verified 2026-10-01)
 
-Source: `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`,
-`SvgThumbs.tsx`, `SvgBatchStrip.tsx`, `SvgDialogs.tsx`, `SvgPanel.tsx`.
+[SVG generation](selectors/svg-generation.md#p-generate-svg--srcsvg-verified-2026-10-01); [AI-source image edits and provider consent](selectors/svg-image-edits.md).
 
-Source bar (always rendered — `svg-open-folder` is the one way in whether or not
-a root is loaded; `svg-root-empty` / `svg-unsupported` are the two empty states
-and stay distinct):
+## Q. App shell and the global activity log (verified 2026-10-05)
 
-| Test id | Element | Notes |
-|---|---|---|
-| `svg-open-folder` | green `Open folder` button | the same shared control as the Selection tabs (I-44), offered whether or not a root is loaded (I-30); `svg-root-empty`'s button is `svg-open-folder-empty` |
-| `svg-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar, whole value in its `title`, text only — captured from the clipboard when the folder is picked (I-35) and remembered per folder name (I-29, `iconSplitter.rootpaths.v1`); *full path not captured* names the missing state (*completed — check it* removed by I-59) (I-46) |
-| `svg-rescan` | `↻ Rescan` | re-walks the root, keeps rows and the prompt |
-| `svg-scope-copy` | text | "recursively, both files present, decision = approved" |
-| `svg-audit` | text | the whole picture the list was checked against, one line (I-33): "Audit — 30 files · 13 AI sources · 14 references excluded · 2 missing files · 2 duplicates removed → 13 rows". The same line is the scan log's detail |
-| `svg-count-{eligible,generated,approved,failed}` | counter chips | live counts |
-
-Prompt + provider card:
-
-| Test id | Element | Notes |
-|---|---|---|
-| `svg-prompt` | `textarea` | `aria-label="Generation prompt"`; `svg-prompt-reset` restores the documented default; `svg-prompt-window` wraps the window. The shared preset bar (2026-10-09): `svg-preset-list`, `svg-preset-quick-load`, `svg-preset-delete`, `svg-preset-name`, `svg-preset-save` — the same handles and rules as the metadata prompt, over the SVG preset list |
-| `svg-provider` | text | provider name + "OpenAI-compatible" |
-| `svg-limits` | text | the values that will really be used: "\{stall label} · N retries · N per request" — the label names its tier floor ("600s stall (high floor)") and the per-request size is **exactly what the user configured** (no tier ever shrinks it); the `title` carries the tier note |
-| `svg-per-request` | `input[type=number]` | images per request, 1–9 — the size that is really sent, at every reasoning tier |
-| `svg-timeout` | `input[type=number]` | the **stall window** in **seconds**, 5–900, default 120: the longest silence between bytes; there is no total-duration limit. Clamped at the moment of change; the tier floor can raise the effective window, which `svg-limits` and `svg-confirm-timeout` then show |
-| `svg-retries` | `input[type=number]` | retries per request, 0–5, default 2, for failures the provider **confirmed**; a stall is never retried — its outcome is unknown |
-| `svg-model` | `input` | the model id (verified default `openai/gpt-6.1-sol`) |
-| `svg-key-state` | button | masked key, with the honest state AND its origin: "API key secured locally" / "API key kept for this session only" / "Storage could not be read" / "No API key yet"; opens the editor |
-| `svg-key-mask` / `svg-key-note` | two rows of `svg-key-state` | the masked key (ellipsised) on its own line above "GPT 6.1 Sol · excluded from Git · logs · exports" — never side by side, so they cannot overlap. The note states what a reload does: a device key says "local only · excluded from Git · logs · exports"; a key storage refused says "browser storage refused it — paste again after a reload"; an unreadable store says "this device's storage is unreadable here (private mode?)" |
-| `svg-key-forget` | button | shown only while a key is in hand; deletes the stored key from this device (the one deliberate way to clear it) |
-| `svg-key-input` / `svg-key-save` / `svg-key-cancel` | editor | `input[type=password]`, `aria-label="Requesty API key"`; `svg-key-save` is `disabled` while the field is empty (an empty Save never erases the stored key) |
-
-The provider card (`svg-provider-card`) is **minimizable**: `svg-provider-toggle`
-is a link in the header with `aria-expanded` and `aria-label`
-("Minimize model settings" / "Restore model settings"). Minimized, only the
-header stays — provider, limits (`svg-limits`) and the toggle — and the choice
-is remembered locally (RULE 6), so a restart opens the card the way it was left.
-
-Sampling (`SvgSampling.tsx`) — only what the selected model accepts is offered:
-
-| Test id | Element | Notes |
-|---|---|---|
-| `svg-temperature` | `input[type=number]` | 0–2, step 0.1; **absent** on a reasoning model, which shows `svg-temperature-off` ("Not supported by this model") instead |
-| `svg-max-tokens` | `input[type=number]` | clamped to the model's range (family default 1 000–200 000, or the model list's `max_output_tokens`) |
-| `svg-effort` | `select` | Low / Medium / High / Extra High; the empty option is the provider default. `xhigh` (Extra High) only on the models that accept it |
-| `svg-caps` | text | the token field, both ranges and where the limits came from (model list / family / default) |
-| `svg-param-note` | warning | what a model change reset, and why; dismissable |
-| `svg-refresh-models` | button | re-reads `GET /v1/models` (cached 24 h) and re-resolves the limits |
-
-Filters: `svg-filter-generation` (all / not generated / generating / generated
-/ failed), `svg-filter-review` (all / pending / approved / declined / needs-review),
-`svg-sort` (date / name / generation / review / cost), `svg-search` (matches the
-file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
-
-Bulk bar (`svg-bulk`):
-
-| Test id | Element | Notes |
-|---|---|---|
-| `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
-| `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
-| `svg-select-visible` / `svg-deselect` | buttons | scope = what the filters show |
-| `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, **48–800** step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout. Same range, same rule and the same shared layout as Selection V2's `v2-thumb` (I-55 — one implementation, `lib/zoom` + `ui/PairedThumbs`) |
-| `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
-| `svg-estimate` | text | token estimate for the selection |
-| `svg-generate-selected` | button | "✦ Generate selected" — unchanged: arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
-| `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared confirmation is titled "Confirm SVG regeneration" and previews/sends only those rows, excluding checked rows with no generated SVG. Bulk regeneration appends behind a run in flight (I-53) |
-| `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow warning, regenerated — new review); disabled at 0 |
-| `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
-
-Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`):
-
-| Test id | Element | Notes |
-|---|---|---|
-| `svg-row-{sourceId}` | row `role="listitem"` | keyed by the stable pair id, never a row index |
-| `svg-check-{sourceId}` | checkbox | `aria-label="Select {base}"` |
-| `svg-ai-{sourceId}` | thumbnail | the approved AI image (`<img>` in the same `svg-thumb` square box, `object-fit: contain`); missing → placeholder of the same size |
-| `svg-prev-{sourceId}` | inline preview | the newest valid SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame, the same `svg-thumb` px box as the AI thumbnail beside it; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |
-| `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |
-| `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | "Location" copies the **folder of the file the row names** (I-56: the same path `svg-target-{id}` shows, minus the file name — `…\<piece>\split_04`); "Copy" puts that version's SVG source on the clipboard. Neither is disabled by the folder's depth, and neither ever copies a file path |
-| `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
-| `svg-generate-{sourceId}` / `svg-needs-review-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row Generate or Regenerate + review: needs-review (⚠ yellow, regenerated — new review) near approve/decline; approve/decline disabled until a version exists; regeneration automatically sets needs-review |
-| `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
-| `svg-review-{sourceId}` | badge | pending / approved / declined / needs-review (regenerated — new review, yellow) |
-| `svg-usage-{sourceId}` | text | version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
-| `svg-target-{sourceId}` | text | the SVG this row owns: the newest version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the pair file's name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
-| `svg-persist-{sourceId}` | text | "Pair file saved" / "Not generated yet" / "Pair file unreadable — SVGs on disk are kept"; the `title` names the pair's own file ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it, I-41); `error` class on failure |
-| `svg-problem-{sourceId}` | text | the row's scan status when a file of a **listed** source needs attention: "Reference missing" / "Unreadable file" (several reasons joined by " · "); its `title` is the full per-file reason ("no AI result (court\_AI.png) beside architecture/court.png"). An unreadable file or a missing reference is a status on the row, never a removal — but a missing **AI image** means there is no row at all (I-31): that source appears in `svg-warn-excluded` instead |
-
-List chrome: `svg-row-count` (visible rows), `svg-running-count`,
-`svg-queued-count` ("N next attempt" — rows waiting in a queued batch, I-53),
-`svg-attention-count` (rows needing attention), `svg-empty` ("No approved
-source matches these filters."), `svg-footer-summary` (`shownLabel`).
-
-Status badge while a row waits in the queue: `svg-status-{sourceId} .svg-badge`
-reads "Next attempt" with class `queued` (grey); the row's own status is back the
-moment the batch is dropped (I-53). `svg-generate-{sourceId}` while a run is in
-flight queues that source FIRST, with no dialog (idle: the dialog as before).
-
-Queue (waiting batches, I-53): `svg-queue` is absent when nothing waits; otherwise
-`svg-queue-count` ("N queued — they start as soon as the run in flight ends.
-Adding more never interrupts it."), `svg-queue-line-{n}` (1-based, "#n · <first
-file> + N more · N images · N requests") and `svg-queue-drop-{n}` ("× Drop", drops
-exactly that batch — the run in flight is untouched). `svg-confirm-generate` reads
-"Add to queue" while a run is in flight and `svg-confirm-queue-note` explains why.
-
-Run record (I-58): `svg-run-record` wraps the batch strip and the queue and sits
-BELOW the list; absent when nothing ran and nothing waits.
-
-Persistent progress header (I-57, on EVERY tab, portalled to `#svg-progress-mount` above tab bar): `svg-progress-header` (class `complete` when done), `svg-progress-title` ("Generating SVGs · 24 images" / "SVG batch complete"), `svg-progress-file` (current filename or "24 results saved · ready for review"), `svg-progress-thumb` (current AI thumbnail), `svg-progress-track` + `svg-progress-fill`, `svg-progress-completed` / `svg-progress-remaining` / `svg-progress-percent`, `svg-progress-cancel` (opens cancel dialog), `svg-progress-review` (→ Review results), `svg-progress-dismiss` (×; final line stays until dismissed, new run brings it back), `svg-cancel-dialog` with `svg-cancel-current` (thumbnail + "Currently generating · image 9 of 24" + filename) and `svg-cancel-stats` (kept/stopped) and `svg-cancel-keep` / `svg-cancel-confirm` / `svg-cancel-close`. Shell: `svg-shell` is the
-Generate SVG tab's parked wrapper (`hidden` on other tabs, never unmounted).
-
-Batch strip (`svg-batch`, the request in flight and every finished request;
-it stays after the run ends so the record is readable): `svg-batch-composite`
-(the contact sheet actually sent), `svg-batch-id`, `svg-batch-grid`
-("request 2 of 3 · 2×2 grid · 4 image(s)"), `svg-batch-counts` ("N saved · N
-failed · N missing"), `svg-batch-elapsed` (the ticking "elapsed m:ss" of the
-request in flight, next to Cancel — the visual proof that a long generation is
-alive; "(ended)" once the run stops), `svg-batch-reports` with one
-`svg-batch-report-{index}` per finished request (its own counts, elapsed,
-tokens and cost; class `failed` when that request failed and `unknown` when its
-outcome was never confirmed), `svg-batch-cancel` (only while something is in
-flight).
-
-Dialogs:
-
-| Test id | Notes |
-|---|---|
-| `svg-confirm` | confirm-before-send backdrop (nothing is sent by opening it); `svg-confirm-title` is "Confirm SVG generation" or "Confirm SVG regeneration"; `svg-confirm-generate` says "Generate now" / "Regenerate now" while idle and "Add to queue" during a run, with `svg-confirm-cancel` / `svg-confirm-close` |
-| `svg-confirm-mode` | badge | "Generation batch now" vs "Regeneration now" — clearly says which prompt path this batch uses (2026-10-09) |
-| `svg-confirm-main-prompt` | note | generation only: "Uses the main currently loaded prompt" — main prompt not reloaded in popup |
-| `svg-confirm-regen-preset` / `svg-confirm-regen-note` / `svg-confirm-regen-label` | regeneration only: dropdown of saved prompts applied to full batch, plus note |
-| `svg-confirm-full-prompt` | `pre` | **full prompt that will be sent** for current request page: generation = `batchPrompt`/`singlePrompt` (manifest + order line + main prompt), regeneration = `currentSvgPrompt(presetText, stem, code)` (preset + Icon name line for title detection + current SVG code verbatim). One per request; regeneration loads code via `readSvgText` |
-| `svg-confirm-full-prompt-note` | small | explains what full prompt contains |
-| `svg-confirm-full-prompt-loading` | note | shown while SVG code loads for regeneration preview |
-| `svg-confirm-count` / `svg-confirm-requests` | the selected images and the total request count with the per-request size ("4 × 4 max" — the user's size, at every tier; "· prompt “{name}”" appended for regeneration) |
-| `svg-confirm-model` / `svg-confirm-sampling` / `svg-confirm-timeout` | the provider+model, the sampling values that will be sent (e.g. "no temperature · 32 000 max tokens · effort Medium") and the stall window that will really be used ("600s stall (medium floor)") |
-| `svg-confirm-streaming` | the streaming fact: "on — a live request is never cut, however long it runs" |
-| `svg-confirm-queue-note` | shown only while a run is in flight: "confirming adds these N image(s) to the queue", so the user knows the run in flight is not interrupted (I-53) |
-| `svg-confirm-limit` / `svg-confirm-problem` | the tier note ("effort medium raises the stall window to 300s … the batch itself is sent as configured") or `null` when the tier raises nothing; the refusal when the plan cannot be mapped — `svg-confirm-generate` is disabled and nothing is sent; regeneration with no saved prompts shows problem and disables confirm |
-| `svg-batch-page` / `svg-batch-prev` / `svg-batch-next` | the page label ("batch\_1\_2 · Request 1 of 2") and pagination, one page per request |
-| `svg-batch-grid` / `svg-batch-empty` / `svg-batch-items` | that page's grid size, its empty cells (partial last request) and its ordered "position — name" filenames |
-| `svg-composite-img` / `svg-composite-meta` | the page's own contact sheet (built in memory on first view, cached) and its layout line |
-| `svg-composite-building` / `svg-composite-error` | the honest in-progress and could-not-build states |
-| `svg-code-dialog` | the SVG source: `svg-code-block`, `svg-code-missing`, `svg-code-select`, `svg-code-copy`, `svg-code-close`, `svg-code-done`, plus `svg-code-preview` → `svg-code-art` (the same document, drawn) and `svg-code-preview-note` |
-| `svg-history-{sourceId}` | button | opens the **version chooser** (I-54); disabled when the pair has no recorded version |
-| `svg-history-dialog` | the version chooser: `svg-history-title`, `svg-history-shown` ("Showing v2 of 3 recorded versions — choosing another one keeps all of them"), `svg-history-note` (why a choice could not be saved; absent when it could), `svg-history-table`, `svg-history-v{n}` (one tile per version, class `shown` on the one the row shows), `svg-history-status-{n}`, `svg-history-art-{n}` (that version's own artwork, 96×96), `svg-history-cost-{n}` (cost + Estimated/reported label and the pricing-version line), `svg-history-use-{n}` ("Use this version"; disabled for an unusable tile or the one already shown), `svg-history-code-{n}`, `svg-history-close`, `svg-history-done` |
-
-Restart recovery: `svg-inflight` (the note about requests with no confirmed
-outcome, shown while `iconSplitter.svg.inflight.v1` has entries) with
-`svg-inflight-note` (how many, their request ids and files, and "Nothing has
-been resent"), `svg-inflight-retry` (opens the normal confirmation for exactly
-those sources — the only way to resend, always a deliberate user action) and
-`svg-inflight-dismiss` (acknowledges the note and clears the journal).
-
-Shared surfaces: `svg-warn-{noteId}` (`pairfile` — the pair files that could not
-be parsed, I-43 / `problems` — the
-listed sources that need attention, with the first reasons spelled out /
-`excluded` — the approved sources **not** listed, grouped by kind with the first
-reasons spelled out ("4 approved source(s) are not listed — 2 with no AI image
-on disk, 2 duplicate records." — a source outside the split output is reported
-as `outside-split` and never offered, I-38), so a reference image is never mistaken for a
-missing row (I-31) / `unreadable` — the files that could not be read this scan /
-save failure),
-`svg-toast` (`role="status"`), `svg-busy`, `svg-statusbar` with
-`svg-status-totals` (visible tokens + cost, "—" when unknown),
-`svg-status-progress`, `svg-status-running`. Undo of a review gesture goes
-through the global bar handles `hist-undo` / `hist-redo` (§O).
+[Shared shell and log](selectors/shared.md#q-app-shell-and-the-global-activity-log-verified-2026-10-05).
 
 ## R. SVG to upload — `src/upload/*` (verified 2026-10-07)
 
-Source: `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`,
-`UploadRow.tsx`, `UploadMetaFields.tsx`, `UploadSettingsDialog.tsx`,
-`UploadPreview.tsx`, `UploadPanel.tsx`. The panel root carries both `svg` and
-`up` classes, so the whole Generate SVG look applies; `.up-*` CSS adds the row
-grammar with the expandable metadata detail, the package-status badge colours
-and the settings dialog's inherited/overridden markers.
-
-Source bar (always rendered — `upload-open-folder` is the one way in;
-`upload-root-empty` / `upload-unsupported` are the two empty states):
-
-| Test id | Element | Notes |
-|---|---|---|
-| `upload-open-folder` | green `Open folder` button | the shared control (I-44), offered whether or not a root is loaded; `upload-root-empty`'s button is `upload-open-folder-empty` |
-| `upload-folder-path` | read-only path row | the picked folder's **complete path**, full-width below the bar (I-46) |
-| `upload-rescan` | `↻ Rescan` | re-walks the root (busy label while scanning) |
-| `upload-scope-copy` | text | "Approved SVGs only · recursive · N icons" |
-| `upload-audit` | text | the scan's one audit line: rows · SVG files · pairs not listed · corrupt pair files |
-| `upload-count-{icons,processed,partial,failed,stale}` | counter chips | live counts; a failed run counts even with record null |
-
-Metadata prompt panel (`upload-prompt-panel`, its own section beside the Gemini
-card — never inside it) and the provider card:
-
-| `upload-prompt-copy` | text | "Metadata prompt · saved locally · default/custom" |
-| `upload-prompt-reset` | link | restores the documented default prompt |
-| `upload-prompt` | `textarea` | the EDITABLE prompt the one confirmed request carries and the export record names |
-| `upload-prompt-note` | note | stored locally · the validator still enforces the default prompt's rules |
-| `upload-preset-list` | `select` | saved prompt presets ("Pick a saved prompt (N saved)") |
-| `upload-preset-quick-load` / `upload-preset-delete` | buttons | act on the picked preset; disabled until one is picked |
-| `upload-preset-name` / `upload-preset-save` | input + button | Save as: a named snapshot of exactly the editor's text |
-| `upload-settings-open` | button | opens the global-defaults settings dialog — it lives in the bulk bar BESIDE THE ZOOM controls (`upload-bulk-right`) |
-| `upload-bulk-right` | container | the bulk bar's action half: preview background, zoom, export settings, progress, the bulk actions |
-| `upload-provider-card` | card | minimizable via `upload-provider-toggle` (`aria-expanded`) |
-| `upload-provider` / `upload-limits` | text | "Gemini · metadata generation" / "{timeout}s timeout · N retries · N parallel" |
-| `upload-provider-grid` | grid | Model, Endpoint (full-width row), Timeout, Retries, Parallel — one contained grid |
-| `upload-model` / `upload-endpoint` | `input` | the model id (verified default `gemini-3.1-flash-lite`) and the base URL |
-| `upload-provider-check` | row | the model check: `upload-model-check` + `upload-model-state` |
-| `upload-model-check` | `button` | asks the provider's own model list; never substitutes the configured id |
-| `upload-model-state` | `p[data-state]` | the check's one line: `idle` / `checking` / `found` / `missing` / `failed` |
-| `upload-timeout` / `upload-retries` / `upload-concurrency` | `input[type=number]` | clamped at the moment of change (5–900 s, 0–5, 1–8) |
-| `upload-key-state` | button | masked key, with the honest state AND its origin: "Gemini API key secured locally" / "Gemini key kept for this session only" / "Storage could not be read" / "No Gemini API key yet"; opens the editor |
-| `upload-key-mask` / `upload-key-note` | rows of `upload-key-state` | the masked key above "stored in IndexedDB · masked in the UI · redacted from logs · excluded from exports"; a session-only key says "browser storage refused it — paste again after a reload", an unreadable store says "this device's storage is unreadable here (private mode?)" |
-| `upload-key-forget` | button | shown only while a key is in hand; deletes the stored key from this device (the one deliberate way to clear it) |
-| `upload-key-input` / `upload-key-save` / `upload-key-cancel` | editor | `input[type=password]`, `aria-label="Gemini API key"`; `upload-key-save` is `disabled` while the field is empty (an empty Save never erases the stored key) |
-| `upload-provider-note` | note | endpoint · the key travels in the `x-goog-api-key` header only · each icon's image is sent only inside the one request you confirm · nothing is ever uploaded automatically |
-
-Filters: `upload-filter-status` (all / processed / partial / failed / cancelled /
-stale / not exported), `upload-filter-metadata` (all / empty / generating /
-generated / invalid / accepted / interrupted), `upload-sort` (name / package
-status / metadata state), `upload-search`, `upload-shown` ("Showing N of M"),
-`upload-clear-filters`.
-
-Bulk bar (`upload-bulk`):
-
-| `upload-check-all` | header checkbox | checked / unchecked / **indeterminate**; scope = the filtered list |
-| `upload-selected-count` / `upload-scope` | text | "N selected", "across N approved SVGs" |
-| `upload-select-visible` / `upload-deselect` | buttons | scope = what the filters show |
-| `upload-thumb` | `input[type=range]` | the ONE zoom value: 48–800 px step 4, display-only (never the output scale); `upload-thumb-value` is the live readout |
-| `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
-| `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
-| `upload-apply-settings` | button | pins the current defaults onto the selection — ONE undoable `uploadSettings` entry |
-| `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = selected icons with NO metadata text yet; the paid request never replaces existing text (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
-| `upload-meta-regenerate-selected` | button | "↻ Regenerate metadata (N)" — N = selected icons whose metadata is non-null; opens an exact-request confirmation/previews for only those rows, excluding empty rows (disabled at 0 eligible rows) |
-| `upload-export-selected` | button | "⇪ Export selected" — generates the missing metadata first (accepted as it lands), then exports the WHOLE selection; with nothing to generate it exports immediately (disabled at 0 selected) |
-| `upload-download-selected` | button | "⤓ Download all (N files)" — N = the committed SVG/JPG/EPS files of the SELECTION; opens the browser's folder dialog and copies them there under their artifact names, never overwriting (disabled at 0 selected; the `title` says so). The toast/log line: "Saved N files (M icons) to <folder> · k kept (already there) · j icons not exported yet" |
-| `upload-cancel-run` | button | aborts the in-flight run; finished results are kept |
-
-List (`upload-list`): `upload-row-count`, `upload-running-count` ("N in flight"),
-`upload-attention-count` ("N need attention"), `upload-rows` (role `listbox`),
-`upload-row-{pairId}`, `upload-empty`, `upload-footer-summary`.
-
-Row (`upload-row-{id}`):
-
-| `upload-check-{id}` | checkbox | selects the row (session-persisted, not undoable) |
-| `upload-prev-{id}` + `upload-prev-{id}-frame` | preview | the approved SVG inline in a shadow root, inside the coloured frame (`data-bg`); the box comes from the shared zoom rule |
-| `upload-target-{id}` | text | the row's source path (the approved SVG) |
-| `upload-export-path-{id}` | text | "export → {pair-folder}/export · approved v{N}" — the folder, not the file name, so a renamed artifact (2026-10-08: the package is named after the ICON, `fog.svg`, not `fog_AI.svg`) never moves this line |
-| `upload-status-{id}` | cell | the package badge (Processed / Partial / Failed / Stale / the stage while running) + the redacted error + the auto-fix note |
-| `upload-note-{id}` | small | (2026-10-08) the amber `.svg-note` "EPS auto-fixed: …" line from `record.tools.eps.fixes` — present only when the EPS writer adjusted something on its own (a rounded `<rect>` drawn as an exact outline); the row stays Processed, nothing is asked |
-| `upload-meta-cell-{id}` | cell | the metadata-state badge + tags/tokens |
-| `upload-settings-{id}` / `upload-settings-pinned-{id}` | cell | the effective settings, one line, plus "inherits defaults" / "N fields overridden" |
-| `upload-meta-{id}` / `upload-settings-btn-{id}` / `upload-location-{id}` / `upload-export-{id}` | buttons | the row's Metadata / Settings / Location / Export — Location copies the export folder path with the same code the Generate SVG tab's Location uses (`lib/copypath`) |
-| `upload-detail-{id}` | detail | the ACTIVE row's expandable area with the metadata fields |
-
-Metadata fields (`upload-detail-{id}`, empty until generated):
-`upload-meta-empty-{id}` (with `upload-meta-gen-{id}`), the editable fields
-`upload-meta-title-{id}` / `upload-meta-description-{id}` (2026-10-08: both
-hints read "ONE phrase … sentence case, no period"; Accept rewrites the
-field to that phrase at once) /
-`upload-meta-tags-{id}` (each with its live count), the per-field copy buttons
-`upload-copy-{title,description,tags}-{id}`, the validation line
-`upload-meta-validation-{id}`, and the actions row `upload-meta-state-{id}`
-/ `upload-meta-usage-{id}` / `upload-meta-detail-{id}` /
-`upload-meta-regen-{id}` / `upload-meta-accept-{id}` (disabled when accepted
-and unedited).
-
-Settings dialog (`upload-dialog-backdrop`, `role="dialog"`):
-`upload-dialog-scope` (the global-defaults vs per-icon wording),
-`upload-set-{padding,stroke,mp,quality}` (`input[type=number]`, clamped on
-change; `upload-set-stroke` is "Stroke width (px)" since 2026-10-08 — the
-number typed is the number written in the file, and the row cell reads
-`2 px`), `upload-set-{optimize,eps}` (checkboxes), the background
-(`upload-set-bg-transparent` — the default, a checkerboard swatch —
-`upload-set-bg-{white,black,gray,green,red}` + `upload-set-bg-custom` +
-`upload-set-bg-value`, which reads `transparent` or the hex), the stroke
-colour (2026-10-08: `upload-set-stroke-color-artwork` — a diagonal-cut
-swatch — `upload-set-stroke-color-{white,black,gray,green,red}` (`black` is
-the default: ONE global `stroke="#000"` in the file) +
-`upload-set-stroke-color-custom` + `upload-set-stroke-color-value`, which
-reads the hex or `artwork`; its marker is `upload-set-marker-stroke-color`),
-every swatch carrying `aria-pressed`, the per-field marker
-`upload-set-marker-{field}` ("inherited" / "overridden", icon scope only),
-`upload-set-reset` (icon scope: deletes the override — one undoable entry),
-`upload-set-close`. The row's settings cell `upload-settings-{id}` names the
-background (`transparent` or the hex) and appends `· stroke #hex` when a
-stroke colour is pinned.
-The EPS converter row (2026-10-09) is `upload-set-eps-converter` (`<select>`
-whose options ARE the registry: `builtin` "Built-in (PostScript subset)",
-`inkscape` "Inkscape CLI (local helper)"; marker
-`upload-set-marker-eps-converter`; choosing one never toggles
-`upload-set-eps`). Only for `inkscape` the helper row `upload-eps-helper`
-renders: `upload-eps-helper-url` (the helper URL, saved as typed when valid),
-`upload-eps-helper-check` (re-probes) and the state line
-`upload-eps-helper-state` — `helper running · Inkscape 1.3.2` (class `ok`),
-or the reason + fix (class `warn`): `… not reachable — … run_inkscape_bridge.bat`
-/ `the Inkscape helper is running but Inkscape was not found — install
-Inkscape 1.x (inkscape.org) or set INKSCAPE_PATH`. The probe runs when the
-row appears and on Check. Before a batch that wants Inkscape EPS, one probe
-runs: when the helper is not usable the toast (`upload-toast`) says
-`EPS: <reason> — N rows will be partial · <fix>` up front and again on the
-batch's final line. `upload-set-expand` (checkbox) is "Expand strokes
-to fills". The row's settings cell reads `eps off · builtin` /
-`eps on · inkscape` and appends `· strokes → fills` when expansion is on.
-The artboard row (2026-10-08) is `upload-set-artboard` (`<select>`: Content /
-the square presets / Custom), its hint `upload-set-artboard-note`, and — only
-for Custom — `upload-set-artboard-w` / `upload-set-artboard-h` (numbers,
-clamped on change) with the reduced-gcd ratio `upload-set-artboard-ratio` and
-the megapixel readout `upload-set-artboard-mp`. `upload-set-mp` is NEVER disabled (2026-10-08): with a pinned
-artboard the checkbox `upload-set-mp-match` ("same size as the artboard",
-default checked) offers the choice, typing a megapixel value unticks it in the
-same gesture, and `upload-set-mp-note` says what the JPEG will really be
-(`the JPEG is the artboard itself: 1024×576 px — untick for a bigger file` vs
-`rendered from the vectors at this resolution, at the artboard's aspect
-ratio`). With a `content` artboard the checkbox is not rendered at all.
-Under the artboard select (2026-10-09, I-62): `upload-set-mp-scale` (checkbox
-"scale to", disabled with a pinned artboard), `upload-set-mp-target` (number
-1–64 step 0.1, disabled while the box is off; the artboard's megapixels, NOT
-the JPEG's `upload-set-mp`) and `upload-set-mp-scale-note` (`the artboard
-(icon + padding) is scaled to 5 MP · strokes keep their px` / `the pinned size
-decides the megapixels`); the row's settings cell appends `· artboard 5 MP`
-while it applies.
-
-Metadata confirmation (`upload-meta-backdrop`, `role="dialog"`): the exact
-request — `upload-meta-provider`, `upload-meta-endpoint`,
-`upload-meta-prompt` (the exact prompt that WILL be sent, read-only, wrapping),
-the auth/retries facts, the images the request will carry
-(`upload-preview-strip`, one `upload-preview-{id}` with its own
-`upload-preview-caption-{id}`, `upload-preview-count`,
-`upload-preview-busy` while they render, `upload-preview-none` when none could
-be), `upload-meta-confirm` (sends; disabled until the previews are ready;
-label matches Generate vs Regenerate) / `upload-meta-dismiss` /
-`upload-meta-cancel`. The title `#upload-meta-title` reads "Generate metadata
-for N icons" or "Regenerate metadata for N icons"; when opened by "⇪ Export
-selected", it also says "…, then export N". Regeneration's note states that a
-returned answer replaces current text and is never auto-accepted; review it and
-fix validation errors before accepting, while provider failure preserves it. The
-extra note `upload-meta-then-export` states
-the accept-as-it-lands rule before anything is paid for.
-
-Banners: `upload-warn-excluded`, `upload-warn-corrupt`,
-`upload-warn-unreadable`, `upload-warn-interrupted` (a metadata request in
-flight at restart — never resent automatically).
-
-Status bar (`upload-statusbar`): `upload-status-counts`
-("N processed · N partial · N failed · N stale"), `upload-status-provider`
-("Gemini · {model}"), the key state, `upload-status-meta` /
-`upload-status-export` ("… in flight").
-
-Shared surfaces: `upload-toast` (`role="status"`), `upload-busy`. Undo of a
-settings gesture goes through the global bar handles `hist-undo` / `hist-redo`
-(§O).
+[SVG to upload](selectors/upload.md#r-svg-to-upload--srcupload-verified-2026-10-07).
 
 ## S1. Persistent progress header — `src/svg/SvgProgressHeader.tsx` (2026-10-11)
 
-Pinned above tab header, portalled to `#svg-progress-mount` in Workbench, visible on every tab while a run is in flight or completed until dismissed:
-
-| Test id | Element | Notes |
-|---|---|---|
-| `svg-progress-mount` | mount div in Workbench | above nav, `position:relative`, z-index 55 |
-| `svg-progress-header` | bar container | `complete` class when done |
-| `svg-progress-title` | strong | "Generating SVGs · N images" or "SVG batch complete" |
-| `svg-progress-file` | span | current filename while running, or "N results saved · ready for review" when complete |
-| `svg-progress-thumb` | img/span | current AI thumbnail (via `useSideThumbs`) |
-| `svg-progress-track` | div | progress bar track |
-| `svg-progress-completed` | span | "8 completed / 24" |
-| `svg-progress-remaining` | span | "16 remaining" or "0 remaining" |
-| `svg-progress-percent` | span | "33%" / "100%" |
-| `svg-progress-cancel` | button | "✕ Cancel batch" — opens confirmation |
-| `svg-progress-review` | button | "→ Review results" — switches tab to Generate SVG |
-| `svg-progress-dismiss` | button | X dismisses completed bar |
-| `svg-cancel-dialog` | backdrop dialog | cancel confirmation |
-| `svg-cancel-current` | div | currently generating image line: thumbnail + "Currently generating · image 9 of 24" + filename |
-| `svg-cancel-stats` | div | "8 completed · kept" / "16 remaining · stopped" |
-| `svg-cancel-keep` / `svg-cancel-confirm` / `svg-cancel-close` | buttons | Keep running / Cancel batch / X close |
-
-Cancel flow: `svg-progress-cancel` → `svg-cancel-dialog` with current thumbnail, counts, note "Unsent requests will be removed..." → `svg-cancel-confirm` calls `cancelRun` (drops queue, aborts, keeps saved), `svg-cancel-keep` closes dialog (Esc also).
+[SVG generation progress header](selectors/svg-generation-run.md#s1-persistent-progress-header--srcsvgsvgprogressheadertsx-2026-10-11), visible on every tab.
 
 ## S. Regenerate SVG — per-batch prompt in confirmation (2026-10-09 revised, `src/svg/SvgConfirm.tsx`)
 
-First-time generation uses the main currently loaded prompt shown in `svg-prompt-zone`.
-Regeneration no longer has a global window in the main toolbar. The prompt is chosen
-**per-batch in the confirmation popup** before anything is sent.
-
-`RegenSettingWindow` (`src/svg/RegenSetting.tsx`) remains as fallback for the front-placement
-path (a row's Regenerate while a run is in flight — no dialog, first in queue) and its
-storage (`iconSplitter.svg.regen.v1`) is still honoured there.
-
-Confirmation popup handles (regeneration mode):
-
-| Handle | Kind | Notes |
-|---|---|---|
-| `svg-confirm-mode` | badge | "Generation batch now" (first generation, uses main prompt) vs "Regeneration now" (regeneration, uses chosen preset) |
-| `svg-confirm-main-prompt` | small note | shown only for generation — names that main prompt is used, not reloaded |
-| `svg-confirm-regen-preset` | `select` | shown only for regeneration — dropdown of saved SVG prompts (`iconSplitter.svg.prompts.v1`), applies selected prompt to full batch |
-| `svg-confirm-regen-note` | small | regeneration note: what chosen preset does, or "No saved prompts yet — save one in the prompt window" |
-| `svg-confirm-regen-label` | label | "Regeneration prompt" (aria for the select) |
-| `svg-confirm-problem` | p | when no presets, says why confirm is disabled |
-
-Generation popup shows `svg-confirm-main-prompt` and no preset dropdown.
-Regeneration popup shows `svg-confirm-regen-preset` + `svg-confirm-regen-note` and hides main-prompt note.
-`onConfirm` receives the selected preset name (`string`) for regeneration, `null` for generation.
-
-Legacy global window handles (still rendered only when `RegenSettingWindow` is used directly, not in main prompt zone):
-
-| Handle | Kind | Notes |
-|---|---|---|
-| `svg-regen` | container | the whole row, label "Regenerate SVG from" — now only in fallback contexts |
-| `svg-regen-mode` | `select` | main / current-svg — fallback only |
-| `svg-regen-preset` | `select` | saved prompt list — fallback only |
-| `svg-regen-note` | `small` | fallback note |
-
+[SVG regeneration confirmation](selectors/svg-generation-dialogs.md#s-regenerate-svg--per-batch-prompt-in-confirmation-2026-10-09-revised-srcsvgsvgconfirmtsx).

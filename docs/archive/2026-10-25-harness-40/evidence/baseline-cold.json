@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "label": "baseline40-cold",
+  "command": [
+    "npm",
+    "run",
+    "verify",
+    "--",
+    "--base",
+    "281edd6",
+    "--cold"
+  ],
+  "environment": {
+    "node": "v22.22.3",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 2,
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "memoryBytes": 4131278848,
+    "kernel": "6.1.158+",
+    "host": "e2b.local"
+  },
+  "seconds": 129.91633793100002,
+  "exitCode": 0,
+  "signal": null
+}

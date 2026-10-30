@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 10 — state sync: <base>.json written beside the reference,
 // refreshed on every scan, corrupt payloads replaced safely (RULE 13).
 import { describe, expect, it } from "vitest";

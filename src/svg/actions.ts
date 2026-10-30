@@ -5,11 +5,18 @@ import type { ReviewStatus } from "../lib/svgfile";
 import { message } from "./runner";
 import { validateBatchPlan } from "../lib/svgbatch";
 import { parseConfig, type SvgConfig } from "../lib/svgconfig";
+import type { Connection, ConnectionKind } from "../lib/svgconnections";
+import { useConnectionActions } from "./connectionactions";
+import { useImgRegenActions } from "./imgactions";
+import type { PreparedImageRun } from "./imgprepare";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
+import { clampStroke } from "../lib/previewstroke";
 import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
-import type { HistoryApi } from "../state/HistoryProvider";
+import { applyRowGesture, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
+import type { HistoryActions } from "../state/HistoryProvider";
+import { selectionPayloads } from "../lib/selectiondelta";
 import { useKeyActions } from "./keyactions";
 import { useSvgPromptActions, type SvgPromptActions } from "./promptactions";
 import { refreshCatalog } from "./catalog";
@@ -18,16 +25,19 @@ import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { guard, perRequestOf, planOf } from "./runplan";
-import { busy, confirmRun, dropQueueForCancel, dropWaiting, regenerateNext, type CancelNote } from "./runcontrol";
+import { confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
+import { hasJobs } from "./jobstate";
+import { skipCurrentSvgRequest, stopSvgRuns } from "./runjobs";
+import type { CancelNote } from "./runcontext";
+import type { ConfirmedBatch } from "./types";
 import { useCodeActions } from "./codeactions";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
 import { idsWithGeneratedSvg } from "./rowmodel";
 import type { Discovery } from "./sources";
-import { MAIN_PLAN, type RegenPlan } from "../lib/svgregen";
-import { findPreset } from "../lib/promptpresets";
+import { MAIN_PLAN, clampRegenPerRequest, regenPlanFromPreset, type RegenPlan } from "../lib/svgregen";
 export interface SvgCtx {
-  m: SvgModel; dispatch: Dispatch<SvgAction>; refs: SvgRefs; hist: HistoryApi;
+  m: SvgModel; dispatch: Dispatch<SvgAction>; refs: SvgRefs; hist: HistoryActions;
   rows: SvgRow[]; visible: SvgRow[]; checked: string[]; activeId: string | null;
   header: "none" | "some" | "all"; affected: string[]; totals: UsageTotals; requests: number;
   provider: string; say: (msg: string, err?: boolean) => void; loadAll: () => void; refreshKey: () => void;
@@ -40,13 +50,22 @@ export type SvgSetters = Pick<SvgCtx, "say" | "loadAll" | "refreshKey" | "setRoo
 export interface SvgActions extends SvgPromptActions {
   readCode: (id: string, version: number) => Promise<string | null>;
   chooseRoot: () => void; rescan: () => void; setThumb: (px: number) => void; setPreviewBg: (bg: PreviewBackground) => void;
+  setPreviewStroke: (px: number | null) => void;
   setFilter: (patch: Partial<SvgListFilter>) => void; setSort: (sort: SvgSort) => void; setConfig: (patch: Partial<SvgConfig>) => void;
+  switchConnection: (id: string) => void; addConnection: () => void; removeConnection: () => void;
+  setConnectionMeta: (patch: { name?: string; kind?: ConnectionKind }) => void;
+  setImage: (patch: Partial<Connection["image"]>) => void;
   setProviderOpen: (open: boolean) => void; setParams: (patch: Partial<SamplingParams>) => void; refreshModels: () => void;
   saveKey: (key: string) => void; forgetKey: () => void; toggleCheck: (id: string) => void; selectVisible: () => void;
-  deselectAll: () => void; checkActive: () => void; uncheckActive: () => void; setActive: (id: string) => void;
+  uncheckVisible: () => void; deselectAll: () => void; checkActive: () => void; uncheckActive: () => void;
+  selectRow: (id: string, intent: SelectIntent) => void; setActive: (id: string) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
   requestGenerate: (ids: string[], placement?: Placement, operation?: SvgOperation) => void;
-  regenerateSelected: (ids: string[]) => void; cancelRun: () => void; confirmGenerate: (regenPresetName: string | null) => void;
+  requestImageRegen: (ids: string[]) => void; confirmImageRegen: (prepared?: PreparedImageRun | null) => void; stopImageRegen: () => void;
+  setImageVersion: (id: string, version: number | null) => void;
+  applyImageReview: () => void; discardImageReview: () => void;
+  dismissImageJournal: (id: string) => void; retryImageUnknown: (id: string) => void;
+  regenerateSelected: (ids: string[]) => void; cancelRun: (id?: string) => void; skipCurrentRequest: () => void; confirmGenerate: (batch: ConfirmedBatch) => void;
   dismissDialog: () => void; showCode: (id: string, version: number) => void; showHistory: (id: string) => void;
   dropQueued: (itemId: string) => void; preferVersion: (id: string, version: number) => Promise<string | null>;
   copyCode: (id: string, version: number) => void; openLocation: (id: string) => void;
@@ -55,7 +74,7 @@ export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 export function useSvgActions(ctx: SvgCtx): SvgActions {
   useReviewApplier(ctx);
   return {
-    ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx),
+    ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx), ...useImgRegenActions(ctx),
     ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx), ...useSvgPromptActions(ctx),
   };
 }
@@ -64,25 +83,28 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   const chooseRoot = useCallback(() => {
     void (async () => {
       const c = latest.current;
+      if (hasJobs(c.refs)) return c.say("Finish or stop active processes before changing the folder", true);
       const picked = await pickFolderFor((h) => { c.refs.root.current = h; c.dispatch({ type: "root", name: h.name }); void rememberRoot(h); });
       if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
       const cap = picked.message === null ? "" : " · full path captured";
       log({ feature: "svg", action: "root-picked", detail: picked.handle.name + cap });
-      await scanSources(c.refs, c);
+      c.refreshKey(); // a fresh pick never went through the remembered-handle boot: load the stored device key too
+      await scanSources(c.refs, c, true);
       c.say(picked.message ?? `Approved sources scanned from ${picked.handle.name}`);
     })();
   }, []);
-  const rescan = useCallback(() => { void scanSources(latest.current.refs, latest.current); }, []);
+  const rescan = useCallback(() => { void scanSources(latest.current.refs, latest.current, true); }, []);
   return { chooseRoot, rescan };
 }
-function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setProviderOpen" | "setFilter" | "setSort"> {
+function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPreviewStroke" | "setProviderOpen" | "setFilter" | "setSort"> {
   const latest = useRef(ctx); latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
   const setPreviewBg = useCallback((bg: PreviewBackground) => latest.current.dispatch({ type: "bg", bg: parsePreviewBackground(bg) }), []);
+  const setPreviewStroke = useCallback((px: number | null) => latest.current.dispatch({ type: "stroke", px: px === null ? null : clampStroke(px) }), []);
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
   const setProviderOpen = useCallback((open: boolean) => latest.current.dispatch({ type: "provider-open", open }), []);
-  return { setThumb, setPreviewBg, setProviderOpen, setFilter, setSort };
+  return { setThumb, setPreviewBg, setPreviewStroke, setProviderOpen, setFilter, setSort };
 }
 function useModelActions(ctx: SvgCtx): Slice<"setConfig" | "setParams" | "refreshModels"> {
   const latest = useRef(ctx); latest.current = ctx;
@@ -110,43 +132,67 @@ async function refreshModelsNow(latest: { current: SvgCtx }): Promise<void> {
     c.say(`Model list refreshed — ${models.length} models`);
   } catch (error) { c.say(message(error), true); }
 }
-function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "setActive" | "decide"> {
+function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "decide"> {
   const latest = useRef(ctx); latest.current = ctx;
-  const toggleCheck = useCallback((id: string) => {
-    const c = latest.current;
-    const ids = c.checked.includes(id) ? c.checked.filter((x) => x !== id) : [...c.checked, id];
-    editChecked(c, ids, null);
-  }, []);
-  const selectVisible = useCallback(() => {
-    const c = latest.current;
-    editChecked(c, [...new Set([...c.checked, ...c.visible.map((r) => r.source.id)])], null);
-  }, []);
-  const deselectAll = useCallback(() => editChecked(latest.current, [], null), []);
-  const checkActive = useCheckActive(latest);
-  const uncheckActive = useUncheckActive(latest);
-  const setActive = useCallback((id: string) => patchSvg({ activeId: id }), []);
-  const decide = useDecide(latest);
-  return { toggleCheck, selectVisible, deselectAll, checkActive, uncheckActive, setActive, decide };
+  return { ...useSvgChecks(latest), ...useSvgRowActions(latest), decide: useDecide(latest) };
 }
+
+function useSvgChecks(latest: { current: SvgCtx }) {
+  const toggleCheck = useCallback((id: string) => {
+    const before = svgSelection();
+    editChecked(latest.current, { ...before, checked: toggleChecked(before.checked, id) }, "Toggle row");
+  }, [latest]);
+  const selectVisible = useCallback(() => {
+    const before = svgSelection();
+    const ids = latest.current.visible.map((r) => r.source.id);
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, ids, true) }, "Select visible");
+  }, [latest]);
+  const uncheckVisible = useCallback(() => {
+    const before = svgSelection();
+    const ids = latest.current.visible.map((r) => r.source.id);
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, ids, false) }, "Deselect visible");
+  }, [latest]);
+  const deselectAll = useCallback(() => {
+    const before = svgSelection();
+    editChecked(latest.current, { ...before, checked: [] }, "Deselect all");
+  }, [latest]);
+  return { toggleCheck, selectVisible, uncheckVisible, deselectAll,
+    checkActive: useCheckActive(latest), uncheckActive: useUncheckActive(latest) };
+}
+
+function useSvgRowActions(latest: { current: SvgCtx }) {
+  const selectRow = useCallback((id: string, intent: SelectIntent) => {
+    const before = svgSelection();
+    const visibleIds = latest.current.visible.map((r) => r.source.id);
+    const after = applyRowGesture(before, { id, intent, visibleIds });
+    editChecked(latest.current, after, intent === "replace" ? "Select row" : "Select range");
+  }, [latest]);
+  const setActive = useCallback((id: string) => {
+    const before = svgSelection();
+    editChecked(latest.current, { ...before, active: id }, "Move active row", "active");
+  }, [latest]);
+  return { selectRow, setActive };
+}
+
 function useCheckActive(latest: { current: SvgCtx }) {
   return useCallback(() => {
-    const c = latest.current; const id = getAppState().svg.activeId;
-    if (!id || c.checked.includes(id)) return;
-    editChecked(c, [...c.checked, id], null);
-  }, []);
+    const before = svgSelection();
+    if (!before.active) return;
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, [before.active], true) }, "Select active row");
+  }, [latest]);
 }
 function useUncheckActive(latest: { current: SvgCtx }) {
   return useCallback(() => {
-    const c = latest.current; const id = getAppState().svg.activeId;
-    if (!id || !c.checked.includes(id)) return;
-    editChecked(c, c.checked.filter((x) => x !== id), null);
-  }, []);
+    const before = svgSelection();
+    if (!before.active) return;
+    editChecked(latest.current, { ...before, checked: setChecked(before.checked, [before.active], false) }, "Deselect active row");
+  }, [latest]);
 }
 function useDecide(latest: { current: SvgCtx }) {
   return useCallback((ids: string[], decision: ReviewStatus) => {
     log({ feature: "svg", action: "review-decided", detail: `${ids.length} → ${decision}` });
     void decideReview(latest.current, ids, decision);
-  }, []);
+  }, [latest]);
 }
 function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelected" | "dismissDialog"> {
   const latest = useRef(ctx); latest.current = ctx;
@@ -158,7 +204,7 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
     const perReq = perRequestOf(c, regenForGuard);
     const problems = validateBatchPlan(planOf(c, ids, regenForGuard), perReq);
     if (problems.length > 0) return c.say(problems[0], true);
-    if (placement === "front" && busy(c)) return regenerateNext(c, ids);
+    void placement; // Row corrections also preview their new prompt before consent.
     const dialog: Dialog = { kind: "confirm", ids, operation };
     log({ feature: "svg", action: "confirm-opened", detail: `${ids.length} · ${operation}` });
     c.dispatch({ type: "dialog", dialog });
@@ -172,37 +218,47 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
   const dismissDialog = useCallback(() => latest.current.dispatch({ type: "dialog", dialog: null }), []);
   return { requestGenerate, regenerateSelected, dismissDialog };
 }
-function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "dropQueued"> {
+function useQueueActions(ctx: SvgCtx): Slice<"confirmGenerate" | "cancelRun" | "skipCurrentRequest" | "dropQueued"> {
   const latest = useRef(ctx); latest.current = ctx;
-  const confirmGenerate = useCallback((regenPresetName: string | null) => { void confirmRun(latest.current, regenPresetName); }, []);
-  const cancelRun = useCallback(() => {
+  const confirmGenerate = useCallback((batch: ConfirmedBatch) => { void confirmRun(latest.current, batch); }, []);
+  const cancelRun = useCallback((id?: string) => {
     const c = latest.current;
     log({ level: "warn", feature: "svg", action: "cancel-requested", detail: "cancel — keep finished" });
+    if (typeof id === "string") { stopSvgRuns(c, id); return; }
     const dropped = dropQueueForCancel(c);
+    stopSvgRuns(c, undefined, dropped);
     c.refs.abort.current?.abort({ dropped } satisfies CancelNote);
     c.dispatch({ type: "current", id: null });
     c.say(dropped === 0 ? "Cancelling — finished results are kept" : `Cancelling — kept, ${dropped} batch${dropped === 1 ? "" : "es"} dropped`);
   }, []);
+  const skipCurrentRequest = useCallback(() => { skipCurrentSvgRequest(latest.current); }, []);
   const dropQueued = useCallback((itemId: string) => {
     const c = latest.current;
     c.say(`Queued batch dropped — ${dropWaiting(c, itemId)} still waiting`);
   }, []);
-  return { confirmGenerate, cancelRun, dropQueued };
+  return { confirmGenerate, cancelRun, skipCurrentRequest, dropQueued };
 }
-function editChecked(c: SvgCtx, ids: string[], active: string | null): void {
-  const before = getAppState().svg.checked;
-  patchSvg({ checked: ids });
-  if (active !== null) patchSvg({ activeId: active });
-  c.hist.push({
-    type: "checked", label: ids.length === 0 ? "Clear selection" : `Select ${ids.length} source${ids.length === 1 ? "s" : "s"}`,
-    origin: getAppState().tab, ids, before: { ids: before }, after: { ids },
+function svgSelection(): RowSelection {
+  const { checked, activeId, anchorId } = getAppState().svg;
+  return { checked, active: activeId, anchor: anchorId };
+}
+
+/** One gesture = one entry holding the DIFF (lib/selectiondelta), never two
+ *  copies of a 1,000-row selection. `gesture` makes an arrow burst one entry. */
+function editChecked(c: SvgCtx, after: RowSelection, label: string, gesture?: string): void {
+  const before = svgSelection();
+  if (sameRowSelection(before, after)) return;
+  patchSvg({ checked: after.checked, activeId: after.active, anchorId: after.anchor });
+  const payload = selectionPayloads(before, after);
+  const record = gesture === undefined ? c.hist.push : c.hist.pushGesture;
+  record({
+    type: "svgChecked", label, origin: getAppState().tab,
+    ...(gesture === undefined ? {} : { gesture }),
+    ids: payload.ids, before: payload.before, after: payload.after,
   });
 }
 function dummyRegen(c: SvgCtx): RegenPlan {
-  const presets = c.m.presets;
-  if (presets.length === 0) return MAIN_PLAN;
-  const first = presets[0];
-  const found = findPreset(presets, first.name);
-  if (found === null || found.text.trim() === "") return MAIN_PLAN;
-  return { kind: "current-svg", presetName: found.name, presetText: found.text };
+  const found = c.m.presets.find((p) => p.text.trim() !== "");
+  const plan = regenPlanFromPreset(found ?? null, clampRegenPerRequest(c.m.config.imagesPerRequest));
+  return plan.ok ? plan.plan : MAIN_PLAN;
 }

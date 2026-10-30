@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the upload scan orchestration runs for real: one ticket per scan,
 // one complete commit, an unchanged snapshot commits nothing, a superseded
 // scan commits nothing, and failures report instead of throwing.

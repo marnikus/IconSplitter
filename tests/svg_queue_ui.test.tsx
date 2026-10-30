@@ -1,12 +1,13 @@
 // svg_queue_ui.test.tsx — the queue as the USER meets it (I-53, RULE 8): while
-// a run is streaming, Generate stays available, a second confirmation ADDS to
-// the queue and sends nothing extra, the waiting batch starts by itself when the
+// a run is streaming, Generate stays available; independent confirmations can
+// run in parallel, while serial-mode/conflicting work waits until the
 // run in flight ends, Cancel empties the queue, and a single waiting batch can be
 // dropped by its own ×. Everything here drives the real panel, the real scan and
 // the real runner over the shared fake transport — a regression in any link of
 // that chain (the confirm dialog's label, the strip, the drain loop, the refs)
 // fails the test that names the behaviour.
 import { act } from "react";
+import * as completionAudio from "../src/ui/completionSound";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { compositeLayout } from "../src/lib/svgcomposite";
@@ -28,6 +29,9 @@ import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairMetaFor, svgSource, svgVersion } from "./helpers/svgpair";
 import { dropDb } from "./helpers/idb";
 import { streamFrames, transport, type Transport } from "./helpers/svgtransport";
+import { setParallelLimit } from "../src/svg/jobstate";
+import { loadInflight } from "../src/svg/journal";
+import { waitUntil } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -123,13 +127,7 @@ async function settle(): Promise<void> {
 }
 
 /** Waits for a real condition the run needs several turns to reach. */
-async function waitFor(pred: () => boolean, what: string, budgetMs = 4000): Promise<void> {
-  const until = Date.now() + budgetMs;
-  await act(async () => {
-    while (!pred() && Date.now() < until) await tick();
-  });
-  expect(pred(), `never reached: ${what}`).toBe(true);
-}
+const waitFor = (pred: () => boolean, what: string, budgetMs = 4000) => waitUntil(pred, what, budgetMs);
 
 async function mount(root: FakeDir): Promise<void> {
   picked = root;
@@ -167,7 +165,13 @@ async function check(id: string): Promise<void> {
 const callsOf = (t: Transport) => t.calls.map((c) => c.items.map((i) => i.split("/").pop()));
 
 afterEach(async () => {
-  // the popup portals into <body>: unmount, or the next test sees this one's
+  // Stop real runners before their fake transport is restored at teardown.
+  const cancel = host?.querySelector("[data-testid=svg-cancel-run]") as HTMLButtonElement | null;
+  if (cancel) {
+    await act(async () => cancel.click());
+    await waitUntil(() => host.querySelector("[data-testid=svg-cancel-run]") === null, "the test runner to stop", 4000);
+  }
+  // The popup portals into <body>: unmount, or the next test sees this one's.
   if (ui !== undefined) await act(async () => { ui.unmount(); });
   host?.remove();
 });
@@ -177,10 +181,52 @@ beforeEach(async () => {
   await saveApiKey(KEY);
   window.localStorage.clear();
   stored.clear();
+  setParallelLimit(1); // Exercise the supported serial mode in the legacy queue cases.
   savePresets(PRESETS);
   resetAppStore();
   host = document.createElement("div");
   document.body.appendChild(host);
+});
+
+describe("parallel confirmed runs", () => {
+  beforeEach(() => setParallelLimit(3));
+  it("starts disjoint work without interrupting the streaming run and scopes both journal records", async () => {
+    const notify = vi.spyOn(completionAudio, "notifyCompletion");
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    await pick(FOG);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "first run to send");
+    await check(FOG);
+    await pick(COURT);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 2, "independent second run to send in parallel");
+    expect(callsOf(t)).toEqual([["fog_AI.png"], ["court_AI.png"]]);
+    expect(host.querySelectorAll("[data-testid^=svg-run-stop-]")).toHaveLength(2);
+    const notes = loadInflight();
+    expect(notes).toHaveLength(2);
+    expect(new Set(notes.map((r) => r.runId)).size).toBe(2);
+    expect(notes[0].batchId).toBe(notes[1].batchId); // actual collision, not artificial ids
+    await click(`[data-testid=svg-run-stop-${host.querySelector("[data-testid^=svg-run-stop-]")!.getAttribute("data-run-id")}]`);
+    await waitFor(() => host.querySelectorAll("[data-testid^=svg-run-stop-]").length === 1, "only one run to stop");
+    expect(q("[data-testid=svg-cancel-run]")).not.toBeNull();
+    expect(loadInflight()).toHaveLength(1);
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it("opens the correction prompt popup for a row even while another run streams", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRegenerationRoot());
+    await pick(MIST);
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "first run to send");
+    await click(`[data-testid=svg-generate-${FOG}]`);
+    expect(q("[data-testid=svg-confirm]")).not.toBeNull();
+    expect(txt("[data-testid=svg-confirm]")).toContain("Confirm SVG regeneration");
+    expect(t.calls).toHaveLength(1); // opening a correction is not consent
+  });
 });
 
 describe("the generation queue (I-53)", () => {
@@ -208,7 +254,7 @@ describe("the generation queue (I-53)", () => {
     expect(txt("[data-testid=svg-queue-count]")).toContain("1 queued");
     expect(txt("[data-testid=svg-queue-line-1]")).toContain("court_AI.png");
     expect(txt("[data-testid=svg-queue-line-1]")).toContain("1 request");
-    expect(txt("[data-testid=svg-toast]")).toContain("wait for the run in flight");
+    expect(txt("[data-testid=svg-toast]")).toContain("waiting for source locks or a parallel slot");
   });
 
   it("sends the images in the order they were picked, not the list's order", async () => {
@@ -384,35 +430,22 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
     await click("[data-testid=svg-regenerate-selected]");
     expect(q("[data-testid=svg-confirm-title]")?.textContent).toBe("Confirm SVG regeneration");
     expect(q("[data-testid=svg-confirm-count]")?.textContent).toBe("2");
-    // 2026-10-09: regeneration is 1 image per request
-    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("2 × 1 max");
+    // 2026-10-20: the connection's Images / request sizes a regeneration too
+    // (here the default 4), so both eligible rows travel in ONE request.
+    expect(q("[data-testid=svg-confirm-requests]")?.textContent).toContain("1 × 4 max");
     expect(q("[data-testid=svg-confirm-mode]")?.textContent).toContain("Regeneration now");
-    expect(q("[data-testid=svg-confirm-regen-preset]" )).not.toBeNull();
-    // 2026-10-09: regen is 1 per request, so first page shows 1 of 2
-    let manifestPage1 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
+    expect(q("[data-testid=svg-confirm-prompt-select]")).not.toBeNull();
+    const manifest = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
       .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
-    expect(manifestPage1).toHaveLength(1);
-    expect(["court_AI", "fog_AI"]).toContain(manifestPage1[0]);
-    // walk to next request
-    await click("[data-testid=svg-batch-next]");
-    let manifestPage2 = Array.from(q("[data-testid=svg-batch-items]")?.querySelectorAll("span") ?? [])
-      .map((el) => el.textContent?.replace(/^\d+ — /, "") ?? "");
-    expect(manifestPage2).toHaveLength(1);
-    const combined = [...manifestPage1, ...manifestPage2].sort();
-    expect(combined).toEqual(["court_AI", "fog_AI"]);
-    expect(combined.some((name) => name.includes("mist"))).toBe(false);
+    expect([...manifest].sort()).toEqual(["court_AI", "fog_AI"]);
+    expect(manifest.some((name) => name.includes("mist"))).toBe(false);
 
     await click("[data-testid=svg-confirm-generate]");
-    await waitFor(() => t.calls.length === 2, "the Regenerate first request to send (2×1)");
-    await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
-    await waitFor(() => t.calls.length === 3, "the Regenerate second request to send (2×1)");
-    const sent1 = (callsOf(t)[1] ?? []).map((name) => name ?? "");
-    const sent2 = (callsOf(t)[2] ?? []).map((name) => name ?? "");
-    const sentAll = [...sent1, ...sent2];
+    await waitFor(() => t.calls.length === 2, "the Regenerate request to send (1×9)");
+    const sentAll = (callsOf(t)[1] ?? []).map((name) => name ?? "");
     expect([...sentAll].sort()).toEqual(["court_AI.png", "fog_AI.png"]);
-    expect(sentAll).toHaveLength(2);
     expect(sentAll.some((name) => name.includes("mist"))).toBe(false);
-    await act(async () => { t.streams[2].push(streamFrames(t.calls[2].items)); t.streams[2].close(); });
+    await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
     await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "the regeneration batch to finish");
 
     const arch = root.children.get("architecture") as FakeDir;
@@ -455,7 +488,7 @@ describe("bulk Regenerate selected (2026-10-09)", () => {
   });
 });
 
-describe("the NEXT attempt (2026-10-08): a waiting row says so, and Regenerate jumps the queue", () => {
+describe("explicit row corrections retain earlier confirmed queue attempts (2026-10-24)", () => {
   it("a row that waits shows the grey 'Next attempt' badge, the head counts it, and a drop restores the old badge", async () => {
     const t = transport({ mode: "silent" });
     vi.stubGlobal("fetch", t.fetch);
@@ -482,42 +515,34 @@ describe("the NEXT attempt (2026-10-08): a waiting row says so, and Regenerate j
     expect(txt("[data-testid=svg-queued-count]")).toBe("0 next attempt");
   });
 
-  it("Regenerate on a row while a run is in flight: no dialog, first in the queue, the run untouched, a later copy removed", async () => {
+  it("a row correction previews its new prompt without deleting earlier confirmed attempts", async () => {
     const t = transport({ mode: "silent" });
     vi.stubGlobal("fetch", t.fetch);
-    await mount(makeRoot());
-
+    await mount(makeRegenerationRoot());
     await pick(FOG);
     await click("[data-testid=svg-confirm-generate]");
     await waitFor(() => t.calls.length === 1, "the first request to leave");
-    // two batches wait: court, then fog+court (fog is still in flight)
-    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await check(FOG);
     await pick(COURT);
     await click("[data-testid=svg-confirm-generate]");
-    await act(async () => { (q(`[data-testid=svg-check-${FOG}]`) as HTMLInputElement).click(); });
+    await check(FOG);
     await click("[data-testid=svg-generate-selected]");
     await click("[data-testid=svg-confirm-generate]");
     expect(txt("[data-testid=svg-queue-count]")).toContain("2 queued");
     expect(txt("[data-testid=svg-queue-line-2]")).toContain("2 images");
-
-    // the row's own button: straight to the FRONT, no confirmation to click
-    await click(`[data-testid=svg-generate-${COURT}]`);
-    expect(q("[data-testid=svg-confirm]")).toBeNull();
-    expect(txt("[data-testid=svg-queue-line-1]")).toContain("court_AI.png");
-    expect(txt("[data-testid=svg-queue-line-1]")).toContain("1 image");
-    // ...and court left the batches behind it: #2 was court alone → gone; #3 (fog + court) → fog alone
-    expect(txt("[data-testid=svg-queue-line-2]")).toContain("fog_AI.png");
-    expect(txt("[data-testid=svg-queue-line-2]")).toContain("1 image");
-    expect(q("[data-testid=svg-queue-line-3]")).toBeNull();
+    await click(`[data-testid=svg-generate-${FOG}]`);
+    expect(q("[data-testid=svg-confirm]")).not.toBeNull();
+    expect(txt("[data-testid=svg-confirm-title]")).toBe("Confirm SVG regeneration");
+    expect(t.calls).toHaveLength(1); // still no consent to this correction
     expect(txt("[data-testid=svg-queue-count]")).toContain("2 queued");
-    expect(txt("[data-testid=svg-toast]")).toContain("next attempt");
-    expect(txt("[data-testid=svg-toast]")).toContain("removed from 2 waiting batches");
-    expect(t.calls).toHaveLength(1); // the run in flight was never touched
-    expect(q("[data-testid=svg-cancel-run]")).not.toBeNull();
-
-    // the first answer lands: the FRONT job (court) is what starts next
-    await act(async () => { t.streams[0].push(streamFrames(["architecture/fog_AI.png"])); t.streams[0].close(); });
-    await waitFor(() => t.calls.length === 2, "the next attempt to start");
+    await click("[data-testid=svg-confirm-generate]");
+    expect(txt("[data-testid=svg-queue-count]")).toContain("3 queued");
+    expect(txt("[data-testid=svg-queue-line-1]")).toContain("court_AI.png");
+    expect(txt("[data-testid=svg-queue-line-2]")).toContain("2 images");
+    expect(txt("[data-testid=svg-queue-line-3]")).toContain("fog_AI.png");
+    expect(t.calls).toHaveLength(1); // original controller and request untouched
+    await act(async () => { t.streams[0].push(streamFrames(t.calls[0].items)); t.streams[0].close(); });
+    await waitFor(() => t.calls.length === 2, "first confirmed waiter to start");
     expect(callsOf(t)).toEqual([["fog_AI.png"], ["court_AI.png"]]);
   });
 
@@ -618,4 +643,197 @@ describe("the run popup and the kept-alive panel (2026-10-08): the run outlives 
     await settle();
     expect(rowIds()).toEqual([last, before[0]]);
   });
+});
+
+// Input drivers use real controlled React events, never call scheduler internals.
+async function inputValue(testid: string, value: string): Promise<void> {
+  const input = q(`[data-testid=${testid}]`) as HTMLInputElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settle();
+}
+
+function manyRoot(): FakeDir {
+  const root = makeRegenerationRoot();
+  const arch = root.children.get("architecture") as FakeDir;
+  for (const name of ["court", "mist", "rain"]) {
+    arch.children.set(`${name}.png`, new FakeFile(`${name}.png`));
+    arch.children.set(`${name}_AI.png`, new FakeFile(`${name}_AI.png`));
+    const source = svgSource(pairId("architecture", name, ""), { name: `${name}_AI.png` });
+    const meta = serializePairMeta(pairMetaFor(source));
+    arch.children.set(`${name}_AI.svg.json`, new FakeFile(`${name}_AI.svg.json`, meta.length, 10, meta));
+  }
+  return root;
+}
+
+describe("parallel admission, immutable inputs and row handoff", () => {
+  beforeEach(() => setParallelLimit(3));
+
+  it("corrects a completed icon while the rest of its original batch streams, without losing either version", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    await inputValue("svg-per-request", "1");
+    await check(FOG); await check(COURT);
+    await click("[data-testid=svg-generate-selected]"); await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "first source to send");
+    await act(async () => { t.streams[0].push(streamFrames(t.calls[0].items)); t.streams[0].close(); });
+    await waitFor(() => t.calls.length === 2, "remaining original source to send");
+    expect(callsOf(t)).toEqual([["fog_AI.png"], ["court_AI.png"]]);
+    await click(`[data-testid=svg-generate-${FOG}]`);
+    expect(txt("[data-testid=svg-confirm-title]")).toBe("Confirm SVG regeneration");
+    await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 3, "finished icon correction to send in parallel");
+    expect(t.calls[2].prompt).toContain("Make bolder.");
+    expect(t.calls[2].prompt).toContain("<title>fog_AI</title>");
+    await act(async () => { t.streams[2].push(streamFrames(t.calls[2].items)); t.streams[2].close(); });
+    await waitFor(() => host.querySelectorAll("[data-testid^=svg-run-stop-]").length === 1, "only original batch to remain");
+    expect(txt(`[data-testid=svg-status-${COURT}]`)).toContain("Generating");
+    const arch = await picked.getDirectoryHandle("architecture");
+    const fogMeta = () => JSON.parse((arch.children.get("fog_AI.svg.json") as FakeFile).text);
+    expect(fogMeta().versions.map((v: { version: number }) => v.version)).toEqual([1, 2]);
+    await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
+    await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "both processes to finish");
+    expect(fogMeta().versions.map((v: { version: number }) => v.version)).toEqual([1, 2]);
+    expect(txt(`[data-testid=svg-status-${FOG}]`)).toContain("Generated");
+    expect(arch.children.has("court_AI.svg")).toBe(true);
+  });
+
+  it("queues the same pair and freezes the confirmed model and request size", async () => {
+    const t = transport({ mode: "silent" });
+    const models: string[] = [];
+    vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
+      models.push((JSON.parse(String(init.body)) as { model: string }).model);
+      return t.fetch(url, init);
+    });
+    await mount(makeRoot());
+    await inputValue("svg-per-request", "1");
+    await pick(FOG); await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "first source to send");
+    await check(COURT); // FOG remains checked: a conflicting 2-request batch
+    await click("[data-testid=svg-generate-selected]"); await click("[data-testid=svg-confirm-generate]");
+    expect(t.calls).toHaveLength(1);
+    expect(txt("[data-testid=svg-queue-count]")).toContain("1 queued");
+    await inputValue("svg-model", "different/model");
+    await inputValue("svg-per-request", "4");
+    await act(async () => { t.streams[0].push(streamFrames(t.calls[0].items)); t.streams[0].close(); });
+    await waitFor(() => t.calls.length === 2, "same-pair waiter after its lease releases");
+    expect(models[1]).toBe(models[0]);
+    expect(callsOf(t)[1]).toEqual(["fog_AI.png"]);
+    await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
+    await waitFor(() => t.calls.length === 3, "frozen one-image second request");
+    expect(models[2]).toBe(models[0]);
+    expect(callsOf(t)[2]).toEqual(["court_AI.png"]);
+  });
+
+  it("enforces three slots and admits a fourth after just one run stops", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(manyRoot());
+    for (const name of ["fog", "court", "mist", "rain"]) {
+      await click("[data-testid=svg-deselect]");
+      await pick(pairId("architecture", name, ""));
+      await click("[data-testid=svg-confirm-generate]");
+    }
+    expect(t.calls).toHaveLength(3);
+    expect(txt("[data-testid=svg-queue-count]")).toContain("1 queued");
+    const stop = host.querySelector("[data-testid^=svg-run-stop-]") as HTMLElement;
+    await click(`[data-testid=${stop.dataset.testid}]`);
+    await waitFor(() => t.calls.length === 4, "one freed parallel slot");
+    expect(callsOf(t).map((items) => items[0])).toEqual(["fog_AI.png", "court_AI.png", "mist_AI.png", "rain_AI.png"]);
+    expect(host.querySelectorAll("[data-testid^=svg-run-stop-]")).toHaveLength(3);
+  });
+
+  it("refuses folder changes and scans while a process owns source files", async () => {
+    const t = transport({ mode: "silent" });
+    vi.stubGlobal("fetch", t.fetch);
+    await mount(makeRoot());
+    await pick(FOG); await click("[data-testid=svg-confirm-generate]");
+    await waitFor(() => t.calls.length === 1, "run to send");
+    const picker = vi.fn(async () => new FakeDir("wrong-root"));
+    w.showDirectoryPicker = picker;
+    await click("[data-testid=svg-open-folder]");
+    expect(picker).not.toHaveBeenCalled();
+    expect(txt("[data-testid=svg-toast]")).toContain("before changing the folder");
+    await click("[data-testid=svg-rescan]");
+    expect(txt("[data-testid=svg-toast]")).toContain("before rescanning");
+    expect(txt(`[data-testid=svg-status-${FOG}]`)).toContain("Generating");
+    expect(t.calls).toHaveLength(1);
+  });
+});
+
+
+it("notifies once after an entire real SVG process, never as each icon finishes", async () => {
+  const notify = vi.spyOn(completionAudio, "notifyCompletion");
+  const t = transport({ mode: "silent" });
+  vi.stubGlobal("fetch", t.fetch);
+  await mount(makeRoot());
+  await inputValue("svg-per-request", "1");
+  await click(`[data-testid=svg-check-${FOG}]`);
+  await click(`[data-testid=svg-check-${COURT}]`);
+  await click("[data-testid=svg-generate-selected]");
+  await click("[data-testid=svg-confirm-generate]");
+  await waitFor(() => t.calls.length === 1, "first request");
+  await act(async () => { t.streams[0].push(streamFrames(t.calls[0].items)); t.streams[0].close(); });
+  await waitFor(() => t.calls.length === 2, "second request");
+  expect(notify).not.toHaveBeenCalled();
+  await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
+  await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "entire process to finish");
+  expect(notify).toHaveBeenCalledTimes(1);
+  expect(notify).toHaveBeenCalledWith(expect.any(String));
+});
+
+it("cleans source ownership after an unexpected filesystem exception and permits explicit retry", async () => {
+  const t = transport({ mode: "silent" });
+  const root = makeRoot();
+  vi.stubGlobal("fetch", t.fetch);
+  await mount(root);
+  await click(`[data-testid=svg-generate-${FOG}]`);
+  await click("[data-testid=svg-confirm-generate]");
+  await waitFor(() => t.calls.length === 1, "first request");
+  const arch = root.children.get("architecture") as FakeDir;
+  const broken = vi.spyOn(arch, "entries").mockImplementation(() => { throw new Error("disk disconnected"); });
+  await act(async () => { t.streams[0].push(streamFrames(t.calls[0].items)); t.streams[0].close(); });
+  await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "failed run cleanup");
+  expect(t.calls).toHaveLength(1); // no automatic retry after an exception
+  broken.mockRestore();
+  await click(`[data-testid=svg-generate-${FOG}]`);
+  await click("[data-testid=svg-confirm-generate]");
+  await waitFor(() => t.calls.length === 2, "explicit retry after cleanup");
+  await act(async () => { t.streams[1].push(streamFrames(t.calls[1].items)); t.streams[1].close(); });
+  await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "retry finish");
+  expect(q(`[data-testid=svg-status-${FOG}]`)?.textContent).toContain("Generated");
+});
+
+it("skips the current SVG request and continues the same batch without dropping independent queued work", async () => {
+  const notify = vi.spyOn(completionAudio, "notifyCompletion");
+  const t = transport({ mode: "silent" });
+  vi.stubGlobal("fetch", t.fetch);
+  const root = makeRegenerationRoot();
+  await mount(root);
+  await inputValue("svg-per-request", "1");
+  await check(FOG); await check(COURT);
+  await click("[data-testid=svg-generate-selected]");
+  await click("[data-testid=svg-confirm-generate]");
+  await waitFor(() => t.calls.length === 1, "the first request in the two-icon batch");
+  const runId = host.querySelector("[data-testid^=svg-run-stop-]")!.getAttribute("data-run-id")!;
+  await check(FOG); await check(COURT);
+  await pick(MIST); await click("[data-testid=svg-confirm-generate]");
+  expect(txt("[data-testid=svg-queue-count]")).toContain("1 queued");
+  await click("[data-testid=svg-batch-cancel]");
+  await waitFor(() => t.calls.length === 2, "the next SVG request after skipping the current one");
+  expect(callsOf(t)).toEqual([["fog_AI.png"], ["court_AI.png"]]);
+  expect(q(`[data-testid=svg-run-stop-${runId}]`)).not.toBeNull();
+  expect(txt("[data-testid=svg-queue-count]")).toContain("1 queued");
+  t.streams[1].push(streamFrames(["architecture/court_AI.png"])); t.streams[1].close();
+  await waitFor(() => t.calls.length === 3, "the preserved independent queued batch");
+  t.streams[2].push(streamFrames(["architecture/mist_AI.png"])); t.streams[2].close();
+  await waitFor(() => q("[data-testid=svg-cancel-run]") === null, "both batches to finish");
+  const dir = root.children.get("architecture") as FakeDir;
+  expect((dir.children.get("court_AI.svg") as FakeFile).text).toContain("<title>court_AI</title>");
+  expect((dir.children.get("mist_AI.svg") as FakeFile).text).toContain("<title>mist_AI</title>");
+  expect((dir.children.get("fog_AI.svg") as FakeFile).text).not.toContain("<title>fog_AI</title>");
+  expect(notify.mock.calls.filter(([id]) => id === runId)).toHaveLength(1);
 });

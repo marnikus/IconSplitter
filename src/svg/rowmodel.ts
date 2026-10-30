@@ -3,11 +3,14 @@
 // approved lookups, filter+sort through lib/svglist, the header checkbox state,
 // and dropping checked ids a rescan removed. Pure except for the store write.
 
-import { approvedVersion, chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
+import { isStateSort } from "../lib/statesort";
+import { chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import { ALL_SVG_FILTER, applySvgFilters, pinOrder, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
 import { getAppState, patchSvg } from "../state/appstore";
+import { rememberListTargets } from "../state/listtargets";
+import { checkState, pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
 import { queuedIds, type QueueItem } from "./runqueue";
@@ -23,7 +26,7 @@ export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean
   const failed = versions.some((v) => v.status !== "generated");
   const row = withMeta({
     source, meta, corrupt, running: false, status: "not-generated", error: null, queued: false,
-    newest: null, preferred: null, approved: null,
+    newest: null, preferred: null, review: "pending",
   }, meta);
   return {
     ...row,
@@ -44,7 +47,7 @@ export function withMeta(row: SvgRow, meta: PairMeta | null): SvgRow {
     ...row, meta,
     newest: newestValid(versions),
     preferred: preferredVersion(versions, meta?.preferred ?? null),
-    approved: approvedVersion(versions),
+    review: meta?.review ?? "pending",
   };
 }
 
@@ -89,7 +92,7 @@ export function toListRow(row: SvgRow): SvgListRow {
   const v = shownVersion(row);
   return {
     id: row.source.id, name: row.source.name, relPath: row.source.relPath,
-    generation: row.status, review: v?.review ?? "pending", ...versionFields(v),
+    generation: row.status, review: row.review, ...versionFields(v),
   };
 }
 
@@ -104,15 +107,14 @@ function versionFields(v: SvgVersion | null): Pick<SvgListRow, "generatedAt" | "
   };
 }
 
-/**
- * Filter + sort a copy of the rows; the caller's array is never reordered. With
- * an `order` (the pin, lib/svglist `pinOrder`) the sorted result is arranged by
- * it, so a landing SVG cannot move a row while the user looks at the list.
- */
-export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort, order: readonly string[] = []): SvgRow[] {
+export interface SvgListView { order?: readonly string[]; checked?: readonly string[] }
+
+/** Filter/sort copies; ordinary sorts respect the pin, state groups follow live flags. */
+export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort, view: SvgListView = {}): SvgRow[] {
   const byId = new Map(rows.map((r) => [r.source.id, r]));
-  const sorted = sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort).map((l) => l.id);
-  return pinOrder(order, sorted).flatMap((id) => {
+  const sorted = sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort, view.checked).map((l) => l.id);
+  const ordered = isStateSort(sort) ? sorted : pinOrder(view.order ?? [], sorted);
+  return ordered.flatMap((id) => {
     const row = byId.get(id);
     return row ? [row] : [];
   });
@@ -137,15 +139,15 @@ export function idsWithGeneratedSvg(rows: SvgRow[], ids: string[]): string[] {
 
 /** Header checkbox state for the visible rows (indeterminate = some). */
 export function headerState(visible: SvgRow[], checked: string[]): "none" | "some" | "all" {
-  if (visible.length === 0) return "none";
-  const on = visible.filter((r) => checked.includes(r.source.id)).length;
-  if (on === 0) return "none";
-  return on === visible.length ? "all" : "some";
+  return checkState(visible.map((r) => r.source.id), checked);
 }
 
 /** A restored check must never point at a source the rescan removed. */
 export function pruneChecked(rows: SvgRow[]): void {
   const known = new Set(rows.map((r) => r.source.id));
-  const kept = getAppState().svg.checked.filter((id) => known.has(id));
-  if (kept.length !== getAppState().svg.checked.length) patchSvg({ checked: kept });
+  rememberListTargets("generateSvg", [...known]);
+  const state = getAppState().svg;
+  const before = { checked: state.checked, active: state.activeId, anchor: state.anchorId };
+  const after = pruneRowSelection(before, known);
+  if (!sameRowSelection(before, after)) patchSvg({ checked: after.checked, activeId: after.active, anchorId: after.anchor });
 }

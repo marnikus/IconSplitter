@@ -8,21 +8,25 @@
 // the rules stay testable without a DOM (RULE 5).
 
 import { DEFAULT_PREFS, type ReviewPrefs } from "../lib/reviewprefs";
+import { resetListTargets } from "./listtargets";
 import {
-  DEFAULT_SESSION, type SessionBatch, type SessionSelection, type SessionState, type SessionSvg, type SessionUpload, type SessionV2, type TabId,
+  DEFAULT_SESSION, DEFAULT_STOCK_UPLOAD,
+  type SessionBatch, type SessionSelection, type SessionState, type SessionStockUpload, type SessionSvg, type SessionUpload, type SessionV2, type TabId,
 } from "../lib/session";
 
 export interface AppState {
   tab: TabId;
   sheets: SheetOptsState;
-  /** Review view state shared by the Selection and Selection V2 tabs. */
+  /** Selection V2 review state, persisted in the compatible selection JSON slice. */
   view: SessionSelection;
-  /** What only the V2 layout adds on top of that. */
+  /** Selection V2 checkbox and scroll state. */
   v2: SessionV2;
   /** Generate SVG tab: its own checkbox selection (stable source ids). */
   svg: SessionSvg;
   /** SVG to upload tab: its own checkbox selection (stable pair ids). */
   upload: SessionUpload;
+  /** Upload (stock FTPS) tab: its own checkbox selection (stable pair ids). */
+  stockUpload: SessionStockUpload;
   /** Batch folders tab: its own selection, active row and anchor. */
   batch: SessionBatch;
   /** Held in memory only — selectionv2/prefsstore is its single writer. */
@@ -38,7 +42,9 @@ const listeners = new Set<Listener>();
 export function initialAppState(session: SessionState, prefs: ReviewPrefs): AppState {
   return {
     tab: session.tab, sheets: session.sheets,
-    view: session.selection, v2: session.selectionV2, svg: session.svg, upload: session.upload, batch: session.batch, prefs,
+    view: session.selection, v2: session.selectionV2, svg: session.svg,
+    upload: session.upload, stockUpload: session.stockUpload ?? DEFAULT_STOCK_UPLOAD,
+    batch: session.batch, prefs,
   };
 }
 
@@ -59,12 +65,38 @@ export function patchV2(patch: Partial<SessionV2>): void {
   setAppState({ v2: { ...state.v2, ...patch } });
 }
 
+/** A V2 selection gesture: checked + anchor live in `v2`, the active row in `view`. */
+export interface V2SelectionPatch {
+  checked?: string[];
+  anchorId?: string | null;
+  activeId?: string | null;
+}
+
+/**
+ * ONE store notification for a whole gesture. V2 keeps its active row in the
+ * shared `view` slice, so the old path wrote `v2` and then `view` (two
+ * notifications, and a needless `v2` rewrite for an active-only move).
+ */
+export function patchV2Selection(p: V2SelectionPatch): void {
+  const v2: SessionV2 = { ...state.v2 };
+  if (p.checked !== undefined) v2.checked = p.checked;
+  if (p.anchorId !== undefined) v2.anchorId = p.anchorId;
+  const nextActive = p.activeId === undefined ? state.view.selectedId : p.activeId;
+  const view = nextActive === state.view.selectedId ? state.view : { ...state.view, selectedId: nextActive };
+  state = { ...state, v2, view };
+  notify();
+}
+
 export function patchSvg(patch: Partial<SessionSvg>): void {
   setAppState({ svg: { ...state.svg, ...patch } });
 }
 
 export function patchUpload(patch: Partial<SessionUpload>): void {
   setAppState({ upload: { ...state.upload, ...patch } });
+}
+
+export function patchStockUpload(patch: Partial<SessionStockUpload>): void {
+  setAppState({ stockUpload: { ...state.stockUpload, ...patch } });
 }
 
 export function patchBatch(patch: Partial<SessionBatch>): void {
@@ -79,12 +111,16 @@ export function subscribe(listener: Listener): () => void {
 /** Install a state wholesale: the restore path, and test isolation. */
 export function resetAppStore(next: AppState = initialAppState(DEFAULT_SESSION, DEFAULT_PREFS)): void {
   state = next;
+  resetListTargets();
   notify();
 }
 
 /** The restart projection. Prefs stay out — prefsstore already owns them. */
 export function sessionOf(s: AppState): SessionState {
-  return { tab: s.tab, sheets: s.sheets, selection: s.view, selectionV2: s.v2, svg: s.svg, upload: s.upload, batch: s.batch };
+  return {
+    tab: s.tab, sheets: s.sheets, selection: s.view, selectionV2: s.v2,
+    svg: s.svg, upload: s.upload, stockUpload: s.stockUpload, batch: s.batch,
+  };
 }
 
 function notify(): void {

@@ -1,14 +1,18 @@
+import { completionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 // workbench_ui.test.tsx — the shell above the panels: the restored tab is the
 // one that opens, a tab switch goes through the store (so it survives a
 // restart), and the global undo/redo bar is present on every tab.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SESSION } from "../src/lib/session";
-import { getAppState, resetAppStore } from "../src/state/appstore";
+import { getAppState, patchBatch, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
-import { loadSessionState, saveSessionState } from "../src/state/sessionstore";
+import { loadSessionState, saveSessionState, SESSION_KEY } from "../src/state/sessionstore";
 import Workbench from "../src/ui/Workbench";
+import { useSvgHotkeys, type SvgHotActions } from "../src/svg/SvgHotkeys";
+import type { SvgRow } from "../src/svg/types";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -19,7 +23,7 @@ const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const click = async (sel: string) => {
   await act(async () => { (q(sel) as HTMLButtonElement).dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 };
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
 function mountWorkbench(): void {
   host = document.createElement("div");
@@ -28,7 +32,21 @@ function mountWorkbench(): void {
   act(() => { ui.render(<Workbench />); });
 }
 
+function SvgKeyboardProbe({ actions, enabled }: { actions: SvgHotActions; enabled: boolean }) {
+  useSvgHotkeys(actions, enabled);
+  return null;
+}
+
+function mountSvgKeyboard(actions: SvgHotActions): void {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  ui = createRoot(host);
+  act(() => { ui.render(<SvgKeyboardProbe actions={actions} enabled={false} />); });
+}
+
 beforeEach(() => {
+  // Workbench mounts Sheets too; model discovery must stay on a fake transport.
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })));
   localStorage.clear();
   resetAppStore();
 });
@@ -36,9 +54,36 @@ beforeEach(() => {
 afterEach(() => {
   act(() => ui.unmount());
   host.remove();
+  vi.unstubAllGlobals();
 });
 
 describe("the shell", () => {
+  it("migrates a saved original Selection tab into V2 without rendering the removed panel", () => {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ ...DEFAULT_SESSION, v: 1, tab: "selection",
+      selection: { ...DEFAULT_SESSION.selection, selectedId: "pair_kept" },
+      selectionV2: { checked: ["pair_kept"], scrollY: 12, anchorId: "pair_kept" } }));
+    bootStores();
+    mountWorkbench();
+    expect(getAppState().tab).toBe("selectionV2");
+    expect(getAppState().view.selectedId).toBe("pair_kept");
+    expect(getAppState().v2.checked).toEqual(["pair_kept"]);
+    expect(q('[data-testid="tab-selection"]')).toBeNull();
+    expect(q('[data-testid="sel-unsupported"]')).toBeNull();
+    expect(q('[data-testid="v2-unsupported"]')).not.toBeNull();
+  });
+
+  it("unlocks shared audio on pointer and keyboard gestures on any tab, never on mount", async () => {
+    recordCompletionAudio(); mountWorkbench();
+    expect(completionAudio.resumes).toBe(0);
+    const shell = q('[data-testid="app-shell"]')!;
+    await act(async () => { shell.dispatchEvent(new Event("pointerdown", { bubbles: true })); });
+    expect(completionAudio.resumes).toBeGreaterThan(0);
+    const before = completionAudio.resumes;
+    await act(async () => { shell.dispatchEvent(new KeyboardEvent("keydown", { key: "Shift", bubbles: true })); });
+    expect(completionAudio.resumes).toBeGreaterThan(before);
+    expect(completionAudio.starts).toEqual([]);
+  });
+
   it("shows the undo/redo bar next to the tabs on the default tab", () => {
     mountWorkbench();
     expect(q("[data-testid='history-bar']")).not.toBeNull();
@@ -57,26 +102,33 @@ describe("the shell", () => {
   });
 
   it("opens on the tab the last session ended on", () => {
-    saveSessionState({ ...DEFAULT_SESSION, tab: "selection" }, "2026-10-01T12:00:00.000Z");
+    saveSessionState({ ...DEFAULT_SESSION, tab: "selectionV2" }, "2026-10-01T12:00:00.000Z");
     bootStores();
     mountWorkbench();
-    expect(getAppState().tab).toBe("selection");
+    expect(getAppState().tab).toBe("selectionV2");
     // the Selection panel, not the sheets tab — this DOM has no File System
     // Access API, so the panel renders its "unsupported browser" note
-    expect(q("[data-testid='sel-unsupported']")).not.toBeNull();
+    expect(q("[data-testid='v2-unsupported']")).not.toBeNull();
     expect(q("[data-testid='padding-slider']")).toBeNull();
   });
 
-  it("offers the SVG to upload tab right after Generate SVG, and opens its panel", async () => {
+  it("offers the SVG to upload and Upload tabs right after Generate SVG, and opens their panels", async () => {
     mountWorkbench();
     const tabs = [...host.querySelectorAll("[data-testid^='tab-']")].map((el) => el.getAttribute("data-testid"));
-    expect(tabs).toEqual(["tab-sheets", "tab-batch", "tab-selection", "tab-selection-v2", "tab-generate-svg", "tab-upload"]);
+    expect(tabs).toEqual([
+      "tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload", "tab-stock-upload",
+    ]);
     await click("[data-testid='tab-upload']");
     await settle();
     expect(getAppState().tab).toBe("upload");
     // this DOM has no File System Access API, so the panel renders its note
     expect(q("[data-testid='upload-unsupported']")).not.toBeNull();
     expect(q("[data-testid='upload-panel']")).toBeNull();
+
+    await click("[data-testid='tab-stock-upload']");
+    await settle();
+    expect(getAppState().tab).toBe("stockUpload");
+    expect(q("[data-testid='stock-upload-unsupported']")).not.toBeNull();
   });
 });
 
@@ -108,5 +160,55 @@ describe("the Generate SVG tab is kept alive (2026-10-08)", () => {
     expect(q("[data-testid='svg-shell']")).not.toBeNull(); // parked from the start
     expect((q("[data-testid='svg-shell']") as HTMLElement).hidden).toBe(true);
     expect(q("[data-testid='upload-unsupported']")).toBeNull();
+  });
+
+  it("keeps Batch keyboard listeners silent while its panel is parked", async () => {
+    mountWorkbench(); // Single sheets is active; Batch is mounted but hidden.
+    await act(async () => { patchBatch({ activeId: "hidden-batch-row" }); });
+    expect((q("[data-testid='batch-shell-outer']") as HTMLElement).hidden).toBe(true);
+    expect((q("[data-testid='hist-undo']") as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "e", bubbles: true })); });
+    await settle();
+    expect(getAppState().batch.checked).toEqual([]);
+    expect((q("[data-testid='hist-undo']") as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("a parked Generate SVG keyboard layer", () => {
+  it("does not walk SVG rows when another tab owns the keyboard", () => {
+    const actions = svgActions(false);
+    mountSvgKeyboard(actions);
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    expect(actions.setActive).not.toHaveBeenCalled();
+  });
+
+  it("does not close a parked SVG dialog on Escape", () => {
+    const actions = svgActions(true);
+    mountSvgKeyboard(actions);
+    act(() => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(actions.dismissDialog).not.toHaveBeenCalled();
+  });
+});
+
+function svgActions(dialogOpen: boolean): SvgHotActions {
+  return {
+    visible: [{ source: { id: "svg-row" } } as unknown as SvgRow], activeId: null, dialogOpen,
+    setActive: vi.fn(), toggleCheck: vi.fn(), generate: vi.fn(), decide: vi.fn(),
+    showCode: vi.fn(), dismissDialog: vi.fn(),
+  };
+}
+
+describe("Upload lifetime and shared progress mount", () => {
+  it("keeps Upload mounted after visiting and provides its global progress portal", async () => {
+    mountWorkbench();
+    expect(q('[data-testid="upload-progress-mount"]')).not.toBeNull();
+    await click('[data-testid="tab-upload"]');
+    const shell = q('[data-testid="upload-shell"]') as HTMLElement;
+    expect(shell).not.toBeNull();
+    await click('[data-testid="tab-selection-v2"]');
+    expect(q('[data-testid="upload-shell"]')).toBe(shell);
+    expect(shell.hidden).toBe(true);
+    await click('[data-testid="tab-upload"]');
+    expect(shell.hidden).toBe(false);
   });
 });
