@@ -28,7 +28,8 @@ a real browser.
    `invalid-file-media` ("Upload failed") means not — a listed row proves nothing.
    The app marks an icon uploaded only when the response lists its stem, and names
    a rejected file with Getty's id. `GET /getty-web/progress` feeds the panel the
-   live per-file counts while the one request is in flight.
+   live counts while the one request is in flight, so **the bar moves with each
+   thumbnail** (1 s poll; the helper's 404 before its session exists is retried).
 6. **Metadata:** per contribution it selects the card by stem, types the accepted
    title, description, keywords and **today's date** into Date Created, and saves —
    never overwriting Getty's IPTC/XMP prefill.
@@ -57,9 +58,8 @@ summarizes the screen (`page "Sign in - ESP"; 2 input(s)`), never a value.
   runs, so a first sign-in's cookies survive. It holds Getty cookies and is never
   deleted by the helper.
 - `--getty-check` launches once, verifies the DevTools socket, prints
-  `browser:`, `launch:`, `devtools:`, `socket:` and exits.
-- `--getty-reset --getty-profile <folder>` ends the browser holding that folder
-  and clears its stale locks.
+  `browser:`, `launch:`, `devtools:`, `socket:`.
+- `--getty-reset --getty-profile <folder>` ends the browser holding that folder.
 - `--getty-cdp` (= `GETTY_WEB_CDP`) attaches to a browser started with
   `--remote-debugging-port=9222` (loopback only).
 - `GETTY_WEB_BROWSER` overrides the executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS`
@@ -123,7 +123,7 @@ of identifier and password.
 - An interrupted run can leave a batch short; a duplicate is the recovery.
 - Arkose/funCaptcha **cannot** be automated: solve it once headed with
   `--getty-profile`, then runs reuse the cookie. Typing and the Angular bridge are
-  proven against a fake CDP and a DOM, not the live page.
+  proven against a fake CDP and a DOM.
 - The helper types the saved identifier, guessing nothing.
 - Metadata editors and Complete use **label keywords** and row proximity — guesses
   **not** seen live; a missing editor is reported per file.

@@ -35,7 +35,9 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   submission type is never reopened; the batch id must differ from the one read
   before the click, or the run keeps waiting.
 - Getty web progress: `GET /getty-web/progress?sessionKey=…` returns the live
-  `{phase,total,uploaded,failed,listed}` counts only — no names, no page text.
+  `{phase,total,uploaded,failed,listed}` counts only — no names, no page text. It
+  answers 404 until the upload request has a session, so the client keeps polling
+  instead of treating that as the end of the run.
 - Getty web dismissals: before attaching the run's files and before submitting,
   `[role=dialog]`, `[role=alert]` and `[data-cy$="-error"]` scopes get their
   `Dismiss|Cancel|Close|OK|Got it` control clicked. A scope with no such control is

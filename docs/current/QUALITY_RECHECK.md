@@ -3963,3 +3963,17 @@ gate (changed) PASS (0.7 s), Tests + coverage PASS (99.3 s), Build PASS (6.7 s).
 Focused suites: getty_web_driver 32, getty_web_batch 19, getty_web_upload 16,
 bridge_getty_web 20, stockupload_getty_web 10, getty_web_finalize 7. Docs: SOR
 8,945 B / 9,000 B, selectors 6,687 B.
+
+## 2026-10-30 — The bar moves with each thumbnail, from the first one
+
+Cause: the live watcher stopped at the first unreadable poll. The helper answers
+`404` for `/getty-web/progress` until its upload request has a session, so the
+watcher died before the first thumbnail and the panel stayed at `0 completed /
+14` with `Preparing upload batch…`. Even a successful reading only changed the
+label, never `done`. Now every reading reports at once, misses are retried (1 s
+cadence, 60 misses), `done` = files Getty settled (thumbnail + its own
+"Upload failed"), and the watch ends on `done`/`failed` or the run's end.
+Measured: Types PASS (18.3 s), Lint PASS (15.7 s, 0 errors / 21 warnings), Quality
+gate (changed) PASS (0.7 s), Tests + coverage PASS (129.6 s), Build PASS (8.2 s).
+Focused: stockupload_getty_web 13, getty_web_upload 16, getty_web_batch 19.
+Docs: SOR 8,989 B / 9,000 B, selectors 6,822 B.

@@ -12,7 +12,9 @@ import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 import type { ItemTracker, RunCounters, UploadBatchDeps, UploadBatchSummary } from "./batchtypes";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
 import { finishGettyWebRun } from "./gettywebfinish";
-import { completionNote, uploadGettyWebRun, watchGettyProgress } from "./gettywebtransfer";
+import {
+  completionNote, progressLabel, settledFiles, uploadGettyWebRun, watchGettyProgress,
+} from "./gettywebtransfer";
 import { markUploadInFlight } from "./journal";
 import {
   flushTargetStatuses, recordMissingCreds, recordTaskResult, reportNetworkCertificate,
@@ -115,6 +117,23 @@ async function runNetworkGroups(ctx: NetworkCtx): Promise<number> {
 }
 
 /**
+ * Wires Getty's live counts into the panel: each thumbnail (or Getty's own
+ * "Upload failed") moves the bar at once, instead of only at the end of the run.
+ */
+function liveGettyProgress(ctx: NetworkCtx): () => void {
+  const base = ctx.counters.done;
+  return watchGettyProgress(
+    { bridgeUrl: ctx.deps.bridgeUrl, sessionKey: ctx.sessionKey, targetName: ctx.target.name },
+    (progress) => ctx.deps.onProgress?.({
+      done: Math.min(ctx.counters.total, base + settledFiles(progress)),
+      total: ctx.counters.total,
+      label: progressLabel(progress, ctx.target.name),
+    }),
+    ctx.deps.gettyWebProgressFn,
+  );
+}
+
+/**
  * The Getty web target sends **all** selected icons in one request, so Getty
  * receives every pair in one attach; per-icon HTTP calls used to stop after one.
  */
@@ -124,11 +143,7 @@ async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
   }));
   for (const icon of icons) markUploadInFlight(icon.tasks[0].itemId, ctx.target.id);
   // Getty reports each file while the one request is in flight; show that live.
-  const stop = watchGettyProgress(
-    { bridgeUrl: ctx.deps.bridgeUrl, sessionKey: ctx.sessionKey, targetName: ctx.target.name },
-    (label) => ctx.deps.onProgress?.({ done: ctx.counters.done, total: ctx.counters.total, label }),
-    ctx.deps.gettyWebProgressFn,
-  );
+  const stop = liveGettyProgress(ctx);
   const res = await uploadGettyWebRun({
     icons, root: ctx.deps.root, target: ctx.target, creds: ctx.creds,
     combine: ctx.plan.combineTitleDescription,

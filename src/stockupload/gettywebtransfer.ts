@@ -155,30 +155,60 @@ export function progressLabel(progress: GettyWebProgress, targetName: string): s
   return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}`;
 }
 
-const PROGRESS_POLL_MS = 2000;
+/** Files Getty has already settled: a thumbnail, or its own "Upload failed". */
+export function settledFiles(progress: GettyWebProgress): number {
+  return progress.uploaded + progress.failed;
+}
+
+const PROGRESS_POLL_MS = 1000;
+// The helper answers 404 until its upload request is being handled, and a helper
+// that dies mid-run says nothing at all: neither may kill the live progress.
+const PROGRESS_MAX_MISSES = 60;
+
+type ProgressPoll = (bridgeUrl: string, sessionKey: string) => Promise<GettyWebProgress | null>;
+
+interface WatchState {
+  input: { bridgeUrl: string; sessionKey: string };
+  report: (progress: GettyWebProgress) => void;
+  poll: ProgressPoll;
+  stopped: boolean;
+  misses: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+/** One reading, then the next poll — a missing helper is retried, not fatal. */
+async function progressTick(state: WatchState): Promise<void> {
+  if (state.stopped) return;
+  const progress = await state.poll(state.input.bridgeUrl, state.input.sessionKey).catch(() => null);
+  if (state.stopped) return;
+  if (progress === null) state.misses += 1;
+  else {
+    state.misses = 0;
+    state.report(progress);
+    if (progress.phase === "done" || progress.phase === "failed") return;
+  }
+  if (state.misses <= PROGRESS_MAX_MISSES) {
+    state.timer = setTimeout(() => void progressTick(state), PROGRESS_POLL_MS);
+  }
+}
 
 /**
  * Polls the helper while the one upload request is in flight, so the panel shows
  * Getty's own per-file progress instead of sitting still until the batch lands.
- * Returns its stop function; a missing progress route (older helper) is harmless.
+ * Every reading (thumbnail count included) is reported at once. Returns its stop
+ * function; the first reading is taken immediately.
  */
 export function watchGettyProgress(
   input: { bridgeUrl: string; sessionKey: string; targetName: string },
-  onProgress: (label: string) => void,
-  poll: (bridgeUrl: string, sessionKey: string) => Promise<GettyWebProgress | null> = gettyWebProgress,
+  onProgress: (progress: GettyWebProgress) => void,
+  poll: ProgressPoll = gettyWebProgress,
 ): () => void {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let stopped = false;
-  const tick = async () => {
-    const progress = await poll(input.bridgeUrl, input.sessionKey).catch(() => null);
-    if (stopped || progress === null) return;
-    onProgress(progressLabel(progress, input.targetName));
-    if (progress.phase === "done" || progress.phase === "failed") return;
-    timer = setTimeout(() => void tick(), PROGRESS_POLL_MS);
+  const state: WatchState = {
+    input, report: onProgress, poll, stopped: false, misses: 0, timer: null,
   };
-  timer = setTimeout(() => void tick(), PROGRESS_POLL_MS);
+  state.timer = setTimeout(() => void progressTick(state), 0);
   return () => {
-    stopped = true;
-    if (timer !== null) clearTimeout(timer);
+    state.stopped = true;
+    if (state.timer !== null) clearTimeout(state.timer);
   };
 }

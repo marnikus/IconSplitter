@@ -11,6 +11,7 @@ import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { getStockHistory, resetStockHistory } from "../src/stockupload/historystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
+import { settledFiles, watchGettyProgress } from "../src/stockupload/gettywebtransfer";
 import { resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import type { GettyWebUploadInput } from "../src/lib/stockupload/gettywebclient";
@@ -150,6 +151,87 @@ describe("Getty web upload in the batch runner", () => {
     release!();
     await run;
     expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) uploaded"))).toBe(true);
+  });
+
+  it("moves the bar as each thumbnail appears, not only when the run ends", async () => {
+    vi.useFakeTimers();
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const steps: Array<{ done: number; total: number; label: string }> = [];
+    let release: (() => void) | null = null;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let polls = 0;
+    const run = executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      onProgress: (step) => steps.push({ ...step }),
+      gettyWebUploadFn: async (input) => {
+        await gate;
+        return {
+          ok: true, batchId: "68565609",
+          accepted: input.icons.flatMap((icon) => icon.files.map((f) => f.name)),
+          failed: [], completed: false, completion: null, metadata: [],
+        };
+      },
+      // The helper has no session for the first polls (its 404), then reports.
+      gettyWebProgressFn: async () => {
+        polls += 1;
+        if (polls <= 2) return null;
+        return { phase: "uploading", total: 4, uploaded: polls >= 4 ? 2 : 1, failed: 0, listed: 2 };
+      },
+      finishGettyWebFn: async () => ({
+        ok: true, batchId: "68565609", accepted: [], completed: true,
+        completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    await vi.advanceTimersByTimeAsync(6000);
+    release!();
+    await run;
+    // One thumbnail lands => the bar is already at 1 of 4, then 2 of 4.
+    expect(steps.some((step) => step.done === 1 && step.total === 4)).toBe(true);
+    expect(steps.some((step) => step.done === 2 && step.label.includes("2 of 4 file(s) uploaded"))).toBe(true);
+    // And the misses before the helper's session did not stop the watching.
+    expect(polls).toBeGreaterThan(3);
+  });
+
+  it("reads a live upload through a helper that answers nothing at first", async () => {
+    vi.useFakeTimers();
+    const seen: number[] = [];
+    let calls = 0;
+    const stop = watchGettyProgress(
+      { bridgeUrl: "http://127.0.0.1:47391", sessionKey: "run-7", targetName: "Getty" },
+      (progress) => seen.push(settledFiles(progress)),
+      async () => {
+        calls += 1;
+        return calls <= 3 ? null : { phase: calls >= 5 ? "done" : "uploading", total: 4, uploaded: 2, failed: 1, listed: 4 };
+      },
+    );
+    await vi.advanceTimersByTimeAsync(4000);
+    stop();
+    // 404s are retried, and a settled reading ends the watch instead of polling on.
+    expect(seen).toEqual([3, 3]);
+    expect(calls).toBe(5);
+  });
+
+  it("stops watching when the run is over, with no timer left behind", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const stop = watchGettyProgress(
+      { bridgeUrl: "http://127.0.0.1:47391", sessionKey: "run-7", targetName: "Getty" },
+      () => undefined,
+      async () => { calls += 1; return null; },
+    );
+    await vi.advanceTimersByTimeAsync(2500);
+    stop();
+    const after = calls;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toBe(after);
+    expect(after).toBeGreaterThan(1);
   });
 
   it("keeps the icons Getty listed and names the one it did not, before submitting once", async () => {
