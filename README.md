@@ -48,8 +48,10 @@ It has six modes (tabs across the top):
   upload preset needs only the contributor ID (or e-mail) and password: the local helper starts headless Chrome/Edge, signs in to
   `esp.gettyimages.com/contribute`, creates one batch, hands the JPEG (+
   optional EPS) to that page's own uploader, fills the accepted metadata and
-  completes the batch — run `run_ftp_bridge.bat --getty-headed` once if Getty
-  asks for a verification — see
+  completes the batch — sign in once with `run_ftp_bridge.bat --getty-headed`
+  and keep the sign-in between runs by adding
+  `--getty-profile "%LOCALAPPDATA%\IconSplitter\getty-profile"` (the helper
+  keeps that browser signed in; a throwaway profile asks again every run) — see
   [the Getty web upload page](docs/current/sor/stock-upload-getty-web.md). The API protocol is tested with a local mock, not a live account.
   It uses OAuth2 PKCE and keeps credentials local. Includes local-only
   non-expanded credentials, and multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)

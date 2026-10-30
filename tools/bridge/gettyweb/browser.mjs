@@ -7,8 +7,15 @@ import { execFile, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { openCdp } from "./cdp.mjs";
 
 const LAUNCH_TIMEOUT_MS = 25000;
+// A browser that is asked to close writes its cookies (the Getty sign-in) to the
+// profile; a force-kill can lose the last 30 s of them. Give it a moment.
+const CLOSE_TIMEOUT_MS = 8000;
+// A named profile's browser is kept between runs so the next upload reuses the
+// signed-in window; it is closed politely after this much idleness.
+const KEEP_ALIVE_MS = 600000;
 
 /** Absolute browser candidates per platform (Edge is the Windows fallback). */
 function absoluteCandidates(env) {
@@ -65,6 +72,9 @@ function launchArgs(profileDir, headed) {
     headed ? "" : "--headless=new",
     "--remote-debugging-port=0",
     `--user-data-dir=${profileDir}`,
+    // Restoring the last session also restores its session cookies, so a sign-in
+    // that lives only in memory survives a browser restart.
+    "--restore-last-session",
     "--no-first-run", "--no-default-browser-check", "--disable-extensions",
     "--disable-background-networking", "--disable-sync", "--disable-translate",
     "--disable-features=Translate,MediaRouter", "--mute-audio",
@@ -269,6 +279,54 @@ async function existingBrowser(dir, probe) {
   return socket === null ? null : { port: active.port, socket };
 }
 
+/**
+ * Browsers kept for the next run, per profile folder. A new run that attaches to
+ * one must cancel its idle close, or the browser would vanish mid-upload.
+ */
+const keptAlive = new Map();
+
+/** Stops the idle close of a profile a new run is about to reuse. */
+export function cancelIdleClose(dir) {
+  const entry = keptAlive.get(dir);
+  if (!entry) return false;
+  entry.cancel();
+  return true;
+}
+
+function keepAliveUntilIdle(dir, close, ms) {
+  keptAlive.get(dir)?.cancel();
+  const timer = setTimeout(() => { keptAlive.delete(dir); void close(); }, ms);
+  timer.unref?.();
+  keptAlive.set(dir, { cancel: () => { clearTimeout(timer); keptAlive.delete(dir); } });
+}
+
+/** Asks Chrome to shut itself down over DevTools; resolves true when it took. */
+async function closeOverCdp(socket, openFn = openCdp) {
+  if (typeof socket !== "string" || socket === "") return false;
+  let connection = null;
+  try {
+    connection = openFn(socket);
+    await connection.ready;
+    await connection.send("Browser.close", {});
+    return true;
+  } catch {
+    // The socket usually drops as the browser leaves; that is still a clean exit.
+    return true;
+  } finally {
+    try { connection?.close(); } catch { /* already gone */ }
+  }
+}
+
+/** Waits for a launched browser to leave on its own. */
+function waitForExit(child, ms) {
+  if (child?.exitCode !== null && child?.exitCode !== undefined) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), ms);
+    timer.unref?.();
+    child?.once?.("exit", () => { clearTimeout(timer); resolve(true); });
+  });
+}
+
 /** Closes the browser including its child processes (Windows keeps a tree). */
 function killTree(child) {
   if (child.exitCode !== null) return;
@@ -302,7 +360,11 @@ export async function launchBrowser(options = {}) {
   const reusable = resolveProfileDir(options.profileDir);
   if (reusable !== null) {
     const running = await existingBrowser(reusable, probe);
-    if (running) return { ok: true, ...running, stop: () => {} };
+    if (running) {
+      // This run owns the window now; its idle close must not fire underneath it.
+      cancelIdleClose(reusable);
+      return { ok: true, ...running, stop: () => {} };
+    }
     const locked = profileLocks(reusable).length > 0;
     if (decideProfileUse({ locked, answers: false }) === "busy") {
       if (options.resetProfile === false) {
@@ -324,14 +386,31 @@ export async function launchBrowser(options = {}) {
     try { rmSync(profileDir, { recursive: true, force: true }); } catch { /* profile already gone */ }
   };
   child.once("exit", removeTemporaryProfile);
-  const stop = ({ keepOpen = false } = {}) => {
-    if (keepOpen) {
-      child.unref?.();
-      return;
+  let socketUrl = null;
+  const graceful = options.gracefulClose ?? ((url) => closeOverCdp(url));
+  const closeTimeoutMs = options.closeTimeoutMs ?? CLOSE_TIMEOUT_MS;
+  // Polite first: Chrome flushes cookies and session data only on a real exit,
+  // so the profile still knows this device the next time it is launched.
+  const close = async () => {
+    await graceful(socketUrl).catch(() => false);
+    if (await waitForExit(child, closeTimeoutMs)) {
+      removeTemporaryProfile();
+      return "closed";
     }
     killTree(child);
-    if (reusable !== null) return;
-    try { rmSync(profileDir, { recursive: true, force: true }); } catch { /* profile already gone */ }
+    removeTemporaryProfile();
+    return "killed";
+  };
+  const stop = ({ keepOpen = false, force = false } = {}) => {
+    // A visible window, or a named profile between runs, stays — that kept
+    // browser is exactly what makes the next upload skip the sign-in.
+    if (keepOpen || (reusable !== null && !force)) {
+      child.unref?.();
+      if (!keepOpen && reusable !== null) keepAliveUntilIdle(reusable, close, options.idleMs ?? KEEP_ALIVE_MS);
+      return "kept";
+    }
+    void close();
+    return "closing";
   };
   const deadline = Date.now() + (options.timeoutMs ?? LAUNCH_TIMEOUT_MS);
   let lastPort = null;
@@ -340,12 +419,15 @@ export async function launchBrowser(options = {}) {
     if (active) {
       lastPort = active.port;
       const socket = await probe(active.port);
-      if (socket) return { ok: true, port: active.port, socket, stop };
+      if (socket) {
+        socketUrl = socket;
+        return { ok: true, port: active.port, socket, stop };
+      }
     }
     if (child.exitCode !== null && active === null && lastPort === null) break;
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
-  stop();
+  stop({ force: true });
   const where = reusable === null ? "the temporary profile" : `the profile folder ${reusable}`;
   const port = lastPort === null ? "" : ` (DevTools port ${lastPort} did not accept a connection)`;
   return {

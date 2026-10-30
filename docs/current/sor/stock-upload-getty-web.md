@@ -11,10 +11,10 @@ a real browser.
 
 ## 2. Flow
 
-1. The user saves the contributor **numeric ID** (Getty also takes an e-mail) and
-   password in the vault, then presses **Test connection** or **Upload**.
-2. `panelops.ts` probes `/health` (`gettyWeb.ready`, `gettyWeb.browser`); a
-   missing browser or an old helper fails with a hint.
+1. The user saves the contributor **numeric ID** (or e-mail) and password in the
+   vault, then presses **Test connection** or **Upload**.
+2. `panelops.ts` probes `/health` (`gettyWeb.ready`, `gettyWeb.browser`); a missing
+   browser or an old helper fails with a hint.
 3. `runupload.ts` groups tasks **per icon** (JPEG + optional EPS), one `sessionKey`
    per target. `getty-web` is the one protocol that does not send one request per
    icon: `uploadGettyWebRun` posts every icon together.
@@ -58,19 +58,21 @@ screen, never a value.
 - Default: `chrome --headless=new` with a throwaway profile (never steals focus).
 - `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window for watching a run
   or clearing a verification. A visible window is never killed: a failed run
-  leaves the page up and says so.
-- `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) reuses one profile between
-  runs, so a first sign-in's cookies survive. It holds Getty cookies and is never
-  deleted by the helper.
+  leaves it up.
+- `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) is what remembers the
+  sign-in: the browser is kept on that folder between runs (the next upload
+  attaches to it, and it closes politely after ten idle minutes), every close is a
+  real `Browser.close` so cookies reach the disk, and `--restore-last-session`
+  brings back a session-only login. The helper never deletes the folder.
 - `--getty-check` launches once and prints `browser:`, `launch:`, `socket:`.
-- `--getty-reset --getty-profile <folder>` ends the browser holding that folder.
+- `--getty-reset --getty-profile <folder>` ends the browser on that folder.
 - `--getty-cdp` (= `GETTY_WEB_CDP`) attaches to a browser started with
   `--remote-debugging-port=9222` (loopback only).
 - `GETTY_WEB_BROWSER` overrides the executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS`
-  (180 s) and `GETTY_WEB_READY_TIMEOUT_MS` (300 s) bound the two waits.
+  (180 s) and `GETTY_WEB_READY_TIMEOUT_MS` (300 s) bound the waits.
 
-**A vector pair is one contribution.** Getty lists the EPS name only, so files are
-matched by **stem** (`.jpg` + `.eps` = one card).
+**A vector pair is one contribution:** files are matched by **stem** (`.jpg` +
+`.eps` = one card).
 
 **One profile, one browser — freed by the helper.** A browser answering on the
 folder's port is attached to. A locked folder without a port means a leftover
@@ -109,8 +111,8 @@ Sign-in has no captured handles: `fillLoginForm`, `focusLoginField`,
 `inspectSignIn`, `choosePasswordOption`, `submitLogin` match behaviour, as
 described in the selectors page.
 
-Codes map to HTTP: `bad-request` 400 (config, host, file rules; 409 for a finish
-with no open batch), `auth` 401 (rejected sign-in, signed out mid-run), `browser`
+Codes map to HTTP: `bad-request` 400 (config, host, file rules, no open batch),
+`auth` 401 (rejected sign-in, signed out mid-run), `browser`
 503 (no executable, launch failure, busy profile, refused socket), `timeout` 504
 (no batch page / names missing / control never ready / a contribution absent at
 `finish`), `cancelled` 499, `page` 502 (selector not found). A refused socket names
@@ -120,14 +122,13 @@ of identifier and password.
 ## 6. Honest limits
 
 - Built against captured markup plus a local helper, **not** a live account:
-  selector drift is a `page` failure naming the step. Only the hidden contribution
-  uploader is used, never a release input.
-- A thumbnail means Getty took the file, not that it accepted it for review.
+  selector drift is a `page` failure naming the step. Only the hidden uploader is
+  used, never a release input.
+- A thumbnail means Getty took the file, not that it accepted it.
 - An interrupted run can leave a batch short; a duplicate is the recovery.
-- Arkose/funCaptcha **cannot** be automated: solve it once headed with
-  `--getty-profile`, then runs reuse the cookie. Typing and the Angular bridge are
-  proven against a fake CDP and a DOM.
-- The helper types the saved identifier, guessing nothing.
+- Arkose/funCaptcha **cannot** be automated: solve it once headed (it then lives in
+  the profile). Typing and the Angular bridge are proven against a fake CDP.
+- The helper types the saved identifier only.
 - Metadata editors and Complete use **label keywords**, `data-cy` and row
   proximity — guesses **not** seen live; a missing editor is reported per file.
 - `completed: true` means the control was clicked and confirmed, not that Getty

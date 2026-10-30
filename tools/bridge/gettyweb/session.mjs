@@ -120,16 +120,18 @@ export async function openGettySession(options) {
   });
   if (!browser.ok) return browser;
   const connection = openCdp(browser.socket);
-  const cleanup = () => {
+  const cleanup = (closing = {}) => {
     connection.close();
-    // A visible sign-in window belongs to the user: disconnect automation,
-    // but leave the page open for inspection or manual verification.
-    browser.stop({ keepOpen: options.headed === true });
+    // A visible sign-in window belongs to the user: disconnect automation, but
+    // leave the page open for inspection or manual verification. A named profile
+    // keeps its browser between runs either way, which is what remembers Getty's
+    // sign-in; only a failure or a reset closes it (politely, so cookies land).
+    browser.stop({ keepOpen: options.headed === true, force: closing.force === true });
   };
   const fail = (code, reason) => {
     const outcome = failureOutcome(options.headed, reason);
     if (outcome.keepOpen) connection.close();
-    else cleanup();
+    else cleanup({ force: true });
     return { ok: false, code, reason: outcome.reason, keptOpen: outcome.keepOpen };
   };
   try {

@@ -247,6 +247,12 @@ function startListening() {
     console.log(inkscape.found ? `Inkscape ${inkscape.version} at ${inkscape.path}` : `Inkscape NOT found (optional, only for Inkscape EPS conversion) — ${inkscape.fix}`);
     console.log(`serving ${existsSync(path.join(config.dist, "index.html")) ? "the built app" : "NO built app yet"} from ${config.dist}`);
     if (process.env.GETTY_WEB_HEADED === "1") console.log("Getty web browser: VISIBLE window (--getty-headed)");
+    const profile = resolveProfileDir(process.env.GETTY_WEB_PROFILE);
+    if (profile !== null) {
+      console.log(`Getty web browser: profile ${profile} — the sign-in is kept there and reused by later runs`);
+    } else {
+      console.log("Getty web browser: throwaway profile — pass --getty-profile <folder> to keep the Getty sign-in between runs");
+    }
     console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
   });
 }
@@ -304,7 +310,7 @@ async function runGettyCheck() {
   } finally {
     connection.close();
     if (visible) console.log("window: LEFT OPEN — close it when you are done looking");
-    else started.stop();
+    else started.stop({ force: true });
   }
 }
 

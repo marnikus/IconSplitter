@@ -265,6 +265,122 @@ describe("Getty web browser launch", () => {
   });
 });
 
+describe("Getty web remembered sign-in", () => {
+  it("launches with the session-restoring flags that keep Getty signed in", async () => {
+    const dir = tempProfile();
+    const argv: string[][] = [];
+    try {
+      const launched = await launchBrowser({
+        profileDir: dir, env: FAKE_BROWSER_ENV,
+        spawnFn: (_path: string, args: string[]) => { argv.push(args); writeActivePort(dir, 61111); return fakeChild(); },
+        probeSocket: async () => "ws://127.0.0.1:61111/devtools/browser/live",
+      });
+      expect(launched.ok).toBe(true);
+      const args = argv[0] ?? [];
+      expect(args).toContain("--restore-last-session");
+      expect(args).toContain(`--user-data-dir=${dir}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a named profile's browser alive between runs and closes it gently when idle", async () => {
+    const dir = tempProfile();
+    const closed: string[] = [];
+    let killed = 0;
+    const child = { ...fakeChild(), unref: () => {}, kill: () => { killed += 1; return true; } };
+    try {
+      const launched = await launchBrowser({
+        profileDir: dir, env: FAKE_BROWSER_ENV, idleMs: 5,
+        gracefulClose: async (socket: string) => { closed.push(socket); return true; },
+        spawnFn: () => { writeActivePort(dir, 61222); return child; },
+        probeSocket: async () => "ws://127.0.0.1:61222/devtools/browser/live",
+      });
+      expect(launched.ok).toBe(true);
+      expect(launched.ok && launched.stop()).toBe("kept");
+      // The window stays for the next upload; it is not force-killed.
+      expect(killed).toBe(0);
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      expect(closed).toEqual(["ws://127.0.0.1:61222/devtools/browser/live"]);
+      expect(killed).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("cancels the idle close when the next run attaches to that window", async () => {
+    const dir = tempProfile();
+    const closed: string[] = [];
+    const socket = "ws://127.0.0.1:61555/devtools/browser/live";
+    try {
+      const first = await launchBrowser({
+        profileDir: dir, env: FAKE_BROWSER_ENV, idleMs: 20,
+        gracefulClose: async (url: string) => { closed.push(url); return true; },
+        spawnFn: () => { writeActivePort(dir, 61555); return { ...fakeChild(), unref: () => {} }; },
+        probeSocket: async () => socket,
+      });
+      expect(first.ok).toBe(true);
+      if (first.ok) first.stop();
+      // The next run finds the same port answering and reuses the signed-in window.
+      const second = await launchBrowser({ profileDir: dir, env: FAKE_BROWSER_ENV, probeSocket: async () => socket });
+      expect(second.ok).toBe(true);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(closed).toEqual([]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("asks Chrome to close itself so cookies reach the disk before any hard kill", async () => {
+    const dir = tempProfile();
+    const graces: string[] = [];
+    let killed = 0;
+    const child = {
+      exitCode: null as number | null, pid: 4242, once: () => {},
+      kill: () => { killed += 1; return true; },
+    };
+    try {
+      const launched = await launchBrowser({
+        profileDir: dir, env: FAKE_BROWSER_ENV,
+        gracefulClose: async (socket: string) => { graces.push(socket); child.exitCode = 0; return true; },
+        spawnFn: () => { writeActivePort(dir, 61333); return child; },
+        probeSocket: async () => "ws://127.0.0.1:61333/devtools/browser/live",
+      });
+      expect(launched.ok).toBe(true);
+      if (launched.ok) expect(launched.stop({ force: true })).toBe("closing");
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(graces).toEqual(["ws://127.0.0.1:61333/devtools/browser/live"]);
+      // It exited on its own, so nothing is force-killed.
+      expect(killed).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("still ends a browser that ignores the polite close", async () => {
+    const dir = tempProfile();
+    let killed = 0;
+    const child = {
+      exitCode: null as number | null, pid: 4242, once: () => {},
+      kill: () => { killed += 1; return true; },
+    };
+    try {
+      const launched = await launchBrowser({
+        profileDir: dir, env: FAKE_BROWSER_ENV, closeTimeoutMs: 5,
+        gracefulClose: async () => false,
+        spawnFn: () => { writeActivePort(dir, 61444); return child; },
+        probeSocket: async () => "ws://127.0.0.1:61444/devtools/browser/live",
+      });
+      expect(launched.ok).toBe(true);
+      if (launched.ok) launched.stop({ force: true });
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(killed).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("Getty web socket failure reason", () => {
   it("turns a refused DevTools socket into an actionable hint without leaking anything", () => {
     const reason = cdpFailureReason(new Error("browser debugging socket failed"), {

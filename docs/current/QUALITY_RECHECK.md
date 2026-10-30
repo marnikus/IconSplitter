@@ -4005,3 +4005,13 @@ coverage 99.4 s (3325 passed) · Build 7.1 s → ALL LANES PASSED. Focused:
 `getty_web_upload` 17, `getty_web_cdp` 11, `bridge_getty_web` 20,
 `stockupload_getty_web` 14 = 130 passed. SOR 8,966 B, selectors 7,349 B.
 - 2026-10-30 — row badge Ctrl-click removal and successful re-upload behavior: focused badge/selection tests passed; `npm run verify` passed all lanes, including typecheck, lint, quality, full tests/coverage, and build.
+
+## 2026-10-30 — Getty web: remember the sign-in (kept profile browser, polite close)
+Measured after the profile keep-alive, the CDP `Browser.close` before any
+force-kill, `--restore-last-session`, the idle-close cancel on attach, and the
+startup line naming the profile:
+`verify:fast` Types 4.0 s · Lint 1.7 s (0/21) · Quality gate 0.5 s · Tests +
+coverage 98.7 s · Build 7.0 s → ALL LANES PASSED. `getty_web_browser` 26,
+`getty_web_signin`, `getty_web_cdp`, `bridge_getty_web`, `getty_web_finalize`,
+`getty_web_batch`, `getty_web_driver`, `getty_web_upload`,
+`stockupload_getty_web` = 165 focused passed. SOR 8,996 B.

@@ -10,6 +10,8 @@ export function resetProfile(dir: string, options?: {
   killPids?: (pids: number[]) => void;
   settleMs?: number;
 }): Promise<{ reset: boolean; killed: number[]; reason: string | null }>;
+/** Cancels the idle close of a profile the next run is about to reuse. */
+export function cancelIdleClose(dir: string): boolean;
 export function launchBrowser(options?: {
   headed?: boolean;
   profileDir?: string;
@@ -21,5 +23,11 @@ export function launchBrowser(options?: {
   listProcesses?: () => Promise<string>;
   killPids?: (pids: number[]) => void;
   settleMs?: number;
+  /** Asks the browser to exit over DevTools, so cookies are flushed first. */
+  gracefulClose?: (socket: string) => Promise<boolean>;
+  /** How long a polite close may take before the process is force-ended. */
+  closeTimeoutMs?: number;
+  /** How long a named profile's browser is kept between runs. */
+  idleMs?: number;
 }): Promise<any>;
 export function connectBrowser(options?: { headed?: boolean; cdpUrl?: string; profileDir?: string; env?: Record<string, string | undefined> }): Promise<any>;
