@@ -14,16 +14,23 @@ export interface ProcessProgressBarProps {
   leading: ReactNode;
   actions: ReactNode;
   complete?: boolean;
+  /** The run ended with files that did not upload: not a success colour. */
+  failed?: boolean;
 }
 
 export default function ProcessProgressBar(p: ProcessProgressBarProps) {
   const cls = `${p.theme}-progress`;
+  // "complete" paints the bar green: only truthful when nothing failed.
+  const success = p.complete === true && p.failed !== true;
   return (
-    <div className={`${cls}-header process-progress-header${p.complete ? " complete" : ""}`} data-testid={`${p.prefix}-progress-header`}>
+    <div
+      className={`${cls}-header process-progress-header${success ? " complete" : ""}${p.failed ? " failed" : ""}`}
+      data-testid={`${p.prefix}-progress-header`}
+    >
       <div className={`${cls}-left`}>
         {p.leading}
         <div className={`${cls}-text`}>
-          <strong className={p.complete ? "success" : undefined} data-testid={`${p.prefix}-progress-title`}>{p.title}</strong>
+          <strong className={p.failed ? "error" : success ? "success" : undefined} data-testid={`${p.prefix}-progress-title`}>{p.title}</strong>
           <span className={`${cls}-file`} data-testid={`${p.prefix}-progress-file`} title={p.detail}>{p.detail}</span>
         </div>
       </div>

@@ -19,8 +19,13 @@ export interface UploadBar {
   remaining: number;
 }
 
-function titleOf(step: UploadProgressStep, finished: boolean, failed: boolean): string {
-  if (step.complete === true) return failed ? "Upload finished with errors" : "Upload complete";
+function titleOf(step: UploadProgressStep, finished: boolean, failed: boolean, done: number): string {
+  if (step.complete === true) {
+    if (!failed) return "Upload complete";
+    // Nothing landed: saying "finished with errors" over a full bar still reads
+    // like a success, so a run that uploaded no file says exactly that.
+    return done === 0 ? "Upload failed — nothing was uploaded" : "Upload finished with errors";
+  }
   // A full upload phase only means the bytes are in: the run still has to save
   // metadata and see Getty mark each card "Ready to submit", so it is not done.
   if (!finished) return step.phase === "verifying" ? "Verifying Ready to submit" : "Uploading to stock sites";
@@ -39,10 +44,12 @@ export function uploadBar(step: UploadProgressStep): UploadBar {
   const failed = (step.failed ?? 0) > 0;
   const finished = step.complete === true || (done >= step.total && step.phase !== "uploading");
   return {
-    percent: finished ? 100 : percent,
+    // 100 % is only for a run that really uploaded every file: a failed run keeps
+    // the honest ratio it earned (0 uploaded of 418 is 0 %, not 100 %).
+    percent: finished && !failed ? 100 : percent,
     finished,
     failed,
-    title: titleOf(step, finished, failed),
+    title: titleOf(step, finished, failed, done),
     detail: step.label,
     done,
     total: step.total,

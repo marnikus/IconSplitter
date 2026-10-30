@@ -1084,11 +1084,17 @@
 .svg-progress-text { display: grid; gap: 2px; min-width: 0; }
 .svg-progress-text strong { font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .svg-progress-text strong.success { color: #7ee3b6; }
+.svg-progress-text strong.error { color: #ff9aa5; }
 .svg-progress-file { color: var(--v2-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .svg-progress-center { display: grid; gap: 4px; }
 .svg-progress-track { height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
 .svg-progress-fill { height: 100%; background: #745cff; transition: width 0.3s; }
 .svg-progress-header.complete .svg-progress-fill { background: #32d68b; }
+/* A run that lost files is never green: red track, red title, red percent. */
+.svg-progress-header.failed { background: #1c1418; }
+.svg-progress-header.failed .svg-progress-fill { background: #f0596a; }
+.svg-progress-header.failed .svg-progress-percent { color: #ff9aa5; }
+.svg-progress-header.failed .svg-progress-check { background: #3a1720; color: #ff9aa5; }
 .svg-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
 .svg-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 .svg-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }

@@ -5,8 +5,8 @@ Parent: [stock-upload](stock-upload.md). Handles: [selectors/stock-upload](../se
 ## 1. Why this is a bridge job
 
 Getty's ESP **API** preset (`esp-https`) needs a Partner key; a website login
-uploads through `esp.gettyimages.com/contribute`, which the app cannot drive (no
-CORS login), so the **loopback helper** (`tools/bridge/gettyweb/`) drives a real
+uploads through `esp.gettyimages.com/contribute`, which the app cannot drive
+(CORS), so the **loopback helper** (`tools/bridge/gettyweb/`) drives a real
 browser.
 
 ## 2. Flow
@@ -18,20 +18,21 @@ browser.
 2. `runupload.ts` groups tasks **per icon** — a JPEG/EPS pair is **one**
    contribution, matched by **stem** — one `sessionKey` per target, then hands the
    icons to `uploadGettyWebRun`.
-3. **The run is N batches of at most 100 icons** (`planGettyWebBatches`, the
+3. **The run is N batches of ≤ 100 icons** (`planGettyWebBatches`, the
    limit mirrored by the helper's `MAX_ICONS`): one icon is one upload — its JPEG
    plus its EPS — since Getty lists a pair once under the EPS name, so 100 pairs
-   (200 files) are one batch and 101 icons are two. A batch
-   also ends early once its bytes would cross the request budget: the helper
-   advertises `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) and the run uses
-   it, capped at this build's 64 MB; a helper that reports nothing (an older
-   build) is assumed at 16 MB. Names carry their place:
+   (200 files) are one batch and 101 icons are two. A batch also ends early at
+   the request budget: `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) capped
+   at this build's 64 MB, or 16 MB for a helper that reports none. Names carry
+   their place:
    `IconSplitter 2026-10-30 2/3 (100 icons)`.
 4. `/getty-web/upload` runs **once per batch** with `newBatch: true`: the helper
    stages that chunk, signs in once per run, returns to the contributor page,
    creates the batch (`session.startBatch` resets the last id, names and counts)
    and hands its files to the uploader in one `DOM.setFileInputFiles` after
-   dismissing dialogs (one blocks the uploader).
+   dismissing dialogs (one blocks the uploader). The per-icon manifest is the
+   **body's tail** (`manifestBytes` in the header), never a header: Node answers
+   431 above 16 KB, before any route runs (I-83).
 5. Getty's uploader transfers; an oversized body is drained and answered 413, and
    a request the helper never answered is retried **in halves** (twice), since it
    carried nothing. **If nothing new appears for 30 s** the helper
@@ -62,7 +63,7 @@ browser.
    missing or says "Upload failed" (after re-uploading the rejected files once).
    **A page with no Complete/Submit control is not an error:** every card carrying
    "Ready to submit" *is* the finished state (`ok: true`, `ready: true`,
-   `completed: false`, log `batch-ready`). `accepted` is the chip list, so the app
+   `completed: false`). `accepted` is the chip list, so the app
    badges only what Getty validated. The next batch follows in the same session.
 8. **The re-upload list:** an icon whose card showed no thumbnail, was never
    listed or read "Upload failed" is queued and retried **exactly once**
@@ -108,8 +109,8 @@ browsers, clearing locks and relaunching.
 
 ## 5. Page contract and failure codes
 
-`driver.mjs` keeps each DOM decision self-contained (own constants, each step in
-an IIFE, so it can be re-injected); handles, cards and drawer rules are in
+`driver.mjs` keeps each DOM decision self-contained (own constants and IIFEs, so
+it can be re-injected); handles, cards and drawer rules are in
 [selectors/stock-upload](../selectors/stock-upload.md). Sign-in has no captured
 handles: `fillLoginForm`/`inspectSignIn`/`submitLogin` match behaviour, and the
 text is typed (`Input.insertText` plus `angular.element(el)`, since
@@ -119,7 +120,7 @@ an unvalidated file), `cancelled` 499, `page` 502. No credentials in a reason.
 
 ## 6. Honest limits
 
-- Built against captured markup plus a local helper, **not** a live account:
+- Built against captured markup, **not** a live account:
   drift is a `page` failure naming the step; editor/Complete selectors are
   guesses **not** seen live.
 - A picture proves nothing: Getty draws one for rejected files and unvalidated

@@ -222,7 +222,9 @@ function logLine(req, res, started, bytes) {
   console.log(`${new Date().toISOString()} ${req.method} ${(req.url ?? "/").split("?")[0]} → ${res.statusCode} · ${ms} ms · ${bytes} B`);
 }
 
-const server = createServer((req, res) => {
+// The Getty manifest now travels in the body; a generously raised header cap keeps
+// an older app working, and stops Node answering 431 before a route can explain.
+const server = createServer({ maxHeaderSize: 1024 * 1024 }, (req, res) => {
   const started = Date.now();
   route(req, res, server.address()?.port ?? config.port)
     .then((bytes) => logLine(req, res, started, bytes ?? 0))

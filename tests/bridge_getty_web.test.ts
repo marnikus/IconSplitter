@@ -357,6 +357,30 @@ describe("Getty web batch limits in the helper", () => {
     expect(body.reason).toContain("GETTY_WEB_MAX_BYTES");
   });
 
+  it("reads a 200 KB icon manifest from the body, not from a header Node caps at 16 KB", async () => {
+    // A 100-icon batch with 2 KB descriptions was a ~290 KB base64 header: Node
+    // answered 431 and destroyed the socket before the route ran, so a 209-icon
+    // run never opened a browser. The manifest now rides at the end of the body.
+    const helper = await startHelper();
+    const icons = Array.from({ length: 100 }, (_v, i) => ({
+      files: [{ name: `icon_${i}.jpeg`, bytes: 1 }],
+      metadata: { title: `title ${i}`, description: "d".repeat(2000), keywords: ["k1"] },
+    }));
+    const manifest = Buffer.from(JSON.stringify({ icons }), "utf8");
+    const res = await fetch(`${helper.url}/getty-web/upload`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-getty-web-config": configHeader(gettyConfig({ manifestBytes: manifest.length })),
+      },
+      body: Buffer.concat([Buffer.alloc(icons.length, 1), manifest]),
+    });
+    expect(manifest.length).toBeGreaterThan(200 * 1024);
+    // The route ran: with no browser installed it answers its browser 503.
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ ok: false, code: "browser" });
+  });
+
   it("never sweeps a session that has a request in flight", () => {
     // A 100-icon batch outlives the five idle minutes; closing it mid-batch would
     // lose the run.

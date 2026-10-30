@@ -114,3 +114,18 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   with that reason. A session with a request in flight is never swept by the idle
   timer. Pinned by `getty_web_chunk`, `stockupload_getty_web`,
   `getty_web_upload`, `bridge_getty_web` and `getty_web_session`.
+
+<a id="i-83"></a>
+* **I-83 (a Getty web request keeps its per-icon manifest in the body, never in a
+  header, RULE 4/7 — 2026-10-30):** `x-getty-web-config` carries settings,
+  credentials and `manifestBytes` only — far under 8 KB — and the manifest
+  (`{icons:[{metadata, files:[{name, bytes}]}]}`) is the **last `manifestBytes`
+  bytes of the body**, ahead of nothing (it follows the staged file bytes). A
+  100-icon batch with 2 KB descriptions is a ~290 KB base64 header, and Node's 16
+  KB `maxHeaderSize` answers **431 and destroys the socket before any route runs**,
+  so the browser never opens and the app can only see a dead helper: that is
+  exactly the 209-icon failure, not a size cap and never a missing helper. The
+  helper rebuilds the config with `configFromBody` before validating, still
+  reads an older `icons` header, and raises `maxHeaderSize` to 1 MB as defence.
+  Pinned by `getty_web_upload` (header < 8 KB, body > 200 KB) and
+  `bridge_getty_web` (a 200 KB manifest reaches the route).

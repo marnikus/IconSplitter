@@ -4254,3 +4254,22 @@ PASSED. Focused vitest 10 files / 168 tests green: `getty_web_chunk` 11/11,
 `stockupload_progress_ui`, `stockupload_getty_web_ui`, `docs_navigation`. Full
 suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 <200 ms" (228 ms on this 2-vCPU box) missed, untouched by this change.
+
+## 2026-10-30 — Getty web: a 209-icon run failed at the header, not the helper
+
+- Cause (measured): `x-getty-web-config` carried `{icons:[…]}` — 100 icons with
+  2 KB descriptions = **287,340 chars** of base64 — and Node's 16 KB
+  `maxHeaderSize` answered **431 in 5 ms**, destroying the socket before any
+  route ran, so no browser opened and 418 files were reported as a dead helper
+  (`/tmp/hdr_probe.mjs`: small header → 503 in 46 ms, 100 KB header → 431 in 5 ms).
+- Fix: the header keeps settings + `manifestBytes` (< 8 KB); the per-icon manifest
+  is the **body's tail**; the helper rebuilds the config (`configFromBody`), still
+  reads an older `icons` header, and raises `maxHeaderSize` to 1 MB as defence.
+- Bar: `uploadBar` counts **uploaded** files (`done`), so 0 of 418 is `0%` /
+  "Upload failed — nothing was uploaded", `failed` paints red, and `complete`
+  (green) needs `failed === 0`.
+- Measured: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 12 files / 176 tests green;
+  full suite 3,434/3,435 — the only miss is `algo_efficiency`
+  "synthetic 1000px 4-icon grid < 200 ms" at 265 ms (environmental, budget kept);
+  docs 4/4 (soR 8,998 B, selectors 8,933 B, invariants 8,762 B).

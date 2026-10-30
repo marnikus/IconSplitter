@@ -88,8 +88,24 @@ function encodeBase64Utf8(text: string): string {
   return btoa(bin);
 }
 
-/** The loopback header: preset shape + credentials + staged file sizes. */
-function uploadConfig(input: GettyWebUploadInput): string {
+/** The per-icon manifest: names, sizes and metadata of every staged icon. */
+function uploadManifest(input: GettyWebUploadInput): Uint8Array {
+  const manifest = {
+    icons: input.icons.map((icon) => ({
+      metadata: icon.metadata ?? null,
+      files: icon.files.map((file) => ({ name: file.name, bytes: file.bytes.byteLength })),
+    })),
+  };
+  return new TextEncoder().encode(JSON.stringify(manifest));
+}
+
+/**
+ * The loopback header: preset shape, credentials and the manifest length only.
+ * The manifest itself rides in the body — 100 icons with 2 KB descriptions is a
+ * ~290 KB base64 header, and Node answers 431 above 16 KB before any route runs,
+ * which is how a 209-icon run failed instantly and never opened a browser.
+ */
+function uploadConfig(input: GettyWebUploadInput, manifestBytes: number): string {
   return encodeBase64Utf8(JSON.stringify({
     ...input.preset,
     username: input.creds.username,
@@ -99,10 +115,7 @@ function uploadConfig(input: GettyWebUploadInput): string {
     submissionType: input.submissionType,
     complete: input.complete === true,
     newBatch: input.newBatch === true,
-    icons: input.icons.map((icon) => ({
-      metadata: icon.metadata ?? null,
-      files: icon.files.map((file) => ({ name: file.name, bytes: file.bytes.byteLength })),
-    })),
+    manifestBytes,
   }));
 }
 
@@ -120,23 +133,26 @@ function megabytesOf(bytes: number): string {
  * named, with the knob that changes it, so a 209-icon run is diagnosable.
  */
 function uploadTransportReason(input: GettyWebUploadInput): string {
-  return `the local helper did not answer while taking ${megabytesOf(stagedBytesOf(input))} of files — `
-    + `restart run_ftp_bridge.bat (or run_inkscape_bridge.bat) so it reports GETTY_WEB_MAX_BYTES, `
-    + `and raise that limit above this batch if it is still refused (${BRIDGE_FIX_HINT})`;
+  return `the local helper dropped the request while taking ${megabytesOf(stagedBytesOf(input))} of files — `
+    + `a request it cannot take answers 413 or 431, so check its window and raise GETTY_WEB_MAX_BYTES in run_ftp_bridge.bat`;
 }
 
-/** Every staged byte of every icon, in the order the config lists them. */
-function uploadBody(input: GettyWebUploadInput): Blob {
-  return new Blob(input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart)));
+/** Every staged byte of every icon, then the manifest the header points at. */
+function uploadBody(input: GettyWebUploadInput, manifest: Uint8Array): Blob {
+  return new Blob([
+    ...input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart)),
+    manifest as BlobPart,
+  ]);
 }
 
 /** Sends every icon of the run (JPEG + optional EPS each) to the Getty page. */
 export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<GettyWebResult> {
   const fetchFn = input.fetchImpl ?? globalThis.fetch;
+  const manifest = uploadManifest(input);
   try {
     const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/getty-web/upload`, {
-      method: "POST", signal: input.signal, body: uploadBody(input),
-      headers: { "content-type": "application/octet-stream", "x-getty-web-config": uploadConfig(input) },
+      method: "POST", signal: input.signal, body: uploadBody(input, manifest),
+      headers: { "content-type": "application/octet-stream", "x-getty-web-config": uploadConfig(input, manifest.byteLength) },
     });
     const body = await answerOf(res);
     if (res.ok) return parseSuccess(body, input.icons.flatMap((icon) => icon.files.map((file) => file.name)));

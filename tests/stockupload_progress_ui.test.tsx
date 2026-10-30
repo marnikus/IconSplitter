@@ -121,6 +121,40 @@ describe("stock upload progress bar", () => {
     expect(mount.querySelector('[data-testid="stock-progress-dismiss"]')).not.toBeNull();
   });
 
+  it("never paints a run that uploaded nothing as a full green bar", async () => {
+    // 418 failed, 0 uploaded: the bar used to read "418 completed / 418 · 100 %"
+    // in green, which is the opposite of what happened.
+    const g = api({
+      model: {
+        dialog: null, uploading: false,
+        progress: { done: 0, total: 418, label: "Uploaded 0 file(s), 418 failed", complete: true, failed: 418 },
+      },
+    } as Partial<StockUploadApi>);
+    await render(g);
+    expect(mount.querySelector('[data-testid="stock-upload-progress-title"]')!.textContent)
+      .toBe("Upload failed — nothing was uploaded");
+    expect(mount.querySelector('[data-testid="stock-upload-progress-percent"]')!.textContent).toBe("0%");
+    expect(mount.querySelector('[data-testid="stock-upload-progress-completed"]')!.textContent)
+      .toBe("0 completed / 418");
+    const bar = mount.querySelector('[data-testid="stock-upload-progress-header"]') as HTMLElement;
+    // Green is reserved for a run that really uploaded: a failure is not success.
+    expect(bar.className).not.toContain("complete");
+    expect(bar.className).toContain("failed");
+  });
+
+  it("counts the files that uploaded, not the ones that were processed", async () => {
+    const g = api({
+      model: {
+        dialog: null, uploading: false,
+        progress: { done: 3, total: 5, label: "Uploaded 3 file(s), 2 failed", complete: true, failed: 2 },
+      },
+    } as Partial<StockUploadApi>);
+    await render(g);
+    expect(mount.querySelector('[data-testid="stock-upload-progress-percent"]')!.textContent).toBe("60%");
+    expect(mount.querySelector('[data-testid="stock-upload-progress-remaining"]')!.textContent).toBe("2 remaining");
+    expect(mount.querySelector('[data-testid="stock-upload-progress-title"]')!.textContent).toBe("Upload finished with errors");
+  });
+
   it("stays on screen after the run returns, until it is closed", async () => {
     const g = api({
       model: {

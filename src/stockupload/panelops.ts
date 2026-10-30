@@ -171,7 +171,9 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
  */
 function finishedProgress(plan: StockUploadPlan, summary: UploadBatchSummary, label: string): UploadProgressStep {
   return {
-    done: plan.tasks.length, total: plan.tasks.length, label,
+    // The bar counts files that really uploaded: a run where everything failed
+    // must not paint "418 completed / 418 · 100 %" in green.
+    done: summary.uploadedFiles, total: plan.tasks.length, label,
     complete: true, failed: summary.failedFiles,
   };
 }

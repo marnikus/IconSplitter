@@ -116,7 +116,8 @@ function StockProgressPortal({ g }: { g: StockUploadApi }) {
       remaining={bar.remaining}
       percent={bar.percent}
       complete={bar.finished}
-      leading={<span className="svg-progress-check" aria-hidden="true">{bar.finished ? "✓" : "◍"}</span>}
+      failed={bar.failed}
+      leading={<span className="svg-progress-check" aria-hidden="true">{bar.finished && !bar.failed ? "✓" : "◍"}</span>}
       actions={<ProgressActions g={g} bar={bar} running={g.model.uploading} />}
     />
   );

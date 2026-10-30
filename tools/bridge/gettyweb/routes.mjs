@@ -184,6 +184,28 @@ export function iconsFromConfig(cfg) {
   return [{ files, metadata: sanitizeMetadata(cfg?.metadata) }];
 }
 
+/**
+ * Rebuilds the request config with the per-icon manifest the body carries. The
+ * header holds settings only: 100 icons with 2 KB descriptions is a ~290 KB
+ * base64 header, and Node kills such a request with 431 before this route runs.
+ * A config that still lists its icons in the header keeps working.
+ */
+export function configFromBody(cfg, body) {
+  const bytes = cfg?.manifestBytes;
+  if (bytes === undefined) return { config: cfg, files: body };
+  if (!Number.isInteger(bytes) || bytes <= 0 || bytes > body.length) return null;
+  let manifest;
+  try {
+    manifest = JSON.parse(body.subarray(body.length - bytes).toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(manifest?.icons)) return null;
+  const settings = { ...cfg };
+  delete settings.manifestBytes;
+  return { config: { ...settings, icons: manifest.icons }, files: body.subarray(0, body.length - bytes) };
+}
+
 /** Reads every staged file of every icon out of the body, or why it cannot. */
 export function iconsFromBody(body, cfg) {
   const icons = iconsFromConfig(cfg);
@@ -260,13 +282,14 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
       reason: `the staged files exceed the helper's limit (${limit} bytes) — send fewer icons per batch, or raise GETTY_WEB_MAX_BYTES on the helper`,
     });
   }
-  const icons = iconsFromBody(body, cfg);
-  if (!icons) return json(res, 400, { ok: false, code: "bad-request", reason: "the upload must contain a JPEG (and optional matching EPS) per icon" });
-  const url = contributeUrlOf(cfg);
+  const parsed = configFromBody(cfg, body);
+  const icons = parsed && iconsFromBody(parsed.files, parsed.config);
+  if (!parsed || !icons) return json(res, 400, { ok: false, code: "bad-request", reason: "the upload must contain a JPEG (and optional matching EPS) per icon" });
+  const url = contributeUrlOf(parsed.config);
   try {
-    const result = await performUpload(cfg, url, icons);
+    const result = await performUpload(parsed.config, url, icons);
     if (!result?.ok) {
-      return json(res, statusFor(result?.code ?? "page"), failurePayload(result, cfg));
+      return json(res, statusFor(result?.code ?? "page"), failurePayload(result, parsed.config));
     }
     return json(res, 200, {
       ok: true, batchId: result.batchId ?? null,
@@ -286,7 +309,7 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
       submitted: result.state?.submitted === true,
     });
   } catch (err) {
-    return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });
+    return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, parsed.config) });
   }
 }
 
