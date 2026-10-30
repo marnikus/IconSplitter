@@ -254,6 +254,41 @@ describe("Getty web upload in the batch runner", () => {
     ]]);
   });
 
+  it("keeps the two sizes of one picture apart inside a random batch", async () => {
+    // A draw can put snow_01 next to snow_02; the batch is then dealt so the
+    // neighbouring picture goes between them.
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "snow_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "snow_02", { jpg: true, eps: true });
+    addExported(root, "icon-3", "c", "wheel_01", { jpg: true, eps: true });
+    addExported(root, "icon-4", "d", "wheel_02", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const sent: string[][] = [];
+    await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebMaxIcons: 4,
+      gettyWebRandomBatches: true,
+      gettyWebRandomFn: () => 0,
+      gettyWebUploadFn: async (input) => {
+        sent.push(input.icons.map((icon) => icon.files[0].name));
+        return {
+          ok: true, batchId: "b", accepted: input.icons.flatMap((icon) => icon.files.map((f) => f.name)),
+          failed: [], completed: false, completion: null, metadata: [],
+        };
+      },
+      finishGettyWebFn: async () => ({
+        ok: true, batchId: "b", accepted: [], completed: true,
+        completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    // Same four icons, but no two sizes of one picture side by side.
+    expect(sent[0]).toEqual(["wheel_01.jpg", "snow_01.jpg", "wheel_02.jpg", "snow_02.jpg"]);
+  });
+
   it("keeps the bar's total across batches instead of restarting at every 100 icons", async () => {
     // Batch 1's icons were validated, so batch 2 starts from them: the panel used
     // to fall back to batch 2's own counts (0 of 418) and never recovered.

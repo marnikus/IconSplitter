@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_BYTES, GETTY_WEB_MAX_BATCH_ICONS, gettyWebBatchLabel,
   gettyWebBatchName, gettyWebBatchSummary, gettyWebBatchSummaryOf, gettyWebRequestBytes,
-  planGettyWebBatches, randomBatchOrder,
+  planGettyWebBatches, randomBatchOrder, similarityKeyOf, spreadSimilar,
 } from "../src/lib/stockupload/gettyweb";
 
 const icons = (n: number) => Array.from({ length: n }, (_v, i) => ({ id: `icon-${i}` }));
@@ -50,6 +50,23 @@ describe("Getty web batch planning", () => {
     expect(gettyWebBatchName(now, 7, { index: 1, total: 1, retry: true }))
       .toBe("2026-10-30 retry 1/1 (7 icons)");
     expect(gettyWebBatchName(now, 100, { index: 3, total: 3 }).length).toBeLessThanOrEqual(60);
+  });
+
+  it("groups icons that only differ by a trailing number, so they can be kept apart", () => {
+    expect(similarityKeyOf("icon-snowflake_2_01.jpg")).toBe("icon-snowflake_2");
+    expect(similarityKeyOf("ICON-06.eps")).toBe("icon");
+    expect(similarityKeyOf("star.eps")).toBe("star");
+  });
+
+  it("never leaves two icons of the same picture side by side when it can help it", () => {
+    // The batch was drawn at random, but a draw can still put both sizes of one
+    // picture next to each other; the dealer moves one of them away.
+    const batch = ["snow_01", "snow_02", "wheel_01", "wheel_02"];
+    expect(spreadSimilar(batch, similarityKeyOf)).toEqual(["snow_01", "wheel_01", "snow_02", "wheel_02"]);
+    // Same members, only the order changes — nothing is dropped or added.
+    expect([...spreadSimilar(batch, similarityKeyOf)].sort()).toEqual([...batch].sort());
+    // A batch of one picture only cannot be spread: the run keeps it as it is.
+    expect(spreadSimilar(["a_01", "a_02"], similarityKeyOf)).toEqual(["a_01", "a_02"]);
   });
 
   it("can order the whole selection at random, so every batch is a random draw", () => {

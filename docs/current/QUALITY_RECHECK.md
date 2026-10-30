@@ -4368,3 +4368,17 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 - Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
   PASSED; `verify:fast` ALL LANES PASSED; helper+bridge+stockupload 15 files /
   130 tests green; focused 5 files / 80 tests green; docs 4/4 (soR 8,999 B).
+- 2026-10-30 — `Random batches` spreads look-alike icons as well as shuffling:
+  `similarityKeyOf` strips a trailing number (`icon-snowflake_2_01` →
+  `icon-snowflake_2`) and `spreadSimilar` moves a batch member that repeats its
+  neighbour's key further along, so two sizes of one picture no longer travel
+  side by side while the rest of the draw keeps its order. One uniform
+  Fisher–Yates draw stays the source of the randomness (a second pass would add
+  nothing to a uniform permutation); the batch with the box off is untouched.
+  New tests: `getty_web_chunk` (key grouping, dealing, nothing dropped) and
+  `stockupload_getty_web` ("keeps the two sizes of one picture apart inside a
+  random batch": `snow_01/snow_02/wheel_01/wheel_02` upload as
+  `wheel_01, snow_01, wheel_02, snow_02`).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 3 files / 49 tests green;
+  docs 4/4 (soR 8,996 B).

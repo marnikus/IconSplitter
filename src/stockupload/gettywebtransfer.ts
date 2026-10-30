@@ -8,7 +8,7 @@
 import type { DirHandleLike } from "../lib/fs";
 import {
   GETTY_WEB_MAX_ATTEMPTS, gettyWebBatchLabel, gettyWebBatchName, planGettyWebBatches,
-  randomBatchOrder, type GettyWebBatchSlot,
+  randomBatchOrder, similarityKeyOf, spreadSimilar, type GettyWebBatchSlot,
 } from "../lib/stockupload/gettyweb";
 import {
   finishBridgeGettyWeb, uploadBridgeGettyWeb, type GettyWebErrorCode, type GettyWebFinishInput,
@@ -213,14 +213,21 @@ function primaryOrder(state: RunState): number[] {
   return randomBatchOrder(count, state.input.rng);
 }
 
+/** The name that decides whether two icons of a batch look alike: its first file. */
+function iconName(state: RunState, index: number): string {
+  return state.input.icons[index].tasks[0]?.fileName ?? "";
+}
+
 /**
- * A drawn batch is mixed inside itself too: neighbouring stems sit side by side
- * in the list, so a random slice of it can still hand Getty near-duplicate files
- * in a row. Off, the batch keeps the user's row order untouched.
+ * A drawn batch is mixed inside itself too, and two sizes of one picture are
+ * pushed apart: the list keeps similar stems next to each other, so a random
+ * slice of it can still hand Getty near-duplicates in a row. Off, the batch
+ * keeps the user's row order untouched.
  */
 function mixedBatch(state: RunState, chunk: readonly number[]): number[] {
   if (state.input.randomizeBatches !== true) return [...chunk];
-  return randomBatchOrder(chunk.length, state.input.rng).map((slot) => chunk[slot]);
+  const drawn = randomBatchOrder(chunk.length, state.input.rng).map((slot) => chunk[slot]);
+  return spreadSimilar(drawn, (index) => similarityKeyOf(iconName(state, index)));
 }
 
 async function runPrimaryPass(state: RunState): Promise<void> {

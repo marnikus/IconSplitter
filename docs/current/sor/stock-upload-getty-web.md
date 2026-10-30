@@ -28,7 +28,8 @@ browser.
    name. The opt-in `Random batches` (`stock-random-batches`, persisted) draws
    each batch from the icons not yet sent: `randomBatchOrder` shuffles the indexes
    once, so every icon still goes once and the last batch holds the rest, and each
-   batch is mixed inside itself, so similar stems do not go up side by side.
+   batch is mixed inside itself with two sizes of one picture pushed apart
+   (`spreadSimilar`), so similar stems do not go up side by side.
 4. `/getty-web/upload` runs **once per batch** with `newBatch: true`: the helper
    stages that chunk, signs in once per run, returns to the contributor page,
    creates the batch (`session.startBatch` resets its id, names and counts)
@@ -52,7 +53,7 @@ browser.
    only gets Enter). Every drawer saved, it selects **all** cards and presses
    **Save metadata** (`bulkSave`). A `metadata-skeleton` drawer, or
    one that never unlocks, reloads the page at once and walks again from the
-   **first** file (once), skipping cards with no picture.
+   **first** file (once), skipping picture-less cards.
    **Then it verifies:** every card must show `pending-icon` /
    `aria-label="Ready to submit"`, and the bar climbs with them. A card
    still showing `not-ready-icon` follows a 30 s ladder: **Save metadata again**,
@@ -64,7 +65,7 @@ browser.
 7. **Complete each batch, then start the next:** after its last card carries
    "Ready to submit" the run posts `/getty-web/finish` **for that batch only**. It
    refuses, naming what is wrong, while one of *that* batch's contributions is
-   missing or says "Upload failed" (rejections are re-uploaded once).
+   missing or says "Upload failed" (rejections re-uploaded once).
    **No Complete/Submit control is not an error:** every card carrying
    "Ready to submit" *is* the finished state (`ok: true`, `ready: true`,
    `completed: false`); `accepted` is the chip list, so the app badges only
@@ -74,8 +75,8 @@ browser.
    (`GETTY_WEB_MAX_ATTEMPTS = 2`). Queued icons fill a later batch's room, so a
    250-icon run carries them in batch 3; the rest becomes the final
    `… retry 1/1 (7 icons)` batch, and only a terminal outcome reaches the row.
-   A dead browser, session or helper stops the run; what it never reached fails
-   with that reason.
+   A dead browser, session or helper stops the run; unreached icons fail with
+   that reason.
 9. `/getty-web/close` releases the browser, deletes staged files; an idle
     session closes after 5 min, but one **with a request in flight is never swept**
     (`mayReleaseSession`).
@@ -90,9 +91,8 @@ browser.
   (0600, never logged), so a killed window starts signed in.
 - `--getty-check` shows `browser:`, `launch:`, `socket:`; `--getty-reset
   --getty-profile <folder>` ends that browser; `--getty-cdp` (`GETTY_WEB_CDP`)
-  attaches to `--remote-debugging-port=9222`. `GETTY_WEB_BROWSER` overrides the
-  executable; `GETTY_WEB_UPLOAD_TIMEOUT_MS` (180 s),
-  `GETTY_WEB_READY_TIMEOUT_MS` (300 s) bound the waits.
+  attaches to `--remote-debugging-port=9222`. `GETTY_WEB_BROWSER` overrides it; `GETTY_WEB_UPLOAD_TIMEOUT_MS` (180 s),
+  `GETTY_WEB_READY_TIMEOUT_MS` (300 s) bound waits
 
 **One profile, one browser, freed by the helper.** A browser answering on the
 folder's port is attached to; a locked folder without one is freed by ending its
@@ -107,7 +107,7 @@ browsers, clearing locks, relaunching.
 - Type `iStock creative illustration`; the run completes each batch via
   `/getty-web/finish` and reports `completed`/`completion`/`ready`;
   `GETTY_WEB_COMPLETE=0` stops after upload. A failed upload
-  answers `accepted`/`failed`/`notReady`/`seen` (`failurePayload`), so a timed-out
+  answers `accepted`/`failed`/`notReady`/`seen`, so a timed-out
   chunk is never re-sent.
 
 ## 5. Page contract and failure codes
@@ -115,7 +115,7 @@ browsers, clearing locks, relaunching.
 `driver.mjs` keeps each DOM decision self-contained (own constants and IIFEs, so
 it can be re-injected); handles, cards and drawers live in
 [selectors/stock-upload](../selectors/stock-upload.md). Sign-in has no captured
-handles: `fillLoginForm`/`inspectSignIn`/`submitLogin` match behaviour, and
+handles: `fillLoginForm`/`inspectSignIn`/`submitLogin` match behaviour;
 text is typed (`Input.insertText` plus `angular.element(el)`, since
 `ng-app="SignInApp"` ignores `.value =`). Codes: `bad-request` 400, `auth` 401,
 `browser` 503, `timeout` 504 (no batch page, a name missing, control never ready,
@@ -134,7 +134,7 @@ an unvalidated file), `cancelled` 499, `page` 502; no credentials in a reason.
 
 - Credentials live only in the vault ([I-81](invariants/upload.md#i-81)), go only
   to the helper, and are never logged or echoed. Only
-  `https://<…>.gettyimages.com` contributor paths are contacted (`..`, queries and
+  `https://<…>.gettyimages.com` contributor paths are contacted (`..` and
   other hosts refused by `contributeUrlOf`); staged files use sanitized names,
   deleted on close.
 - Tests (`tests/`): `getty_web_chunk` (budgets, names), `getty_web_driver`
@@ -142,5 +142,5 @@ an unvalidated file), `cancelled` 499, `page` 502; no credentials in a reason.
   reset, kept window), `getty_web_batch` (dialog, uploader), `getty_web_upload`
   (sizes, split codes), `getty_web_cdp`, `bridge_getty_web` (routes, 413, cap),
   `getty_web_finalize` (metadata, skeleton restart, re-save, re-upload, complete),
-  `stockupload_getty_web` (grouping, chunking, random order, split retry, folding,
-  sign-out, cancel).
+  `stockupload_getty_web` (grouping, chunking, random order, spread, split retry,
+  folding, cancel).

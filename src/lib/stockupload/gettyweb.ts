@@ -105,6 +105,34 @@ export function randomBatchOrder(count: number, rng: () => number = Math.random)
   return order;
 }
 
+/**
+ * The part of an icon's name that makes two icons look alike: `icon-snowflake_2_01`
+ * and `icon-snowflake_2_02` are one picture in two sizes, so they group.
+ */
+export function similarityKeyOf(name: string): string {
+  const leaf = String(name ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  const stem = (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
+  return stem.replace(/[\s._-]*\d+$/, "") || stem;
+}
+
+/**
+ * Pushes icons of the same picture apart after a batch was drawn: an icon that
+ * repeats the key of the one before it is moved further along, so the batch keeps
+ * the draw's own order everywhere else while similar files stop travelling side
+ * by side. A batch that is one picture only cannot be spread and stays as it is.
+ */
+export function spreadSimilar<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
+  const out = [...items];
+  for (let i = 1; i < out.length; i += 1) {
+    if (keyOf(out[i]) !== keyOf(out[i - 1])) continue;
+    const j = out.findIndex((item, index) => index > i && keyOf(item) !== keyOf(out[i - 1]));
+    if (j < 0) continue;
+    out.splice(i, 0, ...out.splice(j, 1));
+  }
+  return out;
+}
+
 /** Batch name the bridge types into Getty's Create Batch dialog: date, place, size. */
 export function gettyWebBatchName(now: Date, itemCount: number, slot?: GettyWebBatchSlot): string {
   const stamp = now.toISOString().slice(0, 10);
