@@ -29,20 +29,20 @@ browser.
 4. `/getty-web/upload` runs **once per batch** with `newBatch: true`: the helper
    stages that chunk, signs in once per run, returns to the contributor page,
    creates the batch (`session.startBatch` resets the last id, names and counts)
-   and hands its files to the uploader in one `DOM.setFileInputFiles` after
-   dismissing dialogs (one blocks the uploader). The per-icon manifest is the
+   and hands its files to the uploader in one `DOM.setFileInputFiles`; one stray
+   dialog blocks that uploader, so dialogs are dismissed first. The per-icon manifest is the
    **body's tail** (`manifestBytes` in the header), never a header: Node answers
    431 above 16 KB, before any route runs (I-83).
-5. Getty's uploader transfers; an oversized body is drained and answered 413, and
+5. An oversized body is drained and answered 413, and
    a request the helper never answered is retried **in halves** (twice), since it
    carried nothing. **If nothing new appears for 30 s** the helper
-   reloads the page and re-attaches only the missing files (twice, then it fails
-   honestly); a timed-out read is that stall, retried. It waits until every file
-   is listed, then for each card's **picture** or its `pending-icon` "Ready to
-   submit" chip — a thumbnail arms the metadata step, since the chip appears
-   **only after** a save. `invalid-file-media` ("Upload failed") is a rejection
-   named with Getty's id. `GET /getty-web/progress` (1 s poll) counts **arrivals**
-   here, so the bar says "uploaded", never "complete".
+   reloads the page and re-attaches only the missing files; a timed-out read, or a
+   listed card with no **picture** for that window, is the same stall (per batch,
+   twice, then it fails honestly). It waits until every file is listed, then for
+   each card's picture or its `pending-icon` "Ready to submit" chip — a thumbnail
+   arms the metadata step, since the chip appears **only after** a save. `invalid-file-media` ("Upload failed") is a rejection
+   named with Getty's id. `GET /getty-web/progress` (1 s poll) counts **arrivals**, so
+   the bar says "uploaded", never "complete".
 6. **Metadata:** per contribution it selects the card by stem (twice if Getty
    drops the click), types title and description and writes **today's date** into
    Date Created as Getty renders it (`MM/DD/YYYY 00:00:00 +0000`). Prefilled prose
@@ -51,11 +51,11 @@ browser.
    presses **Save metadata** once (`bulkSave`).
    **Then it verifies:** every card must show `pending-icon` /
    `aria-label="Ready to submit"`, and the bar's line climbs with them. A card
-   still showing `not-ready-icon` gets **Save metadata again after 30 s** (twice)
-   with only those files re-checked; if the chip still does not come, the run
-   **re-uploads that file from its staged copy** (`reattachFiles`) and re-checks —
-   a third save changes nothing, a second attach does. A file still unvalidated is
-   named (`timeout`); the verifying phase counts **chips**, so 100 % means
+   still showing `not-ready-icon` follows a 30 s ladder: **Save metadata again**,
+   then **reload the page and save again** (twice each — a fresh load is what turns
+   these cards), then **re-upload the file from its staged copy** (`reattachFiles`);
+   every step re-reads the chips, and a batch always gets its own reload before it
+   is given up on. A file still unvalidated is named (`timeout`); the verifying phase counts **chips**, so 100 % means
    submittable. `readiness`: `ok`, `notReady`, `resaves`, `repairs`.
 7. **Complete each batch, then start the next:** after its last card carries
    "Ready to submit" the run posts `/getty-web/finish` **for that batch only**. It
@@ -81,10 +81,9 @@ browser.
 - Default `chrome --headless=new`, throwaway profile; `--getty-headed`
   (`GETTY_WEB_HEADED=1`) shows the window; a visible window is never killed.
 - `--getty-profile <folder>` (`GETTY_WEB_PROFILE`) keeps the browser between runs
-  so Getty's sign-in survives (ten idle minutes close it),
-  `--restore-last-session` revives a session-only login, and cookies are kept in
-  `iconsplitter-session.json` (0600, never logged) so a killed window starts
-  signed in.
+  so Getty's sign-in survives (ten idle minutes close it), `--restore-last-session`
+  revives a session-only login, and cookies live in `iconsplitter-session.json`
+  (0600, never logged) so a killed window starts signed in.
 - `--getty-check` prints `browser:`, `launch:`, `socket:`; `--getty-reset
   --getty-profile <folder>` ends that browser; `--getty-cdp` (`GETTY_WEB_CDP`)
   attaches to `--remote-debugging-port=9222`. `GETTY_WEB_BROWSER` overrides the
@@ -126,8 +125,7 @@ an unvalidated file), `cancelled` 499, `page` 502. No credentials in a reason.
 - A picture proves nothing: Getty draws one for rejected files and unvalidated
   cards, so a card left `not_ready_to_submit` fails that file by name.
 - Arkose/funCaptcha **cannot** be automated: solve it once headed (it then lives
-  in the profile); typing is proven against a fake CDP. `completed` means the
-  control was clicked, `ready` that every card showed Getty's icon.
+  in the profile); typing is proven against a fake CDP.
 
 ## 7. Invariants and tests
 

@@ -188,10 +188,10 @@ it("waits for the hidden contribution uploader instead of using an existing rele
 // "Ready to submit" icon once it validated it. A rejected card says "Upload
 // failed". Every card renders a thumbnail, so a picture never decides anything.
 const READY_ICON = '<svg data-cy="pending-icon" aria-label="Ready to submit"></svg>';
-const card = (name: string, status: "ready" | "processing" | "failed" = "ready") => `
+const card = (name: string, status: "ready" | "processing" | "failed" | "blank" = "ready") => `
   <div data-cy="grid-row"><div data-cy="item-card">
     <div data-cy="image-card">
-      ${status === "failed" ? "<p>Upload failed</p>" : `<img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/${name}.jpg">`}
+      ${status === "failed" ? "<p>Upload failed</p>" : status === "blank" ? "" : `<img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/${name}.jpg">`}
     </div>
     <div data-cy="item-info">
       ${status === "ready" ? READY_ICON : status === "processing" ? '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>' : ""}
@@ -275,6 +275,29 @@ class FrozenReadPage extends DomConnection {
   }
   frozen = false;
   attachments = 0;
+}
+
+/**
+ * A batch page that lists the pair straight away but never gives it a picture —
+ * the stuck state a real run sits in for minutes — and answers a reload with the
+ * card Getty only renders on a fresh page load.
+ */
+class BlankPicturePage extends DomConnection {
+  reloads = 0;
+  constructor(private readonly name = "a.eps") {
+    super();
+  }
+  override async send(method: string, params: Record<string, unknown>) {
+    if (method === "Page.reload") {
+      this.reloads += 1;
+      document.body.innerHTML = UPLOADER;
+      document.body.insertAdjacentHTML("beforeend", card(this.name));
+      return {};
+    }
+    const answer = await super.send(method, params);
+    if (method === "DOM.setFileInputFiles") document.body.insertAdjacentHTML("beforeend", card(this.name, "blank"));
+    return answer;
+  }
 }
 
 const PAIR = ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"];
@@ -693,6 +716,30 @@ describe("completing one batch for several icons", () => {
     expect(result).toMatchObject({ ok: false, code: "timeout" });
     expect(result.reason).toContain("has not enabled its SUBMIT control");
     expect(clicks).toBe(0);
+  });
+
+  it("reloads a page whose listed card never gets its picture", async () => {
+    // A run that waits out the whole bound on a blank card never finishes: the
+    // reload is what makes Getty render it. Time alone must not be the answer.
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new BlankPicturePage();
+      const notes: string[] = [];
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg", "/staged/a.eps"], names: ["a.jpg", "a.eps"],
+        timeoutMs: 60000, readyTimeoutMs: 120000, stallMs: 5000,
+        onProgress: (note: string) => notes.push(note),
+      });
+      await vi.advanceTimersByTimeAsync(20000);
+      const settled = await result;
+      expect(settled.ok).toBe(true);
+      expect(page.reloads).toBe(1);
+      expect(notes.some((note) => /reload/i.test(note))).toBe(true);
+      expect(settled.state.uploaded).toContain("a.eps");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("reloads the page after 30 s without progress and re-attaches only what is missing", async () => {

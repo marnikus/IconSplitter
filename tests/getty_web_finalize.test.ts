@@ -13,17 +13,28 @@ const META = { title: "Charity hand icon", description: "Open palm holding a hea
 class FakeConnection {
   steps: string[] = [];
   expressions: string[] = [];
+  /** Every CDP method, so a page reload is visible next to the page steps. */
+  calls: string[] = [];
+  /** Methods and page steps in the order they happened, for the ladder's order. */
+  timeline: string[] = [];
   queue: Record<string, unknown[]>;
   constructor(queue: Record<string, unknown[]>) {
     this.queue = queue;
   }
   send(method: string, params: Record<string, unknown>): Promise<unknown> {
-    if (method !== "Runtime.evaluate") return Promise.resolve({});
+    this.calls.push(method);
+    if (method !== "Runtime.evaluate") {
+      this.timeline.push(method);
+      return Promise.resolve({});
+    }
     const expression = String(params.expression);
+    // A reloaded page is usable again: that is what the helper waits for.
+    if (expression.includes("document.readyState")) return Promise.resolve({ result: { value: true } });
     this.expressions.push(expression);
     const tail = expression.slice(expression.lastIndexOf("\n;return ("));
     const name = /\(function (\w+)/.exec(tail)?.[1] ?? "unknown";
     this.steps.push(name);
+    this.timeline.push(name);
     const value = this.queue[name]?.shift() ?? null;
     return Promise.resolve({ result: { value } });
   }
@@ -188,7 +199,7 @@ describe("Getty web automatic finalize", () => {
     const progress: string[] = [];
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: true,
-      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 20, readyRetryMs: 0, readyTimeoutMs: 100, readyResaves: 1,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 20, readyRetryMs: 0, readyTimeoutMs: 100, readyResaves: 1, readyReloads: 0,
       onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
     });
     expect(result.ok).toBe(false);
@@ -434,13 +445,70 @@ describe("Getty web automatic finalize", () => {
     expect(cdp.steps).not.toContain("completeBatch");
   });
 
+  it("reloads the batch page when a card stays not ready through both re-saves", async () => {
+    // Getty stops re-reading its own validation until the page is loaded again:
+    // the reload is the recovery that turns the card, and it must happen before
+    // the run gives up on the file.
+    const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      readUploadState: [notReady, notReady, notReady, notReady, { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] }],
+    };
+    const cdp = connection(queue);
+    const notes: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0, readyTimeoutMs: 60000,
+      onProgress: (line: string) => notes.push(line),
+      signal: new AbortController().signal,
+    });
+    expect(cdp.calls).toContain("Page.reload");
+    expect(notes.some((line) => /reload/i.test(line))).toBe(true);
+    // The reload is followed by applying the metadata again, then the cards are
+    // read: a fresh page only re-validates a card whose metadata it was given.
+    const afterReload = cdp.timeline.slice(cdp.timeline.lastIndexOf("Page.reload"));
+    expect(afterReload).toContain("selectAllContributions");
+    expect(afterReload).toContain("saveMetadataEditor");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, notReady: [], resaves: 2 });
+  });
+
+  it("always reloads a stuck batch page at least once before giving up on it", async () => {
+    // The per-batch guarantee: a batch whose cards never turn gets its page
+    // reloaded even when no re-save or re-upload is left in the plan, and only
+    // then is it reported — never silently handed to the next 100-icon batch.
+    const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      readUploadState: [notReady],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0,
+      readyTimeoutMs: 40, readyResaves: 0, readyRepairs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(cdp.calls.filter((call) => call === "Page.reload").length).toBeGreaterThanOrEqual(1);
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
+    if (!result.ok) expect(result.report.readiness).toMatchObject({ ok: false, resaves: 0, repairs: 0, notReady: ["star_01"] });
+    expect(cdp.steps).not.toContain("completeBatch");
+  });
+
   it("re-uploads a card that never turns Ready to submit, then finishes", async () => {
     const queue = {
       ...successQueue(),
       selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
       saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
-      // Two re-saves change nothing; the card only validates after the re-upload.
+      // Two re-saves and two page reloads change nothing; the card only validates
+      // after the re-upload, which is exactly the ladder's last step.
       readUploadState: [
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
         { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
         { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
         { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },

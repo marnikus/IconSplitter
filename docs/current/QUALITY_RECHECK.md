@@ -4273,3 +4273,22 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   full suite 3,434/3,435 — the only miss is `algo_efficiency`
   "synthetic 1000px 4-icon grid < 200 ms" at 265 ms (environmental, budget kept);
   docs 4/4 (soR 8,998 B, selectors 8,933 B, invariants 8,762 B).
+
+## 2026-10-30 — Getty web: a stuck batch page is reloaded before it is written off
+
+- Symptom: 100 cards listed, chips red for the whole readiness window, one card
+  "Upload failed", and no page reload — the run simply waited out its bound and
+  moved on. A reload is the recovery that turns those cards most of the time.
+- Helper: `waitForVerified` now reloads a page that gives no new picture for a
+  stall window; `waitForReadyToSubmit` runs a bounded ladder per batch —
+  **save, reload + save, save, reload + save, then re-upload** (`readyPlan`,
+  `READY_RELOADS = 2`) — re-reading the chips after every step, so a batch is
+  always reloaded at least once in its own verification before it is reported or
+  the next 100-icon batch starts. One `reloadMeter` per attach keeps the count
+  honest, and `session.mjs` feeds it into `progress.reloads` so the bar says
+  "page reloaded to get it moving".
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 10 files / 175 tests green;
+  full suite 3,437/3,438 (only the environmental `algo_efficiency` 1000px budget,
+  259 ms vs 200 ms, budgets untouched); docs 4/4 (soR 8,998 B, invariants
+  8,926 B).

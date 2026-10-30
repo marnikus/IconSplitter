@@ -65,6 +65,8 @@ export function finishBatch(connection: any, sessionId: string, options?: {
   readyResaves?: number;
   /** How many times the unvalidated files may be re-uploaded (default 1). */
   readyRepairs?: number;
+  /** How many times a stuck batch page is reloaded (default 2; 0 only in tests). */
+  readyReloads?: number;
   /**
    * Re-uploads the named contributions from their staged copies. Without it the
    * run reports them instead of retrying.
@@ -117,6 +119,8 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
   readyResaves?: number;
   /** How many times the unvalidated files may be re-uploaded (default 1). */
   readyRepairs?: number;
+  /** How many times a stuck batch page is reloaded (default 2; 0 only in tests). */
+  readyReloads?: number;
   /**
    * Re-uploads the named contributions from their staged copies. Without it the
    * run reports them instead of retrying.

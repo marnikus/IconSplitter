@@ -330,10 +330,18 @@ function buildSession(ctx) {
       }
       state.progress = { ...progressOf(result.state, state.reloads), phase: "metadata" };
       // Every card that turns "Ready to submit" after the save moves the bar.
-      const onState = (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "metadata" }; };
+      let lastRead = result.state;
+      const onState = (read) => { lastRead = read; state.progress = { ...progressOf(read, state.reloads), phase: "metadata" }; };
+      // A reload of a stuck batch page is counted in the same run total, so the
+      // panel can say the page was reloaded instead of showing a silent wait.
+      const baseReloads = state.reloads;
+      const onReload = (count) => {
+        state.reloads = baseReloads + count;
+        state.progress = { ...progressOf(lastRead, state.reloads), phase: "metadata" };
+      };
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
-        onProgress: options.onProgress, signal: options.signal, onState, ...readyOptionsOf(options),
+        onProgress: options.onProgress, signal: options.signal, onState, onReload, ...readyOptionsOf(options),
         // A card Getty never validates (or rejected) is re-uploaded from its own
         // staged copy instead of being reported as uploaded.
         repair: repairCapability(connection, page.sessionId, files, paths, { onState, onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs }),
@@ -355,9 +363,11 @@ function buildSession(ctx) {
      * after the first icon is what used to lock the batch and drop the rest.
      */
     async finish(input = {}) {
+      const baseReloads = state.reloads;
       const result = await finishBatch(connection, page.sessionId, {
         expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
         onProgress: options.onProgress, ...readyOptionsOf(options),
+        onReload: (count) => { state.reloads = baseReloads + count; },
         repair: repairCapability(connection, page.sessionId, staged.files, staged.paths, {
           onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs,
         }),
