@@ -11,6 +11,7 @@ import { recoverInterruptedUploads } from "./journal";
 import { loadStockPrefs, saveStockPrefs, type StockUploadPrefs } from "./prefsstore";
 import { loadStockPresets } from "./presetstore";
 import { ALL_STOCK_FILTER, type StockListFilter, type StockMetaDraft, type StockUploadSort } from "./rowlist";
+import type { GettyWebRetryTarget } from "./batchtypes";
 import type { UploadProgressStep } from "./runupload";
 
 export type StockDialog = null | { kind: "rowBadges" } | { kind: "confirmUpload"; plan: StockUploadPlan };
@@ -30,6 +31,8 @@ export interface StockUploadModel {
   testStatus: FtpTestStatus;
   uploading: boolean;
   progress: UploadProgressStep | null;
+  /** Files a finished Getty run left unverified, while its batch is still open. */
+  retry: GettyWebRetryTarget | null;
 }
 
 export type StockModelAction =
@@ -84,6 +87,6 @@ export function initialStockModel(): StockUploadModel {
     prefs: loadStockPrefs(), filter: ALL_STOCK_FILTER, sort: "path",
     dialog: null, toast: null, drafts: {}, credSaved: {},
     testStatus: { busy: false, ok: null, note: "", certSha256: null },
-    uploading: false, progress: null,
+    uploading: false, progress: null, retry: null,
   };
 }

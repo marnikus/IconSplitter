@@ -23,28 +23,74 @@ async function openPage(connection) {
   return { targetId: target.targetId, sessionId: attached.sessionId };
 }
 
-/** Turns one page reading into the counts the app's progress line shows. */
+/** The stem a file name belongs to; a JPEG/EPS pair shares one contribution. */
+function stemOf(fileName) {
+  const leaf = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  return (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
+}
+
+/** One contribution's truth from a page reading, by its own card. */
+export function truthOf(read) {
+  if (Array.isArray(read?.contributions)) return read.contributions;
+  const ready = new Set((read?.readyToSubmit ?? []).map(stemOf));
+  const failed = new Set((read?.failed ?? []).map(stemOf));
+  const uploaded = new Set((read?.uploaded ?? []).map(stemOf));
+  const seen = new Set((read?.namesSeen ?? []).map(stemOf));
+  const states = [];
+  for (const stem of seen) {
+    const state = failed.has(stem) ? "failed" : ready.has(stem) ? "ready" : uploaded.has(stem) ? "arrived" : "pending";
+    states.push({ name: stem, stem, id: null, state, picture: uploaded.has(stem), ready: state === "ready" });
+  }
+  return states;
+}
+
+/**
+ * Turns one page reading into the counts the app's progress line shows. Arrival
+ * (`uploaded`) is reported as arrival; only Getty's own "Ready to submit" chips
+ * are `ready`, and a page whose cards could not be rendered is `verified: false`
+ * so nothing is counted from it.
+ */
 export function progressOf(read, reloads = 0) {
   const uploaded = Array.isArray(read?.uploaded) ? read.uploaded.length : 0;
   const failed = Array.isArray(read?.failed) ? read.failed.length : 0;
   const listed = Array.isArray(read?.namesSeen) ? read.namesSeen.length : 0;
   const total = listed + (Array.isArray(read?.missing) ? read.missing.length : 0);
-  // Getty's own "Ready to submit" validation, the only proof a run is finished;
-  // reported only once it exists, so a reading without it stays the old shape.
-  // `uploaded` stays the earlier "the picture is there" count, which is what
-  // lets the metadata step start as soon as the last file lands.
   const ready = Array.isArray(read?.readyToSubmit) ? read.readyToSubmit.length : 0;
-  return { total, uploaded, failed, listed, ...(ready > 0 ? { ready } : {}), reloads };
+  const verified = read?.cardsPresent !== false && Array.isArray(read?.contributions ?? read?.namesSeen);
+  const pending = Math.max(0, total - ready - failed);
+  return { total, uploaded, ready, failed, listed, pending, verified, reloads };
 }
 
 /**
- * What the run may call uploaded. The last reading of the run wins: it is taken
- * after the grid-wide metadata save, so it is the one that can show Getty's
- * "Ready to submit" icon. A file without that icon is never in this list.
+ * What the run may call uploaded: only the names whose card carries Getty's own
+ * "Ready to submit" validation icon in the last reading of the run. A picture is
+ * not an upload proof, so the names of arrived files are never in this list.
  */
-export function acceptedOf(done, attachResult) {
-  const settled = done?.report?.readiness?.state ?? attachResult?.state ?? null;
-  return Array.isArray(settled?.uploaded) ? settled.uploaded : [];
+export function acceptedOf(read) {
+  if (Array.isArray(read?.contributions)) {
+    return read.contributions.filter((truth) => truth.state === "ready").map((truth) => truth.name);
+  }
+  return Array.isArray(read?.readyToSubmit) ? read.readyToSubmit : [];
+}
+
+/** The per-contribution truth a run reports, one entry per name it sent. */
+export function outcomesOf(read) {
+  return truthOf(read).map((truth) => ({
+    name: truth.name,
+    stem: truth.stem ?? stemOf(truth.name),
+    state: truth.state,
+    picture: truth.picture === true,
+    ready: truth.state === "ready",
+    id: truth.id ?? null,
+  }));
+}
+
+/** Names still open after the run: listed or arrived, but never validated. */
+export function pendingOf(read, names) {
+  const open = new Set(truthOf(read).filter((truth) => truth.state === "pending" || truth.state === "arrived")
+    .map((truth) => truth.stem ?? stemOf(truth.name)));
+  return (Array.isArray(names) ? names : []).filter((name) => open.has(stemOf(name)));
 }
 
 /** The readiness pacing a caller may inject; production keeps the real windows. */
@@ -194,7 +240,7 @@ export async function openGettySession(options) {
 function buildSession(ctx) {
   const { connection, page, options, cleanup } = ctx;
   const tempDir = mkdtempSync(path.join(tmpdir(), "getty-web-files-"));
-  const state = { batchId: null, expected: [], progress: null, reloads: 0 };
+  const state = { batchId: null, expected: [], files: [], progress: null, reloads: 0 };
   let closed = false;
   const dropTemp = () => {
     try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp already gone */ }
@@ -220,6 +266,8 @@ function buildSession(ctx) {
     async upload(input) {
       const icons = iconsOf(input);
       const files = icons.flatMap((icon) => icon.files.map((file) => ({ name: file.name, metadata: icon.metadata })));
+      // Kept for a retry: the same batch, the same metadata, no second attach.
+      state.files = files;
       for (const file of files) {
         if (typeof file.name === "string" && file.name !== "" && !state.expected.includes(file.name)) {
           state.expected.push(file.name);
@@ -253,10 +301,44 @@ function buildSession(ctx) {
       state.progress = { ...progressOf(done.report?.readiness?.state ?? result.state, state.reloads), phase: done.ok ? "done" : "failed" };
       // What counts as uploaded is the last reading, taken after the metadata was
       // saved: a file is accepted only when its card shows "Ready to submit".
-      const settledState = done.report?.readiness?.state ?? result.state;
+      const settled = done.report?.readiness?.state ?? result.state;
+      const pending = pendingOf(settled, files.map((file) => file.name));
       return {
         ...done, state: { ...result.state, ...done.report?.state }, report: done.report,
-        accepted: acceptedOf(done, result), failed: settledState?.failures ?? result.state?.failures ?? [],
+        accepted: acceptedOf(settled), failed: settled?.failures ?? result.state?.failures ?? [],
+        pending, verified: settled?.cardsPresent === true,
+        outcomes: outcomesOf(settled),
+        // A batch-level sentence: it explains the run without deciding a file.
+        batchNote: pending.length > 0 && done.ok
+          ? `Getty still lists ${pending.length} file(s) without "Ready to submit" — they stay open in the batch`
+          : null,
+        batchId: state.batchId,
+      };
+    },
+    /**
+     * Re-checks the files a finished run left open, in the same batch: their
+     * drawers are filled again, the grid is saved again, and the cards are read
+     * again. No new batch and no new attach, so nothing is duplicated.
+     */
+    async retry(input = {}) {
+      const wanted = new Set(Array.isArray(input.names) && input.names.length > 0 ? input.names : state.expected);
+      const files = state.files.filter((file) => wanted.has(file.name));
+      if (files.length === 0) {
+        return { ok: false, code: "bad-request", reason: "no file of this batch matches the retry" };
+      }
+      const done = await finalizeBatch(connection, page.sessionId, {
+        files, failed: [], complete: false,
+        onProgress: options.onProgress, signal: input.signal ?? options.signal, ...readyOptionsOf(options),
+        onState: (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "metadata" }; },
+      });
+      const settled = done.report?.readiness?.state ?? null;
+      state.progress = { ...progressOf(settled, state.reloads), phase: done.ok ? "done" : "failed" };
+      return {
+        ...done,
+        accepted: acceptedOf(settled), failed: settled?.failures ?? [],
+        pending: pendingOf(settled, files.map((file) => file.name)),
+        verified: settled?.cardsPresent === true, outcomes: outcomesOf(settled),
+        batchNote: done.ok ? null : done.reason ?? null,
         batchId: state.batchId,
       };
     },

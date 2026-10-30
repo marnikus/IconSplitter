@@ -4206,3 +4206,60 @@ or budget changed. Docs: `sor/stock-upload-getty-web.md` (arrival vs finish),
 `selectors/stock-upload.md` (picture starts metadata, chip finishes),
 `sor/stock-upload.md` (bar counting) — 8 964 / 8 568 / 8 067 B. `dist/` and
 `node_modules/` restored, not committed.
+
+## 2026-10-30 — Getty web: one Ready-icon truth, honest bar, last file pursued
+
+Implemented `archive/2026-10-30-getty-upload-honest-status/design.md` end to end
+(Fix A + Fix B). Root cause, now closed in code: a picture on a card was treated
+as an upload (`settledFiles`, `acceptedOf(read.uploaded)`), so 12 arrived files
+made a full 100 % bar while one card was `invalid-file-media` and two were still
+asleep; the readiness pass then returned at the first rejection, so the lagging
+file's drawer was never re-filled or re-saved.
+
+Helper (`tools/bridge/gettyweb/`): `readUploadState` returns `contributions` —
+per name `state` (`pending|arrived|ready|failed`), `picture`, `ready`, Getty's id
+— plus `cardNames`; `progressOf` emits `ready/failed/pending/verified` every time
+and `acceptedOf(read)` is the `readyToSubmit` list only; `notReadyContributions`
+skips rejected cards; `waitForReadyToSubmit` re-fills the drawer that never took
+the metadata (`refillAndSave`) before re-saving, extends its window while cards
+turn ready (ceiling 2× the budget, inside `uploadTimeoutFor`), and reports an
+unreadable page as `page` instead of `verified:false`+`ok:true`;
+`finalizeBatch` runs readiness **before** the rejection return and reports the
+final reading (`readiness.state`); `session.upload` answers `accepted/failed/
+pending/verified/outcomes/batchNote` and keeps the batch open when files are
+left; `POST /getty-web/retry` + `session.retry` re-check those names in the same
+batch (400 without names, 409 with no session). `/getty-web/upload` and `/retry`
+answer **200** with a partial payload whenever the page was read.
+
+App (`src/`): `progressmodel.uploadBar` counts `ready + failed`, caps at 99 %
+while running and is `finished` only when the run returned (titles: `Upload
+complete`, `Upload finished with N failed`, `… — N not ready to submit`, `… — N
+not verified`, `Upload cancelled`); `terminalFiles` replaces `settledFiles`;
+`progressLabel` says "Getty has N of M file(s), K ready to submit" and counts
+nothing from an unreadable page; `outcomeOf` splits into `rejectionOf` /
+`unreadyReason` (CC 11 → 5); `gettywebresult.ts` now owns the result types and
+`parseGettySuccess` (client 360 → 235 lines); `runupload` records `pendingFiles/
+unverifiedFiles` and hands back `retry: {sessionKey, names}`; `gettyretry.ts`
+(`readingOf`, `retryOpenGettyFiles`, `applyGettyRetry`, `runGettyRetry`) drives
+the finished bar's **Retry not-ready files** (`stock-progress-retry`), moving a
+row to `uploaded` only when its card says "Ready to submit".
+
+Tests: new `stockupload_progress_model` (6), `getty_retry` (5) and rewritten
+progress-UI cases (7, incl. retry visibility); `stockupload_getty_web` 18 (new
+"keeps a ready pair uploaded when a sibling card is still open", "reports a batch
+it could not verify as open work"); `getty_web_finalize` 25 (new "pursues the
+lagging card even when another card shows Upload failed", "re-fills a drawer
+Getty did not list yet on the second pass", "fails honestly when the batch page
+shows no cards to verify"); `getty_web_driver` / `getty_web_batch` /
+`getty_web_session` / `getty_web_upload` / `bridge_getty_web` updated to the new
+truth (partial payload, retry 400/409). No test skipped or loosened; the two old
+expectations that encoded the bug (100 % at arrival, `accepted` = arrived) were
+replaced, not worked around.
+
+Measured: `npx vitest run` **ALL PASS** (1 500+ tests, coverage lane included),
+`npx tsc --noEmit` clean, `npm run lint` 0 errors, `npm run quality:changed`
+GATE PASSED, `npm run verify` — every lane green except the native perf budget
+`synthetic 1000px 4-icon grid detects <200ms`, which measured 225 ms on this
+sandbox (untouched code, machine speed). Docs (`sor/stock-upload.md`,
+`sor/stock-upload-getty-web.md`, `selectors/stock-upload.md`) updated in place:
+8 688 / 8 962 / 8 977 B, all under the 9 000 B page cap.

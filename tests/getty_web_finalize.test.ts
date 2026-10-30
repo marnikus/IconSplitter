@@ -50,6 +50,12 @@ function successQueue(): Record<string, unknown[]> {
     completeBatch: [{ clicked: true, label: "Submit batch" }],
     confirmCompletion: [{ confirmed: true, label: "Submit", dialog: true }],
     readCompletionState: [{ submitted: true, canComplete: false }],
+    // The cards Getty validated: every file of the fixture pages carries the chip.
+    readUploadState: [{
+      cardsPresent: true, failed: [],
+      readyToSubmit: ["star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps"],
+      awaitingReady: [],
+    }],
   };
 }
 
@@ -255,7 +261,7 @@ describe("Getty web automatic finalize", () => {
       expect(result.reason).toContain("star_01");
     }
     expect(cdp.steps).not.toContain("completeBatch");
-    expect(progress.some((line) => /saving the metadata again/.test(line))).toBe(true);
+    expect(progress.some((line) => /filling and saving their metadata again/.test(line))).toBe(true);
   });
 
   it("keeps the engine and the helper's Date Created identical", () => {
@@ -426,18 +432,95 @@ describe("Getty web automatic finalize", () => {
     if (result.ok) expect(result.report.completion).toBeNull();
   });
 
-  it("fails honestly when the batch page offers no Complete/Submit control", async () => {
-    const queue = { ...successQueue(), completeBatch: [{ clicked: false, label: null }] };
+  it("fails honestly when the batch page shows no cards to verify", async () => {
+    // A control-less page is only "finished" when every card shows the chip. A page
+    // that renders no cards at all cannot say that, so it is an error, not a pass.
+    const queue = {
+      ...successQueue(),
+      completeBatch: [{ clicked: false, label: null }],
+      readUploadState: [{ cardsPresent: false }],
+    };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: true, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true, settleMs: 0, bulkSaveSettleMs: 0,
+      pollMs: 1, readyTimeoutMs: 20, readyResaves: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.code).toBe("page");
-      expect(result.reason).toContain("Complete/Submit");
+      expect(result.reason).toContain("no contribution cards");
+      expect(result.report.readiness).toMatchObject({ ok: false, verified: false });
     }
     expect(cdp.steps).not.toContain("confirmCompletion");
+    expect(cdp.steps).not.toContain("completeBatch");
+  });
+
+  it("pursues the lagging card even when another card shows Upload failed", async () => {
+    // The reported run: one card rejected, one card still ingesting. The run must
+    // not return at the rejection — it re-saves the grid, the lagging card turns
+    // ready, and only the rejected one stays failed.
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: [{ selected: 1, method: "select-all" }, { selected: 1, method: "select-all" }],
+      saveMetadataEditor: [
+        { saved: true, label: "Save" }, { saved: true, label: "Save metadata" }, { saved: true, label: "Save metadata" },
+      ],
+      readUploadState: [
+        { cardsPresent: true, readyToSubmit: ["star_01.eps"], failed: ["broken_02.eps"], awaitingReady: ["moon_02.eps"] },
+        { cardsPresent: true, readyToSubmit: ["star_01.eps", "moon_02.eps"], failed: ["broken_02.eps"], awaitingReady: [] },
+      ],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      failed: ["broken_02.eps"], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
+      pollMs: 0, readyRetryMs: 0, signal: new AbortController().signal,
+    });
+    // The readiness step ran and the open card was saved again, so it flipped.
+    expect(cdp.steps.filter((step) => step === "selectAllContributions")).toHaveLength(2);
+    expect(cdp.steps).toContain("readUploadState");
+    // Only the rejected file is reported, never the one that turned ready.
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toContain("broken_02.eps");
+      expect(result.reason).not.toContain("moon_02");
+      expect(result.report.readiness).toMatchObject({ ok: true, verified: true, notReady: [], resaves: 1 });
+    }
+  });
+
+  it("re-fills a drawer Getty did not list yet on the second pass", async () => {
+    // The first pass could not open the card at all; re-saving alone would leave
+    // its metadata untyped forever, so the retry re-fills it.
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: false, method: null, label: null },
+        { opened: true, method: "card", label: "star_01.jpg" },
+        { opened: true, method: "card", label: "moon_02.jpg" },
+      ],
+      readUploadState: [
+        { cardsPresent: true, readyToSubmit: ["star_01.eps"], awaitingReady: ["moon_02.eps"] },
+        { cardsPresent: true, readyToSubmit: ["star_01.eps", "moon_02.eps"], awaitingReady: [] },
+      ],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "moon_02.jpg", metadata: META }, { name: "star_01.jpg", metadata: META }],
+      complete: false, settleMs: 0, bulkSaveSettleMs: 0, pollMs: 0, readyRetryMs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // Three clicks: moon_02 twice (the failed pass and the re-fill), star_01 once.
+    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(3);
+    // The re-fill actually typed the metadata that the first pass could not.
+    expect(cdp.steps.filter((step) => step === "fillMetadataFields")).toHaveLength(2);
+    if (result.ok) {
+      expect(result.report.metadata).toContainEqual({ name: "moon_02.jpg", status: "row-not-found" });
+      expect(result.report.metadata).toContainEqual(
+        expect.objectContaining({ name: "moon_02.jpg", status: "saved" }),
+      );
+      expect(result.report.readiness).toMatchObject({ ok: true, verified: true, notReady: [] });
+    }
   });
 
   it("cancels between files without completing the batch", async () => {

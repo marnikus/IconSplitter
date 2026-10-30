@@ -555,7 +555,26 @@ export function failedContributions(expected, state) {
  */
 export function notReadyContributions(expected, state) {
   const ready = new Set((state?.readyToSubmit ?? []).map(stemOf));
-  return [...new Set(expected.map(stemOf))].filter((stem) => !ready.has(stem));
+  // A card Getty rejected can never turn ready: counting it as pending is what made
+  // the readiness step wait for it instead of pursuing the file still lagging.
+  const failed = new Set((state?.failed ?? []).map(stemOf));
+  return [...new Set(expected.map(stemOf))].filter((stem) => !ready.has(stem) && !failed.has(stem));
+}
+
+/** A page that renders no cards cannot state readiness at all — never a pass. */
+const NOT_READABLE = "Getty's batch page lists no contribution cards, so its \"Ready to submit\" state cannot be read — check the batch on the contributor page";
+
+/** The readiness pacing of one run: how long, how often, how many saves. */
+function readyPlan(options, expected) {
+  const budget = options.readyTimeoutMs ?? READY_TIMEOUT_MS;
+  return {
+    retryMs: options.readyRetryMs ?? READY_RETRY_MS,
+    maxResaves: options.readyResaves ?? READY_RESAVES,
+    total: contributionCount(expected),
+    budget,
+    // Progress extends the window, but never past this: a dead page must end.
+    ceiling: Date.now() + (options.readyCeilingMs ?? budget * 2),
+  };
 }
 
 /** Why a file Getty never marked ready is reported — named, never counted only. */
@@ -565,67 +584,94 @@ function notReadyReason(pending, resaves) {
   return `Getty does not show its "Ready to submit" icon for ${pending.length} file(s) (${named})${again} — the upload is not complete`;
 }
 
+/** One reading that also hands the panel its new counts; null when unreadable. */
+async function readOnce(connection, sessionId, names, options) {
+  const read = await readStateSafe(connection, sessionId, names);
+  if (!read.ok) return null;
+  options?.onState?.(read.state);
+  return read.state;
+}
+
+/**
+ * Re-fills the drawers that never took the metadata, then saves the grid again.
+ * A card whose drawer could not be opened on the first pass (row not found yet,
+ * editor locked) gets a real second chance here — re-saving alone cannot help a
+ * file whose metadata was never typed.
+ */
+async function refillAndSave(connection, sessionId, options, pending) {
+  const wanted = new Set(pending);
+  const status = options.metadataStatus ?? new Map();
+  const done = new Set();
+  const refilled = [];
+  for (const file of options.files ?? []) {
+    const stem = stemOf(file.name);
+    if (!file.metadata || !wanted.has(stem) || done.has(stem)) continue;
+    if (status.get(file.name) === "saved") continue;
+    done.add(stem);
+    const filled = await fillOneFileMetadata(connection, sessionId, file, options);
+    status.set(file.name, filled.status);
+    refilled.push(filled);
+  }
+  if (refilled.length > 0) options.onRefilled?.(refilled);
+  await saveEverySelected(connection, sessionId, options).catch(() => null);
+}
+
 /**
  * Waits until every contribution shows Getty's own "Ready to submit" icon, the
- * only proof that a file may be submitted. A card that stays unvalidated gets the
- * grid-wide Save metadata pressed again (only the pending ones matter), because
- * that second save is what flips it. A page that cannot report readiness at all
- * (no contribution cards, or a reading that failed) is reported as unverified
- * instead of being guessed either way.
+ * only proof that a file may be submitted. Rejected cards are left out (they can
+ * never turn ready); every other open card is pursued — re-filled when its drawer
+ * never took the metadata, then re-saved — and each card that turns ready buys
+ * the run more time, so the last file gets a real chance. A page that cannot
+ * report readiness at all is an error, never a pass.
  */
-async function waitForReadyToSubmit(connection, sessionId, expected, options, first) {
-  const retryMs = options.readyRetryMs ?? READY_RETRY_MS;
-  const deadline = Date.now() + (options.readyTimeoutMs ?? READY_TIMEOUT_MS);
-  const maxResaves = options.readyResaves ?? READY_RESAVES;
-  const total = contributionCount(expected);
+async function waitForReadyToSubmit(connection, sessionId, expected, options) {
+  const plan = readyPlan(options, expected);
+  const stems = [...new Set(expected.map(stemOf))];
+  let deadline = Date.now() + plan.budget;
   let resaves = 0;
-  let nextSaveAt = Date.now() + retryMs;
-  let state = first ?? null;
-  if (state === null) {
-    const read = await readStateSafe(connection, sessionId, expected);
-    state = read.ok ? read.state : null;
-  }
-  // A page that renders no contribution cards (or did not answer) cannot state
-  // readiness: report it unverified rather than guess either way.
-  if (state === null || state.cardsPresent === false) {
-    return { ok: true, verified: false, ready: 0, total, notReady: [], resaves, state };
-  }
+  let nextSaveAt = Date.now() + plan.retryMs;
+  let best = 0;
+  let state = await readOnce(connection, sessionId, expected, options);
   for (;;) {
-    const pending = notReadyContributions(expected, state);
-    if (pending.length === 0) {
-      return { ok: true, verified: true, ready: total, total, notReady: [], resaves, state };
+    const readable = state !== null && state.cardsPresent !== false;
+    const pending = readable ? notReadyContributions(expected, state) : stems;
+    if (readable && pending.length === 0) {
+      return { ok: true, verified: true, ready: plan.total, total: plan.total, notReady: [], resaves, state };
     }
-    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", notReady: pending, total, resaves, state };
-    if (Date.now() >= deadline) return { ok: false, code: "timeout", reason: notReadyReason(pending, resaves), notReady: pending, total, resaves, state };
-    if (resaves < maxResaves && Date.now() >= nextSaveAt) {
+    if (options.signal?.aborted) {
+      return { ok: false, code: "cancelled", reason: "upload cancelled", notReady: pending, total: plan.total, resaves, state };
+    }
+    // Progress-driven window: every card that turned ready extends the deadline.
+    if (plan.total - pending.length > best) {
+      best = plan.total - pending.length;
+      deadline = Math.min(plan.ceiling, Math.max(deadline, Date.now() + plan.budget));
+    }
+    if (Date.now() >= deadline) {
+      return readable
+        ? { ok: false, code: "timeout", reason: notReadyReason(pending, resaves), notReady: pending, total: plan.total, resaves, state }
+        : { ok: false, code: "page", reason: NOT_READABLE, notReady: pending, total: plan.total, resaves, state };
+    }
+    if (resaves < plan.maxResaves && Date.now() >= nextSaveAt) {
       resaves += 1;
-      nextSaveAt = Date.now() + retryMs;
-      options.onProgress?.(`${pending.length} file(s) are not ready to submit — saving the metadata again (${resaves}/${maxResaves})`);
-      await saveEverySelected(connection, sessionId, options).catch(() => null);
-      const reread = await readStateSafe(connection, sessionId, expected);
-      if (reread.ok) {
-        state = reread.state;
-        options.onState?.(state);
-      }
+      nextSaveAt = Date.now() + plan.retryMs;
+      options.onProgress?.(`${pending.length} file(s) are not ready to submit — filling and saving their metadata again (${resaves}/${plan.maxResaves})`);
+      await refillAndSave(connection, sessionId, options, pending);
+      state = (await readOnce(connection, sessionId, expected, options)) ?? state;
       continue;
     }
     await sleep(pollMsOf(options));
-    const read = await readStateSafe(connection, sessionId, expected);
-    if (read.ok) {
-      state = read.state;
-      // The panel's bar follows these readings: each card that turns ready while
-      // the metadata is being saved is one more file the run can submit.
-      options.onState?.(state);
-    }
+    state = (await readOnce(connection, sessionId, expected, options)) ?? state;
   }
 }
 
 /** The readiness part of a report: what Getty marked, and how often it was asked. */
 function readinessReport(readiness) {
   return {
-    ok: readiness.ok === true, verified: readiness.verified !== false,
+    ok: readiness.ok === true, verified: readiness.verified === true,
     ready: readiness.ready ?? 0, total: readiness.total ?? 0,
     notReady: readiness.notReady ?? [], resaves: readiness.resaves ?? 0,
+    // The reading readiness ended on: it is the one that can show the icon.
+    state: readiness.state ?? null,
   };
 }
 
@@ -658,7 +704,7 @@ async function clickComplete(connection, sessionId, options) {
  * made a finished run look failed.
  */
 async function finishOnIcons(connection, sessionId, expected, options, state) {
-  const readiness = await waitForReadyToSubmit(connection, sessionId, expected, options, state);
+  const readiness = await waitForReadyToSubmit(connection, sessionId, expected, options);
   const report = {
     metadata: [], readiness: readinessReport(readiness), completion: NO_COMPLETION,
     state: { submitted: false, canComplete: false },
@@ -670,9 +716,7 @@ async function finishOnIcons(connection, sessionId, expected, options, state) {
       reason: `Getty shows no Complete/Submit control and ${readiness.reason}`,
     };
   }
-  options.onProgress?.(readiness.verified
-    ? "every file shows Ready to submit — Getty has no Complete button here, so this batch is finished"
-    : "Getty shows no Complete button and no contribution cards — nothing is left to click on this batch");
+  options.onProgress?.("every file shows Ready to submit — Getty has no Complete button here, so this batch is finished");
   return { ok: true, report };
 }
 
@@ -744,7 +788,7 @@ export async function finishBatch(connection, sessionId, options = {}) {
   const control = await runDriverStep(connection, sessionId, "completionState");
   if (!control?.present) return finishOnIcons(connection, sessionId, expected, options, state);
   if (state?.cardsPresent !== false && notReadyContributions(expected, state).length > 0) {
-    const readiness = await waitForReadyToSubmit(connection, sessionId, expected, options, state);
+    const readiness = await waitForReadyToSubmit(connection, sessionId, expected, options);
     if (!readiness.ok) {
       return { ok: false, code: readiness.code ?? "timeout", reason: readiness.reason, state: readiness.state ?? state };
     }
@@ -797,6 +841,15 @@ export async function finalizeBatch(connection, sessionId, options) {
   if (filled.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", report };
   // The dates and text are in every drawer, so one save now covers all the files.
   if (anyDrawerSaved(filled.report)) report.bulkSave = await saveEverySelected(connection, sessionId, options);
+  const names = namesOf((options.files ?? []).map((file) => file?.name));
+  // Readiness runs for every card that is still open, rejected ones included: an
+  // early return on a rejection is what left the last file never re-saved.
+  const status = new Map(filled.report.map((entry) => [entry.name, entry.status]));
+  const readiness = await waitForReadyToSubmit(connection, sessionId, names, {
+    ...options, metadataStatus: status, onRefilled: (entries) => report.metadata.push(...entries),
+  });
+  report.readiness = readinessReport(readiness);
+  if (!readiness.ok) return { ok: false, code: readiness.code ?? "timeout", reason: readiness.reason, report };
   const rejected = namesOf(options.failed);
   if (rejected.length > 0) {
     // Submitting a batch that still shows "Upload failed" cards locks those icons out.
@@ -805,10 +858,6 @@ export async function finalizeBatch(connection, sessionId, options) {
       reason: `Getty reports "Upload failed" for ${rejected.length} file(s) (${rejected.slice(0, 3).join(", ")}) — the batch is not completed`,
     };
   }
-  const names = namesOf((options.files ?? []).map((file) => file?.name));
-  const readiness = await waitForReadyToSubmit(connection, sessionId, names, options);
-  report.readiness = readinessReport(readiness);
-  if (!readiness.ok) return { ok: false, code: readiness.code ?? "timeout", reason: readiness.reason, report };
   if (options.complete === false) return { ok: true, report };
   return finishValidated(connection, sessionId, options, report, readiness);
 }

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { StockUploadPlan } from "../lib/stockupload/plan";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
 import UploadRowBadgeSettings from "../upload/UploadRowBadgeSettings";
+import type { GettyWebRetryTarget } from "./batchtypes";
 import { uploadBar, type UploadBar } from "./progressmodel";
 import type { StockUploadApi } from "./useStockUpload";
 
@@ -106,7 +107,7 @@ function StockProgressPortal({ g }: { g: StockUploadApi }) {
       percent={bar.percent}
       complete={bar.finished}
       leading={<span className="svg-progress-check" aria-hidden="true">{bar.finished ? "✓" : "◍"}</span>}
-      actions={<ProgressActions g={g} bar={bar} running={g.model.uploading} />}
+      actions={<ProgressActions g={g} bar={bar} running={g.model.uploading} retry={g.model.retry} />}
     />
   );
   const mount = document.getElementById("stock-upload-progress-mount");
@@ -117,12 +118,27 @@ function StockProgressPortal({ g }: { g: StockUploadApi }) {
  * A finished bar is done: it offers the same ✕ close as the other process
  * headers instead of a Cancel that has nothing left to stop.
  */
-function ProgressActions({ g, bar, running }: { g: StockUploadApi; bar: UploadBar; running: boolean }) {
+function ProgressActions(
+  { g, bar, running, retry }: {
+    g: StockUploadApi; bar: UploadBar; running: boolean; retry: GettyWebRetryTarget | null | undefined;
+  },
+) {
   const close = (
     <button type="button" className="svg-progress-close" data-testid="stock-progress-dismiss"
       aria-label="Close upload progress" onClick={g.dismissProgress}>✕</button>
   );
-  if (bar.finished) return <>{close}</>;
+  if (bar.finished) {
+    // Only a batch the helper still holds can be retried: no button otherwise.
+    if (!retry || retry.names.length === 0) return <>{close}</>;
+    return (
+      <>
+        <button type="button" className="svg-btn tiny" data-testid="stock-progress-retry" onClick={g.retryOpenFiles}>
+          Retry not-ready files
+        </button>
+        {close}
+      </>
+    );
+  }
   return (
     <>
       <button type="button" className="svg-btn tiny" data-testid="stock-progress-cancel" onClick={g.cancelUpload}>

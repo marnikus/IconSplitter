@@ -16,6 +16,7 @@ import type { StockModelAction, StockRefs, StockUploadModel } from "./model";
 import type { StockUploadPrefs } from "./prefsstore";
 import { ALL_STOCK_FILTER, initialMetaDraft, type StockListFilter, type StockMetaDraft, type StockUploadSort } from "./rowlist";
 import { log } from "../log/logstore";
+import { runGettyRetry } from "./gettyretry";
 import { executeStockUploadBatch, type UploadBatchSummary, type UploadProgressStep } from "./runupload";
 import { rememberStockRoot } from "./scan";
 
@@ -49,6 +50,8 @@ export interface StockPanelOps {
   cancelUpload: () => void;
   /** Closes a finished (or cancelled) bar there is nothing left to watch. */
   dismissProgress: () => void;
+  /** Re-checks the files a finished Getty run left open, in the same batch. */
+  retryOpenFiles: () => void;
   downloadGettyCsv: () => void;
 }
 
@@ -111,17 +114,21 @@ async function probeUploadHelpers(c: OpsCtx, targets: readonly StockFtpPreset[])
   return gettyWeb.ok ? null : gettyWeb.reason;
 }
 
+/** Probes every helper this run will talk to; the reason it cannot start, or null. */
+async function uploadBlocked(c: OpsCtx, plan: StockUploadPlan): Promise<string | null> {
+  const network = plan.targets.filter((target) => target.protocol !== "esp-batch");
+  if (network.length === 0) return null;
+  return probeUploadHelpers(c, network);
+}
+
 async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<void> {
   if (!c.r.root.current) return;
-  const networkTargets = plan.targets.filter((t) => t.protocol !== "esp-batch");
   c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Preparing upload batch…" } } });
-  if (networkTargets.length > 0) {
-    const failure = await probeUploadHelpers(c, networkTargets);
-    if (failure !== null) {
-      c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
-      c.say(failure, true);
-      return;
-    }
+  const failure = await uploadBlocked(c, plan);
+  if (failure !== null) {
+    c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
+    c.say(failure, true);
+    return;
   }
   const controller = new AbortController();
   c.r.abort.current = controller;
@@ -136,18 +143,27 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
   });
   c.r.abort.current = null;
   const msg = summarizeBatch(summary, plan.targets.length);
-  c.dispatch({ type: "patch", patch: { uploading: false, progress: finishedProgress(plan, summary, msg.text) } });
+  c.dispatch({
+    type: "patch",
+    patch: { uploading: false, progress: finishedProgress(plan, summary, msg.text), retry: summary.retry ?? null },
+  });
   c.say(msg.text, msg.err);
 }
 
 /**
- * The bar stays as the finished state (100%, ✕ to close) instead of vanishing or
- * sitting at 100% offering a Cancel that no longer does anything.
+ * The bar stays as the finished state (✕ to close) instead of vanishing or
+ * offering a Cancel that no longer does anything. `done` counts verified
+ * outcomes only, so a run that left files open cannot render as a full bar that
+ * claims success.
  */
 function finishedProgress(plan: StockUploadPlan, summary: UploadBatchSummary, label: string): UploadProgressStep {
   return {
-    done: plan.tasks.length, total: plan.tasks.length, label,
+    done: Math.min(plan.tasks.length, summary.uploadedFiles + summary.failedFiles),
+    total: plan.tasks.length, label,
     complete: true, failed: summary.failedFiles,
+    pending: summary.pendingFiles ?? 0,
+    unverified: summary.unverifiedFiles ?? 0,
+    cancelled: summary.cancelled,
   };
 }
 
@@ -190,10 +206,24 @@ function copyMetaField(c: OpsCtx, item: ExportedItem, field: "title" | "descript
     .catch(() => c.say("Clipboard blocked — copy text manually", true));
 }
 
+/** Binds "Retry not-ready files" to the live panel state. */
+function retryOpenFilesOp(ref: { current: OpsCtx }): () => void {
+  return () => {
+    const c = ref.current;
+    void runGettyRetry({
+      bridgeUrl: c.model.prefs.bridgeUrl,
+      preset: c.presetState.presets.find((preset) => preset.protocol === "getty-web") ?? null,
+      retry: c.model.retry, progress: c.model.progress, items: c.items,
+      loadCreds: readFtpCredentials, say: c.say,
+      apply: (patch) => c.dispatch({ type: "patch", patch }),
+    });
+  };
+}
+
 function buildMetaAndUploadOps(ref: { current: OpsCtx }): Pick<
   StockPanelOps,
   "metaDraftOf" | "editMeta" | "acceptMeta" | "copyMeta" | "startUploadFlow" | "confirmUpload"
-  | "cancelUpload" | "dismissProgress" | "downloadGettyCsv"
+  | "cancelUpload" | "dismissProgress" | "retryOpenFiles" | "downloadGettyCsv"
 > {
   return {
     metaDraftOf: (item) => ref.current.model.drafts[item.id] ?? initialMetaDraft(item),
@@ -209,7 +239,8 @@ function buildMetaAndUploadOps(ref: { current: OpsCtx }): Pick<
       ref.current.r.abort.current?.abort();
       ref.current.say("Cancelling upload — completed files stay on server");
     },
-    dismissProgress: () => ref.current.dispatch({ type: "patch", patch: { progress: null } }),
+    dismissProgress: () => ref.current.dispatch({ type: "patch", patch: { progress: null, retry: null } }),
+    retryOpenFiles: retryOpenFilesOp(ref),
     downloadGettyCsv: () => triggerGettyCsvDownload(ref.current),
   };
 }

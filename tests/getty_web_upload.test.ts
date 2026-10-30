@@ -84,8 +84,12 @@ describe("Getty web loopback client", () => {
       batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       complete: true, fetchImpl,
     });
-    // `failed` is normalized even when the helper reports none.
-    expect(result).toEqual({ ...reply, failed: [] });
+    // Every honesty field is normalized: nothing the helper left out counts, and
+    // `ready` is absent rather than false — absent never means ready.
+    expect(result).toEqual({
+      ...reply, failed: [], pending: [], outcomes: [], verified: false, partial: false, batchNote: null,
+    });
+    expect("ready" in (result as object)).toBe(false);
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:47391/getty-web/upload");
     const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
@@ -192,10 +196,17 @@ describe("Getty web loopback client", () => {
 describe("Getty web live progress", () => {
   it("reads the per-file counts the helper reports for a running upload", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, {
-      ok: true, progress: { phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4, reloads: 1 },
+      ok: true, progress: {
+        phase: "uploading", total: 4, uploaded: 3, ready: 2, failed: 1, listed: 4,
+        pending: 1, verified: true, reloads: 1,
+      },
     }));
     const progress = await gettyWebProgress("http://127.0.0.1:47391", "run 7", fetchImpl as unknown as typeof fetch);
-    expect(progress).toEqual({ phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4, reloads: 1 });
+    // Every count is kept, including the zeros: a dropped zero reads as "unknown".
+    expect(progress).toEqual({
+      phase: "uploading", total: 4, uploaded: 3, ready: 2, failed: 1, listed: 4,
+      pending: 1, verified: true, reloads: 1,
+    });
     const [url] = fetchImpl.mock.calls[0] as unknown as [string];
     expect(url).toBe("http://127.0.0.1:47391/getty-web/progress?sessionKey=run%207");
   });

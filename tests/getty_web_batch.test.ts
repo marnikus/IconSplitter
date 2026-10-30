@@ -302,7 +302,9 @@ describe("Getty web upload verification", () => {
       await vi.advanceTimersByTimeAsync(4000);
       const settled = await result;
       expect(settled.ok).toBe(true);
-      expect(settled.state).toMatchObject({ contributions: ["icon-map-pin_5_01.eps"], fileCount: 1, ready: true });
+      expect(settled.state).toMatchObject({ cardNames: ["icon-map-pin_5_01.eps"], fileCount: 1, ready: true });
+      // Both names belong to the one card, which Getty marks ready here.
+      expect(settled.state.contributions.map((truth: { state: string }) => truth.state)).toEqual(["ready", "ready"]);
       expect(settled.state.namesSeen).toEqual(PAIR);
       // Getty's own "Ready to submit" icon on the card is what counts as uploaded.
       expect(settled.state.uploaded).toEqual(PAIR);
@@ -329,7 +331,7 @@ describe("Getty web upload verification", () => {
     expect(page.attached).toEqual(names.map((name) => `/staged/${name}`));
     expect(result.ok).toBe(true);
     expect(result.state.namesSeen).toEqual(names);
-    expect(result.state.contributions).toEqual(["star_01.eps", "moon_02.eps"]);
+    expect(result.state.cardNames).toEqual(["star_01.eps", "moon_02.eps"]);
   });
 
   it("settles on Getty's Ready-to-submit icon when no thumbnail is rendered", async () => {

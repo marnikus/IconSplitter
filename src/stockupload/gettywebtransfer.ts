@@ -9,8 +9,8 @@ import {
 } from "../lib/stockupload/gettyweb";
 import { gettyWebProgress, type GettyWebProgress } from "../lib/stockupload/gettyprogress";
 import {
-  uploadBridgeGettyWeb, type GettyWebFile, type GettyWebIcon, type GettyWebRejection,
-  type GettyWebResult, type GettyWebUploadInput,
+  uploadBridgeGettyWeb, type GettyWebFile, type GettyWebIcon,
+  type GettyWebResult, type GettyWebSuccess, type GettyWebUploadInput,
 } from "../lib/stockupload/gettywebclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, SkippedFormat } from "../lib/stockupload/plan";
@@ -49,6 +49,12 @@ export interface GettyWebRunOutcome {
   /** Non-empty when an icon (or the whole call) did not upload. */
   reason: string;
   icons: GettyWebIconOutcome[];
+  /** Files still listed but not validated when the helper answered. */
+  pending?: string[];
+  /** The helper could read the cards, so every outcome above is real. */
+  verified?: boolean;
+  /** A batch-level sentence (e.g. a refused submission) that changes no file. */
+  batchNote?: string | null;
   /** Set on success: the batch is only filled, the run submits it at the end. */
   deferCompletion?: boolean;
 }
@@ -96,23 +102,45 @@ async function prepareIcons(input: GettyWebRunInput): Promise<GettyWebIcon[] | s
   return prepared;
 }
 
+function stemsOf(icon: GettyWebIconInput): string[] {
+  return gettyWebFileOrder(icon.tasks).map((task) => gettyWebStem(task.fileName));
+}
+
+/** Getty's own "Upload failed" for this icon, named with the id it printed. */
+function rejectionOf(icon: GettyWebIconInput, res: GettyWebSuccess): GettyWebIconOutcome | null {
+  const stems = stemsOf(icon);
+  const rejected = (res.failed ?? []).find((entry) => stems.includes(gettyWebStem(entry.name)));
+  if (!rejected) return null;
+  const id = rejected.id ? ` (${rejected.id})` : "";
+  return { ok: false, reason: `Getty reports "Upload failed" for ${rejected.name}${id}` };
+}
+
+/** Why nothing proves this icon uploaded: unreadable page, arrived, or absent. */
+function unreadyReason(icon: GettyWebIconInput, res: GettyWebSuccess): string {
+  const stems = stemsOf(icon);
+  const named = stems[0] ?? "this icon";
+  if (res.verified === false) {
+    return `Getty's batch page could not be read to verify ${named} — not counted as uploaded`;
+  }
+  const truth = (res.outcomes ?? []).find((entry) => stems.includes(entry.stem));
+  if (truth?.picture === true || truth?.state === "arrived") {
+    return `Getty has ${named} but does not show "Ready to submit" — not counted as uploaded`;
+  }
+  return `Getty does not show its "Ready to submit" icon for ${named} — not counted as uploaded`;
+}
+
 /**
  * Only a card carrying Getty's own "Ready to submit" icon proves the file was
- * uploaded; a card reading "Upload failed" is named as such, and anything else is
- * not claimed as uploaded. A thumbnail proves nothing.
+ * uploaded. A picture means the bytes arrived, which proves nothing; "Upload
+ * failed" is named with Getty's id, and a page that could not be read leaves the
+ * file unproven instead of guessed either way.
  */
-function outcomeOf(
-  icon: GettyWebIconInput, accepted: readonly string[], failed: readonly GettyWebRejection[],
-): GettyWebIconOutcome {
-  const stems = gettyWebFileOrder(icon.tasks).map((task) => gettyWebStem(task.fileName));
-  const stemOf = (name: string) => gettyWebStem(name);
-  const rejected = failed.find((entry) => stems.includes(stemOf(entry.name)));
-  if (rejected) {
-    const id = rejected.id ? ` (${rejected.id})` : "";
-    return { ok: false, reason: `Getty reports "Upload failed" for ${rejected.name}${id}` };
-  }
-  if (accepted.some((name) => stems.includes(stemOf(name)))) return { ok: true, reason: "" };
-  return { ok: false, reason: `Getty does not show its "Ready to submit" icon for ${stems[0] ?? "this icon"} — not counted as uploaded` };
+function outcomeOf(icon: GettyWebIconInput, res: GettyWebSuccess): GettyWebIconOutcome {
+  const rejected = rejectionOf(icon, res);
+  if (rejected) return rejected;
+  const stems = stemsOf(icon);
+  const ready = (res.accepted ?? []).some((name) => stems.includes(gettyWebStem(name)));
+  return ready ? { ok: true, reason: "" } : { ok: false, reason: unreadyReason(icon, res) };
 }
 
 const GETTY_WEB_NOT_COMPLETED_NOTE =
@@ -147,38 +175,45 @@ export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyW
     complete: false, sessionKey: input.sessionKey, signal: input.signal,
   });
   if (!res.ok) return failed(input, res.reason);
-  const outcomes = input.icons.map((icon) => outcomeOf(icon, res.accepted ?? [], res.failed ?? []));
+  const outcomes = input.icons.map((icon) => outcomeOf(icon, res));
   const reason = outcomes.find((entry) => !entry.ok)?.reason ?? "";
-  return { ok: reason === "", reason, icons: outcomes, deferCompletion: true };
+  return {
+    ok: reason === "", reason, icons: outcomes,
+    pending: res.pending ?? [], verified: res.verified === true,
+    batchNote: res.batchNote ?? null, deferCompletion: true,
+  };
 }
 
 /**
- * The panel line for a live upload reading. While the bytes are moving it counts
- * the files Getty already has (its picture is on the page); once the metadata is
- * being saved it counts the cards that turned "Ready to submit", which is what
- * actually finishes the run.
+ * The panel line for a live upload reading. Arrival is reported as arrival —
+ * "Getty has N of M file(s)" — and only the cards Getty itself marked "Ready to
+ * submit" are ever called ready. A reading that could not see the cards says so
+ * instead of borrowing the picture count.
  */
 export function progressLabel(progress: GettyWebProgress, targetName: string): string {
   const of = progress.total > 0 ? ` of ${progress.total}` : "";
   const failed = progress.failed > 0 ? `, ${progress.failed} failed` : "";
   const reloaded = progress.reloads > 0 ? " — page reloaded to get it moving" : "";
-  const ready = progress.ready ?? 0;
+  const open = progress.pending > 0 ? `, ${progress.pending} still ingesting` : "";
+  if (!progress.verified) return `${targetName}: cannot read Getty's cards — nothing is counted yet${reloaded}`;
   if (progress.phase === "uploading") {
-    if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
-    return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}${reloaded}`;
+    return `${targetName}: Getty has ${progress.uploaded}${of} file(s), ${progress.ready} ready to submit${failed}${reloaded}`;
   }
-  if (ready === 0 && progress.failed === 0) return `${targetName}: saving metadata ${progress.listed}${of} file(s)${reloaded}`;
-  return `${targetName}: ${ready}${of} file(s) ready to submit${failed}${reloaded}`;
+  return `${targetName}: ${progress.ready}${of} file(s) ready to submit${failed}${open}${reloaded}`;
 }
 
 /**
- * Files the bar may count as done: the ones whose picture rendered (Getty has
- * them) or, once the metadata is being saved, the ones that turned "Ready to
- * submit" — whichever is further, so the count never runs backwards while the
- * run finishes. Rejected files count straight away.
+ * Files the bar may count as done: **verified** outcomes only — the cards Getty
+ * marked "Ready to submit" plus the ones it rejected. A picture is not an
+ * outcome, so the count can never reach the total before the page has spoken.
  */
-export function settledFiles(progress: GettyWebProgress): number {
-  return Math.max(progress.uploaded, progress.ready ?? 0) + progress.failed;
+export function terminalFiles(progress: GettyWebProgress): number {
+  return progress.ready + progress.failed;
+}
+
+/** Files whose picture Getty rendered: bytes in, nothing proven yet. */
+export function arrivedFiles(progress: GettyWebProgress): number {
+  return progress.uploaded;
 }
 
 const PROGRESS_POLL_MS = 1000;

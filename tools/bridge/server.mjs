@@ -24,7 +24,7 @@ import { connectBrowser, findBrowser, resetProfile, resolveProfileDir } from "./
 import { openCdp } from "./gettyweb/cdp.mjs";
 import {
   gettyWebHealth, handleGettyWebClose, handleGettyWebFinish, handleGettyWebProgress,
-  handleGettyWebTest, handleGettyWebUpload,
+  handleGettyWebRetry, handleGettyWebTest, handleGettyWebUpload,
 } from "./gettyweb/routes.mjs";
 import { cdpFailureReason } from "./gettyweb/session.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
@@ -207,6 +207,7 @@ async function route(req, res, port) {
     return handleGettyWebUpload(req, res, readBinaryBody, json, config.ftpMaxBytes);
   }
   if (req.method === "POST" && url === "/getty-web/test") return handleGettyWebTest(req, res, readBody, json);
+  if (req.method === "POST" && url === "/getty-web/retry") return handleGettyWebRetry(req, res, readBody, json);
   if (req.method === "POST" && url === "/getty-web/finish") return handleGettyWebFinish(req, res, readBody, json);
   if (req.method === "POST" && url === "/getty-web/close") return handleGettyWebClose(req, res, readBody, json);
   if (req.method === "GET" && url === "/getty-web/progress") return handleGettyWebProgress(req, res, json);

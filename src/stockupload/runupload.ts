@@ -13,7 +13,8 @@ import type { ItemTracker, RunCounters, UploadBatchDeps, UploadBatchSummary } fr
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
 import { finishGettyWebRun } from "./gettywebfinish";
 import {
-  completionNote, progressLabel, settledFiles, uploadGettyWebRun, watchGettyProgress,
+  completionNote, progressLabel, terminalFiles, uploadGettyWebRun, watchGettyProgress,
+  type GettyWebIconInput, type GettyWebRunOutcome,
 } from "./gettywebtransfer";
 import { markUploadInFlight } from "./journal";
 import {
@@ -122,7 +123,7 @@ async function runNetworkGroups(ctx: NetworkCtx): Promise<number> {
 /**
  * Wires Getty's live counts into the panel: each card Getty marks "Ready to
  * submit" (or its own "Upload failed") moves the bar at once, instead of only at
- * the end of the run.
+ * the end of the run. A picture on a card moves the *line*, never the bar.
  */
 function liveGettyProgress(ctx: NetworkCtx): () => void {
   const base = ctx.counters.done;
@@ -137,19 +138,44 @@ function liveGettyProgress(ctx: NetworkCtx): () => void {
         ctx.deps.logFn?.(pageReloadedSpec({ target: ctx.target.name, reloads: reload }));
       }
       ctx.deps.onProgress?.({
-        done: Math.min(ctx.counters.total, base + settledFiles(progress)),
+        done: Math.min(ctx.counters.total, base + terminalFiles(progress)),
         total: ctx.counters.total,
         label: progressLabel(progress, ctx.target.name),
+        failed: progress.failed,
+        pending: progress.pending,
+        unverified: progress.verified ? 0 : progress.listed,
       });
     },
     ctx.deps.gettyWebProgressFn,
   );
 }
 
-/**
- * The Getty web target sends **all** selected icons in one request, so Getty
- * receives every pair in one attach; per-icon HTTP calls used to stop after one.
- */
+/** Writes one upload answer into the run: each icon's fate, the bar's counts, and
+ * the still-open batch a retry can talk to. Returns how many icons uploaded. */
+function applyGettyRunOutcome(
+  ctx: NetworkCtx, icons: GettyWebIconInput[], res: GettyWebRunOutcome,
+): number {
+  const { counters } = ctx;
+  // Listed-but-unvalidated and unreadable files are both open work: name them.
+  counters.pendingFiles = res.pending?.length ?? 0;
+  counters.unverifiedFiles = res.verified === false ? icons.reduce((n, icon) => n + icon.tasks.length, 0) : 0;
+  if (res.batchNote) counters.lastError = res.batchNote;
+  let uploaded = 0;
+  icons.forEach((icon, index) => {
+    const outcome = res.icons[index] ?? { ok: false, reason: res.reason };
+    if (outcome.ok) uploaded += 1;
+    else counters.lastError = outcome.reason;
+    for (const task of icon.tasks) {
+      recordTaskResult(task, outcome.ok ? { ok: true } : { ok: false, reason: outcome.reason }, ctx);
+    }
+  });
+  const open = icons.flatMap((icon, index) => (res.icons[index]?.ok ? [] : icon.tasks.map((task) => task.fileName)));
+  // The batch stays open after a run with unverified files, so it can be retried.
+  counters.retry = open.length > 0 ? { sessionKey: ctx.sessionKey, names: open } : null;
+  return uploaded;
+}
+
+/** Getty takes **all** icons in one request: one attach for the whole run. */
 async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
   const icons = groupEspTasks(ctx.targetTasks).map((tasks) => ({
     tasks, missing: ctx.plan.skippedMissing, item: ctx.itemsById.get(tasks[0].itemId),
@@ -164,16 +190,13 @@ async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
     submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey: ctx.sessionKey,
     bridgeUrl: ctx.deps.bridgeUrl, signal: ctx.deps.signal, uploadFn: ctx.deps.gettyWebUploadFn,
   }).finally(stop);
-  let uploaded = 0;
-  icons.forEach((icon, index) => {
-    const outcome = res.icons[index] ?? { ok: false, reason: res.reason };
-    if (outcome.ok) uploaded += 1;
-    else ctx.counters.lastError = outcome.reason;
-    for (const task of icon.tasks) {
-      recordTaskResult(task, outcome.ok ? { ok: true } : { ok: false, reason: outcome.reason }, ctx);
-    }
-  });
-  return uploaded;
+  return applyGettyRunOutcome(ctx, icons, res);
+}
+
+/** Keeps the per-icon reason AND the batch's own. */
+function mergeFinishReason(counters: RunCounters, fin: { error?: string | null; note?: string | null }): void {
+  if (fin.error) counters.lastError = [counters.lastError, fin.error].filter(Boolean).join(" — ");
+  else if (fin.note) counters.lastError = fin.note;
 }
 
 /** Submits the run's one batch once the last icon is in it, and says so. */
@@ -187,8 +210,7 @@ async function submitGettyBatch(
     bridgeUrl: deps.bridgeUrl, preset: target, creds, sessionKey, uploaded, finishFn: deps.finishGettyWebFn,
   });
   // Keep both: the per-icon reason names the file, the finish reason the batch.
-  if (fin.error) counters.lastError = [counters.lastError, fin.error].filter(Boolean).join(" — ");
-  else if (fin.note) counters.lastError = fin.note;
+  mergeFinishReason(counters, fin);
   if (fin.submitted) {
     deps.logFn?.(batchSubmittedSpec(target.name));
     deps.onProgress?.({ done: counters.done, total: counters.total, label: `${target.name}: batch submitted` });
@@ -247,7 +269,8 @@ export async function executeStockUploadBatch(
   deps: UploadBatchDeps,
 ): Promise<UploadBatchSummary> {
   const counters: RunCounters = {
-    done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0, lastError: null, stagedDir: null,
+    done: 0, total: plan.tasks.length, uploadedFiles: 0, failedFiles: 0,
+    pendingFiles: 0, unverifiedFiles: 0, retry: null, lastError: null, stagedDir: null,
   };
   deps.logFn?.(runStartedSpec({ targets: plan.targets.map((t) => t.name), files: plan.tasks.length }));
   for (const target of plan.targets) {
@@ -261,6 +284,9 @@ export async function executeStockUploadBatch(
   return {
     uploadedFiles: counters.uploadedFiles,
     failedFiles: counters.failedFiles,
+    pendingFiles: counters.pendingFiles,
+    unverifiedFiles: counters.unverifiedFiles,
+    retry: counters.retry ?? null,
     cancelled: deps.signal.aborted,
     lastError: counters.lastError,
     stagedDir: counters.stagedDir,

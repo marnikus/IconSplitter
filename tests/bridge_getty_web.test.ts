@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findBrowser, parseCdpEndpoint, resolveProfileDir } from "../tools/bridge/gettyweb/browser.mjs";
-import { contributeUrlOf, iconsFromBody } from "../tools/bridge/gettyweb/routes.mjs";
+import { contributeUrlOf, iconsFromBody, uploadPayload } from "../tools/bridge/gettyweb/routes.mjs";
 import { safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
 
@@ -195,6 +195,26 @@ describe("Getty web helper routes", () => {
     expect(helper.log.join("\n")).not.toContain("GettyPass!42");
   });
 
+  it("answers a retry only for a batch that is still open, and only named files", async () => {
+    const helper = await startHelper();
+    const noNames = await fetch(`${helper.url}/getty-web/retry`, {
+      method: "POST", headers: { "content-type": "text/plain" }, body: configHeader(gettyConfig({ names: [] })),
+    });
+    expect(noNames.status).toBe(400);
+    expect((await noNames.json() as { reason: string }).reason).toContain("name at least one file");
+
+    // No session for this run: the app must re-run the icons, not silently start a batch.
+    const closed = await fetch(`${helper.url}/getty-web/retry`, {
+      method: "POST", headers: { "content-type": "text/plain" },
+      body: configHeader(gettyConfig({ names: ["star_01.eps"] })),
+    });
+    expect(closed.status).toBe(409);
+    const body = await closed.json() as { ok: boolean; reason: string };
+    expect(body.ok).toBe(false);
+    expect(body.reason).toContain("re-run these icons into a new batch");
+    expect(helper.log.join("\n")).not.toContain("GettyPass!42");
+  });
+
   it("closes pooled sessions without touching credentials", async () => {
     const helper = await startHelper();
     const res = await fetch(`${helper.url}/getty-web/close`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionKey: "run-1" }) });
@@ -207,6 +227,36 @@ describe("Getty web helper routes", () => {
 });
 
 describe("Getty web pure route helpers", () => {
+  it("answers a partial batch with what Getty proved, not with a blanket failure", () => {
+    // The reported run: five cards ready, one Upload failed, one still ingesting.
+    const session = { batchId: "68582498" };
+    const result = {
+      ok: false, code: "timeout", reason: 'Getty does not show its "Ready to submit" icon for 1 file(s) (icon-map-pin_6_03_v4.eps)',
+      accepted: ["icon-map-pin_5_01.eps"], failed: [{ name: "icon-map-pin_5_02.eps", id: "2302700698" }],
+      pending: ["icon-map-pin_6_03_v4.eps"], verified: true, outcomes: [],
+      state: { cardsPresent: true },
+      report: { readiness: { ok: false, verified: true, notReady: ["icon-map-pin_6_03_v4"] }, completion: null },
+    };
+    expect(uploadPayload(session, result)).toMatchObject({
+      ok: true, batchId: "68582498", accepted: ["icon-map-pin_5_01.eps"],
+      failed: [{ name: "icon-map-pin_5_02.eps", id: "2302700698" }],
+      pending: ["icon-map-pin_6_03_v4.eps"], verified: true, partial: true, ready: false,
+    });
+    // The named reason survives the trip: the app can show why, not just how many.
+    expect(uploadPayload(session, result).batchNote).toContain("icon-map-pin_6_03_v4.eps");
+  });
+
+  it("says a batch is ready only when every card carries the chip", () => {
+    const ready = {
+      ok: true, accepted: ["star_01.eps"], failed: [], pending: [], verified: true, outcomes: [],
+      state: { cardsPresent: true }, report: { readiness: { ok: true, verified: true, notReady: [] }, completion: null },
+    };
+    expect(uploadPayload({ batchId: "1" }, ready)).toMatchObject({ partial: false, ready: true, batchNote: null });
+    // An unreadable page proves nothing, so it is not ready either.
+    const unreadable = { ...ready, verified: false, state: { cardsPresent: false }, report: { readiness: { ok: true, verified: false } } };
+    expect(uploadPayload({ batchId: "1" }, unreadable)).toMatchObject({ verified: false, ready: false });
+  });
+
   it("treats an explicit profile folder as reusable and an empty one as throwaway", () => {
     expect(resolveProfileDir("")).toBeNull();
     expect(resolveProfileDir("   ")).toBeNull();

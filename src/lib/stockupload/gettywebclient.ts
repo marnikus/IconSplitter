@@ -7,51 +7,21 @@
 import { isRecord } from "../isrecord";
 import { DEFAULT_FTP_BRIDGE_URL, BRIDGE_FIX_HINT } from "./bridgeclient";
 import { redactCredentials, type FtpCredentials } from "./credvault";
+import { parseGettySuccess, type GettyWebErrorCode, type GettyWebResult } from "./gettywebresult";
 import type { StockFtpPreset } from "./types";
+
+export type {
+  GettyWebErrorCode, GettyWebFileReport, GettyWebOutcome, GettyWebRejection, GettyWebResult, GettyWebSuccess,
+} from "./gettywebresult";
 
 const OUTDATED_GETTY_WEB_REASON = "Local helper on 127.0.0.1:47391 predates the Getty web upload — restart run_ftp_bridge.bat to enable it";
 const NO_BROWSER_REASON = "No Google Chrome or Microsoft Edge was found on this machine — install one, or start Chrome with --remote-debugging-port=9222 and set GETTY_WEB_CDP";
-
-export type GettyWebErrorCode = "helper-down" | "bad-request" | "auth" | "browser" | "page" | "timeout" | "cancelled" | "network";
 
 export interface GettyWebMetadataPayload {
   title: string;
   description: string;
   keywords: string[];
 }
-
-export interface GettyWebFileReport {
-  name: string;
-  status: string;
-  fields?: Record<string, boolean>;
-}
-
-/** A contribution Getty itself answered with "Upload failed". */
-export interface GettyWebRejection {
-  name: string;
-  id: string | null;
-}
-
-export type GettyWebResult =
-  | {
-    ok: true; batchId: string | null;
-    /** Names whose card carries Getty's "Ready to submit" icon: the upload proof. */
-    accepted: string[];
-    /** Names Getty answered with "Upload failed" — never counted as uploaded. */
-    failed?: GettyWebRejection[];
-    completed: boolean;
-    /**
-     * Every contribution carried Getty's own "Ready to submit" validation icon,
-     * so the batch is finished even when the page offers no Complete/Submit
-     * control to click. Nothing else — a thumbnail least of all — sets this.
-     */
-    ready?: boolean;
-    completion: { clicked: boolean; label: string | null; confirmed: boolean } | null;
-    metadata: GettyWebFileReport[];
-    /** Set when this upload only filled the batch; the run submits it at the end. */
-    deferCompletion?: boolean;
-  }
-  | { ok: false; code: GettyWebErrorCode; reason: string };
 
 export interface GettyWebFile {
   name: string;
@@ -127,47 +97,6 @@ function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok
   return { ok: false, code, reason };
 }
 
-function metadataEntries(raw: Record<string, unknown>) {
-  if (!Array.isArray(raw.metadata)) return [];
-  return raw.metadata.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-    name: String(entry.name),
-    status: typeof entry.status === "string" ? entry.status : "unknown",
-    ...(isRecord(entry.fields) ? { fields: entry.fields as Record<string, boolean> } : {}),
-  }));
-}
-
-function failedEntries(raw: Record<string, unknown>) {
-  if (!Array.isArray(raw.failed)) return [];
-  return raw.failed.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-    name: String(entry.name),
-    id: typeof entry.id === "string" ? entry.id : null,
-  }));
-}
-
-function completionOf(raw: Record<string, unknown>) {
-  if (!isRecord(raw.completion)) return null;
-  return {
-    clicked: raw.completion.clicked === true,
-    label: typeof raw.completion.label === "string" ? raw.completion.label : null,
-    confirmed: raw.completion.confirmed === true,
-  };
-}
-
-function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
-  if (!isRecord(raw) || raw.ok !== true) return { ok: false, code: "page", reason: "unexpected helper response" };
-  return {
-    ok: true,
-    batchId: typeof raw.batchId === "string" ? raw.batchId : null,
-    accepted: Array.isArray(raw.accepted) ? raw.accepted.filter((n): n is string => typeof n === "string") : fallback,
-    failed: failedEntries(raw),
-    completed: raw.completed === true,
-    // Absent means "not proven ready", never "ready".
-    ...(raw.ready === true ? { ready: true } : {}),
-    completion: completionOf(raw),
-    metadata: metadataEntries(raw),
-  };
-}
-
 /** Sends every icon of the run (JPEG + optional EPS each) to the Getty page. */
 export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<GettyWebResult> {
   const fetchFn = input.fetchImpl ?? globalThis.fetch;
@@ -179,7 +108,7 @@ export async function uploadBridgeGettyWeb(input: GettyWebUploadInput): Promise<
       signal: input.signal,
     });
     const body: unknown = await res.json();
-    if (res.ok) return parseSuccess(body, input.icons.flatMap((icon) => icon.files.map((file) => file.name)));
+    if (res.ok) return parseGettySuccess(body);
     return parseFailure(body, input.creds, res.status);
   } catch (err) {
     if ((err as Error)?.name === "AbortError") return { ok: false, code: "cancelled", reason: "upload cancelled" };
@@ -236,7 +165,33 @@ export async function finishBridgeGettyWeb(input: GettyWebFinishInput): Promise<
     const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/getty-web/finish`, {
       method: "POST", headers: { "content-type": "text/plain" }, body: config,
     });
-    return res.ok ? parseSuccess(await res.json(), []) : await finishFailure(res, input.creds);
+    return res.ok ? parseGettySuccess(await res.json()) : await finishFailure(res, input.creds);
+  } catch {
+    return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${BRIDGE_FIX_HINT}` };
+  }
+}
+
+export interface GettyWebRetryInput extends GettyWebFinishInput {
+  /** The file names still not ready: only these are re-filled and re-saved. */
+  names: string[];
+}
+
+/**
+ * Re-checks the still-open batch: re-fills the metadata of the named files that
+ * never got it, saves the grid again and re-reads every card. No new batch and no
+ * new attach, so a retry cannot duplicate a contribution.
+ */
+export async function retryBridgeGettyWeb(input: GettyWebRetryInput): Promise<GettyWebResult> {
+  const config = encodeBase64Utf8(JSON.stringify({
+    ...input.preset, username: input.creds.username, password: input.creds.password,
+    sessionKey: input.sessionKey, names: input.names,
+  }));
+  const fetchFn = input.fetchImpl ?? globalThis.fetch;
+  try {
+    const res = await fetchFn(`${trimSlash(input.bridgeUrl)}/getty-web/retry`, {
+      method: "POST", headers: { "content-type": "text/plain" }, body: config,
+    });
+    return res.ok ? parseGettySuccess(await res.json()) : await finishFailure(res, input.creds);
   } catch {
     return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${BRIDGE_FIX_HINT}` };
   }

@@ -7,9 +7,9 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-upload-shell`, `stock-upload-panel`, `stock-upload-unsupported`, `stock-pick-root` — panel containers.
 - `stock-upload-progress-mount` — cross-tab portal mount for the upload bar
   (`stock-upload-progress-{header,title,file,track,completed,remaining,percent}`),
-  with `complete` on the header once every file is settled; `stock-progress-cancel`
-  while files move, `stock-progress-dismiss` (✕, "Close upload progress") once the
-  bar is finished or the run returned.
+  with `complete` on the header only once the **run returned**; `stock-progress-cancel`
+  while it runs, `stock-progress-dismiss` (✕) once finished, and
+  `stock-progress-retry` ("Retry not-ready files") only while the batch is open.
 - `stock-open-folder`, `stock-rescan`, `stock-folder-path`, `stock-scope-copy`, `stock-audit` — folder picker, rescan, and full root path bar.
 
 ## Stock presets, Getty ESP CSV & local-only credentials (`StockFtpPanel.tsx`, `StockFtpCredentials.tsx`)
@@ -51,11 +51,15 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   `timeout` failure naming the control); an open dialog or an already-chosen
   submission type is never reopened; the batch id must differ from the one read
   before the click, or the run keeps waiting.
+- Getty web retry: `POST /getty-web/retry` (same header as `finish`, plus `names`)
+  re-checks an open batch; 400 without names, 409 when no session is left.
 - Getty web progress: `GET /getty-web/progress?sessionKey=…` returns the live
-  `{phase,total,uploaded,failed,listed,reloads}` counts only — no names, no page
-  text. It
-  answers 404 until the upload request has a session, so the client keeps polling
-  instead of treating that as the end of the run.
+  `{phase,total,uploaded,ready,failed,listed,pending,verified,reloads}` counts only
+  — no names, no page text. It answers 404 until the upload has a session, so the
+  client keeps polling instead of treating that as the end of the run.
+- Getty web card truth: `readUploadState` returns `contributions` (per sent name:
+  `state` `pending|arrived|ready|failed`, `picture`, `ready`, `id`) and `cardNames`.
+  A thumbnail is `arrived`, never `ready`.
 - Getty web stall recovery: when the batch page lists no new file for 30 s
   (`stallMs`), the helper sends `Page.reload` (cache ignored), waits for
   `document.readyState === "complete"`, dismisses dialogs and re-attaches **only**

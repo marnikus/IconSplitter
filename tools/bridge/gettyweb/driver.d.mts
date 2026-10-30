@@ -13,7 +13,12 @@ export const chooseSubmissionTypeOption: (arg: { label: string }) => any;
 export const fillBatchDetails: (arg: { batchName: string; briefCode?: string }) => any;
 export const submitBatchCreation: () => any;
 export const readUploadState: (arg: { names?: string[] }) => {
-  namesSeen: string[]; missing: string[]; contributions: string[]; fileCount: number;
+  namesSeen: string[]; missing: string[]; cardNames: string[]; fileCount: number;
+  contributions: Array<{
+    name: string; stem: string; id: string | null;
+    state: "pending" | "arrived" | "ready" | "failed";
+    picture: boolean; ready: boolean;
+  }>;
   processing: boolean; ready: boolean; [key: string]: unknown;
 };
 export const labelTextOf: (el: any) => string;

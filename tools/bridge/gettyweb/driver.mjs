@@ -200,6 +200,20 @@ function fileStatus(cards, name) {
  * Getty accepts an e-mail *or* the numeric contributor ID in the same box, so
  * the identifier is matched by name/hint and then by plain text type.
  */
+/**
+ * One contribution's own state, from its own card: a picture means the bytes
+ * arrived and nothing more, and only the "Ready to submit" chip makes it ready.
+ * A name with no card is `pending`, never guessed as uploaded.
+ */
+function contributionTruth(cards, name) {
+  const stem = fileStem(name);
+  const card = cards.find((entry) => entry.stem === stem) ?? null;
+  if (!card) return { name, stem, id: null, state: "pending", picture: false, ready: false };
+  const ready = card.ready === true && card.failed !== true;
+  const state = card.failed ? "failed" : ready ? "ready" : card.thumbnail === true ? "arrived" : "pending";
+  return { name, stem, id: card.id, state, picture: card.thumbnail === true, ready };
+}
+
 function loginFields() {
   const inputs = inputFields();
   const password = inputs.find((el) => el.type === "password") ?? null;
@@ -448,7 +462,10 @@ export function readUploadState({ names }) {
     /** Cards were rendered, so readiness could be read at all. */
     cardsPresent: cards.length > 0,
     failures: cards.filter((card) => card.failed).map((card) => ({ name: card.name, id: card.id })).slice(0, 50),
-    contributions: cards.map((card) => card.name).slice(0, 50),
+    /** One entry per wanted name: what its own card states right now. */
+    contributions: wanted.map((name) => contributionTruth(cards, name)),
+    /** The card texts, for a caller that only needs the names on the page. */
+    cardNames: cards.map((card) => card.name).slice(0, 50),
     fileCount: cards.length,
     processing: cards.some((card) => card.processing),
     // A page without cards says nothing about processing, so it is not waited on.
@@ -738,7 +755,7 @@ export function readCompletionState() {
  */
 export const PAGE_PRELUDE = [
   visible, shown, setNativeValue, notifyAngular, writeField, textOf, click, firstVisible,
-  fileStem, mentionsStem, uploadCards, cardIdOf, cardHasThumbnail, fileStatus, inputFields, loginFields,
+  fileStem, mentionsStem, uploadCards, cardIdOf, cardHasThumbnail, fileStatus, contributionTruth, inputFields, loginFields,
   submitControl, pageSignals, labelTextOf, setFieldValue, dateFieldOf, seenField, existingKeywordCount,
 ]
   .map((fn) => fn.toString()).join("\n")

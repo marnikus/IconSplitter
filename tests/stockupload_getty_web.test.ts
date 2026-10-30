@@ -11,7 +11,7 @@ import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { getStockHistory, resetStockHistory } from "../src/stockupload/historystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
-import { progressLabel, settledFiles, watchGettyProgress } from "../src/stockupload/gettywebtransfer";
+import { progressLabel, terminalFiles, watchGettyProgress } from "../src/stockupload/gettywebtransfer";
 import { resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import type { GettyWebUploadInput } from "../src/lib/stockupload/gettywebclient";
@@ -141,7 +141,8 @@ describe("Getty web upload in the batch runner", () => {
         };
       },
       gettyWebProgressFn: async () => ({
-        phase: "uploading", total: 4, uploaded: 2, failed: 0, listed: 3, reloads: 0,
+        phase: "uploading", total: 4, uploaded: 2, ready: 0, failed: 0, listed: 3,
+        pending: 3, verified: true, reloads: 0,
       }),
       finishGettyWebFn: async () => ({
         ok: true, batchId: "68565609", accepted: [], completed: true,
@@ -152,16 +153,29 @@ describe("Getty web upload in the batch runner", () => {
     await vi.advanceTimersByTimeAsync(2100);
     release!();
     await run;
-    // While the bytes move the panel counts what Getty already has.
-    expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) uploaded"))).toBe(true);
+    // While the bytes move the line reports arrival only — never "uploaded".
+    expect(labels.some((line) => line.includes("Getty Images (web upload): Getty has 2 of 4 file(s), 0 ready to submit"))).toBe(true);
+    expect(labels.some((line) => line.includes("file(s) uploaded"))).toBe(false);
   });
 
   it("says so when Getty's page had to be reloaded to get moving", () => {
-    const base = { phase: "uploading", total: 14, uploaded: 5, failed: 2, listed: 14 };
+    const base = {
+      phase: "uploading", total: 14, uploaded: 5, ready: 6, failed: 2, listed: 14,
+      pending: 6, verified: true,
+    };
     expect(progressLabel({ ...base, reloads: 0 }, "Getty Images (web upload)"))
-      .toBe("Getty Images (web upload): 5 of 14 file(s) uploaded, 2 failed");
+      .toBe("Getty Images (web upload): Getty has 5 of 14 file(s), 6 ready to submit, 2 failed");
     expect(progressLabel({ ...base, reloads: 1 }, "Getty Images (web upload)"))
       .toContain("page reloaded");
+  });
+
+  it("refuses to count anything from a page it cannot read", () => {
+    const unreadable = {
+      phase: "metadata", total: 14, uploaded: 12, ready: 0, failed: 0, listed: 14,
+      pending: 14, verified: false, reloads: 0,
+    };
+    expect(progressLabel(unreadable, "Getty")).toBe("Getty: cannot read Getty's cards — nothing is counted yet");
+    expect(terminalFiles(unreadable)).toBe(0);
   });
 
   it("verifies the bar against the cards turning Ready to submit", async () => {
@@ -194,7 +208,10 @@ describe("Getty web upload in the batch runner", () => {
         polls += 1;
         if (polls <= 2) return null;
         // The transfer is done; the cards turn "Ready to submit" one by one.
-        return { phase: "metadata", total: 4, uploaded: 4, ready: polls >= 4 ? 2 : 1, failed: 0, listed: 4, reloads: 0 };
+        return {
+          phase: "metadata", total: 4, uploaded: 4, ready: polls >= 4 ? 2 : 1, failed: 0,
+          listed: 4, pending: polls >= 4 ? 2 : 3, verified: true, reloads: 0,
+        };
       },
       finishGettyWebFn: async () => ({
         ok: true, batchId: "68565609", accepted: [], completed: true,
@@ -205,10 +222,12 @@ describe("Getty web upload in the batch runner", () => {
     await vi.advanceTimersByTimeAsync(6000);
     release!();
     await run;
-    // The bar keeps the files Getty already has (4), while the line verifies the
-    // cards turning "Ready to submit" — 1 of 4, then 2 of 4.
-    expect(steps.some((step) => step.done === 4 && step.label.includes("1 of 4 file(s) ready to submit"))).toBe(true);
-    expect(steps.some((step) => step.done === 4 && step.label.includes("2 of 4 file(s) ready to submit"))).toBe(true);
+    // The bar counts only what Getty verified: 1 of 4, then 2 of 4 — never the
+    // four pictures that had already arrived.
+    expect(steps.some((step) => step.done === 1 && step.label.includes("1 of 4 file(s) ready to submit"))).toBe(true);
+    expect(steps.some((step) => step.done === 2 && step.label.includes("2 of 4 file(s) ready to submit"))).toBe(true);
+    // Four pictures on the page never made the run look done.
+    expect(steps.filter((step) => step.done === 4 && step.label.includes("ready to submit"))).toHaveLength(0);
     // And the misses before the helper's session did not stop the watching.
     expect(polls).toBeGreaterThan(3);
   });
@@ -219,10 +238,13 @@ describe("Getty web upload in the batch runner", () => {
     let calls = 0;
     const stop = watchGettyProgress(
       { bridgeUrl: "http://127.0.0.1:47391", sessionKey: "run-7", targetName: "Getty" },
-      (progress) => seen.push(settledFiles(progress)),
+      (progress) => seen.push(terminalFiles(progress)),
       async () => {
         calls += 1;
-        return calls <= 3 ? null : { phase: calls >= 5 ? "done" : "metadata", total: 4, uploaded: 2, ready: 2, failed: 1, listed: 4, reloads: 1 };
+        return calls <= 3 ? null : {
+          phase: calls >= 5 ? "done" : "metadata", total: 4, uploaded: 2, ready: 2, failed: 1,
+          listed: 4, pending: 1, verified: true, reloads: 1,
+        };
       },
     );
     await vi.advanceTimersByTimeAsync(4000);
@@ -312,6 +334,72 @@ describe("Getty web upload in the batch runner", () => {
     const byStatus = (want: string) => statuses.filter(([, entry]) => entry.status === want).length;
     expect(byStatus("uploaded")).toBe(1);
     expect(byStatus("failed")).toBe(1);
+  });
+
+  it("keeps a ready pair uploaded when a sibling card is still open", async () => {
+    // The reported batch: the helper answered a partial page (one pair ready, one
+    // still ingesting). The run must not call the open pair uploaded, must not
+    // claim a full bar, and must keep the ready pair's own success.
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const steps: Array<{ done: number; total: number; failed?: number; pending?: number; label: string }> = [];
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      onProgress: (step) => steps.push({ ...step }),
+      gettyWebUploadFn: async () => ({
+        ok: true, batchId: "68582498",
+        accepted: ["star_01.jpg", "star_01.eps"],
+        failed: [],
+        pending: ["moon_02.jpg", "moon_02.eps"],
+        verified: true,
+        outcomes: [
+          { name: "star_01.eps", stem: "star_01", state: "ready", picture: true, ready: true, id: "2302700699" },
+          { name: "moon_02.eps", stem: "moon_02", state: "arrived", picture: true, ready: false, id: "2302700708" },
+        ],
+        batchNote: 'Getty still lists a card without "Ready to submit"',
+        completed: false, completion: null, metadata: [],
+      }),
+      finishGettyWebFn: async () => ({
+        ok: false, code: "timeout",
+        reason: 'Getty does not show its "Ready to submit" icon for 1 file(s) (moon_02)',
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(summary).toMatchObject({ uploadedFiles: 2, failedFiles: 2, pendingFiles: 2, unverifiedFiles: 0 });
+    expect(summary.lastError).toContain("moon_02");
+    // The open batch is handed back, so the finished bar can offer a retry.
+    expect(summary.retry).toEqual({ sessionKey: expect.any(String), names: ["moon_02.jpg", "moon_02.eps"] });
+    // The open pair is never counted as uploaded in the row store.
+    const history = getStockHistory();
+    const statuses = Object.values(history).flatMap((byTarget) => Object.values(byTarget));
+    expect(statuses.filter((entry) => entry.status === "uploaded")).toHaveLength(1);
+    expect(statuses.filter((entry) => entry.status === "failed")).toHaveLength(1);
+    // The open pair is named by the run, and the batch as a whole is not claimed.
+    expect(steps.some((step) => step.label.includes("moon_02"))).toBe(true);
+  });
+
+  it("reports a batch it could not verify as open work, never as uploaded", async () => {
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebUploadFn: async () => ({
+        ok: true, batchId: "68582498", accepted: [], failed: [], pending: ["star_01.jpg", "star_01.eps"],
+        verified: false, completed: false, completion: null, metadata: [],
+      }),
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(summary).toMatchObject({ uploadedFiles: 0, failedFiles: 2, unverifiedFiles: 2 });
+    expect(summary.lastError).toContain("could not be read");
   });
 
   it("reports an un-submitted batch when the finish call completes nothing", async () => {

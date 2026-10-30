@@ -219,27 +219,88 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
   const url = contributeUrlOf(cfg);
   try {
     const result = await performUpload(cfg, url, icons);
-    if (!result?.ok) {
+    // A run that reached the page but left files open is answered with what its
+    // cards state (200, partial); only a run that never read a page is an error.
+    if (!result?.ok && result?.state == null) {
       const code = result?.code ?? "page";
       return json(res, statusFor(code), {
-        ok: false, code, reason: scrub(result?.reason, cfg), state: result?.state ?? null,
+        ok: false, code, reason: scrub(result?.reason, cfg), state: null,
       });
     }
-    return json(res, 200, {
-      ok: true, batchId: result.batchId ?? null,
-      // Only a card carrying Getty's "Ready to submit" icon counts: "Upload failed" is reported, never accepted.
-      accepted: result.accepted ?? result.state?.uploaded ?? [],
-      failed: result.failed ?? result.state?.failures ?? [],
-      chips: result.state?.chips ?? null,
-      completed: result.report?.completion?.clicked === true,
-      // Every card carried Getty's "Ready to submit" icon: the batch is finished
-      // even when the page offers no Complete control to click.
-      ready: result.report?.readiness?.ok === true && result.report?.readiness?.verified !== false,
-      completion: result.report?.completion ?? null,
-      metadata: result.report?.metadata ?? [],
-      submitted: result.state?.submitted === true,
-    });
+    return json(res, 200, uploadPayload({ batchId: result?.batchId ?? null }, result));
   } catch (err) {
+    return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });
+  }
+}
+
+/**
+ * The honest body of an upload/retry answer. `accepted` is only what Getty's own
+ * cards mark "Ready to submit"; `pending` is what is still open; `verified` says
+ * whether the cards could be read at all. A partial answer is still an answer:
+ * 200 with `ok: true` and the open files named, never a blanket failure.
+ */
+export function uploadPayload(session, result) {
+  const pending = Array.isArray(result.pending) ? result.pending : [];
+  const readiness = result.report?.readiness ?? null;
+  return {
+    ok: true,
+    batchId: result.batchId ?? session.batchId ?? null,
+    accepted: Array.isArray(result.accepted) ? result.accepted : [],
+    failed: result.failed ?? result.state?.failures ?? [],
+    pending,
+    outcomes: Array.isArray(result.outcomes) ? result.outcomes : [],
+    verified: result.verified === true || result.state?.cardsPresent === true,
+    partial: result.ok !== true || pending.length > 0,
+    batchNote: result.batchNote ?? (result.ok === true ? null : result.reason ?? null),
+    chips: result.state?.chips ?? null,
+    completed: result.report?.completion?.clicked === true,
+    // Every card that is not rejected must carry the icon; a click is not required.
+    ready: readiness?.ok === true && readiness?.verified === true && pending.length === 0,
+    completion: result.report?.completion ?? null,
+    metadata: result.report?.metadata ?? [],
+    submitted: result.state?.submitted === true,
+    reason: result.ok === true ? null : result.reason ?? null,
+  };
+}
+
+/**
+ * `POST /getty-web/retry`: re-checks the still-open batch of this run. Only the
+ * names the app sends are re-filled, saved and re-read; a run whose session is
+ * gone gets a 409 instead of a silent new batch.
+ */
+export async function handleGettyWebRetry(req, res, post, json) {
+  const body = await post(req, 65536);
+  const cfg = parseConfig(body);
+  const invalid = validConfig(cfg);
+  if (invalid !== null) return json(res, 400, { ok: false, code: "bad-request", reason: invalid });
+  const names = Array.isArray(cfg.names) ? cfg.names.filter((name) => typeof name === "string" && name !== "") : [];
+  if (names.length === 0) {
+    return json(res, 400, { ok: false, code: "bad-request", reason: "name at least one file to retry" });
+  }
+  const url = contributeUrlOf(cfg);
+  const key = poolKeyOf(cfg, url);
+  const entry = sessions.get(key);
+  if (!entry?.session) {
+    return json(res, 409, {
+      ok: false, code: "bad-request",
+      reason: "the Getty batch of this run is no longer open — re-run these icons into a new batch",
+    });
+  }
+  try {
+    const result = await entry.session.retry({ names });
+    touch(key, entry);
+    if (result?.ok !== true && !Array.isArray(result?.outcomes)) {
+      const code = result?.code ?? "page";
+      return json(res, statusFor(code), { ok: false, code, reason: scrub(result?.reason, cfg), state: result?.state ?? null });
+    }
+    return json(res, 200, uploadPayload(entry.session, result));
+  } catch (err) {
+    return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });
+  }
+}
+
+/**
+ * `GET /getty-web/progress?sessionKey=…`  } catch (err) {
     return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });
   }
 }

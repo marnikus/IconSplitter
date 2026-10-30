@@ -433,7 +433,12 @@ describe("Getty batch page as captured", () => {
     const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"] });
     // Getty lists the pair under one name; both sent files belong to that card.
     expect(state.namesSeen).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
-    expect(state.contributions).toEqual(["icon-map-pin_5_01.eps"]);
+    // Per-card truth: the card is still ingesting, so neither name is ready.
+    expect(state.contributions).toEqual([
+      { name: "icon-map-pin_5_01.jpg", stem: "icon-map-pin_5_01", id: "2302596512", state: "pending", picture: false, ready: false },
+      { name: "icon-map-pin_5_01.eps", stem: "icon-map-pin_5_01", id: "2302596512", state: "pending", picture: false, ready: false },
+    ]);
+    expect(state.cardNames).toEqual(["icon-map-pin_5_01.eps"]);
     expect(state.fileCount).toBe(1);
     expect(state.processing).toBe(true);
     expect(state.ready).toBe(false);

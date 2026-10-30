@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   SESSION_COOKIE_FILE, restoreSessionCookies, saveSessionCookies, sessionCookiePath,
 } from "../tools/bridge/gettyweb/sessioncookies.mjs";
-import { acceptedOf } from "../tools/bridge/gettyweb/session.mjs";
+import { acceptedOf, outcomesOf, pendingOf } from "../tools/bridge/gettyweb/session.mjs";
 
 const COOKIE = {
   name: "esp_session", value: "s3cr3t-token", domain: ".gettyimages.com", path: "/",
@@ -133,22 +133,34 @@ describe("Getty web remembered cookies", () => {
 describe("Getty web accepted files", () => {
   const attach = { uploaded: ["star_01.jpg", "star_01.eps"], failed: [], namesSeen: ["star_01.jpg", "star_01.eps"] };
 
-  it("takes the post-save reading, not the attach-phase one", () => {
-    const done = {
-      ok: false, code: "timeout", reason: "Getty does not show its \"Ready to submit\" icon for moon_02.eps",
-      report: { readiness: { ok: false, state: { ...attach, uploaded: ["star_01.jpg", "star_01.eps"] } } },
-    };
-    expect(acceptedOf(done, { state: { ...attach, uploaded: ["star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps"] } }))
-      .toEqual(["star_01.jpg", "star_01.eps"]);
+  it("takes the cards' own Ready to submit icons, not the arrival phase", () => {
+    const read = { ...attach, readyToSubmit: ["star_01.jpg", "star_01.eps"], cardsPresent: true };
+    expect(acceptedOf(read)).toEqual(["star_01.jpg", "star_01.eps"]);
   });
 
   it("is empty when no card showed the icon, even though every file was listed", () => {
-    const done = { ok: false, report: { readiness: { ok: false, state: { ...attach, uploaded: [] } } } };
-    expect(acceptedOf(done, { state: attach })).toEqual([]);
+    // The user's batch: 12 of 14 pictures were on the page, none proven ready.
+    expect(acceptedOf({ ...attach, readyToSubmit: [], cardsPresent: true })).toEqual([]);
   });
 
-  it("falls back to the attach reading only when the run never reached a later one", () => {
-    expect(acceptedOf({ ok: false, report: null }, { state: attach })).toEqual(attach.uploaded);
-    expect(acceptedOf(undefined, undefined)).toEqual([]);
+  it("reads the per-card truth when the page reported it", () => {
+    const read = {
+      cardsPresent: true,
+      contributions: [
+        { name: "star_01.eps", stem: "star_01", id: "2302700699", state: "ready", picture: true, ready: true },
+        { name: "moon_02.eps", stem: "moon_02", id: "2302700733", state: "arrived", picture: true, ready: false },
+      ],
+    };
+    expect(acceptedOf(read)).toEqual(["star_01.eps"]);
+    expect(outcomesOf(read)).toEqual([
+      { name: "star_01.eps", stem: "star_01", state: "ready", picture: true, ready: true, id: "2302700699" },
+      { name: "moon_02.eps", stem: "moon_02", state: "arrived", picture: true, ready: false, id: "2302700733" },
+    ]);
+    expect(pendingOf(read, ["star_01.jpg", "moon_02.eps"])).toEqual(["moon_02.eps"]);
+  });
+
+  it("says nothing about a run that never read a page", () => {
+    expect(acceptedOf(undefined)).toEqual([]);
+    expect(outcomesOf(null)).toEqual([]);
   });
 });
