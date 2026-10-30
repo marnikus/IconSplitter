@@ -37,6 +37,8 @@ export interface GettyWebRunInput {
   now?: Date;
   /** Batch size; the real cap unless a test injects a smaller one. */
   maxIcons?: number;
+  /** Bytes one request may carry; the real budget unless a test injects one. */
+  maxBytes?: number;
   uploadFn?: (input: GettyWebUploadInput) => Promise<GettyWebResult>;
   finishFn?: (input: GettyWebFinishInput) => Promise<GettyWebResult>;
   /** The batch a request belongs to, so the panel's line can name it. */
@@ -141,6 +143,21 @@ function stopped(state: RunState): boolean {
   return state.stopReason !== null || state.input.signal.aborted;
 }
 
+/** The bytes one icon sends, straight from the plan (its JPEG plus optional EPS). */
+function bytesOfIcon(state: RunState, index: number): number {
+  return state.input.icons[index].tasks.reduce((sum, task) => sum + Math.max(0, task.estimatedBytes), 0);
+}
+
+/**
+ * The icons of one request: at most 100 uploads **and** under the byte budget, so
+ * a run of big pairs can never build a body the helper has to refuse.
+ */
+function chunkOf(state: RunState, indexes: readonly number[]): number[][] {
+  return planGettyWebBatches(indexes, {
+    maxIcons: state.maxIcons, maxBytes: state.maxBytes, bytesOf: (index) => bytesOfIcon(state, index),
+  });
+}
+
 /** The chunk, plus whatever is queued and still fits in this batch's room. */
 function membersWithRetries(state: RunState, chunk: readonly number[]): number[] {
   const room = Math.max(0, state.maxIcons - chunk.length);
@@ -150,7 +167,7 @@ function membersWithRetries(state: RunState, chunk: readonly number[]): number[]
 
 async function runPrimaryPass(state: RunState): Promise<void> {
   const indexes = state.input.icons.map((_icon, index) => index);
-  const chunks = planGettyWebBatches(indexes, state.maxIcons);
+  const chunks = chunkOf(state, indexes);
   for (let k = 0; k < chunks.length; k += 1) {
     if (stopped(state)) return;
     await runBatch(state, membersWithRetries(state, chunks[k]), { index: k + 1, total: chunks.length });
@@ -162,7 +179,7 @@ async function runRetryPass(state: RunState): Promise<void> {
   for (let pass = 0; pass < GETTY_WEB_MAX_ATTEMPTS && state.queue.length > 0; pass += 1) {
     if (stopped(state)) return;
     const queued = state.queue.splice(0, state.queue.length);
-    const chunks = planGettyWebBatches(queued, state.maxIcons);
+    const chunks = chunkOf(state, queued);
     for (let k = 0; k < chunks.length; k += 1) {
       if (stopped(state)) return;
       await runBatch(state, chunks[k], { index: k + 1, total: chunks.length, retry: true });

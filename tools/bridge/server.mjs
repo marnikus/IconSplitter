@@ -70,6 +70,9 @@ const config = {
   timeoutMs: Number(process.env.BRIDGE_TIMEOUT_MS ?? 60000),
   maxBytes: Number(process.env.BRIDGE_MAX_BYTES ?? 20 * 1024 * 1024),
   ftpMaxBytes: Number(process.env.BRIDGE_FTP_MAX_BYTES ?? 120 * 1024 * 1024),
+  // A Getty batch is up to 100 pairs of files, so its request is far bigger than
+  // one FTPS file; the app also caps a batch's bytes, this is the backstop.
+  gettyMaxBytes: Number(process.env.GETTY_WEB_MAX_BYTES ?? 256 * 1024 * 1024),
   tmpRoot: process.env.BRIDGE_TMP,
 };
 
@@ -96,33 +99,33 @@ function json(res, status, body) {
   return Buffer.byteLength(text);
 }
 
-/** Reads the body up to the limit; null when it is larger (the caller answers 413 and the connection closes). */
+/**
+ * Reads a body up to `limit`; resolves null when it is larger, so the caller can
+ * answer 413. An oversized body is **drained, not aborted**: closing the socket
+ * mid-upload turns the helper's own answer into a network error the browser can
+ * only report as "cannot reach the helper" (what a 209-icon run used to see).
+ */
 function readBody(req, limit) {
-  if (Number(req.headers["content-length"] ?? 0) > limit) return Promise.resolve(null);
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let size = 0;
-    req.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > limit) { req.pause(); resolve(null); return; }
-      chunks.push(chunk);
-    });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
+  return readUpTo(req, limit, (chunks) => Buffer.concat(chunks).toString("utf8"));
 }
 
 function readBinaryBody(req, limit) {
-  if (Number(req.headers["content-length"] ?? 0) > limit) return Promise.resolve(null);
+  return readUpTo(req, limit, (chunks) => Buffer.concat(chunks));
+}
+
+function readUpTo(req, limit, join) {
+  // A declared length already over the limit still gets read to the end, so the
+  // 413 is a real response the app can show instead of a reset connection.
+  let tooBig = Number(req.headers["content-length"] ?? 0) > limit;
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > limit) { req.pause(); resolve(null); return; }
+      if (tooBig || size > limit) { tooBig = true; chunks.length = 0; return; }
       chunks.push(chunk);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("end", () => resolve(tooBig ? null : join(chunks)));
     req.on("error", reject);
   });
 }
@@ -204,7 +207,7 @@ async function route(req, res, port) {
   if (req.method === "POST" && url === "/ftps/upload") return handleFtpsUpload(req, res, config.ftpMaxBytes, json);
   if (req.method === "POST" && url === "/ftps/close") return handleFtpsClose(req, res, json);
   if (req.method === "POST" && url === "/getty-web/upload") {
-    return handleGettyWebUpload(req, res, readBinaryBody, json, config.ftpMaxBytes);
+    return handleGettyWebUpload(req, res, readBinaryBody, json, config.gettyMaxBytes);
   }
   if (req.method === "POST" && url === "/getty-web/test") return handleGettyWebTest(req, res, readBody, json);
   if (req.method === "POST" && url === "/getty-web/finish") return handleGettyWebFinish(req, res, readBody, json);

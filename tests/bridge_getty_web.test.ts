@@ -20,10 +20,13 @@ const NO_BROWSER = "/nonexistent/getty-web-browser";
 interface Helper { url: string; child: ChildProcess; log: string[]; tmp: string }
 const live: Helper[] = [];
 
-async function startHelper(extraArgs: string[] = []): Promise<Helper> {
+async function startHelper(
+  extraArgs: string[] = [],
+  extraEnv: Record<string, string | undefined> = {},
+): Promise<Helper> {
   const tmp = mkdtempSync(path.join(tmpdir(), "getty-web-bridge-test-"));
   const child = spawn(process.execPath, [SERVER, "--port", "0", ...extraArgs], {
-    env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", BRIDGE_TMP: tmp, GETTY_WEB_BROWSER: NO_BROWSER },
+    env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", BRIDGE_TMP: tmp, GETTY_WEB_BROWSER: NO_BROWSER, ...extraEnv },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const log: string[] = [];
@@ -324,6 +327,25 @@ describe("Getty web batch limits in the helper", () => {
     // card of *its* batch is missing, so a stale name would block batch 2.
     const state = { batchId: "68445204", expected: ["icon_1.jpeg"], progress: { phase: "done" }, reloads: 2 };
     expect(resetBatchState(state)).toEqual({ batchId: null, expected: [], progress: null, reloads: 0 });
+  });
+
+  it("answers an oversized batch with a 413 instead of dropping the connection", async () => {
+    // The symptom a 209-icon run hit: the helper refused by content-length before
+    // reading the body, closed the socket mid-upload, and the browser could only
+    // report a network error. The answer must arrive as a real response.
+    const helper = await startHelper([], { GETTY_WEB_MAX_BYTES: "1024" });
+    const res = await fetch(`${helper.url}/getty-web/upload`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-getty-web-config": configHeader(gettyConfig({ icons: [{ files: [{ name: "icon_1.jpeg", bytes: 2048 }] }] })),
+      },
+      body: new Uint8Array(64 * 1024),
+    });
+    expect(res.status).toBe(413);
+    const body = await res.json() as { code?: string; reason?: string };
+    expect(body.code).toBe("bad-request");
+    expect(body.reason).toContain("GETTY_WEB_MAX_BYTES");
   });
 
   it("never sweeps a session that has a request in flight", () => {

@@ -4230,3 +4230,15 @@ PASSED (build 1,954.73 kB). Focused vitest: `getty_web_chunk` (new) +
 3,420 tests: only `algo_efficiency`'s "synthetic 1000px 4-icon grid <200 ms"
 missed its wall-clock budget on this 2-vCPU sandbox (~224–280 ms); it touches no
 file this round changed and the budget was left untouched.
+
+## 2026-10-30 — a batch that is too big for one request (209-icon run)
+
+Measured this round: `npx tsc --noEmit` clean; `npm run lint` 0 errors (22
+pre-existing warnings); `npm run quality:changed` GATE PASSED (new
+`gettywebparse.ts` 107 lines; `gettywebclient.ts` 234 after the parse split);
+`npm run verify:fast` ALL LANES PASSED (build 1,956.20 kB). Focused vitest:
+`getty_web_chunk` 10/10, `getty_web_upload` 22/22, `stockupload_getty_web` 25/25,
+`bridge_getty_web` 25/25 incl. the new live 413 test, `docs_navigation` 4/4.
+Full suite 3,426 of 3,427: the only miss is `algo_efficiency`'s "synthetic
+1000px grid <200 ms" (216–308 ms) on this 2-vCPU box at load 1.3–2.1; it touches
+no file changed here and the budget was not touched.

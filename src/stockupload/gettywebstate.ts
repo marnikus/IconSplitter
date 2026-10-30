@@ -4,7 +4,8 @@
 // exactly once: uploaded, or failed with Getty's own reason.
 
 import {
-  GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_ICONS, gettyWebFileOrder, gettyWebStem,
+  GETTY_WEB_MAX_ATTEMPTS, GETTY_WEB_MAX_BATCH_BYTES, GETTY_WEB_MAX_BATCH_ICONS, gettyWebFileOrder,
+  gettyWebStem,
 } from "../lib/stockupload/gettyweb";
 import type { GettyWebIcon, GettyWebRejection, GettyWebResult } from "../lib/stockupload/gettywebclient";
 import type { GettyWebIconInput } from "../lib/stockupload/gettywebprep";
@@ -19,6 +20,8 @@ export interface PreparedIcon {
 export interface RunState {
   input: GettyWebRunInput;
   maxIcons: number;
+  /** Bytes one request may carry: a batch also ends when the next icon would cross it. */
+  maxBytes: number;
   outcomes: GettyWebIconOutcome[];
   done: boolean[];
   attempts: number[];
@@ -34,6 +37,7 @@ export function createState(input: GettyWebRunInput): RunState {
   return {
     input,
     maxIcons: Math.max(1, Math.floor(input.maxIcons ?? GETTY_WEB_MAX_BATCH_ICONS)),
+    maxBytes: Math.max(1, Math.floor(input.maxBytes ?? GETTY_WEB_MAX_BATCH_BYTES)),
     outcomes: byIndex(() => ({ ok: false, reason: "not uploaded" })),
     done: byIndex(() => false),
     attempts: byIndex(() => 0),

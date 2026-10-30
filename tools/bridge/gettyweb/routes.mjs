@@ -244,12 +244,15 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
   const cfg = parseConfig(req.headers["x-getty-web-config"]);
   const invalid = validConfig(cfg);
   if (invalid !== null) return json(res, 400, { ok: false, code: "bad-request", reason: invalid });
-  if (Number(req.headers["content-length"] ?? 0) > limit) {
-    res.setHeader("connection", "close");
-    return json(res, 413, { ok: false, code: "bad-request", reason: `the staged files exceed the helper's limit (${limit} bytes)` });
-  }
+  // No early content-length check: the body is drained first, so an oversized
+  // batch gets this 413 as a real answer instead of a connection reset mid-upload.
   const body = await post(req, limit);
-  if (body === null) return json(res, 413, { ok: false, code: "bad-request", reason: "the request body was too large" });
+  if (body === null) {
+    return json(res, 413, {
+      ok: false, code: "bad-request",
+      reason: `the staged files exceed the helper's limit (${limit} bytes) — send fewer icons per batch, or raise GETTY_WEB_MAX_BYTES on the helper`,
+    });
+  }
   const icons = iconsFromBody(body, cfg);
   if (!icons) return json(res, 400, { ok: false, code: "bad-request", reason: "the upload must contain a JPEG (and optional matching EPS) per icon" });
   const url = contributeUrlOf(cfg);

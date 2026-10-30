@@ -2,12 +2,17 @@
 // confirmation modal, and cross-tab portal progress header.
 
 import { createPortal } from "react-dom";
-import { gettyWebBatchSummary } from "../lib/stockupload/gettyweb";
+import { gettyWebBatchSummaryOf, gettyWebIconSizes } from "../lib/stockupload/gettyweb";
 import type { StockUploadPlan } from "../lib/stockupload/plan";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
 import UploadRowBadgeSettings from "../upload/UploadRowBadgeSettings";
 import { uploadBar, type UploadBar } from "./progressmodel";
 import type { StockUploadApi } from "./useStockUpload";
+
+/** The Getty web target ids of a plan, so its icons can be sized per pair. */
+function gettyTargetIds(plan: StockUploadPlan): ReadonlySet<string> {
+  return new Set(plan.targets.filter((t) => t.protocol === "getty-web").map((t) => t.id));
+}
 
 export default function StockUploadDialogs({ g }: { g: StockUploadApi }) {
   const d = g.model.dialog;
@@ -82,7 +87,7 @@ function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
       </p>
       {plan.targets.some((t) => t.protocol === "getty-web") && (
         <p className="svg-note" data-testid="stock-upload-getty-batches">
-          Getty Images: {gettyWebBatchSummary(plan.selectedRows.length)}
+          Getty Images: {gettyWebBatchSummaryOf(gettyWebIconSizes(plan.tasks, gettyTargetIds(plan)))}
         </p>
       )}
       {plan.combineTitleDescription && <p className="svg-warning">Title + description will be combined in upload copies only. Stock sites may limit title length; originals remain unchanged.</p>}
