@@ -30,12 +30,15 @@ a real browser.
    never renders a picture fails the wait (300 s) rather than counting. A
    rejected file is named with Getty's id. `GET /getty-web/progress` feeds the
    panel the live counts, so **the bar moves with each thumbnail** (1 s poll).
-6. **Metadata:** per contribution it selects the card by stem, waits for that
-   drawer to unlock (disabled fields drop typed text), types the accepted title and
-   description, writes **today's date** into Date Created as Getty renders it —
-   `MM/DD/YYYY 00:00:00 +0000` — and saves. Prefilled prose is kept and the date is
-   always replaced, but **tags are never touched**: keywords Getty already lists
-   are left exactly as they are, and only the keyword field ever gets Enter.
+6. **Metadata:** per contribution it selects the card by stem (clicking twice if
+   Getty drops the first), waits for that drawer to unlock (disabled fields drop
+   typed text), types the accepted title and description and writes **today's
+   date** into Date Created as Getty renders it — `MM/DD/YYYY 00:00:00 +0000`.
+   Prefilled prose is kept and the date is always replaced, but **tags are never
+   touched**: keywords Getty already lists are left alone, and only the keyword
+   field ever gets Enter. Every drawer saved, it then selects **all** cards and
+   presses **Save metadata** once — one save covers the batch (`bulkSave` in the
+   report; nothing is claimed if nothing could be selected).
 7. **Complete once:** after the last icon the run posts `/getty-web/finish`. It
    refuses (and so does the inline tail) while a contribution is missing **or
    says "Upload failed"**, then waits
@@ -54,16 +57,15 @@ or Enter, takes a "sign in with password" option on an SSO screen and returns to
 ## 3. Background, headed, attach, profile and self-check
 
 - Default: `chrome --headless=new` with a throwaway profile (never steals focus).
-- `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window for watching a run. A visible window is never killed: a failed run
-  leaves it up.
+- `--getty-headed` (env `GETTY_WEB_HEADED=1`) shows the window; a visible
+  window is never killed, so a failed run leaves it up.
 - `--getty-profile <folder>` (env `GETTY_WEB_PROFILE`) is what remembers the
   sign-in: the browser is kept between runs (the next upload attaches, and it
   closes politely after ten idle minutes), every close is a real `Browser.close`,
   `--restore-last-session` revives a session-only login, and the helper snapshots
   the browser's cookies into `iconsplitter-session.json` in that folder (mode
   0600, never logged) so a killed or relaunched window still starts signed in —
-  only cookies the live browser is missing are put back. The folder is never
-  deleted by the helper.
+  only cookies the live browser is missing are put back.
 - `--getty-check` prints `browser:`, `launch:`, `socket:`.
 - `--getty-reset --getty-profile <folder>` ends that browser.
 - `--getty-cdp` (= `GETTY_WEB_CDP`) attaches to a browser started with
@@ -79,9 +81,8 @@ folder's port is attached to. A locked folder without a port means a leftover
 window owns it, so the helper ends the browsers carrying that exact
 `--user-data-dir`, clears the stale locks and launches again — no manual "close
 every window" step, no other browser touched. Only a failed reset stops the run,
-naming the folder. Stale `DevToolsActivePort` files go first, every port is
-verified over HTTP, and closing kills the browser tree; a visible window is only
-let go.
+naming the folder. Closing kills the browser tree; a visible window is only let
+go.
 
 ## 4. What is sent
 
@@ -90,16 +91,15 @@ let go.
   (IPTC/XMP/RDF) *and* as a `metadata` field, so the helper can type them into the
   drawer. Only `accepted` icons are sent (`gettyWebMetadataOf`), capped (title 200,
   description 2000, keywords 49 × 64, deduped). The file's own tags are kept.
-- Batch name `IconSplitter <UTC date> (<n> icons)`; submission type
-  `iStock creative illustration`. Completion is attempted (`complete: true`) and
+- Batch name `IconSplitter <UTC date> (<n> icons)`; type `iStock creative
+  illustration`. Completion is attempted (`complete: true`) and
   reported as `completed`/`completion`; `GETTY_WEB_COMPLETE=0` stops after upload.
 
 ## 5. Page contract and failure codes
 
 `driver.mjs` keeps each DOM decision self-contained (serialized with a prelude).
 The prelude declares its own constants and each step runs inside an IIFE, so it
-can be re-injected without redeclaring globals. A helper that named a module
-constant once arrived as a bare `hidden,checkbox,…` list.
+can be re-injected without redeclaring globals.
 Captured Batches handles — `create-batch-button`, the dialog,
 `create-batch-submission-type` (MUI: mousedown, portal `role=listbox`),
 `submission_name`, `event_id`, `create-batch-confirm-button`, the contribution
@@ -125,8 +125,8 @@ of identifier and password.
   used.
 - A thumbnail means Getty took the file, not that it accepted it.
 - An interrupted run can leave a batch short; a duplicate recovers it.
-- Arkose/funCaptcha **cannot** be automated: solve it once headed (it then lives in
-  the profile). Typing and the Angular bridge are proven against a fake CDP.
+- Arkose/funCaptcha **cannot** be automated: solve it once headed (it then lives
+  in the profile). Typing is proven against a fake CDP.
 - The helper types the saved identifier only.
 - Metadata editors and Complete use **label keywords**, `data-cy` and row
   proximity — guesses **not** seen live; a missing editor is reported.

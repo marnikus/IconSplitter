@@ -33,12 +33,18 @@ const connection = (queue: Record<string, unknown[]>) => new FakeConnection(queu
 function successQueue(): Record<string, unknown[]> {
   return {
     openFileMetadata: [{ opened: true, method: "button", label: "Edit metadata" }, { opened: true, method: "button", label: "Edit metadata" }],
-    metadataEditorReady: [{ ready: true, present: true }, { ready: true, present: true }, { ready: true, present: true }],
+    metadataEditorReady: [
+      { ready: true, present: true }, { ready: true, present: true }, { ready: true, present: true },
+      { ready: true, present: true }, { ready: true, present: true },
+    ],
     fillMetadataFields: [
       { filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } },
       { filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } },
     ],
-    saveMetadataEditor: [{ saved: true, label: "Save" }, { saved: true, label: "Save" }],
+    saveMetadataEditor: [
+      { saved: true, label: "Save" }, { saved: true, label: "Save" }, { saved: true, label: "Save metadata" },
+    ],
+    selectAllContributions: [{ selected: 2, method: "select-all" }, { selected: 1, method: "ctrl-click" }],
     closeMetadataEditor: [{ closed: true, label: "Close" }, { closed: true, label: "Close" }],
     completeBatch: [{ clicked: true, label: "Submit batch" }],
     confirmCompletion: [{ confirmed: true, label: "Submit", dialog: true }],
@@ -58,6 +64,7 @@ describe("Getty web automatic finalize", () => {
     // star_01.jpg and star_01.eps are one contribution, so one drawer, not two.
     expect(cdp.steps).toEqual([
       "openFileMetadata", "metadataEditorReady", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
+      "selectAllContributions", "saveMetadataEditor",
       "completeBatch", "confirmCompletion", "readCompletionState",
     ]);
     expect(cdp.expressions.some((e) => e.includes("Charity hand icon"))).toBe(true);
@@ -88,6 +95,37 @@ describe("Getty web automatic finalize", () => {
     expect(filled[0]).toMatch(/"dateCreated":"\d{2}\/\d{2}\/\d{4} 00:00:00 \+0000"/);
   });
 
+  it("selects every file once its Date Created is in and applies Save metadata to all of them", async () => {
+    const cdp = connection(successQueue());
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      complete: false, signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    const steps = cdp.steps.filter((step) => step !== "metadataEditorReady");
+    // Every drawer is saved as it is filled, then the whole selection is saved once.
+    expect(steps).toEqual([
+      "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
+      "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
+      "selectAllContributions", "saveMetadataEditor",
+    ]);
+    if (result.ok) {
+      expect(result.report.bulkSave).toEqual({ selected: 2, method: "select-all", saved: true, label: "Save metadata" });
+      // The bulk pass must not touch the tag count of any file.
+      expect(result.report.metadata.every((entry: { keywords?: unknown }) => entry.keywords === undefined)).toBe(true);
+    }
+  });
+
+  it("reports a bulk save that found nothing to select without claiming it saved", async () => {
+    const queue = { ...successQueue(), selectAllContributions: [{ selected: 0, method: "none" }] };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, signal: new AbortController().signal,
+    });
+    expect(cdp.steps.filter((step) => step === "saveMetadataEditor")).toHaveLength(1);
+    if (result.ok) expect(result.report.bulkSave).toEqual({ selected: 0, method: "none", saved: false, label: null });
+  });
+
   it("keeps the engine and the helper's Date Created identical", () => {
     // The panel formats dates in src/lib; the helper does it in plain ESM, so a
     // test pins both to Getty's own rendering.
@@ -116,15 +154,61 @@ describe("Getty web automatic finalize", () => {
     });
     expect(result.ok).toBe(true);
     const steps = cdp.steps.filter((step) => step !== "metadataEditorReady");
-    expect(steps).toEqual(["openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor"]);
+    expect(steps).toEqual([
+      "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
+      "selectAllContributions", "saveMetadataEditor",
+    ]);
     expect(cdp.steps.filter((step) => step === "metadataEditorReady")).toHaveLength(3);
     if (result.ok) expect(result.report.metadata).toEqual([
       { name: "star_01.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
     ]);
   });
 
+  it("waits for a still-locked drawer before typing so the file flips to ready to upload", async () => {
+    const queue = successQueue();
+    // Getty enables the drawer a moment after the card click.
+    queue.metadataEditorReady = [{ ready: false, present: true }, { ready: true, present: true }];
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      editorPollMs: 0, signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    const steps = cdp.steps.filter((step) => step !== "metadataEditorReady");
+    expect(steps).toEqual([
+      "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
+      "selectAllContributions", "saveMetadataEditor",
+    ]);
+    if (result.ok) expect(result.report.metadata).toEqual([
+      { name: "star_01.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
+    ]);
+  });
+
+  it("re-clicks a card whose drawer never unlocks and types nothing into it", async () => {
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: true, method: "card", label: "star_01.jpg" }, { opened: true, method: "card", label: "star_01.jpg" },
+      ],
+      metadataEditorReady: [{ ready: false, present: true }, { ready: false, present: true }],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      editorPollMs: 0, editorTimeoutMs: 0, signal: new AbortController().signal,
+    });
+    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(2);
+    expect(cdp.steps).not.toContain("fillMetadataFields");
+    if (result.ok) {
+      expect(result.report.metadata).toEqual([{ name: "star_01.jpg", status: "editor-not-ready" }]);
+      // Nothing was saved, so no bulk save is claimed either.
+      expect(result.report.bulkSave).toBeNull();
+    }
+  });
+
   it("reports a drawer that never unlocks instead of claiming the file is ready", async () => {
-    const queue = { ...successQueue(), metadataEditorReady: [{ ready: false, present: true }] };
+    // Both clicks land on a drawer Getty keeps disabled.
+    const queue = { ...successQueue(), metadataEditorReady: [{ ready: false, present: true }, { ready: false, present: true }] };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: false,
@@ -185,6 +269,19 @@ describe("Getty web automatic finalize", () => {
     expect(result).toMatchObject({ ok: false, code: "page" });
     if (!result.ok) expect(result.reason).toContain("Upload failed");
     expect(cdp.steps).not.toContain("completeBatch");
+  });
+
+  it("never submits the batch while Getty reports an Upload failed file", async () => {
+    const cdp = connection(successQueue());
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: null }],
+      failed: ["moon_02.jpg"], complete: true, signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toMatch(/Upload failed/);
+    // A failed card would be locked out by submitting, so Complete is never clicked.
+    expect(cdp.steps).not.toContain("completeBatch");
+    if (result.report) expect(result.report.metadata).toContainEqual({ name: "moon_02.jpg", status: "upload-failed" });
   });
 
   it("stops before completion when the helper is told not to submit", async () => {

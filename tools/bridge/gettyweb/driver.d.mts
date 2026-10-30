@@ -21,7 +21,13 @@ export const fillMetadataFields: (arg: { title?: string; description?: string; k
 export const openFileMetadata: (arg: { fileName: string }) => any;
 /** True once the clicked card's drawer accepts input; disabled fields drop typed text. */
 export const metadataEditorReady: () => { ready: boolean; present: boolean };
-export const saveMetadataEditor: () => any;
+/** Clicks the drawer's captured `[data-cy="save-metadata"]` control (label "Save metadata"). */
+export const saveMetadataEditor: () => { saved: boolean; label: string | null };
+/**
+ * Ticks every uploaded contribution: Getty's own select-all control when the grid
+ * has one, else a Ctrl-click on each card. `method` says which gesture was used.
+ */
+export const selectAllContributions: () => { selected: number; method: string };
 export const closeMetadataEditor: () => any;
 export const dismissPageDialogs: () => any;
 export const completionState: () => { present: boolean; enabled: boolean; label: string | null };

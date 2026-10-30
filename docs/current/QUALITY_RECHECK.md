@@ -4032,3 +4032,13 @@ its counter proves them) and after sending Enter only to the keyword field:
 `verify:fast` Types 8.4 s · Lint 1.8 s (0/21) · Quality gate 0.4 s · Tests +
 coverage 101.6 s · Build 7.0 s → ALL LANES PASSED. `getty_web_driver` 38,
 `getty_web_finalize` 13. SOR 8,994 B, selectors 7,651 B.
+
+## 2026-10-30 — Getty web: one Save metadata covers the whole batch
+Measured after selecting every contribution once all drawers were filled and
+pressing Getty's captured `save-metadata` control a single time (Ctrl-click when
+the grid has no select-all box), after re-clicking a card whose drawer never
+unlocked, and after refusing to submit while an "Upload failed" card is listed:
+`verify:fast` Types 3.8 s · Lint 1.3 s (0/21) · Quality gate 0.5 s · Tests +
+coverage 105.7 s (319 files) · Build 7.5 s → ALL LANES PASSED (twice). Focused:
+`getty_web_driver` 41, `getty_web_finalize` 18, six Getty suites 121.
+SOR 8,946 B, selectors 8,060 B.

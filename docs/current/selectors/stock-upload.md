@@ -33,7 +33,12 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   (`textarea[name="created_date"]`) takes `MM/DD/YYYY 00:00:00 +0000`. Existing
   tags show as `[data-cy="metadata-keyword-chip"]` (or
   `[data-cy="metadata-keyword-current-count"]`): when any are there the keyword
-  input is left alone, so an upload never adds a duplicate tag.
+  input is left alone, so an upload never adds a duplicate tag. Its footer button
+  is `[data-cy="save-metadata"]` (label inside a `<p>`, so it is matched by that
+  attribute, not by button text). Once every drawer is filled the grid is saved
+  in one go: `selectAllContributions` clicks the page's own select-all control
+  (any `[data-cy*="select-all"]` checkbox) when present, else Ctrl-clicks each
+  card's `[data-cy="image-card"]`, then `saveMetadataEditor` runs once.
 - Getty web waits: the Create Batch control, `input[name="submission_name"]` and
   `[data-cy="create-batch-confirm-button"]` must render enabled within 60 s (else a
   `timeout` failure naming the control); an open dialog or an already-chosen

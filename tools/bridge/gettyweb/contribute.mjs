@@ -14,6 +14,8 @@ const STEP_SOURCES = new Map(
 const LOGIN_POLL_MS = 1500;
 const UPLOAD_POLL_MS = 1000;
 const CONFIRM_SETTLE_MS = 700;
+/** Getty needs a moment to persist a grid-wide save and refresh the cards. */
+const BULK_SAVE_SETTLE_MS = 1500;
 const EDITOR_POLL_MS = 500;
 // Getty renders a thumbnail some time after it lists the file; twelve icons of
 // full-size JPEGs take minutes, so the wait for every picture is generous.
@@ -405,15 +407,29 @@ async function waitForEditor(connection, sessionId, options) {
   return { ok: state?.ready !== false, present: state?.present === true };
 }
 
+/**
+ * Clicks the card and waits for its drawer. Getty sometimes drops the first
+ * click, so the card is clicked again once before the file is given up on.
+ */
+async function openDrawer(connection, sessionId, file, options) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const opened = await runDriverStep(connection, sessionId, "openFileMetadata", { fileName: file.name });
+    if (!opened?.opened) return { ok: false, status: "row-not-found" };
+    const ready = await waitForEditor(connection, sessionId, options);
+    if (ready.ok) return { ok: true };
+    await runDriverStep(connection, sessionId, "closeMetadataEditor").catch(() => null);
+    if (options.signal?.aborted) break;
+  }
+  return { ok: false, status: "editor-not-ready" };
+}
+
 /** Opens one file's metadata editor, types the accepted text, and saves it. */
 async function fillOneFileMetadata(connection, sessionId, file, options) {
-  const opened = await runDriverStep(connection, sessionId, "openFileMetadata", { fileName: file.name });
-  if (!opened.opened) return { name: file.name, status: "row-not-found" };
-  const ready = await waitForEditor(connection, sessionId, options);
-  if (!ready.ok) {
-    await runDriverStep(connection, sessionId, "closeMetadataEditor").catch(() => null);
-    options.onProgress?.(`${file.name}: the metadata drawer never unlocked`);
-    return { name: file.name, status: "editor-not-ready" };
+  const drawer = await openDrawer(connection, sessionId, file, options);
+  if (!drawer.ok) {
+    options.onProgress?.(`${file.name}: ${drawer.status === "row-not-found"
+      ? "Getty does not list this file" : "the metadata drawer never unlocked after two clicks, so nothing was typed"}`);
+    return { name: file.name, status: drawer.status };
   }
   const filled = await runDriverStep(connection, sessionId, "fillMetadataFields", {
     title: file.metadata.title, description: file.metadata.description,
@@ -426,18 +442,35 @@ async function fillOneFileMetadata(connection, sessionId, file, options) {
   return { name: file.name, status: saved.saved ? "saved" : "filled-unsaved", fields: filled.filled, ...(tags ? { keywords: tags } : {}) };
 }
 
+/**
+ * Getty saves the whole grid at once: once every drawer has been filled, tick
+ * all contributions and press "Save metadata" so one save covers every file
+ * instead of a drawer-by-drawer rhythm the contributor has to watch.
+ */
+async function saveEverySelected(connection, sessionId, options) {
+  const selection = (await runDriverStep(connection, sessionId, "selectAllContributions")) ?? { selected: 0, method: "none" };
+  if (!selection.selected) {
+    options.onProgress?.("no uploaded contribution could be selected — nothing to save in bulk");
+    return { selected: 0, method: selection.method ?? "none", saved: false, label: null };
+  }
+  const saved = (await runDriverStep(connection, sessionId, "saveMetadataEditor")) ?? { saved: false, label: null };
+  await sleep(BULK_SAVE_SETTLE_MS);
+  options.onProgress?.(`${selection.selected} file(s) selected — ${saved.saved ? `"${saved.label}" applied to all` : "no Save metadata control on the selection"}`);
+  return { selected: selection.selected, method: selection.method ?? "none", saved: saved.saved === true, label: saved.label ?? null };
+}
+
 async function fillEveryFileMetadata(connection, sessionId, options) {
   const report = [];
   const done = new Set();
   for (const file of options.files) {
     if (options.signal?.aborted) return { aborted: true, report };
-    if (!file.metadata) {
-      report.push({ name: file.name, status: "embedded-only" });
-      continue;
-    }
-    // A file Getty rejected has no editor to fill.
+    // A file Getty rejected has no editor to fill, whatever metadata it carries.
     if (wasRejected(file, options)) {
       report.push({ name: file.name, status: "upload-failed" });
+      continue;
+    }
+    if (!file.metadata) {
+      report.push({ name: file.name, status: "embedded-only" });
       continue;
     }
     // A vector pair is one contribution: its drawer is filled once, not twice.
@@ -552,13 +585,21 @@ export async function finishBatch(connection, sessionId, options = {}) {
  */
 export async function finalizeBatch(connection, sessionId, options) {
   const filled = await fillEveryFileMetadata(connection, sessionId, options);
-  const report = { metadata: filled.report, completion: null, state: null };
+  const report = { metadata: filled.report, bulkSave: null, completion: null, state: null };
   if (filled.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", report };
+  // The dates and text are in every drawer, so one save now covers all the files.
+  if (filled.report.some((entry) => entry.status === "saved" || entry.status === "filled-unsaved")) {
+    report.bulkSave = await saveEverySelected(connection, sessionId, options);
+  }
   if (options.complete === false) return { ok: true, report };
-  const failed = (options.failed ?? []).length;
-  if (failed > 0) {
+  const rejected = (options.failed ?? []).filter((name) => typeof name === "string" && name !== "");
+  if (rejected.length > 0) {
     // Submitting a batch that still shows "Upload failed" cards locks those icons out.
-    return { ok: false, code: "page", reason: `Getty reports "Upload failed" for ${failed} file(s) — the batch is not completed`, report };
+    return {
+      ok: false, code: "page",
+      reason: `Getty reports "Upload failed" for ${rejected.length} file(s) (${rejected.slice(0, 3).join(", ")}) — the batch is not completed`,
+      report,
+    };
   }
   const clicked = await runDriverStep(connection, sessionId, "completeBatch");
   if (!clicked.clicked) {

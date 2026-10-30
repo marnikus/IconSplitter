@@ -570,14 +570,44 @@ export function openFileMetadata({ fileName }) {
   return { opened: true, method: "row", label: null };
 }
 
-/** Saves the open metadata editor (Save / Save and close / Apply / Done). */
+/**
+ * Saves the open metadata editor. Getty's drawer footer is the captured
+ * `[data-cy="save-metadata"]` button labelled "Save metadata"; the wider label
+ * match stays for any other editor shape.
+ */
 export function saveMetadataEditor() {
-  const buttons = [...document.querySelectorAll("button, [role=button]")].filter(visible);
-  const save = buttons.find((el) => /^(save|save & close|save and close|save changes|apply|done|update)$/i.test(textOf(el))
-    || /^save/i.test(el.getAttribute("aria-label") ?? ""));
+  const buttons = [...document.querySelectorAll("[data-cy=\"save-metadata\"], button, [role=button]")].filter(visible);
+  const save = buttons.find((el) => el.getAttribute("data-cy") === "save-metadata")
+    ?? buttons.find((el) => /^(save|save metadata|save & close|save and close|save changes|apply|done|update)$/i.test(textOf(el))
+      || /^save/i.test(el.getAttribute("aria-label") ?? ""));
   if (!save) return { saved: false, label: null };
   click(save);
   return { saved: true, label: textOf(save) };
+}
+
+/**
+ * Selects every uploaded contribution so one "Save metadata" applies to all of
+ * them: Getty's own select-all control when the grid has one, else Ctrl-click on
+ * each card (the same gesture a contributor uses).
+ */
+export function selectAllContributions() {
+  const cards = [...document.querySelectorAll(CARD_NAME)].map((el) =>
+    el.closest('[data-cy="item-card"]') ?? el.closest('[data-cy="grid-row"]') ?? el.parentElement ?? el);
+  const unique = [...new Set(cards)];
+  if (unique.length === 0) return { selected: 0, method: "none" };
+  const all = [...document.querySelectorAll('[data-cy*="select-all" i], input[type=checkbox][aria-label*="select all" i]')]
+    .find(shown);
+  if (all) {
+    if (!(all.tagName === "INPUT" && all.checked === true)) click(all);
+    return { selected: unique.length, method: "select-all" };
+  }
+  for (const card of unique) {
+    const target = card.querySelector('[data-cy="image-card"]') ?? card;
+    for (const type of ["mousedown", "mouseup", "click"]) {
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, ctrlKey: true, metaKey: true, button: 0 }));
+    }
+  }
+  return { selected: unique.length, method: "ctrl-click" };
 }
 
 /** Leaves a metadata editor that is still open (Close / Back / Cancel). */
@@ -695,6 +725,7 @@ export const DRIVER_STEPS = [
   "readPageInfo", "fillLoginForm", "focusLoginField", "inspectSignIn", "choosePasswordOption", "submitLogin",
   "openCreateBatchDialog", "openSubmissionTypeMenu",
   "chooseSubmissionTypeOption", "fillBatchDetails", "submitBatchCreation", "readUploadState",
-  "fillMetadataFields", "openFileMetadata", "metadataEditorReady", "saveMetadataEditor", "closeMetadataEditor",
+  "fillMetadataFields", "openFileMetadata", "metadataEditorReady", "saveMetadataEditor", "selectAllContributions",
+  "closeMetadataEditor",
   "dismissPageDialogs", "completionState", "completeBatch", "confirmCompletion", "readCompletionState",
 ];

@@ -631,6 +631,39 @@ describe("Getty batch page as captured", () => {
     expect(enters).toEqual(["keywords"]);
   });
 
+  it("finds Getty's own Save metadata button in the drawer footer", () => {
+    mount(`<form data-cy="metadata-form"></form>
+      <div><button type="button" data-cy="save-metadata"><p>Save metadata</p></button></div>`);
+    let clicked = 0;
+    document.querySelector('[data-cy="save-metadata"]')!.addEventListener("click", () => { clicked += 1; });
+    expect(driver.saveMetadataEditor()).toEqual({ saved: true, label: "Save metadata" });
+    expect(clicked).toBe(1);
+  });
+
+  it("selects every contribution with Ctrl when Getty offers no select-all control", () => {
+    mount(`<div data-cy="grid-row"><div data-cy="item-card">
+        <div data-cy="image-card"></div><p data-cy="contribution-file-name">a.eps</p></div></div>
+      <div data-cy="grid-row"><div data-cy="item-card">
+        <div data-cy="image-card"></div><p data-cy="contribution-file-name">b.eps</p></div></div>`);
+    const modifiers: boolean[] = [];
+    for (const card of document.querySelectorAll('[data-cy="image-card"]')) {
+      card.addEventListener("click", (event) => modifiers.push((event as MouseEvent).ctrlKey));
+    }
+    expect(driver.selectAllContributions()).toEqual({ selected: 2, method: "ctrl-click" });
+    expect(modifiers).toEqual([true, true]);
+  });
+
+  it("uses the page's select-all control when there is one", () => {
+    mount(`<input type="checkbox" data-cy="select-all" aria-label="Select all" />
+      <div data-cy="grid-row"><div data-cy="item-card"><div data-cy="image-card"></div>
+        <p data-cy="contribution-file-name">a.eps</p></div></div>`);
+    const box = document.querySelector<HTMLInputElement>('[data-cy="select-all"]')!;
+    let clicked = 0;
+    box.addEventListener("click", () => { clicked += 1; });
+    expect(driver.selectAllContributions()).toEqual({ selected: 1, method: "select-all" });
+    expect(clicked).toBe(1);
+  });
+
   it("reports the metadata editor as not ready while its fields are still disabled", () => {
     mount(CARD_PAGE);
     expect(driver.metadataEditorReady()).toMatchObject({ ready: false, present: true });
