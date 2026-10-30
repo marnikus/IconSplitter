@@ -14,6 +14,8 @@ import {
   finishBridgeGettyWeb, uploadBridgeGettyWeb, type GettyWebErrorCode, type GettyWebFinishInput,
   type GettyWebResult, type GettyWebUploadInput,
 } from "../lib/stockupload/gettywebclient";
+import type { GettyWebIcon } from "../lib/stockupload/gettywebclient";
+import { stagedIcon, stagedRanks, withRealNames } from "../lib/stockupload/gettywebnames";
 import { prepareGettyWebIcon, type GettyWebIconInput } from "../lib/stockupload/gettywebprep";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { StockFtpPreset } from "../lib/stockupload/types";
@@ -91,15 +93,29 @@ async function prepareMembers(state: RunState, members: readonly number[]): Prom
   return prepared;
 }
 
+/**
+ * The icons of one request as the page receives them. A random batch carries a
+ * shuffled rank in front of every name, because Getty lists a batch by file name
+ * — the request order alone cannot mix cards the site sorts itself. With the
+ * option off the names go out exactly as the user's files are called.
+ */
+function stagedIcons(state: RunState, prepared: readonly PreparedIcon[]): GettyWebIcon[] {
+  const icons = prepared.map((entry) => entry.icon);
+  if (state.input.randomizeBatches !== true) return icons;
+  const ranks = stagedRanks(icons.map((icon) => icon.files[0]?.name ?? ""), state.input.rng);
+  return icons.map((icon, index) => stagedIcon(icon, ranks[index]));
+}
+
 /** Sends the batch; the request itself is one attach for the whole chunk. */
-function sendBatch(state: RunState, prepared: readonly PreparedIcon[], batchName: string): Promise<GettyWebResult> {
+async function sendBatch(state: RunState, prepared: readonly PreparedIcon[], batchName: string): Promise<GettyWebResult> {
   const send = state.input.uploadFn ?? uploadBridgeGettyWeb;
-  return send({
+  const res = await send({
     bridgeUrl: state.input.bridgeUrl, preset: state.input.target, creds: state.input.creds,
-    icons: prepared.map((entry) => entry.icon), batchName,
+    icons: stagedIcons(state, prepared), batchName,
     submissionType: state.input.submissionType, complete: false, newBatch: true,
     sessionKey: state.input.sessionKey, signal: state.input.signal,
   });
+  return state.input.randomizeBatches === true ? withRealNames(res) : res;
 }
 
 /** Only the batches Getty closed are counted, and only its own reading says so. */
