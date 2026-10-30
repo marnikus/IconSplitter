@@ -4346,3 +4346,14 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   PASSED; `verify:fast` ALL LANES PASSED; full suite 3,445 / 3,446 (only
   `algo_efficiency` 209.6 ms vs its 200 ms budget, environmental); helper 11
   files / 258 tests green; docs 4/4 (soR 8,998 B, selectors 8,994 B).
+- 2026-10-30 — `Random batches` now also mixes each drawn 100-icon batch inside
+  itself (`mixedBatch` → `randomBatchOrder` over the chunk, the run's own rng), so
+  neighbouring stems from the list are never uploaded side by side; the check
+  that decides batch membership stays the same one-time permutation, and with the
+  box off the batch keeps the user's row order exactly. New test:
+  `stockupload_getty_web` "also mixes the icons inside a random batch, not just
+  between batches" (off = star/moon/sun row order; on with `rng = () => 0` =
+  sun/star/moon, i.e. draw `[b,c,a]` then mix to `[c,a,b]`).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; `tests/stockupload*` 14 files / 102
+  tests green; docs 4/4 (soR 8,997 B).

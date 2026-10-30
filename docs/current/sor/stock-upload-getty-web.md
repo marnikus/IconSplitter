@@ -14,20 +14,21 @@ browser.
 1. The user saves the contributor **numeric ID** (or e-mail) and password in the
    vault, then presses **Test connection** or **Upload**; `panelops.ts` probes
    `/health` (`ready`, `browser`, `maxBytes`): a missing browser or old helper
-   fails with a hint.
+   fails.
 2. `runupload.ts` groups tasks **per icon** — a JPEG/EPS pair is **one**
    contribution, matched by **stem** — one `sessionKey` per target, then hands them to
    `uploadGettyWebRun`.
 3. **The run is N batches of ≤ 100 icons** (`planGettyWebBatches`, mirrored by
-   the helper's `MAX_ICONS`): one icon is one upload (JPEG plus EPS) — Getty lists
+   `MAX_ICONS`): one icon is one upload (JPEG plus EPS) — Getty lists
    a pair once under the EPS name — so 100 pairs
    (200 files) are one batch, 101 icons two. A batch also ends early at the request
-   budget: `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) capped at 64 MB
-   here, or 16 MB for a helper reporting none. A batch name is
-   the date, place and size — `2026-10-30 2/3 (100 icons)` — no product
+   budget: `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) capped at 64 MB,
+   or 16 MB for a helper reporting none. A batch name is
+   date, place and size — `2026-10-30 2/3 (100 icons)` — no product
    name. The opt-in `Random batches` (`stock-random-batches`, persisted) draws
    each batch from the icons not yet sent: `randomBatchOrder` shuffles the indexes
-   once, so every icon still goes once and the last batch holds the rest.
+   once, so every icon still goes once and the last batch holds the rest, and each
+   batch is mixed inside itself, so similar stems do not go up side by side.
 4. `/getty-web/upload` runs **once per batch** with `newBatch: true`: the helper
    stages that chunk, signs in once per run, returns to the contributor page,
    creates the batch (`session.startBatch` resets its id, names and counts)
@@ -38,20 +39,19 @@ browser.
 5. An oversized body is drained, answered 413; a request never answered is
    retried **in halves** (twice), since it carried nothing. **If nothing new appears for 30 s** the page is
    reloaded and the missing files re-attached; a timed-out read, or a card with no
-   **picture** for that window, is the same stall (twice per batch, then it fails
-   honestly). It waits until every file is listed, then for
+   **picture** for that window, is the same stall (twice per batch, then it fails). It waits until every file is listed, then for
    each card's picture or `pending-icon` chip — a thumbnail
    arms the metadata step; the chip appears **only after** a save. `invalid-file-media` ("Upload failed") is a rejection
-   named with Getty's id. `GET /getty-web/progress` (1 s poll) counts **arrivals**, so
+   named with Getty's id. `GET /getty-web/progress` (1 s) counts **arrivals**, so
    the bar says "uploaded", never "complete".
 6. **Metadata:** per contribution it selects the card by stem (twice if Getty
    drops the click), types title and description and writes **today's date** into
    Date Created as Getty renders it (`MM/DD/YYYY 00:00:00 +0000`). Prefilled prose
    stays, the date is replaced, but **tags are never touched** (the keyword field
    only gets Enter). Every drawer saved, it selects **all** cards and presses
-   **Save metadata** (`bulkSave`). A `[data-cy="metadata-skeleton"]`
-   drawer, or one that never unlocks, reloads the page at once and walks again
-   from the **first** file (once), skipping only cards with no picture.
+   **Save metadata** (`bulkSave`). A `metadata-skeleton` drawer, or
+   one that never unlocks, reloads the page at once and walks again from the
+   **first** file (once), skipping cards with no picture.
    **Then it verifies:** every card must show `pending-icon` /
    `aria-label="Ready to submit"`, and the bar climbs with them. A card
    still showing `not-ready-icon` follows a 30 s ladder: **Save metadata again**,
@@ -66,7 +66,7 @@ browser.
    missing or says "Upload failed" (rejected files are re-uploaded once).
    **No Complete/Submit control is not an error:** every card carrying
    "Ready to submit" *is* the finished state (`ok: true`, `ready: true`,
-   `completed: false`), and `accepted` is the chip list, so the app badges only
+   `completed: false`); `accepted` is the chip list, so the app badges only
    what Getty validated. The next batch follows in that session.
 8. **The re-upload list:** an icon whose card showed no thumbnail, was never
    listed or read "Upload failed" is queued and retried **exactly once**
@@ -99,10 +99,10 @@ browsers, clearing locks, relaunching.
 
 ## 4. What is sent
 
-- One JPEG per icon plus its matching-stem EPS; SVG, PNG, ZIP are refused.
+- One JPEG per icon plus its matching-stem EPS; SVG, PNG, ZIP refused.
 - Title, description and keywords travel inside the JPEG/EPS (IPTC/XMP/RDF)
   *and* as a capped `metadata` field (title 200, description 2000, keywords
-  49 × 64, deduped); the file's tags stay.
+  49 × 64, deduped); tags stay.
 - Type `iStock creative illustration`; the run completes each batch via
   `/getty-web/finish` and reports `completed`/`completion`/`ready`;
   `GETTY_WEB_COMPLETE=0` stops after upload. A failed upload
@@ -118,7 +118,7 @@ handles: `fillLoginForm`/`inspectSignIn`/`submitLogin` match behaviour, and
 text is typed (`Input.insertText` plus `angular.element(el)`, since
 `ng-app="SignInApp"` ignores `.value =`). Codes: `bad-request` 400, `auth` 401,
 `browser` 503, `timeout` 504 (no batch page, a name missing, control never ready,
-an unvalidated file), `cancelled` 499, `page` 502. No credentials in a reason.
+an unvalidated file), `cancelled` 499, `page` 502; no credentials in a reason.
 
 ## 6. Honest limits
 

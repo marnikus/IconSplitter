@@ -195,8 +195,18 @@ function primaryOrder(state: RunState): number[] {
   return randomBatchOrder(count, state.input.rng);
 }
 
+/**
+ * A drawn batch is mixed inside itself too: neighbouring stems sit side by side
+ * in the list, so a random slice of it can still hand Getty near-duplicate files
+ * in a row. Off, the batch keeps the user's row order untouched.
+ */
+function mixedBatch(state: RunState, chunk: readonly number[]): number[] {
+  if (state.input.randomizeBatches !== true) return [...chunk];
+  return randomBatchOrder(chunk.length, state.input.rng).map((slot) => chunk[slot]);
+}
+
 async function runPrimaryPass(state: RunState): Promise<void> {
-  const chunks = chunkOf(state, primaryOrder(state));
+  const chunks = chunkOf(state, primaryOrder(state)).map((chunk) => mixedBatch(state, chunk));
   for (let k = 0; k < chunks.length; k += 1) {
     if (stopped(state)) return;
     await runBatch(state, membersWithRetries(state, chunks[k]), { index: k + 1, total: chunks.length });

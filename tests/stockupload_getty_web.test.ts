@@ -210,6 +210,50 @@ describe("Getty web upload in the batch runner", () => {
     expect(shuffled).toEqual([["moon_02.jpg", "moon_02.eps"], ["star_01.jpg", "star_01.eps"]]);
   });
 
+  it("also mixes the icons inside a random batch, not just between batches", async () => {
+    // Similar stems sit next to each other in the list, so a drawn slice of the
+    // list still keeps them together: the batch itself is shuffled too.
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+    addExported(root, "icon-3", "c", "sun_03", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const send = async (random: boolean, rng?: () => number): Promise<string[][]> => {
+      const sent: string[][] = [];
+      await executeStockUploadBatch(planFor(found.items), {
+        root,
+        bridgeUrl: "http://127.0.0.1:47391",
+        signal: new AbortController().signal,
+        loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+        gettyWebMaxIcons: 3,
+        gettyWebRandomBatches: random,
+        gettyWebRandomFn: rng,
+        gettyWebUploadFn: async (input) => {
+          sent.push(input.icons.flatMap((icon) => icon.files.map((file) => file.name)));
+          return {
+            ok: true, batchId: "b", accepted: input.icons.flatMap((icon) => icon.files.map((f) => f.name)),
+            failed: [], completed: false, completion: null, metadata: [],
+          };
+        },
+        finishGettyWebFn: async () => ({
+          ok: true, batchId: "b", accepted: [], completed: true,
+          completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
+        }),
+        closeGettyWebFn: async () => undefined,
+      });
+      return sent;
+    };
+    // Off: the list order, as the user sees it.
+    expect(await send(false)).toEqual([[
+      "star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps", "sun_03.jpg", "sun_03.eps",
+    ]]);
+    // On: one draw picks the members ([b, c, a]), the next draw mixes them inside
+    // the batch ([c, a, b]) — never the drawn order itself.
+    expect(await send(true, () => 0)).toEqual([[
+      "sun_03.jpg", "sun_03.eps", "star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps",
+    ]]);
+  });
+
   it("keeps the bar's total across batches instead of restarting at every 100 icons", async () => {
     // Batch 1's icons were validated, so batch 2 starts from them: the panel used
     // to fall back to batch 2's own counts (0 of 418) and never recovered.
