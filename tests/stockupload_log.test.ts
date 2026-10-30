@@ -13,19 +13,20 @@ import { SHUTTERSTOCK_PRESET } from "../src/lib/stockupload/presets";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import {
-  STOCKUPLOAD_FEATURE, STOCKUPLOAD_LOG_ACTIONS, batchSubmittedSpec, failedSpec, pageReloadedSpec,
+  STOCKUPLOAD_FEATURE, STOCKUPLOAD_LOG_ACTIONS, batchReadySpec, batchSubmittedSpec, failedSpec, pageReloadedSpec,
   reloadNoteOf, runFinishedSpec, runStartedSpec, uploadedSpec,
 } from "../src/stockupload/stockuploadlog";
 
 describe("stock upload log vocabulary", () => {
   it("keeps one closed set of actions and never a data field", () => {
     expect([...STOCKUPLOAD_LOG_ACTIONS]).toEqual([
-      "run-started", "uploaded", "failed", "page-reloaded", "batch-submitted", "run-finished",
+      "run-started", "uploaded", "failed", "page-reloaded", "batch-submitted", "batch-ready", "run-finished",
     ]);
     for (const spec of [
       runStartedSpec({ targets: ["Getty"], files: 4 }), uploadedSpec({ target: "Getty", file: "a.jpg" }),
       failedSpec({ target: "Getty", file: "a.jpg", reason: "no answer" }), pageReloadedSpec({ target: "Getty", reloads: 1 }),
-      batchSubmittedSpec("Getty"), runFinishedSpec({ uploaded: 1, failed: 1, cancelled: false, lastError: "x" }),
+      batchSubmittedSpec("Getty"), batchReadySpec({ target: "Getty", files: 4 }),
+      runFinishedSpec({ uploaded: 1, failed: 1, cancelled: false, lastError: "x" }),
     ]) {
       expect(spec.feature).toBe(STOCKUPLOAD_FEATURE);
       expect(spec).not.toHaveProperty("data");
@@ -46,6 +47,15 @@ describe("stock upload log vocabulary", () => {
   it("says the page was reloaded, since a stalled upload otherwise looks frozen", () => {
     expect(pageReloadedSpec({ target: "Getty Images", reloads: 2 })).toMatchObject({
       level: "warn", action: "page-reloaded", detail: "Getty Images: no progress for 30 s — page reloaded (2)",
+    });
+  });
+
+  it("says a batch with no Complete button is ready to submit, at info level", () => {
+    // A finished run must not read like a failure just because Getty had no
+    // control left to click.
+    expect(batchReadySpec({ target: "Getty Images", files: 14 })).toMatchObject({
+      level: "info", action: "batch-ready",
+      detail: "Getty Images: 14 file(s) ready to submit — Getty has no Complete button on this batch",
     });
   });
 

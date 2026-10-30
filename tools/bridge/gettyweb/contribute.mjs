@@ -20,6 +20,12 @@ const EDITOR_POLL_MS = 500;
 // Getty renders a thumbnail some time after it lists the file; twelve icons of
 // full-size JPEGs take minutes, so the wait for every picture is generous.
 const VERIFY_TIMEOUT_MS = 300000;
+// A saved card only becomes submittable once Getty has validated it, and that
+// icon is the run's success proof. When a card stays unvalidated the grid-wide
+// save is pressed again after this window — the re-apply that flips it.
+const READY_RETRY_MS = 30000;
+const READY_RESAVES = 2;
+const READY_TIMEOUT_MS = 75000;
 // Getty's page sometimes simply stops reacting to its own uploader. Reloading it
 // (and attaching only what is still missing) is the recovery that works there.
 const STALL_MS = 30000;
@@ -542,6 +548,126 @@ export function failedContributions(expected, state) {
 }
 
 /**
+ * The run's contributions that do **not** carry Getty's "Ready to submit"
+ * validation icon yet. A thumbnail only proves the bytes arrived; this icon is
+ * the page's own statement that the file passed validation and may be submitted.
+ */
+export function notReadyContributions(expected, state) {
+  const ready = new Set((state?.readyToSubmit ?? []).map(stemOf));
+  return [...new Set(expected.map(stemOf))].filter((stem) => !ready.has(stem));
+}
+
+/** Why a file Getty never marked ready is reported — named, never counted only. */
+function notReadyReason(pending, resaves) {
+  const named = pending.slice(0, 3).join(", ");
+  const again = resaves > 0 ? ` after saving the metadata ${resaves + 1} times` : "";
+  return `Getty does not show its "Ready to submit" icon for ${pending.length} file(s) (${named})${again} — the upload is not complete`;
+}
+
+/**
+ * Waits until every contribution shows Getty's own "Ready to submit" icon, the
+ * only proof that a file may be submitted. A card that stays unvalidated gets the
+ * grid-wide Save metadata pressed again (only the pending ones matter), because
+ * that second save is what flips it. A page that cannot report readiness at all
+ * (no contribution cards, or a reading that failed) is reported as unverified
+ * instead of being guessed either way.
+ */
+async function waitForReadyToSubmit(connection, sessionId, expected, options, first) {
+  const retryMs = options.readyRetryMs ?? READY_RETRY_MS;
+  const deadline = Date.now() + (options.readyTimeoutMs ?? READY_TIMEOUT_MS);
+  const maxResaves = options.readyResaves ?? READY_RESAVES;
+  const total = contributionCount(expected);
+  let resaves = 0;
+  let nextSaveAt = Date.now() + retryMs;
+  let state = first ?? null;
+  if (state === null) {
+    const read = await readStateSafe(connection, sessionId, expected);
+    state = read.ok ? read.state : null;
+  }
+  // A page that renders no contribution cards (or did not answer) cannot state
+  // readiness: report it unverified rather than guess either way.
+  if (state === null || state.cardsPresent === false) {
+    return { ok: true, verified: false, ready: 0, total, notReady: [], resaves, state };
+  }
+  for (;;) {
+    const pending = notReadyContributions(expected, state);
+    if (pending.length === 0) {
+      return { ok: true, verified: true, ready: total, total, notReady: [], resaves, state };
+    }
+    if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", notReady: pending, total, resaves, state };
+    if (Date.now() >= deadline) return { ok: false, code: "timeout", reason: notReadyReason(pending, resaves), notReady: pending, total, resaves, state };
+    if (resaves < maxResaves && Date.now() >= nextSaveAt) {
+      resaves += 1;
+      nextSaveAt = Date.now() + retryMs;
+      options.onProgress?.(`${pending.length} file(s) are not ready to submit — saving the metadata again (${resaves}/${maxResaves})`);
+      await saveEverySelected(connection, sessionId, options).catch(() => null);
+      const reread = await readStateSafe(connection, sessionId, expected);
+      if (reread.ok) state = reread.state;
+      continue;
+    }
+    await sleep(pollMsOf(options));
+    const read = await readStateSafe(connection, sessionId, expected);
+    if (read.ok) state = read.state;
+  }
+}
+
+/** The readiness part of a report: what Getty marked, and how often it was asked. */
+function readinessReport(readiness) {
+  return {
+    ok: readiness.ok === true, verified: readiness.verified !== false,
+    ready: readiness.ready ?? 0, total: readiness.total ?? 0,
+    notReady: readiness.notReady ?? [], resaves: readiness.resaves ?? 0,
+  };
+}
+
+/** A batch Getty does not offer a Complete/Submit control for, at all. */
+const NO_COMPLETION = { clicked: false, label: null, confirmed: false, confirmLabel: null };
+
+/**
+ * Clicks Complete/Submit when it can be clicked and accepts whatever dialog it
+ * raises. Returns null when the control was not clickable, so the caller can
+ * decide: an unvalidated file is a refusal, a validated one is simply finished.
+ */
+async function clickComplete(connection, sessionId, options) {
+  const clicked = await runDriverStep(connection, sessionId, "completeBatch");
+  if (!clicked?.clicked) return null;
+  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
+  const confirmed = await runDriverStep(connection, sessionId, "confirmCompletion").catch(() => null);
+  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
+  const after = await runDriverStep(connection, sessionId, "readCompletionState");
+  options.onProgress?.(after.submitted ? "Getty shows the batch as submitted" : `batch completion sent (${clicked.label})`);
+  return {
+    completion: { clicked: true, label: clicked.label, confirmed: confirmed?.confirmed === true, confirmLabel: confirmed?.label ?? null },
+    state: { submitted: after.submitted, canComplete: after.canComplete },
+  };
+}
+
+/**
+ * The captured batch page has no Complete/Submit control at all. Every icon
+ * carrying Getty's "Ready to submit" validation then *is* the finished state:
+ * nothing is left for the helper to click, and reporting an error there is what
+ * made a finished run look failed.
+ */
+async function finishOnIcons(connection, sessionId, expected, options, state) {
+  const readiness = await waitForReadyToSubmit(connection, sessionId, expected, options, state);
+  const report = {
+    metadata: [], readiness: readinessReport(readiness), completion: NO_COMPLETION,
+    state: { submitted: false, canComplete: false },
+    contributions: { expected: contributionCount(expected), listed: contributionCount(expected) - readiness.notReady.length },
+  };
+  if (!readiness.ok) {
+    return {
+      ok: false, code: readiness.code ?? "timeout", report, state: readiness.state ?? state,
+      reason: `Getty shows no Complete/Submit control and ${readiness.reason}`,
+    };
+  }
+  options.onProgress?.(readiness.verified
+    ? "every file shows Ready to submit — Getty has no Complete button here, so this batch is finished"
+    : "Getty shows no Complete button and no contribution cards — nothing is left to click on this batch");
+  return { ok: true, report };
+}
+
+/**
  * Getty enables Complete only once it has the files; a click on a disabled
  * control does nothing, so the wait is honest and bounded instead of silent.
  */
@@ -564,89 +690,108 @@ async function waitForCompletionEnabled(connection, sessionId, options) {
   };
 }
 
+/** The file names a step speaks about; anything that is not a name is ignored. */
+function namesOf(value) {
+  return (Array.isArray(value) ? value : []).filter((name) => typeof name === "string" && name !== "");
+}
+
 /**
- * Ends the run: submits the one batch every icon was uploaded into. Refuses when a
- * contribution of the run is not on the page yet, because submitting early locks
- * the batch and leaves the remaining icons out — the bug that dropped icon 2.
+ * Why the batch must not be clicked yet — a contribution still missing, or one
+ * Getty answered with "Upload failed" (submitting would lock that icon out).
  */
-export async function finishBatch(connection, sessionId, options = {}) {
-  if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
-  const expected = (Array.isArray(options.expected) ? options.expected : [])
-    .filter((name) => typeof name === "string" && name !== "");
-  const total = contributionCount(expected);
-  const state = await runDriverStep(connection, sessionId, "readUploadState", { names: expected });
-  const listed = listedContributions(expected, state);
+function finishRefusal(expected, state, total, listed) {
   if (total > 0 && listed < total) {
     return {
-      ok: false, code: "timeout",
-      reason: `Getty lists ${listed} of ${total} contribution(s) — not completing the batch`, state,
+      ok: false, code: "timeout", state,
+      reason: `Getty lists ${listed} of ${total} contribution(s) — not completing the batch`,
     };
   }
   const failed = failedContributions(expected, state);
-  if (failed > 0) {
-    return {
-      ok: false, code: "page",
-      reason: `Getty reports "Upload failed" for ${failed} of ${total} contribution(s) — remove or re-upload them, then finish the batch`, state,
-    };
-  }
+  if (failed === 0) return null;
+  return {
+    ok: false, code: "page", state,
+    reason: `Getty reports "Upload failed" for ${failed} of ${total} contribution(s) — remove or re-upload them, then finish the batch`,
+  };
+}
+
+/**
+ * Ends the run: submits the one batch every icon was uploaded into. Refuses when a
+ * contribution of the run is not on the page yet, because submitting early locks
+ * the batch and leaves the remaining icons out — the bug that dropped icon 2. On a
+ * page without a Complete/Submit control the cards' own "Ready to submit" icons
+ * decide: all ready means the run is finished, so no control is not an error.
+ */
+export async function finishBatch(connection, sessionId, options = {}) {
+  if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
+  const expected = namesOf(options.expected);
+  const total = contributionCount(expected);
+  const state = await runDriverStep(connection, sessionId, "readUploadState", { names: expected });
+  const listed = listedContributions(expected, state);
+  const refusal = finishRefusal(expected, state, total, listed);
+  if (refusal !== null) return refusal;
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
+  const control = await runDriverStep(connection, sessionId, "completionState");
+  if (!control?.present) return finishOnIcons(connection, sessionId, expected, options, state);
   const ready = await waitForCompletionEnabled(connection, sessionId, options);
   if (!ready.ok) return { ...ready, state };
-  const clicked = await runDriverStep(connection, sessionId, "completeBatch");
-  if (!clicked?.clicked) {
-    return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", state };
+  const done = await clickComplete(connection, sessionId, options);
+  if (done === null) return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", state };
+  return { ok: true, report: { metadata: [], ...done, contributions: { expected: total, listed } } };
+}
+
+/** Whether any drawer was filled, i.e. whether a grid-wide save is worth it. */
+function anyDrawerSaved(report) {
+  return report.some((entry) => entry.status === "saved" || entry.status === "filled-unsaved");
+}
+
+/**
+ * A batch Getty offers no clickable Complete/Submit control for. Every icon
+ * carrying the "Ready to submit" validation is then a finished run; only an
+ * unvalidated or unreadable page is a refusal.
+ */
+async function finishValidated(connection, sessionId, options, report, readiness) {
+  const done = await clickComplete(connection, sessionId, options);
+  if (done !== null) {
+    report.completion = done.completion;
+    report.state = done.state;
+    return { ok: true, report };
   }
-  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
-  const confirmed = await runDriverStep(connection, sessionId, "confirmCompletion").catch(() => null);
-  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
-  const after = await runDriverStep(connection, sessionId, "readCompletionState");
-  options.onProgress?.(after.submitted ? "Getty shows the batch as submitted" : `batch completion sent (${clicked.label})`);
+  if (readiness.verified === true) {
+    report.completion = NO_COMPLETION;
+    report.state = { submitted: false, canComplete: false };
+    options.onProgress?.("every file shows Ready to submit — Getty has no Complete button here, so this batch is finished");
+    return { ok: true, report };
+  }
   return {
-    ok: true,
-    report: {
-      metadata: [],
-      completion: { clicked: true, label: clicked.label, confirmed: confirmed?.confirmed === true, confirmLabel: confirmed?.label ?? null },
-      state: { submitted: after.submitted, canComplete: after.canComplete },
-      contributions: { expected: total, listed },
-    },
+    ok: false, code: "page", report,
+    reason: "Getty shows no Complete/Submit control and the batch page lists no contribution cards — finish it on the contributor page",
   };
 }
 
 /**
  * The automatic tail of a run: type each icon's accepted title/description/
- * keywords into its editor (never overwriting what Getty prefilled), then
- * click Complete/Submit and accept its confirmation dialog.
+ * keywords into its editor (never overwriting what Getty prefilled), save the
+ * grid once, then wait for Getty's own "Ready to submit" icon on every card —
+ * that icon, not the thumbnail, is what proves the file may be submitted.
  */
 export async function finalizeBatch(connection, sessionId, options) {
   const filled = await fillEveryFileMetadata(connection, sessionId, options);
-  const report = { metadata: filled.report, bulkSave: null, completion: null, state: null };
+  const report = { metadata: filled.report, bulkSave: null, readiness: null, completion: null, state: null };
   if (filled.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", report };
   // The dates and text are in every drawer, so one save now covers all the files.
-  if (filled.report.some((entry) => entry.status === "saved" || entry.status === "filled-unsaved")) {
-    report.bulkSave = await saveEverySelected(connection, sessionId, options);
-  }
-  if (options.complete === false) return { ok: true, report };
-  const rejected = (options.failed ?? []).filter((name) => typeof name === "string" && name !== "");
+  if (anyDrawerSaved(filled.report)) report.bulkSave = await saveEverySelected(connection, sessionId, options);
+  const rejected = namesOf(options.failed);
   if (rejected.length > 0) {
     // Submitting a batch that still shows "Upload failed" cards locks those icons out.
     return {
-      ok: false, code: "page",
+      ok: false, code: "page", report,
       reason: `Getty reports "Upload failed" for ${rejected.length} file(s) (${rejected.slice(0, 3).join(", ")}) — the batch is not completed`,
-      report,
     };
   }
-  const clicked = await runDriverStep(connection, sessionId, "completeBatch");
-  if (!clicked.clicked) {
-    return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", report };
-  }
-  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
-  const confirmed = await runDriverStep(connection, sessionId, "confirmCompletion");
-  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
-  const state = await runDriverStep(connection, sessionId, "readCompletionState");
-  report.completion = {
-    clicked: true, label: clicked.label, confirmed: confirmed.confirmed, confirmLabel: confirmed.label,
-  };
-  report.state = { submitted: state.submitted, canComplete: state.canComplete };
-  options.onProgress?.(state.submitted ? "Getty shows the batch as submitted" : `batch completion sent (${clicked.label})`);
-  return { ok: true, report };
+  const names = namesOf((options.files ?? []).map((file) => file?.name));
+  const readiness = await waitForReadyToSubmit(connection, sessionId, names, options);
+  report.readiness = readinessReport(readiness);
+  if (!readiness.ok) return { ok: false, code: readiness.code ?? "timeout", reason: readiness.reason, report };
+  if (options.complete === false) return { ok: true, report };
+  return finishValidated(connection, sessionId, options, report, readiness);
 }

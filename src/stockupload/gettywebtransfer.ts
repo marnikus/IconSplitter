@@ -120,10 +120,14 @@ const GETTY_WEB_NOT_COMPLETED_NOTE =
 /**
  * A Getty web upload that uploaded but stopped before Complete needs a manual
  * finish. Per-file work defers completion on purpose (`deferCompletion`), so
- * this only speaks for the single finish call at the end of the run.
+ * this only speaks for the single finish call at the end of the run. A batch
+ * whose every card carries Getty's "Ready to submit" icon is finished too: the
+ * page simply had no Complete/Submit control to click.
  */
-export function completionNote(res: { ok: boolean; completed?: boolean; deferCompletion?: boolean }): string | null {
-  if (!res.ok || res.completed || res.deferCompletion) return null;
+export function completionNote(
+  res: { ok: boolean; completed?: boolean; deferCompletion?: boolean; ready?: boolean },
+): string | null {
+  if (!res.ok || res.completed || res.deferCompletion || res.ready === true) return null;
   return GETTY_WEB_NOT_COMPLETED_NOTE;
 }
 
@@ -152,7 +156,10 @@ export function progressLabel(progress: GettyWebProgress, targetName: string): s
   const of = progress.total > 0 ? ` of ${progress.total}` : "";
   const failed = progress.failed > 0 ? `, ${progress.failed} failed` : "";
   const reloaded = progress.reloads > 0 ? " — page reloaded to get it moving" : "";
+  const ready = progress.ready ?? 0;
   if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
+  // Readiness is what makes a file submittable, so it is said out loud.
+  if (ready > 0) return `${targetName}: ${ready}${of} file(s) ready to submit${failed}${reloaded}`;
   return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}${reloaded}`;
 }
 

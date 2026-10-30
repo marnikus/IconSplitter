@@ -16,7 +16,7 @@ import type { StockModelAction, StockRefs, StockUploadModel } from "./model";
 import type { StockUploadPrefs } from "./prefsstore";
 import { ALL_STOCK_FILTER, initialMetaDraft, type StockListFilter, type StockMetaDraft, type StockUploadSort } from "./rowlist";
 import { log } from "../log/logstore";
-import { executeStockUploadBatch, type UploadBatchSummary } from "./runupload";
+import { executeStockUploadBatch, type UploadBatchSummary, type UploadProgressStep } from "./runupload";
 import { rememberStockRoot } from "./scan";
 
 export interface OpsCtx {
@@ -47,6 +47,8 @@ export interface StockPanelOps {
   startUploadFlow: () => void;
   confirmUpload: () => void;
   cancelUpload: () => void;
+  /** Closes a finished (or cancelled) bar there is nothing left to watch. */
+  dismissProgress: () => void;
   downloadGettyCsv: () => void;
 }
 
@@ -133,9 +135,20 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
     onCertWarning: (_id, sha256) => c.dispatch({ type: "patch", patch: { testStatus: { busy: false, ok: false, note: "Server certificate requires trust", certSha256: sha256 } } }),
   });
   c.r.abort.current = null;
-  c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
   const msg = summarizeBatch(summary, plan.targets.length);
+  c.dispatch({ type: "patch", patch: { uploading: false, progress: finishedProgress(plan, summary, msg.text) } });
   c.say(msg.text, msg.err);
+}
+
+/**
+ * The bar stays as the finished state (100%, ✕ to close) instead of vanishing or
+ * sitting at 100% offering a Cancel that no longer does anything.
+ */
+function finishedProgress(plan: StockUploadPlan, summary: UploadBatchSummary, label: string): UploadProgressStep {
+  return {
+    done: plan.tasks.length, total: plan.tasks.length, label,
+    complete: true, failed: summary.failedFiles,
+  };
 }
 
 function performStartUpload(c: OpsCtx): void {
@@ -164,24 +177,29 @@ function triggerGettyCsvDownload(c: OpsCtx): void {
   c.say(`Exported Getty ESP CSV for ${rows.length} item(s)`);
 }
 
+function editMetaDraft(c: OpsCtx, item: ExportedItem, patch: Partial<IconMetadata>): void {
+  const prev = c.model.drafts[item.id] ?? initialMetaDraft(item);
+  c.dispatch({ type: "draft", id: item.id, draft: { ...prev, metadata: { ...prev.metadata, ...patch }, edited: true } });
+}
+
+function copyMetaField(c: OpsCtx, item: ExportedItem, field: "title" | "description" | "tags"): void {
+  const m = (c.model.drafts[item.id] ?? initialMetaDraft(item)).metadata;
+  const text = field === "title" ? m.title : field === "description" ? m.description : m.tags.join(", ");
+  void navigator.clipboard.writeText(text)
+    .then(() => c.say(`Copied ${field}`))
+    .catch(() => c.say("Clipboard blocked — copy text manually", true));
+}
+
 function buildMetaAndUploadOps(ref: { current: OpsCtx }): Pick<
   StockPanelOps,
-  "metaDraftOf" | "editMeta" | "acceptMeta" | "copyMeta" | "startUploadFlow" | "confirmUpload" | "cancelUpload" | "downloadGettyCsv"
+  "metaDraftOf" | "editMeta" | "acceptMeta" | "copyMeta" | "startUploadFlow" | "confirmUpload"
+  | "cancelUpload" | "dismissProgress" | "downloadGettyCsv"
 > {
   return {
     metaDraftOf: (item) => ref.current.model.drafts[item.id] ?? initialMetaDraft(item),
-    editMeta: (item, patch) => {
-      const prev = ref.current.model.drafts[item.id] ?? initialMetaDraft(item);
-      ref.current.dispatch({ type: "draft", id: item.id, draft: { ...prev, metadata: { ...prev.metadata, ...patch }, edited: true } });
-    },
+    editMeta: (item, patch) => editMetaDraft(ref.current, item, patch),
     acceptMeta: (item) => { void performAcceptMeta(ref.current, item); },
-    copyMeta: (item, field) => {
-      const m = (ref.current.model.drafts[item.id] ?? initialMetaDraft(item)).metadata;
-      const text = field === "title" ? m.title : field === "description" ? m.description : m.tags.join(", ");
-      void navigator.clipboard.writeText(text)
-        .then(() => ref.current.say(`Copied ${field}`))
-        .catch(() => ref.current.say("Clipboard blocked — copy text manually", true));
-    },
+    copyMeta: (item, field) => copyMetaField(ref.current, item, field),
     startUploadFlow: () => performStartUpload(ref.current),
     confirmUpload: () => {
       const d = ref.current.model.dialog;
@@ -191,6 +209,7 @@ function buildMetaAndUploadOps(ref: { current: OpsCtx }): Pick<
       ref.current.r.abort.current?.abort();
       ref.current.say("Cancelling upload — completed files stay on server");
     },
+    dismissProgress: () => ref.current.dispatch({ type: "patch", patch: { progress: null } }),
     downloadGettyCsv: () => triggerGettyCsvDownload(ref.current),
   };
 }

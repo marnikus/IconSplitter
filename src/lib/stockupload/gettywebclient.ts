@@ -40,6 +40,12 @@ export type GettyWebResult =
     /** Names Getty answered with "Upload failed" — never counted as uploaded. */
     failed?: GettyWebRejection[];
     completed: boolean;
+    /**
+     * Every contribution carried Getty's own "Ready to submit" validation icon,
+     * so the batch is finished even when the page offers no Complete/Submit
+     * control to click. A thumbnail alone never sets this.
+     */
+    ready?: boolean;
     completion: { clicked: boolean; label: string | null; confirmed: boolean } | null;
     metadata: GettyWebFileReport[];
     /** Set when this upload only filled the batch; the run submits it at the end. */
@@ -121,34 +127,44 @@ function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok
   return { ok: false, code, reason };
 }
 
+function metadataEntries(raw: Record<string, unknown>) {
+  if (!Array.isArray(raw.metadata)) return [];
+  return raw.metadata.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
+    name: String(entry.name),
+    status: typeof entry.status === "string" ? entry.status : "unknown",
+    ...(isRecord(entry.fields) ? { fields: entry.fields as Record<string, boolean> } : {}),
+  }));
+}
+
+function failedEntries(raw: Record<string, unknown>) {
+  if (!Array.isArray(raw.failed)) return [];
+  return raw.failed.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
+    name: String(entry.name),
+    id: typeof entry.id === "string" ? entry.id : null,
+  }));
+}
+
+function completionOf(raw: Record<string, unknown>) {
+  if (!isRecord(raw.completion)) return null;
+  return {
+    clicked: raw.completion.clicked === true,
+    label: typeof raw.completion.label === "string" ? raw.completion.label : null,
+    confirmed: raw.completion.confirmed === true,
+  };
+}
+
 function parseSuccess(raw: unknown, fallback: string[]): GettyWebResult {
   if (!isRecord(raw) || raw.ok !== true) return { ok: false, code: "page", reason: "unexpected helper response" };
-  const metadata = Array.isArray(raw.metadata)
-    ? raw.metadata.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-      name: String(entry.name),
-      status: typeof entry.status === "string" ? entry.status : "unknown",
-      ...(isRecord(entry.fields) ? { fields: entry.fields as Record<string, boolean> } : {}),
-    }))
-    : [];
   return {
     ok: true,
     batchId: typeof raw.batchId === "string" ? raw.batchId : null,
     accepted: Array.isArray(raw.accepted) ? raw.accepted.filter((n): n is string => typeof n === "string") : fallback,
-    failed: Array.isArray(raw.failed)
-      ? raw.failed.filter((entry) => isRecord(entry) && typeof entry.name === "string").map((entry) => ({
-        name: String(entry.name),
-        id: typeof entry.id === "string" ? entry.id : null,
-      }))
-      : [],
+    failed: failedEntries(raw),
     completed: raw.completed === true,
-    completion: isRecord(raw.completion)
-      ? {
-        clicked: raw.completion.clicked === true,
-        label: typeof raw.completion.label === "string" ? raw.completion.label : null,
-        confirmed: raw.completion.confirmed === true,
-      }
-      : null,
-    metadata,
+    // Absent means "not proven ready", never "ready".
+    ...(raw.ready === true ? { ready: true } : {}),
+    completion: completionOf(raw),
+    metadata: metadataEntries(raw),
   };
 }
 

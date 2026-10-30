@@ -232,6 +232,9 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
       failed: result.failed ?? result.state?.failures ?? [],
       chips: result.state?.chips ?? null,
       completed: result.report?.completion?.clicked === true,
+      // Every card carried Getty's "Ready to submit" icon: the batch is finished
+      // even when the page offers no Complete control to click.
+      ready: result.report?.readiness?.ok === true && result.report?.readiness?.verified !== false,
       completion: result.report?.completion ?? null,
       metadata: result.report?.metadata ?? [],
       submitted: result.state?.submitted === true,
@@ -310,6 +313,7 @@ export async function handleGettyWebFinish(req, res, post, json) {
     const report = result.report ?? {};
     return json(res, 200, {
       ok: true, batchId: entry.session.batchId ?? null, accepted: [], completed: report.completion?.clicked === true,
+      ready: report.readiness?.ok === true && report.readiness?.verified !== false,
       completion: report.completion ?? null, metadata: [], contributions: report.contributions ?? null,
       submitted: report.state?.submitted === true,
     });

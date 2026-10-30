@@ -12,7 +12,7 @@ export const STOCKUPLOAD_FEATURE = "stockupload";
 
 /** The CLOSED set of actions the tab may emit, in one place for the lock test. */
 export const STOCKUPLOAD_LOG_ACTIONS = [
-  "run-started", "uploaded", "failed", "page-reloaded", "batch-submitted", "run-finished",
+  "run-started", "uploaded", "failed", "page-reloaded", "batch-submitted", "batch-ready", "run-finished",
 ] as const;
 
 export type StockUploadLogAction = (typeof STOCKUPLOAD_LOG_ACTIONS)[number];
@@ -65,6 +65,19 @@ export function batchSubmittedSpec(target: string): StockUploadLogSpec {
   return {
     level: "info", feature: STOCKUPLOAD_FEATURE, action: "batch-submitted",
     ids: { target }, detail: `${target}: batch submitted`,
+  };
+}
+
+/**
+ * Getty has no Complete/Submit control on this batch and every file carries its
+ * "Ready to submit" icon — the run is finished, so this is an info line, not an
+ * error on a job that was actually done.
+ */
+export function batchReadySpec(input: { target: string; files: number }): StockUploadLogSpec {
+  return {
+    level: "info", feature: STOCKUPLOAD_FEATURE, action: "batch-ready",
+    ids: { target: input.target, files: input.files },
+    detail: `${input.target}: ${input.files} file(s) ready to submit — Getty has no Complete button on this batch`,
   };
 }
 

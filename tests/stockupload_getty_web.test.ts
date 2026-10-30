@@ -332,6 +332,37 @@ describe("Getty web upload in the batch runner", () => {
     expect(summary.lastError).toContain("not completed");
   });
 
+  it("counts a batch that only needed its icons ready as finished, not unfinished", async () => {
+    // The captured batch page offers no Complete control; every card showing
+    // Getty's "Ready to submit" icon is the finished state, so the run ends at
+    // info level instead of reporting an error on a job that was done.
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: false });
+    const found = await discoverExportedItems(root);
+    const seen: string[] = [];
+    const summary = await executeStockUploadBatch(planFor(found.items, { raster: true, svg: false, eps: false, zip: false }), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebUploadFn: async () => ({
+        ok: true, batchId: "68445204", accepted: ["star_01.jpg"], completed: false, ready: true,
+        completion: null, metadata: [],
+      }),
+      finishGettyWebFn: async () => ({
+        ok: true, batchId: "68445204", accepted: [], completed: false, ready: true, completion: null, metadata: [],
+      }),
+      closeGettyWebFn: async () => undefined,
+      logFn: (spec) => seen.push(`${spec.action}:${spec.detail}:${spec.level}`),
+    });
+    expect(summary.uploadedFiles).toBe(1);
+    expect(summary.failedFiles).toBe(0);
+    // Nothing to complain about: the files are ready to submit.
+    expect(summary.lastError).toBeNull();
+    expect(seen.some((line) => line.startsWith("batch-ready:"))).toBe(true);
+    expect(seen.some((line) => /run-finished:1 file\(s\) uploaded, 0 failed:info/.test(line))).toBe(true);
+  });
+
   it("keeps the helper's own reason when the batch cannot be submitted", async () => {
     const root = new FakeDir("ws");
     addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: false });

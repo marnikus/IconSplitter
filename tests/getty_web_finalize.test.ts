@@ -66,6 +66,8 @@ describe("Getty web automatic finalize", () => {
     expect(cdp.steps).toEqual([
       "openFileMetadata", "metadataEditorReady", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
       "selectAllContributions", "saveMetadataEditor",
+      // Readiness is read from the cards' own validation icons before clicking.
+      "readUploadState",
       "completeBatch", "confirmCompletion", "readCompletionState",
     ]);
     expect(cdp.expressions.some((e) => e.includes("Charity hand icon"))).toBe(true);
@@ -108,7 +110,7 @@ describe("Getty web automatic finalize", () => {
     expect(steps).toEqual([
       "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
       "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
-      "selectAllContributions", "saveMetadataEditor",
+      "selectAllContributions", "saveMetadataEditor", "readUploadState",
     ]);
     if (result.ok) {
       expect(result.report.bulkSave).toEqual({ selected: 2, method: "select-all", saved: true, label: "Save metadata" });
@@ -148,6 +150,60 @@ describe("Getty web automatic finalize", () => {
     }
   });
 
+  it("saves the metadata again when a card is not Ready to submit, then finishes", async () => {
+    // Getty validates a card after its metadata is saved; a card that still shows
+    // the not-ready icon gets the grid-wide save pressed again, and only then is
+    // the batch complete. That second save is what flips the icon.
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: [{ selected: 1, method: "select-all" }, { selected: 1, method: "select-all" }],
+      saveMetadataEditor: [
+        { saved: true, label: "Save" }, { saved: true, label: "Save metadata" }, { saved: true, label: "Save metadata" },
+      ],
+      readUploadState: [
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] },
+      ],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 0, readyRetryMs: 0, signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    expect(cdp.steps.filter((step) => step === "selectAllContributions")).toHaveLength(2);
+    expect(cdp.steps.filter((step) => step === "saveMetadataEditor")).toHaveLength(3);
+    if (result.ok) {
+      expect(result.report.readiness).toMatchObject({ ok: true, verified: true, notReady: [], resaves: 1 });
+      expect(result.report.completion).toMatchObject({ clicked: true });
+    }
+  });
+
+  it("refuses to claim a batch finished while a card never shows Ready to submit", async () => {
+    const queue = {
+      ...successQueue(),
+      readUploadState: [{ cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] }],
+    };
+    const cdp = connection(queue);
+    const progress: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 20, readyRetryMs: 0, readyTimeoutMs: 100, readyResaves: 1,
+      onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("timeout");
+      expect(result.reason).toContain("Ready to submit");
+      expect(result.reason).toContain("star_01");
+      expect(result.report.readiness).toMatchObject({ ok: false, notReady: ["star_01"], resaves: 1 });
+    }
+    // An unvalidated file is never submitted, and the re-save was actually tried.
+    expect(cdp.steps).not.toContain("completeBatch");
+    expect(cdp.steps.filter((step) => step === "selectAllContributions")).toHaveLength(2);
+    expect(progress.some((line) => /not ready to submit/.test(line))).toBe(true);
+  });
+
   it("keeps the engine and the helper's Date Created identical", () => {
     // The panel formats dates in src/lib; the helper does it in plain ESM, so a
     // test pins both to Getty's own rendering.
@@ -178,7 +234,7 @@ describe("Getty web automatic finalize", () => {
     const steps = cdp.steps.filter((step) => step !== "metadataEditorReady");
     expect(steps).toEqual([
       "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
-      "selectAllContributions", "saveMetadataEditor",
+      "selectAllContributions", "saveMetadataEditor", "readUploadState",
     ]);
     expect(cdp.steps.filter((step) => step === "metadataEditorReady")).toHaveLength(3);
     if (result.ok) expect(result.report.metadata).toEqual([
@@ -199,7 +255,7 @@ describe("Getty web automatic finalize", () => {
     const steps = cdp.steps.filter((step) => step !== "metadataEditorReady");
     expect(steps).toEqual([
       "openFileMetadata", "fillMetadataFields", "saveMetadataEditor", "closeMetadataEditor",
-      "selectAllContributions", "saveMetadataEditor",
+      "selectAllContributions", "saveMetadataEditor", "readUploadState",
     ]);
     if (result.ok) expect(result.report.metadata).toEqual([
       { name: "star_01.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
@@ -247,7 +303,7 @@ describe("Getty web automatic finalize", () => {
       files: [{ name: "star_01.jpg", metadata: null }], complete: true, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
-    expect(cdp.steps).toEqual(["completeBatch", "confirmCompletion", "readCompletionState"]);
+    expect(cdp.steps).toEqual(["readUploadState", "completeBatch", "confirmCompletion", "readCompletionState"]);
     if (result.ok) expect(result.report.metadata).toEqual([{ name: "star_01.jpg", status: "embedded-only" }]);
   });
 

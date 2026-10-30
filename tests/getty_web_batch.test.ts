@@ -327,6 +327,27 @@ describe("Getty web upload verification", () => {
     expect(result.state.contributions).toEqual(["star_01.eps", "moon_02.eps"]);
   });
 
+  it("settles on Getty's Ready-to-submit icon when no thumbnail is rendered", async () => {
+    mountBatchPage();
+    const readyOnly = (name: string) => `
+      <div data-cy="grid-row"><div data-cy="item-card">
+        <div data-cy="image-card"></div>
+        <div data-cy="item-info">
+          <svg data-cy="pending-icon" aria-label="Ready to submit"></svg>
+          <p data-cy="contribution-file-name">${name}</p>
+        </div>
+      </div></div>`;
+    document.body.insertAdjacentHTML("beforeend", readyOnly("icon-map-pin_5_01.eps"));
+    const result = await attachFiles(new DomConnection(), "page", {
+      paths: ["/staged/icon-map-pin_5_01.jpg", "/staged/icon-map-pin_5_01.eps"],
+      names: ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"],
+      timeoutMs: 500, readyTimeoutMs: 200,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.state.uploaded).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
+    expect(result.state.readyToSubmit).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
+  });
+
   it("reports each file as it lands, then counts only the ones with a thumbnail", async () => {
     vi.useFakeTimers();
     try {
@@ -427,6 +448,17 @@ describe("completing one batch for several icons", () => {
     </div></div>`;
   const submit = `<button data-cy="open-upload-dialog-button">Upload</button>
     <button type="button">SUBMIT</button><p>0 Not submitted</p>`;
+  // Getty's own validation icon: the only proof a contribution may be submitted.
+  const READY = '<svg data-cy="pending-icon" aria-label="Ready to submit"></svg>';
+  const NOT_READY = '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>';
+  const readyCard = (name: string, ready = true) => `
+    <div data-cy="grid-row"><div data-cy="item-card">
+      <div data-cy="image-card"><img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/${name}.jpg"></div>
+      <div data-cy="item-info">${ready ? READY : NOT_READY}<p data-cy="contribution-file-name">${name}</p></div>
+    </div></div>`;
+  const saveBar = `<button data-cy="open-upload-dialog-button">Upload</button>
+    <button data-cy="save-metadata">Save metadata</button>
+    <input type="checkbox" aria-label="Select all">`;
   const EXPECTED = ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps", "icon-map-pin_5_02.jpg", "icon-map-pin_5_02.eps"];
 
   it("refuses to submit a batch that is still missing a contribution", async () => {
@@ -495,6 +527,84 @@ describe("completing one batch for several icons", () => {
       expect(result.ok).toBe(true);
       expect(result.report.completion).toMatchObject({ clicked: true, label: "SUBMIT" });
       expect(clicks).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not sit on a Submit-control wait the page does not have", async () => {
+    // The captured batch page has no Submit control at all; the run used to wait
+    // two minutes for one and then report an error although every icon was done.
+    document.body.innerHTML = `<button data-cy="open-upload-dialog-button">Upload</button>`
+      + readyCard("icon-map-pin_5_01.eps") + readyCard("icon-map-pin_5_02.eps", false);
+    const started = Date.now();
+    const result = await finishBatch(new DomConnection(), "page", {
+      pollMs: 5, settleMs: 0, expected: EXPECTED, readyRetryMs: 100, readyTimeoutMs: 200,
+    });
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(result.ok).toBe(false);
+    // Honest about both facts: no control, and the file Getty has not marked.
+    expect(result.reason).toContain("Complete/Submit");
+    expect(result.reason).toContain("Ready to submit");
+    expect(result.reason).toContain("icon-map-pin_5_02");
+  });
+
+  it("treats every card's Ready-to-submit icon as the finished state, without a Submit control", async () => {
+    document.body.innerHTML = `<button data-cy="open-upload-dialog-button">Upload</button>`
+      + readyCard("icon-map-pin_5_01.eps") + readyCard("icon-map-pin_5_02.eps");
+    const result = await finishBatch(new DomConnection(), "page", { pollMs: 5, settleMs: 0, expected: EXPECTED });
+    expect(result.ok).toBe(true);
+    expect(result.report.readiness).toMatchObject({ ok: true, ready: 2, notReady: [] });
+    // Nothing was submitted because Getty offers no control — the run is done.
+    expect(result.report.completion).toMatchObject({ clicked: false });
+    expect(result.report.state).toMatchObject({ submitted: false });
+  });
+
+  it("presses Save metadata again after 30 s and finishes when the last file turns ready", async () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = saveBar + readyCard("icon-map-pin_5_01.eps") + readyCard("icon-map-pin_5_02.eps", false);
+      let saves = 0;
+      const save = document.querySelector('[data-cy="save-metadata"]')!;
+      save.addEventListener("click", () => {
+        saves += 1;
+        // Getty validates the file a moment after its metadata is saved again.
+        document.querySelectorAll('[data-cy="not-ready-icon"]').forEach((icon) => {
+          icon.outerHTML = '<svg data-cy="pending-icon" aria-label="Ready to submit"></svg>';
+        });
+      });
+      const pending = finishBatch(new DomConnection(), "page", {
+        pollMs: 10, settleMs: 0, expected: EXPECTED, readyTimeoutMs: 60000,
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(saves).toBe(0);
+      await vi.advanceTimersByTimeAsync(40000);
+      const result = await pending;
+      expect(saves).toBe(1);
+      expect(result.ok).toBe(true);
+      expect(result.report.readiness).toMatchObject({ ok: true, resaves: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refuses to call a batch finished while a file never shows Ready to submit", async () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = saveBar + readyCard("icon-map-pin_5_01.eps") + readyCard("icon-map-pin_5_02.eps", false);
+      let saves = 0;
+      document.querySelector('[data-cy="save-metadata"]')!.addEventListener("click", () => { saves += 1; });
+      const pending = finishBatch(new DomConnection(), "page", {
+        pollMs: 500, settleMs: 0, expected: EXPECTED, readyTimeoutMs: 70000,
+      });
+      await vi.advanceTimersByTimeAsync(90000);
+      const result = await pending;
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe("timeout");
+      expect(result.reason).toContain("Ready to submit");
+      expect(result.reason).toContain("icon-map-pin_5_02");
+      // It did retry the save instead of giving up on the first reading.
+      expect(saves).toBeGreaterThan(0);
     } finally {
       vi.useRealTimers();
     }

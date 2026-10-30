@@ -447,6 +447,57 @@ describe("Getty batch page as captured", () => {
     expect(state.processing).toBe(false);
   });
 
+  // The captured batch page's own validation icon is the only proof that a file
+  // may be submitted: `pending-icon` labelled "Ready to submit" replaces the
+  // `not-ready-icon` once the metadata is saved.
+  const READY_ICON = '<svg data-cy="pending-icon" aria-label="Ready to submit"></svg>';
+
+  it("reads the captured Ready-to-submit validation icon, not just the thumbnail", () => {
+    mount(CARD_PAGE
+      .replace('<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', READY_ICON)
+      .replace('<img data-cy="image-thumbnail" alt="Location pinpointing">',
+        '<img data-cy="image-thumbnail" alt="Location pinpointing" src="https://media.gettyimages.com/id/1/icon.jpg">'));
+    const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"] });
+    // Both files of the pair belong to the one contribution Getty marked ready.
+    expect(state.readyToSubmit).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
+    expect(state.awaitingReady).toEqual([]);
+    // A thumbnail alone is not readiness: it is proof Getty took the bytes.
+    expect(state.uploaded).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
+  });
+
+  it("keeps a card with a thumbnail but no Ready-to-submit icon out of the ready list", () => {
+    mount(CARD_PAGE.replace(
+      '<img data-cy="image-thumbnail" alt="Location pinpointing">',
+      '<img data-cy="image-thumbnail" alt="Location pinpointing" src="https://media.gettyimages.com/id/1/icon.jpg">',
+    ));
+    const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] });
+    expect(state.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
+    expect(state.readyToSubmit).toEqual([]);
+    expect(state.awaitingReady).toEqual(["icon-map-pin_5_01.jpg"]);
+  });
+
+  it("counts a card Getty marked Ready to submit as uploaded even without a picture", () => {
+    // Getty's own validation icon implies the bytes arrived and were processed,
+    // so the upload no longer depends on the thumbnail alone.
+    mount(CARD_PAGE.replace(
+      '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', READY_ICON,
+    ));
+    const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] });
+    expect(state.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
+    expect(state.readyToSubmit).toEqual(["icon-map-pin_5_01.jpg"]);
+  });
+
+  it("never counts an Upload failed card as ready to submit, whatever it carries", () => {
+    mount(CARD_PAGE
+      .replace('<div data-cy="image-card"><img data-cy="image-thumbnail" alt="Location pinpointing"></div>',
+        `<div data-cy="image-card"><p>Upload failed</p></div>${READY_ICON}`)
+      .replace('<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>', ""));
+    const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] });
+    expect(state.failed).toEqual(["icon-map-pin_5_01.jpg"]);
+    expect(state.readyToSubmit).toEqual([]);
+    expect(state.awaitingReady).toEqual([]);
+  });
+
   it("reads each card's own outcome: a thumbnail is uploaded, Upload failed is not", () => {
     const uploaded = CARD_PAGE.replace(
       '<img data-cy="image-thumbnail" alt="Location pinpointing">',

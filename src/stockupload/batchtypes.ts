@@ -15,6 +15,10 @@ export interface UploadProgressStep {
   done: number;
   total: number;
   label: string;
+  /** The run has returned: the bar stays as the finished state until closed. */
+  complete?: boolean;
+  /** Files that did not upload, so a finished bar can say so. */
+  failed?: number;
 }
 
 export interface UploadBatchDeps {

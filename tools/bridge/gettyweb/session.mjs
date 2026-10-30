@@ -29,7 +29,18 @@ export function progressOf(read, reloads = 0) {
   const failed = Array.isArray(read?.failed) ? read.failed.length : 0;
   const listed = Array.isArray(read?.namesSeen) ? read.namesSeen.length : 0;
   const total = listed + (Array.isArray(read?.missing) ? read.missing.length : 0);
-  return { total, uploaded, failed, listed, reloads };
+  // Getty's own "Ready to submit" validation, the only proof a file may be sent;
+  // reported only once it exists, so a reading without it stays the old shape.
+  const ready = Array.isArray(read?.readyToSubmit) ? read.readyToSubmit.length : 0;
+  return { total, uploaded, failed, listed, ...(ready > 0 ? { ready } : {}), reloads };
+}
+
+/** The readiness pacing a caller may inject; production keeps the real windows. */
+export function readyOptionsOf(options = {}) {
+  const keys = ["readyRetryMs", "readyTimeoutMs", "readyResaves", "pollMs", "settleMs", "bulkSaveSettleMs"];
+  const out = {};
+  for (const key of keys) if (typeof options[key] === "number") out[key] = options[key];
+  return out;
 }
 
 /** How long the page may take to list `fileCount` attached files. */
@@ -221,9 +232,11 @@ function buildSession(ctx) {
       state.progress = { ...progressOf(result.state, state.reloads), phase: "metadata" };
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
-        onProgress: options.onProgress, signal: options.signal,
+        onProgress: options.onProgress, signal: options.signal, ...readyOptionsOf(options),
       });
-      state.progress = { ...progressOf(result.state, state.reloads), phase: "done" };
+      // The phase says whether Getty validated every card, not just that the
+      // request returned: a failed readiness leaves the run unfinished.
+      state.progress = { ...progressOf(done.report?.readiness?.state ?? result.state, state.reloads), phase: done.ok ? "done" : "failed" };
       return {
         ...done, state: { ...result.state, ...done.report?.state }, report: done.report,
         accepted: result.state?.uploaded ?? [], failed: result.state?.failures ?? [], batchId: state.batchId,
@@ -234,10 +247,12 @@ function buildSession(ctx) {
      * after the first icon is what used to lock the batch and drop the rest.
      */
     async finish(input = {}) {
-      return finishBatch(connection, page.sessionId, {
+      const result = await finishBatch(connection, page.sessionId, {
         expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
-        onProgress: options.onProgress,
+        onProgress: options.onProgress, ...readyOptionsOf(options),
       });
+      state.progress = { ...(state.progress ?? progressOf(null, state.reloads)), phase: result.ok ? "done" : "failed" };
+      return result;
     },
     /** Names this session has uploaded so far, for the finish report. */
     get expected() { return [...state.expected]; },
