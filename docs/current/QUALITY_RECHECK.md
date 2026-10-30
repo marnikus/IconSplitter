@@ -4396,3 +4396,21 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   PASSED (`gettywebnames.ts` 10 fns / 64 lines, `gettywebtransfer.ts` 31 fns /
   296 lines); `verify:fast` ALL LANES PASSED; focused 3 files / 51 tests green;
   docs tests 4/4 (soR 8,986 B).
+- 2026-10-30 — Shutterstock and Adobe Stock walk the selection in the same rhythm
+  as Getty web: **100 icons per batch**, drawn at random when `Random batches` is
+  on, mixed inside the batch, and uploaded under a shuffled number in front of the
+  real name (`0007-star_01.jpg`). `planIconBatches` draws and mixes
+  (`iconbatches.ts`); `stableRanks` gives every icon a rank that follows its name,
+  so a re-upload replaces the remote file instead of duplicating it — a fresh draw
+  could not promise that on a site that keeps files; `stagedFileName`/`realNameOf`
+  (`shufflenames.ts`, now shared with the Getty path) write and read the rank.
+  Rows, log and history keep the real name; the batch rides in the progress line
+  (`Shutterstock batch 2/3 · star_01.jpg`). `runupload.ts` was split — the file
+  loops live in `filetransfers.ts`. New tests: `stockupload_ftp_batches` (list
+  order and real names with the box off, batch labels, the draw and the in-batch
+  mix, the rank map, the same names on a second run, the Adobe SFTP drop) and
+  `getty_web_names` (`stableRanks` stability and spread, `planIconBatches`).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED (`filetransfers.ts` 14 fns / 154 lines, `runupload.ts` 18 fns / 204
+  lines); `verify:fast` ALL LANES PASSED; focused 8 files / 155 tests green; docs
+  4/4 (soR 8,979 B, selectors 8,990 B).

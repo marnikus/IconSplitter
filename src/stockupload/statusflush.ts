@@ -28,11 +28,18 @@ export function flushTargetStatuses(targetId: string, trackers: Map<string, Item
   }
 }
 
+/** What one target's run knows while it records a file; `batch` names the 100. */
+interface TaskState {
+  target: StockFtpPreset;
+  trackers: Map<string, ItemTracker>;
+  counters: RunCounters;
+  deps: UploadBatchDeps;
+  batch?: string;
+}
+
 /** Records one planned file's outcome and the progress line that goes with it. */
 export function recordTaskResult(
-  task: PlannedTransfer,
-  res: { ok: true } | { ok: false; reason: string },
-  state: { target: StockFtpPreset; trackers: Map<string, ItemTracker>; counters: RunCounters; deps: UploadBatchDeps },
+  task: PlannedTransfer, res: { ok: true } | { ok: false; reason: string }, state: TaskState,
 ): void {
   const tr = state.trackers.get(task.itemId)!;
   if (res.ok) {
@@ -54,9 +61,9 @@ export function recordTaskResult(
   state.deps.logFn?.(res.ok
     ? uploadedSpec({ target: state.target.name, file: task.fileName })
     : failedSpec({ target: state.target.name, file: task.fileName, reason: res.reason }));
-  state.deps.onProgress?.({
-    done: state.counters.done, total: state.counters.total, label: `${state.target.name} · ${task.fileName}`,
-  });
+  // The batch rides in the label, so a 300-icon run says which 100 is in flight.
+  const where = state.batch ? `${state.target.name} ${state.batch}` : state.target.name;
+  state.deps.onProgress?.({ done: state.counters.done, total: state.counters.total, label: `${where} · ${task.fileName}` });
 }
 
 /** A target without saved credentials fails every one of its files, not one. */

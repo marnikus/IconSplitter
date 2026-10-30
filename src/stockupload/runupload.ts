@@ -1,127 +1,31 @@
 // runupload.ts — batch FTPS transfer runner with per-item/per-site isolation,
 // single-login session reuse per target, cancellation (RULE 7), and crash journal.
 
-import {
-  closeBridgeFtpsSession, uploadBridgeFtps, type BridgeUploadResult,
-} from "../lib/stockupload/bridgeclient";
+import { closeBridgeFtpsSession } from "../lib/stockupload/bridgeclient";
 import { GETTY_WEB_SUBMISSION_TYPE } from "../lib/stockupload/gettyweb";
-import { closeBridgeGettyWeb, type GettyWebResult } from "../lib/stockupload/gettywebclient";
-import type { FtpCredentials } from "../lib/stockupload/credvault";
+import { closeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import type { GettyWebProgress } from "../lib/stockupload/gettyprogress";
-import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
-import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
-import type { ItemTracker, RunCounters, UploadBatchDeps, UploadBatchSummary } from "./batchtypes";
-import { groupEspTasks, uploadEspGroup } from "./esptransfer";
+import type { StockUploadPlan } from "../lib/stockupload/plan";
+import type { StockFtpPreset } from "../lib/stockupload/types";
+import type { NetworkCtx, RunCounters, UploadBatchDeps, UploadBatchSummary } from "./batchtypes";
+import { groupEspTasks } from "./esptransfer";
+import {
+  buildTrackers, rejectLocalEspStage, runFileBatches, runNetworkGroups,
+} from "./filetransfers";
 import {
   progressLabel, progressPhase, settledFiles, watchGettyProgress,
 } from "./gettywebprogress";
 import {
-  completionNote, uploadGettyWebRun, type GettyWebIconInput, type GettyWebRunOutcome,
+  uploadGettyWebRun, type GettyWebIconInput, type GettyWebRunOutcome,
 } from "./gettywebtransfer";
 import { markUploadInFlight } from "./journal";
-import {
-  flushTargetStatuses, recordMissingCreds, recordTaskResult, reportNetworkCertificate,
-} from "./statusflush";
+import { flushTargetStatuses, recordMissingCreds, recordTaskResult } from "./statusflush";
 import {
   batchReadySpec, batchSplitSpec, batchSubmittedSpec, pageReloadedSpec, reloadNoteOf, runFinishedSpec,
   runStartedSpec,
 } from "./stockuploadlog";
-import { resolveTransferBytes } from "./transferpayload";
 
 export type { UploadBatchDeps, UploadBatchSummary, UploadProgressStep } from "./batchtypes";
-
-function buildTrackers(plan: StockUploadPlan, targetTasks: readonly PlannedTransfer[]): Map<string, ItemTracker> {
-  const map = new Map<string, ItemTracker>();
-  for (const t of targetTasks) {
-    const missingCount = plan.skippedMissing.filter((m) => m.itemId === t.itemId).length;
-    const prev = map.get(t.itemId) ?? { expected: 0, succeeded: [], missingCount, lastError: null };
-    prev.expected += 1;
-    map.set(t.itemId, prev);
-  }
-  return map;
-}
-
-async function runSingleTask(
-  task: PlannedTransfer,
-  ctx: {
-    target: StockFtpPreset;
-    creds: FtpCredentials;
-    sessionKey: string;
-    combine: boolean;
-    itemsById: ReadonlyMap<string, ExportedItem>;
-    deps: UploadBatchDeps;
-  },
-): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const item = ctx.itemsById.get(task.itemId);
-  if (!item) return { ok: false, reason: "item no longer present" };
-  const payload = await resolveTransferBytes(ctx.deps.root, item, task, ctx.combine);
-  if (!payload.ok) return payload;
-  const upload = ctx.deps.uploadFn ?? uploadBridgeFtps;
-  const res = await upload({
-    bridgeUrl: ctx.deps.bridgeUrl,
-    preset: ctx.target,
-    creds: ctx.creds,
-    fileName: task.fileName,
-    bytes: payload.bytes,
-    sessionKey: ctx.sessionKey,
-    signal: ctx.deps.signal,
-  });
-  if (res.ok) return { ok: true };
-  if (res.code === "cert" && res.serverCertSha256) ctx.deps.onCertWarning?.(ctx.target.id, res.serverCertSha256);
-  return { ok: false, reason: res.reason };
-}
-
-function rejectLocalEspStage(plan: StockUploadPlan, target: StockFtpPreset, deps: UploadBatchDeps, counters: RunCounters): void {
-  const tasks = plan.tasks.filter((t) => t.targetId === target.id);
-  const trackers = buildTrackers(plan, tasks);
-  const result = { ok: false as const, reason: "Local staging is not an upload. Select the Getty ESP API connection." };
-  for (const task of tasks) recordTaskResult(task, result, { target, trackers, counters, deps });
-  flushTargetStatuses(target.id, trackers);
-}
-
-type UploadResult = BridgeUploadResult | GettyWebResult | { ok: true } | { ok: false; reason: string };
-
-interface GroupRun {
-  plan: StockUploadPlan; target: StockFtpPreset; tasks: PlannedTransfer[]; deps: UploadBatchDeps;
-  creds: FtpCredentials; sessionKey: string; itemsById: ReadonlyMap<string, ExportedItem>;
-}
-
-/** One group = one icon for the Getty ESP API, one file for every other stock. */
-function uploadGroup(run: GroupRun): Promise<UploadResult> {
-  const { plan, target, tasks, deps, creds, sessionKey, itemsById } = run;
-  const item = itemsById.get(tasks[0].itemId);
-  if (target.protocol === "esp-https") {
-    return uploadEspGroup({ tasks, missing: plan.skippedMissing, root: deps.root, bridgeUrl: deps.bridgeUrl,
-      target, creds, sessionKey, signal: deps.signal, uploadFn: deps.uploadFn, item, combine: plan.combineTitleDescription });
-  }
-  return runSingleTask(tasks[0], { target, creds, sessionKey, itemsById, deps, combine: plan.combineTitleDescription });
-}
-
-function groupUploadTasks(target: StockFtpPreset, targetTasks: PlannedTransfer[]): PlannedTransfer[][] {
-  return target.protocol === "esp-https" ? groupEspTasks(targetTasks) : targetTasks.map((task) => [task]);
-}
-
-/** Everything one target's run needs; shared by both transfer loops. */
-interface NetworkCtx {
-  plan: StockUploadPlan; target: StockFtpPreset; targetTasks: PlannedTransfer[]; deps: UploadBatchDeps;
-  counters: RunCounters; trackers: Map<string, ItemTracker>; creds: FtpCredentials; sessionKey: string;
-  itemsById: ReadonlyMap<string, ExportedItem>;
-}
-
-async function runNetworkGroups(ctx: NetworkCtx): Promise<number> {
-  const { plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById } = ctx;
-  let uploaded = 0;
-  for (const tasks of groupUploadTasks(target, targetTasks)) {
-    if (deps.signal.aborted) break;
-    markUploadInFlight(tasks[0].itemId, target.id);
-    const res = await uploadGroup({ plan, target, tasks, deps, creds, sessionKey, itemsById });
-    if (!res.ok) reportNetworkCertificate(res, target, deps);
-    else uploaded += 1;
-    counters.lastError = completionNote(res) ?? counters.lastError;
-    for (const task of tasks) recordTaskResult(task, res, { target, trackers, counters, deps });
-  }
-  return uploaded;
-}
 
 /** Where the bar stands: what closed batches proved, and this batch's count. */
 interface ProgressBound { base: number; seen: number; batchNo: number; batch: string; reloads: number }
@@ -247,7 +151,8 @@ async function runNetworkTargetGroup(
   const ctx: NetworkCtx = { plan, target, targetTasks, deps, counters, trackers, creds, sessionKey, itemsById };
   try {
     if (target.protocol === "getty-web") await runGettyWebIcons(ctx);
-    else await runNetworkGroups(ctx);
+    else if (target.protocol === "esp-https") await runNetworkGroups(ctx);
+    else await runFileBatches(ctx);
   } finally {
     const close = target.protocol === "getty-web"
       ? (deps.closeGettyWebFn ?? closeBridgeGettyWeb)

@@ -118,7 +118,7 @@ function CombinedTitleOption({ g }: { g: StockUploadApi }) {
 function RandomBatchesOption({ g }: { g: StockUploadApi }) {
   return (
     <label className="svg-chip" style={{ cursor: "pointer" }}
-      title="Getty web takes 100 icons per batch: draw each batch at random from the remaining icons, mix the files inside it, and upload each under a shuffled number in front of its name (0001-icon-snowflake.jpg) so the site's own name sort cannot put similar icons side by side">
+      title="Every site takes 100 icons per batch: draw each batch at random from what is left, mix the files inside it, and send each under a shuffled number in front of its name (0001-icon-snowflake.jpg) so the site's own name sort cannot put similar icons side by side. Getty web sorts by that name; Shutterstock and Adobe Stock get the same number on a re-upload, so the file is replaced instead of duplicated">
       <input type="checkbox" data-testid="stock-random-batches"
         checked={g.model.prefs.randomBatches}
         onChange={(e) => g.setPrefs({ randomBatches: e.target.checked })} />

@@ -5,11 +5,12 @@ import type { DirHandleLike } from "../lib/fs";
 import type { LogSpec } from "../lib/log";
 import type { BridgeUploadInput, BridgeUploadResult } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
+import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
 import type { GettyWebProgress } from "../lib/stockupload/gettyprogress";
 import type {
   GettyWebFinishInput, GettyWebResult, GettyWebUploadInput,
 } from "../lib/stockupload/gettywebclient";
-import type { UploadFormatKey } from "../lib/stockupload/types";
+import type { ExportedItem, StockFtpPreset, UploadFormatKey } from "../lib/stockupload/types";
 
 /** Which half of a run the bar is showing: bytes in, or chips validated. */
 export type UploadProgressPhase = "uploading" | "verifying";
@@ -44,8 +45,13 @@ export interface UploadBatchDeps {
   gettyWebMaxIcons?: number;
   /** Bytes one Getty request may carry; the real helper cap unless a test injects one. */
   gettyWebMaxBytes?: number;
-  /** Draw each 100-icon Getty batch at random instead of taking the list in order. */
+  /**
+   * Draw each 100-icon batch at random instead of taking the list in order — the
+   * same chip drives the Getty web run and the FTPS/SFTP drops.
+   */
   gettyWebRandomBatches?: boolean;
+  /** Icons one FTPS/SFTP batch may hold; the real 100 unless a test injects one. */
+  ftpMaxIcons?: number;
   /** The shuffle's randomness; `Math.random` unless a test injects one. */
   gettyWebRandomFn?: () => number;
   closeGettyWebFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
@@ -82,4 +88,17 @@ export interface RunCounters {
   reuploadIcons: number;
   lastError: string | null;
   stagedDir: string | null;
+}
+
+/** Everything one target's run needs; shared by every transfer loop. */
+export interface NetworkCtx {
+  plan: StockUploadPlan;
+  target: StockFtpPreset;
+  targetTasks: PlannedTransfer[];
+  deps: UploadBatchDeps;
+  counters: RunCounters;
+  trackers: Map<string, ItemTracker>;
+  creds: FtpCredentials;
+  sessionKey: string;
+  itemsById: ReadonlyMap<string, ExportedItem>;
 }

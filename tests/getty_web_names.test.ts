@@ -4,8 +4,9 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  realNameOf, stagedFileName, stagedRanks, withRealNames,
+  realNameOf, stableRanks, stagedFileName, stagedRanks, withRealNames,
 } from "../src/lib/stockupload/gettywebnames";
+import { planIconBatches } from "../src/lib/stockupload/iconbatches";
 
 const NAMES = ["snow_01.jpg", "snow_02.jpg", "wheel_01.jpg", "wheel_02.jpg"];
 
@@ -70,5 +71,32 @@ describe("Getty's answer read back by the real names", () => {
     if (back.ok) return;
     expect(back.reason).toBe("no answer");
     expect(back.accepted).toEqual(["snow_01.jpg"]);
+  });
+});
+
+describe("the names a kept file re-uploads under", () => {
+  it("holds the same number between runs, so a re-upload replaces the file", () => {
+    const names = ["star.eps", "star.jpg", "snow_01.jpg", "snow_02.jpg", "wheel_01.jpg"];
+    expect(stableRanks(names)).toEqual(stableRanks([...names]));
+    expect([...stableRanks(names)].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("still keeps two sizes of one picture apart", () => {
+    const names = ["snow_02.jpg", "snow_01.jpg", "wheel_02.jpg", "wheel_01.jpg"];
+    expect(byRank(names, stableRanks(names))).toEqual(["snow_02.jpg", "wheel_02.jpg", "snow_01.jpg", "wheel_01.jpg"]);
+  });
+});
+
+describe("icon batches of one target", () => {
+  it("cuts the selection into 100-icon batches in list order with the box off", () => {
+    expect(planIconBatches(5, { maxIcons: 2 })).toEqual([[0, 1], [2, 3], [4]]);
+    expect(planIconBatches(0)).toEqual([]);
+  });
+
+  it("draws the membership and mixes each batch again with the box on", () => {
+    const drawn = planIconBatches(4, {
+      maxIcons: 2, randomize: true, rng: () => 0, nameOf: (index) => ["a.jpg", "b.jpg", "c.jpg", "d.jpg"][index],
+    });
+    expect(drawn).toEqual([[2, 1], [0, 3]]);
   });
 });

@@ -71,13 +71,13 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 ## Filters, unified badges & pinned bulk bar
 - `stock-filters`, `stock-filter-search`, `stock-filter-format`, `stock-filter-badge`, `stock-rowbadges-open`, `stock-sort`, `stock-clear-filters` — filter/sort bar & unified badge catalog button.
 - `stock-bulkbar-pin`, `stock-bulk`, `stock-check-all`, `stock-selected-count`, `stock-select-visible`, `stock-deselect` — pinned selection controls (`stockUploadChecked` undo).
-- `stock-upload-zoom`, `stock-zoom-label`, `stock-bg-<preset>` — thumbnail zoom slider & preview background.
+- `stock-upload-zoom`, `stock-zoom-label`, `stock-bg-<preset>` — thumbnail zoom & preview background.
 - `stock-format-raster`, `stock-format-svg`, `stock-format-eps`, `stock-format-zip` — same-stem representation checkboxes.
-- `stock-combine-title-description` — opt-in locally persisted combination of accepted title and description in upload copies only.
-- `stock-random-batches` — opt-in, persisted: each 100-icon Getty web batch is a random draw from the remaining icons, not list order.
+- `stock-combine-title-description` — opt-in persisted combination of accepted title and description in upload copies only.
+- `stock-random-batches` — opt-in, saved: every site walks 100-icon batches, each drawn at random and mixed, every icon under a shuffled number before its name.
 - `stock-target-check-<presetId>` — multi-upload target stock checkboxes.
 - `stock-upload-start`, `stock-upload-cancel`, `stock-upload-confirm-dialog`, `stock-upload-confirm-go`, `stock-upload-confirm-cancel` — preflight confirmation & upload trigger.
-- `stock-upload-getty-batches` — the confirmation's Getty line whenever `getty-web` is a target (`250 icon(s) → 3 batches (Getty takes 100 uploads per batch; a JPEG + EPS pair counts once)`, singular `1 batch` for a short run), so the chunking (100 icons and 64 MB per request) is visible before Upload.
+- `stock-upload-getty-batches` — the confirmation's Getty line whenever `getty-web` is a target (`250 icon(s) → 3 batches (Getty takes 100 uploads per batch; a JPEG + EPS pair counts once)`, singular `1 batch` for a short run), so the chunking (100 icons, 64 MB) is visible before Upload.
 
 ## Rows & local metadata (`StockUploadRow.tsx`, `StockUploadMetaFields.tsx`)
 - `stock-rows`, `stock-row-<id>`, `stock-check-<id>`, `stock-prev-<id>` — row container, checkbox, and zoomed preview.
