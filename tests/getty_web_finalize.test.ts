@@ -204,6 +204,60 @@ describe("Getty web automatic finalize", () => {
     expect(progress.some((line) => /not ready to submit/.test(line))).toBe(true);
   });
 
+  it("presses Save metadata again when the grid save left a card not ready", async () => {
+    // Getty flips a card to "Ready to submit" only once its metadata is saved
+    // again. The run must re-save after the retry window and re-check the card —
+    // and it must not click Complete before that card is ready.
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: [{ selected: 1, method: "select-all" }, { selected: 1, method: "select-all" }],
+      saveMetadataEditor: [
+        { saved: true, label: "Save" }, { saved: true, label: "Save metadata" }, { saved: true, label: "Save metadata" },
+      ],
+      readUploadState: [
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] },
+      ],
+      completeBatch: [{ clicked: true, label: "Submit batch" }],
+      confirmCompletion: [{ confirmed: true, label: "Submit", dialog: true }],
+      readCompletionState: [{ submitted: true, canComplete: false }],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // Two grid-wide saves: the bulk one and the retry that flipped the card.
+    expect(cdp.steps.filter((step) => step === "selectAllContributions")).toHaveLength(2);
+    const reselect = cdp.steps.lastIndexOf("readUploadState");
+    expect(cdp.steps.slice(reselect)).toContain("completeBatch");
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, notReady: [], resaves: 1 });
+  });
+
+  it("never clicks Complete while a card still lacks its Ready to submit chip", async () => {
+    const queue = {
+      ...successQueue(),
+      readUploadState: [{ cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] }],
+    };
+    const cdp = connection(queue);
+    const progress: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 5, readyRetryMs: 0, readyTimeoutMs: 40, readyResaves: 1,
+      onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("timeout");
+      expect(result.reason).toContain("Ready to submit");
+      expect(result.reason).toContain("star_01");
+    }
+    expect(cdp.steps).not.toContain("completeBatch");
+    expect(progress.some((line) => /saving the metadata again/.test(line))).toBe(true);
+  });
+
   it("keeps the engine and the helper's Date Created identical", () => {
     // The panel formats dates in src/lib; the helper does it in plain ESM, so a
     // test pins both to Getty's own rendering.

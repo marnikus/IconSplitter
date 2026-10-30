@@ -152,18 +152,19 @@ describe("Getty web upload in the batch runner", () => {
     await vi.advanceTimersByTimeAsync(2100);
     release!();
     await run;
-    expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) ready to submit"))).toBe(true);
+    // While the bytes move the panel counts what Getty already has.
+    expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) uploaded"))).toBe(true);
   });
 
   it("says so when Getty's page had to be reloaded to get moving", () => {
     const base = { phase: "uploading", total: 14, uploaded: 5, failed: 2, listed: 14 };
     expect(progressLabel({ ...base, reloads: 0 }, "Getty Images (web upload)"))
-      .toBe("Getty Images (web upload): 5 of 14 file(s) ready to submit, 2 failed");
+      .toBe("Getty Images (web upload): 5 of 14 file(s) uploaded, 2 failed");
     expect(progressLabel({ ...base, reloads: 1 }, "Getty Images (web upload)"))
       .toContain("page reloaded");
   });
 
-  it("moves the bar as each file turns Ready to submit, not only when the run ends", async () => {
+  it("verifies the bar against the cards turning Ready to submit", async () => {
     vi.useFakeTimers();
     const root = new FakeDir("ws");
     addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
@@ -187,11 +188,13 @@ describe("Getty web upload in the batch runner", () => {
           failed: [], completed: false, completion: null, metadata: [],
         };
       },
-      // The helper has no session for the first polls (its 404), then reports.
+      // The helper has no session for the first polls (its 404), then reports the
+      // metadata save: every file has arrived, and the cards turn ready one by one.
       gettyWebProgressFn: async () => {
         polls += 1;
         if (polls <= 2) return null;
-        return { phase: "uploading", total: 4, uploaded: polls >= 4 ? 2 : 1, failed: 0, listed: 2, reloads: 0 };
+        // The transfer is done; the cards turn "Ready to submit" one by one.
+        return { phase: "metadata", total: 4, uploaded: 4, ready: polls >= 4 ? 2 : 1, failed: 0, listed: 4, reloads: 0 };
       },
       finishGettyWebFn: async () => ({
         ok: true, batchId: "68565609", accepted: [], completed: true,
@@ -202,9 +205,10 @@ describe("Getty web upload in the batch runner", () => {
     await vi.advanceTimersByTimeAsync(6000);
     release!();
     await run;
-    // One card turns ready => the bar is already at 1 of 4, then 2 of 4.
-    expect(steps.some((step) => step.done === 1 && step.total === 4)).toBe(true);
-    expect(steps.some((step) => step.done === 2 && step.label.includes("2 of 4 file(s) ready to submit"))).toBe(true);
+    // The bar keeps the files Getty already has (4), while the line verifies the
+    // cards turning "Ready to submit" — 1 of 4, then 2 of 4.
+    expect(steps.some((step) => step.done === 4 && step.label.includes("1 of 4 file(s) ready to submit"))).toBe(true);
+    expect(steps.some((step) => step.done === 4 && step.label.includes("2 of 4 file(s) ready to submit"))).toBe(true);
     // And the misses before the helper's session did not stop the watching.
     expect(polls).toBeGreaterThan(3);
   });
@@ -218,12 +222,13 @@ describe("Getty web upload in the batch runner", () => {
       (progress) => seen.push(settledFiles(progress)),
       async () => {
         calls += 1;
-        return calls <= 3 ? null : { phase: calls >= 5 ? "done" : "uploading", total: 4, uploaded: 2, failed: 1, listed: 4, reloads: 1 };
+        return calls <= 3 ? null : { phase: calls >= 5 ? "done" : "metadata", total: 4, uploaded: 2, ready: 2, failed: 1, listed: 4, reloads: 1 };
       },
     );
     await vi.advanceTimersByTimeAsync(4000);
     stop();
     // 404s are retried, and a settled reading ends the watch instead of polling on.
+    // Two files Getty has (validated) plus one rejection are what counts as settled.
     expect(seen).toEqual([3, 3]);
     expect(calls).toBe(5);
   });

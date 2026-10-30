@@ -4163,3 +4163,46 @@ No test removed, skipped or loosened; no threshold, budget or harness change.
 Docs: `sor/stock-upload-getty-web.md` (icon-only proof, `pending`, `acceptedOf`),
 `selectors/stock-upload.md` (thumbnails decide nothing); both stay under 9 000 B
 (8 996 / 8 527 B). `dist/` and `node_modules/` restored, not committed.
+
+## 2026-10-30 — Getty: metadata starts on the picture, the bar follows the chips
+
+Reported: the run froze on the step that types Date Created and presses Save
+metadata. Cause: the previous change made the transfer wait require the "Ready to
+submit" chip, but Getty only shows that chip **after** the metadata is saved — a
+deadlock that could only end at the 300 s bound.
+
+Two stages are now separate and measured. `driver.mjs` `fileStatus` counts a file
+as arrived on its picture **or** its chip (`uploaded`), while
+`readState.readyToSubmit` is the chip alone; `readState.awaitingReady` is every
+listed card without it. `contribute.mjs` `waitForVerified` waits for **arrival**
+(a picture or a chip) and returns as soon as every file has one — that is what
+starts the metadata step — and only reports `timeout` for a file with neither
+after the bound. The chip remains the finish line: `waitForReadyToSubmit` runs
+after the grid-wide Save metadata, re-presses Save metadata after `readyRetryMs`
+30 s (twice at most, `readyTimeoutMs` 75 s) and re-checks only the files that are
+not ready; a card that never turns ready is named and never clicks Complete.
+
+Progress: `progressOf` reports both counts; `settledFiles` is
+`max(arrived, ready) + failed` so the bar never runs backwards while the metadata
+is saved, and `progressLabel` switches to "N of M file(s) ready to submit" during
+the metadata/readiness phase. `session.upload` passes `onState` into
+`finalizeBatch`, so every readiness reading the helper takes also updates
+`/getty-web/progress` and the panel's bar at 100 % stays a finished, closable bar.
+
+Measured: `getty_web_batch` 30 (new "starts the metadata step on the picture,
+without waiting for the validation chip" reproduces the freeze under fake timers
+and passes in ~2 s of app time instead of the 300 s bound; "waits for the picture
+and then says which files never arrived" pins the honest timeout),
+`getty_web_finalize` 23 (new "presses Save metadata again when the grid save left
+a card not ready" — two grid saves, Complete only after the retry — and "never
+clicks Complete while a card still lacks its Ready to submit chip"),
+`getty_web_driver` 45 ("counts a rendered picture as arrival only, never as ready
+to submit"), `stockupload_getty_web` 15 (bar verifies against chips: 1 of 4 then
+2 of 4 ready while done stays at the arrived count). Focused total: 24 files /
+**275 tests**, all passing. `npx tsc --noEmit` clean, `npm run lint` 0 errors (22
+pre-existing warnings), `npm run quality:changed` GATE PASSED, `npm run
+verify:fast` ALL LANES PASSED. No test skipped, loosened or removed; no threshold
+or budget changed. Docs: `sor/stock-upload-getty-web.md` (arrival vs finish),
+`selectors/stock-upload.md` (picture starts metadata, chip finishes),
+`sor/stock-upload.md` (bar counting) — 8 964 / 8 568 / 8 067 B. `dist/` and
+`node_modules/` restored, not committed.

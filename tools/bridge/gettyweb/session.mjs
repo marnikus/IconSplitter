@@ -29,8 +29,10 @@ export function progressOf(read, reloads = 0) {
   const failed = Array.isArray(read?.failed) ? read.failed.length : 0;
   const listed = Array.isArray(read?.namesSeen) ? read.namesSeen.length : 0;
   const total = listed + (Array.isArray(read?.missing) ? read.missing.length : 0);
-  // Getty's own "Ready to submit" validation, the only proof a file was uploaded;
+  // Getty's own "Ready to submit" validation, the only proof a run is finished;
   // reported only once it exists, so a reading without it stays the old shape.
+  // `uploaded` stays the earlier "the picture is there" count, which is what
+  // lets the metadata step start as soon as the last file lands.
   const ready = Array.isArray(read?.readyToSubmit) ? read.readyToSubmit.length : 0;
   return { total, uploaded, failed, listed, ...(ready > 0 ? { ready } : {}), reloads };
 }
@@ -243,6 +245,8 @@ function buildSession(ctx) {
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
         onProgress: options.onProgress, signal: options.signal, ...readyOptionsOf(options),
+        // Every card that turns "Ready to submit" after the save moves the bar.
+        onState: (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "metadata" }; },
       });
       // The phase says whether Getty validated every card, not just that the
       // request returned: a failed readiness leaves the run unfinished.

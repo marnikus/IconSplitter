@@ -25,11 +25,11 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   names the contribution; `[data-cy="invalid-file-media"]` ("Upload failed") is a
   rejection, reported with its `ID: …` text. Every card carries
   `[data-cy="not-ready-icon"]` (`not_ready_to_submit`) while Getty ingests and
-  `[data-cy="pending-icon"]` (`Ready to submit`) once it validated the file:
-  **only that ready icon is proof of an upload**, so a card's picture
-  (`[data-cy="image-thumbnail"]`) never decides anything — `readUploadState`
-  counts a card as uploaded on its ready icon alone, and the finish requires
-  every card to be ready.
+  `[data-cy="pending-icon"]` (`Ready to submit`) once it validated the file.
+  Two stages: the card's picture (`[data-cy="image-thumbnail"]`) means the file
+  **arrived**, which is what starts the metadata step; the ready icon is what
+  **finishes** the run, and it only appears after Save metadata, so the helper
+  re-saves after 30 s for the cards that still lack it.
 - Getty web Complete: the control is matched by label among *enabled* buttons only;
   `completionState` reports presence/enabled so the finish waits for Getty instead
   of clicking a disabled control. Files are matched to a card by **stem**, since a JPEG/EPS pair

@@ -87,6 +87,8 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
   readyTimeoutMs?: number;
   /** How many times Save metadata may be pressed again (default 2). */
   readyResaves?: number;
+  /** Every fresh page reading, so a panel bar can follow the chips as they land. */
+  onState?: (state: any) => void;
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
 }): Promise<any>;

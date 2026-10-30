@@ -25,14 +25,13 @@ real browser.
 5. Getty's uploader transfers. **If nothing new appears for 30 s** the helper
    reloads the batch page and re-attaches only the missing files (twice, then
    fails honestly); a read that times out is that stall, retried, not a socket
-   error. It waits until every file is listed, then for each card's own
-   verdict: **only `data-cy="pending-icon"` / `aria-label="Ready to submit"`
-   counts as uploaded** — a thumbnail, a listed row or a rendering card proves
-   nothing, and `invalid-file-media` ("Upload failed") is a rejection named with
-   Getty's id. A card that is still unvalidated when the bound (300 s) passes is
-   not claimed: the run moves to the metadata step, which is what makes Getty
-   validate a card, and the gate there decides. `GET /getty-web/progress` feeds
-   the live counts, so **the bar moves with each validated card** (1 s poll).
+   error. It waits until every file is listed, then for each card's **picture**
+   (or its `data-cy="pending-icon"` / `aria-label="Ready to submit"` chip) — that
+   is when the metadata step starts, because Getty only shows the chip **after**
+   the metadata is saved and waiting for it here would deadlock the run.
+   `invalid-file-media` ("Upload failed") is a rejection named with Getty's id; a
+   file with neither a picture nor a chip after the bound (300 s) is reported, not
+   claimed. `GET /getty-web/progress` feeds the live counts (1 s poll).
 6. **Metadata:** per contribution it selects the card by stem (clicking twice if
    Getty drops the first), waits for the drawer to unlock (disabled fields drop
    typed text), types title and description and writes **today's date** into Date
@@ -41,12 +40,13 @@ real browser.
    touched**: keywords Getty lists are left alone and only the keyword field ever
    gets Enter. Every drawer saved, it selects **all** cards and presses **Save
    metadata** once (`bulkSave`; nothing is claimed if nothing could be selected).
-   **Then it waits for the icons:** every card must show `data-cy="pending-icon"` /
-   `aria-label="Ready to submit"` before the run is done. A card still showing
+   **Then it verifies the icons:** every card must show `data-cy="pending-icon"` /
+   `aria-label="Ready to submit"` before the run is done, and the bar's line
+   climbs with them ("N of M file(s) ready to submit"). A card still showing
    `not-ready-icon` gets **Save metadata pressed again after 30 s** (twice at
    most) and only the not-ready files are re-checked; one that stays unvalidated
-   is named and the run does not claim success (`timeout`, "Ready to submit" in
-   the reason). Report `readiness` says `ok`, `notReady`, `resaves`.
+   is named and the run does not claim success (`timeout`). Report `readiness`
+   says `ok`, `notReady`, `resaves`.
 7. **Complete once:** after the last icon the run posts `/getty-web/finish`. It
    refuses (inline tail too) while a contribution is missing **or says "Upload
    failed"**, then waits (bounded) for Getty to enable Complete, clicks it and

@@ -464,16 +464,16 @@ describe("Getty batch page as captured", () => {
     expect(state.uploaded).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
   });
 
-  it("never counts a rendered thumbnail as an upload on its own", () => {
-    // The user's rule: a picture proves nothing — Getty lists one even for files
-    // it later rejects — so only its own "Ready to submit" icon counts.
+  it("counts a rendered picture as arrival only, never as ready to submit", () => {
+    // The picture is what lets the metadata step start; the chip that decides a
+    // run is finished only appears after that metadata is saved.
     mount(CARD_PAGE.replace(
       '<img data-cy="image-thumbnail" alt="Location pinpointing">',
       '<img data-cy="image-thumbnail" alt="Location pinpointing" src="https://media.gettyimages.com/id/1/icon.jpg">',
     ));
     const state = driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] });
-    expect(state.uploaded).toEqual([]);
-    expect(state.processingNames).toEqual(["icon-map-pin_5_01.jpg"]);
+    expect(state.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
+    expect(state.processingNames).toEqual([]);
     expect(state.readyToSubmit).toEqual([]);
     expect(state.awaitingReady).toEqual(["icon-map-pin_5_01.jpg"]);
   });

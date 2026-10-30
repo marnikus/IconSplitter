@@ -153,21 +153,32 @@ export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyW
 }
 
 /**
- * The panel line for a live upload reading. The count is Getty's "Ready to
- * submit" one: a file is not called uploaded until its card carries that icon.
+ * The panel line for a live upload reading. While the bytes are moving it counts
+ * the files Getty already has (its picture is on the page); once the metadata is
+ * being saved it counts the cards that turned "Ready to submit", which is what
+ * actually finishes the run.
  */
 export function progressLabel(progress: GettyWebProgress, targetName: string): string {
   const of = progress.total > 0 ? ` of ${progress.total}` : "";
   const failed = progress.failed > 0 ? `, ${progress.failed} failed` : "";
   const reloaded = progress.reloads > 0 ? " — page reloaded to get it moving" : "";
-  const ready = Math.max(progress.ready ?? 0, progress.uploaded);
-  if (ready === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
+  const ready = progress.ready ?? 0;
+  if (progress.phase === "uploading") {
+    if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
+    return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}${reloaded}`;
+  }
+  if (ready === 0 && progress.failed === 0) return `${targetName}: saving metadata ${progress.listed}${of} file(s)${reloaded}`;
   return `${targetName}: ${ready}${of} file(s) ready to submit${failed}${reloaded}`;
 }
 
-/** Files Getty has already settled: its "Ready to submit" icon, or "Upload failed". */
+/**
+ * Files the bar may count as done: the ones whose picture rendered (Getty has
+ * them) or, once the metadata is being saved, the ones that turned "Ready to
+ * submit" — whichever is further, so the count never runs backwards while the
+ * run finishes. Rejected files count straight away.
+ */
 export function settledFiles(progress: GettyWebProgress): number {
-  return progress.uploaded + progress.failed;
+  return Math.max(progress.uploaded, progress.ready ?? 0) + progress.failed;
 }
 
 const PROGRESS_POLL_MS = 1000;

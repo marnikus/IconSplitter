@@ -248,9 +248,10 @@ export async function createBatch(connection, sessionId, options) {
 
 /**
  * Waits until the batch page lists every file of this call, then until each card
- * proves its outcome: Getty's own "Ready to submit" icon means it took the file,
- * "Upload failed" means it did not. Nothing else counts — not a picture, not the
- * mere arrival of the row.
+ * proves its outcome: Getty's **picture** (or its "Ready to submit" chip) means
+ * the file arrived, "Upload failed" means it did not. The picture is the earlier
+ * proof and is what lets the metadata step start: the chip only appears once the
+ * metadata has been saved, so waiting for it here would deadlock.
  */
 async function waitForFileNames(connection, sessionId, names, options) {
   const timeoutMs = options.timeoutMs ?? 180000;
@@ -350,27 +351,25 @@ async function readStateSafe(connection, sessionId, names) {
 /** The reason a page that neither answers nor accepts its files is given. */
 const PAGE_STOPPED = "the Getty batch page stopped answering and did not accept the remaining files after a reload";
 
-/** Nothing is uploaded until Getty's own validation icon says so. */
+/** A file is settled once Getty finished with it: bytes in, or rejected. */
 function settled(state, names) {
   return names.every((name) => state.uploaded.includes(name) || state.failed.includes(name));
 }
 
 /**
- * Waits for Getty's "Ready to submit" icon on every card, bounded. A file that
- * is still processing when the bound passes is **not** claimed as uploaded: the
- * run goes on to the metadata step, which is what makes Getty validate a card,
- * and the readiness gate after that save decides. Only the icon (or Getty's own
- * "Upload failed") ever settles a file.
+ * Waits for every file to arrive, bounded, then hands the run to the metadata
+ * step — which starts the moment the last picture is on the page. A file that
+ * never arrives (or is rejected) is reported, never called uploaded.
  */
 async function waitForVerified(connection, sessionId, names, options, first) {
   const deadline = Date.now() + (options.readyTimeoutMs ?? VERIFY_TIMEOUT_MS);
   let last = first;
-  // A page that renders no contribution cards cannot show the icon at all:
+  // A page that renders no contribution cards cannot show a picture at all:
   // waiting would only burn the bound, so the metadata/readiness steps report it.
   const readable = () => last?.cardsPresent !== false;
   while (readable() && !settled(last, names) && Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
-    options.onProgress?.(`Getty marked ${last.uploaded.length}/${names.length} file(s) ready to submit`);
+    options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)`);
     await sleep(pollMsOf(options));
     const read = await readStateSafe(connection, sessionId, names);
     if (!read.ok) continue; // a frozen tab is waited out, never reported as uploaded
@@ -378,11 +377,14 @@ async function waitForVerified(connection, sessionId, names, options, first) {
     options.onState?.(last);
   }
   const rejected = last.failed.length > 0 ? `, ${last.failed.length} rejected` : "";
-  options.onProgress?.(`Getty marked ${last.uploaded.length}/${names.length} file(s) ready to submit${rejected}`);
+  options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)${rejected}`);
   const waiting = names.filter((name) => !last.uploaded.includes(name) && !last.failed.includes(name));
   if (waiting.length === 0) return { ok: true, state: last };
-  options.onProgress?.(`${waiting.length} file(s) are not ready to submit yet — saving the metadata next, which is what makes Getty validate them`);
-  return { ok: true, state: last, pending: waiting };
+  const bound = Math.round((options.readyTimeoutMs ?? VERIFY_TIMEOUT_MS) / 1000);
+  return {
+    ok: false, code: "timeout", state: last,
+    reason: `Getty did not show a picture for ${waiting.length} of ${names.length} file(s) after ${bound} s (${waiting.slice(0, 3).join(", ")}) — the upload is not complete`,
+  };
 }
 
 /** The contribution a file belongs to; a vector pair shares one. */
@@ -601,12 +603,20 @@ async function waitForReadyToSubmit(connection, sessionId, expected, options, fi
       options.onProgress?.(`${pending.length} file(s) are not ready to submit — saving the metadata again (${resaves}/${maxResaves})`);
       await saveEverySelected(connection, sessionId, options).catch(() => null);
       const reread = await readStateSafe(connection, sessionId, expected);
-      if (reread.ok) state = reread.state;
+      if (reread.ok) {
+        state = reread.state;
+        options.onState?.(state);
+      }
       continue;
     }
     await sleep(pollMsOf(options));
     const read = await readStateSafe(connection, sessionId, expected);
-    if (read.ok) state = read.state;
+    if (read.ok) {
+      state = read.state;
+      // The panel's bar follows these readings: each card that turns ready while
+      // the metadata is being saved is one more file the run can submit.
+      options.onState?.(state);
+    }
   }
 }
 

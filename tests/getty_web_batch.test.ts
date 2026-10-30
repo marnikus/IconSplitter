@@ -353,26 +353,25 @@ describe("Getty web upload verification", () => {
     expect(result.state.readyToSubmit).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
   });
 
-  it("keeps a listed card without the Ready-to-submit icon out of the uploaded list", async () => {
+  it("starts the metadata step on the picture, without waiting for the validation chip", async () => {
     vi.useFakeTimers();
     try {
       mountBatchPage();
-      // The card renders its thumbnail at once but stays not_ready_to_submit: a
-      // picture is not an upload, so the file must not be counted (or claimed).
+      // The card renders its picture at once but stays not_ready_to_submit — the
+      // real order on Getty, where the chip only appears after the metadata save.
+      // Waiting for it here is what froze the run before the timestamp step.
       const page = new LateCardPage(1000, "icon-map-pin_5_01.eps", "processing");
-      const progress: string[] = [];
       const result = attachFiles(page, "page", {
         paths: ["/staged/icon-map-pin_5_01.jpg"], names: ["icon-map-pin_5_01.jpg"],
-        readyTimeoutMs: 3000, onProgress: (line: string) => progress.push(line),
+        readyTimeoutMs: 300000,
       });
-      await vi.advanceTimersByTimeAsync(5000);
+      await vi.advanceTimersByTimeAsync(2000);
       const done = await result;
       expect(done.ok).toBe(true);
-      expect(done.state.uploaded).toEqual([]);
-      expect(done.state.processingNames).toEqual(["icon-map-pin_5_01.jpg"]);
-      // The run says it out loud and hands the file to the metadata step.
-      expect(done.pending).toEqual(["icon-map-pin_5_01.jpg"]);
-      expect(progress.some((line) => /not ready to submit yet/.test(line))).toBe(true);
+      // Arrived (so the metadata can start) but not yet validated.
+      expect(done.state.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
+      expect(done.state.readyToSubmit).toEqual([]);
+      expect(done.state.awaitingReady).toEqual(["icon-map-pin_5_01.jpg"]);
     } finally {
       vi.useRealTimers();
     }
@@ -392,9 +391,9 @@ describe("Getty web upload verification", () => {
     expect(result.state.failures).toEqual([{ name: "icon-megaphone_5_01.eps", id: "FSPID51446" }]);
   });
 
-  it("keeps waiting for the icon and then hands the unvalidated file to the metadata step", async () => {
-    // The user's "wait for the full upload": a listed card without Getty's
-    // validation icon is not an upload, so it is never reported as one.
+  it("waits for the picture and then says which files never arrived", async () => {
+    // The user's "wait for the full upload": a listed card with neither a picture
+    // nor a validation chip proves nothing, so it is never reported as uploaded.
     vi.useFakeTimers();
     try {
       mountBatchPage();
@@ -418,14 +417,12 @@ describe("Getty web upload verification", () => {
       });
       await vi.advanceTimersByTimeAsync(4000);
       const done = await result;
-      // The metadata save is what makes Getty validate a card, so the run goes on
-      // to it; nothing is claimed as uploaded in the meantime.
-      expect(done.ok).toBe(true);
-      expect(done.pending).toEqual(["sleepy_09.jpg"]);
+      expect(done).toMatchObject({ ok: false, code: "timeout" });
+      expect(done.reason).toContain("did not show a picture");
       expect(done.state.uploaded).toEqual([]);
       expect(done.state.processingNames).toEqual(["sleepy_09.jpg"]);
-      // It re-read the page for the whole bound instead of giving up at once.
-      expect(progress.some((line) => /1 file\(s\) are not ready to submit yet/.test(line))).toBe(true);
+      // It kept reading the page for the whole bound instead of giving up at once.
+      expect(progress.filter((line) => /Getty uploaded 0\/1/.test(line)).length).toBeGreaterThan(1);
     } finally {
       vi.useRealTimers();
     }
