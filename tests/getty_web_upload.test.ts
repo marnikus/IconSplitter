@@ -4,8 +4,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  GETTY_WEB_ERROR_HINT, GETTY_WEB_SUBMISSION_TYPE, gettyWebBatchName, gettyWebFileOrder,
-  isGettyWebPreset, validateGettyWebTasks,
+  GETTY_WEB_ERROR_HINT, GETTY_WEB_SUBMISSION_TYPE, gettyWebBatchName, gettyWebCreatedDate,
+  gettyWebFileOrder, isGettyWebPreset, validateGettyWebTasks,
 } from "../src/lib/stockupload/gettyweb";
 import { gettyWebProgress } from "../src/lib/stockupload/gettyprogress";
 import {
@@ -37,6 +37,13 @@ describe("Getty web upload rules", () => {
     expect(gettyWebBatchName(now, 1)).toBe("IconSplitter 2026-10-29 (1 icon)");
     expect(gettyWebBatchName(now, 3)).toBe("IconSplitter 2026-10-29 (3 icons)");
     expect(gettyWebBatchName(now, 3).length).toBeLessThanOrEqual(60);
+  });
+
+  it("writes Date Created the way Getty's drawer shows it", () => {
+    // The captured drawer holds "10/10/2026 00:00:00 +0000", not an ISO date.
+    expect(gettyWebCreatedDate(new Date("2026-10-10T15:20:00Z"))).toBe("10/10/2026 00:00:00 +0000");
+    expect(gettyWebCreatedDate(new Date("2026-01-05T00:00:00Z"))).toBe("01/05/2026 00:00:00 +0000");
+    expect(gettyWebCreatedDate(new Date("2026-12-31T23:59:59Z"))).toBe("12/31/2026 00:00:00 +0000");
   });
 
   it("accepts a JPEG plus optional matching EPS and puts the JPEG first", () => {
@@ -184,10 +191,10 @@ describe("Getty web loopback client", () => {
 describe("Getty web live progress", () => {
   it("reads the per-file counts the helper reports for a running upload", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, {
-      ok: true, progress: { phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4 },
+      ok: true, progress: { phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4, reloads: 1 },
     }));
     const progress = await gettyWebProgress("http://127.0.0.1:47391", "run 7", fetchImpl as unknown as typeof fetch);
-    expect(progress).toEqual({ phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4 });
+    expect(progress).toEqual({ phase: "uploading", total: 4, uploaded: 3, failed: 1, listed: 4, reloads: 1 });
     const [url] = fetchImpl.mock.calls[0] as unknown as [string];
     expect(url).toBe("http://127.0.0.1:47391/getty-web/progress?sessionKey=run%207");
   });

@@ -11,7 +11,7 @@ import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { getStockHistory, resetStockHistory } from "../src/stockupload/historystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
-import { settledFiles, watchGettyProgress } from "../src/stockupload/gettywebtransfer";
+import { progressLabel, settledFiles, watchGettyProgress } from "../src/stockupload/gettywebtransfer";
 import { resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import type { GettyWebUploadInput } from "../src/lib/stockupload/gettywebclient";
@@ -140,7 +140,9 @@ describe("Getty web upload in the batch runner", () => {
           failed: [], completed: false, completion: null, metadata: [],
         };
       },
-      gettyWebProgressFn: async () => ({ phase: "uploading", total: 4, uploaded: 2, failed: 0, listed: 3 }),
+      gettyWebProgressFn: async () => ({
+        phase: "uploading", total: 4, uploaded: 2, failed: 0, listed: 3, reloads: 0,
+      }),
       finishGettyWebFn: async () => ({
         ok: true, batchId: "68565609", accepted: [], completed: true,
         completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [],
@@ -151,6 +153,14 @@ describe("Getty web upload in the batch runner", () => {
     release!();
     await run;
     expect(labels.some((line) => line.includes("Getty Images (web upload): 2 of 4 file(s) uploaded"))).toBe(true);
+  });
+
+  it("says so when Getty's page had to be reloaded to get moving", () => {
+    const base = { phase: "uploading", total: 14, uploaded: 5, failed: 2, listed: 14 };
+    expect(progressLabel({ ...base, reloads: 0 }, "Getty Images (web upload)"))
+      .toBe("Getty Images (web upload): 5 of 14 file(s) uploaded, 2 failed");
+    expect(progressLabel({ ...base, reloads: 1 }, "Getty Images (web upload)"))
+      .toContain("page reloaded");
   });
 
   it("moves the bar as each thumbnail appears, not only when the run ends", async () => {
@@ -181,7 +191,7 @@ describe("Getty web upload in the batch runner", () => {
       gettyWebProgressFn: async () => {
         polls += 1;
         if (polls <= 2) return null;
-        return { phase: "uploading", total: 4, uploaded: polls >= 4 ? 2 : 1, failed: 0, listed: 2 };
+        return { phase: "uploading", total: 4, uploaded: polls >= 4 ? 2 : 1, failed: 0, listed: 2, reloads: 0 };
       },
       finishGettyWebFn: async () => ({
         ok: true, batchId: "68565609", accepted: [], completed: true,
@@ -208,7 +218,7 @@ describe("Getty web upload in the batch runner", () => {
       (progress) => seen.push(settledFiles(progress)),
       async () => {
         calls += 1;
-        return calls <= 3 ? null : { phase: calls >= 5 ? "done" : "uploading", total: 4, uploaded: 2, failed: 1, listed: 4 };
+        return calls <= 3 ? null : { phase: calls >= 5 ? "done" : "uploading", total: 4, uploaded: 2, failed: 1, listed: 4, reloads: 1 };
       },
     );
     await vi.advanceTimersByTimeAsync(4000);

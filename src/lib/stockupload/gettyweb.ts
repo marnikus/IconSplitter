@@ -65,6 +65,16 @@ export function gettyWebBatchName(now: Date, itemCount: number): string {
   return `IconSplitter ${stamp} (${Math.max(itemCount, 0)} ${plural})`.slice(0, GETTY_WEB_MAX_BATCH_NAME);
 }
 
+/**
+ * Date Created exactly as Getty's metadata drawer shows it, e.g.
+ * "10/10/2026 00:00:00 +0000": US month/day/year, midnight, UTC offset.
+ */
+export function gettyWebCreatedDate(now: Date): string {
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(now.getUTCDate()).padStart(2, "0");
+  return `${month}/${day}/${now.getUTCFullYear()} 00:00:00 +0000`;
+}
+
 function pairOf(tasks: readonly PlannedTransfer[]): { raster: PlannedTransfer | null; vector: PlannedTransfer | null } {
   return {
     raster: tasks.find((t) => t.format === "raster") ?? null,

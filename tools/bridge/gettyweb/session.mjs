@@ -23,12 +23,12 @@ async function openPage(connection) {
 }
 
 /** Turns one page reading into the counts the app's progress line shows. */
-export function progressOf(read) {
+export function progressOf(read, reloads = 0) {
   const uploaded = Array.isArray(read?.uploaded) ? read.uploaded.length : 0;
   const failed = Array.isArray(read?.failed) ? read.failed.length : 0;
   const listed = Array.isArray(read?.namesSeen) ? read.namesSeen.length : 0;
   const total = listed + (Array.isArray(read?.missing) ? read.missing.length : 0);
-  return { total, uploaded, failed, listed };
+  return { total, uploaded, failed, listed, reloads };
 }
 
 /** How long the page may take to list `fileCount` attached files. */
@@ -151,7 +151,7 @@ export async function openGettySession(options) {
 function buildSession(ctx) {
   const { connection, page, options, cleanup } = ctx;
   const tempDir = mkdtempSync(path.join(tmpdir(), "getty-web-files-"));
-  const state = { batchId: null, expected: [], progress: null };
+  const state = { batchId: null, expected: [], progress: null, reloads: 0 };
   let closed = false;
   const dropTemp = () => {
     try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp already gone */ }
@@ -183,25 +183,27 @@ function buildSession(ctx) {
         }
       }
       const paths = stageIcons(tempDir, icons).flat();
-      state.progress = { phase: "uploading", total: files.length, uploaded: 0, failed: 0, listed: 0 };
+      state.reloads = 0;
+      state.progress = { phase: "uploading", total: files.length, uploaded: 0, failed: 0, listed: 0, reloads: 0 };
       const result = await attachFiles(connection, page.sessionId, {
         paths, names: files.map((file) => file.name),
         timeoutMs: uploadTimeoutFor(files.length, options.uploadTimeoutMs ?? UPLOAD_TIMEOUT_MS),
         readyTimeoutMs: options.readyTimeoutMs,
         // Polled by the app, so the panel shows what Getty reports while it runs.
-        onState: (read) => { state.progress = { ...progressOf(read), phase: "uploading" }; },
+        onState: (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "uploading" }; },
+        onReload: (count) => { state.reloads = count; },
         onProgress: options.onProgress, signal: options.signal,
       });
       if (!result.ok) {
-        state.progress = { ...progressOf(result.state), phase: "failed" };
+        state.progress = { ...progressOf(result.state, state.reloads), phase: "failed" };
         return { ...result, batchId: state.batchId };
       }
-      state.progress = { ...progressOf(result.state), phase: "metadata" };
+      state.progress = { ...progressOf(result.state, state.reloads), phase: "metadata" };
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
         onProgress: options.onProgress, signal: options.signal,
       });
-      state.progress = { ...progressOf(result.state), phase: "done" };
+      state.progress = { ...progressOf(result.state, state.reloads), phase: "done" };
       return {
         ...done, state: { ...result.state, ...done.report?.state }, report: done.report,
         accepted: result.state?.uploaded ?? [], failed: result.state?.failures ?? [], batchId: state.batchId,

@@ -5,7 +5,7 @@
 // driver.mjs; this file only sequences steps and waits.
 
 import * as driver from "./driver.mjs";
-import { insertText, navigate, runStep, setFiles, waitFor } from "./cdp.mjs";
+import { insertText, navigate, reloadPage, runStep, setFiles, waitFor } from "./cdp.mjs";
 
 const STEP_SOURCES = new Map(
   Object.entries(driver).filter(([name]) => driver.DRIVER_STEPS.includes(name)).map(([name, fn]) => [name, fn.toString()]),
@@ -14,6 +14,14 @@ const STEP_SOURCES = new Map(
 const LOGIN_POLL_MS = 1500;
 const UPLOAD_POLL_MS = 1000;
 const CONFIRM_SETTLE_MS = 700;
+const EDITOR_POLL_MS = 500;
+// Getty renders a thumbnail some time after it lists the file; twelve icons of
+// full-size JPEGs take minutes, so the wait for every picture is generous.
+const VERIFY_TIMEOUT_MS = 300000;
+// Getty's page sometimes simply stops reacting to its own uploader. Reloading it
+// (and attaching only what is still missing) is the recovery that works there.
+const STALL_MS = 30000;
+const MAX_RELOADS = 2;
 const NAV_RETRY_MS = 5000;
 // Never use the first generic file input: Getty also renders release uploaders.
 // This contribution input is deliberately hidden and accepts the vector pair.
@@ -228,7 +236,11 @@ export async function createBatch(connection, sessionId, options) {
 async function waitForFileNames(connection, sessionId, names, options) {
   const timeoutMs = options.timeoutMs ?? 180000;
   const deadline = Date.now() + timeoutMs;
+  const stallMs = options.stallMs ?? STALL_MS;
   let last = null;
+  let seen = 0;
+  let movedAt = Date.now();
+  let reloads = 0;
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
     last = await readState(connection, sessionId, names);
@@ -236,8 +248,24 @@ async function waitForFileNames(connection, sessionId, names, options) {
     if (last.signInRequired) {
       return { ok: false, code: "auth", reason: "Getty signed the browser out during the upload", state: last };
     }
-    if (last.namesSeen.length === names.length) break;
-    options.onProgress?.(`Getty listed ${last.namesSeen.length}/${names.length} file(s) — waiting for the rest`);
+    if (last.namesSeen.length !== seen) {
+      seen = last.namesSeen.length;
+      movedAt = Date.now();
+    }
+    if (seen === names.length) break;
+    options.onProgress?.(`Getty listed ${seen}/${names.length} file(s) — waiting for the rest`);
+    if (Date.now() - movedAt >= stallMs) {
+      // Nothing has arrived for a while: reload, then re-attach only the rest.
+      const stuckReason = "the Getty batch page stopped reacting and did not accept the remaining files after a reload";
+      if (reloads >= MAX_RELOADS) return { ok: false, code: "page", reason: stuckReason, state: last };
+      reloads += 1;
+      options.onProgress?.(`no file for ${Math.round(stallMs / 1000)} s — reloading the Getty page and retrying the rest`);
+      const recovered = await reloadAndRetry(connection, sessionId, last, options);
+      if (!recovered) return { ok: false, code: "page", reason: stuckReason, state: last };
+      options.onReload?.(reloads);
+      movedAt = Date.now();
+      continue;
+    }
     await sleep(UPLOAD_POLL_MS);
   }
   if (!last || last.namesSeen.length < names.length) {
@@ -249,6 +277,33 @@ async function waitForFileNames(connection, sessionId, names, options) {
   }
   options.onProgress?.(`Getty listed ${names.length}/${names.length} file(s)`);
   return waitForVerified(connection, sessionId, names, options, last);
+}
+
+/**
+ * Reloads the batch page and hands it only the files it is still missing. A
+ * reload is the documented recovery when the page stops reacting to its uploader.
+ */
+async function reloadAndRetry(connection, sessionId, last, options) {
+  const reloaded = await reloadPage(connection, sessionId);
+  if (!reloaded.ok) return false;
+  const missing = new Set((last?.missing ?? []).map((name) => String(name)));
+  const paths = [];
+  const names = [];
+  options.names.forEach((name, index) => {
+    const path = options.paths?.[index];
+    if (!missing.has(name) || typeof path !== "string") return;
+    paths.push(path); names.push(name);
+  });
+  if (paths.length === 0) return true;
+  await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
+  const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
+    sessionId, timeoutMs: 60000, intervalMs: 1000,
+  });
+  if (!input.ok) return false;
+  const attached = await setFiles(connection, paths, { sessionId, selector: CONTRIBUTION_FILE_INPUT });
+  if (!attached.ok) return false;
+  options.onProgress?.(`re-attached ${paths.length} file(s) after the reload`);
+  return true;
 }
 
 async function readState(connection, sessionId, names) {
@@ -264,7 +319,7 @@ function settled(state, names) {
  * once. Anything unresolved after the bound is reported, never called uploaded.
  */
 async function waitForVerified(connection, sessionId, names, options, first) {
-  const deadline = Date.now() + (options.readyTimeoutMs ?? 120000);
+  const deadline = Date.now() + (options.readyTimeoutMs ?? VERIFY_TIMEOUT_MS);
   let last = first;
   while (!settled(last, names) && Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
@@ -274,9 +329,18 @@ async function waitForVerified(connection, sessionId, names, options, first) {
     options.onState?.(last);
   }
   const stuck = names.length - last.uploaded.length - last.failed.length;
-  if (stuck > 0) options.onProgress?.(`${stuck} file(s) are still processing — continuing`);
   const rejected = last.failed.length > 0 ? `, ${last.failed.length} rejected` : "";
   options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)${rejected}`);
+  if (stuck > 0) {
+    options.onProgress?.(`${stuck} file(s) are still processing — the upload is not complete`);
+    // A listed card with no thumbnail is not an upload: reporting success here is
+    // what left cards stuck at "not ready to submit" while the run said it was done.
+    const waiting = names.filter((name) => !last.uploaded.includes(name) && !last.failed.includes(name));
+    return {
+      ok: false, code: "timeout", state: last,
+      reason: `Getty listed ${stuck} of ${names.length} file(s) without a thumbnail after ${Math.round((options.readyTimeoutMs ?? VERIFY_TIMEOUT_MS) / 1000)} s (${waiting.slice(0, 3).join(", ")}) — the upload is not complete`,
+    };
+  }
   return { ok: true, state: last };
 }
 
@@ -287,9 +351,13 @@ function stemOf(fileName) {
   return (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
 }
 
-/** Today's date, the value Getty's required Date Created field gets. */
-export function todayIso(now = new Date()) {
-  return now.toISOString().slice(0, 10);
+/**
+ * Date Created exactly as Getty's drawer renders it — "10/10/2026 00:00:00 +0000"
+ * (month/day/year, midnight, UTC). The ISO date the drawer rejects is not this.
+ */
+export function gettyCreatedDate(now = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${pad(now.getUTCMonth() + 1)}/${pad(now.getUTCDate())}/${now.getUTCFullYear()} 00:00:00 +0000`;
 }
 
 /** Hands the staged files to the page's uploader and waits until they appear. */
@@ -313,13 +381,34 @@ function wasRejected(file, options) {
   return (options.failed ?? []).some((name) => stemOf(name) === stem);
 }
 
+/**
+ * Waits for the drawer of the card just clicked to unlock. Until it does, Getty
+ * drops every typed value, so the file would stay "not ready to submit".
+ */
+async function waitForEditor(connection, sessionId, options) {
+  const deadline = Date.now() + (options.editorTimeoutMs ?? 15000);
+  let state = await runDriverStep(connection, sessionId, "metadataEditorReady");
+  while (state?.ready === false && Date.now() < deadline) {
+    if (options.signal?.aborted) return { ok: false };
+    await sleep(options.editorPollMs ?? EDITOR_POLL_MS);
+    state = await runDriverStep(connection, sessionId, "metadataEditorReady");
+  }
+  return { ok: state?.ready !== false, present: state?.present === true };
+}
+
 /** Opens one file's metadata editor, types the accepted text, and saves it. */
 async function fillOneFileMetadata(connection, sessionId, file, options) {
   const opened = await runDriverStep(connection, sessionId, "openFileMetadata", { fileName: file.name });
   if (!opened.opened) return { name: file.name, status: "row-not-found" };
+  const ready = await waitForEditor(connection, sessionId, options);
+  if (!ready.ok) {
+    await runDriverStep(connection, sessionId, "closeMetadataEditor").catch(() => null);
+    options.onProgress?.(`${file.name}: the metadata drawer never unlocked`);
+    return { name: file.name, status: "editor-not-ready" };
+  }
   const filled = await runDriverStep(connection, sessionId, "fillMetadataFields", {
     title: file.metadata.title, description: file.metadata.description,
-    keywords: file.metadata.keywords, dateCreated: file.metadata.dateCreated ?? todayIso(), overwrite: false,
+    keywords: file.metadata.keywords, dateCreated: file.metadata.dateCreated ?? gettyCreatedDate(), overwrite: false,
   });
   const saved = (await runDriverStep(connection, sessionId, "saveMetadataEditor")) ?? { saved: false, label: null };
   await runDriverStep(connection, sessionId, "closeMetadataEditor").catch(() => null);
@@ -456,6 +545,11 @@ export async function finalizeBatch(connection, sessionId, options) {
   const report = { metadata: filled.report, completion: null, state: null };
   if (filled.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", report };
   if (options.complete === false) return { ok: true, report };
+  const failed = (options.failed ?? []).length;
+  if (failed > 0) {
+    // Submitting a batch that still shows "Upload failed" cards locks those icons out.
+    return { ok: false, code: "page", reason: `Getty reports "Upload failed" for ${failed} file(s) — the batch is not completed`, report };
+  }
   const clicked = await runDriverStep(connection, sessionId, "completeBatch");
   if (!clicked.clicked) {
     return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", report };

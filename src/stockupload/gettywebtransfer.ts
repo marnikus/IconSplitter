@@ -151,8 +151,9 @@ export async function uploadGettyWebRun(input: GettyWebRunInput): Promise<GettyW
 export function progressLabel(progress: GettyWebProgress, targetName: string): string {
   const of = progress.total > 0 ? ` of ${progress.total}` : "";
   const failed = progress.failed > 0 ? `, ${progress.failed} failed` : "";
-  if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)`;
-  return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}`;
+  const reloaded = progress.reloads > 0 ? " — page reloaded to get it moving" : "";
+  if (progress.uploaded === 0 && progress.failed === 0) return `${targetName}: uploading ${progress.listed}${of} file(s)${reloaded}`;
+  return `${targetName}: ${progress.uploaded}${of} file(s) uploaded${failed}${reloaded}`;
 }
 
 /** Files Getty has already settled: a thumbnail, or its own "Upload failed". */

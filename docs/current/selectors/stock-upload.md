@@ -28,16 +28,24 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   of clicking a disabled control. Files are matched to a card by **stem**, since a JPEG/EPS pair
   is listed once, under the EPS name. The metadata drawer uses
   `md-headline`/`md-caption`/`md-created_date`/`metadata-keyword-multiselect` and
-  `save-metadata`, and only enables its fields once a card is selected.
+  `save-metadata`, and only enables its fields once a card is selected — a
+  `metadataEditorReady` poll waits for that unlock, and Date Created
+  (`textarea[name="created_date"]`) takes `MM/DD/YYYY 00:00:00 +0000`.
 - Getty web waits: the Create Batch control, `input[name="submission_name"]` and
   `[data-cy="create-batch-confirm-button"]` must render enabled within 60 s (else a
   `timeout` failure naming the control); an open dialog or an already-chosen
   submission type is never reopened; the batch id must differ from the one read
   before the click, or the run keeps waiting.
 - Getty web progress: `GET /getty-web/progress?sessionKey=…` returns the live
-  `{phase,total,uploaded,failed,listed}` counts only — no names, no page text. It
+  `{phase,total,uploaded,failed,listed,reloads}` counts only — no names, no page
+  text. It
   answers 404 until the upload request has a session, so the client keeps polling
   instead of treating that as the end of the run.
+- Getty web stall recovery: when the batch page lists no new file for 30 s
+  (`stallMs`), the helper sends `Page.reload` (cache ignored), waits for
+  `document.readyState === "complete"`, dismisses dialogs and re-attaches **only**
+  the files the page still misses through the same contribution uploader. Two
+  reloads at most; then the run fails with "stopped reacting".
 - Getty web dismissals: before attaching the run's files and before submitting,
   `[role=dialog]`, `[role=alert]` and `[data-cy$="-error"]` scopes get their
   `Dismiss|Cancel|Close|OK|Got it` control clicked. A scope with no such control is

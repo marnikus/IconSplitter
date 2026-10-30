@@ -134,6 +134,14 @@ export async function navigate(connection, url, sessionId) {
   await waitFor(connection, "document.readyState === 'complete'", { sessionId, timeoutMs: 30000 });
 }
 
+/** Reloads the page, keeping its URL, and waits for it to be usable again. */
+export async function reloadPage(connection, sessionId) {
+  await connection.send("Page.enable", {}, sessionId);
+  await connection.send("Page.reload", { ignoreCache: true }, sessionId);
+  const loaded = await waitFor(connection, "document.readyState === 'complete'", { sessionId, timeoutMs: 30000 });
+  return { ok: loaded.ok };
+}
+
 /**
  * Attaches files to a file input. `selector` picks the input; Chrome then fires
  * the real `change` event, which is what the page's uploader listens to.
