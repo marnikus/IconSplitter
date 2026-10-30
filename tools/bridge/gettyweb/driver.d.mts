@@ -14,13 +14,24 @@ export const fillBatchDetails: (arg: { batchName: string; briefCode?: string }) 
 export const submitBatchCreation: () => any;
 export const readUploadState: (arg: { names?: string[] }) => {
   namesSeen: string[]; missing: string[]; contributions: string[]; fileCount: number;
+  /** Cards Getty rendered a picture for: the only ones whose drawer can be filled. */
+  withThumbnail: string[]; withoutThumbnail: string[];
   processing: boolean; ready: boolean; [key: string]: unknown;
 };
 export const labelTextOf: (el: any) => string;
-export const fillMetadataFields: (arg: { title?: string; description?: string; keywords?: string[]; dateCreated?: string; overwrite?: boolean }) => any;
+export const fillMetadataFields: (arg: { title?: string; description?: string; keywords?: string[]; dateCreated?: string; overwrite?: boolean }) => {
+  filled: Record<string, boolean>; present: Record<string, boolean>;
+  keywordsBefore: number; keywordsAfter: number;
+  /** The drawer's own values after typing — a run can prove the date took. */
+  values: { title: string | null; description: string | null; keywords: string | null; dateCreated: string | null };
+};
 export const openFileMetadata: (arg: { fileName: string }) => any;
 /** True once the clicked card's drawer accepts input; disabled fields drop typed text. */
-export const metadataEditorReady: () => { ready: boolean; present: boolean };
+export const metadataEditorReady: () => {
+  ready: boolean; present: boolean;
+  /** Nothing but Getty's loading skeletons: the page must be reloaded, not waited out. */
+  skeleton: boolean;
+};
 /** Clicks the drawer's captured `[data-cy="save-metadata"]` control (label "Save metadata"). */
 export const saveMetadataEditor: () => { saved: boolean; label: string | null };
 /**

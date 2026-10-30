@@ -346,6 +346,9 @@ function buildSession(ctx) {
       };
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
+        // The upload reading names which cards have a picture: a metadata repair
+        // walk only opens those, and never resumes after the file that failed.
+        state: result.state,
         onProgress: options.onProgress, signal: options.signal, onState, onReload, ...readyOptionsOf(options),
         // A card Getty never validates (or rejected) is re-uploaded from its own
         // staged copy instead of being reported as uploaded.
@@ -371,6 +374,9 @@ function buildSession(ctx) {
       const baseReloads = state.reloads;
       const result = await finishBatch(connection, page.sessionId, {
         expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
+        // The batch's staged files travel with the finish too: a readiness reload
+        // may walk them again, so no file is left without its timestamp.
+        files: staged.files,
         onProgress: options.onProgress, ...readyOptionsOf(options),
         onReload: (count) => { state.reloads = baseReloads + count; },
         repair: repairCapability(connection, page.sessionId, staged.files, staged.paths, {

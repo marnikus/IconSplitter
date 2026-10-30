@@ -4331,3 +4331,26 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   PASSED; `verify:fast` ALL LANES PASSED; focused 7 files / 107 tests green;
   `tests/stockupload*` 14 files / 101 tests green; docs 4/4 (soR 8,992 B,
   selectors 8,994 B).
+- 2026-10-30 — Getty web metadata sweep (blank drawer, missed timestamps): the
+  driver now reports a drawer that holds nothing but its loading skeletons
+  (`metadataEditorReady` → `{ready,present,skeleton}`, `[data-cy="metadata-skeleton"]`
+  / `.MuiSkeleton-root`), so a page that never resolves its contribution is a
+  hard problem instead of an 8 s wait; `readUploadState` splits the cards into
+  `withThumbnail`/`withoutThumbnail` and `fillMetadataFields` reads the drawer's
+  own `values` back, which makes a Date Created that did not take a `date-missing`
+  instead of a `saved`. `contribute.mjs` stops the first pass at the first failed
+  drawer (`fillEveryFileMetadata` → `{aborted,halted,report}`), then reloads the
+  batch page at once and walks **every** pictured contribution again from the
+  first one (`sweepMetadata`, `sweepTargets`, ≤ `METADATA_RESTARTS` 1 restart per
+  walk), skipping only cards without a picture or rejected by Getty; the
+  readiness ladder's reload sweeps too, and `/getty-web/finish` now carries the
+  batch's files so its own reload repairs as well. `finalizeBatch` reports
+  `sweeps` and `session.upload` forwards the upload's `state`. Docs: the Getty web
+  page was condensed and the new
+  [metadata and repair](sor/stock-upload-getty-web-metadata.md) page owns the
+  sweeps, read-back and ladder; [selectors](selectors/stock-upload.md) gained the
+  skeleton and pictured-card handles; design note under
+  `docs/archive/2026-10-30-getty-metadata-sweep/`.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; full `vitest` 322 files / 3,449 tests
+  green; docs 4/4 (soR 8,393 B, metadata page 3,451 B, selectors 8,998 B).

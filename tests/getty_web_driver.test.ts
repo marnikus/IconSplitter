@@ -724,4 +724,43 @@ describe("Getty batch page as captured", () => {
     mount(BATCHES_PAGE);
     expect(driver.metadataEditorReady()).toMatchObject({ ready: false, present: false });
   });
+
+  // Getty paints the drawer as MUI skeletons before it has the contribution; a
+  // drawer that only ever shows those never unlocks and must be reloaded at once.
+  it("tells a drawer that only painted its loading skeletons apart from a locked one", () => {
+    mount(`<div data-cy="metadata-form"><div data-cy="metadata-skeleton">
+      <div class="MuiSkeleton-root MuiSkeleton-text"></div>
+      <div class="MuiSkeleton-root MuiSkeleton-text"></div></div></div>`);
+    expect(driver.metadataEditorReady()).toMatchObject({ ready: false, present: false, skeleton: true });
+    // A drawer Getty unlocked is never reported as loading, whatever else it holds.
+    mount(CARD_PAGE.replace(/disabled/g, ""));
+    expect(driver.metadataEditorReady().skeleton).toBe(false);
+    // A page with no drawer at all is not a loading drawer either.
+    mount(BATCHES_PAGE);
+    expect(driver.metadataEditorReady().skeleton).toBe(false);
+  });
+
+  it("names the contributions that have a picture, so a sweep skips only the rest", () => {
+    mount(CARD_PAGE);
+    // The captured markup's <img> has no src, so no picture arrived for it yet.
+    expect(driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] })).toMatchObject({
+      withThumbnail: [], withoutThumbnail: ["icon-map-pin_5_01.eps"],
+    });
+    mount(CARD_PAGE.replace('<img data-cy="image-thumbnail" alt="Location pinpointing">',
+      '<img data-cy="image-thumbnail" alt="Location pinpointing" src="https://media.gettyimages.com/id/1/icon.jpg">'));
+    expect(driver.readUploadState({ names: ["icon-map-pin_5_01.jpg"] })).toMatchObject({
+      withThumbnail: ["icon-map-pin_5_01.eps"], withoutThumbnail: [],
+    });
+  });
+
+  it("reads the drawer's own values back, so a run can prove the date took", () => {
+    mount(CARD_PAGE.replace(/disabled/g, ""));
+    const date = "10/10/2026 00:00:00 +0000";
+    const filled = driver.fillMetadataFields({ title: "Foldable paper map", description: "Pin.", dateCreated: date });
+    expect(filled.values).toMatchObject({
+      title: "Foldable paper map", description: "Pin.", dateCreated: date,
+    });
+    // A field the run never wrote reads back as the empty value it still has.
+    expect(filled.values.keywords).toBe("");
+  });
 });

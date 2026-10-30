@@ -140,6 +140,11 @@ const CARD_FAILED_NODE = '[data-cy="invalid-file-media"], [data-cy*="invalid-fil
 // what starts the metadata step; the "Ready to submit" chip (below) is what ends
 // the run, and it only appears after the metadata is saved.
 const CARD_THUMBNAIL = '[data-cy="image-thumbnail"], [data-cy="image-card"] img, img';
+// Getty paints the metadata drawer as MUI skeleton rows before the contribution
+// is available ("metadata-skeleton", `.MuiSkeleton-root` spans). A drawer that
+// only ever shows those never unlocks, so it is a reload, not a longer wait.
+const DRAWER_SKELETON = '[data-cy="metadata-skeleton"], .MuiSkeleton-root, [class*="Skeleton"]';
+const DRAWER_SCOPE = '[data-cy="metadata-form"], [data-cy="metadata-drawer"]';
 
 /** A real picture in the card: a loaded/remote/embedded image, not a placeholder. */
 function cardHasThumbnail(scope) {
@@ -449,6 +454,10 @@ export function readUploadState({ names }) {
     cardsPresent: cards.length > 0,
     failures: cards.filter((card) => card.failed).map((card) => ({ name: card.name, id: card.id })).slice(0, 50),
     contributions: cards.map((card) => card.name).slice(0, 50),
+    /** Cards Getty rendered a picture for: only these can open a drawer. */
+    withThumbnail: cards.filter((card) => card.thumbnail).map((card) => card.name).slice(0, 100),
+    /** Listed cards without a picture — there is no drawer to fill for them yet. */
+    withoutThumbnail: cards.filter((card) => !card.thumbnail).map((card) => card.name).slice(0, 100),
     fileCount: cards.length,
     processing: cards.some((card) => card.processing),
     // A page without cards says nothing about processing, so it is not waited on.
@@ -525,11 +534,14 @@ function dateFieldOf(fields) {
  * is dropped, which is how files stayed "not ready to submit".
  */
 export function metadataEditorReady() {
-  const form = document.querySelector('[data-cy="metadata-form"]');
+  const form = document.querySelector(DRAWER_SCOPE);
   const fields = [...(form ?? document).querySelectorAll("input, textarea, [contenteditable=true]")].filter(shown);
   const present = fields.length > 0;
   const editable = fields.some((el) => !el.disabled && !el.readOnly && seenField(el));
-  return { ready: present && editable, present };
+  // Only a drawer with no usable field is "loading": once a field takes input the
+  // run types into it, whatever else the drawer still renders behind it.
+  const skeleton = !editable && (form ?? document).querySelector(DRAWER_SKELETON) !== null;
+  return { ready: present && editable, present, skeleton };
 }
 
 /** One of the drawer fields the run fills (title, caption, date, keywords). */
@@ -573,8 +585,16 @@ export function fillMetadataFields({ title, description, keywords, dateCreated, 
     setFieldValue(el, value, key === "keywords");
     filled[key] = true;
   }
+  // The drawer's own values after typing: a run can prove the Date Created took
+  // instead of trusting that the write landed. A missing field reports null.
+  const readBack = (el) => (el === null ? null
+    : el.isContentEditable ? textOf(el) : String(el.value ?? ""));
+  const values = {
+    title: readBack(targets.title), description: readBack(targets.description),
+    keywords: readBack(targets.keywords), dateCreated: readBack(targets.dateCreated),
+  };
   // Reported so a run can never silently change how many tags a file carries.
-  return { filled, present, keywordsBefore, keywordsAfter: existingKeywordCount() };
+  return { filled, present, keywordsBefore, keywordsAfter: existingKeywordCount(), values };
 }
 
 /** Opens the metadata editor for one uploaded file (row button, else the row). */
@@ -750,6 +770,8 @@ export const PAGE_PRELUDE = [
   + `\nconst CARD_FAILED = ${CARD_FAILED.toString()};`
   + `\nconst CARD_FAILED_NODE = ${JSON.stringify(CARD_FAILED_NODE)};`
   + `\nconst CARD_THUMBNAIL = ${JSON.stringify(CARD_THUMBNAIL)};`
+  + `\nconst DRAWER_SKELETON = ${JSON.stringify(DRAWER_SKELETON)};`
+  + `\nconst DRAWER_SCOPE = ${JSON.stringify(DRAWER_SCOPE)};`
   + `\nconst COMPLETE_LABEL = ${COMPLETE_LABEL.toString()};`
   + `\n${usable.toString()}`;
 

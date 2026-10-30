@@ -105,6 +105,12 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
   /** How long one clicked card's drawer may stay disabled before it is reported. */
   editorTimeoutMs?: number;
   editorPollMs?: number;
+  /** How long a drawer may show only Getty's loading skeletons before the reload. */
+  skeletonTimeoutMs?: number;
+  /** How often one metadata walk may reload and restart from the first file. */
+  metadataRestarts?: number;
+  /** The upload reading: which cards have a picture, so a walk opens only those. */
+  state?: { cardsPresent?: boolean; withThumbnail?: string[]; failed?: string[]; [key: string]: unknown } | null;
   /** Poll cadence of the page waits (1 s against Getty); a test may hand in 1 ms. */
   pollMs?: number;
   /** Pause after clicking Complete, before the confirmation dialog is read. */

@@ -20,14 +20,13 @@ browser.
    `uploadGettyWebRun`.
 3. **The run is N batches of ≤ 100 icons** (`planGettyWebBatches`, mirrored by
    the helper's `MAX_ICONS`): one icon is one upload (JPEG plus EPS) — Getty lists
-   a pair once under the EPS name — so 100 pairs
-   (200 files) are one batch, 101 icons two. A batch also ends early at the request
-   budget: `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) capped at 64 MB
-   here, or 16 MB for a helper that reports none. A batch name is
-   the date, place and size — `2026-10-30 2/3 (100 icons)` — no product
-   name. The opt-in `Random batches` (`stock-random-batches`, persisted) draws
-   each batch from the icons not yet sent: `randomBatchOrder` shuffles the indexes
-   once, so every icon still goes once and the last batch holds the rest.
+   a pair once under the EPS name — so 100 pairs (200 files) are one batch, 101
+   icons two. A batch also ends early at the request budget:
+   `gettyWeb.maxBytes` (`GETTY_WEB_MAX_BYTES`, 256 MB) capped at 64 MB here, or
+   16 MB for a helper that reports none. A batch name is the date, place and size
+   — `2026-10-30 2/3 (100 icons)` — no product name. The opt-in `Random batches`
+   (`stock-random-batches`, persisted) draws each batch from the icons not yet
+   sent: `randomBatchOrder` shuffles once, so every icon still goes once.
 4. `/getty-web/upload` runs **once per batch** with `newBatch: true`: the helper
    stages that chunk, signs in once per run, returns to the contributor page,
    creates the batch (`session.startBatch` resets its id, names and counts)
@@ -40,24 +39,16 @@ browser.
    reloads the page and re-attaches the missing files; a timed-out read, or a
    listed card with no **picture** for that window, is the same stall (per batch,
    twice, then it fails honestly). It waits until every file is listed, then for
-   each card's picture or `pending-icon` "Ready to submit" chip — a thumbnail
-   arms the metadata step; the chip appears **only after** a save. `invalid-file-media` ("Upload failed") is a rejection
-   named with Getty's id. `GET /getty-web/progress` (1 s poll) counts **arrivals**, so
-   the bar says "uploaded", never "complete".
-6. **Metadata:** per contribution it selects the card by stem (twice if Getty
-   drops the click), types title and description and writes **today's date** into
-   Date Created as Getty renders it (`MM/DD/YYYY 00:00:00 +0000`). Prefilled prose
-   stays, the date is always replaced, but **tags are never touched** (the keyword
-   field only gets Enter). Every drawer saved, it selects **all** cards and
-   presses **Save metadata** (`bulkSave`).
-   **Then it verifies:** every card must show `pending-icon` /
-   `aria-label="Ready to submit"`, and the bar's line climbs with them. A card
-   still showing `not-ready-icon` follows a 30 s ladder: **Save metadata again**,
-   then **reload and save again** (twice each — a fresh load turns these
-   cards), then **re-upload the file from its staged copy** (`reattachFiles`);
-   every step re-reads the chips, and a batch always gets its own reload before it
-   is given up on. An unvalidated file is named (`timeout`); verifying counts
-   **chips**, so 100 % means submittable. `readiness`: `ok`, `notReady`, `resaves`, `repairs`.
+   each card's picture or `pending-icon` chip — a thumbnail arms the metadata
+   step; the chip appears **only after** a save. `invalid-file-media` ("Upload
+   failed") is a rejection named with Getty's id. `GET /getty-web/progress`
+   (1 s poll) counts **arrivals**, so the bar says "uploaded", never "complete".
+6. **Metadata, timestamps and verification:** every pictured contribution's
+   drawer gets title, description and **today's Date Created**; prefilled prose
+   stays, tags are never touched, and a drawer Getty leaves on its loading
+   skeletons triggers an immediate reload and a walk of the batch from its first
+   pictured file — see [metadata and repair](stock-upload-getty-web-metadata.md)
+   (the readiness ladder and `report.sweeps` live there too).
 7. **Complete each batch, then start the next:** after its last card carries
    "Ready to submit" the run posts `/getty-web/finish` **for that batch only**. It
    refuses, naming what is wrong, while one of *that* batch's contributions is
@@ -136,9 +127,10 @@ an unvalidated file), `cancelled` 499, `page` 502. No credentials in a reason.
   other hosts refused by `contributeUrlOf`); staged files use sanitized names,
   deleted on close.
 - Tests (`tests/`): `getty_web_chunk` (budgets, batch names), `getty_web_driver`
-  (arrival vs ready), `getty_web_signin`, `getty_web_browser` (locks, launch,
-  reset, kept window), `getty_web_batch` (dialog, batch id, uploader),
-  `getty_web_upload` (sizes, failure reasons), `getty_web_cdp`, `bridge_getty_web`
-  (routes, flags, 413, cap), `getty_web_finalize` (metadata, re-save, re-upload,
-  complete), `stockupload_getty_web` (grouping, chunking, random order,
-  half-split retry, folding, sign-out, cancel).
+  (arrival vs ready, skeleton drawer, pictured cards, read-back values),
+  `getty_web_signin`, `getty_web_browser` (locks, launch, reset, kept window),
+  `getty_web_batch` (dialog, batch id, uploader), `getty_web_upload` (sizes,
+  failure reasons), `getty_web_cdp`, `bridge_getty_web` (routes, flags, 413,
+  cap), `getty_web_finalize` (metadata, re-save, re-upload, skeleton reload and
+  the repair walk, complete), `stockupload_getty_web` (grouping, chunking, random
+  order, half-split retry, folding, sign-out, cancel).

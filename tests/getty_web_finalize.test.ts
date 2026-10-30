@@ -340,7 +340,10 @@ describe("Getty web automatic finalize", () => {
       files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
       editorPollMs: 0, editorTimeoutMs: 0, signal: new AbortController().signal,
     });
-    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(2);
+    // Two clicks in the first walk, then the repair walk reopens the page and
+    // tries the file again — it never types into a drawer Getty keeps locked.
+    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(3);
+    expect(cdp.calls).toContain("Page.reload");
     expect(cdp.steps).not.toContain("fillMetadataFields");
     if (result.ok) {
       expect(result.report.metadata).toEqual([{ name: "star_01.jpg", status: "editor-not-ready" }]);
@@ -452,23 +455,36 @@ describe("Getty web automatic finalize", () => {
     const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
     const queue = {
       ...successQueue(),
+      // The reloaded page is walked again: its drawer is reopened and re-filled
+      // before the grid is saved, so the file gets its timestamp back.
+      openFileMetadata: [
+        { opened: true, method: "card" }, { opened: true, method: "card" }, { opened: true, method: "card" },
+      ],
+      metadataEditorReady: Array.from({ length: 3 }, () => ({ ready: true, present: true })),
+      fillMetadataFields: Array.from({ length: 3 }, () => ({
+        filled: { title: true, description: true, keywords: false, dateCreated: true }, present: { title: true, dateCreated: true },
+      })),
       selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
-      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      saveMetadataEditor: Array.from({ length: 10 }, () => ({ saved: true, label: "Save metadata" })),
       readUploadState: [notReady, notReady, notReady, notReady, { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] }],
     };
     const cdp = connection(queue);
     const notes: string[] = [];
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      state: { cardsPresent: true, withThumbnail: ["star_01.eps"], readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
       settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0, readyTimeoutMs: 60000,
       onProgress: (line: string) => notes.push(line),
       signal: new AbortController().signal,
     });
     expect(cdp.calls).toContain("Page.reload");
     expect(notes.some((line) => /reload/i.test(line))).toBe(true);
-    // The reload is followed by applying the metadata again, then the cards are
-    // read: a fresh page only re-validates a card whose metadata it was given.
-    const afterReload = cdp.timeline.slice(cdp.timeline.lastIndexOf("Page.reload"));
+    // The reload is followed by walking the batch from its first file again: the
+    // drawer is reopened and the date re-typed, then the grid is saved. A fresh
+    // page only re-validates a card whose metadata it was given.
+    const afterReload = cdp.timeline.slice(cdp.timeline.indexOf("Page.reload"));
+    expect(afterReload).toContain("openFileMetadata");
+    expect(afterReload).toContain("fillMetadataFields");
     expect(afterReload).toContain("selectAllContributions");
     expect(afterReload).toContain("saveMetadataEditor");
     expect(result.ok).toBe(true);
@@ -588,5 +604,133 @@ describe("Getty web automatic finalize", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("cancelled");
     expect(cdp.steps).toEqual([]);
+  });
+});
+
+describe("Getty metadata repair sweep (timestamp + metadata applied to every file)", () => {
+  const DATE = gettyCreatedDate();
+  const state = (extra: Record<string, unknown>) => ({
+    cardsPresent: true, readyToSubmit: [], awaitingReady: [], failed: [],
+    withThumbnail: ["star_01.eps", "moon_02.eps"], ...extra,
+  });
+
+  it("reloads the page at once when a drawer only shows skeletons, then walks every file from the first", async () => {
+    // The reported failure: the drawer paints its MUI skeletons and never unlocks.
+    // Waiting it out and moving to the next file leaves this one without its
+    // timestamp; the page has to be reloaded and the batch walked from file 0.
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: true, method: "card", label: "star_01.eps" },
+        { opened: true, method: "card", label: "star_01.eps" },
+        { opened: true, method: "card", label: "moon_02.eps" },
+      ],
+      metadataEditorReady: [
+        { ready: false, present: false, skeleton: true },
+        { ready: true, present: true }, { ready: true, present: true },
+      ],
+      fillMetadataFields: [
+        { filled: { title: true, description: true, keywords: false, dateCreated: true }, present: { title: true, description: true, keywords: true, dateCreated: true }, values: { dateCreated: DATE } },
+        { filled: { title: true, description: true, keywords: false, dateCreated: true }, present: { title: true, description: true, keywords: true, dateCreated: true }, values: { dateCreated: DATE } },
+      ],
+      selectAllContributions: [{ selected: 2, method: "select-all" }],
+      saveMetadataEditor: Array.from({ length: 6 }, () => ({ saved: true, label: "Save metadata" })),
+      readUploadState: [{ cardsPresent: true, readyToSubmit: ["star_01.jpg", "moon_02.jpg"], awaitingReady: [] }],
+    };
+    const cdp = connection(queue);
+    const notes: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      state: state({}), complete: true, settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1,
+      editorPollMs: 0, skeletonTimeoutMs: 0, onProgress: (line: string) => notes.push(line),
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // The page was reloaded before the second file was ever touched.
+    const reloadAt = cdp.timeline.lastIndexOf("Page.reload");
+    expect(reloadAt).toBeGreaterThanOrEqual(0);
+    const firstFill = cdp.expressions.findIndex((expression) => expression.includes("fillMetadataFields"));
+    const starAt = cdp.expressions.findIndex((expression) => expression.includes("star_01"));
+    const moonAt = cdp.expressions.findIndex((expression) => expression.includes("moon_02"));
+    expect(starAt).toBeGreaterThanOrEqual(0);
+    expect(firstFill).toBeLessThan(moonAt);
+    // Both files of the batch got their Date Created after the reload.
+    const dates = cdp.expressions.filter((expression) => expression.includes("fillMetadataFields"));
+    expect(dates.length).toBeGreaterThanOrEqual(2);
+    expect(notes.some((line) => /skeleton|from the beginning/i.test(line))).toBe(true);
+    if (result.ok) {
+      expect(result.report.metadata).toEqual([
+        expect.objectContaining({ name: "star_01.jpg", status: "saved" }),
+        expect.objectContaining({ name: "moon_02.jpg", status: "saved" }),
+      ]);
+      expect(result.report.sweeps).toBe(1);
+    }
+  });
+
+  it("detects a Date Created that did not take and repairs it from the first file", async () => {
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: true, method: "card", label: "star_01.eps" },
+        { opened: true, method: "card", label: "star_01.eps" },
+      ],
+      metadataEditorReady: [{ ready: true, present: true }, { ready: true, present: true }],
+      fillMetadataFields: [
+        // Getty dropped the typed date: the drawer reads back empty.
+        { filled: { title: true, description: true, keywords: false, dateCreated: true }, present: { title: true, description: true, keywords: true, dateCreated: true }, values: { dateCreated: "" } },
+        { filled: { title: true, description: true, keywords: false, dateCreated: true }, present: { title: true, description: true, keywords: true, dateCreated: true }, values: { dateCreated: DATE } },
+      ],
+      selectAllContributions: [{ selected: 1, method: "select-all" }],
+      saveMetadataEditor: Array.from({ length: 6 }, () => ({ saved: true, label: "Save metadata" })),
+      readUploadState: [{ cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] }],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }],
+      state: state({ withThumbnail: ["star_01.eps"] }), complete: true, settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1,
+      editorPollMs: 0, onProgress: () => undefined, signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    expect(cdp.calls).toContain("Page.reload");
+    const fills = cdp.expressions.filter((expression) => expression.includes("fillMetadataFields"));
+    expect(fills).toHaveLength(2);
+    expect(fills[1]).toContain(DATE);
+    if (result.ok) expect(result.report.metadata).toEqual([expect.objectContaining({ name: "star_01.jpg", status: "saved" })]);
+  });
+
+  it("skips only the contributions without a picture, whatever the run sent", async () => {
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: true, method: "card", label: "moon_02.eps" },
+        { opened: true, method: "card", label: "moon_02.eps" },
+      ],
+      metadataEditorReady: [
+        { ready: false, present: false, skeleton: true },
+        { ready: true, present: true },
+      ],
+      fillMetadataFields: [{
+        filled: { title: true, description: true, keywords: false, dateCreated: true },
+        present: { title: true, description: true, keywords: true, dateCreated: true }, values: { dateCreated: DATE },
+      }],
+      readUploadState: [{ cardsPresent: true, readyToSubmit: ["star_01.jpg", "moon_02.jpg"], awaitingReady: [] }],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      // star_01 arrived without a picture: there is no drawer to open for it.
+      state: state({ withThumbnail: ["moon_02.eps"] }), complete: false, settleMs: 0, bulkSaveSettleMs: 0,
+      pollMs: 1, editorPollMs: 0, skeletonTimeoutMs: 0, onProgress: () => undefined,
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // Only the file with a picture was ever opened — the picture-less one is skipped.
+    const opened = cdp.expressions.filter((expression) => expression.includes("openFileMetadata"));
+    expect(opened).toHaveLength(2);
+    expect(opened.every((expression) => expression.includes("moon_02"))).toBe(true);
+    if (result.ok) {
+      expect(result.report.metadata.map((entry: { name: string }) => entry.name)).toContain("moon_02.jpg");
+      expect(result.report.metadata.map((entry: { name: string }) => entry.name)).not.toContain("star_01.jpg");
+    }
   });
 });
