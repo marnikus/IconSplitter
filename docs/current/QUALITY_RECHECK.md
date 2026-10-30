@@ -4053,3 +4053,29 @@ closing line to the shell's log dock:
 coverage 111.7 s · Build 7.4 s → ALL LANES PASSED. Focused:
 `getty_web_batch` 24, `getty_web_driver` 41, `getty_web_finalize` 18,
 `getty_web_session` 6, `stockupload_log` 9. SOR 8,986 B, parent SOR 6,989 B.
+
+## 2026-10-30 — test-system wall time, second 40% attempt (measured, not met)
+
+Same host as the 2026-10-25 entry (2 vCPU, Node 22.22.3), recorded with
+`tools/harness-benchmark.mjs`: `verify:fast` median **117.44 s → 108.61 s = 7.5 %
+less** (clean runs 109.80 / 107.42; every run, including the four that exited 1
+for a disclosed reason, is filed under
+`docs/archive/2026-10-30-harness-speed/evidence/`). Suite alone 92.7–98.6 s for
+**3365 tests / 320 files**, all passing; no test removed, skipped or loosened and
+every perf budget and coverage threshold unchanged.
+
+What bought the time: the Getty bridge's production pacing is now injectable
+(`settleMs` 700, `bulkSaveSettleMs` 1500, `pollMs` 1000 defaults) so
+`getty_web_finalize` runs 0.25 s instead of 22.65 s and `getty_web_batch` 0.63 s
+instead of 7.98 s, with a fake-timer guard proving the real defaults still apply;
+and `waitUntil` was fixed to stop spending its app-time window on one timer
+fast-forward, which root-caused a rare `never reached: upload rows` on the
+heaviest React files (reproduced at 4 ms of real time, now covered by a test).
+
+Why it is not 40 %: 167 s of CPU for a 93 s run (85–90 % worker packing),
+132.6 s of it real test bodies rendering the actual panel (react-dom dev 23 %,
+happy-dom 16 %, GC 13 % of samples). `isolate:false` measured 106 s and broke
+isolation canaries; threads/V8 pools, group merges, optimizer pre-bundling and
+semi-space tuning were all neutral or slower. Reaching 40 % needs smaller or
+fewer rendering-scale tests, or 4 vCPU — see
+`docs/archive/2026-10-30-harness-speed/README.md`.

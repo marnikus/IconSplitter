@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_regencodes.test.ts — the one reader of a regeneration's current SVG code
 // (2026-10-20). The confirmation previews these texts and the queued batch
 // carries them, so what is shown is what is sent; an unreadable or missing code

@@ -101,14 +101,18 @@ export async function settle(maxMs = 80): Promise<void> {
 
 /** Steps the app (as settle does) until `pred` holds; fails after `budgetMs` of app time. */
 export async function waitUntil(pred: () => boolean, what: string, budgetMs = 4000): Promise<void> {
-  const deadline = now() + budgetMs;
+  let deadline = now() + budgetMs;
   const stopAt = realNow() + Math.max(budgetMs, 2000);
   while (!pred() && now() < deadline && realNow() < stopAt) {
     // Readiness may already be queued in a Promise/React commit. Observe that
     // work before selecting a future timer (otherwise a toast can expire first).
     await act(async () => { await new Promise<void>((r) => realSetImmediate(r)); });
     if (pred()) return;
+    const before = warp;
     if (!(await step(deadline))) await act(async () => { await new Promise((r) => realSetTimeout(r, 1)); });
+    // Fast-forwarding to a timer is not waiting: give the budget back, or one
+    // step onto a timer due at the edge ends the wait in real milliseconds.
+    deadline += warp - before;
   }
   if (!pred()) throw new Error(`never reached: ${what}`);
 }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Getty Images web-upload rules and loopback client: what may be sent, how the
 // staged header is built, and how failures are scrubbed before they reach the
 // UI. No browser and no live account is involved.

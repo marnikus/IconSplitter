@@ -1,3 +1,4 @@
+// @vitest-environment node
 // selectiondelta.test.ts — the compact selection history payload. A delta must
 // restore the EXACT selection array (order included: selection order is the
 // request order) and must never invent, duplicate or lose an id.

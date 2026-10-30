@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { committedArtifactCount, planDownload } from "../src/lib/upload/download";
 import { newExportRecord, ARTIFACT_EXTS } from "../src/lib/upload/export";

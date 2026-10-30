@@ -31,6 +31,16 @@ const CONTRIBUTION_FILE_INPUT = 'input[type="file"][data-cy="upload-button-file-
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Getty needs a beat after a click that closes an overlay (the confirmation
+ * dialog, the grid-wide save). The two settle windows are injectable so a test
+ * can hand in 0 instead of really waiting — production keeps the real timings.
+ */
+const settle = (options, key, fallback) => sleep(typeof options?.[key] === "number" ? options[key] : fallback);
+
+/** The poll cadence of the upload waits: 1 s for Getty, injectable so a test can run at 1 ms. */
+const pollMsOf = (options) => (typeof options?.pollMs === "number" ? options.pollMs : UPLOAD_POLL_MS);
+
 /** Runs one named page step; unknown names fail loudly instead of silently. */
 export function runDriverStep(connection, sessionId, name, arg) {
   const source = STEP_SOURCES.get(name);
@@ -168,23 +178,23 @@ export async function ensureSignedIn(connection, sessionId, options) {
 }
 
 // Wait for rendered, enabled controls; never retry a successful click/submit.
-async function waitForControl(connection, sessionId, selector) {
+async function waitForControl(connection, sessionId, selector, pollMs = UPLOAD_POLL_MS) {
   return waitFor(connection, `(() => {
     const controls = [...document.querySelectorAll(${JSON.stringify(selector)})];
     return controls.some(el => !el.disabled && !el.hidden
       && el.getAttribute('aria-hidden') !== 'true'
       && (typeof el.checkVisibility !== 'function' || el.checkVisibility()));
-  })()`, { sessionId, timeoutMs: 60000, intervalMs: 1000 });
+  })()`, { sessionId, timeoutMs: 60000, intervalMs: pollMs });
 }
 
-async function chooseSubmissionType(connection, sessionId, label, onProgress) {
-  const control = await waitForControl(connection, sessionId, '[data-cy="create-batch-submission-type"] [role="combobox"]');
+async function chooseSubmissionType(connection, sessionId, label, onProgress, pollMs = UPLOAD_POLL_MS) {
+  const control = await waitForControl(connection, sessionId, '[data-cy="create-batch-submission-type"] [role="combobox"]', pollMs);
   if (!control.ok) return { ok: false, reason: "Getty submission type control did not become ready within 60 seconds" };
   const menu = await runDriverStep(connection, sessionId, "openSubmissionTypeMenu", { label });
   if (!menu.opened) return { ok: false, reason: "submission type menu did not open" };
   if (menu.selected) return { ok: true, reason: null };
   const ready = await waitFor(connection, `Boolean(document.querySelector('[role="listbox"] [role="option"]'))`, {
-    sessionId, timeoutMs: 60000, intervalMs: 1000,
+    sessionId, timeoutMs: 60000, intervalMs: pollMs,
   });
   if (!ready.ok) return { ok: false, reason: "Getty did not show the submission type options" };
   const chosen = await runDriverStep(connection, sessionId, "chooseSubmissionTypeOption", { label });
@@ -197,24 +207,25 @@ async function chooseSubmissionType(connection, sessionId, label, onProgress) {
 export async function createBatch(connection, sessionId, options) {
   if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
   const before = await runDriverStep(connection, sessionId, "readPageInfo");
+  const pollMs = pollMsOf(options);
   const ready = await waitForControl(connection, sessionId,
-    `${driver.CREATE_BATCH_DIALOG_SELECTOR}, [data-cy="create-batch-button"]`);
+    `${driver.CREATE_BATCH_DIALOG_SELECTOR}, [data-cy="create-batch-button"]`, pollMs);
   if (!ready.ok) return { ok: false, code: "timeout", reason: "Getty Create Batch control did not become ready within 60 seconds" };
   const opened = await runDriverStep(connection, sessionId, "openCreateBatchDialog");
   if (!opened.clicked) return { ok: false, code: "page", reason: opened.reason };
   const dialog = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(driver.CREATE_BATCH_DIALOG_SELECTOR)}))`, {
-    sessionId, timeoutMs: 60000, intervalMs: 1000,
+    sessionId, timeoutMs: 60000, intervalMs: pollMsOf(options),
   });
   if (!dialog.ok) return { ok: false, code: "page", reason: "the Create Batch dialog did not open" };
-  const type = await chooseSubmissionType(connection, sessionId, options.submissionType || "iStock creative illustration", options.onProgress);
+  const type = await chooseSubmissionType(connection, sessionId, options.submissionType || "iStock creative illustration", options.onProgress, pollMs);
   if (!type.ok) return { ok: false, code: "page", reason: type.reason };
-  const nameReady = await waitForControl(connection, sessionId, 'input[name="submission_name"]');
+  const nameReady = await waitForControl(connection, sessionId, 'input[name="submission_name"]', pollMs);
   if (!nameReady.ok) return { ok: false, code: "timeout", reason: "Getty batch name field did not become ready within 60 seconds" };
   const filled = await runDriverStep(connection, sessionId, "fillBatchDetails", {
     batchName: String(options.batchName ?? "").trim() || `IconSplitter ${new Date().toISOString()}`, briefCode: options.briefCode ?? "",
   });
   if (!filled.filled) return { ok: false, code: "page", reason: filled.reason };
-  const submitReady = await waitForControl(connection, sessionId, '[data-cy="create-batch-confirm-button"]');
+  const submitReady = await waitForControl(connection, sessionId, '[data-cy="create-batch-confirm-button"]', pollMs);
   if (!submitReady.ok) return { ok: false, code: "timeout", reason: "Getty Create button did not become ready within 60 seconds" };
   const submitted = await runDriverStep(connection, sessionId, "submitBatchCreation");
   if (!submitted.clicked) return { ok: false, code: "page", reason: submitted.reason };
@@ -222,7 +233,7 @@ export async function createBatch(connection, sessionId, options) {
     const m = /\\/contribute\\/batches\\/(\\d+)/.exec(location.pathname);
     return m && m[1] !== ${JSON.stringify(before.batchId ?? null)} ? m[1] : null;
   })()`, {
-    sessionId, timeoutMs: options.timeoutMs ?? 60000, intervalMs: 1000,
+    sessionId, timeoutMs: options.timeoutMs ?? 60000, intervalMs: pollMsOf(options),
   });
   if (!created.ok) return { ok: false, code: "timeout", reason: "Getty did not open the new batch page" };
   options.onProgress?.(`batch ${created.value} created`);
@@ -272,7 +283,7 @@ async function waitForFileNames(connection, sessionId, names, options) {
       movedAt = Date.now();
       continue;
     }
-    await sleep(UPLOAD_POLL_MS);
+    await sleep(pollMsOf(options));
   }
   if (!last) return { ok: false, code: "page", reason: PAGE_STOPPED, state: null };
   if (last.namesSeen.length < names.length) {
@@ -305,7 +316,7 @@ async function reloadAndRetry(connection, sessionId, last, options) {
   if (paths.length === 0) return true;
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
   const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
-    sessionId, timeoutMs: 60000, intervalMs: 1000,
+    sessionId, timeoutMs: 60000, intervalMs: pollMsOf(options),
   }).catch(() => ({ ok: false }));
   if (!input.ok) return false;
   const attached = await setFiles(connection, paths, { sessionId, selector: CONTRIBUTION_FILE_INPUT });
@@ -347,7 +358,7 @@ async function waitForVerified(connection, sessionId, names, options, first) {
   while (!settled(last, names) && Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state: last };
     options.onProgress?.(`Getty uploaded ${last.uploaded.length}/${names.length} file(s)`);
-    await sleep(UPLOAD_POLL_MS);
+    await sleep(pollMsOf(options));
     const read = await readStateSafe(connection, sessionId, names);
     if (!read.ok) continue; // a frozen tab is waited out, never reported as uploaded
     last = read.state;
@@ -391,7 +402,7 @@ export async function attachFiles(connection, sessionId, options) {
   // that blocks its uploader, which is how a 2-icon run stalled after the first.
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
   const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
-    sessionId, timeoutMs: 60000, intervalMs: 1000,
+    sessionId, timeoutMs: 60000, intervalMs: pollMsOf(options),
   }).catch(() => ({ ok: false }));
   if (!input.ok) return { ok: false, code: "page", reason: "Getty contribution uploader (Upload from device) did not become ready within 60 seconds; release inputs were not used", state: null };
   const result = await setFiles(connection, options.paths, { sessionId, selector: CONTRIBUTION_FILE_INPUT });
@@ -477,7 +488,7 @@ async function saveEverySelected(connection, sessionId, options) {
     return { selected: 0, method: selection.method ?? "none", saved: false, label: null };
   }
   const saved = (await runDriverStep(connection, sessionId, "saveMetadataEditor")) ?? { saved: false, label: null };
-  await sleep(BULK_SAVE_SETTLE_MS);
+  await settle(options, "bulkSaveSettleMs", BULK_SAVE_SETTLE_MS);
   options.onProgress?.(`${selection.selected} file(s) selected — ${saved.saved ? `"${saved.label}" applied to all` : "no Save metadata control on the selection"}`);
   return { selected: selection.selected, method: selection.method ?? "none", saved: saved.saved === true, label: saved.label ?? null };
 }
@@ -541,7 +552,7 @@ async function waitForCompletionEnabled(connection, sessionId, options) {
   while (!last.enabled && Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled" };
     options.onProgress?.("waiting for Getty to enable Complete");
-    await sleep(UPLOAD_POLL_MS);
+    await sleep(pollMsOf(options));
     last = await runDriverStep(connection, sessionId, "completionState");
   }
   if (last.enabled) return { ok: true };
@@ -585,9 +596,9 @@ export async function finishBatch(connection, sessionId, options = {}) {
   if (!clicked?.clicked) {
     return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", state };
   }
-  await sleep(CONFIRM_SETTLE_MS);
+  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
   const confirmed = await runDriverStep(connection, sessionId, "confirmCompletion").catch(() => null);
-  await sleep(CONFIRM_SETTLE_MS);
+  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
   const after = await runDriverStep(connection, sessionId, "readCompletionState");
   options.onProgress?.(after.submitted ? "Getty shows the batch as submitted" : `batch completion sent (${clicked.label})`);
   return {
@@ -628,9 +639,9 @@ export async function finalizeBatch(connection, sessionId, options) {
   if (!clicked.clicked) {
     return { ok: false, code: "page", reason: "could not find the batch Complete/Submit control", report };
   }
-  await sleep(CONFIRM_SETTLE_MS);
+  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
   const confirmed = await runDriverStep(connection, sessionId, "confirmCompletion");
-  await sleep(CONFIRM_SETTLE_MS);
+  await settle(options, "settleMs", CONFIRM_SETTLE_MS);
   const state = await runDriverStep(connection, sessionId, "readCompletionState");
   report.completion = {
     clicked: true, label: clicked.label, confirmed: confirmed.confirmed, confirmLabel: confirmed.label,

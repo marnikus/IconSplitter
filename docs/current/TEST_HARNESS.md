@@ -4,26 +4,22 @@ Harness configuration, verification runner and quiet-helper contracts.
 Commands/gates: [Code Verification](CODE_VERIFICATION.md).
 Feature tests: [test index](sor/TESTS.md).
 
-## 1. Current evidence (2026-10-25)
+## 1. Current evidence (2026-10-30)
 
-**Additional 40% full-system time reduction is NOT achieved.** Reference
-281edd6, Linux / 2 CPUs / 3.85 GiB / Node22.22.3:
+**Both 40% attempts failed; the second measures 7.5%.** `verify:fast` medians
+117.44s -> 108.61s (clean runs 109.80/107.42) on 2 vCPU/Node22.22.3: the Getty bridge shed ~30s of real
+production sleep (22.65s->0.25s, 7.98s->0.63s), but the suite is CPU-bound --
+167s CPU for a 93s run (85-90% packing), 132.6s of it real test bodies that
+render the actual panel (react-dom dev 23%, DOM 16%, GC 13% of samples).
+`isolate:false` (106s), other pools, group merges and optimizer bundling were
+slower. 40% needs fewer/scaled-down rendering tests or 4 vCPU:
+[plan and rejected experiments](../archive/2026-10-30-harness-speed/README.md).
 
-| Full verification | Reference | Candidate |
-|---|---:|---:|
-| Warm runs |91.85/96.16s|92.14/90.31s|
-| Warm median |94.00s|91.23s|
-| Cache-bypassed |129.92s|117.85s|
-
-Warm target <=56.40s. Nominal reduction: warm 2.95%, cold 9.29%; neither 40%.
-Release recheck86.38s also PASS; it does not replace the planned pair.
-Host/timing variation is substantial; **do not advertise a guaranteed multiplier**.
-Measured opt-in overlap82.05s versus serial82.37s is within noise and was not
-selected as the default. Older~80s/255s and118s comparisons describe older work,
-not this task's baseline. No Windows timing guarantee.
-
-[Plan and research](../archive/2026-10-25-harness-40/README.md),
-[results, scope and rejected experiments](../archive/2026-10-25-harness-40/results.md).
+2026-10-25 attempt: warm 94.00s -> 91.23s (2.95%), cold 129.92 -> 117.85; target
+was <=56.40s ([plan](../archive/2026-10-25-harness-40/README.md),
+[results](../archive/2026-10-25-harness-40/results.md)). Host variation is
+large -- **never advertise a guaranteed multiplier**; opt-in `--overlap`
+(82.05s vs 82.37s) is noise, not the default. No Windows guarantee.
 
 ## 2. Isolated projects and resource budget
 
@@ -53,22 +49,20 @@ changed-quality, native uninstrumented performance alarms, one complete coverage
 suite, build. `verify:fast` omits only the additional uninstrumented native lane.
 No test/coverage/build success is cached. Every native algorithm/budget still runs.
 
-`npm run verify -- --overlap` explicitly enables two pipelines on >=2CPUs and
->=3GiB constrained memory: **native alarms alone first**, then the serial
-Types→Lint→Quality→Build queue alongside one complete coverage run. At most one
-static command and one Vitest invocation are live; Vitest retains its own worker
-budget. This is not a promise of faster execution on CPU-bound two-core hosts.
+`npm run verify -- --overlap` (>=2CPUs, >=3GiB) runs native alarms alone first,
+then the serial Types→Lint→Quality→Build queue beside one coverage run: at most
+one static command and one Vitest live, own worker budget. Not a speed promise.
 
 - `--serial` overrides overlap. Inadequate resources fall back to serial.
-- `--plan [--json]` lists the canonical command inventory with `executionGroup`
-  and selected `executionMode`; canonical order is not overlapping start order.
+- `--plan [--json]` lists commands with `executionGroup`/`executionMode`;
+  canonical order is not overlapping start order.
 - Coverage gets `PERF_BUDGETS=coverage`; native alarms do not. No verifier lane
   overlaps the uninstrumented native stage.
 - All gate failures propagate, including executable-start errors; other gates
   still diagnose failures. Unknown groups fail closed, never silently skip work.
 - SIGINT/SIGTERM cancel owned child process trees and prevent subsequent starts.
   Windows uses taskkill tree cleanup; Windows timing is not validated here.
-- Opt-in overlap interleaves logs; named start/finish records identify lanes.
+- Overlap interleaves logs; named start/finish records identify lanes.
 
 ## 4. DOM setup and readiness
 
@@ -85,16 +79,21 @@ budget. This is not a promise of faster execution on CPU-bound two-core hosts.
 | `settle(maxMs=80)` | three calm turns inside act; accelerate timers due within maxMs, bounded by max(maxMs,250) real ms |
 | `waitUntil(pred,what,budgetMs=4000)` | flush queued Promise/React/immediate work, recheck readiness BEFORE advancing a future timer; throw `never reached: what` on timeout |
 
-A step drains immediates first (IndexedDB/React); it only advances an eligible
-timer when otherwise idle. A timer beyond the caller's window is left alone.
-`settle(0)` is a one-tick-style settle; never poll inside one long act callback,
-since React cannot commit until it returns. Wait for actual state, not a guessed
-number of turns. Existing timing budgets and failure conditions are unchanged.
+A step drains immediates first (IndexedDB/React) and only advances an eligible
+timer when otherwise idle; a timer beyond the window is left alone. A
+fast-forward never consumes `waitUntil`'s app window. `settle(0)` is a
+one-tick-style settle; never poll inside one long act callback, since React
+cannot commit until it returns. Wait for state, not a guessed turn count.
 
-**Do not indiscriminately cancel pending work between cases.** A rejected
-experiment cancelled shared IndexedDB immediates, deadlocking later transactions.
-Even blanket timeout cancellation has no proved ownership/performance benefit.
-Neither prototype ships; the existing lifecycle and prior Promise-order fix remain.
+**Do not indiscriminately cancel pending work between cases.** Cancel the
+shared IndexedDB immediates and later transactions deadlock; blanket timeout
+cancellation has no proved benefit. Both prototypes were rejected.
+
+**Real production pacing is injectable, never deleted.** Getty's 700ms Complete
+settle, 1500ms bulk Save and 1000ms poll are options (`settleMs`,
+`bulkSaveSettleMs`, `pollMs`) that tests set to single digits;
+`getty_web_finalize` proves the real defaults still apply under fake timers.
+Never zero a default to win time, and never fake-timer a whole suite file.
 
 ## 5. Real computation, not cheaper fake tests
 
@@ -107,10 +106,9 @@ near-threshold and nonfinite cases retain the original forty-step search.
 TOL0.01, check positions, subdivision/depth8 and output geometry are unchanged.
 
 This **is application computational code**, not merely harness configuration.
-Original281edd6 output hashes for36 deterministic/adversarial cases and648
-near-threshold comparisons guard equivalence. Real supplied SVG/EPS regressions
-remain intact, including the exact37-pass fit. Do not claim a focused geometry
-speedup meets an overall verification target.
+Original281edd6 hashes for36 deterministic cases and648 near-threshold
+comparisons guard equivalence; real SVG/EPS regressions stay intact. A focused
+geometry speedup is never overall verification evidence.
 
 Rejected: non-contextified custom VM (microbenchmark faster, actual suite not),
 global threads/V8, four-worker oversubscription, automatic pending-work cancellation.
@@ -122,9 +120,9 @@ No custom DOM/provider/dependency/pool switch ships.
   aggregate95.33%stmt/89.74%branch/98.20%fn/98.29%line; all new kernel functions
   and lines100%. The reference95.32/89.72/98.20/98.29 scope gains one real module;
   no source omission, assertion deletion or uncovered-code waiver.
-- Independent audit: `PERF_BUDGETS=coverage npx vitest run --coverage --coverage.provider=v8`.
-  PowerShell: set/remove `$env:PERF_BUDGETS` around the audit. Never leave it set
-  for native budgets. Provider branch accounting can differ.
+- Independent audit: `PERF_BUDGETS=coverage npx vitest run --coverage
+  --coverage.provider=v8` (set/remove the variable around it; never leave it set
+  for native budgets). Provider branch accounting can differ.
 - Compiler-owned TypeScript incremental and content-keyed ESLint caches live in
   `node_modules/.cache/verify`. Source/config/tool edits invalidate them.
 - `npm run verify -- --cold` bypasses these and filesystem transforms, not gates.

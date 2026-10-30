@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_regenprompt.test.ts — the text ONE request carries (2026-10-09, batch
 // regeneration 2026-10-20). Feature 1 (the batch's own prompt + the images) is
 // locked here first; Feature 2 (the saved prompt + the current SVG code of

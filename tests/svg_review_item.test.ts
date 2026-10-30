@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_review_item.test.ts — review is ONE status per item (2026-10-20).
 // The user reported that each SVG version carried its own review status, so
 // switching the shown version changed the badge. The status now belongs to the

@@ -81,11 +81,11 @@ beforeEach(() => {
 describe("Getty MUI batch creation and attachment", () => {
   it("recognizes the real dialog, uses the selected type, creates a named batch and attaches selected files", async () => {
     const connection = new DomConnection();
-    const created = await createBatch(connection, "page", { batchName: "Selected icons", submissionType: TYPE });
+    const created = await createBatch(connection, "page", { pollMs: 1, batchName: "Selected icons", submissionType: TYPE });
     expect(created).toEqual({ ok: true, batchId: "987654" });
     expect(connection.submittedName).toBe("Selected icons");
     expect(connection.openedMenus).toBe(0);
-    const uploaded = await attachFiles(connection, "page", {
+    const uploaded = await attachFiles(connection, "page", { pollMs: 1,
       paths: ["/staged/selected.jpg", "/staged/selected.eps"], names: ["selected.jpg", "selected.eps"],
     });
     expect(uploaded.ok).toBe(true);
@@ -96,7 +96,7 @@ describe("Getty MUI batch creation and attachment", () => {
 
   it("opens MUI with mousedown, waits for portal options and supplies a name when blank", async () => {
     const connection = new DomConnection("iStock creative image", true);
-    const created = await createBatch(connection, "page", { batchName: "  ", submissionType: TYPE });
+    const created = await createBatch(connection, "page", { pollMs: 1, batchName: "  ", submissionType: TYPE });
     expect(created.ok).toBe(true);
     expect(connection.openedMenus).toBe(1);
     expect(connection.submittedType).toBe(TYPE);
@@ -107,7 +107,7 @@ describe("Getty MUI batch creation and attachment", () => {
     window.history.replaceState({}, "", "/contribute/batches/12345");
     const connection = new DomConnection();
     connection.failCreation = true;
-    const created = await createBatch(connection, "page", { batchName: "New batch", timeoutMs: 1 });
+    const created = await createBatch(connection, "page", { pollMs: 1, batchName: "New batch", timeoutMs: 1 });
     expect(created).toMatchObject({ ok: false, code: "timeout" });
     expect(connection.attached).toEqual([]);
   });
@@ -316,7 +316,7 @@ describe("Getty web upload verification", () => {
       "beforeend", card("star_01.eps") + card("moon_02.eps"),
     );
     setTimeout(insertCards, 0);
-    const result = await attachFiles(page, "page", {
+    const result = await attachFiles(page, "page", { pollMs: 1,
       paths: names.map((name) => `/staged/${name}`), names,
       timeoutMs: 3000, readyTimeoutMs: 1000,
     });
@@ -353,7 +353,7 @@ describe("Getty web upload verification", () => {
   it("never counts a card reading Upload failed as uploaded, and names its id", async () => {
     mountBatchPage();
     document.body.insertAdjacentHTML("beforeend", card("icon-megaphone_5_01.eps", false, true));
-    const result = await attachFiles(new DomConnection(), "page", {
+    const result = await attachFiles(new DomConnection(), "page", { pollMs: 1,
       paths: ["/staged/icon-megaphone_5_01.jpg", "/staged/icon-megaphone_5_01.eps"],
       names: ["icon-megaphone_5_01.jpg", "icon-megaphone_5_01.eps"],
       timeoutMs: 2000, readyTimeoutMs: 200,
@@ -433,7 +433,7 @@ describe("completing one batch for several icons", () => {
     document.body.innerHTML = submit + card("icon-map-pin_5_01.eps");
     let clicks = 0;
     document.querySelectorAll("button")[1].addEventListener("click", () => { clicks += 1; });
-    const result = await finishBatch(new DomConnection(), "page", { expected: EXPECTED });
+    const result = await finishBatch(new DomConnection(), "page", { pollMs: 1, settleMs: 0, expected: EXPECTED });
     expect(result).toMatchObject({ ok: false, code: "timeout" });
     expect(result.reason).toContain("1 of 2 contribution(s)");
     expect(clicks).toBe(0);
@@ -444,7 +444,7 @@ describe("completing one batch for several icons", () => {
     document.querySelectorAll("button")[1].addEventListener("click", () => {
       document.body.insertAdjacentHTML("beforeend", "<p>Batch submitted for review</p>");
     });
-    const result = await finishBatch(new DomConnection(), "page", { expected: EXPECTED });
+    const result = await finishBatch(new DomConnection(), "page", { pollMs: 1, settleMs: 0, expected: EXPECTED });
     expect(result.ok).toBe(true);
     expect(result.report.completion).toMatchObject({ clicked: true, label: "SUBMIT" });
     expect(result.report.state.submitted).toBe(true);
@@ -606,7 +606,7 @@ describe("completing one batch for several icons", () => {
       </div></div>`;
     let clicks = 0;
     document.querySelectorAll("button")[1].addEventListener("click", () => { clicks += 1; });
-    const result = await finishBatch(new DomConnection(), "page", { expected: EXPECTED });
+    const result = await finishBatch(new DomConnection(), "page", { pollMs: 1, expected: EXPECTED });
     expect(result).toMatchObject({ ok: false, code: "page" });
     expect(result.reason).toContain('"Upload failed" for 1 of 2');
     expect(clicks).toBe(0);
@@ -619,9 +619,9 @@ describe("completing one batch for several icons", () => {
     let dismissed = 0;
     document.querySelector('[role="dialog"] button')!.addEventListener("click", () => { dismissed += 1; });
     const page = new DomConnection();
-    const result = await attachFiles(page, "page", {
+    const result = await attachFiles(page, "page", { pollMs: 5,
       paths: ["/staged/icon-map-pin_5_02.jpg"], names: ["icon-map-pin_5_02.jpg"],
-      timeoutMs: 2000, readyTimeoutMs: 1000,
+      timeoutMs: 60, readyTimeoutMs: 30,
     });
     // The snackbar was dismissed before attaching, so the upload still went out.
     expect(dismissed).toBe(1);

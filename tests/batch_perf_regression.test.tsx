@@ -1,3 +1,4 @@
+// @vitest-environment node
 // batch_perf_regression.test.tsx — TDD regression tests for the batch scroll /
 // CPU-spike perf bug (root cause chain fixed on arena/736d3693-iconsplitter,
 // commits 20b78e4…32c6797): unstable core/view identity, O(n²) review sync,

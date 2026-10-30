@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { initialModel, reduceState, type UploadAction, type UploadModel } from "../src/upload/statemodel";
 import { DEFAULT_UPLOAD_SETTINGS, settingsFingerprint, type UploadSettings } from "../src/lib/upload/settings";

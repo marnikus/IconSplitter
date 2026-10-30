@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { discoverExportedItems } from "../src/lib/stockupload/discovery";
 import { buildGettyEspCsv, GETTY_ESP_CSV_HEADER } from "../src/lib/stockupload/gettycsv";

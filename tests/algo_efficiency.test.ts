@@ -1,3 +1,4 @@
+// @vitest-environment node
 // algo_efficiency.test.ts — TDD for 80% faster per-image pipeline
 // Verifies fast-count redesign: rMax capped 35, grid-bounds filter, merged mask+downsample
 

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Diagnostic only: isolate override-map work, not filesystem, SVG geometry,
 // restale cost or browser frames. The production reducer is never substituted.
 import { mkdirSync, writeFileSync } from "node:fs";

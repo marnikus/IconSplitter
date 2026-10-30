@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_sizeguide_settings.test.ts — S/L size-guide defaults, validation and opt-in fingerprints.
 import { describe, expect, it } from "vitest";
 import { AS_IS_SETTINGS, isAsIs } from "../src/lib/upload/asis";

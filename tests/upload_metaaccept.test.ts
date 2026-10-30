@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 import { acceptSelectedMetadata, idsAwaitingAcceptance, needsMetadataAcceptance } from "../src/upload/metaaccept";
 import { EMPTY_META, type UploadRow, type UploadMetaState, type Latest } from "../src/upload/types";

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_badge_settings.test.ts — corner-badge defaults, validation and opt-in fingerprints.
 import { describe, expect, it } from "vitest";
 import { AS_IS_SETTINGS, isAsIs } from "../src/lib/upload/asis";

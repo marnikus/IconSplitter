@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svgregen_batch.test.ts — batch regeneration (2026-10-20): one request may
 // carry up to N icons, each with its own current SVG code, and the answer is
 // matched back by name. Locks the prompt text, the record text (never a code),

@@ -23,6 +23,8 @@ export function attachFiles(connection: any, sessionId: string, options: {
   names: string[];
   timeoutMs?: number;
   readyTimeoutMs?: number;
+  /** Poll cadence of the page waits (1 s against Getty); a test may hand in 1 ms. */
+  pollMs?: number;
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
 }): Promise<{ ok: boolean; code?: string; reason?: string | null; state: any }>;
@@ -38,6 +40,10 @@ export function finishBatch(connection: any, sessionId: string, options?: {
   signal?: AbortSignal;
   /** How long to wait for Getty to enable Complete before refusing. */
   completeTimeoutMs?: number;
+  /** Poll cadence of the page waits (1 s against Getty); a test may hand in 1 ms. */
+  pollMs?: number;
+  /** Pause after clicking Complete, before the confirmation dialog is read. */
+  settleMs?: number;
 }): Promise<any>;
 export function finalizeBatch(connection: any, sessionId: string, options: {
   files: Array<{
@@ -50,6 +56,12 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
   /** How long one clicked card's drawer may stay disabled before it is reported. */
   editorTimeoutMs?: number;
   editorPollMs?: number;
+  /** Poll cadence of the page waits (1 s against Getty); a test may hand in 1 ms. */
+  pollMs?: number;
+  /** Pause after clicking Complete, before the confirmation dialog is read. */
+  settleMs?: number;
+  /** Pause after the grid-wide Save metadata; Getty needs a beat to persist it. */
+  bulkSaveSettleMs?: number;
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
 }): Promise<any>;

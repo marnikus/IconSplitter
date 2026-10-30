@@ -1,3 +1,4 @@
+// @vitest-environment node
 // prompttasks.test.ts — the six prompt tasks (2026-10-20). One unit per work x
 // shape; each remembers its own last choice; the picker's message names the
 // default of the task being looked at. Locks the fallbacks: a deleted preset is

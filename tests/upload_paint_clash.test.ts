@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_paint_clash.test.ts — the export's stroke colour drawn on a background
 // it cannot be seen on (2026-10-19 report: a black background with the black
 // stroke colour previewed — and exported — a solid black square). RULE 8: the

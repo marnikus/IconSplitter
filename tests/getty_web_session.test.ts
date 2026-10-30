@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The sign-in has to survive a browser restart: Chrome only writes its cookie
 // store on a real exit, so the helper snapshots the session cookies into the
 // profile folder and restores them before the contributor page loads. These

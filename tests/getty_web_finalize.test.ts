@@ -1,8 +1,9 @@
+// @vitest-environment node
 // The automatic tail of a Getty web run: fill each file's metadata editor from
 // the accepted export.json text, save it, then complete the batch — sequenced
 // through the real page steps with a recording CDP connection.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { finalizeBatch, gettyCreatedDate } from "../tools/bridge/gettyweb/contribute.mjs";
 import { gettyWebCreatedDate } from "../src/lib/stockupload/gettyweb";
 import type { CdpConnection } from "../tools/bridge/gettyweb/cdp.mjs";
@@ -57,7 +58,7 @@ describe("Getty web automatic finalize", () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }, { name: "star_01.eps", metadata: META }],
-      complete: true,
+      complete: true, settleMs: 0, bulkSaveSettleMs: 0,
       signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
@@ -83,7 +84,7 @@ describe("Getty web automatic finalize", () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
-      complete: true, signal: new AbortController().signal,
+      complete: true, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
     expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(2);
@@ -99,7 +100,7 @@ describe("Getty web automatic finalize", () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
-      complete: false, signal: new AbortController().signal,
+      complete: false, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
     const steps = cdp.steps.filter((step) => step !== "metadataEditorReady");
@@ -120,10 +121,31 @@ describe("Getty web automatic finalize", () => {
     const queue = { ...successQueue(), selectAllContributions: [{ selected: 0, method: "none" }] };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: false, signal: new AbortController().signal,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(cdp.steps.filter((step) => step === "saveMetadataEditor")).toHaveLength(1);
     if (result.ok) expect(result.report.bulkSave).toEqual({ selected: 0, method: "none", saved: false, label: null });
+  });
+
+  it("keeps Getty's real settle windows unless a caller injects faster ones", async () => {
+    // The knobs exist so tests do not sleep; production must still wait for Getty.
+    vi.useFakeTimers();
+    try {
+      const cdp = connection(successQueue());
+      const pending = finalizeBatch(cdp, "page-1", {
+        files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+        signal: new AbortController().signal,
+      });
+      await vi.advanceTimersByTimeAsync(1200);
+      // The grid-wide save's own 1.5 s window has not elapsed yet.
+      expect(cdp.steps).not.toContain("completeBatch");
+      await vi.advanceTimersByTimeAsync(2000);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect((await pending).ok).toBe(true);
+      expect(cdp.steps).toContain("selectAllContributions");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the engine and the helper's Date Created identical", () => {
@@ -138,7 +160,7 @@ describe("Getty web automatic finalize", () => {
     const cdp = connection(successQueue());
     await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: { ...META, dateCreated: "01/31/2025 00:00:00 +0000" } }],
-      complete: false, signal: new AbortController().signal,
+      complete: false, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(cdp.expressions.some((expression) => expression.includes('"dateCreated":"01/31/2025 00:00:00 +0000"'))).toBe(true);
   });
@@ -149,7 +171,7 @@ describe("Getty web automatic finalize", () => {
     queue.metadataEditorReady = [{ ready: false, present: true }, { ready: false, present: true }, { ready: true, present: true }];
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
       editorPollMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
@@ -170,7 +192,7 @@ describe("Getty web automatic finalize", () => {
     queue.metadataEditorReady = [{ ready: false, present: true }, { ready: true, present: true }];
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
       editorPollMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
@@ -194,7 +216,7 @@ describe("Getty web automatic finalize", () => {
     };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
       editorPollMs: 0, editorTimeoutMs: 0, signal: new AbortController().signal,
     });
     expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(2);
@@ -211,7 +233,7 @@ describe("Getty web automatic finalize", () => {
     const queue = { ...successQueue(), metadataEditorReady: [{ ready: false, present: true }, { ready: false, present: true }] };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
       editorTimeoutMs: 0, editorPollMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
@@ -222,7 +244,7 @@ describe("Getty web automatic finalize", () => {
   it("does not touch the editor when a file has no accepted metadata, but still completes", async () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: null }], complete: true, signal: new AbortController().signal,
+      files: [{ name: "star_01.jpg", metadata: null }], complete: true, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
     expect(cdp.steps).toEqual(["completeBatch", "confirmCompletion", "readCompletionState"]);
@@ -238,7 +260,7 @@ describe("Getty web automatic finalize", () => {
     const progress: string[] = [];
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: false,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
       onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
@@ -254,7 +276,7 @@ describe("Getty web automatic finalize", () => {
     }];
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: false, signal: new AbortController().signal,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.report.metadata[0]).not.toHaveProperty("keywords");
@@ -264,7 +286,7 @@ describe("Getty web automatic finalize", () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], failed: ["broken_02.jpg"],
-      complete: true, signal: new AbortController().signal,
+      complete: true, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result).toMatchObject({ ok: false, code: "page" });
     if (!result.ok) expect(result.reason).toContain("Upload failed");
@@ -275,7 +297,7 @@ describe("Getty web automatic finalize", () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: null }],
-      failed: ["moon_02.jpg"], complete: true, signal: new AbortController().signal,
+      failed: ["moon_02.jpg"], complete: true, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/Upload failed/);
@@ -287,7 +309,7 @@ describe("Getty web automatic finalize", () => {
   it("stops before completion when the helper is told not to submit", async () => {
     const cdp = connection(successQueue());
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: false, signal: new AbortController().signal,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(true);
     expect(cdp.steps).not.toContain("completeBatch");
@@ -298,7 +320,7 @@ describe("Getty web automatic finalize", () => {
     const queue = { ...successQueue(), completeBatch: [{ clicked: false, label: null }] };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: true, signal: new AbortController().signal,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true, settleMs: 0, bulkSaveSettleMs: 0, signal: new AbortController().signal,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -313,7 +335,7 @@ describe("Getty web automatic finalize", () => {
     const controller = new AbortController();
     controller.abort();
     const result = await finalizeBatch(cdp, "page-1", {
-      files: [{ name: "star_01.jpg", metadata: META }], complete: true, signal: controller.signal,
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true, settleMs: 0, bulkSaveSettleMs: 0, signal: controller.signal,
     });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe("cancelled");

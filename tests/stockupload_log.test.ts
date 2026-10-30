@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The stock upload tab's log trail: every file that went up, every reason one
 // did not, the reload that unstuck Getty's page and the one summary line of the
 // run — all through the shell's one log dock (no data field, so no metadata).

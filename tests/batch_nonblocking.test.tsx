@@ -1,3 +1,4 @@
+// @vitest-environment node
 // batch_nonblocking.test.tsx — TDD for non-blocking batch + scan
 import { describe, expect, it } from "vitest";
 
