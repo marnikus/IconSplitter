@@ -16,13 +16,22 @@ real browser.
 2. `panelops.ts` probes `/health` (`gettyWeb.ready`, `gettyWeb.browser`); a missing
    browser or old helper fails with a hint.
 3. `runupload.ts` groups tasks **per icon** — a JPEG/EPS pair is **one**
-   contribution, matched by **stem** — with one `sessionKey` per target;
-   `uploadGettyWebRun` posts every icon together.
-4. `/getty-web/upload` takes the run (`icons: [{files, metadata}]`, up to 200):
-   the helper stages it, signs in once, creates **one** batch and hands **all**
-   files to the uploader in one `DOM.setFileInputFiles`; stray dialogs (one blocks
+   contribution, matched by **stem** — with one `sessionKey` per target, then
+   hands the ordered icons to `uploadGettyWebRun`.
+4. **The run is N batches of at most 100 icons** (`planGettyWebBatches`,
+   `GETTY_WEB_MAX_BATCH_ICONS = 100`, helper `MAX_ICONS = 100`). One icon is one
+   upload — its JPEG plus its optional matching EPS — because Getty lists a pair
+   once, under the EPS name; so 100 pairs (up to 200 physical files) are one
+   batch and 101 icons are two. The pair is the chunk unit, so it can never be
+   split. Batch names carry their place: `IconSplitter 2026-10-30 2/3 (100 icons)`
+   (`gettyWebBatchName`; a single-batch run keeps the plain name, 60-char cap).
+5. `/getty-web/upload` is called **once per batch** with `newBatch: true`: the
+   helper stages that chunk, signs in once for the whole run, navigates back to
+   the contributor page, creates the batch (`session.startBatch` resets the batch
+   id, the expected names and the counts of the previous one) and hands its files
+   to the uploader in one `DOM.setFileInputFiles`; stray dialogs (one blocks
    Getty's uploader) are dismissed first.
-5. Getty's uploader transfers. **If nothing new appears for 30 s** the helper
+6. Getty's uploader transfers. **If nothing new appears for 30 s** the helper
    reloads the batch page and re-attaches only the missing files (twice, then it
    fails honestly); a read that times out is that same stall, retried, not a
    socket error. It waits until every file is listed, then until each card proves
@@ -33,7 +42,7 @@ real browser.
    rejected file is named with Getty's id. `GET /getty-web/progress` feeds the
    live counts, so **the bar moves with each thumbnail and validated card**
    (1 s poll).
-6. **Metadata:** per contribution it selects the card by stem (clicking twice if
+7. **Metadata:** per contribution it selects the card by stem (clicking twice if
    Getty drops the first), waits for the drawer to unlock (disabled fields drop
    typed text), types title and description and writes **today's date** into Date
    Created as Getty renders it — `MM/DD/YYYY 00:00:00 +0000`.
@@ -47,16 +56,28 @@ real browser.
    most) and only the not-ready files are re-checked; one that stays unvalidated
    is named and the run does not claim success (`timeout`, "Ready to submit" in
    the reason). Report `readiness` says `ok`, `notReady`, `resaves`.
-7. **Complete once:** after the last icon the run posts `/getty-web/finish`. It
-   refuses (inline tail too) while a contribution is missing **or says "Upload
-   failed"**, then waits (bounded) for Getty to enable Complete, clicks it and
-   accepts the confirmation. **A page with no Complete/Submit control at all** is
-   not an error: every card carrying "Ready to submit" *is* the finished state, so
-   the answer is `ok: true`, `ready: true`, `completed: false` and the run logs
-   `batch-ready` (info) — nothing is waited for. Only a card that never validates,
-   or a page with no cards, is a refusal, reported with the names.
-8. `/getty-web/close` lets the browser go and deletes staged files; an idle
-   session closes after 5 min.
+8. **Complete each batch, then start the next:** after the batch's last card
+   carries "Ready to submit" the run posts `/getty-web/finish` **for that batch
+   only**. It refuses while a contribution of *that* batch is missing or says
+   "Upload failed", naming what is wrong; a refused finish leaves the batch open
+   and is reported with its reason, and nothing is claimed uploaded. **A page
+   with no Complete/Submit control at all** is not an error: every card carrying
+   "Ready to submit" *is* the finished state (`ok: true`, `ready: true`,
+   `completed: false`, log `batch-ready`). Only once the batch is closed does the
+   next one get created — in the same browser session, never a second sign-in.
+9. **The re-upload list:** an icon whose card showed no thumbnail, was never
+   listed, or read "Upload failed" is queued and retried **exactly once**
+   (`GETTY_WEB_MAX_ATTEMPTS = 2`). Queued icons fill the remaining room of a later
+   primary batch (`100 −` its icons), so a 250-icon run `[100, 100, 50]` can carry
+   its rejections in batch 3; whatever is left becomes the run's final
+   `… retry 1/1 (7 icons)` batch(es). Only a terminal outcome is written to the
+   row: an icon accepted on retry is never first reported failed. A sign-out
+   (`auth`), a missing/dead browser (`browser`) or a dead helper (`helper-down`)
+   stops the run instead — another batch cannot fix those — and every icon the
+   run never reached is reported failed with that reason.
+10. `/getty-web/close` lets the browser go and deletes staged files; an idle
+   session closes after 5 min, but a session **with a request in flight is never
+   swept** (`mayReleaseSession`): a 100-icon batch outlives five minutes.
 
 **Sign-in is typed, not assigned.** Each poll focuses the identifier (then the
 password), inserts the saved text with real input events (`Input.insertText`) and
@@ -95,9 +116,14 @@ step, no other browser touched. Closing kills the tree, never a visible window.
   (IPTC/XMP/RDF) *and* as a `metadata` field. Only `accepted` icons are sent
   (`gettyWebMetadataOf`), capped (title 200, description 2000, keywords 49 × 64,
   deduped); the file's own tags are kept.
-- Batch name `IconSplitter <UTC date> (<n> icons)`, type `iStock creative
-  illustration`. Completion is attempted (`complete: true`) and reported as
+- Type `iStock creative illustration`; every batch is named
+  `IconSplitter <UTC date> [<i>/<n>|retry <i>/<n>] (<count> icons)`, capped at 60
+  characters. Each batch is completed by the run through `/getty-web/finish` (a
+  request never completes one itself: `complete: false`) and reported as
   `completed`/`completion`/`ready`; `GETTY_WEB_COMPLETE=0` stops after upload.
+- A failed `/getty-web/upload` answers `accepted`/`failed`/`seen` besides its
+  code and reason (`failurePayload`): the names the page had already taken,
+  rejected or listed, so a timed-out chunk is never re-sent whole.
 
 ## 5. Page contract and failure codes
 
@@ -137,10 +163,12 @@ and says to retry; reasons never carry identifier or password.
 - Only `https://<…>.gettyimages.com` contributor paths are contacted; `..`, query
   strings and non-GETTY hosts are refused (`contributeUrlOf`). Staged files use
   sanitized names and are deleted on close.
-- Tests (`tests/`): `getty_web_driver` (page steps, ready icon),
+- Tests (`tests/`): `getty_web_chunk` (the 100-upload cap, chunk order, batch
+  names/labels), `getty_web_driver` (page steps, ready icon),
   `getty_web_signin` (typing order, SSO, reasons), `getty_web_browser` (locks,
   launch, reset, stale port, kept window), `getty_web_batch` (dialog, batch id,
   uploader input, readiness settle), `getty_web_upload` (rules + client),
   `getty_web_cdp` (framing, prelude), `bridge_getty_web` (routes, helper flags),
   `getty_web_finalize` (metadata, readiness resave, complete),
-  `stockupload_getty_web` (grouping, cancel, no creds).
+  `stockupload_getty_web` (grouping, one batch per chunk, retry folding, the
+  two-attempt cap, a sign-out stopping the run, cancel at a boundary, no creds).

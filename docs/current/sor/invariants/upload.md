@@ -97,3 +97,20 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   unavailable), never in `localStorage`, `export.json`, presets, or logs, and are
   never expanded or echoed back in the UI after saving. Pinned by
   `stockupload_credvault`, `secret_hygiene`, and `stockupload_ui`.
+
+<a id="i-82"></a>
+* **I-82 (a Getty web run is closed batches of at most 100 uploads, RULE 4/13 —
+  2026-10-30):** one icon is one upload — its JPEG plus its optional matching EPS,
+  listed once by Getty — so a batch holds at most **100 icons** (≤ 200 files),
+  never 200 icons; `GETTY_WEB_MAX_BATCH_ICONS` and the helper's `MAX_ICONS` must
+  agree and the pair is never split across batches. Each batch is uploaded with
+  `newBatch: true` (the helper resets the previous batch id, expected names and
+  counts), then **completed before the next is created**; a refused finish leaves
+  its batch open and claims nothing. An icon with no thumbnail or "Upload failed"
+  is **re-queued, not reported**, for at most two attempts: queued icons fill the
+  remaining room of a later primary batch, leftovers become the run's final
+  `retry` batch(es), and only a terminal outcome writes the row. `auth`,
+  `browser` and `helper-down` stop the run; every unreached icon is reported failed
+  with that reason. A session with a request in flight is never swept by the idle
+  timer. Pinned by `getty_web_chunk`, `stockupload_getty_web`,
+  `getty_web_upload`, `bridge_getty_web` and `getty_web_session`.

@@ -11,7 +11,7 @@ import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { getStockHistory, resetStockHistory } from "../src/stockupload/historystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
-import { progressLabel, settledFiles, watchGettyProgress } from "../src/stockupload/gettywebtransfer";
+import { progressLabel, settledFiles, watchGettyProgress } from "../src/stockupload/gettywebprogress";
 import { resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import type { GettyWebUploadInput } from "../src/lib/stockupload/gettywebclient";
@@ -454,5 +454,189 @@ describe("Getty web upload in the batch runner", () => {
     expect(calls).toBe(0);
     expect(summary.failedFiles).toBe(1);
     expect(summary.lastError).toContain("No saved credentials");
+  });
+});
+
+// A selection bigger than one batch: Getty takes 100 uploads per batch, so the
+// run becomes several batches — each completed before the next is created — and
+// an icon Getty did not take gets exactly one retry before it is called failed.
+describe("Getty web batches above the cap", () => {
+  function addIcons(root: FakeDir, count: number, eps = true): void {
+    for (let i = 1; i <= count; i += 1) addExported(root, `icon-${i}`, `d${i}`, `stem_${i}`, { jpg: true, eps });
+  }
+
+  const accepted = (input: GettyWebUploadInput) => input.icons.flatMap((icon) => icon.files.map((f) => f.name));
+  const doneBatch = { ok: true as const, batchId: "b", accepted: [], completed: true, completion: null, metadata: [] };
+
+  async function runWith(
+    config: { count: number; eps?: boolean; cap: number },
+    upload: (input: GettyWebUploadInput, call: number) => Promise<unknown>,
+    finish: (call: number) => Promise<unknown>,
+  ) {
+    const root = new FakeDir("ws");
+    addIcons(root, config.count, config.eps ?? true);
+    const found = await discoverExportedItems(root);
+    const sent: GettyWebUploadInput[] = [];
+    const sentAt: string[] = [];
+    let uploads = 0;
+    let finishes = 0;
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebMaxIcons: config.cap,
+      gettyWebUploadFn: async (input) => {
+        uploads += 1;
+        sent.push(input);
+        sentAt.push(`upload:${uploads}`);
+        return await upload(input, uploads) as never;
+      },
+      finishGettyWebFn: async () => {
+        finishes += 1;
+        sentAt.push(`finish:${finishes}`);
+        return await finish(finishes) as never;
+      },
+      closeGettyWebFn: async () => undefined,
+    });
+    return { summary, sent, sentAt, root, found };
+  }
+
+  it("sends one batch at a time and completes each before the next is created", async () => {
+    let batchNo = 0;
+    const { summary, sent, sentAt } = await runWith({ count: 5, cap: 2 }, async (input) => {
+      batchNo += 1;
+      return {
+        ok: true, batchId: `b${batchNo}`, accepted: accepted(input), completed: false, completion: null, metadata: [],
+      };
+    }, async () => doneBatch);
+
+    // 5 icons at 2 per batch: 2 + 2 + 1, never 101-style overflow.
+    expect(sent.map((input) => input.icons.length)).toEqual([2, 2, 1]);
+    expect(sent[0].batchName).toContain("1/3 (2 icons)");
+    expect(sent[1].batchName).toContain("2/3 (2 icons)");
+    expect(sent[2].batchName).toContain("3/3 (1 icon)");
+    // Each request asks for its own batch, and all of them share one session.
+    expect(sent.every((input) => input.newBatch === true)).toBe(true);
+    expect(new Set(sent.map((input) => input.sessionKey)).size).toBe(1);
+    // upload → finish → upload → finish …: a batch is closed before the next starts.
+    expect(sentAt).toEqual(["upload:1", "finish:1", "upload:2", "finish:2", "upload:3", "finish:3"]);
+    expect(summary).toMatchObject({ uploadedFiles: 10, failedFiles: 0, reuploadIcons: 0, lastError: null });
+  });
+
+  it("retries a rejected icon inside the last batch, which still had room", async () => {
+    const { summary, sent } = await runWith({ count: 5, cap: 2 }, async (input, call) => {
+      if (call === 1) {
+        // Getty took the first pair and rejected the second.
+        return {
+          ok: true, batchId: "b1", accepted: ["stem_1.jpg", "stem_1.eps"],
+          failed: [{ name: "stem_2.eps", id: "FSPID1" }], completed: false, completion: null, metadata: [],
+        };
+      }
+      return { ok: true, batchId: "b2", accepted: accepted(input), completed: false, completion: null, metadata: [] };
+    }, async () => doneBatch);
+
+    // Batch 3 held one icon, so the rejected one rides along instead of needing
+    // a batch of its own — the user's "later / last batch".
+    expect(sent.map((input) => input.icons.length)).toEqual([2, 2, 2]);
+    expect(sent[2].icons.map((icon) => icon.files[0].name)).toEqual(["stem_5.jpg", "stem_2.jpg"]);
+    expect(sent[2].batchName).toContain("3/3");
+    expect(summary).toMatchObject({ uploadedFiles: 10, failedFiles: 0, reuploadIcons: 0 });
+    // The retried icon is uploaded, never first called failed.
+    const statuses = Object.values(getStockHistory()).flatMap((byTarget) => Object.values(byTarget));
+    expect(statuses.filter((entry) => entry.status === "uploaded")).toHaveLength(5);
+    expect(statuses.filter((entry) => entry.status === "failed")).toHaveLength(0);
+  });
+
+  it("gives the re-upload list a retry batch of its own when no batch has room", async () => {
+    const { summary, sent } = await runWith({ count: 4, cap: 2 }, async (input, call) => {
+      if (call === 1) {
+        return {
+          ok: true, batchId: "b1", accepted: ["stem_1.jpg", "stem_1.eps"],
+          failed: [{ name: "stem_2.eps", id: "FSPID2" }], completed: false, completion: null, metadata: [],
+        };
+      }
+      return { ok: true, batchId: "b2", accepted: accepted(input), completed: false, completion: null, metadata: [] };
+    }, async () => doneBatch);
+
+    expect(sent.map((input) => input.icons.length)).toEqual([2, 2, 1]);
+    expect(sent[2].batchName).toContain("retry 1/1 (1 icon)");
+    expect(sent[2].icons[0].files[0].name).toBe("stem_2.jpg");
+    expect(summary).toMatchObject({ uploadedFiles: 8, failedFiles: 0, reuploadIcons: 0 });
+  });
+
+  it("never sends an icon a third time: twice and it is on the re-upload list", async () => {
+    const { summary, sent } = await runWith({ count: 3, cap: 2 }, async (input, call) => {
+      if (call === 1) {
+        return {
+          ok: true, batchId: "b1", accepted: ["stem_1.jpg", "stem_1.eps"],
+          failed: [{ name: "stem_2.eps", id: "FSPID3" }], completed: false, completion: null, metadata: [],
+        };
+      }
+      const names = accepted(input);
+      return {
+        ok: true, batchId: "b2", accepted: names.filter((name) => !name.startsWith("stem_2")),
+        failed: [{ name: "stem_2.eps", id: "FSPID3" }], completed: false, completion: null, metadata: [],
+      };
+    }, async () => doneBatch);
+
+    const attemptsOfStem2 = sent.filter((input) => input.icons.some((icon) => icon.files[0].name === "stem_2.jpg"));
+    expect(attemptsOfStem2).toHaveLength(2);
+    expect(summary.reuploadIcons).toBe(1);
+    expect(summary.uploadedFiles).toBe(4);
+    expect(summary.lastError).toContain("Upload failed");
+    expect(summary.lastError).toContain("FSPID3");
+    // The row store agrees: exactly the rejected icon is failed.
+    const statuses = Object.values(getStockHistory()).flatMap((byTarget) => Object.values(byTarget));
+    expect(statuses.filter((entry) => entry.status === "failed")).toHaveLength(1);
+  });
+
+  it("stops the run when Getty signs the browser out, naming what was left", async () => {
+    const { summary, sent, sentAt } = await runWith({ count: 4, cap: 2 }, async () => ({
+      ok: false, code: "auth", reason: "Getty signed the browser out during the upload",
+    }), async () => doneBatch);
+
+    // A sign-out cannot be fixed by another batch, so batch 2 is never created.
+    expect(sent).toHaveLength(1);
+    expect(sentAt).toEqual(["upload:1"]);
+    expect(summary.uploadedFiles).toBe(0);
+    expect(summary.failedFiles).toBe(8);
+    expect(summary.reuploadIcons).toBe(4);
+    expect(summary.lastError).toContain("signed the browser out");
+  });
+
+  it("stops at the batch boundary when the run is cancelled", async () => {
+    const root = new FakeDir("ws");
+    addIcons(root, 4);
+    const found = await discoverExportedItems(root);
+    const controller = new AbortController();
+    const sent: GettyWebUploadInput[] = [];
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: controller.signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebMaxIcons: 2,
+      gettyWebUploadFn: async (input) => {
+        sent.push(input);
+        controller.abort();
+        return { ok: true, batchId: "b1", accepted: accepted(input), completed: false, completion: null, metadata: [] };
+      },
+      finishGettyWebFn: async () => doneBatch,
+      closeGettyWebFn: async () => undefined,
+    });
+    // The batch in flight is finished (its files are up), the next one never starts.
+    expect(sent).toHaveLength(1);
+    expect(summary.cancelled).toBe(true);
+    expect(summary.uploadedFiles).toBe(4);
+    expect(summary.failedFiles).toBe(4);
+  });
+
+  it("names the batch in the live progress line", () => {
+    const base = { phase: "uploading", total: 4, uploaded: 2, failed: 0, listed: 2, reloads: 0 };
+    expect(progressLabel(base, "Getty Images (web upload)", "batch 2/3"))
+      .toBe("Getty Images (web upload): batch 2/3 · 2 of 4 file(s) uploaded");
+    expect(progressLabel(base, "Getty Images (web upload)"))
+      .toBe("Getty Images (web upload): 2 of 4 file(s) uploaded");
   });
 });

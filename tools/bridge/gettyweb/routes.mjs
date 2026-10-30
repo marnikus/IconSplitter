@@ -17,7 +17,9 @@ const MAX_DESCRIPTION = 2000;
 const MAX_KEYWORDS = 49;
 const MAX_KEYWORD = 64;
 const MAX_SESSIONS = 2;
-const MAX_ICONS = 200;
+// Getty takes at most 100 uploads per batch: one icon (JPEG + optional EPS) is
+// one upload, so the counted limit is icons, not files.
+const MAX_ICONS = 100;
 const MAX_FILES_PER_ICON = 2;
 const GETTY_HOST = /(^|\.)gettyimages\.com$/i;
 const sessions = new Map();
@@ -104,9 +106,16 @@ function poolKeyOf(cfg, url) {
 
 const headed = () => process.env.GETTY_WEB_HEADED === "1";
 
+/** A session with a request in flight is never swept: one batch outlives 5 min. */
+export function mayReleaseSession(entry) {
+  return entry?.busy !== true;
+}
+
 function touch(key, entry) {
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = setTimeout(() => {
+    // A long batch keeps its browser: re-arm instead of closing what is working.
+    if (!mayReleaseSession(entry)) { touch(key, entry); return; }
     sessions.delete(key);
     releaseSession(entry.session, headed());
   }, SESSION_IDLE_MS);
@@ -190,14 +199,41 @@ async function performUpload(cfg, url, icons) {
   const session = acquired.entry.session;
   if (!session) return acquired.failure;
   touch(acquired.key, acquired.entry);
-  const batch = await session.ensureBatch({ batchName: cfg.batchName, submissionType: cfg.submissionType });
-  if (!batch.ok) return batch;
-  const uploaded = await session.upload({
-    icons,
-    // The run submits its one batch itself; nothing here may lock it early.
-    complete: cfg.complete === true && process.env.GETTY_WEB_COMPLETE !== "0",
-  });
-  return { ...uploaded, batchId: batch.batchId };
+  acquired.entry.busy = true;
+  try {
+    const start = { batchName: cfg.batchName, submissionType: cfg.submissionType };
+    // `newBatch` is one batch per chunk of a long run; without it the session
+    // keeps the batch it already has (a run that fits in one batch).
+    const batch = cfg.newBatch === true ? await session.startBatch(start) : await session.ensureBatch(start);
+    if (!batch.ok) return batch;
+    const uploaded = await session.upload({
+      icons,
+      // The run finishes each batch itself; nothing here may lock it early.
+      complete: cfg.complete === true && process.env.GETTY_WEB_COMPLETE !== "0",
+    });
+    return { ...uploaded, batchId: batch.batchId };
+  } finally {
+    acquired.entry.busy = false;
+    touch(acquired.key, acquired.entry);
+  }
+}
+
+/**
+ * What a failed upload may say: its code, its scrubbed reason, and the names the
+ * page had already accepted or rejected. Names only — never page text, never a
+ * credential — so a timed-out chunk is not re-sent whole.
+ */
+export function failurePayload(result, cfg) {
+  const state = result?.state ?? null;
+  return {
+    ok: false,
+    code: result?.code ?? "page",
+    reason: scrub(result?.reason, cfg),
+    state,
+    accepted: state?.uploaded ?? [],
+    failed: state?.failures ?? [],
+    seen: state?.namesSeen ?? [],
+  };
 }
 
 /**
@@ -220,10 +256,7 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
   try {
     const result = await performUpload(cfg, url, icons);
     if (!result?.ok) {
-      const code = result?.code ?? "page";
-      return json(res, statusFor(code), {
-        ok: false, code, reason: scrub(result?.reason, cfg), state: result?.state ?? null,
-      });
+      return json(res, statusFor(result?.code ?? "page"), failurePayload(result, cfg));
     }
     return json(res, 200, {
       ok: true, batchId: result.batchId ?? null,
@@ -304,7 +337,8 @@ export async function handleGettyWebFinish(req, res, post, json) {
     });
   }
   try {
-    const result = await entry.session.finish({});
+    entry.busy = true;
+    const result = await entry.session.finish({}).finally(() => { entry.busy = false; });
     touch(key, entry);
     if (!result?.ok) {
       const code = result?.code ?? "page";

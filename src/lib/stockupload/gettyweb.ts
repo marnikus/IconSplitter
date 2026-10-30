@@ -9,6 +9,15 @@ import type { ExportedItem, StockFtpPreset } from "./types";
 
 export const GETTY_WEB_SUBMISSION_TYPE = "iStock creative illustration";
 export const GETTY_WEB_MAX_BATCH_NAME = 60;
+/**
+ * Getty takes at most **100 uploads per batch**. One icon is one upload — its
+ * JPEG, plus its EPS when it has one, because Getty lists a pair once under the
+ * EPS name. So the number that must never exceed this is the icon count, not the
+ * file count: 100 pairs are fine, 101 are not.
+ */
+export const GETTY_WEB_MAX_BATCH_ICONS = 100;
+/** One upload plus one retry: an icon is never sent a third time. */
+export const GETTY_WEB_MAX_ATTEMPTS = 2;
 export const GETTY_WEB_ERROR_HINT =
   "start run_ftp_bridge.bat (or run_inkscape_bridge.bat) on this machine, then retry";
 
@@ -59,10 +68,54 @@ export function isGettyWebPreset(preset: StockFtpPreset): boolean {
 }
 
 /** Batch name the bridge types into Getty's Create Batch dialog. */
-export function gettyWebBatchName(now: Date, itemCount: number): string {
+export function gettyWebBatchName(now: Date, itemCount: number, slot?: GettyWebBatchSlot): string {
   const stamp = now.toISOString().slice(0, 10);
   const plural = itemCount === 1 ? "icon" : "icons";
-  return `IconSplitter ${stamp} (${Math.max(itemCount, 0)} ${plural})`.slice(0, GETTY_WEB_MAX_BATCH_NAME);
+  return `IconSplitter ${stamp}${batchPlaceOf(slot)} (${Math.max(itemCount, 0)} ${plural})`
+    .slice(0, GETTY_WEB_MAX_BATCH_NAME);
+}
+
+/** Where a batch sits in a run; absent for a run that fits in one batch. */
+export interface GettyWebBatchSlot {
+  index: number;
+  total: number;
+  /** A retry batch carries icons of an earlier batch for their second attempt. */
+  retry?: boolean;
+}
+
+/** `" 2/3"` (or `" retry 1/1"`), and nothing at all for a single-batch run. */
+function batchPlaceOf(slot?: GettyWebBatchSlot): string {
+  if (slot === undefined) return "";
+  if (slot.retry === true) return ` retry ${slot.index}/${slot.total}`;
+  return slot.total > 1 ? ` ${slot.index}/${slot.total}` : "";
+}
+
+/**
+ * Splits ordered icons into batches of at most `maxIcons`. The icon is the unit,
+ * so a JPEG/EPS pair can never be split across two batches; order is preserved,
+ * which is what makes "the first 100 pairs" mean something.
+ */
+export function planGettyWebBatches<T>(
+  icons: readonly T[],
+  maxIcons = GETTY_WEB_MAX_BATCH_ICONS,
+): T[][] {
+  const size = Math.max(1, Math.floor(maxIcons));
+  const out: T[][] = [];
+  for (let i = 0; i < icons.length; i += size) out.push(icons.slice(i, i + size));
+  return out;
+}
+
+/** The batch a request belongs to, for the panel's progress line. */
+export function gettyWebBatchLabel(slot: GettyWebBatchSlot): string {
+  if (slot.retry === true) return `retry batch ${slot.index}/${slot.total}`;
+  return slot.total > 1 ? `batch ${slot.index}/${slot.total}` : "";
+}
+
+/** One line for the confirm dialog: how many Getty batches the selection needs. */
+export function gettyWebBatchSummary(iconCount: number, maxIcons = GETTY_WEB_MAX_BATCH_ICONS): string {
+  const batches = Math.max(1, Math.ceil(Math.max(iconCount, 0) / Math.max(1, maxIcons)));
+  const plural = batches === 1 ? "batch" : "batches";
+  return `${iconCount} icon(s) → ${batches} ${plural} (Getty takes ${maxIcons} uploads per batch; a JPEG + EPS pair counts once)`;
 }
 
 /**

@@ -2,6 +2,7 @@
 // confirmation modal, and cross-tab portal progress header.
 
 import { createPortal } from "react-dom";
+import { gettyWebBatchSummary } from "../lib/stockupload/gettyweb";
 import type { StockUploadPlan } from "../lib/stockupload/plan";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
 import UploadRowBadgeSettings from "../upload/UploadRowBadgeSettings";
@@ -79,6 +80,11 @@ function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
       <p className="svg-note">
         Formats: <strong>{plan.selectedFormats.join(", ").toUpperCase()}</strong>
       </p>
+      {plan.targets.some((t) => t.protocol === "getty-web") && (
+        <p className="svg-note" data-testid="stock-upload-getty-batches">
+          Getty Images: {gettyWebBatchSummary(plan.selectedRows.length)}
+        </p>
+      )}
       {plan.combineTitleDescription && <p className="svg-warning">Title + description will be combined in upload copies only. Stock sites may limit title length; originals remain unchanged.</p>}
       {plan.skippedMissing.length > 0 && (
         <p className="svg-warning">

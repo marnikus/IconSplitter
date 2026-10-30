@@ -31,6 +31,8 @@ export interface UploadBatchDeps {
   uploadFn?: (input: BridgeUploadInput) => Promise<BridgeUploadResult>;
   closeSessionFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
   gettyWebUploadFn?: (input: GettyWebUploadInput) => Promise<GettyWebResult>;
+  /** Batch size for the Getty web target; the real 100-icon cap unless a test injects one. */
+  gettyWebMaxIcons?: number;
   closeGettyWebFn?: (bridgeUrl: string, sessionKey: string) => Promise<void>;
   finishGettyWebFn?: (input: GettyWebFinishInput) => Promise<GettyWebResult>;
   /** The shell's log dock; the run writes what went up and what did not. */
@@ -45,6 +47,8 @@ export interface UploadBatchSummary {
   cancelled: boolean;
   lastError: string | null;
   stagedDir?: string | null;
+  /** Icons that need a re-upload — what the user has to run again later. */
+  reuploadIcons?: number;
 }
 
 export interface ItemTracker {
@@ -59,6 +63,8 @@ export interface RunCounters {
   total: number;
   uploadedFiles: number;
   failedFiles: number;
+  /** Icons still missing after their one retry — the tab's re-upload list. */
+  reuploadIcons: number;
   lastError: string | null;
   stagedDir: string | null;
 }

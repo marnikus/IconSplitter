@@ -1,8 +1,6 @@
-// gettywebclient.ts — browser client for the loopback helper's Getty web routes
-// (`/getty-web/upload`, `/getty-web/finish`, `/getty-web/test`, `/getty-web/close`).
-// Credentials go
-// only into the loopback request; every returned reason is scrubbed before it
-// can reach the log or the UI.
+// gettywebclient.ts — the loopback helper's Getty web routes (`/getty-web/upload`,
+// `/finish`, `/test`, `/close`). Credentials go only into the loopback request;
+// every returned reason is scrubbed before it can reach the log or the UI.
 
 import { isRecord } from "../isrecord";
 import { DEFAULT_FTP_BRIDGE_URL, BRIDGE_FIX_HINT } from "./bridgeclient";
@@ -39,19 +37,25 @@ export type GettyWebResult =
     accepted: string[];
     /** Names Getty answered with "Upload failed" — never counted as uploaded. */
     failed?: GettyWebRejection[];
+    /** Every name the batch page listed, so "unproven" can be told from "absent". */
+    seen?: string[];
     completed: boolean;
-    /**
-     * Every contribution carried Getty's own "Ready to submit" validation icon,
-     * so the batch is finished even when the page offers no Complete/Submit
-     * control to click. A thumbnail alone never sets this.
-     */
+    /** Every contribution carried Getty's "Ready to submit" icon: the batch is
+     *  finished even without a Complete control. A thumbnail never sets this. */
     ready?: boolean;
     completion: { clicked: boolean; label: string | null; confirmed: boolean } | null;
     metadata: GettyWebFileReport[];
-    /** Set when this upload only filled the batch; the run submits it at the end. */
+    /** Set when this upload only filled the batch; the run finishes it later. */
     deferCompletion?: boolean;
   }
-  | { ok: false; code: GettyWebErrorCode; reason: string };
+  | {
+    ok: false; code: GettyWebErrorCode; reason: string;
+    /** Names the page had already accepted / rejected / listed. Without them a
+     *  timed-out batch is re-sent whole, duplicating everything Getty took. */
+    accepted?: string[];
+    failed?: GettyWebRejection[];
+    seen?: string[];
+  };
 
 export interface GettyWebFile {
   name: string;
@@ -76,11 +80,12 @@ export interface GettyWebUploadInput {
   icons: GettyWebIcon[];
   batchName: string;
   submissionType: string;
-  /**
-   * Click the batch's Complete/Submit control after uploading. Uploads of a run
-   * must leave this false: the run calls `finishBridgeGettyWeb` once, at the end.
-   */
+  /** Click Complete after uploading. A run leaves this false: it finishes each
+   *  batch itself, between batches. */
   complete?: boolean;
+  /** Create a **new** batch instead of reusing the session's open one — one
+   *  batch per chunk of a run above 100 icons. */
+  newBatch?: boolean;
   sessionKey?: string;
   signal?: AbortSignal;
   fetchImpl?: typeof fetch;
@@ -107,6 +112,7 @@ function uploadConfig(input: GettyWebUploadInput): string {
     batchName: input.batchName,
     submissionType: input.submissionType,
     complete: input.complete === true,
+    newBatch: input.newBatch === true,
     icons: input.icons.map((icon) => ({
       metadata: icon.metadata ?? null,
       files: icon.files.map((file) => ({ name: file.name, bytes: file.bytes.byteLength })),
@@ -119,12 +125,26 @@ function uploadBody(input: GettyWebUploadInput): Blob {
   return new Blob(input.icons.flatMap((icon) => icon.files.map((file) => file.bytes as BlobPart)));
 }
 
+function nameList(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((name): name is string => typeof name === "string") : [];
+}
+
 function parseFailure(raw: unknown, creds: FtpCredentials, status: number): { ok: false; code: GettyWebErrorCode; reason: string } {
   const code = isRecord(raw) && typeof raw.code === "string" ? raw.code as GettyWebErrorCode : "page";
   const reason = isRecord(raw) && typeof raw.reason === "string" && raw.reason.trim() !== ""
     ? redactCredentials(raw.reason.trim(), creds)
     : `Getty web upload failed (HTTP ${status})`;
-  return { ok: false, code, reason };
+  if (!isRecord(raw)) return { ok: false, code, reason };
+  // A failed batch still says what it accepted: those icons are not re-sent.
+  const accepted = nameList(raw.accepted);
+  const failed = failedEntries(raw);
+  const seen = nameList(raw.seen);
+  return {
+    ok: false, code, reason,
+    ...(accepted.length > 0 ? { accepted } : {}),
+    ...(failed.length > 0 ? { failed } : {}),
+    ...(seen.length > 0 ? { seen } : {}),
+  };
 }
 
 function metadataEntries(raw: Record<string, unknown>) {
