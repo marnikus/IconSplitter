@@ -1,4 +1,4 @@
-# Getty Images web upload — the 200-file batch limit, sequential batches and the re-upload list
+# Getty Images web upload — the 100-upload batch limit, sequential batches and the re-upload list
 
 Date: 2026-10-30
 Branch: `arena/02f71097-iconsplitter`
@@ -12,16 +12,23 @@ Current owner page for the shipped behaviour: [stock-upload-getty-web](../../cur
 
 ### 1.1 What the user reported
 
-> Getty allows a maximum of **200 files per batch upload (100 JPEG + EPS pairs)**. If the
-> user selected 200+ files (more than 100 pairs), only the first 100 pairs should be
-> uploaded, then the run must **close that batch on the web and start the next one**,
-> repeating as many times as needed until every selected icon has been uploaded into its
-> own batch. Icons that failed inside a batch go on a **re-upload list** and are added to
-> a later / the last batch to be uploaded a **second time**.
+> Getty takes a maximum of **100 uploads per batch** — the number is 100, not 200. A
+> JPEG + EPS pair is **one** upload (Getty lists the pair once, under the EPS name), so a
+> batch holds at most **100 pairs** however many physical files that is. If the user
+> selected more than 100 pairs, only the first 100 should be uploaded, then the run must
+> **close that batch on the web and start the next one**, repeating as many times as
+> needed until every selected icon has been uploaded into its own batch. Icons that failed
+> inside a batch go on a **re-upload list** and are added to a later / the last batch to
+> be uploaded a **second time**.
 
 In other words: a run is no longer "one session → one batch → every icon". A run becomes
-**N batches, sent one after another, each one completed before the next is created**, plus
-**one bounded retry pass** for the icons that did not land.
+**N batches of at most 100 icons, sent one after another, each one completed before the next
+is created**, plus **one bounded retry pass** for the icons that did not land.
+
+The counting unit is the **icon (contribution), never the file**: one icon is its JPEG plus
+its optional matching EPS, and Getty counts that as one upload. A batch therefore carries
+100 icons — 100 physical files when none has an EPS, up to 200 when all do — and the number
+that must never pass 100 is the icon count.
 
 ### 1.2 What the code does today (measured, not assumed)
 
@@ -30,21 +37,22 @@ In other words: a run is no longer "one session → one batch → every icon". A
 | One GETTY web run = **one** helper request carrying **every** icon | `runGettyWebIcons` — `src/stockupload/runupload.ts:152`, `uploadGettyWebRun` — `src/stockupload/gettywebtransfer.ts:139` |
 | One batch for the whole session; the batch id is cached forever | `ensureBatch` — `tools/bridge/gettyweb/session.mjs:193` (`if (state.batchId !== null) return …`) |
 | Completion is deferred once, at the end of the run | `submitGettyBatch` — `src/stockupload/runupload.ts:179`, `finishGettyWebRun` — `src/stockupload/gettywebfinish.ts` |
-| The helper accepts up to **200 icons** per request, each ≤ 2 files → up to **400 files** | `MAX_ICONS = 200`, `MAX_FILES_PER_ICON = 2` — `tools/bridge/gettyweb/routes.mjs:20-21`, checked at `:158`, `:163` |
+| The helper accepts up to **200 icons = 200 counted uploads** per request — twice the cap (and up to 400 physical files) | `MAX_ICONS = 200`, `MAX_FILES_PER_ICON = 2` — `tools/bridge/gettyweb/routes.mjs:20-21`, checked at `:158`, `:163` |
 | A request-level failure marks **every** icon of the request failed | `failed()` — `src/stockupload/gettywebtransfer.ts` (used by `uploadGettyWebRun` when `!res.ok`) |
 | A failed upload answers `{code, reason, state}` only — no accepted/failed name lists | `handleGettyWebUpload` — `tools/bridge/gettyweb/routes.mjs:207` |
 | Batch name = date + total icon count, capped at 60 chars, no index | `gettyWebBatchName` — `src/lib/stockupload/gettyweb.ts` |
 | A pooled session is dropped after 5 idle minutes, and the idle timer is armed **once, at request start** | `SESSION_IDLE_MS` — `tools/bridge/gettyweb/routes.mjs:14`; `touch()` — `:107`, called once at `performUpload` (`:192`) |
 | The current SOR states "one batch, all pairs in one attach, up to 200" | `docs/current/sor/stock-upload-getty-web.md:21` |
 
-So today the app is **doubly wrong against the reported limit**: the helper allows *400*
-files in one request, and the app happily builds that request.
+So today the app is **doubly wrong against the limit**: the helper accepts twice a
+batch's worth of icons in one request, and the app happily builds that request.
 
-### 1.3 Why that fails at 200+ files
+### 1.3 Why that fails above 100 pairs
 
-1. **Over-limit request.** 240 selected icons = 480 files in one `DOM.setFileInputFiles`
-   call. Getty accepts at most 200 files per batch; the surplus is either refused or
-   silently dropped, and the run then reports a timeout with no usable per-icon truth.
+1. **Over-limit request.** 240 selected icons = 240 counted uploads (up to 480 physical
+   files) in one `DOM.setFileInputFiles` call. Getty takes at most 100 uploads per batch;
+   the surplus is either refused or silently dropped, and the run then reports a timeout
+   with no usable per-icon truth.
 2. **No second batch.** `ensureBatch` returns the cached batch id for the life of the
    session, so even if the app wanted a second batch it would upload into the first one.
 3. **No per-batch completion.** `gettywebfinish.ts` submits once, after the last icon. A
@@ -63,8 +71,8 @@ files in one request, and the app happily builds that request.
 
 | # | Criterion |
 |---|---|
-| A1 | No helper request and no batch ever carries more than **200 files** (JPEG + EPS counted together). |
-| A2 | A pair (one stem's JPEG + EPS) is never split across batches. |
+| A1 | No helper request and no batch ever carries more than **100 icons**. One icon counts once, whether it is a JPEG alone or a JPEG + EPS pair (so at most 200 physical files). |
+| A2 | A pair counts as one upload and is never split across batches — the chunk unit is the icon, so this cannot break. |
 | A3 | Batch 1 holds the **first 100 pairs** in the plan's existing deterministic order, batch 2 the next 100, and so on. |
 | A4 | Each batch is **completed on the web** (Complete clicked, or every card carrying Getty's "Ready to submit" icon when the page offers no control) **before** the next batch is created. A batch that cannot be completed is reported with its refusal reason and its icons are not claimed as uploaded. |
 | A5 | The whole run signs in **once** and reuses one browser session; only the batch is new per chunk. |
@@ -78,7 +86,7 @@ files in one request, and the app happily builds that request.
 - **Icon / pair** — one exported item: its JPEG plus an optional matching-stem EPS. The
   unit the user selects and the unit a row shows.
 - **Batch** — one Getty submission batch (`/contribute/batches/<id>`), created in the
-  Create Batch dialog, holding at most 200 files.
+  Create Batch dialog, holding at most 100 icons (100–200 physical files).
 - **Chunk** — the icons the app hands to one batch in one request.
 - **Re-upload list** — icons of this run that Getty did not accept, eligible for the one
   retry attempt.
@@ -87,29 +95,33 @@ files in one request, and the app happily builds that request.
 
 ## 2. Facts and constraints that shape the design
 
-1. **The limit belongs to Getty, not to the helper.** It is stated by the user as
-   "200 files / 100 pairs" and lives as one constant in the app
-   (`GETTY_WEB_MAX_BATCH_FILES = 200`) mirrored in the helper (`MAX_FILES = 200`). It is
-   the only number to change if Getty moves the line; a bridge test asserts both copies
-   agree.
-2. **The count is files, not icons.** An icon with a JPEG only weighs 1; with a JPEG + EPS
-   it weighs 2. 200 JPEG-only icons are legal; 101 pairs (202 files) are not. The planner
-   therefore chunks by **file weight**, which naturally yields 100 pairs for the reported
-   case.
-3. **A batch is the only thing that can be completed.** There is no "append to a completed
+1. **The limit belongs to Getty, not to the helper.** It is **100 counted uploads per
+   batch**. One icon — its JPEG, plus its EPS when it has one — is one upload, because
+   Getty lists a pair once (under the EPS name). So the number that must never exceed 100
+   is the **icon** count, not the file count: 100 icons means 100 files when no icon has an
+   EPS and 200 files when every one does, and both are legal. The limit lives as one
+   constant in the app (`GETTY_WEB_MAX_BATCH_ICONS = 100`) mirrored in the helper
+   (`MAX_ICONS = 100`); a bridge test asserts both copies agree.
+2. **The count is icons, not files and not bytes.** A JPEG-only icon and a JPEG + EPS icon
+   both cost 1. 100 JPEG-only icons, 100 pairs and 50 pairs + 50 JPEG-only icons are all
+   legal; 101 icons of any shape is not. The planner therefore chunks by **icon count**,
+   which is also why a pair can never be split across two batches.
+3. **If Getty ever counts physical files instead**, the same constant halves the chunk to
+   50 pairs — one number, one test, no other change.
+4. **A batch is the only thing that can be completed.** There is no "append to a completed
    batch", so retries cannot go back into batch *k* once it has been submitted. They go
    forward.
-4. **Sign-in is expensive and rate-limited.** Arkose/funCaptcha can only be solved by a
+5. **Sign-in is expensive and rate-limited.** Arkose/funCaptcha can only be solved by a
    human once; the run must not create a new browser or a new login per batch. The pooled
    session (`/getty-web/close`, 5-minute idle) already gives us one sign-in — it just has
    to survive N batch creations.
-5. **Metadata typing is per card.** Each batch still pays one drawer open + one bulk
+6. **Metadata typing is per card.** Each batch still pays one drawer open + one bulk
    "Save metadata" for its own cards; that cost scales with icons, not with batches, so
    splitting does not make the run slower overall.
-6. **The run is long.** 300 icons ≈ 3 batches ≈ hours, not minutes. Every wait
+7. **The run is long.** 300 icons ≈ 3 batches ≈ hours, not minutes. Every wait
    (`uploadTimeoutFor`, `readyTimeoutMs`) must be **per batch**, and the UI must be
    truthful about batch progress rather than pretending a single bar will finish soon.
-7. **Rules that cannot bend**: no credential or page text in logs (RULE 20), one owner per
+8. **Rules that cannot bend**: no credential or page text in logs (RULE 20), one owner per
    fact (RULE 17), new functions ≤ 30 lines / ≤ 4 params / CC ≤ 10 (RULE 16), no live
    provider calls in tests.
 
@@ -120,23 +132,19 @@ files in one request, and the app happily builds that request.
 ### D1 — One pure planner decides the chunks (`src/lib/stockupload/gettyweb.ts`)
 
 ```ts
-export const GETTY_WEB_MAX_BATCH_FILES = 200;
+export const GETTY_WEB_MAX_BATCH_ICONS = 100;  // one icon = one counted upload (JPEG ± EPS)
 export const GETTY_WEB_MAX_ATTEMPTS = 2;      // one upload + one retry
-
-export interface GettyWebBatchPlan {
-  icons: readonly GettyWebIconRef[];  // ordered, pair intact
-  files: number;                      // sum of file weights, ≤ max
-}
 
 export function planGettyWebBatches(
   icons: readonly GettyWebIconRef[],
-  maxFiles = GETTY_WEB_MAX_BATCH_FILES,
-): GettyWebBatchPlan[];
+  maxIcons = GETTY_WEB_MAX_BATCH_ICONS,
+): GettyWebIconRef[][];   // batches of 1 … maxIcons icons, order preserved
 ```
 
-- Greedy pack in the plan's existing order; an icon's weight is its file count (1 or 2).
-- An icon is never split: if a single icon alone exceeded the cap it would become its own
-  batch (impossible today, but the rule is explicit and tested).
+- Greedy pack in the plan's existing order, **100 icons per batch**, so the first 100 pairs
+  of the selection are batch 1.
+- The unit is the icon, so a JPEG/EPS pair can never be split and an icon can never be
+  half-sent; a JPEG-only icon and a pair cost the same 1.
 - Pure, no I/O, ≤ 30 lines, one job — the whole chunking contract is testable without a
   browser.
 
@@ -146,12 +154,13 @@ export function planGettyWebBatches(
   **rejected** (`invalid-file-media`, Getty's id), **unproven** (never listed, or listed
   without a thumbnail).
 - Rejected + unproven icons enter the re-upload list with their reason and attempt count.
-- Before every batch after the first, the run fills that batch's **remaining room** from
-  the re-upload list (oldest failure first). Whatever is still queued after the last
-  primary batch becomes the **final retry batch(es)**, named `… retry 1/1 (7 icons)`.
+- Before every batch after the first, the run fills that batch's **remaining room**
+  (100 − its own icons) from the re-upload list, oldest failure first. Whatever is still
+  queued after the last primary batch becomes the **final retry batch(es)**, named
+  `… retry 1/1 (7 icons)`.
 - This is exactly the user's "later / last batch": a 250-icon selection chunks as
-  `[100, 100, 50]`, so failures from batches 1–2 can ride along in batch 3, and only what
-  is left over forms a retry batch.
+  `[100, 100, 50]`, so batch 3 has 50 icons of room and failures from batches 1–2 can ride
+  along in it; only what is left over forms a retry batch.
 - An icon is attempted at most `GETTY_WEB_MAX_ATTEMPTS` (2) times, which makes an infinite
   retry loop structurally impossible.
 
@@ -160,7 +169,7 @@ export function planGettyWebBatches(
 The app sends the same `POST /getty-web/upload` once **per chunk**, with a new config flag:
 
 ```jsonc
-{ "newBatch": true, "batchName": "IconSplitter 2026-10-30 2/3 (100 icons)", … "icons": [ … ≤ 200 files … ] }
+{ "newBatch": true, "batchName": "IconSplitter 2026-10-30 2/3 (100 icons)", … "icons": [ … ≤ 100 icons … ] }
 ```
 
 - `newBatch: true` → `session.startBatch({batchName, submissionType})`: navigate back to
@@ -199,7 +208,7 @@ Today `failed(input, reason)` marks every icon failed. With 100-icon chunks that
   shape; `uploadGettyWebRun` maps accepted names to uploaded icons, and only the rest to
   re-upload candidates.
 
-Without this, a timeout after 95 of 100 accepted files would re-upload those 95 into the
+Without this, a timeout after 95 of a 100-icon batch would re-upload those 95 into the
 next batch as duplicate contributions.
 
 ### D6 — One terminal outcome per icon (this is what makes A7 true)
@@ -262,9 +271,10 @@ every long batch is a coin flip.
 
 ### D12 — The helper's cap becomes a file cap
 
-`MAX_ICONS = 200` → `MAX_FILES = 200` (sum over all icons, each ≤ 2 files), rejected with
-`400 bad-request` naming the limit. The app can then never be "one config away" from
-sending 400 files.
+`MAX_ICONS = 200` → `MAX_ICONS = 100` (one counted upload per icon, still ≤ 2 files
+each), rejected with `400 bad-request` naming the 100-upload cap. The app's
+`GETTY_WEB_MAX_BATCH_ICONS` and the helper's `MAX_ICONS` are asserted equal in the bridge
+test, so the app can never be "one config away" from sending two batches' worth.
 
 ---
 
@@ -274,7 +284,7 @@ sending 400 files.
 buildStockUploadPlan → plan.tasks (JPEG + EPS per icon, deterministic order)
         │ groupEspTasks(): one icon per item, JPEG first
         ▼
-planGettyWebBatches(icons, 200 files) → chunk[0] … chunk[n-1]
+planGettyWebBatches(icons, 100) → chunk[0] … chunk[n-1]
         │  one sign-in, one browser session, one staged temp folder
         ▼
 for k in 0 … n-1:
@@ -297,8 +307,8 @@ Example, 250 icons (500 files):
 |---|---|---|---|---|
 | 1 | `… 1/3 (100 icons)` | 100 | 200 | 3 rejected → 3 queued |
 | 2 | `… 2/3 (100 icons)` | 100 | 200 | 2 more rejected → 5 queued |
-| 3 | `… 3/3 (55 icons)` | 50 + 5 retries | 110 | 250 icons = 100 + 100 + 50, so the last chunk has 100 files of room |
-| 4 | `… retry 1/1 (n icons)` | whatever is still queued | ≤ 200 | attempt 2; created only when the queue is non-empty after batch 3 |
+| 3 | `… 3/3 (55 icons)` | 50 + 5 retries | 110 | 250 icons = 100 + 100 + 50, so the last chunk has 50 icons of room |
+| 4 | `… retry 1/1 (n icons)` | whatever is still queued (≤ 100) | ≤ 200 | attempt 2; created only when the queue is non-empty after batch 3 |
 
 (Retry batches are created **only** when the queue is non-empty after the last primary
 batch.)
@@ -309,10 +319,10 @@ batch.)
 
 | New / changed | File | Responsibility | Gate |
 |---|---|---|---|
-| `GETTY_WEB_MAX_BATCH_FILES`, `GETTY_WEB_MAX_ATTEMPTS`, `planGettyWebBatches`, `gettyWebBatchName(now, count, meta)` | `src/lib/stockupload/gettyweb.ts` | pure chunking + naming | ≤30 lines each |
+| `GETTY_WEB_MAX_BATCH_ICONS`, `GETTY_WEB_MAX_ATTEMPTS`, `planGettyWebBatches`, `gettyWebBatchName(now, count, meta)` | `src/lib/stockupload/gettyweb.ts` | pure chunking + naming | ≤30 lines each |
 | `uploadGettyWebBatch` (one chunk, one request), `runGettyWebBatches` (ordering), `nextRetryIcons(queue, room)` | `src/stockupload/gettywebtransfer.ts` | the run's state machine, no DOM | ≤30 lines, ≤4 params |
 | `startBatch()` — navigate, create, reset `batchId/expected/progress/reloads` | `tools/bridge/gettyweb/session.mjs` | per-batch lifecycle | — |
-| `MAX_FILES`, failure body with `accepted/failed/seen` | `tools/bridge/gettyweb/routes.mjs` | caps + honest failures | — |
+| `MAX_ICONS = 100`, failure body with `accepted/failed/seen` | `tools/bridge/gettyweb/routes.mjs` | caps + honest failures | — |
 | `newBatch?: boolean` in the config, failure-shape parsing | `src/lib/stockupload/gettywebclient.ts` | request/response contract | — |
 | batch loop wiring, per-batch progress label | `src/stockupload/runupload.ts` | replaces the single `runGettyWebIcons` + `submitGettyBatch` pair | ≤30 lines |
 | re-upload count, `stock-filter-status`, confirm-dialog batch line | `src/stockupload/{rowlist,StockUploadControls,StockUploadDialogs,StockUploadBulkBar}.tsx` | UI | RULE 16 |
@@ -346,7 +356,7 @@ one `counters` object, one `finally` close. The difference is entirely inside
 
 **Confirm dialog** (`stock-upload-confirm-dialog`) gains one line for the Getty web target:
 
-> `250 icons · 500 files → 3 batches (Getty allows 200 files / 100 pairs per batch)`
+> `250 icons → 3 batches (Getty takes 100 uploads per batch; a JPEG + EPS pair counts once)`
 
 **Progress bar** (`stock-upload-progress-*`, `uploadBar`): `done/total` still counts files
 of the selection, so the bar keeps its meaning and retries do not inflate it. The label
@@ -378,24 +388,26 @@ path for a later run.
 Each step is a coherent commit; a step is not done until its focused test is green and
 `npx tsc --noEmit` + `npm run lint` pass.
 
-### Step 1 — The cap becomes a file cap (helper)
+### Step 1 — The cap is 100 icons (helper + app)
 
-- Test (failing): `tests/bridge_getty_web.test.ts` — 100 pairs (200 files) are accepted, 101
-  pairs (202 files) and 201 JPEG-only files are refused with `400 bad-request` naming the
-  200-file cap.
-- Implement: `MAX_FILES = 200` in `routes.mjs`, `iconsFromConfig` weighs files instead of
-  counting icons; `GETTY_WEB_MAX_BATCH_FILES` in `src/lib/stockupload/gettyweb.ts` with a
-  test asserting both constants agree.
+- Test (failing): `tests/bridge_getty_web.test.ts` — 100 icons are accepted (100 pairs =
+  200 physical files, and 100 JPEG-only icons); 101 icons are refused with `400 bad-request`
+  naming the 100-upload cap, whatever their file count.
+- Implement: `MAX_ICONS = 100` in `routes.mjs` (the per-icon ≤ 2 files rule stays);
+  `GETTY_WEB_MAX_BATCH_ICONS = 100` in `src/lib/stockupload/gettyweb.ts` with a test
+  asserting both constants agree.
 - Done: no request can carry more than one batch's worth.
 
 ### Step 2 — The pure chunk planner
 
 - Test (failing): new `tests/getty_web_chunk.test.ts`
-  - 250 icons × 2 files → `[100, 100, 50]` icons, each chunk ≤ 200 files;
-  - 150 JPEG-only icons → `[150]`;
+  - 250 icons → `[100, 100, 50]`, each chunk ≤ 100 icons (≤ 200 files);
+  - 150 JPEG-only icons → `[100, 50]` (a JPEG-only icon still costs 1 of the 100);
+  - 50 pairs + 50 JPEG-only icons → one batch of 100 icons / 150 files;
   - a JPEG/EPS pair never lands in two chunks; order is preserved (first icon of the
     selection is the first icon of batch 1);
-  - empty selection → no batches; a 1-file icon counts 1;
+  - empty selection → no batches;
+  - 101 icons → `[100, 1]`, never `[101]`;
   - `gettyWebBatchName` stays ≤ 60 chars for `1/3`, `2/3`, `retry 1/1`.
 - Implement: `planGettyWebBatches`, `gettyWebBatchName(now, count, meta)`.
 - Done: chunking is fully specified without touching the browser.
@@ -476,7 +488,7 @@ Each step is a coherent commit; a step is not done until its focused test is gre
 ### Step 10 — Docs and gates
 
 - Update `docs/current/sor/stock-upload-getty-web.md` (§2 flow: N batches, retry pass; §4
-  the 200-file cap; §5 codes; §6 limits), `docs/current/selectors/stock-upload.md`
+  the 100-upload cap; §5 codes; §6 limits), `docs/current/selectors/stock-upload.md`
   (`stock-filter-status`, re-upload chip, batch label), `docs/current/sor/invariants/upload.md`
   (new invariant: *a Getty web run never sends more than one batch's file cap, completes a
   batch only after its own cards are ready, and never claims an icon whose retry is still
@@ -489,8 +501,10 @@ Each step is a coherent commit; a step is not done until its focused test is gre
 
 ## 9. Open questions and risks
 
-1. **Is the cap per batch or per upload?** The plan treats it as per batch (the user's
-   wording) and as one constant, so a correction is a one-line change plus one test.
+1. **Is the cap counted in uploads or in physical files?** The plan counts **uploads**
+   (100 icons, ≤ 200 files), which is what the report says. If Getty turns out to count
+   physical files, the single constant drops the chunk to 50 pairs and nothing else
+   changes. It is per batch, not per session.
 2. **Batch-creation rate limit.** Unknown how fast Getty allows Create Batch after Complete.
    The helper keeps its 60 s control wait and one retry per batch; if this bites, the next
    lever is a short pause between batches, not a bigger chunk.
