@@ -4414,3 +4414,23 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   PASSED (`filetransfers.ts` 14 fns / 154 lines, `runupload.ts` 18 fns / 204
   lines); `verify:fast` ALL LANES PASSED; focused 8 files / 155 tests green; docs
   4/4 (soR 8,979 B, selectors 8,990 B).
+- 2026-10-30 — The loopback helper restarts itself when a `git pull` changes its
+  own code, so an update no longer leaves old code in memory until the window is
+  closed by hand. `tools/bridge/updatewatch.mjs` hashes the bytes of `tools/bridge/`
+  (`helperCodeStamp`, reusing `computeSrcFingerprint`) and reads HEAD for the note
+  (`readCommit`, loose ref or detached HEAD, `null` outside a checkout);
+  `shouldRestart` refuses while an upload moves. The helper re-checks every 10 s
+  and exits `RESTART_CODE = 75`; `tools/bridge/supervise.mjs` is the new process
+  above it (all four `.bat` launchers start it) and re-runs the helper on `75`, on
+  a crash up to 10 times, and stops after more than 10 restarts inside a minute.
+  Mid-run restarts are deferred (`gettyWebBusy` counts only a batch actually in
+  flight), idle Getty browsers are handed back first (`releaseIdleSessions`), and
+  `/health` now reports `update: {watching, commit, restarts}`. New tests:
+  `bridge_update_watch` (byte-following stamp, HEAD reading, busy deferral, note,
+  launchers never calling the bare server, the supervisor's restart/clean-exit
+  loop, a live helper exiting `75` on a change and staying up with
+  `--no-update-watch`).
+- Verified: `tsc` clean (with `updatewatch.d.mts`); lint 0 errors / 24 warnings
+  (added `clearInterval` to the Node globals); `quality:changed` GATE PASSED;
+  `verify:fast` ALL LANES PASSED; focused 6 files / 59 tests green; docs 4/4
+  (new page `sor/bridge-helper.md` 3,980 B, router 4,971 B).

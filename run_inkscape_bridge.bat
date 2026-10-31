@@ -44,5 +44,5 @@ echo.
 echo === Inkscape & FTPS/SFTP helper (http://127.0.0.1:47391) ===
 echo Keep this window open while exporting EPS or uploading to stock servers.
 echo.
-node tools\bridge\server.mjs %*
+node tools\bridge\supervise.mjs %*
 pause

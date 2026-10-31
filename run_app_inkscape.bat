@@ -41,7 +41,7 @@ for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":47391 " ^| findstr "LISTENI
 
 echo.
 echo === Starting the local helper and opening the app ===
-start "Icon Splitter - Local Helper" cmd /k node tools\bridge\server.mjs %*
+start "Icon Splitter - Local Helper" cmd /k node tools\bridge\supervise.mjs %*
 timeout /t 2 >nul
 start "" "http://127.0.0.1:47391/"
 echo.
