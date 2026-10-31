@@ -19,11 +19,13 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
+import { RESTART_CODE, helperCodeStamp, readCommit, restartNote, shouldRestart } from "./updatewatch.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
 import { connectBrowser, findBrowser, resetProfile, resolveProfileDir } from "./gettyweb/browser.mjs";
 import { openCdp } from "./gettyweb/cdp.mjs";
 import {
-  gettyWebHealth, handleGettyWebClose, handleGettyWebFinish, handleGettyWebProgress,
+  gettyWebBusy, gettyWebHealth, handleGettyWebClose, handleGettyWebFinish, handleGettyWebProgress,
+  releaseIdleSessions,
   handleGettyWebTest, handleGettyWebUpload,
 } from "./gettyweb/routes.mjs";
 import { cdpFailureReason } from "./gettyweb/session.mjs";
@@ -74,6 +76,12 @@ const config = {
   // one FTPS file; the app also caps a batch's bytes, this is the backstop.
   gettyMaxBytes: Number(process.env.GETTY_WEB_MAX_BYTES ?? 256 * 1024 * 1024),
   tmpRoot: process.env.BRIDGE_TMP,
+  // A `git pull` under a running helper must not leave the old code in memory: the
+  // helper watches its own files and asks the launcher for a restart in place.
+  updateWatch: args["no-update-watch"] === undefined && process.env.BRIDGE_NO_UPDATE_WATCH !== "1",
+  updateCheckMs: Math.max(200, Number(args["update-check-ms"] ?? process.env.BRIDGE_UPDATE_CHECK_MS ?? 10_000) || 10_000),
+  watchDirs: typeof args["watch-dir"] === "string" ? [path.resolve(args["watch-dir"])] : [HERE],
+  restarts: Math.max(0, Number(process.env.BRIDGE_RESTARTS ?? 0) || 0),
 };
 
 let queue = Promise.resolve(); // one conversion at a time; the batch is sequential anyway
@@ -135,6 +143,9 @@ function health(res, port) {
   return json(res, 200, {
     ok: inkscape.found, inkscape, ftps: { ready: true }, sftp: { ready: true }, esp: { ready: true },
     gettyWeb: gettyWebHealth(), port,
+    // The app can tell a helper that just picked up a new build from one that
+    // needs the window closed by hand.
+    update: { watching: config.updateWatch, commit: readCommit(REPO_ROOT), restarts: config.restarts },
   });
 }
 
@@ -217,6 +228,43 @@ async function route(req, res, port) {
   return json(res, 404, { reason: "not found" });
 }
 
+/** Requests being served right now: a restart waits for them. */
+let inFlight = 0;
+
+/** True while an upload is moving, seen either as a request or as a live session. */
+function busyWithUpload() {
+  return inFlight > 0 || gettyWebBusy();
+}
+
+/**
+ * The helper's own watchdog. It compares the bytes of its code with what it booted
+ * from; when a `git pull` changed them it exits with RESTART_CODE so the launcher
+ * (supervise.mjs) starts the new code at once — but only with nothing in flight,
+ * and it says why in this window instead of dying silently.
+ */
+function watchOwnCode() {
+  if (!config.updateWatch) return;
+  const started = helperCodeStamp(config.watchDirs);
+  const commit = readCommit(REPO_ROOT);
+  let waiting = false;
+  const timer = setInterval(() => {
+    const current = helperCodeStamp(config.watchDirs);
+    if (current !== started && busyWithUpload()) {
+      if (!waiting) console.log(`helper code changed${commit === null ? "" : ` (commit ${commit})`} — restarting when this run finishes`);
+      waiting = true;
+      return;
+    }
+    if (!shouldRestart(started, current, { busy: false })) return;
+    console.log(restartNote({ commit: readCommit(REPO_ROOT) ?? commit, restarts: config.restarts + 1 }));
+    clearInterval(timer);
+    // An idle Getty browser would be orphaned by the exit: hand it back first.
+    const released = releaseIdleSessions();
+    if (released > 0) console.log(`closed ${released} idle Getty browser session(s) before the restart`);
+    setTimeout(() => process.exit(RESTART_CODE), 50);
+  }, config.updateCheckMs);
+  timer.unref();
+}
+
 function logLine(req, res, started, bytes) {
   const ms = Date.now() - started;
   console.log(`${new Date().toISOString()} ${req.method} ${(req.url ?? "/").split("?")[0]} → ${res.statusCode} · ${ms} ms · ${bytes} B`);
@@ -226,12 +274,14 @@ function logLine(req, res, started, bytes) {
 // an older app working, and stops Node answering 431 before a route can explain.
 const server = createServer({ maxHeaderSize: 1024 * 1024 }, (req, res) => {
   const started = Date.now();
+  inFlight += 1;
   route(req, res, server.address()?.port ?? config.port)
     .then((bytes) => logLine(req, res, started, bytes ?? 0))
     .catch((error) => {
       if (!res.headersSent) json(res, 500, { reason: `helper error: ${error.message}` });
       logLine(req, res, started, 0);
-    });
+    })
+    .finally(() => { inFlight -= 1; });
 });
 
 let retriedReplace = false;
@@ -259,6 +309,11 @@ function startListening() {
       console.log("Getty web browser: throwaway profile — pass --getty-profile <folder> to keep the Getty sign-in between runs");
     }
     console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
+    watchOwnCode();
+    if (config.updateWatch) {
+      const commit = readCommit(REPO_ROOT);
+      console.log(`Update watch: ON — a git pull that changes the helper's code restarts it here${commit === null ? "" : ` (now at ${commit})`}`);
+    }
   });
 }
 

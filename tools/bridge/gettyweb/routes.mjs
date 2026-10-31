@@ -118,6 +118,29 @@ export function mayReleaseSession(entry) {
   return entry?.busy !== true;
 }
 
+/**
+ * A batch is moving — uploading, or its metadata being typed. The helper asks
+ * before it restarts itself: a restart would close the browser mid-run and lose
+ * the batch the user is watching. A browser merely pooled and idle is not busy.
+ */
+export function gettyWebBusy() {
+  for (const entry of sessions.values()) if (entry.busy === true) return true;
+  return false;
+}
+
+/** Hands every idle browser back before a restart; a busy one is never touched. */
+export function releaseIdleSessions() {
+  let released = 0;
+  for (const [key, entry] of [...sessions.entries()]) {
+    if (!mayReleaseSession(entry)) continue;
+    if (entry.timer) clearTimeout(entry.timer);
+    sessions.delete(key);
+    releaseSession(entry.session, headed());
+    released += 1;
+  }
+  return released;
+}
+
 function touch(key, entry) {
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = setTimeout(() => {

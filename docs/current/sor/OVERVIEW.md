@@ -54,8 +54,10 @@ A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
    to one or more configured stock FTPS/SFTP presets (seeded with
    **Shutterstock** `ftps.shutterstock.com:21` Explicit FTPS and **Adobe Stock**
    `sftp.contributor.adobestock.com:22` SFTP) after explicit confirmation via
-   the local loopback helper (`tools/bridge/server.mjs`), with local-only
-   non-expanded credentials ([I-81](invariants/upload.md#i-81)).
+   the local loopback helper (`tools/bridge/server.mjs`; see
+   [the helper](bridge-helper.md), which restarts itself when a pull changes its
+   code), with local-only non-expanded credentials
+   ([I-81](invariants/upload.md#i-81)).
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.
 Production build is one self-contained `dist/index.html`

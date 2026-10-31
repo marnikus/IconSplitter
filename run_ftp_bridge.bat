@@ -4,7 +4,8 @@ rem  Icon Splitter - Local FTPS/SFTP & Inkscape helper
 rem  Builds the latest app bundle into dist\index.html, stops any
 rem  older helper on 127.0.0.1:47391, and starts the fresh helper
 rem  so the "Upload" tab always has Shutterstock FTPS (:21) and
-rem  Adobe Stock SFTP (:22).
+rem  Adobe Stock SFTP (:22). It also restarts itself when a `git pull`
+rem  brings new helper code, so an update never needs the window closed.
 rem ============================================================
 setlocal
 cd /d "%~dp0"
@@ -50,5 +51,8 @@ echo   run  run_ftp_bridge.bat --getty-check  to test the Getty browser on its o
 echo   run  run_ftp_bridge.bat --getty-reset --getty-profile "%LOCALAPPDATA%\IconSplitter\getty-profile"  to free a stuck profile.
 echo   add  --getty-profile "%LOCALAPPDATA%\IconSplitter\getty-profile"  to keep that sign-in.
 echo.
-node tools\bridge\server.mjs %*
+rem The launcher keeps the helper alive: when a `git pull` changes the
+rem helper's own code it restarts itself here with the new build (no window
+rem to close), and it never restarts while an upload is moving.
+node tools\bridge\supervise.mjs %*
 pause
