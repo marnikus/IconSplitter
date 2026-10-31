@@ -4414,3 +4414,17 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   PASSED (`filetransfers.ts` 14 fns / 154 lines, `runupload.ts` 18 fns / 204
   lines); `verify:fast` ALL LANES PASSED; focused 8 files / 155 tests green; docs
   4/4 (soR 8,979 B, selectors 8,990 B).
+- 2026-10-31 — Shutterstock and Adobe Stock upload in the number order the export
+  names carry, not in folder order and not under a rank the run invents: the
+  dashboard showed `0154 … 0023 … 0240` because discovery groups icons by folder,
+  and `Random batches` renumbered them on top. `fileorder.ts` now reads the
+  leading number (`0001`, `0002`, `0003` …, natural order for unnumbered names)
+  and `filetransfers.ts` walks the icons in it, sending the real names, so the
+  site's own name sort matches the plan and a re-upload still replaces the file.
+  The chip is Getty web only now, and the dead FTPS rank path went with it
+  (`iconbatches` chunking only, `stableRanks` removed from `shufflenames.ts`).
+  Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED (`fileorder.ts` 10 fns / 58 lines, `filetransfers.ts` 13 fns / 147
+  lines, `iconbatches.ts` 2 fns / 24 lines, `shufflenames.ts` 6 fns / 35 lines);
+  `verify:fast` ALL LANES PASSED; focused 5 files / 62 tests green; docs 4/4
+  (soR 8,938 B, selectors 8,984 B).

@@ -1,16 +1,16 @@
 // filetransfers.ts — one target's files, one upload at a time. The Getty ESP target
 // sends one icon per request. FTPS/SFTP sites (Shutterstock, Adobe Stock) take one
-// file per request, but the run still walks them **100 icons per batch**: each
-// batch is drawn from what is left when Random batches is on, mixed inside itself,
-// and every icon travels under a shuffled number in front of its real name — the
-// row, the log and the history keep the real one.
+// file per request, walked **100 icons per batch**; both sites list a folder by
+// name, so the run follows the number every export carries (0001, 0002, 0003 …)
+// and sends the real names — the order the user planned, not the folder order and
+// never a rank this run invents.
 
 import { uploadBridgeFtps, type BridgeUploadResult } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
+import { numericIconOrder } from "../lib/stockupload/fileorder";
 import { gettyWebBatchLabel } from "../lib/stockupload/gettyweb";
 import { planIconBatches } from "../lib/stockupload/iconbatches";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
-import { stableRanks, stagedFileName } from "../lib/stockupload/shufflenames";
 import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 import type { ItemTracker, NetworkCtx, RunCounters, UploadBatchDeps } from "./batchtypes";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
@@ -107,35 +107,29 @@ export async function runNetworkGroups(ctx: NetworkCtx): Promise<number> {
 interface BatchFile { task: PlannedTransfer; fileName: string; batch: string }
 
 /**
- * Every file the target sends, in the order its batches carry them. With Random
- * batches on the icons are drawn, mixed inside the batch and ranked; with it off
- * the list order and the real file names go out untouched.
+ * Every file the target sends, in the order the names carry: numbered icons
+ * ascending (0001 → 0002 → 0003 …), the rest by name, cut into batches of at most
+ * 100 icons. The wire name is the real name, so the site's own sort matches the
+ * plan and a re-upload replaces the same file.
  */
 function batchFiles(ctx: NetworkCtx): BatchFile[] {
   const icons = groupEspTasks(ctx.targetTasks);
-  const randomize = ctx.deps.gettyWebRandomBatches === true;
-  const names = icons.map((tasks) => tasks[0]?.fileName ?? "");
-  const ranks = randomize ? stableRanks(names) : null;
-  const batches = planIconBatches(icons.length, {
-    maxIcons: ctx.deps.ftpMaxIcons, randomize, rng: ctx.deps.gettyWebRandomFn,
-    nameOf: (index) => names[index],
-  });
+  const order = numericIconOrder(icons.map((tasks) => tasks[0]?.fileName ?? ""));
+  const batches = planIconBatches(order.length, { maxIcons: ctx.deps.ftpMaxIcons });
   const files: BatchFile[] = [];
   batches.forEach((batch, position) => {
     const label = gettyWebBatchLabel({ index: position + 1, total: batches.length });
-    for (const index of batch) {
-      for (const task of icons[index]) {
-        files.push({ task, fileName: ranks === null ? task.fileName : stagedFileName(ranks[index], task.fileName), batch: label });
-      }
+    for (const slot of batch) {
+      for (const task of icons[order[slot]]) files.push({ task, fileName: task.fileName, batch: label });
     }
   });
   return files;
 }
 
 /**
- * The FTPS/SFTP target: one file per request, walked as 100-icon batches. The
- * shuffled name is only what the site receives — the row is still told the real
- * name, so a failure names the file the user knows.
+ * The FTPS/SFTP target: one file per request, walked as 100-icon batches in the
+ * order the file names carry. The name on the wire is the real one, so the row,
+ * the log and the site all speak the name the user planned.
  */
 export async function runFileBatches(ctx: NetworkCtx): Promise<number> {
   const { target, deps, counters, trackers, creds, sessionKey, itemsById } = ctx;

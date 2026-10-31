@@ -74,7 +74,7 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-upload-zoom`, `stock-zoom-label`, `stock-bg-<preset>` — thumbnail zoom & preview background.
 - `stock-format-raster`, `stock-format-svg`, `stock-format-eps`, `stock-format-zip` — same-stem representation checkboxes.
 - `stock-combine-title-description` — opt-in persisted combination of accepted title and description in upload copies only.
-- `stock-random-batches` — opt-in, saved: every site walks 100-icon batches, each drawn at random and mixed, every icon under a shuffled number before its name.
+- `stock-random-batches` — saved; Getty **web** only: random, mixed 100-icon batches under shuffled ranks. Shutterstock/Adobe upload in name-number order.
 - `stock-target-check-<presetId>` — multi-upload target stock checkboxes.
 - `stock-upload-start`, `stock-upload-cancel`, `stock-upload-confirm-dialog`, `stock-upload-confirm-go`, `stock-upload-confirm-cancel` — preflight confirmation & upload trigger.
 - `stock-upload-getty-batches` — the confirmation's Getty line whenever `getty-web` is a target (`250 icon(s) → 3 batches (Getty takes 100 uploads per batch; a JPEG + EPS pair counts once)`, singular `1 batch` for a short run), so the chunking (100 icons, 64 MB) is visible before Upload.

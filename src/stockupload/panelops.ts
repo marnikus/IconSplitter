@@ -155,7 +155,7 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
     loadCreds: readFtpCredentials,
     // The batch bytes the running helper can take, so no request is sent blind.
     gettyWebMaxBytes: budget.gettyMaxBytes,
-    // Random batch selection: each 100-icon batch is a random draw from what is left.
+    // Getty web only: each 100-icon batch is a random draw from what is left.
     gettyWebRandomBatches: c.model.prefs.randomBatches,
     onProgress: (progress) => c.dispatch({ type: "patch", patch: { progress } }),
     logFn: log,

@@ -1,13 +1,13 @@
 // gettywebnames.ts — the names a **random** Getty web batch travels under. Getty
 // lists a batch by file name, so the order readers see is decided by the names,
-// not by the order of the request. The rank itself is shared with every other
-// chunked target (`shufflenames.ts`); what is Getty-only is the pair rule and the
-// mapping of Getty's own answer back to the real names.
+// not by the order of the request. The rank lives in `shufflenames.ts`; what is
+// Getty-only is the pair rule and the mapping of Getty's own answer back to the
+// real names. The FTPS/SFTP sites keep their own name numbers instead.
 
 import type { GettyWebIcon, GettyWebRejection, GettyWebResult } from "./gettywebclient";
 import { realNameOf, stagedFileName } from "./shufflenames";
 
-export { realNameOf, stagedFileName, stagedRanks, stableRanks } from "./shufflenames";
+export { realNameOf, stagedFileName, stagedRanks } from "./shufflenames";
 
 /** One icon as the page receives it: every file of the pair under the same rank. */
 export function stagedIcon(icon: GettyWebIcon, rank: number): GettyWebIcon {

@@ -80,8 +80,9 @@ describe("stock upload planner, batch runner and crash journal", () => {
     resetUploadJournal();
 
     const root = new FakeDir("ws");
-    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
-    addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+    // The number in front of a name is the upload order: icon-1 goes first.
+    addExported(root, "icon-1", "a", "0001-star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "0002-moon_02", { jpg: true, eps: true });
     const found = await discoverExportedItems(root);
 
     const plan = buildStockUploadPlan({
@@ -104,17 +105,17 @@ describe("stock upload planner, batch runner and crash journal", () => {
       onProgress: (p) => progressSteps.push(p.done),
       uploadFn: async (inp) => {
         sent.push(inp.fileName);
-        if (inp.fileName === "star_01.eps") {
+        if (inp.fileName === "0001-star_01.eps") {
           return { ok: false, code: "ftp", reason: "disk quota", serverCertSha256: null };
         }
-        if (inp.fileName === "moon_02.jpg") controller.abort();
+        if (inp.fileName === "0002-moon_02.jpg") controller.abort();
         return { ok: true, bytes: inp.bytes.byteLength };
       },
       closeSessionFn: async () => undefined,
     });
 
-    // star_01.jpg succeeded, star_01.eps failed -> partial; moon_02.jpg succeeded then aborted before moon_02.eps
-    expect(sent).toEqual(["star_01.jpg", "star_01.eps", "moon_02.jpg"]);
+    // 0001-star_01.jpg succeeded, its EPS failed -> partial; 0002-moon_02.jpg succeeded then aborted before its EPS
+    expect(sent).toEqual(["0001-star_01.jpg", "0001-star_01.eps", "0002-moon_02.jpg"]);
     expect(summary.uploadedFiles).toBe(2);
     expect(summary.failedFiles).toBe(1);
     expect(summary.cancelled).toBe(true);
@@ -162,8 +163,9 @@ describe("stock upload planner, batch runner and crash journal", () => {
     resetRowBadges();
 
     const root = new FakeDir("ws");
-    addExported(root, "icon-1", "a", "star_01", { svg: true });
-    addExported(root, "icon-2", "b", "moon_02", { svg: true });
+    // The number in front of a name is the upload order: icon-1 goes first.
+    addExported(root, "icon-1", "a", "0001-star_01", { svg: true });
+    addExported(root, "icon-2", "b", "0002-moon_02", { svg: true });
     const found = await discoverExportedItems(root);
 
     const plan = buildStockUploadPlan({
@@ -191,7 +193,7 @@ describe("stock upload planner, batch runner and crash journal", () => {
       },
       uploadFn: async (inp) => {
         // Fail moon_02 on Adobe Stock -> must NOT get Adobe Stock badge!
-        if (inp.preset.id === "adobe-stock" && inp.fileName === "moon_02.svg") {
+        if (inp.preset.id === "adobe-stock" && inp.fileName === "0002-moon_02.svg") {
           return { ok: false, code: "ftp", reason: "rejected", serverCertSha256: null };
         }
         return { ok: true, bytes: inp.bytes.byteLength };

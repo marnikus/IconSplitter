@@ -46,8 +46,9 @@ export interface UploadBatchDeps {
   /** Bytes one Getty request may carry; the real helper cap unless a test injects one. */
   gettyWebMaxBytes?: number;
   /**
-   * Draw each 100-icon batch at random instead of taking the list in order — the
-   * same chip drives the Getty web run and the FTPS/SFTP drops.
+   * Draw each 100-icon Getty web batch at random instead of taking the list in
+   * order, and rank the files it stages. The FTPS/SFTP drops ignore it: their
+   * sites take the names in the number order the exports carry.
    */
   gettyWebRandomBatches?: boolean;
   /** Icons one FTPS/SFTP batch may hold; the real 100 unless a test injects one. */

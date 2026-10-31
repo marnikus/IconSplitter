@@ -1,17 +1,19 @@
-// Shutterstock and Adobe Stock take files one at a time, but the run still walks
-// the selection **100 icons per batch**: each batch is drawn at random from what
-// is left, mixed inside itself, and every icon travels under a shuffled number in
-// front of its real name — with the map kept, so the row and the log still speak
-// the real name.
+// Shutterstock and Adobe Stock take one file per request, and the site sorts the
+// folder by name — the number in front of every file name is the plan the user
+// made (0001, 0002, 0003 …). The run must walk the icons in exactly that number
+// order, whatever folder each one sits in, and send the real names: a site keeps
+// the file it is given, so a number this run invents is a file the user did not plan.
 
 import { describe, expect, it } from "vitest";
+import {
+  compareIconNames, leadingNumber, numericIconOrder,
+} from "../src/lib/stockupload/fileorder";
 import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { discoverExportedItems } from "../src/lib/stockupload/discovery";
 import { buildStockUploadPlan } from "../src/lib/stockupload/plan";
 import { ADOBE_STOCK_PRESET, SHUTTERSTOCK_PRESET } from "../src/lib/stockupload/presets";
 import type { StockFtpPreset } from "../src/lib/stockupload/types";
-import { realNameOf } from "../src/lib/stockupload/shufflenames";
 import { resetStockHistory } from "../src/stockupload/historystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { executeStockUploadBatch } from "../src/stockupload/runupload";
@@ -48,19 +50,31 @@ function addExported(root: FakeDir, id: string, dir: string, stem: string): void
   cur.children.set(`${stem}.eps`, new FakeFile(`${stem}.eps`, 16, 1000, "%%!PS-Adobe-3.0\n"));
 }
 
-const STEMS = ["star_01", "moon_02", "sun_03", "cloud_04"];
+/** Folder order is deliberately the reverse of the numbers: the plan is the name. */
+const NUMBERED = [
+  { stem: "0154-icon-waving-flag_5_03", dir: "a-flags" },
+  { stem: "0023-icon-steering-wheel_7_02", dir: "b-travel" },
+  { stem: "0024-icon-wallet_4_01", dir: "c-money" },
+];
 
-/** Uploads the four icons to one preset and returns what the helper was handed. */
+const NUMBERED_SENT = [
+  "0023-icon-steering-wheel_7_02.jpg", "0023-icon-steering-wheel_7_02.eps",
+  "0024-icon-wallet_4_01.jpg", "0024-icon-wallet_4_01.eps",
+  "0154-icon-waving-flag_5_03.jpg", "0154-icon-waving-flag_5_03.eps",
+];
+
+/** Uploads the icons to one preset and returns what the helper was handed. */
 async function runSite(
   preset: StockFtpPreset,
-  config: { cap?: number; random?: boolean } = {},
+  config: { cap?: number; random?: boolean; icons?: readonly { stem: string; dir: string }[] } = {},
 ): Promise<{ sent: string[]; labels: string[]; uploadedFiles: number }> {
   localStorage.clear();
   resetStockHistory();
   resetUploadJournal();
   resetRowBadges();
   const root = new FakeDir("ws");
-  STEMS.forEach((stem, index) => addExported(root, `icon-${index + 1}`, `d${index}`, stem));
+  const icons = config.icons ?? NUMBERED;
+  icons.forEach((icon, index) => addExported(root, `icon-${index + 1}`, icon.dir, icon.stem));
   const found = await discoverExportedItems(root);
   const plan = buildStockUploadPlan({
     items: found.items,
@@ -89,65 +103,62 @@ async function runSite(
   return { sent, labels, uploadedFiles: summary.uploadedFiles };
 }
 
-describe("Shutterstock and Adobe Stock upload in random 100-icon batches", () => {
-  it("leaves the order and the names exactly as they are with Random batches off", async () => {
+describe("the number in front of a name is the upload order", () => {
+  it("reads the number a name starts with, and null when there is none", () => {
+    expect(leadingNumber("0012-icon-snowflake_2_01.jpg")).toBe(12);
+    expect(leadingNumber("sub/dir/0154-star.eps")).toBe(154);
+    expect(leadingNumber("icon-snowflake_2_01.jpg")).toBeNull();
+  });
+
+  it("orders by that number first, then naturally (icon_2 before icon_10)", () => {
+    expect(compareIconNames("0154-a.jpg", "0023-b.jpg")).toBeGreaterThan(0);
+    expect(compareIconNames("icon_2.jpg", "icon_10.jpg")).toBeLessThan(0);
+    // A numbered name outranks an unnumbered one; the rest keep alphabetical order.
+    expect(numericIconOrder(["star_01.jpg", "0023-b.jpg", "cloud_02.jpg"])).toEqual([1, 2, 0]);
+  });
+});
+
+describe("Shutterstock and Adobe Stock upload in the plan's number order", () => {
+  it("walks the icons 0023 → 0024 → 0154, not the folder order discovery gives", async () => {
     const { sent, uploadedFiles } = await runSite(SHUTTERSTOCK_PRESET);
-    expect(sent).toEqual([
-      "star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps",
-      "sun_03.jpg", "sun_03.eps", "cloud_04.jpg", "cloud_04.eps",
-    ]);
-    expect(uploadedFiles).toBe(8);
+    expect(sent).toEqual(NUMBERED_SENT);
+    expect(uploadedFiles).toBe(6);
+  });
+
+  it("keeps a JPEG and its EPS together under the icon's own number", async () => {
+    const { sent } = await runSite(SHUTTERSTOCK_PRESET, { cap: 2 });
+    for (const base of ["0023-icon-steering-wheel_7_02", "0024-icon-wallet_4_01", "0154-icon-waving-flag_5_03"]) {
+      expect(sent.filter((name) => name.startsWith(base))).toEqual([`${base}.jpg`, `${base}.eps`]);
+    }
   });
 
   it("names the batch in the panel's progress line, 100 icons at a time", async () => {
     const { labels } = await runSite(SHUTTERSTOCK_PRESET, { cap: 2 });
-    // Two icons per batch, in the list order: nothing is drawn with the box off.
-    expect(labels[0]).toBe("Shutterstock batch 1/2 · star_01.jpg");
-    expect(labels[3]).toBe("Shutterstock batch 1/2 · moon_02.eps");
-    expect(labels[4]).toBe("Shutterstock batch 2/2 · sun_03.jpg");
+    expect(labels[0]).toBe("Shutterstock batch 1/2 · 0023-icon-steering-wheel_7_02.jpg");
+    expect(labels[3]).toBe("Shutterstock batch 1/2 · 0024-icon-wallet_4_01.eps");
+    expect(labels[4]).toBe("Shutterstock batch 2/2 · 0154-icon-waving-flag_5_03.jpg");
   });
 
-  it("draws the next 100 at random and mixes them inside the batch", async () => {
-    const { sent } = await runSite(SHUTTERSTOCK_PRESET, { cap: 2, random: true });
-    // Draw [moon, sun, cloud, star], two per batch, each batch mixed again.
-    expect(sent.map(realNameOf)).toEqual([
-      "sun_03.jpg", "sun_03.eps", "moon_02.jpg", "moon_02.eps",
-      "star_01.jpg", "star_01.eps", "cloud_04.jpg", "cloud_04.eps",
+  it("sends the real names and the same order with Random batches on", async () => {
+    const off = await runSite(SHUTTERSTOCK_PRESET);
+    const on = await runSite(SHUTTERSTOCK_PRESET, { random: true });
+    // A site keeps what it is handed: no rank is invented in front of the plan's number.
+    expect(on.sent).toEqual(NUMBERED_SENT);
+    expect(on.sent).toEqual(off.sent);
+  });
+
+  it("falls back to name order for exports that carry no number", async () => {
+    const icons = ["star_01", "moon_02", "sun_03", "cloud_04"].map((stem) => ({ stem, dir: `d-${stem}` }));
+    const { sent } = await runSite(SHUTTERSTOCK_PRESET, { icons });
+    expect(sent).toEqual([
+      "cloud_04.jpg", "cloud_04.eps", "moon_02.jpg", "moon_02.eps",
+      "star_01.jpg", "star_01.eps", "sun_03.jpg", "sun_03.eps",
     ]);
-  });
-
-  it("uploads each icon under a shuffled number in front of its real name", async () => {
-    const { sent } = await runSite(SHUTTERSTOCK_PRESET, { random: true });
-    // A number the site's own name sort can use, then the real name — the map.
-    for (const name of sent) expect(name).toMatch(/^\d{4}-(star_01|moon_02|sun_03|cloud_04)\.(jpg|eps)$/);
-    // Both sizes of one picture share the rank, so the pair stays one picture.
-    const ranks = new Map<string, string>();
-    for (const name of sent) {
-      const [rank] = name.split("-");
-      const real = realNameOf(name).replace(/\.(jpg|eps)$/, "");
-      expect(ranks.get(real) ?? rank).toBe(rank);
-      ranks.set(real, rank);
-    }
-    expect(new Set(ranks.values()).size).toBe(4);
-  });
-
-  it("keeps the same shuffled names on a second run, so a re-upload replaces the file", async () => {
-    const first = await runSite(SHUTTERSTOCK_PRESET, { random: true });
-    const second = await runSite(SHUTTERSTOCK_PRESET, { random: true });
-    const nameOf = (sent: string[], real: string) => sent.find((name) => realNameOf(name) === real);
-    for (const stem of STEMS) {
-      expect(nameOf(second.sent, `${stem}.jpg`)).toBe(nameOf(first.sent, `${stem}.jpg`));
-      expect(nameOf(second.sent, `${stem}.eps`)).toBe(nameOf(first.sent, `${stem}.eps`));
-    }
   });
 
   it("does the same for Adobe Stock's SFTP drop", async () => {
-    const { sent, labels } = await runSite(ADOBE_STOCK_PRESET, { cap: 2, random: true });
-    expect(sent.map(realNameOf)).toEqual([
-      "sun_03.jpg", "sun_03.eps", "moon_02.jpg", "moon_02.eps",
-      "star_01.jpg", "star_01.eps", "cloud_04.jpg", "cloud_04.eps",
-    ]);
-    expect(sent[0]).toMatch(/^\d{4}-sun_03\.jpg$/);
-    expect(labels[0]).toContain("Adobe Stock batch 1/2");
+    const { sent, labels } = await runSite(ADOBE_STOCK_PRESET, { cap: 2 });
+    expect(sent).toEqual(NUMBERED_SENT);
+    expect(labels[0]).toBe("Adobe Stock batch 1/2 · 0023-icon-steering-wheel_7_02.jpg");
   });
 });

@@ -1,6 +1,8 @@
-// The names every chunked target uploads under: a shuffled number in front of the
-// real name, kept both ways — the site sorts by name, the app must still know
-// which picture a card belongs to.
+// The names a **random Getty web batch** uploads under: a shuffled rank in front
+// of the real name, kept both ways — Getty lists a batch by name, so the rank is
+// what decides who sits next to whom, and the app must still know which picture a
+// card belongs to. The FTPS/SFTP sites do not use a rank: they send the real
+// names in the number order those names already carry (`fileorder.ts`).
 
 import { randomBatchOrder, similarityKeyOf, spreadSimilar } from "./gettyweb";
 
@@ -19,41 +21,15 @@ export function realNameOf(fileName: string): string {
   return String(fileName ?? "").replace(/^\d{4}-/, "");
 }
 
-/** One rank per icon of one request, drawn fresh: the shuffle of a web batch. */
-export function stagedRanks(names: readonly string[], rng: () => number = Math.random): number[] {
-  const order = spreadSimilar(randomBatchOrder(names.length, rng), (index) => similarityKeyOf(names[index]));
-  return ranksOf(names.length, order);
-}
-
-/**
- * FNV-1a over the leaf, lowercased: the same picture always lands on the same
- * number, so a re-upload of a selection replaces its files instead of piling a
- * second copy next to them — the names only look random.
- */
-function hashOf(name: string): number {
-  const leaf = String(name ?? "").split(/[\\/]/).pop() ?? "";
-  let hash = 0x811c9dc5;
-  for (const char of leaf.toLowerCase()) {
-    hash ^= char.codePointAt(0) ?? 0;
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash;
-}
-
-/** Ranks in the order of the map rather than of a draw. */
+/** Ranks in the order of the draw rather than of the list. */
 function ranksOf(count: number, order: readonly number[]): number[] {
   const ranks = new Array<number>(Math.max(0, count)).fill(0);
   order.forEach((index, position) => { ranks[index] = position + 1; });
   return ranks;
 }
 
-/**
- * Ranks that hold still between runs — what a site keeps as a file needs: the
- * number follows the name, two sizes of one picture are pushed apart, and the
- * order is random-looking without being random.
- */
-export function stableRanks(names: readonly string[], keyOf: (name: string) => string = similarityKeyOf): number[] {
-  const indexes = names.map((_name, index) => index);
-  const sorted = indexes.sort((a, b) => (hashOf(names[a]) - hashOf(names[b])) || names[a].localeCompare(names[b]));
-  return ranksOf(names.length, spreadSimilar(sorted, (index) => keyOf(names[index])));
+/** One rank per icon of one request, drawn fresh: the shuffle of a web batch. */
+export function stagedRanks(names: readonly string[], rng: () => number = Math.random): number[] {
+  const order = spreadSimilar(randomBatchOrder(names.length, rng), (index) => similarityKeyOf(names[index]));
+  return ranksOf(names.length, order);
 }

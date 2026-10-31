@@ -111,8 +111,9 @@ function addExported(root: FakeDir, id: string, dir: string, stem: string) {
 describe("a stock upload run writes what happened into the log", () => {
   it("logs every uploaded file, every failure with its reason, and one summary line", async () => {
     const root = new FakeDir("ws");
-    addExported(root, "icon-1", "a", "star_01");
-    addExported(root, "icon-2", "b", "moon_02");
+    // The number in front of a name is the upload order: 0001 goes first.
+    addExported(root, "icon-1", "a", "0001-star_01");
+    addExported(root, "icon-2", "b", "0002-moon_02");
     const found = await discoverExportedItems(root);
     const plan = buildStockUploadPlan({
       items: found.items, checkedIds: ["icon-1", "icon-2"], presets: [SHUTTERSTOCK_PRESET],
@@ -123,14 +124,14 @@ describe("a stock upload run writes what happened into the log", () => {
       root, bridgeUrl: "http://127.0.0.1:47391", signal: new AbortController().signal,
       loadCreds: async () => ({ username: "u", password: "p" }),
       logFn: (spec) => seen.push(spec),
-      uploadFn: async (inp) => (inp.fileName === "moon_02.jpg"
+      uploadFn: async (inp) => (inp.fileName === "0002-moon_02.jpg"
         ? { ok: false, code: "ftp", reason: "disk quota", serverCertSha256: null }
         : { ok: true, bytes: inp.bytes.length }),
     });
     const actions = seen.map((spec) => spec.action);
     expect(actions).toEqual(["run-started", "uploaded", "failed", "run-finished"]);
-    expect(seen[1].detail).toContain("star_01.jpg uploaded");
-    expect(seen[2]).toMatchObject({ level: "error", detail: "Shutterstock · moon_02.jpg failed — disk quota" });
+    expect(seen[1].detail).toContain("0001-star_01.jpg uploaded");
+    expect(seen[2]).toMatchObject({ level: "error", detail: "Shutterstock · 0002-moon_02.jpg failed — disk quota" });
     expect(seen[3]).toMatchObject({ level: "error", detail: "1 file(s) uploaded, 1 failed — disk quota" });
   });
 
