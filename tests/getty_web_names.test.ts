@@ -93,6 +93,14 @@ describe("icon batches of one target", () => {
     expect(planIconBatches(0)).toEqual([]);
   });
 
+  it("draws the same batches twice when the draw is by name, never the list order", () => {
+    const names = ["a_01.jpg", "b_02.jpg", "c_03.jpg", "d_04.jpg"];
+    const drawn = planIconBatches(4, { maxIcons: 2, randomize: true, stable: true, nameOf: (i) => names[i] });
+    expect(drawn).toEqual(planIconBatches(4, { maxIcons: 2, randomize: true, stable: true, nameOf: (i) => names[i] }));
+    expect(drawn.flat()).not.toEqual([0, 1, 2, 3]);
+    expect([...drawn.flat()].sort()).toEqual([0, 1, 2, 3]);
+  });
+
   it("draws the membership and mixes each batch again with the box on", () => {
     const drawn = planIconBatches(4, {
       maxIcons: 2, randomize: true, rng: () => 0, nameOf: (index) => ["a.jpg", "b.jpg", "c.jpg", "d.jpg"][index],

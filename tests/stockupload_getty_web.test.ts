@@ -254,8 +254,8 @@ describe("Getty web upload in the batch runner", () => {
     // the batch ([c, a, b]) — never the drawn order itself — and each icon leaves
     // with a rank in front of its name so the page's own sort cannot undo it.
     expect(await send(true, () => 0)).toEqual([[
-      "0003-sun_03.jpg", "0003-sun_03.eps", "0001-star_01.jpg", "0001-star_01.eps",
-      "0002-moon_02.jpg", "0002-moon_02.eps",
+      "0001-sun_03.jpg", "0001-sun_03.eps", "0002-star_01.jpg", "0002-star_01.eps",
+      "0003-moon_02.jpg", "0003-moon_02.eps",
     ]]);
   });
 
@@ -293,12 +293,15 @@ describe("Getty web upload in the batch runner", () => {
     // Getty lists a batch by file name, so the batch travels ranked: sorted by
     // name it is the spread order, and no two sizes of one picture are neighbours.
     expect(sent[0]).toEqual([
-      "0004-wheel_01.jpg", "0001-snow_01.jpg", "0002-wheel_02.jpg", "0003-snow_02.jpg",
+      "0001-wheel_01.jpg", "0002-snow_01.jpg", "0003-wheel_02.jpg", "0004-snow_02.jpg",
     ]);
+    // Sorted by name — what the page shows — the spread is still in place.
     const byName = [...sent[0]].sort();
     expect(byName).toEqual([
-      "0001-snow_01.jpg", "0002-wheel_02.jpg", "0003-snow_02.jpg", "0004-wheel_01.jpg",
+      "0001-wheel_01.jpg", "0002-snow_01.jpg", "0003-wheel_02.jpg", "0004-snow_02.jpg",
     ]);
+    // The numbers go up in the order the request carries them: 0001, 0002, …
+    expect([...sent[0]].map((name) => name.slice(0, 4))).toEqual(["0001", "0002", "0003", "0004"]);
     // Getty's answer names the staged files; every icon is still read by its own
     // real name, so nothing is reported as "never listed".
     expect(summary.uploadedFiles).toBe(8);

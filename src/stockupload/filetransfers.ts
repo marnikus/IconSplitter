@@ -10,7 +10,7 @@ import type { FtpCredentials } from "../lib/stockupload/credvault";
 import { gettyWebBatchLabel } from "../lib/stockupload/gettyweb";
 import { planIconBatches } from "../lib/stockupload/iconbatches";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
-import { stableRanks, stagedFileName } from "../lib/stockupload/shufflenames";
+import { stagedFileName } from "../lib/stockupload/shufflenames";
 import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 import type { ItemTracker, NetworkCtx, RunCounters, UploadBatchDeps } from "./batchtypes";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
@@ -108,24 +108,27 @@ interface BatchFile { task: PlannedTransfer; fileName: string; batch: string }
 
 /**
  * Every file the target sends, in the order its batches carry them. With Random
- * batches on the icons are drawn, mixed inside the batch and ranked; with it off
- * the list order and the real file names go out untouched.
+ * batches on the icons are drawn, mixed inside the batch and numbered 0001, 0002,
+ * … across the whole run — and the run then uploads **in that numbered order**,
+ * so the folder the site lists reads 0001, 0002, 0003 exactly as planned. With
+ * the box off the list order and the real file names go out untouched.
  */
 function batchFiles(ctx: NetworkCtx): BatchFile[] {
   const icons = groupEspTasks(ctx.targetTasks);
   const randomize = ctx.deps.gettyWebRandomBatches === true;
   const names = icons.map((tasks) => tasks[0]?.fileName ?? "");
-  const ranks = randomize ? stableRanks(names) : null;
   const batches = planIconBatches(icons.length, {
-    maxIcons: ctx.deps.ftpMaxIcons, randomize, rng: ctx.deps.gettyWebRandomFn,
-    nameOf: (index) => names[index],
+    maxIcons: ctx.deps.ftpMaxIcons, randomize, stable: randomize,
+    rng: ctx.deps.gettyWebRandomFn, nameOf: (index) => names[index],
   });
   const files: BatchFile[] = [];
+  let numbered = 0;
   batches.forEach((batch, position) => {
     const label = gettyWebBatchLabel({ index: position + 1, total: batches.length });
     for (const index of batch) {
+      numbered += 1;
       for (const task of icons[index]) {
-        files.push({ task, fileName: ranks === null ? task.fileName : stagedFileName(ranks[index], task.fileName), batch: label });
+        files.push({ task, fileName: randomize ? stagedFileName(numbered, task.fileName) : task.fileName, batch: label });
       }
     }
   });

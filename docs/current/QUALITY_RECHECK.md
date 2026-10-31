@@ -4434,3 +4434,17 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   (added `clearInterval` to the Node globals); `quality:changed` GATE PASSED;
   `verify:fast` ALL LANES PASSED; focused 6 files / 59 tests green; docs 4/4
   (new page `sor/bridge-helper.md` 3,980 B, router 4,971 B).
+- 2026-10-30 — Shutterstock/Adobe uploads now leave **in the numbered order** they
+  were given. `planIconBatches` gained `stable` (draw by `stableOrder`, a name
+  hash, so a run's batches and numbers repeat exactly — a fresh draw would upload
+  a second copy under another number) and no longer falls back to `Math.random`
+  for a stable draw; `filetransfers.batchFiles` numbers icons `0001, 0002, …`
+  across the whole run and emits them in that order, batch by batch. The Getty web
+  request does the same: a request's rank is its position (`index + 1`), not a
+  second, independent draw, so "the number I planned" and "the order it went up"
+  are one fact. New/updated tests: `stockupload_ftp_batches` (strictly ascending
+  ranks, name-based draw, same names on a rerun, Adobe) and
+  `stockupload_getty_web`/`getty_web_names` (rank = position, stable draw twice).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused suites green (55 + 36 + 11
+  tests); docs 4/4 (soR 8,926 B).

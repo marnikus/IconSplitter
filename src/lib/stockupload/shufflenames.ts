@@ -48,12 +48,19 @@ function ranksOf(count: number, order: readonly number[]): number[] {
 }
 
 /**
+ * The icons in the order their names havehed to — the shuffle a site that keeps
+ * files must have, because it has to be the **same** shuffle on every run.
+ */
+export function stableOrder(names: readonly string[]): number[] {
+  return names.map((_name, index) => index)
+    .sort((a, b) => (hashOf(names[a]) - hashOf(names[b])) || names[a].localeCompare(names[b]));
+}
+
+/**
  * Ranks that hold still between runs — what a site keeps as a file needs: the
  * number follows the name, two sizes of one picture are pushed apart, and the
  * order is random-looking without being random.
  */
 export function stableRanks(names: readonly string[], keyOf: (name: string) => string = similarityKeyOf): number[] {
-  const indexes = names.map((_name, index) => index);
-  const sorted = indexes.sort((a, b) => (hashOf(names[a]) - hashOf(names[b])) || names[a].localeCompare(names[b]));
-  return ranksOf(names.length, spreadSimilar(sorted, (index) => keyOf(names[index])));
+  return ranksOf(names.length, spreadSimilar(stableOrder(names), (index) => keyOf(names[index])));
 }
