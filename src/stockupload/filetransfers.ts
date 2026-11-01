@@ -2,15 +2,16 @@
 // sends one icon per request. FTPS/SFTP sites (Shutterstock, Adobe Stock) take one
 // file per request, but the run still walks them **100 icons per batch**: each
 // batch is drawn from what is left when Random batches is on, mixed inside itself,
-// and every icon travels under a shuffled number in front of its real name — the
-// row, the log and the history keep the real one.
+// and every icon is numbered **in the order it is sent** — 0001 travels first, then
+// 0002, and the next batch counts on — so the site receives exactly 0001-…, 0002-…,
+// 0003-… in that sequence. The row, the log and the history keep the real name.
 
 import { uploadBridgeFtps, type BridgeUploadResult } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import { gettyWebBatchLabel } from "../lib/stockupload/gettyweb";
 import { planIconBatches } from "../lib/stockupload/iconbatches";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
-import { stableRanks, stagedFileName } from "../lib/stockupload/shufflenames";
+import { stagedFileName } from "../lib/stockupload/shufflenames";
 import type { ExportedItem, StockFtpPreset } from "../lib/stockupload/types";
 import type { ItemTracker, NetworkCtx, RunCounters, UploadBatchDeps } from "./batchtypes";
 import { groupEspTasks, uploadEspGroup } from "./esptransfer";
@@ -108,24 +109,27 @@ interface BatchFile { task: PlannedTransfer; fileName: string; batch: string }
 
 /**
  * Every file the target sends, in the order its batches carry them. With Random
- * batches on the icons are drawn, mixed inside the batch and ranked; with it off
- * the list order and the real file names go out untouched.
+ * batches on the icons are drawn at random, mixed inside the batch, and numbered
+ * in that very order — 0001 goes up first, then 0002, and the next batch counts
+ * on from 0101 — so the wire order and the name order can never disagree. With
+ * the box off the list order and the real file names go out untouched.
  */
 function batchFiles(ctx: NetworkCtx): BatchFile[] {
   const icons = groupEspTasks(ctx.targetTasks);
   const randomize = ctx.deps.gettyWebRandomBatches === true;
   const names = icons.map((tasks) => tasks[0]?.fileName ?? "");
-  const ranks = randomize ? stableRanks(names) : null;
   const batches = planIconBatches(icons.length, {
     maxIcons: ctx.deps.ftpMaxIcons, randomize, rng: ctx.deps.gettyWebRandomFn,
     nameOf: (index) => names[index],
   });
   const files: BatchFile[] = [];
+  let rank = 0;
   batches.forEach((batch, position) => {
     const label = gettyWebBatchLabel({ index: position + 1, total: batches.length });
     for (const index of batch) {
+      rank += 1;
       for (const task of icons[index]) {
-        files.push({ task, fileName: ranks === null ? task.fileName : stagedFileName(ranks[index], task.fileName), batch: label });
+        files.push({ task, fileName: randomize ? stagedFileName(rank, task.fileName) : task.fileName, batch: label });
       }
     }
   });

@@ -4434,3 +4434,10 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   (added `clearInterval` to the Node globals); `quality:changed` GATE PASSED;
   `verify:fast` ALL LANES PASSED; focused 6 files / 59 tests green; docs 4/4
   (new page `sor/bridge-helper.md` 3,980 B, router 4,971 B).
+
+## 2026-11-01 — stock upload: wire order = numbered order (0001, 0002, 0003…)
+- Changed: src/stockupload/filetransfers.ts, src/lib/stockupload/shufflenames.ts, src/lib/stockupload/gettywebnames.ts, src/stockupload/StockUploadBulkBar.tsx, docs/current/sor/stock-upload.md, docs/current/selectors/stock-upload.md, tests/stockupload_ftp_batches.test.ts, tests/getty_web_names.test.ts
+- Focused: stockupload_ftp_batches 6/6, getty_web_names 8/8 green (new tests witnessed red first: sent "0003-sun_03.jpg" where "0001-…" belonged)
+- Full suite (npx vitest run): 3472 passed, 1 failed — tests/algo_efficiency.test.ts "<200ms" wall-clock budget; fails identically on the clean tree (slow sandbox CPU, pre-existing/environmental)
+- npx tsc --noEmit: clean; npm run lint: 0 errors (24 pre-existing warnings, none in changed files); npm run quality:changed: PASS (4 files)
+- npm run verify:fast: Build lane PASS; Tests+coverage lane OOM-killed by sandbox at ~737 s — suite re-run uninstrumented separately (above)

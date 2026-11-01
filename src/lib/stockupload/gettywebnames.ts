@@ -7,7 +7,7 @@
 import type { GettyWebIcon, GettyWebRejection, GettyWebResult } from "./gettywebclient";
 import { realNameOf, stagedFileName } from "./shufflenames";
 
-export { realNameOf, stagedFileName, stagedRanks, stableRanks } from "./shufflenames";
+export { realNameOf, stagedFileName, stagedRanks } from "./shufflenames";
 
 /** One icon as the page receives it: every file of the pair under the same rank. */
 export function stagedIcon(icon: GettyWebIcon, rank: number): GettyWebIcon {
