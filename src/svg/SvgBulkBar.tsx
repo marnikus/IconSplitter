@@ -51,6 +51,8 @@ export interface SvgBulkBarProps {
   onImageStop: () => void;
   onDecide: (decision: "approved" | "declined" | "needs-review") => void;
   onCancel: () => void;
+  /** Take SVGs already sitting in the selected folders into their pairs (2026-11-01). */
+  onRegisterExisting: () => void;
 }
 
 export default function SvgBulkBar(p: SvgBulkBarProps) {
@@ -107,6 +109,7 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
       <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
         disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
       <RegenerateButton p={p} />
+      <RegisterButton p={p} />
       <ImageRegenButtons p={p} />
       <button type="button" className="svg-btn warning" data-testid="svg-needs-review-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("needs-review")}>⚠ Needs review selected</button>
@@ -126,6 +129,22 @@ function RegenerateButton({ p }: { p: SvgBulkBarProps }) {
     <button type="button" className="svg-btn" data-testid="svg-regenerate-selected"
       disabled={p.regenerableCount === 0} onClick={p.onRegenerate} title={title}>
       ↻ Regenerate selected ({p.regenerableCount})</button>
+  );
+}
+
+/**
+ * SVGs that are already in the folder but not in the pair's history — an earlier
+ * build's output, another tool's file, a hand edit. One click reads every selected
+ * folder, records what it finds as versions and shows the newest one.
+ */
+function RegisterButton({ p }: { p: SvgBulkBarProps }) {
+  const title = p.checkedCount === 0
+    ? "Select the items whose folders should be checked"
+    : `Look in ${p.checkedCount} selected folder(s) for SVGs the app has not recorded yet; the newest becomes the shown version`;
+  return (
+    <button type="button" className="svg-btn" data-testid="svg-register-existing"
+      disabled={p.checkedCount === 0} onClick={p.onRegisterExisting} title={title}>
+      ⤓ Register existing SVGs ({p.checkedCount})</button>
   );
 }
 

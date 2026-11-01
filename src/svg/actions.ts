@@ -31,6 +31,7 @@ import { skipCurrentSvgRequest, stopSvgRuns } from "./runjobs";
 import type { CancelNote } from "./runcontext";
 import type { ConfirmedBatch } from "./types";
 import { useCodeActions } from "./codeactions";
+import { useRegisterActions } from "./registerexisting";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
 import { idsWithGeneratedSvg } from "./rowmodel";
@@ -68,6 +69,8 @@ export interface SvgActions extends SvgPromptActions {
   regenerateSelected: (ids: string[]) => void; cancelRun: (id?: string) => void; skipCurrentRequest: () => void; confirmGenerate: (batch: ConfirmedBatch) => void;
   dismissDialog: () => void; showCode: (id: string, version: number) => void; showHistory: (id: string) => void;
   dropQueued: (itemId: string) => void; preferVersion: (id: string, version: number) => Promise<string | null>;
+  /** Take the SVGs already in the folder into the pair, newest shown (2026-11-01). */
+  registerExisting: (ids: string[]) => void;
   copyCode: (id: string, version: number) => void; openLocation: (id: string) => void;
 }
 export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
@@ -75,7 +78,8 @@ export function useSvgActions(ctx: SvgCtx): SvgActions {
   useReviewApplier(ctx);
   return {
     ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx), ...useImgRegenActions(ctx),
-    ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx), ...useSvgPromptActions(ctx),
+    ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx),
+    ...useRegisterActions(ctx), ...useSvgPromptActions(ctx),
   };
 }
 function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {

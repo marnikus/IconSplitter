@@ -4508,3 +4508,33 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 - **Not changed:** the reload never fires mid-run, the transfer/upload paths and the retry budget
   (`READY_RETRY_MS` 30 s, `READY_RESAVES` 2, `READY_REPAIRS` 1) are untouched; no test was
   deleted, skipped or loosened.
+
+## 2026-11-01 — round 19: register the SVGs that are already in the folder
+
+- **Asked:** "Generate SVG tab — look at the folder with AI source images and check if some SVG
+  already exists. If one, register it in the app same as it was generated with the app. If
+  several, check versions and add versions by their names; the latest version make active as if
+  it was selected as the best actual version. Add this button control — works for all selected
+  item folders."
+- **Built:** `src/lib/svgimport.ts` (pure: which files belong to a stem, the version each becomes,
+  what is already recorded, the one toast line) and `src/svg/registerexisting.ts` (read each
+  folder, validate with the real `validateSvg` gate, `withVersion` + `withReview(pair.review)`,
+  `withPreferred(newest readable)`, one verified pair-file write, row rebuilt with `toRow`). The
+  action is wired as `registerExisting(ids)` and exposed as **⤓ Register existing SVGs (N)** in
+  the bulk bar (`svg-register-existing`). A busy pair is refused; an invalid/unreadable file is
+  counted and skipped; a second click adds nothing.
+- **Measured:** focused `tests/svg_register_existing.test.ts` (12) +
+  `tests/svg_register_existing_ui.test.tsx` (8) = **20**; related SVG suites (`svg_ui`,
+  `svg_version_chips`, `svg_pinned_bulkbar`, `svg_versions_ui`) 61 total green; full suite
+  **3,527 of 3,528** under `npm run test:fast`; `npx tsc --noEmit` clean; `npm run lint`
+  **0 errors / 24 warnings**; `npm run quality:changed` **GATE PASSED** (6 changed source files,
+  largest `src/svg/SvgPanel.tsx` 289 lines, `registerexisting.ts` 188); `npm run verify:fast`
+  **ALL LANES PASSED** (build 8.6 s, `dist/index.html` 1,973.78 kB); docs 4/4
+  (`sor/version-acceptance.md` 6,253 B incl. the new section, `selectors/svg-generation-list.md`
+  8,989 B).
+- **Environment note (not a product defect):** the `native` perf project's wall-clock tripwire
+  `algo_efficiency … synthetic 1000px <200ms` measures **221–232 ms** on this sandbox host for
+  the untouched `src/lib/detect.ts` (it measured under 200 ms on the previous host earlier in
+  the same session). No budget was widened and no test was skipped; the documented gate
+  (`verify:fast`, `PERF_BUDGETS=coverage`) passes, so the failure is recorded here as a host
+  speed change, not as a regression of this round.

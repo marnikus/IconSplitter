@@ -115,7 +115,8 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
           onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
           onRegenerate={() => g.regenerateSelected(g.checked)}
           onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}
-          onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
+          onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun}
+          onRegisterExisting={() => g.registerExisting(g.checked)} />
       </div>
       <SvgList g={g} actions={actions} />
       <SvgRuns refs={g.refs} onStop={g.cancelRun} />

@@ -11,20 +11,21 @@ file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
 
 | Test id | Element | Notes |
 |---|---|---|
-| `svg-bulkbar-pin` | sticky wrapper of the bulk bar | pins the whole bar to the top while rows scroll (`position: sticky` in `.app-main`, 2026-10-19) |
-| `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; toggles visible checks only, keeps hidden |
+| `svg-bulkbar-pin` | sticky wrapper of the bulk bar | pins the bar while rows scroll (`position: sticky` in `.app-main`) |
+| `svg-check-all` | header checkbox | checked / unchecked / **indeterminate**; toggles visible checks, keeps hidden |
 | `svg-selected-count` / `svg-scope` | text | "N selected", "across N approved sources" |
-| `svg-select-visible` / `svg-deselect` | buttons | add visible / clear ALL checks including hidden |
-| `svg-thumb` | `input[type=range]` | the ONE zoom value: in px, **48–800** step 4; it sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb` on `svg-panel`); `svg-thumb-value` is the live readout. Same range, same rule and the same shared layout as Selection V2's `v2-thumb` (I-55 — one implementation, `lib/zoom` + `ui/PairedThumbs`) |
-| `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`, `aria-label="Custom preview background"`), `svg-bg-value` (live label, follows the choice) |
-| `svg-stroke-control` → `svg-stroke` / `svg-stroke-value` / `svg-stroke-reset` | preview stroke width | text field (placeholder `default`, 0–50 px, `aria-invalid` on bad text), live label, Reset (disabled at default); preview only, screen px (`vector-effect: non-scaling-stroke`, same visible width for every viewBox) — row thumbnails adopt one shared sheet (2026-10-19) |
+| `svg-select-visible` / `svg-deselect` | buttons | add visible / clear ALL checks, hidden too |
+| `svg-thumb` | `input[type=range]` | the ONE zoom value: px, **48–800** step 4; sizes BOTH previews, the row's minimum height and the previews column (inline `--svg-thumb`); `svg-thumb-value` reads it live. Same range and shared layout as V2's `v2-thumb` (I-55 — `lib/zoom` + `ui/PairedThumbs`) |
+| `svg-bg` | swatch group | **preview background**, app-side only — presets `svg-bg-white` / `svg-bg-black` / `svg-bg-gray` / `svg-bg-green` / `svg-bg-red` (each `aria-pressed`), `svg-bg-custom` (`input[type=color]`), `svg-bg-value` (live label) |
+| `svg-stroke-control` → `svg-stroke` / `svg-stroke-value` / `svg-stroke-reset` | preview stroke width | text field (placeholder `default`, 0–50 px, `aria-invalid` on bad text), live label, Reset (disabled at default); preview only, screen px (`vector-effect: non-scaling-stroke`) — thumbnails adopt one shared sheet (2026-10-19) |
 | `svg-estimate` | text | token estimate for the selection |
-| `svg-generate-selected` | button | "✦ Generate selected" — unchanged: arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
-| `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared confirmation is titled "Confirm SVG regeneration" and previews/sends only those rows, excluding checked rows with no generated SVG. Bulk regeneration confirms and schedules independent work in parallel; conflicts wait (I-53) |
+| `svg-generate-selected` | button | "✦ Generate selected" — arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
+| `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared "Confirm SVG regeneration" previews/sends only those rows; bulk regeneration runs in parallel, conflicts wait (I-53) |
+| `svg-register-existing` | button | "⤓ Register existing SVGs (N)" — records SVGs already in the selected folders but not in their pair files (`<stem>.svg`, `<stem>_vN.svg`, a copy), newest shown; disabled at 0, an invalid file is skipped, a busy pair refused ([contract](../sor/version-acceptance.md#svgs-already-in-the-folder-are-registered-as-versions)) |
 | `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow warning, regenerated — new review); disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
-New lists start unchecked; selection gestures use global Undo ([RULE 25](../rules/BEHAVIOR.md#rule-25)). ↑/↓ move active; E/Q check/uncheck, Space toggles; A/D/W review the active valid SVG. Paid actions still require the exact-input confirmation. The image batch action and Stop control are [owned by AI-source image edits](svg-image-edits.md#image-regeneration-actions-and-row-feedback).
+New lists start unchecked; selection gestures use global Undo ([RULE 25](../rules/BEHAVIOR.md#rule-25)). ↑/↓ move active; E/Q check/uncheck, Space toggles; A/D/W review the active valid SVG. Paid actions need the exact-input confirmation. The image batch action and Stop are [owned by AI-source image edits](svg-image-edits.md#image-regeneration-actions-and-row-feedback).
 
 ## Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`)
 
