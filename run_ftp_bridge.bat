@@ -54,5 +54,8 @@ echo.
 rem The launcher keeps the helper alive: when a `git pull` changes the
 rem helper's own code it restarts itself here with the new build (no window
 rem to close), and it never restarts while an upload is moving.
-node tools\bridge\supervise.mjs %*
+rem --build: a restart is a FULL restart — the app bundle is rebuilt first, then
+rem the helper starts on the new code, with the same flags this window got
+rem (--getty-headed, --getty-profile ...).
+node tools\bridge\supervise.mjs --build %*
 pause

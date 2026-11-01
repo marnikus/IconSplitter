@@ -4466,3 +4466,19 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 - Verified: `tsc` clean (new `guards.d.mts`); lint 0 errors / 24 warnings;
   `quality:changed` GATE PASSED; `verify:fast` ALL LANES PASSED; focused 7 files /
   61 tests green; docs 4/4 (bridge-helper.md 5,698 B).
+- 2026-10-30 — A helper restart is now a **full** restart: `supervise.mjs --build`
+  runs `npm run build` before starting the new helper (exactly what
+  `run_ftp_bridge.bat` does on a fresh launch), so a pull that changes app code
+  leaves the page on a current bundle instead of the pre-pull one. All four
+  launchers pass `--build`; the first start is not rebuilt (the launcher just did
+  it), `--build-cmd` / `--build-cwd` / `--no-build` / `BRIDGE_REBUILD=1` change the
+  step, a failed build logs `rebuild failed (…) — serving the previous bundle` and
+  the helper still starts, and the restarted child keeps this window's flags
+  (`--getty-headed`, `--getty-profile …`). The helper prints that the launcher will
+  rebuild when it announces its own restart. New tests:
+  `bridge_restart_rebuild` (build once per restart and never on the first start,
+  flags carried over, failed build still starts, `--build-cmd` alone does not
+  enable it) plus a launcher assertion that every `.bat` passes `--build`.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; bridge suites 53 tests + 16 new/updated
+  green; docs 4/4 (bridge-helper.md 6,554 B).

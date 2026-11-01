@@ -266,6 +266,7 @@ function watchOwnCode() {
     }
     if (!shouldRestart(started, current, { busy: false })) return;
     console.log(restartNote({ commit: readCommit(REPO_ROOT) ?? commit, restarts: config.restarts + 1 }));
+    console.log("the launcher rebuilds the app bundle and starts a fresh helper with this window's flags");
     clearInterval(timer);
     // An idle Getty browser would be orphaned by the exit: hand it back first.
     const released = releaseIdleSessions();

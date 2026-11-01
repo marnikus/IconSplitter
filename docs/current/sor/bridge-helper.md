@@ -48,6 +48,14 @@ app then talked to a helper that predated it (`restart run_ftp_bridge.bat`).
 - Turn it off with `--no-update-watch` (`BRIDGE_NO_UPDATE_WATCH=1`). `GET /health`
   reports `update: { watching, commit, restarts }`, so a helper that already picked
   up a new build can be told from one that needs the window closed.
+- **A restart is a full restart.** The launchers pass `--build`, so the supervisor
+  runs `npm run build` *before* starting the new helper — the same work
+  `run_ftp_bridge.bat` does on a fresh launch (`--build-cmd` / `--no-build` /
+  `BRIDGE_REBUILD=1` change it; the first start is not rebuilt, the launcher just
+  did). The new helper gets this window's own flags (`--getty-headed`,
+  `--getty-profile …`). A failed build prints `rebuild failed (…) — serving the
+  previous bundle` and the helper starts anyway; the reload of the page picks up the
+  bundle that was built.
 - Dependency changes are not its business: after a pull that changes
   `package.json`, run `install_dependencies.bat` (`npm ci`) once.
 
@@ -82,7 +90,10 @@ own** files changed; an app-only pull needs a browser reload, not a new window.
 
 ## 5. Tests
 
-`tests/bridge_crash_guard.test.ts` — a stalled FTPS server answers a failure and the
+`tests/bridge_restart_rebuild.test.ts` — a restart builds before starting the new
+helper (and the first start does not), the restarted helper gets the window's flags,
+a failed build still starts the helper and says so, and `--build-cmd` alone does not
+turn the step on. `tests/bridge_crash_guard.test.ts` — a stalled FTPS server answers a failure and the
 helper stays up, `/ftps/close` during a stalled upload leaves the window alive past
 the reply timeout, the reply reader's waiters settle independently, the guards
 survive an unhandled rejection in a real process, and a crash loop stops with a

@@ -52,6 +52,8 @@ describe("the launchers keep the helper alive", () => {
       const text = readFileSync(path.resolve(bat), "utf8");
       expect(text).toContain("tools\\bridge\\supervise.mjs");
       expect(text).not.toMatch(/node tools\\bridge\\server\.mjs/);
+      // A restart must rebuild the app too, exactly like a fresh launch does.
+      expect(text).toContain("supervise.mjs --build");
     }
   });
 });
