@@ -39,6 +39,13 @@ function planAfterClose(code, signal, state) {
   return state.crashes < state.maxRestarts ? { again: true, reason: "crash" } : { again: false, reason: "gave up" };
 }
 
+/** Why the window is closing, in one line the user can act on. */
+function stoppingNote(plan, code) {
+  if (plan.reason !== "gave up") return null;
+  return `supervisor: the helper stopped (${code}) ${state.crashes} times — stopping after ${state.crashes} restart(s); `
+    + "fix the reason above, then start this window again";
+}
+
 /** A restart loop is only a loop when it is fast and frequent: that is a bad build. */
 function tooManyRestarts(window, max) {
   const now = Date.now();
@@ -66,6 +73,8 @@ function run() {
       console.error(`supervisor: ${state.restartWindow.length} restarts in under a minute — stopping so a broken build is visible`);
       process.exit(1);
     }
+    const note = stoppingNote(plan, code);
+    if (note !== null) console.error(note);
     if (plan.reason === "restart") state.restarts += 1;
     if (plan.reason === "crash") state.crashes += 1;
     if (!plan.again) { process.exit(code ?? 0); return; }

@@ -51,6 +51,28 @@ app then talked to a helper that predated it (`restart run_ftp_bridge.bat`).
 - Dependency changes are not its business: after a pull that changes
   `package.json`, run `install_dependencies.bat` (`npm ci`) once.
 
+## 3a. A stalled or cancelled transfer never ends the window
+
+A socket the user already cancelled can fail long after its request answered: a
+`STOR` reply timer that fires after `/ftps/close`, a data channel that stalls during
+the TLS handshake, a reply whose promise the caller walked away from. Node's default
+is to kill the process for an unhandled rejection — one 30 s FTP timeout used to end
+the whole window mid-run.
+
+- `tools/bridge/guards.mjs` installs `unhandledRejection` and `uncaughtException`
+  handlers in `server.mjs`: the reason is logged once (`helper: … was logged, not
+  fatal`) and the helper keeps serving. The request that owned the socket already
+  has its own failure, so nothing is hidden from the app.
+- The two sources are fixed as well: `observed()` marks the early `STOR` reply as
+  handled (it starts before the data channel's TLS handshake finishes), and the
+  reply reader's timeout only ever settles **its own** waiter — an older timer can no
+  longer steal a newer read or leave it hanging.
+- Reasons are scrubbed of credentials only when the secret is 4+ characters; a
+  one-letter password used to mask every "p" in the sentence instead of protecting
+  anything.
+- If the helper does crash, the supervisor restarts it and says so; when it stops
+  trying it prints `the helper stopped (1) N times — stopping after N restart(s)`.
+
 ## 4. Fresh app bundle, same helper
 
 `dist/index.html` is rebuilt automatically when `src/` is newer or carries another
@@ -60,7 +82,11 @@ own** files changed; an app-only pull needs a browser reload, not a new window.
 
 ## 5. Tests
 
-`tests/bridge_update_watch.test.ts` — the stamp follows bytes, `readCommit` reads
+`tests/bridge_crash_guard.test.ts` — a stalled FTPS server answers a failure and the
+helper stays up, `/ftps/close` during a stalled upload leaves the window alive past
+the reply timeout, the reply reader's waiters settle independently, the guards
+survive an unhandled rejection in a real process, and a crash loop stops with a
+readable line. `tests/bridge_update_watch.test.ts` — the stamp follows bytes, `readCommit` reads
 HEAD and detached HEAD and is silent outside git, a busy helper is never restarted,
 every launcher starts the supervisor (never the bare server), the supervisor
 re-runs the helper after `75` and stops on a clean exit, and a live helper exits

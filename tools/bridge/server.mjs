@@ -19,6 +19,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
+import { installCrashGuards } from "./guards.mjs";
 import { RESTART_CODE, helperCodeStamp, readCommit, restartNote, shouldRestart } from "./updatewatch.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
 import { connectBrowser, findBrowser, resetProfile, resolveProfileDir } from "./gettyweb/browser.mjs";
@@ -227,6 +228,15 @@ async function route(req, res, port) {
   if (req.method === "GET") return serveDist(url, res);
   return json(res, 404, { reason: "not found" });
 }
+
+/**
+ * A socket that the user already cancelled can fail long after its request
+ * answered — a `STOR` reply timer that fires after `/ftps/close`, a data channel
+ * that stalls mid-handshake. Node's default is to kill the process for that, which
+ * is how one 30 s timeout ended a whole run. The helper logs the line and keeps
+ * serving instead; the request that owned the socket already has its own failure.
+ */
+installCrashGuards(process, { log: (line) => console.error(`helper: ${line}`) });
 
 /** Requests being served right now: a restart waits for them. */
 let inFlight = 0;

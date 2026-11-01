@@ -57,7 +57,7 @@ function scrub(text, cfg) {
   let out = typeof text === "string" && text.trim() !== "" ? text.trim() : "Getty web upload failed";
   for (const raw of [cfg?.password, cfg?.username]) {
     const secret = typeof raw === "string" ? raw.trim() : "";
-    if (secret !== "") out = out.split(secret).join("••••••••");
+    if (secret.length >= 4) out = out.split(secret).join("••••••••");
   }
   return out.slice(0, 500);
 }

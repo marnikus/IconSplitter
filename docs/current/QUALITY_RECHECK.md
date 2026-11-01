@@ -4448,3 +4448,21 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 - Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
   PASSED; `verify:fast` ALL LANES PASSED; focused suites green (55 + 36 + 11
   tests); docs 4/4 (soR 8,926 B).
+- 2026-10-30 — One timed-out transfer no longer ends the helper window. Reported:
+  `FtpsError: FTPS server timed out after 30s` at `ftps/reply.mjs` killed Node
+  mid-run (right after `POST /ftps/close → 200`). Two sources fixed —
+  `nextReply`'s timer only settles **its own** waiter (the old `if (waiter)
+  waiter = null` cancelled a newer read and rejected an abandoned promise), and
+  the early `STOR` reply is wrapped in `observed()` because it starts before the
+  data channel's TLS handshake finishes. Belt: `tools/bridge/guards.mjs` installs
+  `unhandledRejection`/`uncaughtException` handlers in `server.mjs` that log one
+  scrubbed line and keep serving. `scrubSecrets` (ftps + gettyweb routes) now hides
+  only secrets of 4+ characters — a one-letter password masked every "p" in the
+  message. The supervisor prints `the helper stopped (N) … stopping after N
+  restart(s)` when it gives up. New tests: `bridge_crash_guard` (stalled FTPS
+  answers a failure and the helper stays up; `/ftps/close` during a stalled upload
+  leaves the window alive past the reply timeout; independent waiters; guards keep
+  a real process alive after an abandoned rejection; crash-loop message).
+- Verified: `tsc` clean (new `guards.d.mts`); lint 0 errors / 24 warnings;
+  `quality:changed` GATE PASSED; `verify:fast` ALL LANES PASSED; focused 7 files /
+  61 tests green; docs 4/4 (bridge-helper.md 5,698 B).
