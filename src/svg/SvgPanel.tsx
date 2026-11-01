@@ -22,6 +22,7 @@ import SvgControls from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
 import { useSvgHotkeys } from "./SvgHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
+import { useRunning } from "../ui/rebuildwatch";
 import { idsWithGeneratedSvg } from "./rowmodel";
 import { countsOf, decidableCount } from "./panelcounts";
 import SvgList from "./SvgList";
@@ -39,6 +40,8 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
   const g = useSvgGen();
   const rootRef = g.refs.root as { current: DirHandleLike | null };
   const dialogOpen = g.dialog !== null || g.imgReview !== null;
+  // A reload must not land inside a generation run.
+  useRunning("svg", g.running);
   useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active && !dialogOpen);
   useSvgHotkeys({
     visible: g.visible, activeId: g.activeId, dialogOpen,

@@ -56,7 +56,8 @@ A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
    `sftp.contributor.adobestock.com:22` SFTP) after explicit confirmation via
    the local loopback helper (`tools/bridge/server.mjs`; see
    [the helper](bridge-helper.md), which restarts itself when a pull changes its
-   code), with local-only non-expanded credentials
+   code, rebuilds the bundle and reloads the open page with a short confirmation),
+   with local-only non-expanded credentials
    ([I-81](invariants/upload.md#i-81)).
 
 Stack: React 19 + Vite 7 + TypeScript + Tailwind 4, `jszip` for archives.

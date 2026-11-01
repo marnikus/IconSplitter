@@ -4482,3 +4482,29 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
 - Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
   PASSED; `verify:fast` ALL LANES PASSED; bridge suites 53 tests + 16 new/updated
   green; docs 4/4 (bridge-helper.md 6,554 B).
+
+## 2026-11-01 — round 18: the page reloads itself after a rebuild
+
+- **Asked:** "automatically restart browser after update — add small msg confirmation notification
+  for user as new rebuild just rebuild and run on top web page."
+- **Built:** the helper reports `update.served = { stamp, builtAt }` on `GET /health`
+  (`servedBundle` in `tools/bridge/distfresh.mjs`, one `stat` per poll); `src/lib/updatewatch.ts`
+  compares that stamp with the page's own `<meta name="iconsplitter-src-hash">` and decides
+  reload / wait / nothing; `src/lib/runbusy.ts` collects the panels' `running` flags so an
+  upload, split run or generation holds the reload; `src/ui/rebuildwatch.tsx` polls every 15 s
+  and shows one short line at the top of the page (`New build found — reloading this page now`,
+  then `New build is running — rebuilt from <commit> at HH:MM` for 8 s through `sessionStorage`).
+  One automatic reload per (own → served) pair, so a page that cannot pick the bundle up says
+  `press reload` instead of looping. `BatchPanel`'s five row callbacks moved into `useRowActions`
+  to stay inside the function-size rule.
+- **Measured:** focused suites `tests/update_reload.test.ts` (13) + `tests/rebuild_watch_ui.test.tsx`
+  (8) = **21 passing**, full suite **3,508 tests / 329 files passing**; `npx tsc --noEmit` clean;
+  `npm run lint` **0 errors / 24 warnings** (unchanged); `npm run quality:changed` **GATE PASSED**
+  (8 changed files, largest `src/ui/rebuildwatch.tsx` 219 lines); `npm run verify:fast`
+  **ALL LANES PASSED** (build 6.7 s, `dist/index.html` 1,968.70 kB). Live helper proof: build
+  stamp `3b8c963f…` in `dist/index.html` == `/health` → `update.served.stamp`; rewriting the
+  served file moves the stamp and a live helper follows it. Docs: `sor/bridge-helper.md`
+  8,565 B (≤9,000), `sor/OVERVIEW.md` 4,497 B.
+- **Not changed:** the reload never fires mid-run, the transfer/upload paths and the retry budget
+  (`READY_RETRY_MS` 30 s, `READY_RESAVES` 2, `READY_REPAIRS` 1) are untouched; no test was
+  deleted, skipped or loosened.

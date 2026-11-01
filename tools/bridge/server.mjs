@@ -18,7 +18,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
+import { isDistStale, rebuildDistAsync, servedBundle } from "./distfresh.mjs";
 import { installCrashGuards } from "./guards.mjs";
 import { RESTART_CODE, helperCodeStamp, readCommit, restartNote, shouldRestart } from "./updatewatch.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
@@ -146,7 +146,12 @@ function health(res, port) {
     gettyWeb: gettyWebHealth(), port,
     // The app can tell a helper that just picked up a new build from one that
     // needs the window closed by hand.
-    update: { watching: config.updateWatch, commit: readCommit(REPO_ROOT), restarts: config.restarts },
+    // `served` is the bundle at `/` right now: the open tab compares its own stamp
+    // with this one, so a rebuild it did not ask for ends in a reload, not a stale page.
+    update: {
+      watching: config.updateWatch, commit: readCommit(REPO_ROOT), restarts: config.restarts,
+      served: servedBundle(path.join(config.dist, "index.html")),
+    },
   });
 }
 

@@ -61,6 +61,37 @@ export function isDistStale(distHtmlPath, watchPaths) {
   return !html.includes(`name="iconsplitter-src-hash" content="${expected}"`);
 }
 
+const STAMP_RE = /name="iconsplitter-src-hash"\s+content="([^"]+)"/;
+let cachedServed = { key: null, value: null };
+
+/**
+ * The stamp written into the page the helper serves, plus the moment that file
+ * was written — what the open tab compares itself against to know the bundle
+ * under it changed. `null` for a dist the helper cannot read.
+ * Cached by mtime+size so a page polling `/health` costs one `stat`.
+ */
+export function servedBundle(distHtmlPath) {
+  let stat;
+  try {
+    stat = statSync(distHtmlPath);
+  } catch {
+    return null;
+  }
+  if (!stat.isFile() || stat.size === 0) return null;
+  const key = `${distHtmlPath}\0${stat.mtimeMs}\0${stat.size}`;
+  if (cachedServed.key === key) return cachedServed.value;
+  let stamp = null;
+  try {
+    const m = STAMP_RE.exec(readFileSync(distHtmlPath, "utf8"));
+    if (m !== null) stamp = m[1];
+  } catch {
+    return null;
+  }
+  const value = { stamp, builtAt: new Date(stat.mtimeMs).toISOString() };
+  cachedServed = { key, value };
+  return value;
+}
+
 let inFlightBuild = null;
 
 export function rebuildDistAsync(repoRoot) {

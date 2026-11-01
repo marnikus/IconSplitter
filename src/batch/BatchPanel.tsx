@@ -14,6 +14,7 @@ import BatchProgressHeader from "./BatchProgressHeader";
 import { useBatchPreview, isStaleEntry, expectedKeyFor, type PreviewEntry } from "./useBatchPreview";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
+import { useRunning } from "../ui/rebuildwatch";
 
 type View = ReturnType<typeof useBatchView>;
 type Preview = ReturnType<typeof useBatchPreview>;
@@ -34,6 +35,18 @@ function useReviewed(v: View) {
   return { onReviewed, onReviewedBatch };
 }
 function useCheckedRows(v: View) { return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]); }
+/** The callbacks the list and the pinned bar need, kept out of the panel body. */
+function useRowActions(v: View, preview: Preview) {
+  const checkedRows = useCheckedRows(v);
+  return {
+    onPreview: useOnPreview(checkedRows, preview),
+    rowStale: useRowStale(v, preview),
+    onRegenerate: useOnRegenerate(checkedRows, preview),
+    onRowMergeApply: useRowMergeApply(v, preview),
+    onRowMergeReset: useRowMergeReset(v, preview),
+  };
+}
+
 function useOnPreview(checkedRows: View["core"]["s"]["rows"], preview: Preview) {
   return useCallback(() => { void preview.previewSelected(checkedRows, false); }, [checkedRows, preview]);
 }
@@ -77,14 +90,11 @@ export default function BatchPanel({ active = true }: { active?: boolean }) {
   const thumbFor = useThumbCache(v.core.thumbUrl);
   const { onReviewed, onReviewedBatch } = useReviewed(v);
   const preview = usePreviewSetup(v, onReviewed, onReviewedBatch);
+  // A reload must not land inside a split run.
+  useRunning("batch", v.core.s.running || preview.running);
   useBatchHotkeys(v as never, active);
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, active);
-  const checkedRows = useCheckedRows(v);
-  const onPreview = useOnPreview(checkedRows, preview);
-  const rowStale = useRowStale(v, preview);
-  const onRegenerate = useOnRegenerate(checkedRows, preview);
-  const onRowMergeApply = useRowMergeApply(v, preview);
-  const onRowMergeReset = useRowMergeReset(v, preview);
+  const { onPreview, rowStale, onRegenerate, onRowMergeApply, onRowMergeReset } = useRowActions(v, preview);
   return (
     <div className="batch-shell w-full space-y-4">
       <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => {}} mode="split" />

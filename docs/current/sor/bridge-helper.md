@@ -46,8 +46,10 @@ app then talked to a helper that predated it (`restart run_ftp_bridge.bat`).
 - The stamp is content, not time: saving a file with the same bytes changes nothing.
   Outside a git checkout the note says `local changes` instead of a commit.
 - Turn it off with `--no-update-watch` (`BRIDGE_NO_UPDATE_WATCH=1`). `GET /health`
-  reports `update: { watching, commit, restarts }`, so a helper that already picked
-  up a new build can be told from one that needs the window closed.
+  reports `update: { watching, commit, restarts, served: { stamp, builtAt } }`, so a
+  helper that already picked up a new build can be told from one that needs the
+  window closed — and an open page can tell whether the bundle under it is still
+  the one it loaded (§4).
 - **A restart is a full restart.** The launchers pass `--build`, so the supervisor
   runs `npm run build` *before* starting the new helper — the same work
   `run_ftp_bridge.bat` does on a fresh launch (`--build-cmd` / `--no-build` /
@@ -81,12 +83,32 @@ the whole window mid-run.
 - If the helper does crash, the supervisor restarts it and says so; when it stops
   trying it prints `the helper stopped (1) N times — stopping after N restart(s)`.
 
-## 4. Fresh app bundle, same helper
+## 4. Fresh app bundle, same helper — the page reloads itself
 
 `dist/index.html` is rebuilt automatically when `src/` is newer or carries another
-`iconsplitter-src-hash` (`tools/bridge/distfresh.mjs`), so a pull shows the new UI on
-the next page load without restarting anything. The helper only restarts when **its
-own** files changed; an app-only pull needs a browser reload, not a new window.
+`iconsplitter-src-hash` (`tools/bridge/distfresh.mjs`), and a supervised restart
+rebuilds it too (§3). The open tab used to keep the old bundle until someone pressed
+F5; it now swaps by itself and says so in one short line.
+
+- The build writes its `src/` fingerprint into the page as
+  `<meta name="iconsplitter-src-hash">`; `GET /health` reports the stamp of the file
+  the helper is serving. Every 15 s the page compares the two
+  (`src/lib/updatewatch.ts`, `src/lib/runbusy.ts`, `src/ui/rebuildwatch.tsx`).
+- Equal stamps: nothing happens, no request beyond the poll. Different: a bar at the
+  top of the page says `New build found — reloading this page now`, and the page
+  reloads after ~0.9 s so the line can be read. The page that
+  comes back says `New build is running — rebuilt from <commit> at HH:MM` for 8 s;
+  the note travels through `sessionStorage`, so it survives the swap.
+- **Never mid-run.** Each panel reports its own `running` / `uploading` flag; while an
+  upload, a split run or a generation is in flight the bar says `reloading when this
+  run finishes` and offers `Reload now`. The reload goes as soon as the last run ends,
+  so no transfer is cut and no queue is lost. `✕` on the bar drops it entirely.
+- One automatic reload per (own → served) pair. A page that comes back on the old
+  bundle anyway (a copy of `dist/index.html` opened from disk, not served by this
+  helper) sees `this tab keeps the old build — press reload` instead of reloading
+  forever.
+- A page with no stamp is not watched (nothing to compare), and a dev-server page
+  just gets its own app back from `/health`, so `npm run dev` is unaffected.
 
 ## 5. Tests
 
@@ -102,5 +124,11 @@ HEAD and detached HEAD and is silent outside git, a busy helper is never restart
 every launcher starts the supervisor (never the bare server), the supervisor
 re-runs the helper after `75` and stops on a clean exit, and a live helper exits
 `75` when the watched code changes while staying up with `--no-update-watch`.
+`tests/update_reload.test.ts` — the stamp is read from the page and followed
+through a rebuild by a live helper, a fresh bundle reloads a page while an in-flight
+run holds it, one reload per pair, and the confirmation survives the swap.
+`tests/rebuild_watch_ui.test.tsx` — the real hook and toast: reload after a new
+stamp, nothing when the stamps match, a held reload while an upload runs, `Reload
+now`, dismiss, and a failed poll that asks again.
 `tests/bridge_ftps.test.ts`, `tests/bridge_sftp.test.ts`, `tests/bridge_getty_web.test.ts`
 own the routes themselves.

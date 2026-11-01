@@ -65,7 +65,7 @@ async function rebuildApp(own) {
     });
   });
   const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-  if (result.ok) console.log(`supervisor: app bundle rebuilt in ${seconds}s — reload the page to pick it up`);
+  if (result.ok) console.log(`supervisor: app bundle rebuilt in ${seconds}s — the open page reloads itself onto it`);
   else console.error(`supervisor: rebuild failed (${result.reason}) — serving the previous bundle`);
   return result;
 }

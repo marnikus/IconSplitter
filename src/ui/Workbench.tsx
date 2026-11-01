@@ -16,6 +16,7 @@ import { useAppSlice } from "../state/useAppState";
 import { usePrefsAutosave } from "../state/usePrefsAutosave";
 import { useSessionAutosave } from "../state/useSessionAutosave";
 import HistoryBar from "./HistoryBar";
+import RebuildToast, { useRebuildWatch } from "./rebuildwatch";
 import { armCompletionSound } from "./completionSound";
 import ScrollTopButton from "./ScrollTopButton";
 
@@ -39,6 +40,7 @@ export default function Workbench() {
 function Shell() {
   const tab = useAppSlice("tab");
   const mainRef = useRef<HTMLElement | null>(null);
+  const rebuild = useRebuildWatch();
   useSessionAutosave();
   usePrefsAutosave();
   return (
@@ -54,6 +56,8 @@ function Shell() {
         <Panels tab={tab} />
       </main>
       <LogDock />
+      {/* The rebuilt page says so for a few seconds, then the line goes away. */}
+      <RebuildToast notice={rebuild.notice} onDismiss={rebuild.dismiss} onAction={rebuild.reloadNow} />
       {/* Fixed float — kept after the layout rows so main and the dock stay adjacent (I-27). */}
       <ScrollTopButton target={mainRef} />
     </div>

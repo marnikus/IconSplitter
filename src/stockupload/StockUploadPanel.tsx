@@ -8,6 +8,7 @@ import StockUploadBulkBar from "./StockUploadBulkBar";
 import StockUploadControls from "./StockUploadControls";
 import StockUploadDialogs from "./StockUploadDialogs";
 import StockUploadList from "./StockUploadList";
+import { useRunning } from "../ui/rebuildwatch";
 import { useStockUpload, type StockUploadApi } from "./useStockUpload";
 
 function useArrowKeys(g: StockUploadApi, enabled: boolean): void {
@@ -43,6 +44,8 @@ export default function StockUploadPanel({ active = true }: { active?: boolean }
   }, keysEnabled);
   useArrowKeys(g, keysEnabled);
 
+  // The upload is the run a reload must never interrupt: bytes are in flight.
+  useRunning("stock-upload", g.model.uploading);
   if (!g.supported) {
     return (
       <div className="svg-empty-root" data-testid="stock-upload-unsupported">
