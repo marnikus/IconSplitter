@@ -6,6 +6,9 @@
 // hook polls `/health`, compares the stamp the build wrote into the page with the
 // stamp the helper reports for the file it serves, and reloads — never while an
 // upload or a run is in flight, and always with a one-line confirmation.
+//
+// 2026-11-01: whitespace-only touch, on purpose — it moves the bundle stamp too, so
+// the reload that the touch above triggers is exercised against a genuinely new build.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DEFAULT_BRIDGE_URL } from "../lib/upload/epsconv/bridgeconfig";

@@ -13,6 +13,10 @@
 //              [--getty-check]  (launch, verify the DevTools socket, exit)
 //              [--getty-reset]  (end a stuck Getty browser, clear its profile)
 //   env: INKSCAPE_PATH, BRIDGE_TIMEOUT_MS (60000), BRIDGE_MAX_BYTES (20 MB)
+//
+// 2026-11-01: whitespace-only touch, on purpose — it moves the helper code stamp so
+// one real cycle runs end to end: exit 75 -> supervisor rebuilds the app -> the open
+// page sees the new `served` stamp on /health -> it reloads itself and says so.
 
 import { createServer, request as httpRequest } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
