@@ -1,4 +1,4 @@
-// RegisterProgress.tsx — the bar the two register passes report through
+// SvgRegisterProgress.tsx — the bar the two register passes report through
 // (2026-11-02). One bar per tab, in the same stack and with the same language as
 // the generation and upload bars: percent, done/total, the pair being read, and a
 // green finished state that also plays the completion cue — registering 200

@@ -4551,6 +4551,27 @@ Measured on this checkout after the round-24 edits (`npx tsc --noEmit`, `npm run
 `npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
 
 - 3,574 tests pass, 0 fail; coverage lane PASS (113 s); build PASS (1,984.69 kB, gzip 612.44 kB, 7.4 s).
-- Lint 0 errors / 24 warnings (unchanged count; the new `RegisterProgress` complexity warning was split away).
+- Lint 0 errors / 24 warnings (unchanged count; the new `SvgRegisterProgress` complexity warning was split away).
 - Quality gate (changed) PASS: `performConfirmUpload` is back to 27 lines after `startProgress`/`depsFor`/`abortStart` were extracted (RULE 19 order: nesting → CC → cognitive → size).
 - New: `notifyBarCompletion` makes the shared bar the cue owner of last resort — a feature that already cued the id keeps it, so no finished bar is silent and none plays twice; the deferred replay now surfaces an earlier refused cue at the next gesture, which the three action-timing tests absorb with `settleCompletionAudio()` instead of loosening an assertion.
+
+## 2026-11-02 — round 24b: the register bar builds on Windows
+
+The round-24 register bar shipped as `src/svg/RegisterProgress.tsx` beside the
+model `src/svg/registerprogress.ts`. On Windows those two names fold into one
+file, so `import RegisterProgress from "./RegisterProgress"` bound to the model
+and rollup failed with `"default" is not exported` — green on Linux, red on the
+contributor's machine. The UI is now `src/svg/SvgRegisterProgress.tsx`, matching
+`SvgImageProgress.tsx` beside `imgprogress.ts`.
+
+Measured after the rename (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,577 tests pass, 0 fail (2 new guards in `fs_case_collisions.test.ts`);
+  coverage lane PASS (112 s); build PASS (1,984.73 kB, gzip 612.43 kB, 6.6 s).
+- Lint 0 errors / 24 warnings; quality gate (changed) PASS.
+- New guards: no two paths in the tree differ only in case, every relative
+  import resolves with exact case, and none resolves only by folding. Verified by
+  recreating the old pair — both report the failing name.
+- Docs: `rules/QUALITY_GATES.md` 16.6a (naming rule), process-progress,
+  version-acceptance and the SVG-run selectors now name the new file.

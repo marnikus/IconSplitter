@@ -7,7 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { publishProcess } from "../src/lib/processslot";
 import { armCompletionSound, setCompletionSound } from "../src/ui/completionSound";
-import RegisterProgress from "../src/svg/RegisterProgress";
+import SvgRegisterProgress from "../src/svg/SvgRegisterProgress";
 import { registerSlot, type RegisterProgress as Snapshot } from "../src/svg/registerprogress";
 import type { SvgRefs } from "../src/svg/types";
 import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
@@ -24,7 +24,7 @@ const RUNNING: Snapshot = {
 };
 
 function show(refsObj: SvgRefs): Promise<void> {
-  return act(async () => { ui.render(<RegisterProgress refs={refsObj} />); });
+  return act(async () => { ui.render(<SvgRegisterProgress refs={refsObj} />); });
 }
 
 function publish(refsObj: SvgRefs, value: Snapshot | null): Promise<void> {

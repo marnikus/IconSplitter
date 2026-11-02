@@ -7,7 +7,7 @@
 
 `src/ui/ProcessProgressBar.tsx` is the ONE header/track/stats layout used by
 `BatchProgressHeader`, `SvgProgressHeader`, `UploadProgressHeaders`,
-`StockUploadDialogs` and `RegisterProgress`. Reuse it instead of copying a
+`StockUploadDialogs` and `SvgRegisterProgress`. Reuse it instead of copying a
 header. Callers provide a prefix, theme, title/detail, counts/percentage and
 slots for a thumbnail icon and actions. It never starts requests, persists
 state or owns cancellation. One rule stacks it on narrow screens; the track is
@@ -140,7 +140,7 @@ cue goes to a deferred set and replays on the next `armCompletionSound()`.
 Register passes publish `{id, kind, done, total, current, phase, registered,
 skipped}` through `src/svg/registerprogress.ts` (`beginRegister` →
 `{reading, settled, finish}`) and render the same bar in
-`src/svg/RegisterProgress.tsx`: percent, done/total, the pair being read, a
+`src/svg/SvgRegisterProgress.tsx`: percent, done/total, the pair being read, a
 green finished state, 6 s auto-hide and a ✕. Getty web upload stamps a
 `runId` on every patch and flags a user-stopped run so it stays silent.
 

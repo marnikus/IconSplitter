@@ -2,7 +2,7 @@
 // in the folder" passes (SVGs 2026-11-01, AI sources 2026-11-02). Both do the same
 // work — read one folder per pair, then the next — so both drive ONE model: a
 // session publishes the folder being read, how many folders settled, and how many
-// records each one left behind. The bar in `RegisterProgress.tsx` renders it, and
+// records each one left behind. The bar in `SvgRegisterProgress.tsx` renders it, and
 // because the bar owns the completion cue, a finished pass is always audible.
 //
 // Reuse, not a second counter: the done/total bookkeeping is lib/processprogress'

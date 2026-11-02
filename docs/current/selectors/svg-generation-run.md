@@ -60,7 +60,7 @@ Pinned above tab header, portalled to `#svg-progress-mount` in Workbench, visibl
 
 Cancel flow: `svg-progress-cancel` → `svg-cancel-dialog` with current thumbnail, counts, note "Unsent requests will be removed..." → `svg-cancel-confirm` calls `cancelRun` (drops waiting SVG jobs then aborts active SVG jobs only; keeps saved; image process is independent), `svg-cancel-keep` closes dialog (Esc also).
 
-### Register progress — `src/svg/RegisterProgress.tsx` (2026-11-02)
+### Register progress — `src/svg/SvgRegisterProgress.tsx` (2026-11-02)
 
 Both register passes report through the shared bar, portalled to
 `#svg-progress-mount` beside the run header. Prefix `register-svg` (existing
