@@ -53,6 +53,8 @@ export interface SvgBulkBarProps {
   onCancel: () => void;
   /** Take SVGs already sitting in the selected folders into their pairs (2026-11-01). */
   onRegisterExisting: () => void;
+  /** Take AI source images already sitting in the selected folders into their pairs (2026-11-02). */
+  onRegisterImages: () => void;
 }
 
 export default function SvgBulkBar(p: SvgBulkBarProps) {
@@ -110,6 +112,7 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
         disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
       <RegenerateButton p={p} />
       <RegisterButton p={p} />
+      <RegisterImagesButton p={p} />
       <ImageRegenButtons p={p} />
       <button type="button" className="svg-btn warning" data-testid="svg-needs-review-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("needs-review")}>⚠ Needs review selected</button>
@@ -145,6 +148,22 @@ function RegisterButton({ p }: { p: SvgBulkBarProps }) {
     <button type="button" className="svg-btn" data-testid="svg-register-existing"
       disabled={p.checkedCount === 0} onClick={p.onRegisterExisting} title={title}>
       ⤓ Register existing SVGs ({p.checkedCount})</button>
+  );
+}
+
+/**
+ * AI source images that are already in the folder but not in the pair's image
+ * history — an older build's output, the original before a split, a copy. One
+ * click reads every selected folder and makes the newest NUMBERED file main.
+ */
+function RegisterImagesButton({ p }: { p: SvgBulkBarProps }) {
+  const title = p.checkedCount === 0
+    ? "Select the items whose folders should be checked"
+    : `Look in ${p.checkedCount} selected folder(s) for AI source images the app has not recorded yet; the newest numbered one becomes the main image`;
+  return (
+    <button type="button" className="svg-btn" data-testid="svg-register-images"
+      disabled={p.checkedCount === 0} onClick={p.onRegisterImages} title={title}>
+      ⤓ Register AI sources ({p.checkedCount})</button>
   );
 }
 

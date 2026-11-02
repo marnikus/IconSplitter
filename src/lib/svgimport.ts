@@ -12,29 +12,21 @@
 //
 // The name a split pair had BEFORE the split counts too: a file called
 // `download-icon-01_AI.svg` beside `download-icon-01_AI_01.png` was made for this
-// artwork, so it is registered rather than ignored. When two pairs in one folder
-// could claim the same file, the LONGEST matching name wins; a tie belongs to
-// nobody (it is reported, never guessed).
-//
-// Files the pair file already records are never added twice. Pure: no disk, no
-// React — the caller reads the files and validates their content.
+// artwork, so it is registered rather than ignored (see lib/foldernames, which the
+// AI-source pass shares). Files the pair file already records are never added
+// twice. Pure: no disk, no React — the caller reads and validates the files.
 
 import { versionOfFileName } from "./svgfile";
 import { compareNames } from "./scan";
+import { assignNumbers, matchLength, ownerOf, prefixesOf as prefixes, type Naming } from "./foldernames";
 import type { SvgVersion } from "./svgmodel";
+
+export { prefixesOf, type Naming } from "./foldernames";
 
 /** One SVG file found in the pair's folder, with the version it becomes. */
 export interface ExistingSvg {
   name: string;
   version: number;
-}
-
-/** How a pair is named on disk: its AI file's stem, plus the name it had first. */
-export interface Naming {
-  /** `download-icon-01_AI_01` — the AI image's file name without its extension. */
-  stem: string;
-  /** `download-icon-01` — the pair's base, before the `_AI` and the split suffix. */
-  base: string;
 }
 
 export interface ImportPlan {
@@ -49,36 +41,11 @@ export interface ImportPlan {
 }
 
 const SVG_SUFFIX = ".svg";
-/** Separators a foreign tool puts between the name and its own suffix. */
-const SEPARATORS = ["_", " ", "-", "(", "."];
-
-/** Every name this pair answers to, longest first: the stem, then its earlier names. */
-export function prefixesOf(n: Naming): string[] {
-  const all = [n.stem, `${n.base}_AI`, n.base].map((p) => p.toLowerCase()).filter((p) => p !== "");
-  return [...new Set(all)].sort((a, b) => b.length - a.length);
-}
-
-/**
- * How well this file name matches one of the prefixes: the length of the longest
- * prefix it carries (0 = not this pair). Case-insensitive, because the folder and
- * the AI image can differ in case on a case-insensitive drive.
- */
-export function matchLength(name: string, prefixes: readonly string[]): number {
-  if (!name.toLowerCase().endsWith(SVG_SUFFIX)) return 0;
-  const base = name.slice(0, -SVG_SUFFIX.length).toLowerCase();
-  let best = 0;
-  for (const prefix of prefixes) {
-    if (base === prefix || SEPARATORS.some((sep) => base.startsWith(`${prefix}${sep}`))) {
-      best = Math.max(best, prefix.length);
-    }
-  }
-  return best;
-}
 
 /** Is this file an SVG of THIS pair — its stem or one of its earlier names? */
 export function relatedTo(stem: string, name: string, aliases: readonly string[] = []): boolean {
   if (stem === "") return false;
-  return matchLength(name, prefixesOf({ stem, base: aliases[0] ?? "" })) > 0;
+  return matchLength(name, prefixes({ stem, base: aliases[0] ?? "" })) > 0;
 }
 
 /** The name a version record points at (root-relative paths end in it). */
@@ -94,20 +61,9 @@ function knownNames(versions: readonly SvgVersion[]): Set<string> {
   return out;
 }
 
-/** Whose file is this? `self` = ours, `other` = a sibling pair's, `shared` = a tie. */
-function ownerOf(name: string, self: Naming, siblings: readonly Naming[]): "self" | "other" | "shared" {
-  const own = matchLength(name, prefixesOf(self));
-  if (own === 0) return "other";
-  let best = 0;
-  let claimedBy = 0;
-  for (const sibling of siblings) {
-    const theirs = matchLength(name, prefixesOf(sibling));
-    if (theirs > best) best = theirs;
-    if (theirs === own) claimedBy++;
-  }
-  if (best > own) return "other"; // a longer name in the same folder is a better match
-  if (claimedBy > 0) return "shared"; // two pairs answer to the same name: never guess
-  return "self";
+/** The version number an SVG name carries, or null when it carries none. */
+function numberOf(name: string, stem: string): number | null {
+  return versionOfFileName(name, stem);
 }
 
 /**
@@ -125,38 +81,12 @@ export function planImport(
   const others = isSvg.filter((n) => !known.has(n) && ownerOf(n, self, siblings) !== "self");
   const taken = new Set<number>(versions.map((v) => v.version));
   for (const name of knownFiles) {
-    const parsed = versionOfFileName(name, self.stem);
+    const parsed = numberOf(name, self.stem);
     if (parsed !== null) taken.add(parsed);
   }
-  const fresh = assign(mine, self.stem, taken);
+  const fresh = assignNumbers(mine, (name) => numberOf(name, self.stem), taken);
   const all = [...taken, ...fresh.map((f) => f.version)];
   return { fresh, known: knownFiles, others, latest: all.length === 0 ? null : Math.max(...all) };
-}
-
-/**
- * Named files keep their own number first (a v3 stays v3 even when a copy sorts
- * before it), then the unnumbered ones take the next free numbers in name order.
- */
-function assign(candidates: readonly string[], stem: string, taken: Set<number>): ExistingSvg[] {
-  const out: ExistingSvg[] = [];
-  const deferred: string[] = [];
-  const named = candidates.map((name) => ({ name, version: versionOfFileName(name, stem) }));
-  for (const item of named.sort((a, b) => (a.version ?? 0) - (b.version ?? 0) || compareNames(a.name, b.name))) {
-    if (item.version === null || taken.has(item.version)) { deferred.push(item.name); continue; }
-    taken.add(item.version);
-    out.push({ name: item.name, version: item.version });
-  }
-  for (const name of deferred.sort(compareNames)) {
-    const version = freeAfter(taken);
-    taken.add(version);
-    out.push({ name, version });
-  }
-  return out.sort((a, b) => a.version - b.version);
-}
-
-/** The lowest number above everything already taken — deterministic, never a gap. */
-function freeAfter(taken: Set<number>): number {
-  return (taken.size === 0 ? 0 : Math.max(...taken)) + 1;
 }
 
 /** The version the row should show once these records are in: the newest readable one. */

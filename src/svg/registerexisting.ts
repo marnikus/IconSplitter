@@ -21,23 +21,18 @@ import { withPreferred } from "../lib/pairpreferred";
 import { parseSvg, validateSvg } from "../lib/svgvalidate";
 import { countIcons } from "../lib/svgicons";
 import type { SvgVersion } from "../lib/svgmodel";
-import { importSummary, newestReadable, planImport, type ImportTally, type Naming } from "../lib/svgimport";
+import { importSummary, newestReadable, planImport, type ImportTally } from "../lib/svgimport";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { metaForSource } from "./sources";
 import { listSvgFiles, readSvgText } from "./svgfiles";
 import { toRow } from "./rowmodel";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
-import type { SvgRefs, SvgRow } from "./types";
+import { namingOf, siblingsOf, usableRow, type RegisterCtx } from "./registernames";
+import type { SvgRow } from "./types";
 import type { Slice } from "./actions";
 
-/** Only what registering needs: the folder, the rows and the two writers. */
-export interface RegisterCtx {
-  refs: SvgRefs;
-  rows: SvgRow[];
-  say: (msg: string, err?: boolean) => void;
-  setRowsFn: (fn: (rows: SvgRow[]) => SvgRow[]) => void;
-}
+export type { RegisterCtx } from "./registernames";
 
 /** One file the plan picked, with the version number it becomes. */
 type ExistingFile = { name: string; version: number };
@@ -59,7 +54,7 @@ interface FolderOutcome {
 export async function runRegisterFor(c: RegisterCtx, ids: string[]): Promise<void> {
   const root = c.refs.root.current as DirHandleLike | null;
   if (root === null) return c.say("No folder is open — nothing to look at", true);
-  const rows = ids.map((id) => c.rows.find((r) => r.source.id === id)).filter(isRow);
+  const rows = ids.map((id) => c.rows.find((r) => r.source.id === id)).filter(usableRow);
   if (rows.length === 0) return c.say("Select the items whose folder should be checked", true);
   const release = reserveSources(c, rows.map((r) => r.source.id));
   if (release === null) return c.say(SOURCE_BUSY, true);
@@ -68,10 +63,6 @@ export async function runRegisterFor(c: RegisterCtx, ids: string[]): Promise<voi
   } finally {
     release();
   }
-}
-
-function isRow(row: SvgRow | undefined): row is SvgRow {
-  return row !== undefined && !row.corrupt;
 }
 
 async function runRegister(c: RegisterCtx, root: DirHandleLike, rows: SvgRow[]): Promise<void> {
@@ -91,18 +82,6 @@ async function runRegister(c: RegisterCtx, root: DirHandleLike, rows: SvgRow[]):
     data: { registered: tally.registered, skipped: tally.skipped, folders: tally.folders },
   });
   c.say(line.text, line.err);
-}
-
-/** The names this pair answers to: its AI stem and the names it had before a split. */
-function namingOf(row: SvgRow): Naming {
-  return { stem: row.source.stem, base: row.source.base };
-}
-
-/** The pairs that share this folder — only they can contest a file name. */
-function siblingsOf(c: RegisterCtx, row: SvgRow): Naming[] {
-  return c.rows
-    .filter((r) => r.source.id !== row.source.id && r.source.dirPath === row.source.dirPath)
-    .map(namingOf);
 }
 
 /** One pair's folder: plan from its file names, validate each document, write once. */

@@ -64,6 +64,7 @@ Version choices remain off the undo timeline as before; existing explicit review
 - AI acceptance: `src/svg/imagechoice.ts`, called by `imgactions.ts`; actual input rule: `src/lib/svgimgreg.ts::mainImageOf`.
 - Export identity: `src/upload/discovery.ts`.
 - Existing-SVG registration: `src/lib/svgimport.ts` (pure plan), `src/svg/registerexisting.ts` (read, validate, write), button in `SvgBulkBar.tsx`.
-- Regressions: `svg_version_chips`, `svg_versions_ui`, `svg_imagechoice`, `svg_imgreg_ui`, `svg_register_existing`, `svg_register_existing_ui`, `upload_discovery` and `upload_runexport` tests. The real export pipeline checks that accepted older artwork, not a newer file beside it, is committed.
+- Existing-AI-source registration: `src/lib/imgimport.ts` (pure plan, shared name rules in `src/lib/foldernames.ts`), `src/svg/registerimages.ts` (list, prove PNG, write), button `svg-register-images` in `SvgBulkBar.tsx` ([contract](svg-image-edits.md#ai-sources-already-in-the-folder-are-registered)).
+- Regressions: `svg_version_chips`, `svg_versions_ui`, `svg_imagechoice`, `svg_imgreg_ui`, `svg_register_existing`, `svg_register_existing_ui`, `svg_register_images`, `svg_register_images_ui`, `upload_discovery` and `upload_runexport` tests. The real export pipeline checks that accepted older artwork, not a newer file beside it, is committed.
 
 See [SVG results/review](svg-generation-results.md), [image edits](svg-image-edits.md), [Upload discovery](upload.md#scope-and-discovery), [I-54](invariants/svg-run.md#i-54) and [I-71](invariants/svg-image-edits.md#i-71).

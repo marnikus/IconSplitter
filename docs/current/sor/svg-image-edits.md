@@ -43,3 +43,34 @@ without approving an existing SVG.
   logged **once per composite** (never invented or multiplied by icon count),
   and a validated metadata-only journal leaves unknown or lost-on-reload
   requests for deliberate reconfirmation, never auto-retry.
+
+## AI sources already in the folder are registered
+
+The row shows the AI image the pair was approved with plus its own
+regenerations. An image that was already there — the original before a split, a
+`_vN` written by an older build, a copy, a hand edit — stayed invisible, so the
+row kept showing the wrong artwork. **⤓ Register AI sources (N)**
+(`svg-register-images`, 2026-11-02) reads every selected folder once:
+
+- PNGs in the pair's folder and in its `AI source regeneration versions` folder
+  are matched by name (`src/lib/foldernames.ts`, shared with the SVG pass), so
+  `download-icon-01_AI.png` inside `download-icon-01_AI/split_01/` is this pair's.
+  The pair's own AI image and its reference image are never re-registered: a
+  folder with only those changes nothing and the toast says which original it saw.
+- A name that carries `_vN` keeps that number; an unnumbered file takes the next
+  free one, so nothing on disk is invisible and nothing is counted twice. A file
+  the pair file already records is skipped; a name two pairs both answer to is
+  refused and reported, never guessed.
+- A file is recorded only after its bytes prove a PNG (signature read through the
+  normal file path); anything else is counted, said out loud and not recorded.
+- The newest **NUMBERED** version becomes `imagePreferred` — the main image the
+  row shows and SVG generation vectorizes (`mainImageOf`). An unnumbered copy is
+  taken in but never moves the pointer on its own.
+- One `saveMetaAt` per pair through the usual verified path; the SVG fields and
+  the pair's review status are untouched; a busy pair is refused; nothing on disk
+  is renamed or deleted.
+
+Regressions: `svg_register_images` (names, numbering, the original, ties, the
+summary line) and `svg_register_images_ui` (the pair's own image, a numbered
+regeneration, a copy, a non-PNG, a second click, a busy pair, the split folder
+from the report through a real click).
