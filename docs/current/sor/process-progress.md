@@ -5,7 +5,7 @@
 
 ## Shared presentation and reusable API
 
-`src/ui/ProcessProgressBar.tsx` is the ONE header/track/stats layout used by
+`src/ui/ProcessProgressBar.tsx` is the ONE header/track/stats layout for
 `BatchProgressHeader`, `SvgProgressHeader`, `UploadProgressHeaders`,
 `StockUploadDialogs` and `SvgRegisterProgress`. Reuse it instead of copying a
 header. Callers provide a prefix, theme, title/detail, counts/percentage and
@@ -21,8 +21,8 @@ state or owns cancellation. One rule stacks it on narrow screens; the track is
 - `createProcessReporter(total, publish)` publishes a running snapshot with a
   unique run ID, `advance()` per completed item, one terminal `finish()`.
   Snapshots are immutable; late calls are ignored. `src/lib/processslot.ts`
-  keeps one slot per feature (+ `useProcessSlot` to subscribe); `imgprogress`,
-  `registerprogress` and the upload/batch slots all reuse it.
+  keeps one slot per feature (+ `useProcessSlot`); `imgprogress`,
+  `registerprogress` and the upload/batch slots reuse it.
 - Counts are processed attempts, **not all-successful outputs**; item failures
   stay visible in the rows. Aborted items are not completed, and cancellation
   keeps the real percentage and remaining count.
@@ -46,15 +46,12 @@ derived from the running slots, never a second counter.
 `exportactions.ts`; download uses `downloadactions.ts`. Workers publish progress independently of React rerenders.
 A failed/cancelled metadata phase never launches a chained Export selected.
 A successful phase leaves its summary while the export header starts at zero.
-Existing exact-request provider confirmation and acceptance rules are unchanged.
-
 Download starts at zero after destination selection, using the captured plan's
 **file** count (not icons). Verified saved/kept/missing/failed attempts each
 advance once; missing or failed files summarise without stopping later copies.
 Cancel finishes the active write/readback before the next file and keeps actual
-counts. Empty plans and cancelled pickers create no bar or sound; duplicate
-clicks cannot launch overlapping pickers. The toolbar uses the
-download slot/counts while active, without resetting metadata/export summaries.
+counts. Empty plans and cancelled pickers create no bar or sound. The toolbar
+uses the download slot while active, without resetting other summaries.
 
 Upload mounts lazily, then stays hidden rather than unmounting, like the other
 running panels. Its progress portal sits above Workbench navigation, outside
@@ -74,7 +71,7 @@ when the next batch starts, so the bar carries its total instead of restarting.
 - Prefixes: `upload-{metadata,export,download}-progress-*`,
   `register-{svg,images}-progress-*`, `stock-upload-progress-*`.
 - Suffixes: `header`, `title`, `file`, `track`, `completed`, `remaining`,
-  `percent`, `cancel` (running), `review` and `dismiss` (terminal).
+  `note`, `percent`, `cancel` (running), `review` and `dismiss` (terminal).
 - Existing `batch[-preview]-progress-*`, `svg-progress-*` and Upload toolbar
   `upload-estimate`, `upload-progress`, `upload-cancel-run` remain compatible.
 
@@ -92,7 +89,7 @@ runners so no late retry escapes the fake transport. No live provider sends.
 
 ## Completion sound on every tab
 
-`src/ui/completionSound.ts` is the one local audio service for **all** tabs. One enabled cue follows each real process reaching its terminal boundary
+`src/ui/completionSound.ts` is the one audio service for **all** tabs. One enabled cue follows each real process reaching its terminal boundary
 (including completed attempts with item errors), independent of the visible
 tab, a header mounting or a re-render.
 
@@ -140,9 +137,11 @@ cue goes to a deferred set and replays on the next `armCompletionSound()`.
 Register passes publish `{id, kind, done, total, current, phase, registered,
 skipped}` through `src/svg/registerprogress.ts` (`beginRegister` →
 `{reading, settled, finish}`) and render the same bar in
-`src/svg/SvgRegisterProgress.tsx`: percent, done/total, the pair being read, a
-green finished state, 6 s auto-hide and a ✕. Getty web upload stamps a
-`runId` on every patch and flags a user-stopped run so it stays silent.
+`src/svg/SvgRegisterProgress.tsx`: percent, done/total, the pair being read,
+`N remaining`, `N new files registered` this run, a green finished state, 6 s
+auto-hide, ✕. The optional `note` prop carries that second reading — what the
+run produced, not only what is left. Getty web upload stamps a `runId` on every
+patch and flags a user-stopped run so it stays silent.
 
 Sound regressions: `completion_sound.test.ts`, `process_completion_sound.test.tsx`,
 `sheets_completion_sound.test.tsx`, plus actual Upload phase-chain/hidden-tab/

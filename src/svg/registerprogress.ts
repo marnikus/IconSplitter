@@ -82,6 +82,17 @@ export function registerDetail(p: RegisterProgress): string {
   return `${p.registered} registered${skipped}`;
 }
 
+/**
+ * What this run has actually written so far, in the same line as what is left:
+ * "3 remaining" answers how much work is pending, this answers what it produced.
+ * Only while running — a finished bar already says it in its detail line.
+ */
+export function registerNote(p: RegisterProgress): string {
+  if (p.phase !== "running") return "";
+  if (p.registered === 0) return "no new files yet";
+  return `${p.registered} new file${p.registered === 1 ? "" : "s"} registered`;
+}
+
 /** The bar's title: what is happening, in the tab's own words. */
 export function registerTitle(p: RegisterProgress): string {
   const what = p.kind === "svg" ? "existing SVGs" : "AI sources";

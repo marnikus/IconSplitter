@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  beginRegister, clearRegister, registerDetail, registerSlot, registerTitle,
+  beginRegister, clearRegister, registerDetail, registerNote, registerSlot, registerTitle,
 } from "../src/svg/registerprogress";
 import type { SvgRefs } from "../src/svg/types";
 
@@ -52,6 +52,21 @@ describe("the register progress model", () => {
     expect(registerTitle(done)).toBe("Registering existing SVGs complete");
     expect(registerDetail(done)).toBe("1 registered · 2 skipped");
     expect(registerTitle({ ...done, kind: "images", total: 1 })).toBe("Registering AI sources complete");
+  });
+
+  it("tells the user how many new files this run registered, next to what is left", () => {
+    const r = refs();
+    const bar = beginRegister(r, "svg", 3);
+    expect(registerNote(registerSlot(r).value!)).toBe("no new files yet");
+    bar.settled({ registered: 1, skipped: 0 });
+    expect(registerNote(registerSlot(r).value!)).toBe("1 new file registered");
+    bar.settled({ registered: 2, skipped: 1 });
+    expect(registerNote(registerSlot(r).value!)).toBe("3 new files registered");
+    bar.settled({ registered: 0, skipped: 0 });
+    bar.finish();
+    // The finished bar already says it in its detail line — never twice.
+    expect(registerDetail(registerSlot(r).value!)).toBe("3 registered · 1 skipped");
+    expect(registerNote(registerSlot(r).value!)).toBe("");
   });
 
   it("clears the bar on its ✕ and after a later pass, never leaving a stale one", () => {

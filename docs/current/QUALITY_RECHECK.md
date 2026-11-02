@@ -4575,3 +4575,26 @@ Measured after the rename (`npx tsc --noEmit`, `npm run lint`,
   recreating the old pair — both report the failing name.
 - Docs: `rules/QUALITY_GATES.md` 16.6a (naming rule), process-progress,
   version-acceptance and the SVG-run selectors now name the new file.
+
+## 2026-11-02 — round 24c: the register bar says what the run produced, not only what is left
+
+The register bar already showed folders done, percent and "N remaining". It now
+carries a second reading next to it — `registered` folders that this run actually
+wrote: "no new files yet", "1 new file registered", "N new files registered" —
+so a pass that finds nothing new is visible while it runs instead of only in the
+final toast. The finished bar keeps its single line ("3 registered · 1 skipped"),
+so the count is never printed twice.
+
+`ProcessProgressBar` gained an optional `note` (rendered as
+`{prefix}-progress-note` in the stats row, green); the register model owns the
+wording in `registerNote`, so both passes and the tests read one source.
+
+Measured after the change (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,579 tests pass, 0 fail (2 new assertions); coverage lane PASS (103 s);
+  build PASS; `npm run verify:fast` all lanes passed.
+- Lint 0 errors / 24 warnings; quality gate (changed) PASS.
+- `register_progress.test.ts` covers 0 / 1 / many and the finished empty note;
+  `register_progress_ui.test.tsx` asserts the note and "N remaining" together on
+  the real bar.

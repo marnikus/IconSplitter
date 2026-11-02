@@ -1096,6 +1096,8 @@
 .svg-progress-header.failed .svg-progress-percent { color: #ff9aa5; }
 .svg-progress-header.failed .svg-progress-check { background: #3a1720; color: #ff9aa5; }
 .svg-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
+/* "N new files registered": what the run produced, not only what is left. */
+.svg-progress-stats .svg-progress-note { color: #7ee3b6; white-space: nowrap; }
 .svg-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 .svg-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
 .svg-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }
@@ -1125,6 +1127,7 @@
 .batch-progress-fill { height: 100%; background: #32d68b; transition: width 0.3s; }
 .batch-progress-header.complete .batch-progress-fill { background: #32d68b; }
 .batch-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
+.batch-progress-stats .batch-progress-note { color: #7ee3b6; white-space: nowrap; }
 .batch-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 .batch-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
 .batch-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }

@@ -66,8 +66,9 @@ Both register passes report through the shared bar, portalled to
 `#svg-progress-mount` beside the run header. Prefix `register-svg` (existing
 SVGs) or `register-images` (existing AI sources), same suffixes as above:
 `-header`, `-title`, `-file` (pair being read), `-track`, `-completed` ("N
-registered · K skipped"), `-remaining`, `-percent` and `-dismiss` (✕; the bar
-also clears 6 s after it completes). A finished bar plays the completion cue
+registered · K skipped"), `-remaining` ("3 remaining"), `-note` ("N new files
+registered" so far this run; "no new files yet"), `-percent` and `-dismiss` (✕;
+the bar also clears 6 s after it completes). A finished bar plays the completion cue
 once, keyed by the pass id; a cancelled pass stays silent.
 
 Shared surfaces: `svg-warn-{noteId}` (`pairfile` — the pair files that could not

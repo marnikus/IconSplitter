@@ -8,7 +8,7 @@ import { createPortal } from "react-dom";
 import { processTotals } from "../lib/processprogress";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
 import { useProcessSlot } from "../ui/useProcessSlot";
-import { clearRegister, registerDetail, registerSlot, registerTitle, type RegisterProgress as Snapshot } from "./registerprogress";
+import { clearRegister, registerDetail, registerNote, registerSlot, registerTitle, type RegisterProgress as Snapshot } from "./registerprogress";
 import type { SvgRefs } from "./types";
 
 /** Long enough to read "complete", short enough not to sit in the way. */
@@ -44,6 +44,7 @@ function RegisterBar({ refs, p }: { refs: SvgRefs; p: Snapshot }) {
     <ProcessProgressBar prefix={`register-${p.kind}`} theme="svg"
       title={registerTitle(p)} detail={registerDetail(p)}
       done={totals.done} total={totals.total} remaining={totals.left} percent={done ? 100 : totals.percent}
+      note={registerNote(p)}
       complete={done} cue={p.id} leading={<span aria-hidden="true">{done ? "✓" : "⤓"}</span>}
       actions={done ? <Dismiss refs={refs} kind={p.kind} /> : undefined} />
   );

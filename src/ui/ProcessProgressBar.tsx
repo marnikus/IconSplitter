@@ -27,6 +27,11 @@ export interface ProcessProgressBarProps {
   cue?: string | null;
   /** The run was cancelled or stopped: it ended, but it is not a completion. */
   cueSilent?: boolean;
+  /**
+   * One extra honest line next to "N remaining" — how much a run has produced,
+   * not only how much is left (the register passes count new files here).
+   */
+  note?: string;
 }
 
 /** One sound per finished bar, never per render and never for a stopped run. */
@@ -77,6 +82,7 @@ function ProcessStats({ p }: { p: ProcessProgressBarProps }) {
       <div className={`${cls}-stats`}>
         <span data-testid={`${p.prefix}-progress-completed`}>{p.done} completed / {p.total}</span>
         <span data-testid={`${p.prefix}-progress-remaining`}>{p.remaining} remaining</span>
+        {p.note ? <span className={`${cls}-note`} data-testid={`${p.prefix}-progress-note`}>{p.note}</span> : null}
       </div>
     </div>
   );

@@ -66,6 +66,17 @@ describe("the register progress bar", () => {
     expect(completionAudio.starts).toHaveLength(0); // nothing finished yet
   });
 
+  it("says how many new files the run registered so far, beside what is left", async () => {
+    const r = refs();
+    publishProcess(registerSlot(r), RUNNING);
+    await show(r);
+    expect(q("[data-testid=register-svg-progress-note]")?.textContent).toBe("1 new file registered");
+    expect(q("[data-testid=register-svg-progress-remaining]")?.textContent).toBe("3 remaining");
+    await publish(r, { ...RUNNING, done: 3, registered: 5 });
+    expect(q("[data-testid=register-svg-progress-note]")?.textContent).toBe("5 new files registered");
+    expect(q("[data-testid=register-svg-progress-remaining]")?.textContent).toBe("1 remaining");
+  });
+
   it("turns green at 100 % and plays the completion cue exactly once", async () => {
     const r = refs();
     publishProcess(registerSlot(r), RUNNING);
