@@ -38,6 +38,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   directory names and direct saved-version reads are unaffected. Generate SVG's
   separate discovery still omits canonical positive `_AI_vN.png` files directly
   in `AI source regeneration versions`; this does not change its storage layout.
+  An image a pair file records in its own `imageVersions` is that pair's history,
+  never a pair of its own: both tabs take it from one rule module
+  (`src/lib/imageartifact.ts`), so registering sources can never grow the review
+  list ([policy](../selection.md#behaviour)).
 
 <a id="i-40"></a>
 * **I-40 (the scope is visible, RULE 12):** the Selection V2 toolbar states the

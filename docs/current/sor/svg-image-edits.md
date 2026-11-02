@@ -69,6 +69,11 @@ row kept showing the wrong artwork. **⤓ Register AI sources (N)**
 - One `saveMetaAt` per pair through the usual verified path; the SVG fields and
   the pair's review status are untouched; a busy pair is refused; nothing on disk
   is renamed or deleted.
+- A registered image becomes that pair's history, never artwork of its own:
+  Selection V2 drops any pair whose side is a recorded `imageVersions` path of a
+  different pair (`withoutRecordedVariants`, `src/lib/imageartifact.ts`), so
+  registering sources never adds review rows to the other tab. Generate SVG
+  needed no change — it lists only approved canonical sources.
 
 Regressions: `svg_register_images` (names, numbering, the original, ties, the
 summary line) and `svg_register_images_ui` (the pair's own image, a numbered

@@ -4688,3 +4688,22 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
   panel: both orders, a flipped filter, a flipped group, direction surviving a
   filter change). Registration keeps the found file's time (both passes) and falls
   back to the click time when the browser hides it.
+
+## 2026-11-02 — registered AI sources stay out of Selection V2 (round 27)
+
+- Reported: after Generate SVG's "Register AI sources" pass took an image into a
+  pair's `imageVersions`, the same image appeared in Selection V2 as a new pair.
+- Cause: two different rules. Generate SVG lists only approved canonical sources
+  (so nothing there), while Selection V2 lists pending pairs, and pairing has no
+  idea a file is somebody's recorded history.
+- Fix: `withoutRecordedVariants` + `variantOwner` in `src/lib/imageartifact.ts`
+  (the module that already owns the version-folder artifact rule). Selection's
+  walk reads the pair files first, then drops every pair with a side recorded as a
+  different pair's version — before split-scope counting. Matched on the record,
+  case-insensitively, on whole path segments either way round; a pair recording
+  its own face stays.
+- Tests: `tests/selection_ignores_registered_variants.test.tsx` (3) — the record
+  index, the drop/keep rule through the real registration action, and a mounted
+  Selection V2 panel that showed the phantom row before the fix.
+- Measured: types PASS · lint 0 errors / 24 warnings · quality gate (changed)
+  PASS · tests 3,605 passed · build PASS.

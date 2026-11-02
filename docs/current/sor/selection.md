@@ -33,6 +33,19 @@ Selection V2 shared review rules:
   alone is never evidence, an unreadable file is never reported as changed or
   gone, and a scan performs **zero writes** inside the root (the decision file
   is created by the first save, not by opening a folder).
+* **A registered AI source is history, not a pair (2026-11-02).** When Generate
+  SVG's "Register AI sources" pass takes an image the app never wrote (a copy, a
+  pre-split name, a `_vN` from an older build) into a pair's `imageVersions`, that
+  image must not come back as a pair to review. The scan reads each pair file
+  first, then drops every pair whose AI **or** reference side is a recorded
+  version of a *different* pair (`withoutRecordedVariants` in
+  `src/lib/imageartifact.ts`, the same rule file that owns the version-folder
+  artifact rule). The match is on the record, not the name — case-insensitively,
+  and on whole path segments either way round, so it holds when the pair file was
+  written against a parent or a child root, and a same-named file in another
+  folder is never mistaken for it. A pair that records its own face stays. The
+  dropped pairs are gone before split-scope counting, so the "N in the main
+  folder not listed" count never mentions them either.
 * One scan may commit: a monotonic ticket (`lib/scanseq`) means an older scan
   that resolves later commits nothing, and an unchanged snapshot commits
   nothing at all (no row replacement, no churn). A completed scan is committed
