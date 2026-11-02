@@ -109,6 +109,64 @@ describe("several SVGs already in the folder", () => {
   });
 });
 
+describe("the folder from the report (split pair, pre-split SVG name)", () => {
+  /** .../download-icon-01_AI/split_01/download-icon-01_AI_01.png + an older-named SVG beside it. */
+  function splitRoot(svgName: string): FakeDir {
+    const root = new FakeDir("split_root");
+    const dir = new FakeDir("split_01");
+    dir.children.set("download-icon-01.png", new FakeFile("download-icon-01.png", 12, 3000, "a"));
+    dir.children.set("download-icon-01_AI_01.png", new FakeFile("download-icon-01_AI_01.png", 20, 3100, "b"));
+    dir.children.set(svgName, new FakeFile(svgName, V1.length, 3200, V1));
+    root.children.set("split_01", dir);
+    const recs = [{
+      pair_id: SPLIT_ID, source: "split_01/download-icon-01.png",
+      ai_result: "split_01/download-icon-01_AI_01.png", decision: "approved", reviewed_at: "2026-11-01T09:00:00.000Z",
+    }];
+    root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({ records: recs })));
+    return root;
+  }
+
+  const SPLIT_ID = pairId("split_01", "download-icon-01", "_01");
+
+  function splitMetaOnDisk(root: FakeDir) {
+    const file = (root.children.get("split_01") as FakeDir).children.get("download-icon-01_AI_01.svg.json") as FakeFile;
+    const parsed = parsePairMeta(file.text);
+    if (!parsed.ok) throw new Error("the pair file was not written");
+    return parsed.meta;
+  }
+
+  it("registers download-icon-01_AI.svg for download-icon-01_AI_01.png and writes the pair file", async () => {
+    const root = splitRoot("download-icon-01_AI.svg");
+    await mount(root);
+    await act(async () => input(`[data-testid=svg-check-${SPLIT_ID}]`).click());
+    await settle();
+    await click(q("[data-testid=svg-register-existing]") as HTMLElement);
+    await settle();
+    const meta = splitMetaOnDisk(root);
+    expect(meta.versions.map((v) => [v.version, v.svgPath])).toEqual([
+      [1, "split_01/download-icon-01_AI.svg"],
+    ]);
+    expect(meta.preferred).toBe(1);
+    expect(meta.review).toBe("pending");
+    expect(text("[data-testid=svg-toast]")).toBe("1 existing SVG registered — v1 is now shown");
+    expect(text("[data-testid=svg-status-progress]")).toBe("1 / 1 generated");
+    await unmountPanel();
+  });
+
+  it("says what it saw when the folder holds another pair's artwork instead", async () => {
+    const root = splitRoot("court_AI.svg");
+    await mount(root);
+    await act(async () => input(`[data-testid=svg-check-${SPLIT_ID}]`).click());
+    await settle();
+    await click(q("[data-testid=svg-register-existing]") as HTMLElement);
+    await settle();
+    expect(text("[data-testid=svg-toast]")).toBe(
+      "No existing SVG for download-icon-01_AI_01 in 1 selected folder — 1 other SVG there is not this pair's (e.g. court_AI.svg)",
+    );
+    await unmountPanel();
+  });
+});
+
 describe("the honest edges", () => {
   it("never records a file that does not validate, and says what it skipped", async () => {
     const root = rootWith({ "fog_AI.svg": V1, "fog_AI_v2.svg": "<svg><broken>" });
@@ -127,7 +185,7 @@ describe("the honest edges", () => {
     const root2 = rootWith({});
     const second = ctxFor(root2);
     await runRegisterFor(second.ctx as never, [FOG]);
-    expect(second.said.at(-1)).toEqual({ msg: "No existing SVG in 1 selected folder", err: false });
+    expect(second.said.at(-1)).toEqual({ msg: "No existing SVG for fog_AI in 1 selected folder", err: false });
     // the pair file on disk now records v1, so a rescan-based run adds nothing
     const { ctx } = ctxFor(root);
     ctx.rows = [toRow(svgSource(FOG, { name: "fog_AI.png" }), pairFileOnDisk(root), false)];
@@ -162,7 +220,7 @@ describe("the button in the tab", () => {
     await click(q("[data-testid=svg-register-existing]") as HTMLElement);
     await settle();
     // fog's v1 is already in its pair file: nothing new is invented
-    expect(text("[data-testid=svg-toast]")).toBe("No existing SVG in 1 selected folder");
+    expect(text("[data-testid=svg-toast]")).toBe("No existing SVG for fog_AI in 1 selected folder");
     expect(q(`[data-testid=svg-prev-${FOG}]`)).not.toBeNull();
   });
 

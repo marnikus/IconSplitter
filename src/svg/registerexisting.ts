@@ -21,7 +21,7 @@ import { withPreferred } from "../lib/pairpreferred";
 import { parseSvg, validateSvg } from "../lib/svgvalidate";
 import { countIcons } from "../lib/svgicons";
 import type { SvgVersion } from "../lib/svgmodel";
-import { importSummary, newestReadable, planImport, type ImportTally } from "../lib/svgimport";
+import { importSummary, newestReadable, planImport, type ImportTally, type Naming } from "../lib/svgimport";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { metaForSource } from "./sources";
@@ -48,6 +48,8 @@ interface FolderOutcome {
   registered: number;
   skipped: number;
   shown: number | null;
+  /** SVG files that are another pair's (or nobody's) — said out loud. */
+  others: string[];
 }
 
 /**
@@ -73,32 +75,50 @@ function isRow(row: SvgRow | undefined): row is SvgRow {
 }
 
 async function runRegister(c: RegisterCtx, root: DirHandleLike, rows: SvgRow[]): Promise<void> {
-  const tally: ImportTally = { registered: 0, skipped: 0, folders: rows.length, shown: null };
+  const tally: ImportTally = { registered: 0, skipped: 0, folders: rows.length, shown: null, others: [] };
+  if (rows.length === 1) tally.stem = rows[0].source.stem;
   for (const row of rows) {
     const out = await registerOne(c, root, row);
     tally.registered += out.registered;
     tally.skipped += out.skipped;
+    tally.others = [...(tally.others ?? []), ...out.others];
     if (out.shown !== null) tally.shown = Math.max(tally.shown ?? 0, out.shown);
   }
   const line = importSummary(tally);
   log({
     feature: "svg", action: "register-existing",
-    detail: `${tally.registered} registered, ${tally.skipped} skipped in ${tally.folders} folder(s)`,
+    detail: `${tally.registered} registered, ${tally.skipped} skipped, ${(tally.others ?? []).length} not this pair's in ${tally.folders} folder(s)`,
     data: { registered: tally.registered, skipped: tally.skipped, folders: tally.folders },
   });
   c.say(line.text, line.err);
+}
+
+/** The names this pair answers to: its AI stem and the names it had before a split. */
+function namingOf(row: SvgRow): Naming {
+  return { stem: row.source.stem, base: row.source.base };
+}
+
+/** The pairs that share this folder — only they can contest a file name. */
+function siblingsOf(c: RegisterCtx, row: SvgRow): Naming[] {
+  return c.rows
+    .filter((r) => r.source.id !== row.source.id && r.source.dirPath === row.source.dirPath)
+    .map(namingOf);
 }
 
 /** One pair's folder: plan from its file names, validate each document, write once. */
 async function registerOne(c: RegisterCtx, root: DirHandleLike, row: SvgRow): Promise<FolderOutcome> {
   const base = c.refs.metas.get(row.source.id) ?? row.meta ?? metaForSource(row.source, null);
   const names = await listSvgFiles(root, row.source);
-  const plan = planImport(row.source.stem, names, base.versions);
-  if (plan.fresh.length === 0) return { meta: base, registered: 0, skipped: 0, shown: null };
+  const plan = planImport(namingOf(row), names, base.versions, siblingsOf(c, row));
+  if (plan.fresh.length === 0) {
+    return { meta: base, registered: 0, skipped: 0, shown: null, others: plan.others };
+  }
   const read = await readAll(root, row, base.review, plan.fresh);
-  if (read.records.length === 0) return { meta: base, registered: 0, skipped: read.skipped, shown: null };
+  if (read.records.length === 0) {
+    return { meta: base, registered: 0, skipped: read.skipped, shown: null, others: plan.others };
+  }
   const meta = applyRecords(base, read.records);
-  return save(c, row, meta, { before: base.versions.length, skipped: read.skipped });
+  return save(c, row, meta, { before: base.versions.length, skipped: read.skipped, others: plan.others });
 }
 
 /** The candidate files, each read and validated; unreadable ones are counted. */
@@ -154,7 +174,7 @@ function applyRecords(base: PairMeta, records: readonly SvgVersion[]): PairMeta 
 async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone): Promise<FolderOutcome> {
   const root = c.refs.root.current as DirHandleLike | null;
   const registered = meta.versions.length - done.before;
-  const failed: FolderOutcome = { meta: row.meta, registered: 0, skipped: done.skipped, shown: null };
+  const failed: FolderOutcome = { meta: row.meta, registered: 0, skipped: done.skipped, shown: null, others: done.others };
   if (root === null) {
     c.say(`Could not save the SVG versions of ${row.source.name}`, true);
     return failed;
@@ -167,13 +187,14 @@ async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone)
   }
   c.refs.metas.set(row.source.id, meta);
   c.setRowsFn((rows) => rows.map((r) => (r.source.id === row.source.id ? toRow(r.source, meta, false) : r)));
-  return { meta, registered, skipped: done.skipped, shown: meta.preferred };
+  return { meta, registered, skipped: done.skipped, shown: meta.preferred, others: done.others };
 }
 
 /** What the write needs to count: how many versions the pair had before. */
 interface SaveDone {
   before: number;
   skipped: number;
+  others: string[];
 }
 
 /** The button's handler: reads the latest context, so one callback serves every render. */

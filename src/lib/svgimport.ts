@@ -6,13 +6,18 @@
 // or copied by hand. This module turns the FILE NAMES into the version records the
 // tab would have written, so one scan is enough:
 //
-//   <stem>.svg          -> v1
-//   <stem>_v3.svg       -> v3
+//   <stem>.svg          -> v1          (download-icon-01_AI_01.svg)
+//   <stem>_v3.svg       -> v3          (the number the name carries)
 //   <stem>-copy.svg     -> the next free number, after the named ones
 //
-// Names that do not belong to the pair (`other.svg`, `<stem>.svg.json`) are left
-// alone; files the pair file already records are never added twice. Pure: no disk,
-// no React — the caller reads the files and validates their content.
+// The name a split pair had BEFORE the split counts too: a file called
+// `download-icon-01_AI.svg` beside `download-icon-01_AI_01.png` was made for this
+// artwork, so it is registered rather than ignored. When two pairs in one folder
+// could claim the same file, the LONGEST matching name wins; a tie belongs to
+// nobody (it is reported, never guessed).
+//
+// Files the pair file already records are never added twice. Pure: no disk, no
+// React — the caller reads the files and validates their content.
 
 import { versionOfFileName } from "./svgfile";
 import { compareNames } from "./scan";
@@ -24,28 +29,59 @@ export interface ExistingSvg {
   version: number;
 }
 
+/** How a pair is named on disk: its AI file's stem, plus the name it had first. */
+export interface Naming {
+  /** `download-icon-01_AI_01` — the AI image's file name without its extension. */
+  stem: string;
+  /** `download-icon-01` — the pair's base, before the `_AI` and the split suffix. */
+  base: string;
+}
+
 export interface ImportPlan {
   /** Files to add, ascending by version — one record each. */
   fresh: ExistingSvg[];
   /** Files the pair file already records (by name) — nothing to do. */
   known: string[];
+  /** SVG files in the folder that are another pair's (or nobody's) — said out loud. */
+  others: string[];
   /** The newest version this pair will have once the plan is applied. */
   latest: number | null;
 }
 
 const SVG_SUFFIX = ".svg";
-/** Separators a foreign tool puts between the stem and its own suffix. */
+/** Separators a foreign tool puts between the name and its own suffix. */
 const SEPARATORS = ["_", " ", "-", "(", "."];
 
-/** Is this file an SVG of THIS pair — its stem, or its stem plus a suffix? */
-export function relatedTo(stem: string, name: string): boolean {
-  if (stem === "" || !name.toLowerCase().endsWith(SVG_SUFFIX)) return false;
-  const base = name.slice(0, -SVG_SUFFIX.length);
-  if (base === stem) return true;
-  return SEPARATORS.some((sep) => base.startsWith(`${stem}${sep}`));
+/** Every name this pair answers to, longest first: the stem, then its earlier names. */
+export function prefixesOf(n: Naming): string[] {
+  const all = [n.stem, `${n.base}_AI`, n.base].map((p) => p.toLowerCase()).filter((p) => p !== "");
+  return [...new Set(all)].sort((a, b) => b.length - a.length);
 }
 
-/** The file name a version record points at (root-relative paths end in it). */
+/**
+ * How well this file name matches one of the prefixes: the length of the longest
+ * prefix it carries (0 = not this pair). Case-insensitive, because the folder and
+ * the AI image can differ in case on a case-insensitive drive.
+ */
+export function matchLength(name: string, prefixes: readonly string[]): number {
+  if (!name.toLowerCase().endsWith(SVG_SUFFIX)) return 0;
+  const base = name.slice(0, -SVG_SUFFIX.length).toLowerCase();
+  let best = 0;
+  for (const prefix of prefixes) {
+    if (base === prefix || SEPARATORS.some((sep) => base.startsWith(`${prefix}${sep}`))) {
+      best = Math.max(best, prefix.length);
+    }
+  }
+  return best;
+}
+
+/** Is this file an SVG of THIS pair — its stem or one of its earlier names? */
+export function relatedTo(stem: string, name: string, aliases: readonly string[] = []): boolean {
+  if (stem === "") return false;
+  return matchLength(name, prefixesOf({ stem, base: aliases[0] ?? "" })) > 0;
+}
+
+/** The name a version record points at (root-relative paths end in it). */
 function nameOf(svgPath: string): string {
   const parts = svgPath.split("/");
   return parts[parts.length - 1];
@@ -58,23 +94,43 @@ function knownNames(versions: readonly SvgVersion[]): Set<string> {
   return out;
 }
 
+/** Whose file is this? `self` = ours, `other` = a sibling pair's, `shared` = a tie. */
+function ownerOf(name: string, self: Naming, siblings: readonly Naming[]): "self" | "other" | "shared" {
+  const own = matchLength(name, prefixesOf(self));
+  if (own === 0) return "other";
+  let best = 0;
+  let claimedBy = 0;
+  for (const sibling of siblings) {
+    const theirs = matchLength(name, prefixesOf(sibling));
+    if (theirs > best) best = theirs;
+    if (theirs === own) claimedBy++;
+  }
+  if (best > own) return "other"; // a longer name in the same folder is a better match
+  if (claimedBy > 0) return "shared"; // two pairs answer to the same name: never guess
+  return "self";
+}
+
 /**
  * The versions one folder's files become. A name that carries a number keeps it;
  * an unnumbered file (a copy, a rename) takes the next free one, so nothing on
  * disk is invisible and nothing is counted twice.
  */
-export function planImport(stem: string, files: readonly string[], versions: readonly SvgVersion[]): ImportPlan {
+export function planImport(
+  self: Naming, files: readonly string[], versions: readonly SvgVersion[], siblings: readonly Naming[] = [],
+): ImportPlan {
   const known = knownNames(versions);
-  const knownFiles = files.filter((n) => known.has(n)).sort(compareNames);
-  const candidates = files.filter((n) => relatedTo(stem, n) && !known.has(n)).sort(compareNames);
+  const isSvg = files.filter((n) => n.toLowerCase().endsWith(SVG_SUFFIX)).sort(compareNames);
+  const knownFiles = isSvg.filter((n) => known.has(n));
+  const mine = isSvg.filter((n) => !known.has(n) && ownerOf(n, self, siblings) === "self");
+  const others = isSvg.filter((n) => !known.has(n) && ownerOf(n, self, siblings) !== "self");
   const taken = new Set<number>(versions.map((v) => v.version));
   for (const name of knownFiles) {
-    const parsed = versionOfFileName(name, stem);
+    const parsed = versionOfFileName(name, self.stem);
     if (parsed !== null) taken.add(parsed);
   }
-  const fresh = assign(candidates, stem, taken);
+  const fresh = assign(mine, self.stem, taken);
   const all = [...taken, ...fresh.map((f) => f.version)];
-  return { fresh, known: knownFiles, latest: all.length === 0 ? null : Math.max(...all) };
+  return { fresh, known: knownFiles, others, latest: all.length === 0 ? null : Math.max(...all) };
 }
 
 /**
@@ -118,17 +174,39 @@ export interface ImportTally {
   folders: number;
   /** The newest version now shown, when one was registered. */
   shown: number | null;
+  /** SVG files the folders hold that are another pair's (or nobody's). */
+  others?: readonly string[];
+  /** The one pair this was about, when a single row was selected. */
+  stem?: string;
 }
 
 /** One honest line for the toast: what happened, and what did not (RULE 9). */
 export function importSummary(t: ImportTally): { text: string; err: boolean } {
-  if (t.registered === 0 && t.skipped === 0) {
-    return { text: `No existing SVG in ${t.folders} selected folder${t.folders === 1 ? "" : "s"}`, err: false };
+  if (t.registered > 0) {
+    const shown = t.shown === null ? "" : ` — v${t.shown} is now shown`;
+    const skipped = t.skipped === 0 ? "" : ` · ${t.skipped} skipped (not a valid SVG)`;
+    return {
+      text: `${t.registered} existing SVG${t.registered === 1 ? "" : "s"} registered${shown}${skipped}${otherNote(t.others ?? [])}`,
+      err: false,
+    };
   }
-  if (t.registered === 0) {
+  if (t.skipped > 0) {
     return { text: `${t.skipped} SVG file${t.skipped === 1 ? "" : "s"} found but none could be registered`, err: true };
   }
-  const shown = t.shown === null ? "" : ` — v${t.shown} is now shown`;
-  const skipped = t.skipped === 0 ? "" : ` · ${t.skipped} skipped (not a valid SVG)`;
-  return { text: `${t.registered} existing SVG${t.registered === 1 ? "" : "s"} registered${shown}${skipped}`, err: false };
+  return { text: nothingText(t), err: false };
+}
+
+/** The other SVGs the folder held, said briefly so a wrong file is noticed at once. */
+function otherNote(others: readonly string[]): string {
+  return others.length === 0 ? "" : ` · ${others.length} other SVG${others.length === 1 ? "" : "s"} there ${others.length === 1 ? "is" : "are"} not this pair's`;
+}
+
+/** Nothing to register: name the pair and, when there are some, the other SVGs seen. */
+function nothingText(t: ImportTally): string {
+  const of = t.stem === undefined ? "this pair" : t.stem;
+  const where = `${t.folders} selected folder${t.folders === 1 ? "" : "s"}`;
+  const others = t.others ?? [];
+  if (others.length === 0) return `No existing SVG for ${of} in ${where}`;
+  const example = others[0] === undefined ? "" : ` (e.g. ${others[0]})`;
+  return `No existing SVG for ${of} in ${where} — ${others.length} other SVG${others.length === 1 ? "" : "s"} there ${others.length === 1 ? "is" : "are"} not this pair's${example}`;
 }

@@ -3,8 +3,12 @@
 // several become the versions their names say, and the newest one is made the
 // shown/accepted version — exactly what generating them in the tab would leave.
 import { describe, expect, it } from "vitest";
-import { importSummary, newestReadable, planImport, relatedTo } from "../src/lib/svgimport";
+import { importSummary, newestReadable, planImport, prefixesOf, relatedTo } from "../src/lib/svgimport";
 import { svgVersion } from "./helpers/svgpair";
+
+/** The pair a folder holds: its AI stem and the base it had before the split. */
+const SPLIT = { stem: "download-icon-01_AI_01", base: "download-icon-01" };
+const PLAIN = { stem: "fog_AI", base: "fog" };
 
 const SVG = (fill: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z" fill="${fill}"/></svg>`;
 
@@ -17,6 +21,14 @@ describe("which files belong to the pair", () => {
     expect(relatedTo("fog_AI", "fog_AI2.svg")).toBe(false);
   });
 
+  it("sees the name the pair had before a split, and never cares about case", () => {
+    // download-icon-01_AI_01.png beside download-icon-01_AI.svg: made for this artwork
+    expect(relatedTo("download-icon-01_AI_01", "download-icon-01_AI.svg", ["download-icon-01"])).toBe(true);
+    expect(relatedTo("download-icon-01_AI_01", "Download-Icon-01_AI_01.SVG")).toBe(true);
+    // a different artwork that merely starts with the same words is not this pair
+    expect(relatedTo("download-icon-01_AI_01", "download-icon-011.svg", ["download-icon-01"])).toBe(false);
+  });
+
   it("ignores the pair file, other pairs' artwork and non-SVG files", () => {
     expect(relatedTo("fog_AI", "fog_AI.svg.json")).toBe(false);
     expect(relatedTo("fog_AI", "court_AI.svg")).toBe(false);
@@ -27,14 +39,14 @@ describe("which files belong to the pair", () => {
 
 describe("planning the versions a folder already holds", () => {
   it("registers a single file as v1 — the record a generation would write", () => {
-    const plan = planImport("fog_AI", ["fog_AI.png", "fog_AI.svg", "fog_AI.svg.json"], []);
+    const plan = planImport(PLAIN, ["fog_AI.png", "fog_AI.svg", "fog_AI.svg.json"], []);
     expect(plan.fresh).toEqual([{ name: "fog_AI.svg", version: 1 }]);
     expect(plan.known).toEqual([]);
     expect(plan.latest).toBe(1);
   });
 
   it("numbers several files by their names and reports the newest", () => {
-    const plan = planImport("fog_AI", ["fog_AI.svg", "fog_AI_v3.svg", "fog_AI_v2.svg"], []);
+    const plan = planImport(PLAIN, ["fog_AI.svg", "fog_AI_v3.svg", "fog_AI_v2.svg"], []);
     expect(plan.fresh.map((f) => [f.name, f.version])).toEqual([
       ["fog_AI.svg", 1], ["fog_AI_v2.svg", 2], ["fog_AI_v3.svg", 3],
     ]);
@@ -42,7 +54,7 @@ describe("planning the versions a folder already holds", () => {
   });
 
   it("gives an unnumbered copy the next free number instead of dropping it", () => {
-    const plan = planImport("fog_AI", ["fog_AI.svg", "fog_AI_v2.svg", "fog_AI-copy.svg"], []);
+    const plan = planImport(PLAIN, ["fog_AI.svg", "fog_AI_v2.svg", "fog_AI-copy.svg"], []);
     expect(plan.fresh.map((f) => f.version)).toEqual([1, 2, 3]);
     expect(plan.fresh[2].name).toBe("fog_AI-copy.svg");
     expect(plan.latest).toBe(3);
@@ -50,16 +62,40 @@ describe("planning the versions a folder already holds", () => {
 
   it("never re-adds a file the pair file already records, and keeps counting from it", () => {
     const history = [svgVersion("architecture/fog_AI.svg", { version: 1 })];
-    const plan = planImport("fog_AI", ["fog_AI.svg", "fog_AI_v2.svg"], history);
+    const plan = planImport(PLAIN, ["fog_AI.svg", "fog_AI_v2.svg"], history);
     expect(plan.fresh).toEqual([{ name: "fog_AI_v2.svg", version: 2 }]);
     expect(plan.known).toEqual(["fog_AI.svg"]);
     expect(plan.latest).toBe(2);
   });
 
-  it("reports nothing to do for a folder without an SVG of this pair", () => {
-    const plan = planImport("fog_AI", ["fog_AI.png", "court_AI.svg"], []);
+  it("reports nothing to do for a folder without an SVG of this pair, naming what it did see", () => {
+    const plan = planImport(PLAIN, ["fog_AI.png", "court_AI.svg"], []);
     expect(plan.fresh).toEqual([]);
+    expect(plan.others).toEqual(["court_AI.svg"]);
     expect(plan.latest).toBeNull();
+  });
+
+  it("registers the SVG a split pair had BEFORE the split (the reported folder)", () => {
+    // .../download-icon-01_AI/split_01/download-icon-01_AI_01.png + download-icon-01_AI.svg
+    const plan = planImport(SPLIT, ["download-icon-01_AI_01.png", "download-icon-01_AI.svg"], []);
+    expect(plan.fresh).toEqual([{ name: "download-icon-01_AI.svg", version: 1 }]);
+    expect(plan.others).toEqual([]);
+  });
+
+  it("gives a file to the pair with the longest matching name, never to both", () => {
+    const sibling = { stem: "fog_AI_02", base: "fog" };
+    const files = ["fog_AI_01.svg", "fog_AI_02.svg"];
+    expect(planImport({ stem: "fog_AI_01", base: "fog" }, files, [], [sibling]).fresh)
+      .toEqual([{ name: "fog_AI_01.svg", version: 1 }]);
+    expect(planImport({ stem: "fog_AI_02", base: "fog" }, files, [], [{ stem: "fog_AI_01", base: "fog" }]).fresh)
+      .toEqual([{ name: "fog_AI_02.svg", version: 1 }]);
+  });
+
+  it("leaves a name two pairs both answer to alone, and says it did", () => {
+    const sibling = { stem: "fog_AI_02", base: "fog" };
+    const plan = planImport({ stem: "fog_AI_01", base: "fog" }, ["fog_AI.svg"], [], [sibling]);
+    expect(plan.fresh).toEqual([]);
+    expect(plan.others).toEqual(["fog_AI.svg"]);
   });
 
   it("shows the newest version that is actually readable", () => {
@@ -90,9 +126,18 @@ describe("what the one line says", () => {
     expect(none.text).toBe("2 SVG files found but none could be registered");
   });
 
-  it("does not call an empty folder an error", () => {
-    const empty = importSummary({ registered: 0, skipped: 0, folders: 1, shown: null });
-    expect(empty).toEqual({ text: "No existing SVG in 1 selected folder", err: false });
+  it("names the pair when nothing was found, and the other SVGs the folder holds", () => {
+    const empty = importSummary({ registered: 0, skipped: 0, folders: 1, shown: null, stem: "fog_AI" });
+    expect(empty).toEqual({ text: "No existing SVG for fog_AI in 1 selected folder", err: false });
+    const named = importSummary({ registered: 0, skipped: 0, folders: 1, shown: null, stem: "fog_AI", others: ["court_AI.svg"] });
+    expect(named.text).toBe("No existing SVG for fog_AI in 1 selected folder — 1 other SVG there is not this pair's (e.g. court_AI.svg)");
+    expect(named.err).toBe(false);
+  });
+
+  it("reads the pair's earlier name as an alias of its stem", () => {
+    // longest first: the split stem, the pre-split AI name, the bare base
+    expect(prefixesOf(SPLIT)).toEqual(["download-icon-01_ai_01", "download-icon-01_ai", "download-icon-01"]);
+    expect(prefixesOf(PLAIN)).toEqual(["fog_ai", "fog"]);
   });
 });
 

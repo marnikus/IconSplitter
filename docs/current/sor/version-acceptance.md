@@ -25,8 +25,10 @@ existing SVGs (N)** in the bulk bar (`svg-register-existing`, 2026-11-01) closes
 **every selected folder** in one pass:
 
 - The files that belong to the pair are read from the folder: `<stem>.svg`, `<stem>_vN.svg`
-  and a copy/rename of the stem (`-copy`, ` (1)`, `.v2`). Other pairs' artwork, the pair file
-  itself and non-SVG files are ignored (`src/lib/svgimport.ts`).
+  and a copy/rename of the stem (`-copy`, ` (1)`, `.v2`). The names the pair had **before a
+  split** count too, so `download-icon-01_AI.svg` beside `download-icon-01_AI_01.png` is
+  found (`src/lib/svgimport.ts`). A name that two pairs in one folder both answer to is
+  refused, so the longer name wins and no pair steals another's file.
 - A version number comes from the name where the name carries one; a file without one takes
   the next free number, so nothing on disk is invisible and nothing is counted twice. Files
   the pair file already records are skipped, so a second click adds nothing.
@@ -40,6 +42,9 @@ existing SVGs (N)** in the bulk bar (`svg-register-existing`, 2026-11-01) closes
 - The **newest readable version becomes `preferred`** — the row shows it, Copy/Code read it and
   later work uses it, exactly as if the user had accepted it with a version chip. History is
   not touched: every version stays listed and re-choosable.
+- When nothing is registered the line **names the pair** (`No existing SVG for
+  download-icon-01_AI_01 in 1 selected folder`) and any other SVG it saw, with the file named,
+  so a silent no-op is impossible.
 - A pair another process holds (a run, an export) is refused with the usual busy message, and
   a failed write says so and changes no row. Nothing on disk is renamed or deleted.
 

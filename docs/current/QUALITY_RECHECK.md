@@ -4538,3 +4538,5 @@ suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
   the same session). No budget was widened and no test was skipped; the documented gate
   (`verify:fast`, `PERF_BUDGETS=coverage`) passes, so the failure is recorded here as a host
   speed change, not as a regression of this round.
+
+- **2026-11-02 — register-existing learns the pre-split name.** Measured: `svg_register_existing` 17 cases, `svg_register_existing_ui` 10 cases, `docs_navigation` green (31 focused); `npx tsc --noEmit` clean; `npm run lint` 0 errors (24 pre-existing warnings); `npm run quality:changed` GATE PASSED (`src/lib/svgimport.ts` 213 lines, `src/svg/registerexisting.ts` 209); `npm run verify:fast` ALL LANES PASSED (build 6.9 s, `dist/index.html` 1,975.10 kB). Defect fixed: the split folder's `download-icon-01_AI.svg` now registers for the pair whose AI file is `download-icon-01_AI_01.png`; a no-op names the pair and any other SVG seen, so nothing is silent.
