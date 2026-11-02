@@ -69,6 +69,9 @@ row kept showing the wrong artwork. **⤓ Register AI sources (N)**
 - One `saveMetaAt` per pair through the usual verified path; the SVG fields and
   the pair's review status are untouched; a busy pair is refused; nothing on disk
   is renamed or deleted.
+- In a Batch split folder Selection V2 lists only that folder's own piece
+  (`isSplitPiece`, `lib/splitscope`), so a registered image there never becomes a
+  review row at all (I-85).
 - A registered image becomes that pair's history, never artwork of its own:
   Selection V2 drops any pair whose side is a recorded `imageVersions` path of a
   different pair (`withoutRecordedVariants`, `src/lib/imageartifact.ts`), so

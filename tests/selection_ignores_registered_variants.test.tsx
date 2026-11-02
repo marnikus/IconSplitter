@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId, pairEntries, type ReviewPair } from "../src/lib/pairing";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { recordedVariants, variantOwner, withoutRecordedVariants } from "../src/lib/imageartifact";
+import { isSplitPiece, splitFolderIndex } from "../src/lib/splitscope";
 import { runRegisterImagesFor } from "../src/svg/registerimages";
 import { toRow } from "../src/svg/rowmodel";
 import SelectionV2Panel from "../src/selectionv2/SelectionV2Panel";
@@ -139,6 +140,59 @@ describe("a file registered as one pair's AI-source version", () => {
     const ids = await selectionRows(root);
     expect(ids).not.toContain(FOG_VARIANT);
     expect([...ids].sort()).toEqual([COURT, FOG].sort());
+  });
+});
+
+/**
+ * The user's folder (2026-11-02 screenshot): one Batch split folder holding the
+ * reference copy, the split AI first generation, its SVG + pair file, an SVG
+ * version — plus the PNG versions that must never become rows.
+ */
+const BATCH_DIR = "2026-11/2026-11-02/download-icon-23_AI/split_04";
+const PIECE = pairId("2026-11/2026-11-02/download-icon-23_AI/split_04", "download-icon-23", "_04");
+const PRE_SPLIT = pairId("2026-11/2026-11-02/download-icon-23_AI/split_04", "download-icon-23", "");
+const SVG_VERSION_ROW = pairId("2026-11/2026-11-02/download-icon-23_AI/split_04", "download-icon-23_AI_04_v2", "");
+
+function batchRoot(): FakeDir {
+  const root = new FakeDir("_split_output");
+  const split = new FakeDir("split_04");
+  split.children.set("download-icon-23.png", pngFile("download-icon-23.png", 1000));       // reference copy
+  split.children.set("download-icon-23_AI_04.png", pngFile("download-icon-23_AI_04.png", 1100)); // the piece
+  split.children.set("download-icon-23_AI_04.svg", new FakeFile("download-icon-23_AI_04.svg", 7, 1200, "<svg/>"));
+  split.children.set("download-icon-23_AI_04.svg.json", new FakeFile("download-icon-23_AI_04.svg.json", 10, 1300, "{}"));
+  split.children.set("download-icon-23_AI_04_v2.svg", new FakeFile("download-icon-23_AI_04_v2.svg", 3, 1400, "<svg/>"));
+  split.children.set("download-icon-23_AI.png", pngFile("download-icon-23_AI.png", 1500)); // an unnumbered copy
+  split.children.set("download-icon-23_AI_04_v2.png", pngFile("download-icon-23_AI_04_v2.png", 1600)); // a version PNG
+  const sheet = new FakeDir("download-icon-23_AI");
+  sheet.children.set("split_04", split);
+  const run = new FakeDir("2026-11-02");
+  run.children.set("download-icon-23_AI", sheet);
+  const month = new FakeDir("2026-11");
+  month.children.set("2026-11-02", run);
+  root.children.set("2026-11", month);
+  return root;
+}
+
+describe("a Batch split folder (2026-11-02)", () => {
+  it("names its piece by the number the folder carries, and nothing else is one", () => {
+    const dir = `${BATCH_DIR}/download-icon-23_AI_04.png`;
+    expect(splitFolderIndex(dir, "_split_output")).toBe(4);
+    expect(isSplitPiece(dir, "_split_output")).toBe(true);
+    // the same file, with the split folder itself picked as the root
+    expect(isSplitPiece("download-icon-23_AI_04.png", "split_04")).toBe(true);
+    // everything else in that folder is a version, not the batch's first generation
+    expect(isSplitPiece(`${BATCH_DIR}/download-icon-23_AI.png`, "_split_output")).toBe(false);
+    expect(isSplitPiece(`${BATCH_DIR}/download-icon-23_AI_04_v2.png`, "_split_output")).toBe(false);
+    expect(isSplitPiece(`${BATCH_DIR}/download-icon-23_AI_04.svg`, "_split_output")).toBe(true); // its own artifact
+    // outside a Batch folder nothing is a piece, so the rule never widens
+    expect(splitFolderIndex("architecture/fog_AI.png", "split_root")).toBeNull();
+  });
+
+  it("shows the reference copy and its split AI first generation — and no other image", async () => {
+    const ids = await selectionRows(batchRoot());
+    expect(ids).toEqual([PIECE]);
+    expect(ids).not.toContain(PRE_SPLIT);
+    expect(ids).not.toContain(SVG_VERSION_ROW);
   });
 });
 

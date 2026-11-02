@@ -6,6 +6,7 @@
 // set — the main folder's unsplit files are not. Pure: names and paths only.
 
 import { isRunStamp, isSplitDirName } from "./batchlayout";
+import { parseAiName } from "./naming";
 import type { ReviewPair } from "./pairing";
 import type { TreeNode } from "./scan";
 
@@ -50,6 +51,41 @@ export function scopeOf(names: readonly string[], rootName: string): ScopeRule {
 /** True when a relative path has a split-output folder as one of its segments. */
 export function inSplitScope(relPath: string): boolean {
   return relPath.split("/").some(isSplitDirName);
+}
+
+/** `split_04` -> 4; null for a path that is not inside a split folder. */
+const SPLIT_DIR = /^split_(\d+)$/i;
+
+/**
+ * The Batch piece number a path's own folder carries. The writer puts one piece
+ * per folder (`<dest>/<month>/<run>/<sheet>/split_04/<sheet>_04.png`), so the
+ * folder's number and the file's tail number are the same fact. A root that IS a
+ * split folder answers for the files directly inside it.
+ */
+export function splitFolderIndex(relPath: string, rootName: string): number | null {
+  const dirs = relPath.split("/").slice(0, -1).filter((d) => d !== "");
+  const match = SPLIT_DIR.exec(dirs.length > 0 ? dirs[dirs.length - 1] : rootName);
+  return match === null ? null : Number(match[1]);
+}
+
+/**
+ * True when this AI image is the piece its own split folder was written FOR
+ * (`…/split_04/download-icon-23_AI_04.png`). Every other image in a split folder
+ * — an unnumbered copy, a registered variant, an older build's `_v2` — is a
+ * version, not the batch's first generation, so it is never a result of its own
+ * (2026-11-02). False outside Batch folders, where this rule never applies.
+ */
+export function isSplitPiece(relPath: string, rootName: string): boolean {
+  const index = splitFolderIndex(relPath, rootName);
+  if (index === null) return false;
+  const ai = parseAiName(relPath.split("/").at(-1) ?? "");
+  const last = ai?.suffix.split("_").filter((part) => part !== "").at(-1);
+  return last !== undefined && Number(last) === index;
+}
+
+/** True when this image sits in one of the Batch's own split folders. */
+export function inSplitFolder(relPath: string, rootName: string): boolean {
+  return splitFolderIndex(relPath, rootName) !== null;
 }
 
 /** A pair belongs to the scope when either side lives inside a split output. */

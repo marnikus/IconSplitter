@@ -19,33 +19,38 @@ Selection V2 shared review rules:
   the list comes out in `(folder, base, suffix)` order, and a versioned output
   (`X_AI_v2.svg`) is ignored rather than invented as a source row.
 * **Output folders are not sources (2026-10-24).** Selection V2 prunes `export`,
-  `AI source regeneration versions`, and `SVG versions` by whole directory name,
-  case-insensitively at every depth. Every file and descendant is excluded,
-  regardless of extension or version naming, before media/sidecar reads, split
-  scope detection and outside counts. Picking one of these folders itself is an
-  empty scan, not an error, and reads none of its media or decision files.
-  Similarly named source folders (e.g. `exports`, `SVG versions originals`)
-  and ordinary source pairs remain eligible. This is review discovery policy:
-  explicit saved-version reads for main images/SVG previews and sidecar version
-  references remain available; no files or history are deleted or moved.
+  `AI source regeneration versions` and `SVG versions` by whole directory name,
+  case-insensitively at every depth: every descendant is excluded, whatever its
+  extension or version naming, before media/sidecar reads, split scope detection
+  and outside counts. Picking one of them is an empty scan, not an error, and
+  reads none of its media or decision files; near-miss names (`exports`) and
+  ordinary pairs stay eligible. Saved-version reads for main images/SVG previews
+  and sidecar version references are untouched; nothing is deleted or moved.
 * A read that fails (locked / being replaced mid-write) is **not** data: the
   walk retries once, then marks the file `unreadable` with its path — `size 0`
   alone is never evidence, an unreadable file is never reported as changed or
   gone, and a scan performs **zero writes** inside the root (the decision file
   is created by the first save, not by opening a folder).
-* **A registered AI source is history, not a pair (2026-11-02).** When Generate
-  SVG's "Register AI sources" pass takes an image the app never wrote (a copy, a
-  pre-split name, a `_vN` from an older build) into a pair's `imageVersions`, that
-  image must not come back as a pair to review. The scan reads each pair file
-  first, then drops every pair whose AI **or** reference side is a recorded
-  version of a *different* pair (`withoutRecordedVariants` in
-  `src/lib/imageartifact.ts`, the same rule file that owns the version-folder
-  artifact rule). The match is on the record, not the name — case-insensitively,
-  and on whole path segments either way round, so it holds when the pair file was
-  written against a parent or a child root, and a same-named file in another
-  folder is never mistaken for it. A pair that records its own face stays. The
-  dropped pairs are gone before split-scope counting, so the "N in the main
-  folder not listed" count never mentions them either.
+* **A registered AI source is history, not a pair (2026-11-02).** An image the
+  "Register AI sources" pass took into a pair's `imageVersions` (a copy, a
+  pre-split name, an older build's `_vN`) never comes back as a pair to review.
+  The scan reads each pair file first, then drops every pair whose AI or reference
+  side is a recorded version of a *different* pair (`withoutRecordedVariants`,
+  `src/lib/imageartifact.ts`). Matched on the record, case-insensitively, on whole
+  path segments either way round — so it holds across a parent or child root, and
+  a same-named file elsewhere never matches; a pair recording its own face stays.
+  This happens before split-scope counting, so no count mentions the dropped pairs.
+* **A Batch split folder shows exactly one artwork (2026-11-02).** The Batch
+  writes one piece per folder (`<dest>/<month>/<run>/<sheet>/split_04/<sheet>_04.png`)
+  beside a copy of the reference. Inside such a folder Selection V2 keeps only the
+  pair whose AI side is **that folder's own piece** — the number in the name is the
+  number the folder carries (`lib/splitscope.isSplitPiece`, tolerant of unpadded
+  numbers and of sheets that already had a numeric tail); the reference copy is the
+  other side, the piece's `.svg` artifact the same row. Everything else — an
+  unnumbered `_AI` copy, a registered variant, an older build's `<stem>_NN_v2.png`,
+  a stray image with no `_AI` name — is never a row, with or without a pair-file
+  record; a picked `split_NN` root behaves the same. Folders that never saw a
+  Batch keep every pair they have.
 * One scan may commit: a monotonic ticket (`lib/scanseq`) means an older scan
   that resolves later commits nothing, and an unchanged snapshot commits
   nothing at all (no row replacement, no churn). A completed scan is committed

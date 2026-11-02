@@ -13,7 +13,7 @@ import { withoutRecordedVariants } from "../lib/imageartifact";
 import type { FileEntry } from "../lib/scan";
 import { walkTree } from "../lib/scan";
 import { pairIdOfMetaPath } from "../lib/pairmeta";
-import { directoryNames, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
+import { directoryNames, inSplitFolder, isSplitPiece, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
 import { log } from "../log/logstore";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import type { ViewPair } from "../lib/reviewfilter";
@@ -106,8 +106,28 @@ async function walkAndLoad(root: DirHandleLike): Promise<Walked> {
   const entries = walkTree(tree, REVIEW_EXCLUDED_FOLDERS);
   const load = await loadPairDecisions(root, entries);
   const rule = scopeOf(directoryNames(tree), root.name);
-  const { pairs, outside } = splitPairs(reviewablePairs(entries, load), rule);
+  const discoverable = batchPieces(reviewablePairs(entries, load), root.name);
+  const { pairs, outside } = splitPairs(discoverable, rule);
   return { pairs, scope: { split: rule.split, outside: outside.length }, load };
+}
+
+/**
+ * Selection V2 reviews what the Batch wrote (2026-11-02): inside a split folder
+ * the only result is the piece that folder was made for, beside the reference
+ * copy the Batch put there. Registered variants, `_v2` PNGs and stray images in
+ * that folder are that pair's history, so they never become rows — while a
+ * folder that never saw a Batch keeps every pair it has.
+ */
+function batchPieces(pairs: readonly ReviewPair[], rootName: string): ReviewPair[] {
+  return pairs.filter((p) => keepsBatchPiece(p, rootName));
+}
+
+function keepsBatchPiece(pair: ReviewPair, rootName: string): boolean {
+  const ai = pair.ai?.relPath ?? null;
+  const source = pair.source?.relPath ?? null;
+  const inBatch = [ai, source].some((p) => p !== null && inSplitFolder(p, rootName));
+  if (!inBatch) return true;
+  return ai !== null && isSplitPiece(ai, rootName);
 }
 
 /** What a walk of an excluded folder (the app's own output) finds: nothing. */

@@ -20,7 +20,9 @@ Focused test inventory; [all tests](../TESTS.md).
 * `selection_ignores_registered_variants.test.tsx` — an image Generate SVG's
   "Register AI sources" pass recorded in a pair's `imageVersions` (a copy, a
   pre-split name) never becomes a Selection V2 row, while a pair recording its own
-  face stays; the record match is case-insensitive and folder-bound
+  face stays, and a Batch split folder lists only its own piece beside the
+  reference copy (unnumbered copy, `_v2` PNG and SVG versions excluded), including
+  a picked `split_NN` root; the record match is case-insensitive and folder-bound
 * `handles.test.ts`, `fmt.test.ts` — path resolution, formatters
 * `selection_ui.test.tsx` — ported V2 DOM smoke: pick → paired list → comparison → A/D hotkeys → text chips
 * `reviewselect.test.ts`, `reviewbulk.test.ts`, `reviewprefs.test.ts`,

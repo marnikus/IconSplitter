@@ -4707,3 +4707,23 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
   Selection V2 panel that showed the phantom row before the fix.
 - Measured: types PASS · lint 0 errors / 24 warnings · quality gate (changed)
   PASS · tests 3,605 passed · build PASS.
+
+## 2026-11-02 — a Batch split folder lists only its own piece (round 27, part 2)
+
+- Reported rule (user, with the folder screenshot): Selection V2 may show only the
+  original image (`download-icon-23.png`) and its split AI first generation
+  (`download-icon-23_AI_04.png`); every version PNG, every SVG and every
+  `.svg.json` is ignored.
+- Cause: pairing accepts any `_AI` name, so an unnumbered copy, a registered
+  variant or a stray `_v2.png` inside `<dest>/<month>/<run>/<sheet>/split_NN/`
+  became a pair of its own — the folder was the one fact nothing read.
+- Fix: `splitFolderIndex` + `isSplitPiece` in `src/lib/splitscope.ts` (the module
+  that already owns the Batch layout rules) and `batchPieces` in Selection's
+  root source: inside a split folder the only artwork is the piece whose number is
+  the folder's number, with the reference copy beside it. Applies to a picked
+  `split_NN` root too; folders that never saw a Batch keep every pair.
+- Tests: `tests/selection_ignores_registered_variants.test.tsx` (5) — the piece
+  index (padded, unpadded, sheet with a numeric tail, non-Batch path) and a
+  mounted Selection V2 panel over the reported folder: one row, not four.
+- Measured: types PASS · lint 0 errors / 24 warnings · quality gate (changed)
+  PASS · tests 3,607 passed · build PASS.
