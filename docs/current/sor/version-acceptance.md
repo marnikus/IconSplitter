@@ -20,10 +20,12 @@ division the AI-source chips already follow. The button's tooltip and the
 dialog's line say so ("choosing does not approve the row"), so the control
 cannot promise an approval it does not perform.
 
-The already-displayed/default version can also be chosen; it is not ignored just
-because it is shown. A version that is already the stored choice need not be
-chosen again. The history tile marks the shown version, and `chosen` when the
-pointer is the stored one.
+The row is never repainted by a choice: its badge and its coloured edge read
+`review` only, so choosing a version cannot make an unapproved row look approved
+in this session or after a reload. The already-displayed/default version can also
+be chosen; it is not ignored just because it is shown. A version that is already
+the stored choice need not be chosen again. The history tile marks the shown
+version, and `chosen` when the pointer is the stored one.
 
 The chosen version drives preview, Copy/Code and current-SVG regeneration
 through `chosenVersion`/`previewTargetOf`. SVG to upload/export honours it

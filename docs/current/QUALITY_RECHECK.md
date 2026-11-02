@@ -4627,3 +4627,31 @@ Measured after the change (`npx tsc --noEmit`, `npm run lint`,
   honest tooltip and the "approves nothing" line.
 - Docs: version-acceptance (SVG section), I-54, svg-generation-results and both
   selector pages; `selectors/svg-generation-list.md` was trimmed back under 9,000 B.
+
+## 2026-11-02 — round 25b: the row itself can no longer be painted approved by a choice
+
+Re-reported after round 25: choosing v2 still turned the row green. The cause was
+the running build, not a second writer: commit 57e8524 (the fix) had never reached
+GitHub — `git push` failed with a TLS handshake error at the time — so the pulled
+app still contained `withReview(withPreferred(...), "approved")`. The commit is
+pushed now and `dist/index.html` rebuilt from it (the served bundle contains
+"does not approve" and no longer contains "approved for export").
+
+Two guards added so the same claim is checked against the row, not only the file,
+and so the shortcut cannot be reintroduced silently (both fail on the old code —
+verified by restoring it temporarily: 4 failures):
+
+- `never paints the row as approved when a version is only chosen` asserts the
+  row's badge text and its green-edge class before the click, after the click and
+  after a reload, then proves the row's own ✓ is still the only approval.
+- `chooses a version in a module that cannot write an approval at all` asserts the
+  choice owner (`src/svg/codeactions.ts`) has no `withReview` call and writes
+  `withPreferred(prev, version)`.
+
+Measured after the change (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,581 tests pass, 0 fail; coverage lane PASS (94 s); build PASS (1,985.25 kB,
+  gzip 612.58 kB); verify:fast all lanes passed.
+- Lint 0 errors / 24 warnings; quality gate (changed) PASS; focused run of the
+  chip, dialog, image-choice, review-item and io suites: 85 passed.

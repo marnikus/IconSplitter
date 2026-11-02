@@ -5,6 +5,7 @@
 // preview, the tag and Copy, and persists `preferred` in the pair file. The
 // dialog path stays (it is pinned here too).
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { parsePairMeta, serializePairMeta, type PairMeta } from "../src/lib/pairmeta";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
@@ -118,6 +119,40 @@ describe("SVG version chips under the SVG preview", () => {
     await settle();
     expect(sidecar(root)).toMatchObject({ preferred: 1, review: "needs-review" });
     expect((await discoverUploadSources(root)).rows).toHaveLength(0);
+  });
+
+  it("never paints the row as approved when a version is only chosen", async () => {
+    const root = makeRoot();
+    await mountRoot(root);
+    const row = () => q(`[data-testid=svg-row-${FOG}]`)?.className ?? "";
+    const badge = () => text(`[data-testid=svg-review-${FOG}]`);
+    expect(badge()).toBe("Pending");
+    expect(row()).not.toContain("approved");
+    await click(chip(2)!); // the choice, not the approval
+    await settle();
+    expect(sidecar(root)).toMatchObject({ preferred: 2, review: "pending" });
+    // the row keeps its green edge and its badge OFF, in this session ...
+    expect(badge()).toBe("Pending");
+    expect(row()).not.toContain("approved");
+    // ... and after a reload, where the row is rebuilt from the folder alone
+    await unmountPanel();
+    await mountRoot(root);
+    expect(badge()).toBe("Pending");
+    expect(row()).not.toContain("approved");
+    // the row's own ✓ is still the one and only approval
+    await click(q(`[data-testid=svg-approve-${FOG}]`)!);
+    await settle();
+    expect(badge()).toBe("Approved");
+    expect(row()).toContain("approved");
+    expect(sidecar(root)).toMatchObject({ preferred: 2, review: "approved" });
+  });
+
+  it("chooses a version in a module that cannot write an approval at all", () => {
+    // The choice owner must not even be able to reach the review writer: the bug
+    // was one `withReview(...)` call inside it, approving the row on selection.
+    const source = readFileSync("src/svg/codeactions.ts", "utf8");
+    expect(source).not.toContain("withReview");
+    expect(source).toContain("withPreferred(prev, version)");
   });
 
   it("clicking the default shown chip pins it as the choice without approving anything", async () => {
