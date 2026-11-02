@@ -5,6 +5,7 @@
 // selection/pairstore + lib/pairmeta, so this module never guesses at it.
 
 import { listChildNames, probePath, readBytesAt, type DirHandleLike } from "../lib/fs";
+import { resolveFile } from "../selection/handles";
 import { imageRegenDir } from "../lib/svgimgreg";
 import type { ScannedImage } from "../lib/imgimport";
 
@@ -36,6 +37,21 @@ export async function listPairImages(root: DirHandleLike, dirPath: string): Prom
 
 function namesOf(names: readonly string[], dirPath: string): ScannedImage[] {
   return names.filter((n) => n.toLowerCase().endsWith(PNG_SUFFIX)).map((name) => ({ name, path: join(dirPath, name) }));
+}
+
+/**
+ * A file's own modification time in epoch ms, or null when the browser hides it
+ * (2026-11-02). Registering a found image must not date it by the click.
+ */
+export async function fileTimeOf(root: DirHandleLike, relPath: string): Promise<number | null> {
+  const fh = await resolveFile(root, relPath);
+  if (fh === null) return null;
+  try {
+    const at = (await fh.getFile()).lastModified;
+    return Number.isFinite(at) && at > 0 ? at : null;
+  } catch {
+    return null;
+  }
 }
 
 /** True only for a file whose bytes start like a PNG — never "it has a .png name". */

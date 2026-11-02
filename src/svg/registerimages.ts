@@ -21,7 +21,7 @@ import { NO_COST } from "../lib/svgmodel";
 import type { ImageVersion } from "../lib/svgimgreg";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
-import { isReadablePng, listPairImages } from "./imgfiles";
+import { fileTimeOf, isReadablePng, listPairImages } from "./imgfiles";
 import { beginRegister } from "./registerprogress";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 import { baseNameOf, namingOf, siblingsOf, usableRow, type RegisterCtx } from "./registernames";
@@ -109,17 +109,19 @@ async function recordsOf(
   const records: ImageVersion[] = [];
   let skipped = 0;
   for (const file of fresh) {
-    if (await isReadablePng(root, file.path)) records.push(recordOf(file));
+    if (await isReadablePng(root, file.path)) records.push(recordOf(file, await fileTimeOf(root, file.path)));
     else skipped++;
   }
   return { records, skipped };
 }
 
 /** One image's version record — the same shape a regeneration writes, marked as found. */
-function recordOf(file: FreshImage): ImageVersion {
+function recordOf(file: FreshImage, foundAt: number | null): ImageVersion {
+  // A found image keeps its OWN time, so "AI source created" is the artwork's age.
+  const updatedAt = foundAt === null ? new Date().toISOString() : new Date(foundAt).toISOString();
   return {
     version: file.version, file: file.path, status: "done", prompt: "", model: "existing file",
-    requestId: null, error: null, updatedAt: new Date().toISOString(),
+    requestId: null, error: null, updatedAt,
     usage: { input: null, output: null, total: null }, cost: { ...NO_COST },
   };
 }

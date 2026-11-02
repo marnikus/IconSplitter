@@ -14,7 +14,7 @@ import {
   type ModelCaps,
   type SamplingParams,
 } from "../lib/modelcaps";
-import { ALL_SVG_FILTER, type SvgListFilter, type SvgSort } from "../lib/svglist";
+import { ALL_SVG_FILTER, naturalDir, type SvgDir, type SvgListFilter, type SvgSort } from "../lib/svglist";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { findPreset, type PromptPreset } from "../lib/promptpresets";
 import type { Discovery } from "./sources";
@@ -69,6 +69,8 @@ export interface SvgModel {
   stroke: number | null;
   filter: SvgListFilter;
   sort: SvgSort;
+  /** The one direction control; a new order resets it to that order's own direction. */
+  sortDir: SvgDir;
   /**
    * The pinned list order (2026-10-08): refreshed by a scan, a sort change and
    * `repin` (a tab re-activation) — never by a run event, so a landing result
@@ -117,6 +119,7 @@ export type SvgAction =
   | { type: "stroke"; px: number | null }
   | { type: "filter"; patch: Partial<SvgListFilter> }
   | { type: "sort"; sort: SvgSort }
+  | { type: "sort-dir"; dir: SvgDir }
   | { type: "repin" }
   | { type: "dialog"; dialog: Dialog | null }
   | { type: "progress"; progress: RunProgress | null }
@@ -169,7 +172,11 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
   stroke: (m, a) => ({ ...m, stroke: (a as { px: number | null }).px }),
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
-  sort: (m, a) => repinned({ ...m, sort: (a as { sort: SvgSort }).sort }),
+  sort: (m, a) => {
+    const sort = (a as { sort: SvgSort }).sort;
+    return repinned({ ...m, sort, sortDir: naturalDir(sort) });
+  },
+  "sort-dir": (m, a) => repinned({ ...m, sortDir: (a as { dir: SvgDir }).dir }),
   repin: (m) => repinned(m),
   dialog: (m, a) => ({ ...m, dialog: (a as { dialog: Dialog | null }).dialog }),
   progress: (m, a) => ({ ...m, progress: (a as { progress: RunProgress | null }).progress }),
@@ -195,7 +202,7 @@ export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
 
 /** The pin is the sort's order over every row at this moment. */
 function repinned(m: SvgModel): SvgModel {
-  return { ...m, order: sortedIds(m.rows, m.sort) };
+  return { ...m, order: sortedIds(m.rows, m.sort, m.sortDir) };
 }
 
 /**
@@ -241,7 +248,7 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     params: { ...DEFAULT_PARAMS }, caps: capsFor(live.model), catalog: null, paramNote: null,
     prompt, presets: extras.presets ?? [], presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg, stroke: prefs.stroke,
-    filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null, imgRunning: [],
+    filter: ALL_SVG_FILTER, sort: "date", sortDir: naturalDir("date"), order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null, imgRunning: [],
     imgReview: null, imgJournal: journal.entries, imgJournalWarning: journal.warning,
   };
 }

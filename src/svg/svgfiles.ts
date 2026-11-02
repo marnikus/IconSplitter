@@ -19,15 +19,30 @@ export async function listSvgFiles(root: DirHandleLike, source: SvgSource): Prom
   return names;
 }
 
-/** Reads a saved SVG document; null when the file is gone or unreadable. */
-export async function readSvgText(root: DirHandleLike, relPath: string): Promise<string | null> {
+/** A saved SVG document and the file's own modification time, when readable. */
+export interface SvgFileText {
+  code: string;
+  /** Epoch ms the file was last written; null when the browser hides it. */
+  lastModified: number | null;
+}
+
+/** Reads a saved SVG with its own time; null when the file is gone or unreadable. */
+export async function readSvgFile(root: DirHandleLike, relPath: string): Promise<SvgFileText | null> {
   const fh = await resolveFile(root, relPath);
   if (!fh) return null;
   try {
-    return await (await fh.getFile()).text();
+    const file = await fh.getFile();
+    const code = await file.text();
+    const time = file.lastModified;
+    return { code, lastModified: Number.isFinite(time) && time > 0 ? time : null };
   } catch {
     return null;
   }
+}
+
+/** Reads a saved SVG document; null when the file is gone or unreadable. */
+export async function readSvgText(root: DirHandleLike, relPath: string): Promise<string | null> {
+  return (await readSvgFile(root, relPath))?.code ?? null;
 }
 
 function dirOf(root: DirHandleLike, dirPath: string): Promise<DirHandleLike | null> {

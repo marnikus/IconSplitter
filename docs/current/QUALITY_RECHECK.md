@@ -4655,3 +4655,36 @@ Measured after the change (`npx tsc --noEmit`, `npm run lint`,
   gzip 612.58 kB); verify:fast all lanes passed.
 - Lint 0 errors / 24 warnings; quality gate (changed) PASS; focused run of the
   chip, dialog, image-choice, review-item and io suites: 85 passed.
+
+## 2026-11-02 — round 26: two created-time orders and one direction arrow
+
+Requested: sort by when the SVG was created/added, sort by when the AI source was
+created, and an ascending/descending control that works for any sort plus filter.
+
+- `lib/svglist.ts` gained `svg-created` and `ai-created` orders, `SvgDir`,
+  `naturalDir`/`sortDirOf` and a `dir` argument on `sortSvgRows`. Direction is the
+  order's own until the user flips it, applies after filtering, swaps the blocks of
+  a grouped sort, keeps unknown timestamps last in both directions and always
+  breaks ties by path.
+- Rows now carry `svgCreatedAt` / `aiCreatedAt`: the shown SVG's own file time
+  (registered files store `fileTime` from `lastModified`), else completion/request
+  time; the accepted image version's `updatedAt` (found images keep their file
+  time), else the AI file's mtime from the scan fingerprint.
+- State: `sortDir` beside `sort`, actions `sort` (restores the order's natural
+  direction) and `sort-dir`, both repinning. UI: both orders in Sort by plus the
+  `svg-sort-dir` arrow with `data-dir` and an honest aria-label; the filter/sort
+  line moved to `src/svg/SvgListFilters.tsx` to keep `SvgControls.tsx` inside the
+  file budget (315 → 255 lines).
+
+Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
+`npx vitest run --coverage`, `npm run build`):
+
+- 3,602 tests pass, 0 fail (23 new); coverage lane PASS (97 s); build PASS;
+  verify:fast all lanes passed.
+- Lint 0 errors / 24 warnings (the new `model.sortDir` memo dependency keeps it at
+  24); quality gate (changed) PASS.
+- New tests: `svg_list_time_sort` (order semantics, reversal of every order, null
+  handling, stable ties, filter-then-sort) and `svg_sort_direction_ui` (the real
+  panel: both orders, a flipped filter, a flipped group, direction surviving a
+  filter change). Registration keeps the found file's time (both passes) and falls
+  back to the click time when the browser hides it.

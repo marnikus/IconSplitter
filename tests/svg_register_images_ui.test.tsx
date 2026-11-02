@@ -11,7 +11,7 @@ import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
 import { reserveSources, SOURCE_BUSY } from "../src/svg/jobstate";
 import { runRegisterImagesFor } from "../src/svg/registerimages";
-import { toRow } from "../src/svg/rowmodel";
+import { toListRow, toRow } from "../src/svg/rowmodel";
 import { svgSource, pairMetaFor } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { FOG, click, input, installSvgPanelHooks, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
@@ -104,6 +104,19 @@ describe("more AI source images on disk", () => {
     expect(meta.imagePreferred).toBe(3);
     expect(ctx.rows[0].meta?.imagePreferred).toBe(3);
     expect(said.at(-1)).toEqual({ msg: "1 existing AI source registered — v3 is now the main image", err: false });
+  });
+
+  it("dates a found image by the file's own time, never by the click (2026-11-02)", async () => {
+    const versions = new FakeDir("AI source regeneration versions");
+    const old = Date.parse("2025-02-03T04:05:06.000Z");
+    versions.children.set("fog_AI_v3.png", pngFile("fog_AI_v3.png", old));
+    const root = rootWith({ "AI source regeneration versions": versions });
+    const { ctx } = ctxFor(root);
+    await runRegisterImagesFor(ctx as never, [FOG]);
+    const [record] = pairFileOnDisk(root).imageVersions;
+    expect(record.updatedAt).toBe("2025-02-03T04:05:06.000Z");
+    // "AI source created" reads that time rather than the registration moment
+    expect(toListRow(ctx.rows[0]).aiCreatedAt).toBe(old);
   });
 
   it("takes an unnumbered copy in under the next free number without moving the main image", async () => {

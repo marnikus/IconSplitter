@@ -177,8 +177,8 @@ function useSvgPersist(model: SvgModel): void {
 function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" | "totals" | "header" | "affected" | "requests"> {
   const sortChecks = isSelectionSort(model.sort) ? checked : undefined;
   const visible = useMemo(
-    () => withQueued(visibleRows(model.rows, model.filter, model.sort, { order: model.order, checked: sortChecks }), model.queue),
-    [model.rows, model.filter, model.sort, model.order, model.queue, sortChecks],
+    () => withQueued(visibleRows(model.rows, model.filter, model.sort, { order: model.order, checked: sortChecks, dir: model.sortDir }), model.queue),
+    [model.rows, model.filter, model.sort, model.sortDir, model.order, model.queue, sortChecks],
   );
   const totals = useMemo(() => usageTotals(visible.map(toListRow)), [visible]);
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);

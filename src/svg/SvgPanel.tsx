@@ -89,11 +89,11 @@ function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
       onSwitchConnection={g.switchConnection} onAddConnection={g.addConnection} onRemoveConnection={g.removeConnection}
       onConnectionMeta={g.setConnectionMeta} onImage={g.setImage}
       paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
-      filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
+      filter={g.filter} sort={g.sort} sortDir={g.sortDir} shown={g.visible.length} total={g.rows.length}
       onChooseRoot={g.chooseRoot} onRescan={g.rescan} onConfig={g.setConfig} onParams={g.setParams} onRefreshModels={g.refreshModels}
       onDismissNote={() => g.dispatch({ type: "param-note", note: null })}
       onSaveKey={g.saveKey} onForgetKey={g.forgetKey} onProviderOpen={g.setProviderOpen}
-      onFilter={g.setFilter} onSort={g.setSort}
+      onFilter={g.setFilter} onSort={g.setSort} onSortDir={g.setSortDir}
       onClearFilters={() => g.setFilter({ generation: "all", review: "all", search: "" })} />
   );
 }

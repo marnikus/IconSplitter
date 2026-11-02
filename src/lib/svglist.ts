@@ -7,7 +7,20 @@ import { isSelectionSort, isStateSort, sortByFlag, type StateSort } from "./stat
 
 export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed" | "unknown";
 export type ReviewFilter = "all" | "pending" | "approved" | "declined" | "needs-review";
-export type SvgSort = StateSort | "date" | "name" | "generation" | "review" | "cost";
+export type SvgSort =
+  | StateSort
+  | "date"
+  | "name"
+  | "generation"
+  | "review"
+  | "cost"
+  /** When the SVG the row shows was created/added (a found file keeps its own time). */
+  | "svg-created"
+  /** When the AI source the row shows was created. */
+  | "ai-created";
+
+/** The one direction control: applies to whichever order and filter is in force. */
+export type SvgDir = "asc" | "desc";
 
 export interface SvgListFilter {
   generation: GenFilter;
@@ -33,6 +46,10 @@ export interface SvgListRow {
   /** Total tokens of the newest version, or null when not reported. */
   tokens: number | null;
   version: number;
+  /** Epoch ms the shown SVG was created/added; null when the row has no SVG. */
+  svgCreatedAt: number | null;
+  /** Epoch ms the shown AI source was created; null when that cannot be known. */
+  aiCreatedAt: number | null;
 }
 
 export function applySvgFilters(rows: readonly SvgListRow[], f: SvgListFilter): SvgListRow[] {
@@ -66,29 +83,105 @@ export function pinOrder(previous: readonly string[], sorted: readonly string[])
   return [...kept, ...sorted.filter((id) => !seen.has(id))];
 }
 
-/** Sorts a copy — the caller's array is never reordered in place. */
-export function sortSvgRows(rows: readonly SvgListRow[], sort: SvgSort, checked: readonly string[] = []): SvgListRow[] {
+/**
+ * Each order's own direction: what a user expects when they pick it. The
+ * direction control starts here and can then be flipped for ANY order, so the
+ * arrow never depends on which sort or filter happens to be selected.
+ */
+const NATURAL_DIR: Record<SvgSort, SvgDir> = {
+  name: "asc",
+  generation: "asc",
+  review: "asc",
+  date: "desc",
+  cost: "desc",
+  "svg-created": "desc",
+  "ai-created": "desc",
+  selected: "desc",
+  unselected: "desc",
+  unapproved: "desc",
+  approved: "desc",
+};
+
+export function naturalDir(sort: SvgSort): SvgDir {
+  return NATURAL_DIR[sort] ?? "desc";
+}
+
+/** The direction the user picked, or that order's own direction when they have not. */
+export function sortDirOf(sort: SvgSort, dir?: SvgDir | null): SvgDir {
+  return dir ?? naturalDir(sort);
+}
+
+/**
+ * Sorts a copy — the caller's array is never reordered in place. `dir` reverses
+ * whichever order is chosen; a row with no timestamp at all is last in BOTH
+ * directions (an unknown age is never claimed to be the oldest or the newest),
+ * and equal rows fall back to the path so an order is never left to chance.
+ */
+export function sortSvgRows(
+  rows: readonly SvgListRow[], sort: SvgSort, checked: readonly string[] = [], dir?: SvgDir | null,
+): SvgListRow[] {
   if (isStateSort(sort)) {
+    // A group's own label says which block comes first; the arrow swaps the
+    // blocks and never scrambles the readable name order inside one.
     const selected = new Set(checked);
-    return sortByFlag(sortSvgRows(rows, "name"), (r) => isSelectionSort(sort)
-      ? selected.has(r.id) : r.review === "approved", sort === "selected" || sort === "approved");
+    const own = sort === "selected" || sort === "approved";
+    return sortByFlag(baseOrder(rows), (r) => isSelectionSort(sort)
+      ? selected.has(r.id) : r.review === "approved", flipped(sort, dir) ? !own : own);
   }
   const out = [...rows];
-  out.sort((a, b) => compare(a, b, sort));
+  out.sort((a, b) => compare(a, b, sort, flipped(sort, dir)));
   return out;
+}
+
+/** True when the user's direction is the opposite of the order's own direction. */
+function flipped(sort: SvgSort, dir?: SvgDir | null): boolean {
+  return dir !== null && dir !== undefined && dir !== naturalDir(sort);
+}
+
+/** The base order a grouped sort falls back on: the name, so groups are stable. */
+function baseOrder(rows: readonly SvgListRow[]): SvgListRow[] {
+  return sortSvgRows(rows, "name");
 }
 
 /** One comparator per sort order, so adding an order never deepens a branch. */
 const COMPARATORS: Record<Exclude<SvgSort, StateSort>, (a: SvgListRow, b: SvgListRow) => number> = {
-  name: (a, b) => (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0),
+  name: (a, b) => comparePath(a, b),
   cost: (a, b) => (b.cost ?? -1) - (a.cost ?? -1),
   date: (a, b) => (b.generatedAt ?? 0) - (a.generatedAt ?? 0),
+  "svg-created": (a, b) => timeOrder(a.svgCreatedAt, b.svgCreatedAt),
+  "ai-created": (a, b) => timeOrder(a.aiCreatedAt, b.aiCreatedAt),
   review: (a, b) => rank(a.review) - rank(b.review),
   generation: (a, b) => rank(a.generation) - rank(b.generation),
 };
 
-function compare(a: SvgListRow, b: SvgListRow, sort: Exclude<SvgSort, StateSort>): number {
-  return COMPARATORS[sort](a, b);
+/** Newest first for known times; an unknown time is always after a known one. */
+function timeOrder(a: number | null, b: number | null): number {
+  if (a === null || b === null) return Number(a === null) - Number(b === null);
+  return b - a;
+}
+
+function comparePath(a: SvgListRow, b: SvgListRow): number {
+  return a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0;
+}
+
+function compare(a: SvgListRow, b: SvgListRow, sort: Exclude<SvgSort, StateSort>, reverse: boolean): number {
+  // An unknown time is neither the newest nor the oldest: it stays last.
+  if (TIME_SORTS.has(sort)) {
+    const unknown = unknownTime(a, b, sort);
+    if (unknown !== 0) return unknown;
+  }
+  const primary = COMPARATORS[sort](a, b);
+  if (primary !== 0) return reverse ? -primary : primary;
+  // Never left to chance: two equal rows keep a stable, readable order.
+  return comparePath(a, b);
+}
+
+const TIME_SORTS = new Set<SvgSort>(["svg-created", "ai-created"]);
+
+/** 1 when only `a` has no time, -1 when only `b` has none, 0 when both are known. */
+function unknownTime(a: SvgListRow, b: SvgListRow, sort: SvgSort): number {
+  const [x, y] = sort === "svg-created" ? [a.svgCreatedAt, b.svgCreatedAt] : [a.aiCreatedAt, b.aiCreatedAt];
+  return Number(x === null) - Number(y === null);
 }
 
 const REVIEW_RANK: Record<ReviewFilter, number> = { all: 0, pending: 1, approved: 2, declined: 3, "needs-review": 4 };

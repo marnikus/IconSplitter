@@ -1,11 +1,13 @@
 # Generate SVG — filters, bulk bar and rows
 
-Selector priority and object shape: [shared conventions](shared.md#i-selector-object-structure--for-every-element). Part of [Generate SVG selectors](svg-generation.md).
+Object shape: [shared conventions](shared.md#i-selector-object-structure--for-every-element). Part of [Generate SVG selectors](svg-generation.md).
 
 Filters: `svg-filter-generation` (all / not generated / generating / generated
 / failed), `svg-filter-review` (all / pending / approved / declined / needs-review),
-`svg-sort` (date / name / generation / review / cost / selected / unselected / unapproved / approved), `svg-search` (matches the
-file name too), `svg-shown` ("Showing N of M"), `svg-clear-filters`.
+`svg-sort` (date / svg-created / ai-created / name / generation / review / cost /
+selected / unselected / unapproved / approved), `svg-sort-dir` (one direction
+arrow, `data-dir`, reverses any order), `svg-search` (name too), `svg-shown`
+("Showing N of M"), `svg-clear-filters`.
 
 ## Bulk bar (`svg-bulk`)
 
@@ -36,12 +38,12 @@ New lists start unchecked; selection gestures use global Undo ([RULE 25](../rule
 | `svg-ai-{sourceId}` | thumbnail | the approved AI image (`<img>` in the `svg-thumb` box, `object-fit: contain`); missing → placeholder of the same size |
 | `svg-prev-{sourceId}` | inline preview | the selected (else newest valid) SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame, the same `svg-thumb` px box as the AI thumbnail beside it; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |
 | `svg-prev-frame-{sourceId}` | frame around the SVG preview | `data-bg` = the chosen colour; class `contrast` when the frame needs the light outline (black artwork under 3:1); the inline host is a child of it, so the colour is what the artwork is painted on; the AI thumbnail is never inside it |
-| `svg-ver-bar-{sourceId}` / `svg-ver-chip-{sourceId}-{n}` | SVG version chips | generated + valid only, shown at 2+ versions; active: `primary`, `data-active`, `aria-pressed`; click [chooses it for use/export](../sor/version-acceptance.md), shown version included, and never approves the row |
+| `svg-ver-bar-{sourceId}` / `svg-ver-chip-{sourceId}-{n}` | SVG version chips | generated + valid only, 2+ versions; `primary`/`data-active`/`aria-pressed`; click [chooses it for use/export](../sor/version-acceptance.md) and never approves the row |
 | `svg-location-{sourceId}` / `svg-copy-{sourceId}` | buttons | "Location" copies the **folder of the file the row names** (I-56: the same path `svg-target-{id}` shows, minus the file name — `…\<piece>\split_04`); "Copy" puts that version's SVG source on the clipboard. Neither is disabled by the folder's depth, and neither ever copies a file path |
 | `svg-code-{sourceId}` / `svg-history-{sourceId}` | buttons | the code dialog and the **version chooser** (I-54); disabled with no SVG / no recorded version |
 | `svg-generate-{sourceId}` / `svg-needs-review-{sourceId}` / `svg-approve-{sourceId}` / `svg-decline-{sourceId}` | buttons | per-row Generate or Regenerate + review: needs-review (⚠ yellow, regenerated — new review) near approve/decline; approve/decline disabled until a version exists; regeneration automatically sets needs-review |
 | `svg-status-{sourceId}` | badge | "Not Generated" / "Generating" / "Generated" / "Failed" / "Unknown" (a request whose outcome was never confirmed — never shown as Failed); its `title` is the row error, e.g. "outcome unknown — request req\_… ; it has not been resent." |
-| `svg-review-{sourceId}` | badge | the ITEM's one status — pending / approved / declined / needs-review (regenerated — new review, yellow); display and version choice change nothing, only the review buttons do |
+| `svg-review-{sourceId}` | badge | the ITEM's one status — pending / approved / declined / needs-review (regenerated — new review, yellow); display and version choice change nothing |
 | `svg-usage-{sourceId}` | text | two halves: `svg-usage-svg-{sourceId}` ("SVG gen." — the shown SVG version) and, once the pair has an image history, `svg-usage-img-{sourceId}` ("Image gen." — the main AI image, or "original"); each: version, tokens and the cost as reported / **Estimated** ("no cost reported" when unknown); the `title` carries the audit line (model · currency · pricing version · basis) |
 | `svg-target-{sourceId}` | text | the SVG this row owns: the selected (else newest valid) version's real path, or — while nothing exists yet — the path generation will write ("2026-10/…/split\_01/icon\_…\_01.svg"). Never the pair file's name; the doubled folder prefix bug (svgPath is already root-relative) is fixed by this handle's rule |
 | `svg-persist-{sourceId}` | text | "Pair file saved" / "Not generated yet" / "Pair file unreadable — SVGs on disk are kept"; the `title` names the pair's own file ("architecture/fog\_AI.svg.json" — the JSON record BESIDE the SVG, not a second extension of it, I-41); `error` class on failure |

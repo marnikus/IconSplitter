@@ -97,7 +97,8 @@ describe("cost wording", () => {
   it("keeps reported money and estimated money apart in the list totals", () => {
     const row = (over: Partial<SvgListRow>): SvgListRow => ({
       id: "x", name: "x.png", relPath: "x.png", generation: "generated", review: "pending",
-      generatedAt: 1, cost: null, costEstimated: false, tokens: null, version: 1, ...over,
+      generatedAt: 1, cost: null, costEstimated: false, tokens: null, version: 1,
+      svgCreatedAt: null, aiCreatedAt: null, ...over,
     });
     const totals = usageTotals([
       row({ id: "reported", cost: 0.05, tokens: 3000 }),

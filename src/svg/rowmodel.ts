@@ -7,7 +7,10 @@ import { isStateSort } from "../lib/statesort";
 import { chosenVersion, newestValid, preferredVersion, SVG_EXT } from "../lib/svgfile";
 import type { SvgVersion } from "../lib/svgmodel";
 import type { PairMeta } from "../lib/pairmeta";
-import { ALL_SVG_FILTER, applySvgFilters, pinOrder, sortSvgRows, type SvgListFilter, type SvgListRow, type SvgSort } from "../lib/svglist";
+import {
+  ALL_SVG_FILTER, applySvgFilters, pinOrder, sortSvgRows,
+  type SvgDir, type SvgListFilter, type SvgListRow, type SvgSort,
+} from "../lib/svglist";
 import { getAppState, patchSvg } from "../state/appstore";
 import { rememberListTargets } from "../state/listtargets";
 import { checkState, pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
@@ -93,7 +96,48 @@ export function toListRow(row: SvgRow): SvgListRow {
   return {
     id: row.source.id, name: row.source.name, relPath: row.source.relPath,
     generation: row.status, review: row.review, ...versionFields(v),
+    svgCreatedAt: svgCreatedAtOf(v), aiCreatedAt: aiCreatedAtOf(row),
   };
+}
+
+/**
+ * When the shown SVG was created: the file's OWN time when it was found on disk,
+ * else when the run that wrote it finished, else when it was requested. This is
+ * what "SVG created" sorts by, so a version registered today from an artwork made
+ * last year sorts as last year's work, not as new.
+ */
+export function svgCreatedAtOf(v: SvgVersion | null): number | null {
+  if (v === null) return null;
+  return firstTime([v.fileTime ?? null, v.completedAt, v.requestedAt]);
+}
+
+/**
+ * When the shown AI source was created: an accepted image version's own time, or
+ * the original AI file's modification time from the scan fingerprint
+ * (`size:mtime`). A row whose source time cannot be known sorts last instead of
+ * claiming to be the newest.
+ */
+export function aiCreatedAtOf(row: SvgRow): number | null {
+  const preferred = row.meta?.imagePreferred ?? null;
+  const chosen = (row.meta?.imageVersions ?? []).find((v) => v.version === preferred && v.status === "done");
+  return firstTime([chosen?.updatedAt ?? null]) ?? fingerprintTime(row.source.fingerprint);
+}
+
+/** The first parseable timestamp, or null when none of them is a real date. */
+function firstTime(values: readonly (string | null)[]): number | null {
+  for (const value of values) {
+    const time = value === null ? NaN : Date.parse(value);
+    if (Number.isFinite(time)) return time;
+  }
+  return null;
+}
+
+/** A scan fingerprint is `size:mtime` in epoch ms ("missing" carries no time). */
+function fingerprintTime(fingerprint: string): number | null {
+  const at = fingerprint.lastIndexOf(":");
+  if (at < 0) return null;
+  const time = Number(fingerprint.slice(at + 1));
+  return Number.isFinite(time) && time > 0 ? time : null;
 }
 
 /** The newest version's list fields; nothing generated means nothing to show. */
@@ -107,12 +151,18 @@ function versionFields(v: SvgVersion | null): Pick<SvgListRow, "generatedAt" | "
   };
 }
 
-export interface SvgListView { order?: readonly string[]; checked?: readonly string[] }
+export interface SvgListView {
+  order?: readonly string[];
+  checked?: readonly string[];
+  /** The one direction control; absent = the chosen order's own direction. */
+  dir?: SvgDir;
+}
 
 /** Filter/sort copies; ordinary sorts respect the pin, state groups follow live flags. */
 export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort, view: SvgListView = {}): SvgRow[] {
   const byId = new Map(rows.map((r) => [r.source.id, r]));
-  const sorted = sortSvgRows(applySvgFilters([...byId.values()].map(toListRow), filter), sort, view.checked).map((l) => l.id);
+  const kept = applySvgFilters([...byId.values()].map(toListRow), filter);
+  const sorted = sortSvgRows(kept, sort, view.checked, view.dir).map((l) => l.id);
   const ordered = isStateSort(sort) ? sorted : pinOrder(view.order ?? [], sorted);
   return ordered.flatMap((id) => {
     const row = byId.get(id);
@@ -127,8 +177,8 @@ export function withQueued(rows: SvgRow[], queue: readonly QueueItem[]): SvgRow[
 }
 
 /** Every row's id in the sort's order — what the pin is refreshed from. */
-export function sortedIds(rows: SvgRow[], sort: SvgSort): string[] {
-  return visibleRows(rows, ALL_SVG_FILTER, sort).map((r) => r.source.id);
+export function sortedIds(rows: SvgRow[], sort: SvgSort, dir?: SvgDir): string[] {
+  return visibleRows(rows, ALL_SVG_FILTER, sort, { dir }).map((r) => r.source.id);
 }
 
 /** Selected ids that already have a valid SVG, preserving checkbox pick order. */

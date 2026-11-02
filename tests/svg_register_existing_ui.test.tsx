@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
 import { runRegisterFor } from "../src/svg/registerexisting";
-import { toRow } from "../src/svg/rowmodel";
+import { toListRow, toRow } from "../src/svg/rowmodel";
 import { svgSource, pairMetaFor, svgVersion } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { FOG, click, input, installSvgPanelHooks, makeRoot, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
@@ -81,6 +81,34 @@ describe("one SVG already in the folder", () => {
     expect(ctx.rows[0].status).toBe("generated");
     expect(ctx.rows[0].newest?.version).toBe(1);
     expect(said.at(-1)).toEqual({ msg: "1 existing SVG registered — v1 is now shown", err: false });
+  });
+});
+
+describe("the age a registered SVG keeps (2026-11-02)", () => {
+  it("records the FILE's own time, so an old artwork does not sort as today's", async () => {
+    const root = rootWith({ "fog_AI.svg": V1 });
+    const arch = root.children.get("architecture") as FakeDir;
+    const old = Date.parse("2025-03-04T05:06:07.000Z");
+    arch.children.set("fog_AI.svg", new FakeFile("fog_AI.svg", V1.length, old, V1));
+    const { ctx } = ctxFor(root);
+    await runRegisterFor(ctx as never, [FOG]);
+    const [record] = pairFileOnDisk(root).versions;
+    expect(record.fileTime).toBe("2025-03-04T05:06:07.000Z");
+    // and the order reads that time, not the moment of the click
+    expect(toListRow(ctx.rows[0]).svgCreatedAt).toBe(old);
+    // the record is still stamped as found today: when it entered the history
+    expect(Date.parse(record.completedAt ?? "")).toBeGreaterThan(old);
+  });
+
+  it("falls back to the registration time when the browser hides a file's time", async () => {
+    const root = rootWith({ "fog_AI.svg": V1 });
+    const arch = root.children.get("architecture") as FakeDir;
+    arch.children.set("fog_AI.svg", new FakeFile("fog_AI.svg", V1.length, 0, V1)); // no usable time
+    const { ctx } = ctxFor(root);
+    await runRegisterFor(ctx as never, [FOG]);
+    const [record] = pairFileOnDisk(root).versions;
+    expect(record.fileTime).toBe(record.requestedAt);
+    expect(toListRow(ctx.rows[0]).svgCreatedAt).toBe(Date.parse(record.fileTime ?? ""));
   });
 });
 

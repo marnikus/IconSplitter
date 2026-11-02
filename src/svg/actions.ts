@@ -11,7 +11,7 @@ import { useImgRegenActions } from "./imgactions";
 import type { PreparedImageRun } from "./imgprepare";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { clampStroke } from "../lib/previewstroke";
-import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
+import type { SvgDir, SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
 import { applyRowGesture, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
@@ -53,7 +53,8 @@ export interface SvgActions extends SvgPromptActions {
   readCode: (id: string, version: number) => Promise<string | null>;
   chooseRoot: () => void; rescan: () => void; setThumb: (px: number) => void; setPreviewBg: (bg: PreviewBackground) => void;
   setPreviewStroke: (px: number | null) => void;
-  setFilter: (patch: Partial<SvgListFilter>) => void; setSort: (sort: SvgSort) => void; setConfig: (patch: Partial<SvgConfig>) => void;
+  setFilter: (patch: Partial<SvgListFilter>) => void; setSort: (sort: SvgSort) => void;
+  setSortDir: (dir: SvgDir) => void; setConfig: (patch: Partial<SvgConfig>) => void;
   switchConnection: (id: string) => void; addConnection: () => void; removeConnection: () => void;
   setConnectionMeta: (patch: { name?: string; kind?: ConnectionKind }) => void;
   setImage: (patch: Partial<Connection["image"]>) => void;
@@ -103,15 +104,16 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   const rescan = useCallback(() => { void scanSources(latest.current.refs, latest.current, true); }, []);
   return { chooseRoot, rescan };
 }
-function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPreviewStroke" | "setProviderOpen" | "setFilter" | "setSort"> {
+function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPreviewStroke" | "setProviderOpen" | "setFilter" | "setSort" | "setSortDir"> {
   const latest = useRef(ctx); latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
   const setPreviewBg = useCallback((bg: PreviewBackground) => latest.current.dispatch({ type: "bg", bg: parsePreviewBackground(bg) }), []);
   const setPreviewStroke = useCallback((px: number | null) => latest.current.dispatch({ type: "stroke", px: px === null ? null : clampStroke(px) }), []);
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
+  const setSortDir = useCallback((dir: SvgDir) => latest.current.dispatch({ type: "sort-dir", dir }), []);
   const setProviderOpen = useCallback((open: boolean) => latest.current.dispatch({ type: "provider-open", open }), []);
-  return { setThumb, setPreviewBg, setPreviewStroke, setProviderOpen, setFilter, setSort };
+  return { setThumb, setPreviewBg, setPreviewStroke, setProviderOpen, setFilter, setSort, setSortDir };
 }
 function useModelActions(ctx: SvgCtx): Slice<"setConfig" | "setParams" | "refreshModels"> {
   const latest = useRef(ctx); latest.current = ctx;

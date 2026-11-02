@@ -45,7 +45,7 @@ Full handle reference with semantic fallbacks: `UI_SELECTORS.md`.
   / `svg-key-input` / `svg-key-save`), the copy prefix (`svg-root-path`;
   `svg-choose-root` is offered while a root is loaded too, so this tab can be
   pointed by hand), filters (`svg-filter-generation`,
-  `svg-filter-review`, `svg-sort`, `svg-search`, `svg-shown`,
+  `svg-filter-review`, `svg-sort`, `svg-sort-dir`, `svg-search`, `svg-shown`,
   `svg-clear-filters`), bulk bar (`svg-check-all`, `svg-selected-count`,
   `svg-select-visible`, `svg-deselect`, `svg-thumb` + `svg-thumb-value`,
   preview background (`svg-bg`, `svg-bg-{white,black,gray,green,red}`,

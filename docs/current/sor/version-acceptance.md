@@ -66,6 +66,8 @@ existing SVGs (N)** in the bulk bar (`svg-register-existing`, 2026-11-01) closes
 - The pair's own `<stem>.svg.json` is written once through the usual verified path. The item's
   review status is put back afterwards: registering a FILE is not a review decision, so an
   approval, a decline or `needs-review` survives it, and a fresh item stays `pending`.
+- A record carries the found file's own modification time (`fileTime`), so the
+  [SVG-created order](list-state-sorting.md) dates old artwork honestly.
 - The **newest readable version becomes `preferred`** — the row shows it, Copy/Code read it and
   later work uses it, exactly as if the user had accepted it with a version chip. History is
   not touched: every version stays listed and re-choosable.

@@ -25,7 +25,7 @@ import { importSummary, newestReadable, planImport, type ImportTally } from "../
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { metaForSource } from "./sources";
-import { listSvgFiles, readSvgText } from "./svgfiles";
+import { listSvgFiles, readSvgFile } from "./svgfiles";
 import { toRow } from "./rowmodel";
 import { beginRegister } from "./registerprogress";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
@@ -124,16 +124,19 @@ async function recordOf(
   root: DirHandleLike, row: SvgRow, file: ExistingFile, review: SvgRow["review"],
 ): Promise<SvgVersion | null> {
   const svgPath = row.source.dirPath === "" ? file.name : `${row.source.dirPath}/${file.name}`;
-  const code = await readSvgText(root, svgPath);
-  if (code === null) return null;
-  const check = validateSvg(code);
+  const read = await readSvgFile(root, svgPath);
+  if (read === null) return null;
+  const check = validateSvg(read.code);
   if (!check.ok) return null;
   const now = new Date().toISOString();
+  // A found file keeps its OWN creation time: registering a year-old artwork must
+  // not make it look like today's work in the "SVG created" order.
+  const found = read.lastModified === null ? now : new Date(read.lastModified).toISOString();
   return {
     version: file.version, svgPath, status: "generated", review,
-    prompt: "", provider: "existing file", model: "", requestedAt: now, completedAt: now,
+    prompt: "", provider: "existing file", model: "", requestedAt: now, completedAt: now, fileTime: found,
     usage: { input: null, output: null, total: null }, cost: { actual: null, estimated: null, currency: "USD", pricing: "", basis: "none" },
-    validation: { ok: true, errors: [], warnings: check.warnings, icons: iconCountOf(code) },
+    validation: { ok: true, errors: [], warnings: check.warnings, icons: iconCountOf(read.code) },
     batch: null, error: null, requestId: null,
   };
 }

@@ -57,6 +57,12 @@ export interface SvgVersion {
   model: string;
   requestedAt: string;
   completedAt: string | null;
+  /**
+   * The file's own modification time (ISO) when the SVG was FOUND on disk
+   * rather than written by a run (registration, 2026-11-02). Additive: a record
+   * without it still reads, and a generated version falls back to `completedAt`.
+   */
+  fileTime?: string;
   usage: TokenUsage;
   cost: CostInfo;
   validation: ValidationInfo;
@@ -93,6 +99,7 @@ export function parseVersion(raw: unknown): SvgVersion | null {
     model: str(raw.model),
     requestedAt: str(raw.requestedAt),
     completedAt: nullableStr(raw.completedAt),
+    ...(nullableStr(raw.fileTime) === null ? {} : { fileTime: nullableStr(raw.fileTime) as string }),
     usage: toUsage(raw.usage),
     cost: toCost(raw.cost),
     validation: toValidation(raw.validation),
