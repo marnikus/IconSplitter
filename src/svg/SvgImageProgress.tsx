@@ -1,17 +1,13 @@
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
+import { useProcessSlot } from "../ui/useProcessSlot";
 import { imageProgressStore, type ImageProcess } from "./imgprogress";
 import type { SvgRefs } from "./types";
 
 export default function SvgImageProgress({ refs, onStop }: { refs: SvgRefs; onStop: () => void }) {
   const [dismissed, setDismissed] = useState<string | null>(null);
-  const store = imageProgressStore(refs);
-  const subscribe = useCallback((fn: () => void) => {
-    store.listeners.add(fn);
-    return () => { store.listeners.delete(fn); };
-  }, [store]);
-  const process = useSyncExternalStore(subscribe, () => store.value);
+  const process = useProcessSlot(imageProgressStore(refs));
   if (!process || process.id === dismissed) return null;
   const done = process.saved + process.failed + process.discarded;
   const active = process.phase !== "complete" && process.phase !== "stopped";
@@ -19,7 +15,7 @@ export default function SvgImageProgress({ refs, onStop }: { refs: SvgRefs; onSt
     detail={`Request ${process.request} of ${process.requests} · ${process.saved} saved · ${process.failed} failed · ${process.discarded} discarded`}
     done={done} total={process.total} remaining={Math.max(0, process.total - done)}
     percent={process.total > 0 ? Math.round(done / process.total * 100) : 0} leading={<span aria-hidden="true">▧</span>}
-    complete={!active} actions={active
+    complete={!active} cue={process.id} cueSilent={process.phase === "stopped"} actions={active
       ? <button className="svg-btn tiny" data-testid="svg-image-progress-stop" disabled={process.stopping} onClick={onStop}>Stop image run</button>
       : <button className="svg-btn tiny" data-testid="svg-image-progress-dismiss" onClick={() => setDismissed(process.id)}>Dismiss</button>} />;
   const mount = document.getElementById("svg-progress-mount");

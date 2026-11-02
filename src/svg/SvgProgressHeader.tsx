@@ -81,6 +81,7 @@ function CompleteBar(props: Props & { onCancelClick: () => void; onDismiss: () =
   return (
     <ProcessProgressBar prefix="svg" theme="svg" title={props.aggregate?.interrupted ? "SVG processes ended — check results" : "SVG batch complete"} detail={`${saved} results saved · ready for review`}
       done={done} total={images} remaining={0} percent={100} complete
+      cue={props.progress?.runId ?? null} cueSilent={props.aggregate?.interrupted === true}
       leading={<span className="svg-progress-check" aria-hidden="true">✓</span>}
       actions={<>
         <button type="button" className="svg-btn primary tiny" data-testid="svg-progress-review" onClick={props.onReview}>→ Review results</button>

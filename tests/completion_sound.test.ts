@@ -96,6 +96,29 @@ describe("completion sound", () => {
     await Promise.resolve(); await Promise.resolve(); expect(starts).toHaveLength(3);
   });
 
+  it("keeps a cue the browser refused and plays it on the next gesture", async () => {
+    const { starts } = fakeAudio();
+    const sound = await import("../src/ui/completionSound");
+    // A finished bar before the page was ever armed (no gesture yet, or a reload
+    // in the background): the cue is not lost, it waits.
+    sound.notifyCompletion("before-any-gesture");
+    await Promise.resolve(); await Promise.resolve();
+    expect(starts).toEqual([]);
+    expect(sound.deferredCueCount()).toBe(1);
+    expect(sound.armCompletionSound()).toBe(true);
+    await Promise.resolve(); await Promise.resolve();
+    expect(starts).toHaveLength(1);
+    expect(sound.deferredCueCount()).toBe(0);
+    // A mute keeps it silent even after the gesture, and nothing replays twice.
+    sound.setCompletionSound(false);
+    sound.notifyCompletion("while-muted");
+    await Promise.resolve(); await Promise.resolve();
+    sound.setCompletionSound(true);
+    expect(sound.armCompletionSound()).toBe(true);
+    await Promise.resolve(); await Promise.resolve();
+    expect(starts).toHaveLength(1);
+  });
+
   it("handles unsupported or blocked audio without rejecting work", async () => {
     vi.stubGlobal("AudioContext", undefined);
     const sound = await import("../src/ui/completionSound");

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef } from "react";
 import { copyFolderText } from "../lib/copypath";
+import type { DirHandleLike } from "../lib/fs";
 import { probeBridgeFtps } from "../lib/stockupload/bridgeclient";
 import { probeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import { buildGettyEspCsv } from "../lib/stockupload/gettycsv";
@@ -137,46 +138,65 @@ async function budgetFor(c: OpsCtx, targets: readonly StockFtpPreset[]): Promise
 }
 
 async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<void> {
-  if (!c.r.root.current) return;
-  const networkTargets = plan.targets.filter((t) => t.protocol !== "esp-batch");
-  c.dispatch({ type: "patch", patch: { dialog: null, uploading: true, progress: { done: 0, total: plan.tasks.length, label: "Preparing upload batch…" } } });
-  const budget = await budgetFor(c, networkTargets);
-  if (budget.failure !== null) {
-    c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
-    c.say(budget.failure, true);
-    return;
-  }
+  const root = c.r.root.current;
+  if (root === null) return;
+  const runId = crypto.randomUUID();
+  c.dispatch(startProgress(runId, plan.tasks.length));
+  const budget = await budgetFor(c, plan.targets.filter((t) => t.protocol !== "esp-batch"));
+  if (budget.failure !== null) return abortStart(c, budget.failure);
   const controller = new AbortController();
   c.r.abort.current = controller;
-  const summary = await executeStockUploadBatch(plan, {
-    root: c.r.root.current,
-    bridgeUrl: c.model.prefs.bridgeUrl,
-    signal: controller.signal,
-    loadCreds: readFtpCredentials,
-    // The batch bytes the running helper can take, so no request is sent blind.
-    gettyWebMaxBytes: budget.gettyMaxBytes,
-    // Random batch selection: each 100-icon batch is a random draw from what is left.
-    gettyWebRandomBatches: c.model.prefs.randomBatches,
-    onProgress: (progress) => c.dispatch({ type: "patch", patch: { progress } }),
-    logFn: log,
-    onCertWarning: (_id, sha256) => c.dispatch({ type: "patch", patch: { testStatus: { busy: false, ok: false, note: "Server certificate requires trust", certSha256: sha256 } } }),
-  });
+  const summary = await executeStockUploadBatch(plan, depsFor(c, root, { runId, signal: controller.signal, gettyMaxBytes: budget.gettyMaxBytes }));
   c.r.abort.current = null;
   const msg = summarizeBatch(summary, plan.targets.length);
-  c.dispatch({ type: "patch", patch: { uploading: false, progress: finishedProgress(plan, summary, msg.text) } });
+  const done = finishedProgress(plan, summary, msg.text, { runId, stopped: controller.signal.aborted });
+  c.dispatch({ type: "patch", patch: { uploading: false, progress: done } });
   c.say(msg.text, msg.err);
+}
+
+/** A run that may not start says why and leaves no empty bar behind. */
+function abortStart(c: OpsCtx, reason: string): void {
+  c.dispatch({ type: "patch", patch: { uploading: false, progress: null } });
+  c.say(reason, true);
+}
+
+/** What the batch runner gets from the panel — one object, one place to read it. */
+function depsFor(
+  c: OpsCtx, root: DirHandleLike, run: { runId: string; signal: AbortSignal; gettyMaxBytes?: number },
+) {
+  return {
+    root,
+    bridgeUrl: c.model.prefs.bridgeUrl,
+    signal: run.signal,
+    loadCreds: readFtpCredentials,
+    // The batch bytes the running helper can take, so no request is sent blind.
+    gettyWebMaxBytes: run.gettyMaxBytes,
+    // Random batch selection: each 100-icon batch is a random draw from what is left.
+    gettyWebRandomBatches: c.model.prefs.randomBatches,
+    // Every live step carries the run id, so the bar's cue is one per run.
+    onProgress: (progress: UploadProgressStep) => c.dispatch({ type: "patch", patch: { progress: { ...progress, runId: run.runId } } }),
+    logFn: log,
+    onCertWarning: (_id: string, sha256: string) => c.dispatch({ type: "patch", patch: { testStatus: { busy: false, ok: false, note: "Server certificate requires trust", certSha256: sha256 } } }),
+  };
+}
+
+/** The bar appears at once, carrying the run id its completion cue is keyed by. */
+function startProgress(runId: string, total: number) {
+  return { type: "patch" as const, patch: { dialog: null, uploading: true, progress: { runId, done: 0, total, label: "Preparing upload batch…" } } };
 }
 
 /**
  * The bar stays as the finished state (100%, ✕ to close) instead of vanishing or
  * sitting at 100% offering a Cancel that no longer does anything.
  */
-function finishedProgress(plan: StockUploadPlan, summary: UploadBatchSummary, label: string): UploadProgressStep {
+function finishedProgress(
+  plan: StockUploadPlan, summary: UploadBatchSummary, label: string, run: Pick<UploadProgressStep, "runId" | "stopped">,
+): UploadProgressStep {
   return {
     // The bar counts files that really uploaded: a run where everything failed
     // must not paint "418 completed / 418 · 100 %" in green.
     done: summary.uploadedFiles, total: plan.tasks.length, label,
-    complete: true, failed: summary.failedFiles,
+    complete: true, failed: summary.failedFiles, ...run,
   };
 }
 

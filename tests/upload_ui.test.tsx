@@ -1,4 +1,4 @@
-import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
+import { completionAudio, flushCompletionAudio, recordCompletionAudio, settleCompletionAudio } from "./helpers/completionAudio";
 // upload_ui.test.tsx — the "SVG to upload" tab drives the real panel, the real
 // scan, the real metadata pipeline and the real export pipeline (RULE 8):
 // approved pairs only, the bulk bar's header checkbox, the filters, the zoom,
@@ -2390,6 +2390,7 @@ describe("real export batch progress", () => {
     await waitFor(() => (q("[data-testid=upload-meta-confirm]") as HTMLButtonElement)?.disabled === false, "prepared confirmation");
     const releases = holdJpegEncodes();
     recordCompletionAudio();
+    await settleCompletionAudio(); // the earlier scan cue is spent, not this action's
     await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => releases.length === 1, "first export JPEG");
     expect(text("[data-testid=upload-metadata-progress-title]")).toContain("complete");

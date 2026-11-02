@@ -25,6 +25,7 @@ function UploadProcess({ g, kind }: { g: UploadApi; kind: UploadProcessKind }) {
   return (
     <ProcessProgressBar prefix={prefix} theme="svg" title={title} detail={detail} done={totals.done} total={totals.total}
       remaining={totals.left} percent={totals.percent} complete={progress.status === "completed"}
+      cue={progress.runId} cueSilent={progress.status === "cancelled"}
       leading={<span className="svg-progress-check" aria-hidden="true">{ICONS[progress.status]}</span>}
       actions={<ProgressActions g={g} kind={kind} />} />
   );

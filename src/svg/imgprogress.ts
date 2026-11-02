@@ -1,27 +1,26 @@
 // Image-only process state: no provider credentials, bytes or SVG counters.
+// The store itself is lib/processslot, shared with the register bars (2026-11-02).
+import { createSlotMap, publishProcess } from "../lib/processslot";
 import type { SvgRefs } from "./types";
 export interface ImageProcess {
   id: string; total: number; requests: number; request: number;
   saved: number; failed: number; discarded: number; stopping: boolean;
   phase: "running" | "saving" | "review" | "complete" | "stopped";
 }
-interface Store { value: ImageProcess | null; listeners: Set<() => void> }
-const stores = new WeakMap<SvgRefs, Store>();
-export function imageProgressStore(refs: SvgRefs): Store {
-  let store = stores.get(refs);
-  if (!store) { store = { value: null, listeners: new Set() }; stores.set(refs, store); }
-  return store;
+const slotOf = createSlotMap<ImageProcess>();
+
+export function imageProgressStore(refs: SvgRefs) {
+  return slotOf(refs);
 }
 export function startImageProcess(refs: SvgRefs, spec: Pick<ImageProcess, "id" | "total" | "requests">): void {
-  const store = imageProgressStore(refs);
-  store.value = { ...spec, request: 0, saved: 0, failed: 0, discarded: 0, stopping: false, phase: "running" };
-  for (const listener of store.listeners) listener();
+  publishProcess(imageProgressStore(refs), {
+    ...spec, request: 0, saved: 0, failed: 0, discarded: 0, stopping: false, phase: "running",
+  });
 }
 export function updateImageProcess(refs: SvgRefs, id: string, patch: Partial<Omit<ImageProcess, "id">>): void {
   const store = imageProgressStore(refs);
   if (store.value?.id !== id) return;
-  store.value = { ...store.value, ...patch };
-  for (const listener of store.listeners) listener();
+  publishProcess(store, { ...store.value, ...patch });
 }
 export function stopImageProcess(refs: SvgRefs): void {
   const current = imageProgressStore(refs).value;

@@ -1,4 +1,4 @@
-import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
+import { completionAudio, flushCompletionAudio, recordCompletionAudio, settleCompletionAudio } from "./helpers/completionAudio";
 // selectionv2_ui.test.tsx — RULE 8: DOM-level tests for the V2 Selection
 // surface (spec V2 §16). Everything here drives the real panel: folder pick →
 // recursive scan → list review rows → zoom → selection → bulk approve →
@@ -450,6 +450,7 @@ describe("Selection V2 panel", () => {
   it("approves the checked rows in one operation with one summary toast", async () => {
     const { el } = await mount(makeRoot());
     recordCompletionAudio();
+    await settleCompletionAudio(); // the mount-time scan cue is spent, not this action's
     await check(q(el, `[data-testid='v2-check-${FOG}']`) as HTMLInputElement, true);
     await check(q(el, `[data-testid='v2-check-${COURT}']`) as HTMLInputElement, true);
     const btn = q(el, "[data-testid='v2-approve-selected']") as HTMLButtonElement;

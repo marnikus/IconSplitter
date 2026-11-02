@@ -82,6 +82,7 @@ function CompleteBar(props: Props & { mode: Mode; onCancelClick: () => void; onD
   return (
     <ProcessProgressBar prefix={mode === "preview" ? "batch-preview" : "batch"} theme="batch" title={title} detail={sub}
       done={done} total={total} remaining={0} percent={100} complete
+      cue={props.progress?.runId ?? null} cueSilent={done < total}
       leading={<span className="batch-progress-check" aria-hidden="true">✓</span>}
       actions={<>
         <button type="button" className="svg-btn primary tiny" data-testid={testId(mode, "progress-review")} onClick={props.onReview}>→ Review results</button>

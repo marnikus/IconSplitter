@@ -22,6 +22,7 @@ import type { ImageVersion } from "../lib/svgimgreg";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { isReadablePng, listPairImages } from "./imgfiles";
+import { beginRegister } from "./registerprogress";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 import { baseNameOf, namingOf, siblingsOf, usableRow, type RegisterCtx } from "./registernames";
 import { toRow } from "./rowmodel";
@@ -60,13 +61,17 @@ export async function runRegisterImagesFor(c: RegisterCtx, ids: string[]): Promi
 async function runRegister(c: RegisterCtx, root: DirHandleLike, rows: SvgRow[]): Promise<void> {
   const tally: ImageTally = { registered: 0, skipped: 0, folders: rows.length, shown: null, others: [] };
   if (rows.length === 1) Object.assign(tally, { stem: rows[0].source.stem, original: rows[0].source.name });
+  const bar = beginRegister(c.refs, "images", rows.length);
   for (const row of rows) {
+    bar.reading(row.source.name);
     const out = await registerOne(c, root, row);
     tally.registered += out.registered;
     tally.skipped += out.skipped;
     tally.others = [...(tally.others ?? []), ...out.others];
     if (out.shown !== null) tally.shown = Math.max(tally.shown ?? 0, out.shown);
+    bar.settled({ registered: out.registered, skipped: out.skipped });
   }
+  bar.finish();
   const line = imageSummary(tally);
   log({
     feature: "svg", action: "register-images",

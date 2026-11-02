@@ -47,6 +47,10 @@ existing SVGs (N)** in the bulk bar (`svg-register-existing`, 2026-11-01) closes
   so a silent no-op is impossible.
 - A pair another process holds (a run, an export) is refused with the usual busy message, and
   a failed write says so and changes no row. Nothing on disk is renamed or deleted.
+- Both passes show the shared [process bar](process-progress.md) while they read and
+  write (`register-svg-progress-*` / `register-images-progress-*`: percent, pairs done,
+  the pair being read, then "N registered · K skipped"), finish green for 6 s with a ✕,
+  and play the completion cue once per pass ([selectors](../selectors/svg-generation-run.md)).
 
 Regressions: `svg_register_existing` (names, numbering, dedupe, the summary line),
 `svg_register_existing_ui` (one file, several versions, an approval kept, an invalid file

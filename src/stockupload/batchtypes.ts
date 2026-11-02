@@ -29,6 +29,10 @@ export interface UploadProgressStep {
   complete?: boolean;
   /** Files that did not upload, so a finished bar can say so. */
   failed?: number;
+  /** Identity of this run: the bar's completion cue is keyed by it (2026-11-02). */
+  runId?: string;
+  /** The user stopped the run: it ended, but it is not a completion. */
+  stopped?: boolean;
 }
 
 export interface UploadBatchDeps {

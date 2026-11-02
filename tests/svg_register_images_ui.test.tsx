@@ -15,6 +15,8 @@ import { toRow } from "../src/svg/rowmodel";
 import { svgSource, pairMetaFor } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { FOG, click, input, installSvgPanelHooks, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
+import { armCompletionSound } from "../src/ui/completionSound";
+import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 
 installSvgPanelHooks();
 
@@ -168,6 +170,8 @@ describe("the button in the tab", () => {
   }
 
   it("is disabled with nothing selected and registers the selected folder on a click", async () => {
+    recordCompletionAudio();
+    armCompletionSound();
     const root = splitRoot();
     await mount(root);
     expect(input("[data-testid=svg-register-images]").hasAttribute("disabled")).toBe(true);
@@ -183,6 +187,12 @@ describe("the button in the tab", () => {
     expect(parsed.meta.imagePreferred).toBeNull(); // the split image stays what the pair shows
     expect(text("[data-testid=svg-toast]")).toBe("1 existing AI source registered — the main image did not change");
     expect(text(`[data-testid=svg-ai-chip-${SPLIT_ID}-1]`)).toBe("v1");
+    // The pass reports through the shared bar and is audible when it ends.
+    expect(text("[data-testid=register-images-progress-title]")).toBe("Registering AI sources complete");
+    expect(text("[data-testid=register-images-progress-percent]")).toBe("100%");
+    expect(q("[data-testid=register-images-progress-header]")?.className).toContain("complete");
+    await flushCompletionAudio();
+    expect(completionAudio.starts).toHaveLength(1);
     await unmountPanel();
   });
 });

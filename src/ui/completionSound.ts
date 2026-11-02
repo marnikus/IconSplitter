@@ -3,6 +3,12 @@ import { readKey, writeKey } from "../state/safestorage";
 import asset from "../../tests/assets/Sound/universfield-new-notification-037-485898.mp3?inline";
 const KEY = "iconSplitter.process.sound.v1";
 const heard = new Set<string>();
+/**
+ * Cues the browser would not play yet (audio not armed, context suspended, a tab
+ * that was hidden). They are kept, not dropped: the next gesture arms the context
+ * and one replay makes the finished bar audible — the "sometimes no sound" fix.
+ */
+const deferred = new Set<string>();
 let audio: AudioContext | null = null;
 let decoded: Promise<AudioBuffer | null> | null = null;
 let nextAt = 0;
@@ -18,8 +24,16 @@ export function armCompletionSound(): boolean {
     audio ??= new AudioContext();
     void audio.resume().catch(() => undefined);
     decoded ??= decodeAsset(audio);
+    replayDeferred();
     return true;
   } catch { return false; }
+}
+
+/** A refused cue is played once here — after any gesture, so the bar is still heard. */
+function replayDeferred(): void {
+  if (deferred.size === 0) return;
+  deferred.clear();
+  void playCompletionSound();
 }
 
 async function decodeAsset(context: AudioContext): Promise<AudioBuffer | null> {
@@ -33,8 +47,22 @@ async function decodeAsset(context: AudioContext): Promise<AudioBuffer | null> {
 export function notifyCompletion(id: string, cancelled = false): void {
   if (heard.has(id)) return;
   heard.add(id);
-  if (!cancelled && completionSoundEnabled()) void playCompletionSound();
+  if (cancelled || !completionSoundEnabled()) return;
+  void playCompletionSound().then((played) => { if (!played) deferred.add(id); });
 }
+
+/**
+ * A finished bar asks for the cue only if nobody has claimed this process yet: the
+ * feature itself (a run, an upload) keeps ownership, and the bar is the safety net
+ * for the flows that never call the sound service at all.
+ */
+export function notifyBarCompletion(id: string, silent = false): void {
+  if (heard.has(id)) return;
+  notifyCompletion(id, silent);
+}
+
+/** How many cues wait for a gesture — the sound test and tests read this. */
+export const deferredCueCount = (): number => deferred.size;
 
 /** Capture one actual run; arm before async work can lose user activation. */
 export function startCompletionSound(id: string = crypto.randomUUID()): (cancelled?: boolean) => void {

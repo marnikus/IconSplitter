@@ -14,6 +14,8 @@ import { svgSource, pairMetaFor, svgVersion } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { FOG, click, input, installSvgPanelHooks, makeRoot, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
 import { reserveSources, SOURCE_BUSY } from "../src/svg/jobstate";
+import { armCompletionSound } from "../src/ui/completionSound";
+import { clearCompletionAudio, completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
 
 installSvgPanelHooks();
 
@@ -163,6 +165,29 @@ describe("the folder from the report (split pair, pre-split SVG name)", () => {
     expect(text("[data-testid=svg-toast]")).toBe(
       "No existing SVG for download-icon-01_AI_01 in 1 selected folder — 1 other SVG there is not this pair's (e.g. court_AI.svg)",
     );
+    await unmountPanel();
+  });
+});
+
+describe("the pass is visible while it runs", () => {
+  it("reports through the same progress bar stack and sounds once when it ends", async () => {
+    recordCompletionAudio();
+    armCompletionSound();
+    const root = rootWith({ "fog_AI.svg": V1, "fog_AI_v2.svg": V2 });
+    await mount(root);
+    await act(async () => input(`[data-testid=svg-check-${FOG}]`).click());
+    await settle();
+    clearCompletionAudio(); // the panel's own scan already cued; count the pass only
+    await click(q("[data-testid=svg-register-existing]") as HTMLElement);
+    await settle();
+    expect(q("[data-testid=register-svg-progress-header]")).not.toBeNull();
+    expect(text("[data-testid=register-svg-progress-title]")).toBe("Registering existing SVGs complete");
+    expect(text("[data-testid=register-svg-progress-percent]")).toBe("100%");
+    expect(text("[data-testid=register-svg-progress-completed]")).toBe("1 completed / 1");
+    expect(q("[data-testid=register-svg-progress-track]")?.getAttribute("aria-valuenow")).toBe("100");
+    expect(q("[data-testid=register-svg-progress-header]")?.className).toContain("complete");
+    await flushCompletionAudio();
+    expect(completionAudio.starts).toHaveLength(1);
     await unmountPanel();
   });
 });
