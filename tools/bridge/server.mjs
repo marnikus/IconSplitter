@@ -22,7 +22,7 @@ import { createServer, request as httpRequest } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isDistStale, rebuildDistAsync, servedBundle } from "./distfresh.mjs";
+import { appWatchPaths, computeSrcFingerprint, isDistStale, rebuildDistAsync, servedBundle } from "./distfresh.mjs";
 import { installCrashGuards } from "./guards.mjs";
 import { RESTART_CODE, helperCodeStamp, readCommit, restartNote, shouldRestart } from "./updatewatch.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
@@ -86,6 +86,13 @@ const config = {
   updateWatch: args["no-update-watch"] === undefined && process.env.BRIDGE_NO_UPDATE_WATCH !== "1",
   updateCheckMs: Math.max(200, Number(args["update-check-ms"] ?? process.env.BRIDGE_UPDATE_CHECK_MS ?? 10_000) || 10_000),
   watchDirs: typeof args["watch-dir"] === "string" ? [path.resolve(args["watch-dir"])] : [HERE],
+  // A pull that changes only the APP cannot wait for someone to press F5: the
+  // helper rebuilds the bundle in place so the open page reloads onto it. The
+  // helper itself does not restart for app code — an upload keeps its window.
+  appWatch: args["no-app-watch"] === undefined && process.env.BRIDGE_NO_APP_WATCH !== "1",
+  appDirs: typeof args["app-dir"] === "string" ? [path.resolve(args["app-dir"])] : appWatchPaths(REPO_ROOT),
+  buildCmd: typeof args["build-cmd"] === "string" ? args["build-cmd"] : (process.env.BRIDGE_BUILD_CMD ?? "npm run build"),
+  buildCwd: typeof args["build-cwd"] === "string" ? path.resolve(args["build-cwd"]) : REPO_ROOT,
   restarts: Math.max(0, Number(process.env.BRIDGE_RESTARTS ?? 0) || 0),
 };
 
@@ -189,10 +196,9 @@ async function serveDist(url, res) {
   const rel = url === "/" ? "index.html" : decodeURIComponent(url.slice(1));
   const file = path.resolve(config.dist, rel);
   if (rel === "index.html" && config.autoBuildDist) {
-    const watch = [path.join(REPO_ROOT, "src"), path.join(REPO_ROOT, "index.html")];
-    if (isDistStale(file, watch)) {
-      console.log("Source files are newer than dist/index.html — rebuilding latest UI (`npm run build`)...");
-      const built = await rebuildDistAsync(REPO_ROOT);
+    if (isDistStale(file, config.appDirs)) {
+      console.log(`Source files are newer than dist/index.html — rebuilding the app (${config.buildCmd})...`);
+      const built = await rebuildDistAsync(REPO_ROOT, { cmd: config.buildCmd, cwd: config.buildCwd });
       if (!built.ok) console.error(`Auto-build failed: ${built.reason}`);
     }
   }
@@ -285,6 +291,45 @@ function watchOwnCode() {
   timer.unref();
 }
 
+/**
+ * The APP's own watchdog (2026-11-02). A `git pull` that changes only `src/` used
+ * to leave the open window serving the previous build until it was closed by hand:
+ * the helper watches its own code (a restart), and the bundle was only rebuilt when
+ * a page happened to ask for `index.html` again. Now a changed app stamp rebuilds
+ * `dist/` in place — the helper keeps running (an upload keeps its window), and the
+ * page's own `/health` poll sees the new `served` stamp and reloads itself.
+ *
+ * One build at a time; the same bytes never fail twice in a row, so a broken pull
+ * says why once and the previous bundle stays served.
+ */
+function watchAppSources() {
+  if (!config.updateWatch || !config.appWatch || config.appDirs.length === 0) return;
+  const distIndex = path.join(config.dist, "index.html");
+  let failedStamp = null;
+  let building = false;
+  const timer = setInterval(() => { void checkApp(); }, config.updateCheckMs);
+  timer.unref();
+
+  const checkApp = async () => {
+    if (building) return;
+    const current = computeSrcFingerprint(config.appDirs);
+    if (current === failedStamp || !isDistStale(distIndex, config.appDirs)) return;
+    building = true;
+    console.log(`app source changed (${readCommit(REPO_ROOT) ?? "local changes"}) — rebuilding the bundle so the open page picks it up`);
+    const startedAt = Date.now();
+    const built = await rebuildDistAsync(REPO_ROOT, { cmd: config.buildCmd, cwd: config.buildCwd });
+    building = false;
+    const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+    if (built.ok && !isDistStale(distIndex, config.appDirs)) {
+      console.log(`app bundle rebuilt in ${seconds}s — the open page reloads itself onto it`);
+      return;
+    }
+    failedStamp = current;
+    const why = built.ok ? "the build did not refresh dist/index.html" : built.reason;
+    console.error(`App rebuild failed (${why}) — serving the previous bundle; fix it and reload the page`);
+  };
+}
+
 function logLine(req, res, started, bytes) {
   const ms = Date.now() - started;
   console.log(`${new Date().toISOString()} ${req.method} ${(req.url ?? "/").split("?")[0]} → ${res.statusCode} · ${ms} ms · ${bytes} B`);
@@ -330,9 +375,11 @@ function startListening() {
     }
     console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
     watchOwnCode();
+    watchAppSources();
     if (config.updateWatch) {
       const commit = readCommit(REPO_ROOT);
-      console.log(`Update watch: ON — a git pull that changes the helper's code restarts it here${commit === null ? "" : ` (now at ${commit})`}`);
+      const app = config.appWatch ? "new app code is rebuilt here and the open page reloads itself onto it" : "app code is not watched";
+      console.log(`Update watch: ON — a git pull that changes the helper's code restarts it here; ${app}${commit === null ? "" : ` (now at ${commit})`}`);
     }
   });
 }

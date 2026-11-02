@@ -1,11 +1,24 @@
 // distfresh.mjs — detects when `dist/index.html` is missing, older than `src/`,
 // or stamped with a different `src/` SHA-256 (e.g. after `git pull` / `git rebase`)
-// and triggers an automatic single-flight `npm run build`.
+// and triggers an automatic single-flight build (`npm run build` by default).
+//
+// 2026-11-02: a pull that changes only the APP now rebuilds the bundle while the
+// helper keeps running (see server.mjs `watchAppSources`). That is what makes the
+// open page reach the new build without closing the window — the helper's own
+// restart is for helper code only.
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+
+/** The app's own inputs, repository-relative: what `npm run build` reads. */
+export const APP_WATCH = Object.freeze(["src", "index.html"]);
+
+/** `APP_WATCH` resolved under a checkout — the one list every staleness check uses. */
+export function appWatchPaths(repoRoot) {
+  return APP_WATCH.map((rel) => path.join(path.resolve(repoRoot), rel)).filter((p) => existsSync(p));
+}
 
 function collectWatchedFiles(targetPath, out) {
   if (!existsSync(targetPath)) return;
@@ -94,20 +107,22 @@ export function servedBundle(distHtmlPath) {
 
 let inFlightBuild = null;
 
-export function rebuildDistAsync(repoRoot) {
+/**
+ * One build at a time, anywhere in the helper. `build.cmd` is a command LINE (a
+ * shell runs it), so a launcher can point it at something other than npm; a
+ * failure resolves `{ ok: false, reason }` and never throws at the caller.
+ */
+export function rebuildDistAsync(repoRoot, build = {}) {
   if (inFlightBuild) return inFlightBuild;
+  const cmd = build.cmd ?? "npm run build";
+  const cwd = build.cwd ?? repoRoot;
   inFlightBuild = new Promise((resolve) => {
-    const isWin = process.platform === "win32";
-    const child = spawn(isWin ? "npm.cmd" : "npm", ["run", "build"], {
-      cwd: repoRoot,
-      shell: isWin,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawn(cmd, { cwd, shell: true, stdio: ["ignore", "pipe", "pipe"] });
     let stderr = "";
     child.stderr.on("data", (c) => { stderr += c.toString("utf8"); });
     child.on("error", (err) => resolve({ ok: false, reason: err.message }));
     child.on("close", (code) => {
-      resolve(code === 0 ? { ok: true } : { ok: false, reason: stderr.trim() || `npm run build exited ${code}` });
+      resolve(code === 0 ? { ok: true } : { ok: false, reason: stderr.trim() || `the build exited ${code}` });
     });
   }).finally(() => {
     inFlightBuild = null;
