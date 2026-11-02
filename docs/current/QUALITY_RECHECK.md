@@ -4598,3 +4598,32 @@ Measured after the change (`npx tsc --noEmit`, `npm run lint`,
 - `register_progress.test.ts` covers 0 / 1 / many and the finished empty note;
   `register_progress_ui.test.tsx` asserts the note and "N remaining" together on
   the real bar.
+
+## 2026-11-02 — round 25: choosing an SVG version is a choice, not an approval
+
+Reported: picking or changing an SVG version immediately approved the row, while
+the AI-source chips only changed the shown version. Choosing a version wrote
+`preferred` **and** `review: "approved"` in one pair-file write, so the approve
+button was bypassed and a pending row became exportable just by browsing its
+history.
+
+`src/svg/codeactions.ts` now writes only `withPreferred(prev, version)`: the item's
+`review` is untouched (pending stays pending, needs-review/declined survive, an
+approved row stays approved). The chips and the history tile mark the stored
+choice (`chosen`), their tooltips say "choosing does not approve the row", and the
+dialog line ends "… and approves nothing". Export still requires approval
+(discovery excludes a non-approved item), so the version is used, not approved.
+
+Measured after the change (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,579 tests pass, 0 fail; coverage lane PASS (95 s); build PASS; verify:fast all
+  lanes passed.
+- Lint 0 errors / 24 warnings; quality gate (changed) PASS.
+- Rewritten assertions (not dropped): the chip/dialog tests now prove the strong
+  pair — choice saved, review unchanged, upload discovery still empty — then
+  approve with the row's own ✓ and get version 1 exported; a later needs-review
+  keeps the choice and removes only the approval. New UI assertions pin the
+  honest tooltip and the "approves nothing" line.
+- Docs: version-acceptance (SVG section), I-54, svg-generation-results and both
+  selector pages; `selectors/svg-generation-list.md` was trimmed back under 9,000 B.

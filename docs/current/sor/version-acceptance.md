@@ -10,11 +10,36 @@ Only completed saved image versions are selectable. Unknown/failed versions, cor
 
 ## SVG
 
-Clicking a valid SVG chip or the history dialog's **Use this version** saves `preferred` and item `review: approved` together. The already-displayed/default version can also be accepted; it is not ignored just because it is shown. A version already explicitly selected and approved need not be saved again. The tooltip states that the choice uses **and approves** it; the history tile marks the accepted choice.
+Clicking a valid SVG chip or the history dialog's **Use this version** saves
+`preferred` — nothing else. A version choice is **not** a review decision: it
+selects which version the row shows, copies, regenerates from and exports, and
+it leaves the item's `review` exactly as it was (`pending`, `approved`,
+`declined` or `needs-review`). Approving the item is the row's own ✓ button (or
+Approve selected) and never a side effect of picking a version — the same
+division the AI-source chips already follow. The button's tooltip and the
+dialog's line say so ("choosing does not approve the row"), so the control
+cannot promise an approval it does not perform.
 
-The selected version drives preview, Copy/Code and current-SVG regeneration through `chosenVersion`/`previewTargetOf`. SVG to upload/export now also honours that explicit version instead of always choosing the highest version number. Export still requires item approval; a stored preference alone never bypasses a pending/declined/needs-review status. No usable stored preference means the legacy newest-valid-on-disk fallback. When a preference names a valid generated version but its file is missing/unreadable, discovery reports it and excludes the item rather than exporting different artwork.
+The already-displayed/default version can also be chosen; it is not ignored just
+because it is shown. A version that is already the stored choice need not be
+chosen again. The history tile marks the shown version, and `chosen` when the
+pointer is the stored one.
 
-One item-level review status and its legacy per-version mirrors remain intact (I-78); there are no competing per-version review states. Explicit version acceptance is the exception to the old rule that version choice never changes approval. New generations retain the existing pending/needs-review rules; nothing here approves unseen future results. Source files and version histories are never overwritten/deleted by selection.
+The chosen version drives preview, Copy/Code and current-SVG regeneration
+through `chosenVersion`/`previewTargetOf`. SVG to upload/export honours it
+instead of always taking the highest version number, and export still requires
+item approval: a stored preference alone never bypasses a pending, declined or
+needs-review status, so a pending row stays out of discovery until the user
+approves it. No usable stored preference means the legacy newest-valid-on-disk
+fallback. When a preference names a valid generated version but its file is
+missing/unreadable, discovery reports it and excludes the item rather than
+exporting different artwork.
+
+One item-level review status and its legacy per-version mirrors remain intact
+(I-78); there are no competing per-version review states. Version choice never
+changes approval. New generations retain the existing pending/needs-review
+rules; nothing here approves unseen future results. Source files and version
+histories are never overwritten/deleted by selection.
 
 ## SVGs already in the folder are registered as versions
 

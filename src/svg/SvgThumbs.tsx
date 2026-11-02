@@ -204,7 +204,8 @@ function VersionChips({ row, onMain }: { row: SvgRow; onMain: AiBarActions["onMa
  * The SVG version chips under the SVG preview (2026-10-19): one per version
  * that can be shown (generated + valid), the shown one marked. A click is the
  * Versions dialog's "Use this version" in one step — same owner, same toast,
- * same pair-file write. One usable version has nothing to switch to: no chips.
+ * same pair-file write, and just like it a CHOICE: the row stays as approved or
+ * unapproved as it was. One usable version has nothing to switch to: no chips.
  */
 function SvgVersionChips({ row, onPrefer }: { row: SvgRow; onPrefer: (id: string, version: number) => void }) {
   const usable = (row.meta?.versions ?? []).filter((v) => v.status === "generated" && v.validation.ok);
@@ -215,12 +216,13 @@ function SvgVersionChips({ row, onPrefer }: { row: SvgRow; onPrefer: (id: string
     <div className="svg-ai-bar" data-testid={`svg-ver-bar-${id}`}>
       {usable.map(({ version }) => {
         const on = version === shown;
-        const accepted = row.review === "approved" && row.meta?.preferred === version;
+        // The stored choice, not the approval: choosing never approves the row.
+        const chosen = row.meta?.preferred === version;
         return (
           <button key={version} type="button" className={`svg-btn tiny${on ? " primary" : ""}`}
             data-testid={`svg-ver-chip-${id}-${version}`} data-active={on ? "true" : "false"} aria-pressed={on}
-            title={accepted ? "This SVG version is approved for use and export" : "Use and approve this SVG version"}
-            onClick={(e) => { e.stopPropagation(); if (!accepted) onPrefer(id, version); }}>v{version}</button>
+            title={chosen ? "This SVG version is the one the row shows and exports" : "Show this SVG version — choosing does not approve the row"}
+            onClick={(e) => { e.stopPropagation(); if (!chosen) onPrefer(id, version); }}>v{version}</button>
         );
       })}
     </div>

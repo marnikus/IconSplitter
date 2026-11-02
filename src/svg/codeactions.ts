@@ -2,15 +2,15 @@ import { reserveSources, SOURCE_BUSY } from "./jobstate";
 // codeactions.ts — the code/versions/location actions of the Generate SVG tab
 // (prompt §16/§18). Owns reading a version's SVG back off disk, copying the
 // complete validated document, opening the code and versions dialogs, choosing
-// the version for actual use/export (I-54: choice + item approval in the pair file —
-// nothing is deleted), and the honest "open file location" fallback (a browser
+// the version for actual use/export (I-54: the choice alone, in the pair file —
+// choosing a version is never a review decision, nothing is deleted), and the honest "open file location" fallback (a browser
 // cannot launch Explorer, so the action copies the absolute path and says
 // exactly that).
 
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { copyFolderText } from "../lib/copypath";
-import { withReview, type PairMeta } from "../lib/pairmeta";
+import type { PairMeta } from "../lib/pairmeta";
 import { withPreferred } from "../lib/pairpreferred";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
@@ -62,11 +62,14 @@ export function useCodeActions(ctx: CodeCtx): Slice<"showCode" | "showHistory" |
 }
 
 /**
- * Accepts the chosen SVG for actual use/export, writing choice and approval into the pair's
- * own file (I-54) — tmp, verify, overwrite, exactly like every other pair-file
- * write. Nothing on disk is removed: the history is what makes the choice
- * reversible. Returns null when it worked, else the reason, so the popup can
- * say it in place; a failure changes nothing in the row and claims nothing.
+ * Chooses the SVG the row shows, copies and exports (I-54), writing that one
+ * pointer into the pair's own file — tmp, verify, overwrite, exactly like every
+ * other pair-file write. It is a CHOICE, not a review decision: the item's
+ * approval is untouched, so only the row's approve button can approve it, the
+ * same way the AI-image chips behave. Nothing on disk is removed — the history
+ * is what makes the choice reversible. Returns null when it worked, else the
+ * reason, so the popup can say it in place; a failure changes nothing in the
+ * row and claims nothing.
  */
 async function preferOf(ctx: CodeCtx, id: string, version: number): Promise<string | null> {
   const release = reserveSources(ctx, [id]);
@@ -85,7 +88,7 @@ async function savePreferredVersion(ctx: CodeCtx, id: string, version: number): 
   const root = ctx.refs.root.current as DirHandleLike | null;
   if (root === null) return refuse(ctx, "No folder is open — the choice cannot be saved");
   if (!await readSvgText(root, chosen.svgPath)) return refuse(ctx, "The selected SVG is missing or unreadable — nothing changed");
-  const next = withReview(withPreferred(prev, version), "approved");
+  const next = withPreferred(prev, version);
   try {
     await saveMetaAt(root, row.source.metaPath, next);
   } catch {
@@ -93,9 +96,15 @@ async function savePreferredVersion(ctx: CodeCtx, id: string, version: number): 
   }
   ctx.refs.metas.set(id, next);
   ctx.setRowsFn((rows) => rows.map((r) => (r.source.id === id ? withMeta(r, next) : r)));
-  log({ feature: "svg", action: "prefer-version", ids: { source: id }, detail: `accepted v${version}` });
-  ctx.say(`Showing v${version} — approved for export; all ${next.versions.length} versions are still there`);
+  log({ feature: "svg", action: "prefer-version", ids: { source: id }, detail: `chose v${version}` });
+  ctx.say(chooseLine(next.review === "approved", version, next.versions.length));
   return null;
+}
+
+/** One honest line: the choice is saved, the approval was not touched. */
+function chooseLine(approved: boolean, version: number, total: number): string {
+  const review = approved ? "row stays approved" : "approve the row to export it";
+  return `Showing v${version} (${review}) — all ${total} versions are still there`;
 }
 
 /** The version the user may choose: it exists, it was generated, it is valid. */

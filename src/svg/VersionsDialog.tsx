@@ -1,6 +1,7 @@
 // VersionsDialog.tsx — the version chooser (I-54). Every recorded version of
 // one icon's SVG is listed as a tile with its OWN artwork, and any of them can
-// be accepted for actual use/export — not only the newest. The choice is written
+// be chosen for actual use/export — not only the newest — without approving the
+// row: approval stays with the row's own button. The choice is written
 // into the pair's own file beside the images (so it travels with the folder and
 // survives a reload), the row and its preview update immediately, and NOTHING is
 // deleted: the whole history stays here, so every choice stays re-choosable.
@@ -76,7 +77,7 @@ function VersionList({ versions, row, shown, readCode, onUse, onShowCode }: List
 /** One honest sentence about what the row shows right now. */
 function shownLine(shown: SvgVersion | null, total: number): string {
   if (shown === null) return `Nothing to show yet — ${total} recorded version${total === 1 ? "" : "s"}.`;
-  return `Showing v${shown.version} of ${total} recorded version${total === 1 ? "" : "s"} — choosing another one keeps all of them.`;
+  return `Showing v${shown.version} of ${total} recorded version${total === 1 ? "" : "s"} — choosing another one keeps all of them and approves nothing.`;
 }
 
 interface TileProps {
@@ -93,19 +94,20 @@ function VersionTile({ row, v, shown, readCode, onUse, onShowCode }: TileProps) 
   const version = v.version;
   const usable = v.status === "generated" && v.validation.ok;
   const isShown = shown?.version === version;
-  const accepted = row.review === "approved" && row.meta?.preferred === version;
+  // The stored choice, not the approval: choosing never approves the row.
+  const chosen = row.meta?.preferred === version;
   return (
     <article className={`svg-history-tile${isShown ? " shown" : ""}`} data-testid={`svg-history-v${version}`}>
       <header className="svg-history-head">
         <b>v{version}</b>
         <span data-testid={`svg-history-status-${version}`}>{statusText(v)}</span>
-        {isShown && <em>{accepted ? "accepted" : "shown"}</em>}
+        {isShown && <em>{chosen ? "chosen" : "shown"}</em>}
       </header>
       <VersionArtwork row={row} v={v} usable={usable} readCode={readCode} />
       <VersionFacts v={v} />
       <footer className="svg-history-pick">
         <button type="button" className="svg-btn tiny primary" data-testid={`svg-history-use-${version}`}
-          disabled={!usable || accepted} title="Use and approve this SVG version" onClick={() => onUse(version)}>Use this version</button>
+          disabled={!usable || chosen} title="Show this SVG version — choosing does not approve the row" onClick={() => onUse(version)}>Use this version</button>
         <button type="button" className="svg-btn tiny" data-testid={`svg-history-code-${version}`}
           disabled={v.status !== "generated"} onClick={() => onShowCode(row.source.id, version)}>Code</button>
       </footer>

@@ -68,6 +68,8 @@ describe("SVG version chips under the SVG preview", () => {
     expect(chip(4)?.className).toContain("primary");
     expect(chip(1)?.getAttribute("data-active")).toBe("false");
     expect(chip(4)?.textContent).toBe("v4");
+    // a chip is a choice, and it says so — no claim of approving the row
+    expect(chip(1)?.title).toContain("does not approve");
   });
 
   it("one click shows that version: preview, tag and pair file follow; the dialog agrees", async () => {
@@ -89,35 +91,41 @@ describe("SVG version chips under the SVG preview", () => {
     expect(q("[data-testid=svg-history-v1]")?.className).toContain("shown");
   });
 
-  it("accepts an older version for actual export, persists it across reload, and can accept the shown version", async () => {
+  it("chooses an older version for use without approving the row; export still needs the approve button", async () => {
     const root = makeRoot();
     await mountRoot(root);
     expect(sidecar(root).review).toBe("pending"); // merely displaying a version approves nothing
     await click(chip(1)!);
     await settle();
-    expect(sidecar(root).review).toBe("approved");
-    expect(sidecar(root).versions.every((v) => v.review === "approved")).toBe(true);
+    // A choice is a choice: it changes what is shown and used, never the approval.
+    expect(sidecar(root)).toMatchObject({ preferred: 1, review: "pending" });
+    expect(sidecar(root).versions.every((v) => v.review === "pending")).toBe(true);
+    // A pending item is never offered to Upload, whatever version it prefers ...
+    expect((await discoverUploadSources(root)).rows).toHaveLength(0);
+    // ... and the row's own ✓ button is what approves it, choosing nothing new.
+    await click(q(`[data-testid=svg-approve-${FOG}]`)!);
+    await settle();
+    expect(sidecar(root)).toMatchObject({ preferred: 1, review: "approved" });
     const exported = await discoverUploadSources(root);
     expect(exported.rows[0]).toMatchObject({ version: 1, svgPath: "architecture/fog_AI.svg" });
+    // choice and approval both survive a reload: they are read from the folder
     await unmountPanel();
     await mountRoot(root);
     expect(previewVersion()).toBe("1");
     expect(sidecar(root).review).toBe("approved");
+    // a later needs-review keeps the choice and drops only the approval
     await click(q(`[data-testid=svg-needs-review-${FOG}]`)!);
     await settle();
-    expect(sidecar(root).review).toBe("needs-review");
-    await click(chip(1)!); // the already-shown version must also be approvable
-    await settle();
-    expect(sidecar(root).review).toBe("approved");
-    expect((await discoverUploadSources(root)).rows[0].version).toBe(1);
+    expect(sidecar(root)).toMatchObject({ preferred: 1, review: "needs-review" });
+    expect((await discoverUploadSources(root)).rows).toHaveLength(0);
   });
 
-  it("clicking the default shown chip explicitly accepts and pins it", async () => {
+  it("clicking the default shown chip pins it as the choice without approving anything", async () => {
     const root = makeRoot();
     await mountRoot(root);
     await click(chip(4)!);
     await settle();
-    expect(sidecar(root)).toMatchObject({ preferred: 4, review: "approved" });
+    expect(sidecar(root)).toMatchObject({ preferred: 4, review: "pending" });
   });
 
   it("refuses a selected SVG whose file disappeared without claiming approval", async () => {
