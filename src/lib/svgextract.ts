@@ -103,6 +103,19 @@ export function matchBlocks(blocks: readonly SvgBlock[], manifest: readonly Mani
   return { ok: problems.length === 0 && missing.length === 0, byPosition, missing, problems };
 }
 
+/**
+ * A ONE-icon request (the web chat, 2026-11-03): the user's prompt asks for
+ * "only SVG code", so the reply names nothing. The explicit matcher still wins;
+ * only when it finds nothing does the reply's LAST SVG (the final answer after
+ * any draft) belong to the only icon. A batch is never guessed at.
+ */
+export function matchLoneBlock(blocks: readonly SvgBlock[], manifest: readonly ManifestItem[]): MatchResult {
+  const matched = matchBlocks(blocks, manifest);
+  if (manifest.length !== 1 || matched.byPosition.size > 0 || blocks.length === 0) return matched;
+  const position = manifest[0].position;
+  return { ok: true, byPosition: new Map([[position, blocks[blocks.length - 1].code]]), missing: [], problems: [] };
+}
+
 function resolvePosition(block: SvgBlock, manifest: readonly ManifestItem[]): number | null {
   if (block.title !== null) {
     const hit = manifest.find((m) => sameName(m.name, block.title as string));

@@ -13,6 +13,7 @@ import type { SvgSource } from "./sources";
 import type { RegenPlan } from "../lib/svgregen";
 import type { PromptChoice } from "../lib/prompttasks";
 import type { RegenCode } from "./regencodes";
+import type { WebChatTarget } from "../lib/webchatprefs";
 
 export type RunEvent =
   /** `images` = the run's image total, so every reader can say "N of M done". */
@@ -60,6 +61,21 @@ export interface RunArgs {
   signal: AbortSignal;
   /** Request-local cancellation never aborts the owning run. Cleared in finally. */
   onRequestController?: (controller: AbortController | null) => void;
+  /**
+   * Generate through the user's ChatGPT page via the local helper instead of
+   * the provider API (2026-11-03). One icon per request; no key, no cost.
+   */
+  web?: WebRun;
+}
+
+/** The web transport of one run; `target.url` follows a restarted chat. */
+export interface WebRun {
+  target: WebChatTarget;
+  bridgeUrl?: string;
+  /** The helper answered from a new chat: the saved URL is replaced with it. */
+  onChatUrl?: (url: string) => void;
+  /** The helper's live phase (waiting-for-login, uploading, generating, …). */
+  onPhase?: (phase: string) => void;
 }
 
 export interface RunSummary {

@@ -1384,6 +1384,7 @@
 .svg-row.declined::after { background: var(--v2-red); }
 .svg-row.needs-review::after { background: var(--v2-yellow); }
 .svg-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
+.svg-web-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 
 .svg-preview-frame {
   border-radius: 5px;

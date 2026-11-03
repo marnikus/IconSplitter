@@ -12,6 +12,7 @@ import { inIdOrder } from "../lib/selectionorder";
 import { enqueue, queuedCount, queueItem, type QueueItem } from "./runqueue";
 import { setQueue, type RunCtx } from "./runcontext";
 import type { RegenCode } from "./regencodes";
+import type { WebChatTarget } from "../lib/webchatprefs";
 
 /** What one batch is queued with: everything the popup froze (I-76). */
 export interface BatchSpec {
@@ -19,13 +20,15 @@ export interface BatchSpec {
   regen?: RegenPlan | null;
   prompt?: PromptChoice;
   codes?: ReadonlyMap<string, RegenCode>;
+  web?: WebChatTarget | null;
 }
 
 /** Record one explicit confirmation; only the scheduler may start it. */
 export function enqueueBatch(ctx: RunCtx, spec: BatchSpec): void {
   const { ids, regen = null } = spec;
-  const requests = requestsOf(ctx, ids, regen);
-  const item = queueItem({ ids, requests, label: labelOf(ctx, ids), regen, prompt: spec.prompt, codes: spec.codes });
+  // A web batch is one chat turn per icon, whatever the configured size.
+  const requests = spec.web ? ids.length : requestsOf(ctx, ids, regen);
+  const item = queueItem({ ids, requests, label: labelOf(ctx, ids), regen, prompt: spec.prompt, codes: spec.codes, web: spec.web });
   captureRun(ctx, item.id);
   const queue = enqueue(ctx.refs.queue.current, item);
   setQueue(ctx, queue);

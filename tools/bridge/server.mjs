@@ -12,6 +12,8 @@
 //              [--getty-profile <dir>]  (reuse a profile so Getty remembers it)
 //              [--getty-check]  (launch, verify the DevTools socket, exit)
 //              [--getty-reset]  (end a stuck Getty browser, clear its profile)
+//   ChatGPT web SVG generation: [--aichat-profile <dir>] [--aichat-headless]
+//              [--aichat-cdp <loopback devtools url>]
 //   env: INKSCAPE_PATH, BRIDGE_TIMEOUT_MS (60000), BRIDGE_MAX_BYTES (20 MB)
 //
 // 2026-11-01: whitespace-only touch, on purpose — it moves the helper code stamp so
@@ -34,6 +36,9 @@ import {
   handleGettyWebTest, handleGettyWebUpload,
 } from "./gettyweb/routes.mjs";
 import { cdpFailureReason } from "./gettyweb/session.mjs";
+import {
+  aichatBusy, aichatHealth, handleAichatCancel, handleAichatClose, handleAichatProgress, handleAichatSend,
+} from "./aichat/routes.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
 import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
 
@@ -65,6 +70,14 @@ function applyGettyFlags(parsed) {
   if (typeof parsed["getty-profile"] === "string" && parsed["getty-profile"] !== "") {
     process.env.GETTY_WEB_PROFILE = parsed["getty-profile"];
   }
+  applyAichatFlags(parsed);
+}
+
+/** ChatGPT web flags: the sign-in profile, a hidden window, an attach endpoint. */
+function applyAichatFlags(parsed) {
+  if (typeof parsed["aichat-profile"] === "string" && parsed["aichat-profile"] !== "") process.env.AICHAT_PROFILE = parsed["aichat-profile"];
+  if (["1", "true", true].includes(parsed["aichat-headless"])) process.env.AICHAT_HEADLESS = "1";
+  if (typeof parsed["aichat-cdp"] === "string" && parsed["aichat-cdp"] !== "") process.env.AICHAT_CDP = parsed["aichat-cdp"];
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -154,7 +167,7 @@ function health(res, port) {
   const inkscape = findInkscape(config.inkscape);
   return json(res, 200, {
     ok: inkscape.found, inkscape, ftps: { ready: true }, sftp: { ready: true }, esp: { ready: true },
-    gettyWeb: gettyWebHealth(), port,
+    gettyWeb: gettyWebHealth(), aichat: aichatHealth(), port,
     // The app can tell a helper that just picked up a new build from one that
     // needs the window closed by hand.
     // `served` is the bundle at `/` right now: the open tab compares its own stamp
@@ -240,6 +253,10 @@ async function route(req, res, port) {
   if (req.method === "POST" && url === "/getty-web/finish") return handleGettyWebFinish(req, res, readBody, json);
   if (req.method === "POST" && url === "/getty-web/close") return handleGettyWebClose(req, res, readBody, json);
   if (req.method === "GET" && url === "/getty-web/progress") return handleGettyWebProgress(req, res, json);
+  if (req.method === "POST" && url === "/aichat/send") return handleAichatSend(req, res, readBody, json);
+  if (req.method === "GET" && url === "/aichat/progress") return handleAichatProgress(req, res, json);
+  if (req.method === "POST" && url === "/aichat/cancel") return handleAichatCancel(req, res, readBody, json);
+  if (req.method === "POST" && url === "/aichat/close") return handleAichatClose(req, res, readBody, json);
   if (req.method === "GET") return serveDist(url, res);
   return json(res, 404, { reason: "not found" });
 }
@@ -258,7 +275,7 @@ let inFlight = 0;
 
 /** True while an upload is moving, seen either as a request or as a live session. */
 function busyWithUpload() {
-  return inFlight > 0 || gettyWebBusy();
+  return inFlight > 0 || gettyWebBusy() || aichatBusy();
 }
 
 /**
@@ -373,6 +390,8 @@ function startListening() {
     } else {
       console.log("Getty web browser: throwaway profile — pass --getty-profile <folder> to keep the Getty sign-in between runs");
     }
+    const chat = aichatHealth();
+    console.log(`ChatGPT web generation: ${chat.headed ? "visible" : "hidden"} browser, sign-in kept in ${chat.profile}`);
     console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
     watchOwnCode();
     watchAppSources();

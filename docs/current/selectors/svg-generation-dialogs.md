@@ -58,6 +58,10 @@ path sends paid requests. See [parallel runs](../sor/svg-parallel-runs.md).
 | `svg-confirm-prompt-note` | small | what the choice does to this batch, or that the other shape's default is not used by it |
 | `svg-confirm-problem` | p | when no presets, says why confirm is disabled |
 
+LIVE WEB variant ([owner](../sor/svg-web-generation.md)): `svg-web-mode` (bulk-bar
+checkbox), `svg-confirm-live-web` (badge), `svg-web-url`, `svg-web-url-problem`,
+`svg-web-maxwait`, `svg-web-ready`, `svg-web-policy`; `svg-confirm-requests` reads `N × 1 max`.
+
 Generation popup lists `Main prompt (currently loaded)` first; the regeneration
 popup lists only saved presets and disables confirm when none exists.
 `onConfirm` receives the selected preset name (`string`) for regeneration, `null` for generation.

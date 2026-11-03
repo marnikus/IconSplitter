@@ -25,7 +25,8 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
   // The user's request size, unchanged by the reasoning level (D1): 8 images at
   // size 4 are two requests of four at every tier, however long they take. The
   // current-SVG regeneration is the one exception: each icon carries its own code.
-  const perRequest = requestSizeFor(args.config.imagesPerRequest, args.regen);
+  // A web run sends one picture and one prompt per chat turn (2026-11-03).
+  const perRequest = args.web ? 1 : requestSizeFor(args.config.imagesPerRequest, args.regen);
   const plans = planBatches(toBatchSources(args.sources), perRequest);
   const state = newRunState(args, plans.length, perRequest);
   const problems = validateBatchPlan(plans, perRequest);

@@ -26,6 +26,7 @@ import { useRegenCodes } from "./confirmcodes";
 import { useConfirmPlan, type ConfirmPlan } from "./confirmplan";
 import { BatchPager } from "./SvgConfirmPager";
 import { FullPromptPreview } from "./SvgConfirmFullPrompt";
+import { LiveWebBadge, WebFacts, WebPolicyNote, useWebTarget } from "./SvgConfirmWeb";
 import type { ConfirmedBatch, SvgOperation, SvgRow } from "./types";
 
 export interface SvgConfirmProps {
@@ -45,6 +46,8 @@ export interface SvgConfirmProps {
   onTaskEntry: (task: PromptTaskId, entry: TaskPromptEntry) => void;
   onConfirm: (batch: ConfirmedBatch) => void;
   onDismiss: () => void;
+  /** LIVE WEB variant (2026-11-03): the chat page, not the API, answers each request. */
+  web?: boolean;
 }
 
 export default function SvgConfirm(p: SvgConfirmProps) {
@@ -52,18 +55,20 @@ export default function SvgConfirm(p: SvgConfirmProps) {
   return (
     <div className="svg-backdrop" data-testid="svg-confirm">
       <section className="svg-modal wide" role="dialog" aria-modal="true" aria-labelledby="svg-confirm-title">
-        <DialogHead operation={p.operation} onDismiss={p.onDismiss} />
+        <DialogHead operation={p.operation} web={p.web === true} onDismiss={p.onDismiss} />
         <div className="svg-modal-body">
+          {p.web === true && <LiveWebBadge />}
           <ModeBadge operation={p.operation} task={s.ownTask} />
           <QueueNote running={p.running} count={s.plan.picked.length} />
           <TaskPromptPicker testId="svg-confirm-prompt" work={s.work} count={p.ids.length}
             entries={s.entries} onEntry={s.chooseEntry} sources={s.sources} note={s.note} />
-          <Facts plan={s.plan} p={p} choice={s.own.choice} />
+          {p.web === true ? <WebFacts count={s.plan.picked.length} requests={s.plan.plans.length} />
+            : <Facts plan={s.plan} p={p} choice={s.own.choice} />}
           <ExclusionNote names={s.plan.excluded} />
           <PlanBody plan={s.plan} p={p} />
           <FullPromptPreview operation={p.operation} prompt={p.prompt} choice={s.own.choice} active={s.plan.active}
             picked={s.plan.picked} codes={s.codes.codes} loading={s.codes.loading} />
-          <PolicyNote operation={p.operation} />
+          {p.web === true ? <WebPolicyNote /> : <PolicyNote operation={p.operation} />}
           <Actions state={s} p={p} />
         </div>
       </section>
@@ -93,7 +98,9 @@ function useConfirmState(p: SvgConfirmProps): ConfirmState {
   const codes = useRegenCodes(p.operation, p.rootRef, picked);
   const sources = useMemo(() => ({ presets: p.presets, mainPrompt: p.prompt }), [p.presets, p.prompt]);
   const own = resolveTaskPrompt(ownTask, entries[ownTask], sources);
-  const plan = useConfirmPlan({ ids: p.ids, operation: p.operation, rows: p.rows, config: p.config, choice: own, codes });
+  // A web request carries one picture and one prompt: the chat answers one icon at a time.
+  const config = useMemo(() => (p.web === true ? { ...p.config, imagesPerRequest: 1 } : p.config), [p.web, p.config]);
+  const plan = useConfirmPlan({ ids: p.ids, operation: p.operation, rows: p.rows, config, choice: own, codes });
   const chooseEntry = (task: PromptTaskId, entry: TaskPromptEntry) => {
     setEntries((prev: TaskPromptMap) => ({ ...prev, [task]: entry }));
     p.onTaskEntry(task, entry);
@@ -114,11 +121,11 @@ function noteFor(ownTask: PromptTaskId, own: ResolvedTaskPrompt, size: number): 
     : `Each request sends its ${size} icons' current SVG code and this prompt, and its answer is matched back by SVG <title>.`;
 }
 
-function DialogHead({ operation, onDismiss }: { operation: SvgOperation; onDismiss: () => void }) {
+function DialogHead({ operation, web, onDismiss }: { operation: SvgOperation; web: boolean; onDismiss: () => void }) {
   return (
     <header className="svg-modal-head">
       <h2 id="svg-confirm-title" data-testid="svg-confirm-title">
-        Confirm SVG {operation === "regenerate" ? "regeneration" : "generation"}
+        Confirm SVG {operation === "regenerate" ? "regeneration" : "generation"}{web ? " — LIVE WEB" : ""}
       </h2>
       <button type="button" className="svg-btn" data-testid="svg-confirm-close" onClick={onDismiss}>Close</button>
     </header>
@@ -168,16 +175,25 @@ function ExclusionNote({ names }: { names: string[] }) {
 
 function Actions({ state, p }: { state: ConfirmState; p: SvgConfirmProps }) {
   const plan = state.plan;
-  const confirm = () => p.onConfirm({ choice: state.own.choice, size: state.size, codes: state.codes.codes });
+  const web = useWebTarget();
+  const target = p.web === true ? web.target : null;
+  const blocked = plan.problems.length > 0 || plan.active === null || (p.web === true && target === null);
+  const confirm = () => p.onConfirm({
+    choice: state.own.choice, size: state.size, codes: state.codes.codes, ...(target === null ? {} : { web: target }),
+  });
   return (
     <div className="svg-modal-actions">
       <button type="button" className="svg-btn" data-testid="svg-confirm-cancel" onClick={p.onDismiss}>Cancel</button>
-      <button type="button" className="svg-btn primary" data-testid="svg-confirm-generate"
-        disabled={plan.problems.length > 0 || plan.active === null} onClick={confirm}>
-        {p.running ? "Add to queue" : p.operation === "regenerate" ? "Regenerate now" : "Generate now"}
+      <button type="button" className="svg-btn primary" data-testid="svg-confirm-generate" disabled={blocked} onClick={confirm}>
+        {actionLabel(p)}
       </button>
     </div>
   );
+}
+
+function actionLabel(p: SvgConfirmProps): string {
+  const verb = p.running ? "Add to queue" : p.operation === "regenerate" ? "Regenerate now" : "Generate now";
+  return p.web === true ? `${verb} in web chat` : verb;
 }
 
 function Facts({ plan, p, choice }: { plan: ConfirmPlan; p: SvgConfirmProps; choice: PromptChoice }) {

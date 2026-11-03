@@ -4727,3 +4727,9 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
   mounted Selection V2 panel over the reported folder: one row, not four.
 - Measured: types PASS · lint 0 errors / 24 warnings · quality gate (changed)
   PASS · tests 3,607 passed · build PASS.
+
+## 2026-11-03 — SVG generation through the ChatGPT web page
+
+- Scope: new `tools/bridge/aichat/` (chatflow, chatpage, session, routes), `/aichat/*` helper routes, app web transport (`src/svg/runweb.ts`, `src/lib/webchatclient.ts`, `src/lib/webchatprefs.ts`, `src/lib/svguse.ts`, `matchLoneBlock`), LIVE WEB confirm variant, `Generate with web page` toggle, queue/job plumbing.
+- Measured: 9 new test files, 62 new tests green; `npx tsc --noEmit` clean; `npm run lint` 0 errors; `npm run quality:changed` GATE PASSED (new files ≤ 103 lines, SvgConfirm.tsx 236 lines).
+- `npm run verify:fast`: tests lane 17 failed / 3652 passed — the same 17 tests in the same 9 files fail on a clean HEAD stash on this Windows/Google-Drive machine (browser-present Getty tests, case-collision scan, docs size budget, verify_execution process tests); build lane PASS. Aggregate gate therefore NOT passed.

@@ -15,6 +15,7 @@ import { attachRequestId, beginRequest } from "./journal";
 import { requestTextOf } from "./regenprompt";
 import type { BatchCtx } from "./runbatch";
 import type { RunState } from "./runtypes";
+import { sendWebRequest } from "./runweb";
 
 interface SendOk { ok: true; text: string; usage: Usage; requestId: string | null }
 interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
@@ -25,11 +26,13 @@ export async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promi
   if (!text.ok) return { ok: false, error: text.error, failure: "payload", retryAfterMs: null };
   ctx.recorded = text.text.record;
   ctx.records = text.text.records;
+  journalRequest(ctx);
+  const web = state.args.web;
+  if (web) return sendWebRequest(ctx, web, composite, text.text.prompt);
   const request = buildChatRequest({
     model: state.args.config.model, prompt: text.text.prompt, image: composite.dataUrl,
     caps: state.args.caps, params: state.args.params,
   });
-  journalRequest(ctx);
   return attemptSend(ctx, request);
 }
 

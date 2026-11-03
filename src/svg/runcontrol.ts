@@ -10,6 +10,7 @@ import { imagesBusy, jobStore } from "./jobstate";
 import { pumpRuns } from "./runjobs";
 import type { ConfirmedBatch } from "./types";
 import type { RunCtx } from "./runcontext";
+import type { WebChatTarget } from "../lib/webchatprefs";
 
 export type { CancelNote } from "./runcontext";
 export type { ConfirmedBatch } from "./types";
@@ -23,7 +24,7 @@ export async function confirmRun(ctx: RunCtx, confirmed: ConfirmedBatch): Promis
   const dialog = ctx.m.dialog;
   if (dialog === null || dialog.kind !== "confirm") return;
   const { ids, operation } = dialog;
-  const why = confirmationProblem(ctx, ids);
+  const why = confirmationProblem(ctx, ids, confirmed.web);
   if (why !== null) return ctx.say(why, true);
   const claims = jobStore(ctx.refs).claims;
   if (claims.has(dialog)) return;
@@ -33,7 +34,7 @@ export async function confirmRun(ctx: RunCtx, confirmed: ConfirmedBatch): Promis
   ctx.dispatch({ type: "dialog", dialog: null });
   armCompletionSound();
   const frozen = { ...ctx, m: { ...ctx.m, config: { ...ctx.m.config, imagesPerRequest: confirmed.size } } };
-  enqueueBatch(frozen, { ids, regen, prompt: confirmed.choice, codes: confirmed.codes });
+  enqueueBatch(frozen, { ids, regen, prompt: confirmed.choice, codes: confirmed.codes, web: confirmed.web ?? null });
   pumpRuns(ctx);
   const waiting = ctx.refs.queue.current.length;
   if (waiting > 0) {
@@ -79,9 +80,9 @@ function regenOf(ctx: RunCtx, confirmed: ConfirmedBatch): RegenPlan | null | "re
 }
 
 
-/** Revalidate consent boundaries before freezing credentials or queuing work. */
-function confirmationProblem(ctx: RunCtx, ids: string[]): string | null {
-  if (ctx.refs.root.current === null || ctx.refs.key.current === null) return "Folder or API key is unavailable — review the run again";
+/** Revalidate consent boundaries before freezing credentials or queuing work; a web batch needs no key. */
+export function confirmationProblem(ctx: RunCtx, ids: string[], web?: WebChatTarget): string | null {
+  if (ctx.refs.root.current === null || (ctx.refs.key.current === null && web === undefined)) return "Folder or API key is unavailable — review the run again";
   if (ctx.m.busy !== null && !ctx.m.busy.startsWith("Regenerating AI sources")) return `Wait for “${ctx.m.busy}” to finish`;
   if (imagesBusy(ctx, ids)) return "An AI source image is being edited — wait, then review the SVG inputs again; nothing was sent";
   if (ids.length === 0 || ids.some((id) => !ctx.rows.some((r) => r.source.id === id))) return "Sources changed — review the run again";

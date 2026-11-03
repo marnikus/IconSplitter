@@ -15,6 +15,7 @@ import { costText, fmtTokens } from "../lib/svgusage";
 import Elapsed from "./Elapsed";
 import PreviewStroke from "./PreviewStroke";
 import { SVG_STROKE_SHEET } from "./strokesheet";
+import WebModeToggle from "./WebModeToggle";
 import type { RunProgress } from "./types";
 
 export interface SvgBulkBarProps {
@@ -108,6 +109,7 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
   return (
     <>
       {p.running && <button type="button" className="svg-btn" data-testid="svg-cancel-run" onClick={p.onCancel}>Cancel run</button>}
+      <WebModeToggle />
       <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
         disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
       <RegenerateButton p={p} />

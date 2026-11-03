@@ -10,6 +10,7 @@ import { MAIN_PLAN, requestSizeFor, type RegenPlan } from "../lib/svgregen";
 import { toBatchSource } from "./sources";
 import { resolveRegen } from "./regenstore";
 import type { SvgCtx } from "./actions";
+import { loadWebChat } from "./webchatstore";
 
 /** What planning needs: the rows to split and the size the user configured. */
 export interface PlanCtx {
@@ -52,7 +53,8 @@ export function guard(c: SvgCtx, ids: string[], regen: RegenPlan | null = null):
   if (ids.length === 0) return "Select at least one approved source";
   if (c.m.busy !== null && !c.m.busy.startsWith("Regenerating AI sources")) return `Wait for “${c.m.busy}” to finish`;
   if (c.refs.root.current === null) return "Pick the source folder first";
-  if (c.refs.key.current === null) return "Add your Requesty API key first — it stays on this device";
+  // The web page mode types into the user's own chat: no API key is involved.
+  if (c.refs.key.current === null && !loadWebChat().enabled) return "Add your Requesty API key first — it stays on this device";
   if (regen !== null) return null;
   const stored = resolveRegen();
   return stored.ok ? null : stored.problem;

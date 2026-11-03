@@ -77,6 +77,7 @@ export interface RunProgress {
 import type { QueueItem } from "./runqueue";
 import type { PromptChoice } from "../lib/prompttasks";
 import type { RegenCode } from "./regencodes";
+import type { WebChatTarget } from "../lib/webchatprefs";
 
 export type { QueueItem } from "./runqueue";
 
@@ -98,6 +99,8 @@ export interface ConfirmedBatch {
   choice: PromptChoice;
   size: number;
   codes: ReadonlyMap<string, RegenCode>;
+  /** Set only by the LIVE WEB popup: the chat page that answers (2026-11-03). */
+  web?: WebChatTarget;
 }
 
 export type Dialog =
