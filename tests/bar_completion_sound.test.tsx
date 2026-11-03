@@ -18,7 +18,8 @@ let ui: Root;
 
 const props = (patch: Partial<ProcessProgressBarProps> = {}): ProcessProgressBarProps => ({
   prefix: "task", theme: "svg", title: "Working", detail: "fog.svg",
-  done: 1, total: 2, remaining: 1, percent: 50, leading: null, actions: null, ...patch,
+  done: 1, total: 2, remaining: 1, percent: 50, status: "running", runId: "run",
+  onCancel: () => undefined, onReview: () => undefined, onDismiss: () => undefined, ...patch,
 });
 
 function render(node: React.ReactNode): Promise<void> {
@@ -43,10 +44,10 @@ afterEach(() => {
 
 describe("the shared bar owns the completion cue", () => {
   it("is silent while it runs and sounds once when it completes", async () => {
-    await render(<ProcessProgressBar {...props({ cue: "run-1" })} />);
+    await render(<ProcessProgressBar {...props({ runId: "run-1" })} />);
     await flushCompletionAudio();
     expect(completionAudio.starts).toHaveLength(0);
-    await render(<ProcessProgressBar {...props({ cue: "run-1", complete: true, done: 2, remaining: 0, percent: 100 })} />);
+    await render(<ProcessProgressBar {...props({ runId: "run-1", status: "completed", done: 2, remaining: 0, percent: 100 })} />);
     await flushCompletionAudio();
     expect(completionAudio.starts).toHaveLength(1);
   });
@@ -54,22 +55,22 @@ describe("the shared bar owns the completion cue", () => {
   it("does not sound twice when the feature already cued the same process", async () => {
     notifyCompletion("run-2");
     await flushCompletionAudio();
-    await render(<ProcessProgressBar {...props({ cue: "run-2", complete: true })} />);
+    await render(<ProcessProgressBar {...props({ runId: "run-2", status: "completed" })} />);
     await flushCompletionAudio();
     expect(completionAudio.starts).toHaveLength(1);
   });
 
   it("keeps a stopped run silent and never cues an empty bar", async () => {
-    await render(<ProcessProgressBar {...props({ cue: "run-3", complete: true, cueSilent: true })} />);
+    await render(<ProcessProgressBar {...props({ runId: "run-3", status: "cancelled" })} />);
     await flushCompletionAudio();
-    await render(<ProcessProgressBar {...props({ cue: "run-4", complete: true, total: 0, done: 0 })} />);
+    await render(<ProcessProgressBar {...props({ runId: "run-4", status: "completed", total: 0, done: 0 })} />);
     await flushCompletionAudio();
     expect(completionAudio.starts).toHaveLength(0);
   });
 
   it("respects the mute even for a finished bar", async () => {
     setCompletionSound(false);
-    await render(<ProcessProgressBar {...props({ cue: "run-5", complete: true })} />);
+    await render(<ProcessProgressBar {...props({ runId: "run-5", status: "completed" })} />);
     await flushCompletionAudio();
     expect(completionAudio.starts).toHaveLength(0);
   });

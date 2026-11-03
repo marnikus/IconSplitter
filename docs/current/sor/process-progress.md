@@ -124,24 +124,23 @@ The supplied `tests/assets/Sound/universfield-new-notification-037-485898.mp3`
 is embedded in the self-contained HTML, never fetched or replaced with a tone.
 A missing asset fails the build; decode failures stay silent and Test reports.
 
-## The bar owns the cue (2026-11-02)
+## One lifecycle for every bar (2026-11-03)
 
-`ProcessProgressBar` takes `cue` (its run/process id) and `cueSilent` (a
-cancelled, stopped or partial run). `useCompletionCue` fires
-`notifyBarCompletion(id)` once per id when `total > 0 && complete && !silent`.
-The bar is the safety net: a feature that already cued that id keeps ownership
-(`notifyBarCompletion` skips a claimed id), so no finished bar is ever silent
-— the stock upload and image-run bars were — and none sounds twice. A refused
-cue goes to a deferred set and replays on the next `armCompletionSound()`.
-
-Register passes publish `{id, kind, done, total, current, phase, registered,
-skipped}` through `src/svg/registerprogress.ts` (`beginRegister` →
-`{reading, settled, finish}`) and render the same bar in
-`src/svg/SvgRegisterProgress.tsx`: percent, done/total, the pair being read,
-`N remaining`, `N new files registered` this run, a green finished state, 6 s
-auto-hide, ✕. The optional `note` prop carries that second reading — what the
-run produced, not only what is left. Getty web upload stamps a `runId` on every
-patch and flags a user-stopped run so it stays silent.
+`ProcessProgressBar` owns the lifecycle; a caller passes `status`
+(`ProcessStatus`), `runId`, `onCancel`, `onReview`, `onDismiss` — never its own
+actions, marks or cue. `running`: the caller's `leading` + Cancel (`cancelLabel`,
+`cancelDisabled`). `completed` ✓ green, `failed` ! red, `cancelled` ■: Review
+results + ✕. One cue per `runId` for completed/failed with `total > 0`
+(`notifyBarCompletion` skips an id the feature already cued); cancelled is
+silent. A finished bar stays until ✕ or the feature's next run: no timer.
+Mappings, one per feature, same rules (a user stop wins over failures):
+`batchStatusOf`, `svgRunStatusOf`, `imageStatusOf`, `registerStatusOf`,
+`stockStatusOf`; Upload uses its reporter status. An SVG run that ended before
+its first request still gets a bar (`endedProgress`). Register passes
+(`beginRegister` → `{reading, settled, finish, fail, cancelled}`) stop at Cancel
+before the next folder (`cancelRegister`) and end `failed` if a folder throws.
+Suffixes: `cancel`, `review`, `dismiss`, `icon`. Contract test:
+`process_bar_lifecycle.test.tsx`.
 
 Sound regressions: `completion_sound.test.ts`, `process_completion_sound.test.tsx`,
 `sheets_completion_sound.test.tsx`, plus actual Upload phase-chain/hidden-tab/

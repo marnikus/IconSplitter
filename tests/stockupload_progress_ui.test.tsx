@@ -59,8 +59,8 @@ describe("stock upload progress bar", () => {
     expect(mount.querySelector('[data-testid="stock-upload-progress-percent"]')!.textContent).toBe("100%");
     expect(mount.querySelector('[data-testid="stock-upload-progress-title"]')!.textContent).toBe("Upload complete");
     // Cancel makes no sense on a finished bar; the ✕ close does.
-    expect(mount.querySelector('[data-testid="stock-progress-cancel"]')).toBeNull();
-    const dismiss = mount.querySelector('[data-testid="stock-progress-dismiss"]') as HTMLElement;
+    expect(mount.querySelector('[data-testid="stock-upload-progress-cancel"]')).toBeNull();
+    const dismiss = mount.querySelector('[data-testid="stock-upload-progress-dismiss"]') as HTMLElement;
     expect(dismiss).not.toBeNull();
     await click(dismiss);
     expect(g.dismissProgress).toHaveBeenCalledTimes(1);
@@ -80,8 +80,8 @@ describe("stock upload progress bar", () => {
     expect(bar.className).not.toContain("complete");
     expect(mount.querySelector('[data-testid="stock-upload-progress-title"]')!.textContent).toBe("Uploading to stock sites");
     // Cancel still works, and there is no ✕ on a run that is still verifying.
-    expect(mount.querySelector('[data-testid="stock-progress-cancel"]')).not.toBeNull();
-    expect(mount.querySelector('[data-testid="stock-progress-dismiss"]')).toBeNull();
+    expect(mount.querySelector('[data-testid="stock-upload-progress-cancel"]')).not.toBeNull();
+    expect(mount.querySelector('[data-testid="stock-upload-progress-dismiss"]')).toBeNull();
   });
 
   it("says it is verifying Ready to submit while the chips flip", async () => {
@@ -103,8 +103,8 @@ describe("stock upload progress bar", () => {
     } as Partial<StockUploadApi>);
     await render(g);
     expect(mount.querySelector('[data-testid="stock-upload-progress-percent"]')!.textContent).toBe("21%");
-    expect(mount.querySelector('[data-testid="stock-progress-dismiss"]')).toBeNull();
-    expect(mount.querySelector('[data-testid="stock-progress-cancel"]')).not.toBeNull();
+    expect(mount.querySelector('[data-testid="stock-upload-progress-dismiss"]')).toBeNull();
+    expect(mount.querySelector('[data-testid="stock-upload-progress-cancel"]')).not.toBeNull();
     const bar = mount.querySelector('[data-testid="stock-upload-progress-header"]') as HTMLElement;
     expect(bar.className).not.toContain("complete");
   });
@@ -118,7 +118,7 @@ describe("stock upload progress bar", () => {
     } as Partial<StockUploadApi>);
     await render(g);
     expect(mount.querySelector('[data-testid="stock-upload-progress-title"]')!.textContent).toBe("Upload finished with errors");
-    expect(mount.querySelector('[data-testid="stock-progress-dismiss"]')).not.toBeNull();
+    expect(mount.querySelector('[data-testid="stock-upload-progress-dismiss"]')).not.toBeNull();
   });
 
   it("never paints a run that uploaded nothing as a full green bar", async () => {

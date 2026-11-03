@@ -1,10 +1,19 @@
-// Shared visual language for Batch, Generate SVG, Upload, stock upload and the
-// register passes. Callers own lifecycle, thumbnails and actions; this component
-// never starts work. It DOES own one thing: the completion cue. A finished bar is
-// the single place that knows a process ended, so `cue` is what plays the sound —
-// no path can finish a bar silently again (2026-11-02).
+// ProcessProgressBar.tsx — the ONE progress bar of every process in every tab
+// (Batch split/preview, Generate SVG runs, AI image runs, register passes,
+// Upload metadata/export/download, stock upload). Callers own the work, the
+// counts and the words; the bar owns the LIFECYCLE, so no feature can behave
+// differently (2026-11-03):
+//   running   → the feature's thumbnail + Cancel; silent
+//   completed → ✓ green, Review results + ✕; one completion sound
+//   failed    → ! red,   Review results + ✕; one completion sound (it ended)
+//   cancelled → ■,       Review results + ✕; silent; real percentage kept
+// A finished bar stays until its ✕ (onDismiss) or until the feature starts its
+// next run — the bar has no timer, and no caller may add one.
 import { useEffect, useRef, type ReactNode } from "react";
+import type { ProcessStatus } from "../lib/processprogress";
 import { notifyBarCompletion } from "./completionSound";
+
+export type { ProcessStatus } from "../lib/processprogress";
 
 export interface ProcessProgressBarProps {
   prefix: string;
@@ -15,59 +24,85 @@ export interface ProcessProgressBarProps {
   total: number;
   remaining: number;
   percent: number;
-  leading: ReactNode;
-  actions: ReactNode;
-  complete?: boolean;
-  /** The run ended with files that did not upload: not a success colour. */
-  failed?: boolean;
+  /** Where the run is; everything else the bar shows and does follows from it. */
+  status: ProcessStatus;
   /**
-   * Identity of the process this bar reports — the same id its feature would use
-   * for its own cue, so one completion never sounds twice.
+   * Identity of the process — the same id its feature uses for its own cue, so
+   * one end never sounds twice and a new run is a new bar.
    */
-  cue?: string | null;
-  /** The run was cancelled or stopped: it ended, but it is not a completion. */
-  cueSilent?: boolean;
-  /**
-   * One extra honest line next to "N remaining" — how much a run has produced,
-   * not only how much is left (the register passes count new files here).
-   */
+  runId: string;
+  /** The running bar's picture (thumbnail or glyph); a finished bar shows its mark. */
+  leading?: ReactNode;
+  onCancel: () => void;
+  cancelLabel?: string;
+  /** A stop is already on its way: Cancel stays visible but inert. */
+  cancelDisabled?: boolean;
+  /** Opens the tab where the results are. */
+  onReview: () => void;
+  /** The only way a finished bar goes away (besides the next run). */
+  onDismiss: () => void;
+  /** One extra honest line next to "N remaining" (e.g. how many files a pass registered). */
   note?: string;
 }
 
-/** One sound per finished bar, never per render and never for a stopped run. */
-function useCompletionCue(cue: string | null | undefined, complete: boolean, silent: boolean): void {
+const MARKS: Record<Exclude<ProcessStatus, "running">, string> = { completed: "✓", failed: "!", cancelled: "■" };
+const CLASSES: Record<ProcessStatus, string> = { running: "", completed: " complete", failed: " failed", cancelled: " cancelled" };
+
+/** One sound per ended run that the user did not stop, never per render. */
+function useCompletionCue(runId: string, status: ProcessStatus, total: number): void {
   const fired = useRef<string | null>(null);
   useEffect(() => {
-    if (cue === null || cue === undefined || !complete || silent) return;
-    if (fired.current === cue) return;
-    fired.current = cue;
-    notifyBarCompletion(cue);
-  }, [cue, complete, silent]);
+    if (total <= 0 || (status !== "completed" && status !== "failed")) return;
+    if (fired.current === runId) return;
+    fired.current = runId;
+    notifyBarCompletion(runId);
+  }, [runId, status, total]);
 }
 
 export default function ProcessProgressBar(p: ProcessProgressBarProps) {
   const cls = `${p.theme}-progress`;
-  // "complete" paints the bar green: only truthful when nothing failed.
-  const success = p.complete === true && p.failed !== true;
-  useCompletionCue(p.cue, p.total > 0 && p.complete === true, p.cueSilent === true);
+  useCompletionCue(p.runId, p.status, p.total);
+  const titleClass = p.status === "failed" ? "error" : p.status === "completed" ? "success" : undefined;
   return (
-    <div
-      className={`${cls}-header process-progress-header${success ? " complete" : ""}${p.failed ? " failed" : ""}`}
-      data-testid={`${p.prefix}-progress-header`}
-    >
+    <div className={`${cls}-header process-progress-header${CLASSES[p.status]}`} data-testid={`${p.prefix}-progress-header`}
+      data-status={p.status}>
       <div className={`${cls}-left`}>
-        {p.leading}
+        <Leading p={p} />
         <div className={`${cls}-text`}>
-          <strong className={p.failed ? "error" : success ? "success" : undefined} data-testid={`${p.prefix}-progress-title`}>{p.title}</strong>
+          <strong className={titleClass} data-testid={`${p.prefix}-progress-title`}>{p.title}</strong>
           <span className={`${cls}-file`} data-testid={`${p.prefix}-progress-file`} title={p.detail}>{p.detail}</span>
         </div>
       </div>
       <ProcessStats p={p} />
       <div className={`${cls}-right`}>
         <span className={`${cls}-percent`} data-testid={`${p.prefix}-progress-percent`}>{p.percent}%</span>
-        {p.actions}
+        <ProcessActions p={p} />
       </div>
     </div>
+  );
+}
+
+function Leading({ p }: { p: ProcessProgressBarProps }) {
+  if (p.status === "running") return <>{p.leading ?? null}</>;
+  return <span className={`${p.theme}-progress-check`} data-testid={`${p.prefix}-progress-icon`} aria-hidden="true">{MARKS[p.status]}</span>;
+}
+
+/** The same controls in every tab: Cancel while running; Review results and ✕ after. */
+function ProcessActions({ p }: { p: ProcessProgressBarProps }) {
+  if (p.status === "running") {
+    return (
+      <button type="button" className="svg-btn tiny" data-testid={`${p.prefix}-progress-cancel`}
+        disabled={p.cancelDisabled === true} onClick={p.onCancel}>{p.cancelLabel ?? "✕ Cancel"}</button>
+    );
+  }
+  return (
+    <>
+      <button type="button" className="svg-btn primary tiny" data-testid={`${p.prefix}-progress-review`} onClick={p.onReview}>
+        → Review results
+      </button>
+      <button type="button" className={`${p.theme}-progress-close`} data-testid={`${p.prefix}-progress-dismiss`}
+        aria-label={`Dismiss: ${p.title}`} onClick={p.onDismiss}>✕</button>
+    </>
   );
 }
 

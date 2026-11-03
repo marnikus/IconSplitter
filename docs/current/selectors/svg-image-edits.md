@@ -57,6 +57,6 @@ hidden. `svg-image-progress-title` names generating/saving/review/stopping and
 terminal complete/check-results/stopped states; `svg-image-progress-file` names
 request position and saved/failed/discarded counts. `svg-image-progress-completed`,
 `-remaining`, `-percent`, `-track`, `-fill` report real processed outcomes, not
-estimated provider progress. `svg-image-progress-stop` stops only image work;
-`svg-image-progress-dismiss` hides the terminal bar. Partial Stop never claims
+estimated provider progress. `svg-image-progress-cancel` stops only image work;
+`-review`/`-dismiss` end the terminal bar. Partial Stop never claims
 100%; a fresh process restores a dismissed bar.

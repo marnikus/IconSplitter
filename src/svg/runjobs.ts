@@ -7,7 +7,7 @@ import { inIdOrder } from "../lib/selectionorder";
 import { redact } from "../lib/svgsecret";
 import { newRunId } from "./journal";
 import { jobStore, parallelLimit, releaseJobRows, sourceKeys, sourcesBusy, type SvgJob, type RunSnapshot } from "./jobstate";
-import { jobEvent, syncForeground } from "./jobprogress";
+import { endedProgress, jobEvent, syncForeground } from "./jobprogress";
 import { runGeneration, message, type RunSummary } from "./runner";
 import { withRunLog } from "./runlog";
 import { summaryLine } from "./runstate";
@@ -87,6 +87,8 @@ function finishJob(c: RunCtx, job: SvgJob): void {
   // Aborted/exceptional items not delivered by a terminal event must not stay generating.
   c.setRowsFn((rows) => rows.map((row) => row.running && jobStore(c.refs).locks.get(sourceKeys(c, [row.source.id])[0]) === job.id
     ? { ...row, running: false, status: "unknown", error: "Run ended without a confirmed result — not resent" } : row));
+  // Every ended run leaves a bar (cancelled ones too), even one that never reached its first request.
+  job.progress = endedProgress(job);
   // Marked terminal already: sync before waking so no new job inherits this controller.
   syncForeground(c);
   releaseJobRows(c.refs, job, job.keys);

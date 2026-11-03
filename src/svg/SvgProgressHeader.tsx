@@ -3,7 +3,8 @@
 // Portalled to #svg-progress-mount in Workbench so it stays visible when switching tabs.
 
 import { useEffect, useState } from "react";
-import ProcessProgressBar from "../ui/ProcessProgressBar";
+import ProcessProgressBar, { type ProcessStatus } from "../ui/ProcessProgressBar";
+import { svgRunStatusOf } from "./jobprogress";
 import { createPortal } from "react-dom";
 import { useSideThumbs } from "../selection/thumbs";
 import type { DirHandleLike } from "../lib/fs";
@@ -48,9 +49,27 @@ export default function SvgProgressHeader(p: Props) {
   return mount ? createPortal(content, mount) : content;
 }
 
+/** One bar for the whole lifecycle; the shared bar decides controls, mark and sound. */
 function Bar(props: Props & { onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  return props.running ? <RunningBar {...props} /> : <CompleteBar {...props} />;
+  const { done, left, images, percent, currentRow } = useCurrent(props);
+  const status = svgRunStatusOf(props.running, props.aggregate ?? { cancelled: false, failed: false });
+  const saved = props.aggregate?.saved ?? props.progress?.saved ?? done;
+  const running = status === "running";
+  return (
+    <ProcessProgressBar prefix="svg" theme="svg" title={TITLES[status](images)}
+      detail={running ? currentRow?.source.name ?? "" : `${saved} results saved · ready for review`}
+      done={done} total={images} remaining={running ? left : images - done} percent={status === "completed" ? 100 : percent}
+      status={status} runId={props.progress?.runId ?? ""} leading={<ProgressThumb rootRef={props.rootRef} row={currentRow} />}
+      onCancel={props.onCancelClick} cancelLabel="✕ Cancel batch" onReview={props.onReview} onDismiss={props.onDismiss} />
+  );
 }
+
+const TITLES: Record<ProcessStatus, (images: number) => string> = {
+  running: (images) => `Generating SVGs · ${images} images`,
+  completed: () => "SVG batch complete",
+  failed: () => "SVG processes ended — check results",
+  cancelled: () => "SVG batch cancelled",
+};
 
 function useCurrent(props: Props) {
   const { progress, queue, chain, currentId, rows } = props;
@@ -62,32 +81,6 @@ function useCurrent(props: Props) {
   const percent = images > 0 ? Math.round((done / images) * 100) : 0;
   const currentRow = currentRowOf(rows, currentId);
   return { totals, currentRow, done, left, images, percent };
-}
-
-function RunningBar(props: Props & { onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  const { done, left, images, percent, currentRow } = useCurrent(props);
-  const currentName = currentRow?.source.name ?? "";
-  return (
-    <ProcessProgressBar prefix="svg" theme="svg" title={`Generating SVGs · ${images} images`} detail={currentName}
-      done={done} total={images} remaining={left} percent={percent}
-      leading={<ProgressThumb rootRef={props.rootRef} row={currentRow} />}
-      actions={<button type="button" className="svg-btn tiny" data-testid="svg-progress-cancel" onClick={props.onCancelClick}>✕ Cancel batch</button>} />
-  );
-}
-
-function CompleteBar(props: Props & { onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  const { done, images } = useCurrent(props);
-  const saved = props.aggregate?.saved ?? props.progress?.saved ?? done;
-  return (
-    <ProcessProgressBar prefix="svg" theme="svg" title={props.aggregate?.interrupted ? "SVG processes ended — check results" : "SVG batch complete"} detail={`${saved} results saved · ready for review`}
-      done={done} total={images} remaining={0} percent={100} complete
-      cue={props.progress?.runId ?? null} cueSilent={props.aggregate?.interrupted === true}
-      leading={<span className="svg-progress-check" aria-hidden="true">✓</span>}
-      actions={<>
-        <button type="button" className="svg-btn primary tiny" data-testid="svg-progress-review" onClick={props.onReview}>→ Review results</button>
-        <button type="button" className="svg-progress-close" data-testid="svg-progress-dismiss" aria-label="Dismiss" onClick={props.onDismiss}>✕</button>
-      </>} />
-  );
 }
 
 function useEsc(onEsc: () => void) {

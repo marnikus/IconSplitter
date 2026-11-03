@@ -2,9 +2,9 @@
 // Portalled to #batch-progress-mount so it stays visible when switching tabs
 
 import { useEffect, useState } from "react";
-import ProcessProgressBar from "../ui/ProcessProgressBar";
+import ProcessProgressBar, { type ProcessStatus } from "../ui/ProcessProgressBar";
 import { createPortal } from "react-dom";
-import { batchTotals, type BatchProgress } from "./BatchProgress";
+import { batchStatusOf, batchTotals, type BatchProgress } from "./BatchProgress";
 import type { Row } from "./useBatchTypes";
 
 type Mode = "split" | "preview";
@@ -48,8 +48,30 @@ export default function BatchProgressHeader(p: Props) {
   return mount ? createPortal(content, mount) : content;
 }
 
+/** One bar for the whole lifecycle; the shared bar decides controls, mark and sound. */
 function Bar(props: Props & { mode: Mode; onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  return props.running ? <RunningBar {...props} /> : <CompleteBar {...props} />;
+  const mode = props.mode;
+  const { done, left, percent, total, currentRow } = useCurrent(props);
+  const progress = props.progress as BatchProgress;
+  const status = batchStatusOf(progress, props.running);
+  const currentName = progress.currentName || currentRow?.name || "";
+  const noun = mode === "preview" ? "previews" : "processed";
+  return (
+    <ProcessProgressBar prefix={mode === "preview" ? "batch-preview" : "batch"} theme="batch" title={titleOf(mode, status, total)}
+      detail={status === "running" ? currentName : `${progress.saved ?? done} ${noun} · ready`}
+      done={done} total={total} remaining={left} percent={status === "completed" ? 100 : percent}
+      status={status} runId={progress.runId}
+      leading={<ProgressThumb thumbFor={props.thumbFor} relPath={progress.currentRelPath} name={currentName} mode={mode} />}
+      onCancel={props.onCancelClick} cancelLabel={`✕ Cancel ${mode === "preview" ? "preview" : "batch"}`}
+      onReview={props.onReview} onDismiss={props.onDismiss} />
+  );
+}
+
+function titleOf(mode: Mode, status: ProcessStatus, total: number): string {
+  const what = mode === "preview" ? "Preview" : "Batch split";
+  if (status === "running") return mode === "preview" ? `Previewing splits · ${total} files` : `Splitting icons · ${total} files`;
+  if (status === "cancelled") return `${what} cancelled`;
+  return status === "failed" ? `${what} finished with errors` : `${what} complete`;
 }
 
 function useCurrent(props: Props) {
@@ -58,37 +80,6 @@ function useCurrent(props: Props) {
   const totals = batchTotals(progress);
   const currentRow = progress.currentRelPath ? rows.find((r) => r.relPath === progress.currentRelPath) ?? null : null;
   return { totals, currentRow, done: totals.done, left: totals.left, percent: totals.percent, total: progress.total };
-}
-
-function RunningBar(props: Props & { mode: Mode; onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  const mode = props.mode;
-  const { done, left, percent, total, currentRow } = useCurrent(props);
-  const currentName = props.progress?.currentName ?? currentRow?.name ?? "";
-  const title = mode === "preview" ? `Previewing splits · ${total} files` : `Splitting icons · ${total} files`;
-  return (
-    <ProcessProgressBar prefix={mode === "preview" ? "batch-preview" : "batch"} theme="batch" title={title} detail={currentName}
-      done={done} total={total} remaining={left} percent={percent}
-      leading={<ProgressThumb thumbFor={props.thumbFor} relPath={props.progress?.currentRelPath ?? null} name={currentName} mode={mode} />}
-      actions={<button type="button" className="svg-btn tiny" data-testid={testId(mode, "progress-cancel")} onClick={props.onCancelClick}>✕ Cancel {mode === "preview" ? "preview" : "batch"}</button>} />
-  );
-}
-
-function CompleteBar(props: Props & { mode: Mode; onCancelClick: () => void; onDismiss: () => void; onReview: () => void }) {
-  const mode = props.mode;
-  const { done, total } = useCurrent(props);
-  const saved = props.progress?.saved ?? done;
-  const title = mode === "preview" ? "Preview complete" : "Batch split complete";
-  const sub = mode === "preview" ? `${saved} previews · ready` : `${saved} processed · ready`;
-  return (
-    <ProcessProgressBar prefix={mode === "preview" ? "batch-preview" : "batch"} theme="batch" title={title} detail={sub}
-      done={done} total={total} remaining={0} percent={100} complete
-      cue={props.progress?.runId ?? null} cueSilent={done < total}
-      leading={<span className="batch-progress-check" aria-hidden="true">✓</span>}
-      actions={<>
-        <button type="button" className="svg-btn primary tiny" data-testid={testId(mode, "progress-review")} onClick={props.onReview}>→ Review results</button>
-        <button type="button" className="batch-progress-close" data-testid={testId(mode, "progress-dismiss")} aria-label="Dismiss" onClick={props.onDismiss}>✕</button>
-      </>} />
-  );
 }
 
 function useEsc(onEsc: () => void) {

@@ -6,6 +6,8 @@ import { jobStore, publishJobs, releaseJobRows, sourceKeys, type SvgJob } from "
 import { runTotals, chainAdd, NO_CHAIN } from "./runtotals";
 import type { RunCtx } from "./runcontext";
 import type { RunEvent } from "./runtypes";
+import type { ProcessStatus } from "../lib/processprogress";
+import type { RunProgress } from "./types";
 
 export function jobEvent(c: RunCtx, job: SvgJob, event: RunEvent): void {
   if (event.kind === "item-failed" && (event.failure === "stalled" || event.failure === "aborted")) {
@@ -51,11 +53,33 @@ export function processTotals(jobs: readonly import("./jobstate").JobView[], que
     const left = job.status === "running" ? job.total - counts.done : 0;
     const saved = job.progress?.outcomes.reduce((n, outcome) => n + outcome.saved, 0) ?? 0;
     return { done: total.done + counts.done, left: total.left + left, images: total.images + counts.done + left,
-      saved: total.saved + saved, interrupted: total.interrupted || job.status === "cancelled" || job.status === "failed" };
-  }, { done: 0, left: queued, images: queued, saved: 0, interrupted: false });
+      saved: total.saved + saved, cancelled: total.cancelled || job.status === "cancelled",
+      failed: total.failed || job.status === "failed" };
+  }, { done: 0, left: queued, images: queued, saved: 0, cancelled: false, failed: false });
+}
+
+/** The bar's lifecycle state across the tab's SVG runs: a cancel wins over a failure. */
+export function svgRunStatusOf(running: boolean, ended: { cancelled: boolean; failed: boolean }): ProcessStatus {
+  if (running) return "running";
+  if (ended.cancelled) return "cancelled";
+  return ended.failed ? "failed" : "completed";
 }
 
 /** Keep the selected active job; otherwise show work, then the latest result. */
 function foregroundJob(store: ReturnType<typeof jobStore>, active: SvgJob[]): SvgJob | undefined {
   return active.find((job) => job.id === store.foreground) ?? active[0] ?? store.jobs.at(-1);
+}
+
+/**
+ * The progress a finished run leaves for its bar. A run that ended before its
+ * first request (a refused plan, an unreadable composite) never produced one,
+ * so it would end with a sound and no bar; it gets an empty terminal one of its
+ * own, counting the images it carried. A real progress is kept as it is.
+ */
+export function endedProgress(job: Pick<SvgJob, "id" | "ids" | "progress">): RunProgress {
+  if (job.progress !== null) return job.progress;
+  return {
+    runId: job.id, batchId: "", index: 0, batches: 0, count: 0, cols: 0, rows: 0, composite: "", hash: "",
+    saved: 0, failed: 0, missing: 0, startedAt: Date.now(), perRequest: 0, images: job.ids.length, outcomes: [],
+  };
 }

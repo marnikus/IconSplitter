@@ -88,7 +88,7 @@ describe("the register progress model", () => {
 describe("the bar the user sees", () => {
   it("is mounted by the Generate SVG panel, next to the generation and image bars", () => {
     const panel = readFileSync("src/svg/SvgJobProgress.tsx", "utf8");
-    expect(panel).toContain("<SvgRegisterProgress refs={g.refs} />");
+    expect(panel).toContain("<SvgRegisterProgress refs={g.refs} onReview={reviewSvg} />");
     // Same portal stack as every other process bar, so it cannot be missed.
     const bar = readFileSync("src/svg/SvgRegisterProgress.tsx", "utf8");
     expect(bar).toContain('getElementById("svg-progress-mount")');

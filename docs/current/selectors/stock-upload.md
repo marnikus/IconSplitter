@@ -7,9 +7,8 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-upload-shell`, `stock-upload-panel`, `stock-upload-unsupported`, `stock-pick-root` — panel containers.
 - `stock-upload-progress-mount` — cross-tab portal mount for the upload bar
   (`stock-upload-progress-{header,title,file,track,completed,remaining,percent}`),
-  with `complete` only if nothing failed, else `failed` (red); `stock-progress-cancel`
-  while files move, `stock-progress-dismiss` (✕, "Close upload progress") once the
-  bar is finished or the run returned.
+  ([lifecycle](../sor/process-progress.md)): `-cancel` while running, `-review`
+  and `-dismiss` once finished; `complete`, or `failed` (red).
 - `stock-open-folder`, `stock-rescan`, `stock-folder-path`, `stock-scope-copy`, `stock-audit` — folder picker, rescan, and full root path bar.
 
 ## Stock presets, Getty ESP CSV & local-only credentials (`StockFtpPanel.tsx`, `StockFtpCredentials.tsx`)

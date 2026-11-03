@@ -11,6 +11,7 @@ import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import BatchMergeBar from "./BatchMergeBar";
 import BatchProgressHeader from "./BatchProgressHeader";
+import { setAppState } from "../state/appstore";
 import { useBatchPreview, isStaleEntry, expectedKeyFor, type PreviewEntry } from "./useBatchPreview";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
@@ -97,8 +98,8 @@ export default function BatchPanel({ active = true }: { active?: boolean }) {
   const { onPreview, rowStale, onRegenerate, onRowMergeApply, onRowMergeReset } = useRowActions(v, preview);
   return (
     <div className="batch-shell w-full space-y-4">
-      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => {}} mode="split" />
-      <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={() => {}} mode="preview" />
+      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={reviewBatch} mode="split" />
+      <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={reviewBatch} mode="preview" />
       {!v.core.supported && <Unsupported />}
       <GrantBar v={v} />
 <BatchControls v={v} />
@@ -176,3 +177,7 @@ function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
   );
 }
 
+/** "Review results" on a Batch bar opens the Batch tab, wherever the bar is seen. */
+function reviewBatch(): void {
+  setAppState({ tab: "batch" });
+}

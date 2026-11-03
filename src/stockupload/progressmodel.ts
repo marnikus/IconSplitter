@@ -3,6 +3,7 @@
 // marked done at 100% and can be closed. Pure, so the display rules are testable
 // without mounting the panel's whole hook.
 
+import type { ProcessStatus } from "../lib/processprogress";
 import type { UploadProgressStep } from "./batchtypes";
 
 export interface UploadBar {
@@ -55,4 +56,12 @@ export function uploadBar(step: UploadProgressStep): UploadBar {
     total: step.total,
     remaining: Math.max(0, step.total - done),
   };
+}
+
+/** The bar's lifecycle state: a user stop wins over files that did not upload. */
+export function stockStatusOf(step: UploadProgressStep): ProcessStatus {
+  const bar = uploadBar(step);
+  if (!bar.finished) return "running";
+  if (step.stopped === true) return "cancelled";
+  return bar.failed ? "failed" : "completed";
 }

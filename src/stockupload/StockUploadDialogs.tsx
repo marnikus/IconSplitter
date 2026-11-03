@@ -6,7 +6,8 @@ import { gettyWebBatchSummaryOf, gettyWebIconSizes } from "../lib/stockupload/ge
 import type { StockUploadPlan } from "../lib/stockupload/plan";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
 import UploadRowBadgeSettings from "../upload/UploadRowBadgeSettings";
-import { uploadBar, type UploadBar } from "./progressmodel";
+import { stockStatusOf, uploadBar } from "./progressmodel";
+import { setAppState } from "../state/appstore";
 import type { StockUploadApi } from "./useStockUpload";
 
 /** The Getty web target ids of a plan, so its icons can be sized per pair. */
@@ -106,43 +107,12 @@ function StockProgressPortal({ g }: { g: StockUploadApi }) {
   if (p === null) return null;
   const bar = uploadBar(p);
   const content = (
-    <ProcessProgressBar
-      prefix="stock-upload"
-      theme="svg"
-      title={bar.title}
-      detail={bar.detail}
-      done={bar.done}
-      total={bar.total}
-      remaining={bar.remaining}
-      percent={bar.percent}
-      complete={bar.finished}
-      failed={bar.failed}
-      cue={p.runId ?? null}
-      cueSilent={p.stopped === true}
-      leading={<span className="svg-progress-check" aria-hidden="true">{bar.finished && !bar.failed ? "✓" : "◍"}</span>}
-      actions={<ProgressActions g={g} bar={bar} running={g.model.uploading} />}
-    />
+    <ProcessProgressBar prefix="stock-upload" theme="svg" title={bar.title} detail={bar.detail}
+      done={bar.done} total={bar.total} remaining={bar.remaining} percent={bar.percent}
+      status={stockStatusOf(p)} runId={p.runId ?? ""}
+      leading={<span className="svg-progress-check" aria-hidden="true">◍</span>}
+      onCancel={g.cancelUpload} onReview={() => setAppState({ tab: "stockUpload" })} onDismiss={g.dismissProgress} />
   );
   const mount = document.getElementById("stock-upload-progress-mount");
   return mount ? createPortal(content, mount) : content;
-}
-
-/**
- * A finished bar is done: it offers the same ✕ close as the other process
- * headers instead of a Cancel that has nothing left to stop.
- */
-function ProgressActions({ g, bar, running }: { g: StockUploadApi; bar: UploadBar; running: boolean }) {
-  const close = (
-    <button type="button" className="svg-progress-close" data-testid="stock-progress-dismiss"
-      aria-label="Close upload progress" onClick={g.dismissProgress}>✕</button>
-  );
-  if (bar.finished) return <>{close}</>;
-  return (
-    <>
-      <button type="button" className="svg-btn tiny" data-testid="stock-progress-cancel" onClick={g.cancelUpload}>
-        Cancel
-      </button>
-      {!running ? close : null}
-    </>
-  );
 }

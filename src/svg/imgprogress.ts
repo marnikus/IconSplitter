@@ -1,5 +1,6 @@
 // Image-only process state: no provider credentials, bytes or SVG counters.
 // The store itself is lib/processslot, shared with the register bars (2026-11-02).
+import type { ProcessStatus } from "../lib/processprogress";
 import { createSlotMap, publishProcess } from "../lib/processslot";
 import type { SvgRefs } from "./types";
 export interface ImageProcess {
@@ -28,4 +29,11 @@ export function stopImageProcess(refs: SvgRefs): void {
 }
 export function finishImageProcess(refs: SvgRefs, id: string, stopped: boolean): void {
   updateImageProcess(refs, id, { phase: stopped ? "stopped" : "complete" });
+}
+
+/** The bar's lifecycle state: Stop wins; a finished run with any loss ended with errors. */
+export function imageStatusOf(p: ImageProcess): ProcessStatus {
+  if (p.phase === "stopped") return "cancelled";
+  if (p.phase !== "complete") return "running";
+  return p.failed > 0 || p.saved + p.discarded < p.total ? "failed" : "completed";
 }

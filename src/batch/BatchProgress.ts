@@ -1,7 +1,7 @@
 // BatchProgress.ts — persistent progress model for batch split (reuses SVG progress pattern)
 // Pure arithmetic, no React, testable (RULE 3)
 
-import { processTotals } from "../lib/processprogress";
+import { processTotals, type ProcessStatus } from "../lib/processprogress";
 
 export interface BatchProgress {
   runId: string;
@@ -39,4 +39,15 @@ export function makeBatchProgress(total: number, runId: string): BatchProgress {
     failed: 0,
     skipped: 0,
   };
+}
+
+/**
+ * The bar's lifecycle state (2026-11-03): a run that stopped before every file
+ * was processed was cancelled; one that processed everything but failed some
+ * files ended with errors.
+ */
+export function batchStatusOf(p: BatchProgress, running: boolean): ProcessStatus {
+  if (running) return "running";
+  if (p.done < p.total) return "cancelled";
+  return p.failed > 0 ? "failed" : "completed";
 }

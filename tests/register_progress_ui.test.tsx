@@ -24,7 +24,7 @@ const RUNNING: Snapshot = {
 };
 
 function show(refsObj: SvgRefs): Promise<void> {
-  return act(async () => { ui.render(<SvgRegisterProgress refs={refsObj} />); });
+  return act(async () => { ui.render(<SvgRegisterProgress refs={refsObj} onReview={() => undefined} />); });
 }
 
 function publish(refsObj: SvgRefs, value: Snapshot | null): Promise<void> {

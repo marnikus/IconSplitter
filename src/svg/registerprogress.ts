@@ -8,7 +8,7 @@
 // Reuse, not a second counter: the done/total bookkeeping is lib/processprogress'
 // reporter, and the live value is a lib/processslot entry per tab.
 
-import type { ProcessProgress } from "../lib/processprogress";
+import type { ProcessProgress, ProcessStatus } from "../lib/processprogress";
 import { createProcessReporter } from "../lib/processprogress";
 import { createSlotMap, publishProcess, type ProcessSlot } from "../lib/processslot";
 import type { SvgRefs } from "./types";
@@ -24,7 +24,7 @@ export interface RegisterProgress {
   total: number;
   /** The pair being read right now — its AI file's name, never a path. */
   current: string;
-  phase: "running" | "complete";
+  phase: "running" | "complete" | "cancelled" | "failed";
   /** New records written so far. */
   registered: number;
   /** Files that matched a pair but could not be read or validated. */
@@ -36,8 +36,12 @@ export interface RegisterSession {
   reading: (name: string) => void;
   /** That folder finished: what it registered, and what it refused. */
   settled: (counts: { registered: number; skipped: number }) => void;
-  /** The whole pass finished: the bar turns green at 100 %. */
+  /** The whole pass ended: complete, or cancelled when Cancel reached it. */
   finish: () => void;
+  /** The pass crashed: its bar ends as failed instead of running forever. */
+  fail: () => void;
+  /** Cancel was pressed: the pass stops before its next folder. */
+  cancelled: () => boolean;
 }
 
 const slotOf = createSlotMap<RegisterProgress>();
@@ -47,7 +51,7 @@ export function registerSlot(refs: SvgRefs): ProcessSlot<RegisterProgress> {
   return slotOf(refs);
 }
 
-/** Clears the bar (its ✕, or the auto-hide after a finished pass). */
+/** Clears the bar — only its ✕ does this; a finished pass stays visible. */
 export function clearRegister(refs: SvgRefs): void {
   publishProcess(registerSlot(refs), null);
 }
@@ -55,11 +59,13 @@ export function clearRegister(refs: SvgRefs): void {
 /** Starts a pass over `total` folders; every folder must settle exactly once. */
 export function beginRegister(refs: SvgRefs, kind: RegisterKind, total: number): RegisterSession {
   const slot = registerSlot(refs);
+  const stop = { requested: false };
+  stops.set(refs, stop);
   let current = "";
   const counts = { registered: 0, skipped: 0 };
   const emit = (last: ProcessProgress) => publishProcess(slot, {
     id: last.runId, kind, done: last.done, total: last.total, current,
-    phase: last.status === "running" ? "running" : "complete",
+    phase: PHASES[last.status],
     registered: counts.registered, skipped: counts.skipped,
   });
   let last: ProcessProgress = { runId: "", done: 0, total: 0, status: "running" };
@@ -71,8 +77,34 @@ export function beginRegister(refs: SvgRefs, kind: RegisterKind, total: number):
       counts.skipped += settled.skipped;
       reporter.advance();
     },
-    finish: () => reporter.finish("completed"),
+    finish: () => { endStop(refs, stop); reporter.finish(stop.requested ? "cancelled" : "completed"); },
+    fail: () => { endStop(refs, stop); reporter.finish("failed"); },
+    cancelled: () => stop.requested,
   };
+}
+
+const PHASES: Record<ProcessStatus, RegisterProgress["phase"]> = {
+  running: "running", completed: "complete", cancelled: "cancelled", failed: "failed",
+};
+
+/** The running pass of each tab, so the bar's Cancel can reach it. */
+const stops = new WeakMap<SvgRefs, { requested: boolean }>();
+
+function endStop(refs: SvgRefs, stop: { requested: boolean }): void {
+  if (stops.get(refs) === stop) stops.delete(refs);
+}
+
+/** The bar's Cancel: the running pass stops before its next folder; false when none runs. */
+export function cancelRegister(refs: SvgRefs): boolean {
+  const stop = stops.get(refs);
+  if (stop === undefined || stop.requested) return false;
+  stop.requested = true;
+  return true;
+}
+
+/** The bar's lifecycle state. */
+export function registerStatusOf(p: Pick<RegisterProgress, "phase">): ProcessStatus {
+  return p.phase === "complete" ? "completed" : p.phase;
 }
 
 /** One honest line for the bar's detail while it runs. */
@@ -98,5 +130,7 @@ export function registerTitle(p: RegisterProgress): string {
   const what = p.kind === "svg" ? "existing SVGs" : "AI sources";
   const folders = `${p.total} folder${p.total === 1 ? "" : "s"}`;
   if (p.phase === "running") return `Registering ${what} · ${folders}`;
+  if (p.phase === "cancelled") return `Registering ${what} cancelled`;
+  if (p.phase === "failed") return `Registering ${what} stopped with an error`;
   return `Registering ${what} complete`;
 }
