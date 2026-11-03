@@ -1,6 +1,7 @@
 // batchOps.ts — scan + process ops (RULE 18), yields to keep UI responsive
 
 import { armCompletionSound, startCompletionSound } from "../ui/completionSound";
+import { withActivity } from "../lib/activity";
 import { readDirTree, ensureDirPath, type DirHandleLike, type FileHandleLike } from "../lib/fs";
 import { walkTree, collectAiImages, linkReferences, type AiImageEntry } from "../lib/scan";
 import { syncAndCollect, applyOutcomes, applyReviewOutcomes, type ReviewOutcome } from "./statewrite";
@@ -258,6 +259,9 @@ export async function decideReview(a: DecideArgs): Promise<void> {
   }
   if (grouped.length > 0) {
     const finish = a.audible ? startCompletionSound() : () => undefined;
-    try { await applyReviewOutcomes(root, grouped, now); } finally { finish(); }
+    try {
+      await withActivity("batch", `Saving review outcomes · ${grouped.length} file${grouped.length === 1 ? "" : "s"}…`,
+        () => applyReviewOutcomes(root, grouped, now));
+    } finally { finish(); }
   }
 }

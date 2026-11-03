@@ -24,9 +24,11 @@ import type { UploadDiscovery, UploadExclusion } from "./discovery";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { useRunning } from "../ui/rebuildwatch";
 import { useUploadHotkeys } from "./UploadHotkeys";
+import { useBusyActivity } from "../ui/useBusyActivity";
 
 export default function UploadPanel({ active = true }: { active?: boolean }) {
   const g = useUpload();
+  useBusyActivity("upload", g.busy);
   const rootRef = g.refs.root as { current: DirHandleLike | null };
   useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active && g.dialog === null);
   useUploadHotkeys({ visible: g.visible, activeId: g.activeId, setActive: g.setActive }, active && g.dialog === null);

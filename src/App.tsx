@@ -15,6 +15,7 @@ import { BusyOverlay, DragOverlay, ToastOverlay } from "./sheets/Overlays";
 
 import { importSheets, type Sheet } from "./sheets/importSheets";
 import { startCompletionSound, withCompletionSound } from "./ui/completionSound";
+import { useBusyActivity } from "./ui/useBusyActivity";
 
 const checker =
   "bg-[length:16px_16px] bg-[linear-gradient(45deg,#e5e7eb_25%,transparent_25%,transparent_75%,#e5e7eb_75%),linear-gradient(45deg,#e5e7eb_25%,#fff_25%,#fff_75%,#e5e7eb_75%)] [background-position:0_0,8px_8px]";
@@ -26,6 +27,7 @@ export default function App() {
   const [sheets, setSheets] = useState<Sheet[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  useBusyActivity("sheets", busy);
   const [drag, setDrag] = useState(false);
   const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null);
   const sheetsEdit = useSheetsEdit();

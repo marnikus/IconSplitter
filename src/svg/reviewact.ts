@@ -1,4 +1,5 @@
 import { withCompletionSound } from "../ui/completionSound";
+import { withActivity } from "../lib/activity";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 // reviewact.ts — the SVG review decision and its undo path (prompt §15, RULE 12).
 // Owns: approving/declining ONE item at a time (2026-10-20). The status belongs
@@ -84,7 +85,7 @@ async function saveReviewDecision(s: ReviewCtx, ids: string[], decision: ReviewS
   const recs = rows.map((r) => recOf(r, decision));
   const activeBefore = getAppState().svg.activeId;
   await withCompletionSound(async () => {
-    await writeAll(s, rows, decision);
+    await withActivity("svg", `Saving review decision · ${rows.length} item${rows.length === 1 ? "" : "s"}…`, () => writeAll(s, rows, decision));
     patchRows(s, rows, decision);
     pushEntry(s, rows, decision, recs);
     if (getAppState().svg.activeId === activeBefore) advanceSvgReview(s, ids, decision);

@@ -29,6 +29,7 @@ import SvgList from "./SvgList";
 import type { Discovery, SourceProblem } from "./sources";
 
 import { exclusionSummary } from "./sourcelist";
+import { useBusyActivity } from "../ui/useBusyActivity";
 
 /**
  * `active` (2026-10-08): the Workbench keeps this panel mounted on every tab
@@ -38,6 +39,8 @@ import { exclusionSummary } from "./sourcelist";
  */
 export default function SvgPanel({ active = true }: { active?: boolean }) {
   const g = useSvgGen();
+  // The AI image run already has its own job bar: it is not shown twice.
+  useBusyActivity("svg", g.busy, (busy) => busy.startsWith("Regenerating AI sources"));
   const rootRef = g.refs.root as { current: DirHandleLike | null };
   const dialogOpen = g.dialog !== null || g.imgReview !== null;
   // A reload must not land inside a generation run.

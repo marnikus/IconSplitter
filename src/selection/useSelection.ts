@@ -5,6 +5,7 @@
 // it; each decision stays in the pair's OWN file, which is its source of truth.
 
 import { startCompletionSound, withCompletionSound } from "../ui/completionSound";
+import { withActivity } from "../lib/activity";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyFilters, filterLabel, type Decision, type ListFilter, type ViewPair } from "../lib/reviewfilter";
 import { sortLabel, sortPairs, type SortState } from "../lib/reviewsort";
@@ -197,7 +198,8 @@ function nothingApplied(setS: Setter, out: BulkOut, d: Decision): void {
 
 async function reportBulk(ctx: Ctx, setS: Setter, out: BulkOut, d: Decision): Promise<void> {
   const finish = startCompletionSound();
-  const saved = await persist(ctx, setS, out.state, out.applied);
+  const saved = await withActivity("selection", `Saving decisions · ${out.applied.length} item${out.applied.length === 1 ? "" : "s"}…`,
+    () => persist(ctx, setS, out.state, out.applied));
   const msg = bulkMessage({ decision: d, applied: out.applied.length, skipped: out.skipped.length, saved });
   setS((p) => ({ ...p, toast: { msg, err: !saved } }));
   finish();
@@ -260,7 +262,8 @@ async function writeChanged(root: DirHandleLike, s: SelState, changed: readonly 
 async function retryWrite(ctx: Ctx, setS: Setter): Promise<void> {
   const ids = ctx.state.current.retryIds;
   await withCompletionSound(async () => {
-    await persist(ctx, setS, ctx.state.current, ids.length > 0 ? ids : ctx.state.current.pairs.map((p) => p.pairId));
+    await withActivity("selection", "Retrying failed saves…",
+      () => persist(ctx, setS, ctx.state.current, ids.length > 0 ? ids : ctx.state.current.pairs.map((p) => p.pairId)));
   });
 }
 

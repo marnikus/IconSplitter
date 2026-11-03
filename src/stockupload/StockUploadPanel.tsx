@@ -10,6 +10,7 @@ import StockUploadDialogs from "./StockUploadDialogs";
 import StockUploadList from "./StockUploadList";
 import { useRunning } from "../ui/rebuildwatch";
 import { useStockUpload, type StockUploadApi } from "./useStockUpload";
+import { useBusyActivity } from "../ui/useBusyActivity";
 
 function useArrowKeys(g: StockUploadApi, enabled: boolean): void {
   useEffect(() => {
@@ -37,6 +38,7 @@ function thumbCss(px: number): CSSProperties {
 
 export default function StockUploadPanel({ active = true }: { active?: boolean }) {
   const g = useStockUpload();
+  useBusyActivity("stock", g.model.busy);
   const keysEnabled = active && g.model.dialog === null;
   useSelectShortcuts({
     activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive,

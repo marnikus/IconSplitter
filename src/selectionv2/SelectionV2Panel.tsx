@@ -22,9 +22,11 @@ import FilterGrid from "./FilterGrid";
 import ReviewList from "./ReviewList";
 import SourceBar from "./SourceBar";
 import { useSelectionV2, type SelectionV2Api } from "./useSelectionV2";
+import { useBusyActivity } from "../ui/useBusyActivity";
 
 export default function SelectionV2Panel() {
   const v = useSelectionV2();
+  useBusyActivity("selection", v.core.s.busy);
   const thumbFor = useSideThumbs(v.core.rootRef);
   const [bulkArmed, setBulkArmed] = useState(false);
   useHotkeys(v, !bulkArmed);

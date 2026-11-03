@@ -19,6 +19,7 @@ import HistoryBar from "./HistoryBar";
 import RebuildToast, { useRebuildWatch } from "./rebuildwatch";
 import { armCompletionSound } from "./completionSound";
 import ScrollTopButton from "./ScrollTopButton";
+import ActivityBars from "./ActivityBars";
 
 const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "sheets", label: "Single sheets", testid: "tab-sheets" },
@@ -46,6 +47,7 @@ function Shell() {
   return (
     <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell" onPointerDownCapture={armCompletionSound} onKeyDownCapture={armCompletionSound}>
       <div className="progress-mounts flex flex-col gap-1">
+        <ActivityBars />
         <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
         <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
         <div id="upload-progress-mount" data-testid="upload-progress-mount"></div>

@@ -16,6 +16,7 @@ import { useBatchPreview, isStaleEntry, expectedKeyFor, type PreviewEntry } from
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { useRunning } from "../ui/rebuildwatch";
+import { useBusyActivity } from "../ui/useBusyActivity";
 
 type View = ReturnType<typeof useBatchView>;
 type Preview = ReturnType<typeof useBatchPreview>;
@@ -88,6 +89,7 @@ function useRowStale(v: View, preview: Preview) {
 
 export default function BatchPanel({ active = true }: { active?: boolean }) {
   const v = useBatchView();
+  useBusyActivity("batch", v.core.s.busy);
   const thumbFor = useThumbCache(v.core.thumbUrl);
   const { onReviewed, onReviewedBatch } = useReviewed(v);
   const preview = usePreviewSetup(v, onReviewed, onReviewedBatch);

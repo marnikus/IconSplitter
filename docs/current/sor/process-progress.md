@@ -1,7 +1,7 @@
 # Shared batch process progress
 
 [Shared shell](shared.md) · [SVG to upload](upload.md) ·
-[Batch](batch.md) · [Generate SVG](svg-generation.md)
+[Batch](batch.md) · [Generate SVG](svg-generation.md) · [Activity bars](activity-bars.md)
 
 ## Shared presentation and reusable API
 
@@ -133,7 +133,7 @@ actions, marks or cue. `running`: the caller's `leading` + Cancel (`cancelLabel`
 results + ✕. One cue per `runId` for completed/failed with `total > 0`
 (`notifyBarCompletion` skips an id the feature already cued); cancelled is
 silent. A finished bar stays until ✕ or the feature's next run: no timer.
-Mappings, one per feature, same rules (a user stop wins over failures):
+Per-feature mappings (a user stop wins):
 `batchStatusOf`, `svgRunStatusOf`, `imageStatusOf`, `registerStatusOf`,
 `stockStatusOf`; Upload uses its reporter status. An SVG run that ended before
 its first request still gets a bar (`endedProgress`). Register passes

@@ -12,6 +12,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { ProcessStatus } from "../lib/processprogress";
 import { notifyBarCompletion } from "./completionSound";
+import ProgressFrame from "./ProgressFrame";
 
 export type { ProcessStatus } from "../lib/processprogress";
 
@@ -60,25 +61,12 @@ function useCompletionCue(runId: string, status: ProcessStatus, total: number): 
 }
 
 export default function ProcessProgressBar(p: ProcessProgressBarProps) {
-  const cls = `${p.theme}-progress`;
   useCompletionCue(p.runId, p.status, p.total);
-  const titleClass = p.status === "failed" ? "error" : p.status === "completed" ? "success" : undefined;
   return (
-    <div className={`${cls}-header process-progress-header${CLASSES[p.status]}`} data-testid={`${p.prefix}-progress-header`}
-      data-status={p.status}>
-      <div className={`${cls}-left`}>
-        <Leading p={p} />
-        <div className={`${cls}-text`}>
-          <strong className={titleClass} data-testid={`${p.prefix}-progress-title`}>{p.title}</strong>
-          <span className={`${cls}-file`} data-testid={`${p.prefix}-progress-file`} title={p.detail}>{p.detail}</span>
-        </div>
-      </div>
-      <ProcessStats p={p} />
-      <div className={`${cls}-right`}>
-        <span className={`${cls}-percent`} data-testid={`${p.prefix}-progress-percent`}>{p.percent}%</span>
-        <ProcessActions p={p} />
-      </div>
-    </div>
+    <ProgressFrame prefix={p.prefix} theme={p.theme} title={p.title} detail={p.detail} done={p.done} total={p.total}
+      remaining={p.remaining} percent={p.percent} note={p.note} stateClass={CLASSES[p.status]} status={p.status}
+      titleClass={p.status === "failed" ? "error" : p.status === "completed" ? "success" : undefined}
+      leading={<Leading p={p} />} actions={<ProcessActions p={p} />} />
   );
 }
 
@@ -103,22 +91,5 @@ function ProcessActions({ p }: { p: ProcessProgressBarProps }) {
       <button type="button" className={`${p.theme}-progress-close`} data-testid={`${p.prefix}-progress-dismiss`}
         aria-label={`Dismiss: ${p.title}`} onClick={p.onDismiss}>✕</button>
     </>
-  );
-}
-
-function ProcessStats({ p }: { p: ProcessProgressBarProps }) {
-  const cls = `${p.theme}-progress`;
-  return (
-    <div className={`${cls}-center`}>
-      <div className={`${cls}-track`} data-testid={`${p.prefix}-progress-track`} role="progressbar" aria-label={p.title}
-        aria-valuemin={0} aria-valuemax={100} aria-valuenow={p.percent} aria-valuetext={`${p.done} of ${p.total} processed`}>
-        <div className={`${cls}-fill`} style={{ width: `${p.percent}%` }} />
-      </div>
-      <div className={`${cls}-stats`}>
-        <span data-testid={`${p.prefix}-progress-completed`}>{p.done} completed / {p.total}</span>
-        <span data-testid={`${p.prefix}-progress-remaining`}>{p.remaining} remaining</span>
-        {p.note ? <span className={`${cls}-note`} data-testid={`${p.prefix}-progress-note`}>{p.note}</span> : null}
-      </div>
-    </div>
   );
 }

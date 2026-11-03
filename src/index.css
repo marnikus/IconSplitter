@@ -1089,6 +1089,14 @@
 .svg-progress-center { display: grid; gap: 4px; }
 .svg-progress-track { height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
 .svg-progress-fill { height: 100%; background: #745cff; transition: width 0.3s; }
+/* An activity with no count yet: a sliding segment says "working", never a fake %. */
+.svg-progress-track.indeterminate .svg-progress-fill, .batch-progress-track.indeterminate .batch-progress-fill {
+  width: 35%; animation: progress-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes progress-indeterminate { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) {
+  .svg-progress-track.indeterminate .svg-progress-fill, .batch-progress-track.indeterminate .batch-progress-fill { animation: none; width: 100%; opacity: 0.5; }
+}
 .svg-progress-header.complete .svg-progress-fill { background: #32d68b; }
 /* A run that lost files is never green: red track, red title, red percent. */
 .svg-progress-header.failed { background: #1c1418; }
