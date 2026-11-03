@@ -2,12 +2,12 @@
 // (2026-11-03): no API key is needed for it, the queued batch keeps its frozen
 // chat target, and the run's web transport writes a restarted chat's URL back
 // into the stored setting.
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_CONFIG } from "../src/lib/svgconfig";
 import { guard } from "../src/svg/runplan";
 import { confirmationProblem } from "../src/svg/runcontrol";
 import { queueItem } from "../src/svg/runqueue";
-import { webRunOf } from "../src/svg/runjobs";
+import { webTransportOf } from "../src/svg/runjobs";
 import { loadWebChat, patchWebChat, WEBCHAT_KEY } from "../src/svg/webchatstore";
 import type { SvgCtx } from "../src/svg/actions";
 import type { RunCtx } from "../src/svg/runcontext";
@@ -23,12 +23,14 @@ function ctx(key: string | null) {
 }
 
 beforeEach(() => { localStorage.removeItem(WEBCHAT_KEY); });
+afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("web mode needs no API key", () => {
-  it("the guard asks for a key in API mode only", () => {
-    expect(guard(ctx(null) as unknown as SvgCtx, ["a"])).toContain("API key");
+  it("the guard asks for a key only when the request needs one (API mode)", () => {
     patchWebChat({ enabled: true });
-    expect(guard(ctx(null) as unknown as SvgCtx, ["a"])).toBeNull();
+    // the stored mode is not a hidden input: the caller says whether a key is needed
+    expect(guard(ctx(null) as unknown as SvgCtx, ["a"])).toContain("API key");
+    expect(guard(ctx(null) as unknown as SvgCtx, ["a"], null, false)).toBeNull();
   });
 
   it("the confirmation accepts a missing key only for a web batch", () => {
@@ -44,13 +46,16 @@ describe("the queued web batch", () => {
     expect(queueItem({ ids: ["a"], requests: 1, label: "a" }).web).toBeNull();
   });
 
-  it("becomes the run's web transport, whose new chat URL replaces the stored one", () => {
+  it("becomes the run's web transport, whose new chat URL replaces the stored one", async () => {
     patchWebChat({ url: TARGET.url, enabled: true });
-    const item = queueItem({ ids: ["a"], requests: 1, label: "a", web: TARGET });
-    const web = webRunOf(item, () => undefined);
-    expect(web?.target).toEqual(TARGET);
-    web?.onChatUrl?.("https://chatgpt.com/c/new-1");
+    const lines: string[] = [];
+    const web = webTransportOf(queueItem({ ids: ["a"], requests: 1, label: "a", web: TARGET }), (line) => lines.push(line));
+    expect(web?.provider()).toBe("Web: chatgpt.com");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, text: "<svg/>", chatUrl: "https://chatgpt.com/c/new-1", restarted: true }), { status: 200 })));
+    const out = await web?.send({ prompt: "p", image: "data:image/png;base64,AA", key: "k", signal: new AbortController().signal });
+    expect(out?.ok).toBe(true);
     expect(loadWebChat().url).toBe("https://chatgpt.com/c/new-1");
-    expect(webRunOf(queueItem({ ids: ["a"], requests: 1, label: "a" }), () => undefined)).toBeUndefined();
+    expect(lines.some((l) => l.includes("new chat"))).toBe(true);
+    expect(webTransportOf(queueItem({ ids: ["a"], requests: 1, label: "a" }), () => undefined)).toBeUndefined();
   });
 });

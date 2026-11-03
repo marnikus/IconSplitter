@@ -38,6 +38,11 @@ export function isChatUrl(raw: string): boolean {
   }
 }
 
+/** True for a ChatGPT conversation page (`/c/<id>`, also inside a GPT `/g/<gpt>/c/<id>`). */
+export function isConversationUrl(raw: string): boolean {
+  return isChatUrl(raw) && /^\/(?:g\/[^/]+\/)?c\/[A-Za-z0-9-]+\/?$/.test(new URL(raw.trim()).pathname);
+}
+
 export function clampMinutes(value: unknown, fallback: number): number {
   const n = Number(value);
   if (typeof value !== "number" || !Number.isFinite(n)) return fallback;

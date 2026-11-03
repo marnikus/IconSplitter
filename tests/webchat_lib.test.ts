@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  DEFAULT_WEBCHAT_PREFS, isChatUrl, parseWebChatPrefs, webChatTargetOf,
+  DEFAULT_WEBCHAT_PREFS, isChatUrl, isConversationUrl, parseWebChatPrefs, webChatTargetOf,
 } from "../src/lib/webchatprefs";
 import { sendWebChat, type WebChatInput } from "../src/lib/webchatclient";
 
@@ -28,6 +28,13 @@ describe("webchatprefs", () => {
     expect(isChatUrl("http://chatgpt.com/c/1")).toBe(false);
     expect(isChatUrl("https://chatgpt.com.evil.io/c/1")).toBe(false);
     expect(isChatUrl("")).toBe(false);
+  });
+
+  it("tells a conversation page from the new-chat page", () => {
+    expect(isConversationUrl("https://chatgpt.com/c/6ae9-83ed")).toBe(true);
+    expect(isConversationUrl("https://chatgpt.com/g/g-abc/c/zz1")).toBe(true);
+    expect(isConversationUrl("https://chatgpt.com/")).toBe(false);
+    expect(isConversationUrl("https://evil.example/c/1")).toBe(false);
   });
 
   it("turns the settings into a run target, or names why it cannot run", () => {

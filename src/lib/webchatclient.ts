@@ -4,7 +4,7 @@
 // the reply text; the run extracts and saves the SVG exactly as for an API reply.
 
 import { isRecord } from "./isrecord";
-import { BRIDGE_FIX_HINT, DEFAULT_FTP_BRIDGE_URL } from "./stockupload/bridgeclient";
+import { HELPER_FIX_HINT, helperBase } from "./helperurl";
 import type { WebChatTarget } from "./webchatprefs";
 
 export type WebChatCode =
@@ -32,12 +32,8 @@ export interface WebChatInput {
 
 const CODES: readonly WebChatCode[] = ["bad-request", "auth", "busy", "browser", "page", "timeout", "cancelled", "reply_was_file"];
 
-function baseOf(url: string | undefined): string {
-  return (url ?? DEFAULT_FTP_BRIDGE_URL).trim().replace(/\/+$/, "") || DEFAULT_FTP_BRIDGE_URL;
-}
-
 function failureOf(status: number, body: unknown): WebChatResult {
-  if (status === 404) return { ok: false, code: "helper-old", reason: `the local helper predates web generation — restart it (${BRIDGE_FIX_HINT})` };
+  if (status === 404) return { ok: false, code: "helper-old", reason: `the local helper predates web generation — restart it (${HELPER_FIX_HINT})` };
   const code = isRecord(body) && CODES.includes(body.code as WebChatCode) ? body.code as WebChatCode : "page";
   const reason = isRecord(body) && typeof body.reason === "string" && body.reason !== "" ? body.reason : `the local helper answered HTTP ${status}`;
   return { ok: false, code, reason: reason.slice(0, 300) };
@@ -81,7 +77,7 @@ function cancelTurn(base: string, sessionKey: string, fetchFn: typeof fetch): vo
 /** Sends one turn to the user's ChatGPT chat through the local helper. */
 export async function sendWebChat(input: WebChatInput): Promise<WebChatResult> {
   const fetchFn = input.fetchImpl ?? globalThis.fetch;
-  const base = baseOf(input.bridgeUrl);
+  const base = helperBase(input.bridgeUrl);
   const stop = followProgress(input, base, fetchFn);
   const onAbort = () => cancelTurn(base, input.sessionKey, fetchFn);
   input.signal?.addEventListener("abort", onAbort, { once: true });
@@ -94,7 +90,7 @@ export async function sendWebChat(input: WebChatInput): Promise<WebChatResult> {
     return res.ok ? successOf(body) : failureOf(res.status, body);
   } catch {
     if (input.signal?.aborted) return { ok: false, code: "cancelled", reason: "the web generation was cancelled" };
-    return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${BRIDGE_FIX_HINT}` };
+    return { ok: false, code: "helper-down", reason: `cannot reach the local helper — ${HELPER_FIX_HINT}` };
   } finally {
     stop();
     input.signal?.removeEventListener("abort", onAbort);

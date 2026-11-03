@@ -6,50 +6,62 @@ Return to the [router](../README.md) or the [Generate SVG owner](svg-generation.
 ## What it does
 
 The user's ChatGPT conversation answers instead of the provider API. The local
-helper (`tools/bridge/server.mjs`) drives a real Chrome/Edge window with its
-own profile. For each request it opens the chat URL, waits until the composer
-is usable (the user signs in there the first time), attaches the ONE reference
-image, types the prompt (with the current SVG code when regenerating), presses
-send, waits until a NEW reply stops changing and no stop button shows, and
-returns the reply text. The app extracts the SVG and saves it as the next
-version exactly like an API answer.
+helper drives a real Chrome/Edge window with its own profile. For each request
+it opens the chat URL, waits for a usable composer (the user signs in there
+once), attaches ONE reference image, types the prompt (plus the current SVG
+code when regenerating), sends, waits until a NEW reply stops changing with no
+stop button, and returns the reply text. The app extracts the SVG and saves it
+as the next version like an API answer.
+
+## Module boundaries
+
+| Layer | Owns | Must not |
+|---|---|---|
+| `tools/bridge/webdriver/` (`browser`, `cdp`, `cookies`) | launching/attaching Chrome, CDP, cookie snapshot | know any feature: env names, temp prefix and hints come from the caller's `naming` |
+| `gettyweb/browser.mjs`, `aichat/browser.mjs` | each feature's `naming` (`GETTY_WEB_*` / `AICHAT_*`) and profile | read the other feature's variables |
+| `aichat/chatflow.mjs` | one turn against an abstract page (ready, attach, type, send, wait, restart, file follow-up) | touch CDP, HTTP or files |
+| `aichat/chatpage.mjs` | in-page DOM steps + their CDP binding | decide the flow |
+| `aichat/pool.mjs` | the one kept page, one turn at a time, temp PNG, latest progress | launch browsers or speak HTTP |
+| `aichat/routes.mjs` | HTTP validation, status codes, cancel on connection close | hold page logic |
+| `src/lib/webchatclient.ts` | the `/aichat/*` wire | know runs or icons |
+| `src/svg/runweb.ts` `createWebTransport` | the run's chat URL, the tab-wide one-turn-at-a-time line, failure mapping | mutate run arguments |
+| `src/svg/answerer.ts` | request size, reply matching, recorded provider/model | — it is the only place that tells API from web |
+| `runsend.ts` | dispatch to `args.web.send` or the API ladder | interpret web replies |
 
 ## Contract
 
 | Rule | Where |
 |---|---|
-| The bulk-bar checkbox `Generate with web page` picks which confirmation opens; both Generate and Regenerate use it | `src/svg/WebModeToggle.tsx`, `SvgDialogs.tsx` |
-| The LIVE WEB popup is the API popup (`SvgConfirm`) with `web`: same prompt picker, sheet pager and full prompt; plus chat URL, max wait, sign-in wait; confirm disabled until the URL is `https://chatgpt.com/…` | `SvgConfirm.tsx`, `SvgConfirmWeb.tsx` |
-| One icon per request, whatever "Images / request" says | `runner.ts`, `runqueuepath.ts`, `SvgConfirm.tsx` |
-| No API key is needed for a web batch; the API path still requires one | `runplan.ts` `guard`, `runcontrol.ts` `confirmationProblem` |
-| The confirmed chat target is frozen into the queued batch (`QueueItem.web`) | `runqueue.ts`, `runcontrol.ts` |
-| Transport seam: `sendBatch` hands a web run to `sendWebRequest`; never retried automatically | `runsend.ts`, `runweb.ts` |
-| A bare untitled reply belongs to the request's only icon (`matchLoneBlock`); a batch is never guessed | `lib/svgextract.ts` |
-| `<use href="#id">` copies are expanded into real elements before saving (both transports) | `lib/svguse.ts`, `runbatch.ts` |
-| The version records provider `Web: <host>`, unknown tokens, no cost | `runbatch.ts`, `lib/webchatprefs.ts` |
-| No finished reply within the max wait → the helper opens a new chat once and resends; the new `/c/<id>` URL replaces the saved URL and the rest of the run uses it | `tools/bridge/aichat/chatflow.mjs`, `runweb.ts`, `runjobs.ts` `webRunOf` |
-| A file-card reply gets one follow-up asking for inline code, else fails `reply_was_file` | `chatflow.mjs` |
-| Skip / cancel aborts the fetch; the helper's turn is cancelled (`/aichat/cancel`, and on connection close) | `lib/webchatclient.ts`, `aichat/routes.mjs` |
+| The bulk-bar checkbox picks the confirmation; both Generate and Regenerate use it | `WebModeToggle.tsx`, `SvgDialogs.tsx` |
+| The LIVE WEB popup is `SvgConfirm` with `web`: same prompt picker, sheet pager and full prompt; plus chat URL and two waits; confirm disabled until the URL is `https://chatgpt.com/…` | `SvgConfirm.tsx`, `SvgConfirmWeb.tsx` |
+| One icon per request whatever "Images / request" says | `answerer.ts` `requestSizeOf`, `runqueuepath.ts`, `SvgConfirm.tsx` |
+| No API key for a web batch: `guard(…, needsKey)` (caller passes it) and `confirmationProblem(…, web)` | `actions.ts`, `runplan.ts`, `runcontrol.ts` |
+| The confirmed target is frozen into `QueueItem.web`; the transport is created at launch | `runqueue.ts`, `runjobs.ts` `webTransportOf` |
+| Web turns of all parallel runs go through the helper one at a time; a turn cancelled while waiting is never sent; never retried | `runweb.ts` |
+| A bare untitled reply belongs to the request's only icon; a batch is never guessed | `lib/svgextract.ts` `matchLoneBlock` |
+| `<use href="#id">` copies are expanded before saving (both transports) | `lib/svguse.ts`, `runbatch.ts` |
+| Versions record provider `Web: <host>` and model `ChatGPT (web)` (never the API model), unknown tokens, no cost; the journal names the same model | `answerer.ts`, `runbatch.ts`, `runsend.ts` |
+| No finished reply within the max wait → new chat once, resend; a new `/c/<id>` URL moves the transport and replaces the saved URL | `chatflow.mjs`, `runweb.ts`, `runjobs.ts` |
+| A file-card reply gets one follow-up asking for inline code, else `reply_was_file` | `chatflow.mjs` |
+| Skip / cancel aborts the fetch; the helper cancels the named turn (a nameless cancel does nothing) and on connection close | `webchatclient.ts`, `routes.mjs`, `pool.mjs` |
 
 ## Helper routes
 
-| Route | Body / answer |
-|---|---|
-| `POST /aichat/send` | `{ url, prompt, image: PNG data URL, maxWaitMs (1–60 min), readyTimeoutMs (10 s–30 min), sessionKey }` → `{ ok, text, chatUrl, restarted }` or `{ ok:false, code, reason }` |
-| `GET /aichat/progress?sessionKey=` | `{ ok, busy, progress: { phase, at } | null }`; phases `opening`, `waiting-for-login`, `uploading`, `typing`, `generating`, `restarting-chat`, `scraping`, `done`, `failed` |
-| `POST /aichat/cancel` | `{ sessionKey }` → `{ ok, cancelled }` |
-| `POST /aichat/close` | lets go of the page |
+`POST /aichat/send` `{ url, prompt, image: PNG data URL, maxWaitMs (1–60 min),
+readyTimeoutMs (10 s–30 min), sessionKey }` → `{ ok, text, chatUrl, restarted }`
+or `{ ok:false, code, reason }`. `GET /aichat/progress?sessionKey=` →
+`{ ok, busy, progress }` (latest turn only; phases `opening`,
+`waiting-for-login`, `uploading`, `typing`, `generating`, `restarting-chat`,
+`scraping`, `done`, `failed`). `POST /aichat/cancel` `{ sessionKey }`.
+`POST /aichat/close`. Status: 400, 401 not signed in, 409 busy, 422 file reply,
+499 cancelled, 503 browser, 504 timeout, 502 page. `/health` →
+`aichat: { ready, browser, headed, profile }`; a running turn blocks self-restart.
 
-Status codes: 400 bad request, 401 not signed in / composer never ready, 409
-busy (one turn at a time), 422 `reply_was_file`, 499 cancelled, 503 browser,
-504 timeout, 502 page. `/health` reports `aichat: { ready, browser, headed, profile }`;
-a running turn blocks the helper's self-restart.
-
-Flags/env: `--aichat-profile <dir>` (`AICHAT_PROFILE`, default
+Flags/env: `--aichat-profile` (`AICHAT_PROFILE`, default
 `~/.iconsplitter/chatgpt-profile`), `--aichat-headless` (`AICHAT_HEADLESS=1`;
-the window is visible by default), `--aichat-cdp <loopback url>` (`AICHAT_CDP`).
+visible by default), `--aichat-cdp` (`AICHAT_CDP`), `AICHAT_BROWSER`.
 
-## Page handles (ChatGPT DOM, data-*/aria only — class names are build hashes)
+## Page handles (data-*/aria only — class names are build hashes)
 
 Composer `form[data-composer-placement="thread"] [contenteditable][role=textbox]`;
 attachments `[data-composer-attachments]`; image input
@@ -57,20 +69,19 @@ attachments `[data-composer-attachments]`; image input
 `button[data-testid=send-button]` / `aria-label^=Send`; stop
 `button[data-testid=stop-button]` / `aria-label^=Stop`; turns `[data-turn-key]`
 with `[data-conversation-role]` (fallback `[data-message-author-role]`); reply
-text `[data-markdown-text-style=assistant-message]` `textContent`; file card
-`[data-file-reference]`; new chat `button[aria-label="New chat"]`.
-When ChatGPT changes its page, update `tools/bridge/aichat/chatpage.mjs` and
-its fixture test `tests/aichat_page.test.ts`.
+`[data-markdown-text-style=assistant-message]` `textContent`; file card
+`[data-file-reference]`; new chat `button[aria-label="New chat"]`. Send, stop
+and attachment handles are not yet confirmed on a live page. When ChatGPT
+changes, update `aichat/chatpage.mjs` and `tests/aichat_page.test.ts`.
 
 ## Privacy
 
-Only an explicit LIVE WEB confirmation sends anything. The image and prompt go
-to 127.0.0.1 only; the helper stages the PNG in a private temp folder and
-deletes it after the attach. The helper log names method, status and bytes —
-never the prompt, image, chat URL or reply.
+Only an explicit LIVE WEB confirmation sends anything, and only to 127.0.0.1.
+The PNG is staged in a private temp folder and deleted after the attach. The
+helper log names method, status and bytes — never prompt, image, URL or reply.
 
 ## Tests
 
-`aichat_flow`, `aichat_page`, `aichat_session`, `bridge_aichat` (helper);
-`webchat_lib`, `svg_web_extract`, `svg_runner_web`, `svg_web_queue`,
-`svg_confirm_web` (app). No live chatgpt.com call is ever made.
+Helper: `aichat_flow`, `aichat_page`, `aichat_pool`, `bridge_aichat`,
+`webdriver_browser`. App: `webchat_lib`, `svg_web_extract`, `svg_web_transport`,
+`svg_runner_web`, `svg_web_queue`, `svg_confirm_web`. No live chatgpt.com call.

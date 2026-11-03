@@ -15,7 +15,8 @@ import { setQueue, type RunCtx } from "./runcontext";
 import type { QueueItem } from "./runqueue";
 import { notifyCompletion } from "../ui/completionSound";
 import { saveWebChatUrl } from "./webchatstore";
-import type { WebRun } from "./runtypes";
+import { createWebTransport } from "./runweb";
+import type { WebTransport } from "./runtypes";
 
 /** Start every eligible independent job; synchronous leases precede all awaits. */
 export function pumpRuns(c: RunCtx): void {
@@ -52,7 +53,7 @@ async function executeRun(snapshot: RunSnapshot, item: QueueItem, job: SvgJob): 
       config: { ...c.m.config, imagesPerRequest: item.regen?.kind === "current-svg" ? item.regen.size : c.m.config.imagesPerRequest }, caps: c.m.caps, params: c.m.params,
       prompt: c.m.prompt, regen: item.regen ?? MAIN_PLAN, promptChoice: item.prompt, regenCodes: item.codes,
       sources: inIdOrder(c.rows, item.ids, (r) => r.source.id).map((r) => r.source), metas: c.refs.metas,
-      onRequestController: (controller) => { job.requestController = controller; }, web: webRunOf(item, (line) => c.say(line)),
+      onRequestController: (controller) => { job.requestController = controller; }, web: webTransportOf(item, (line) => c.say(line)),
       signal: job.controller.signal, onEvent: withRunLog((event) => jobEvent(c, job, event)) });
     job.outcomes = summary.outcomes;
     job.status = summary.cancelled ? "cancelled" : summary.saved === 0 && summary.problems.length > 0 ? "failed" : "finished";
@@ -72,13 +73,12 @@ async function executeRun(snapshot: RunSnapshot, item: QueueItem, job: SvgJob): 
  * Its own copy of the frozen target, so a restarted chat moves only this run —
  * and the stored setting, which is what the next confirmation shows.
  */
-export function webRunOf(item: QueueItem, say: (line: string) => void): WebRun | undefined {
+export function webTransportOf(item: QueueItem, say: (line: string) => void): WebTransport | undefined {
   if (item.web === null) return undefined;
-  return {
-    target: { ...item.web },
+  return createWebTransport(item.web, {
     onChatUrl: (url) => { saveWebChatUrl(url); say("ChatGPT web: no reply in time — continued in a new chat; its URL is now the saved chat URL"); },
     onPhase: (phase) => say(`ChatGPT web: ${phase.replace(/-/g, " ")}…`),
-  };
+  });
 }
 
 function finishJob(c: RunCtx, job: SvgJob): void {

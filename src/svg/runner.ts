@@ -7,7 +7,7 @@
 // unmatched or duplicate result is reported.
 
 import { planBatches, validateBatchPlan, type BatchPlan, type BatchSource } from "../lib/svgbatch";
-import { requestSizeFor } from "../lib/svgregen";
+import { modelOf, requestSizeOf } from "./answerer";
 import { effectiveStallMs } from "../lib/effortlimits";
 import { costInfoFor } from "../lib/svgpricing";
 import { sumUsage } from "../lib/svgusage";
@@ -25,8 +25,7 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
   // The user's request size, unchanged by the reasoning level (D1): 8 images at
   // size 4 are two requests of four at every tier, however long they take. The
   // current-SVG regeneration is the one exception: each icon carries its own code.
-  // A web run sends one picture and one prompt per chat turn (2026-11-03).
-  const perRequest = args.web ? 1 : requestSizeFor(args.config.imagesPerRequest, args.regen);
+  const perRequest = requestSizeOf(args);
   const plans = planBatches(toBatchSources(args.sources), perRequest);
   const state = newRunState(args, plans.length, perRequest);
   const problems = validateBatchPlan(plans, perRequest);
@@ -72,7 +71,7 @@ function summaryOf(state: RunState, cancelled: boolean): RunSummary {
   return {
     perRequest: state.perRequest, batches: state.total, saved: state.saved, failed: state.failed,
     missing: state.missing, invalid: state.invalid, unknown: state.unknown, cancelled,
-    usage: sumUsage(state.usages), estimated: sumEstimated(state.args.config.model, state.usages),
+    usage: sumUsage(state.usages), estimated: sumEstimated(modelOf(state.args), state.usages),
     problems: state.problems, outcomes: state.outcomes,
   };
 }

@@ -4733,3 +4733,9 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 - Scope: new `tools/bridge/aichat/` (chatflow, chatpage, session, routes), `/aichat/*` helper routes, app web transport (`src/svg/runweb.ts`, `src/lib/webchatclient.ts`, `src/lib/webchatprefs.ts`, `src/lib/svguse.ts`, `matchLoneBlock`), LIVE WEB confirm variant, `Generate with web page` toggle, queue/job plumbing.
 - Measured: 9 new test files, 62 new tests green; `npx tsc --noEmit` clean; `npm run lint` 0 errors; `npm run quality:changed` GATE PASSED (new files ≤ 103 lines, SvgConfirm.tsx 236 lines).
 - `npm run verify:fast`: tests lane 17 failed / 3652 passed — the same 17 tests in the same 9 files fail on a clean HEAD stash on this Windows/Google-Drive machine (browser-present Getty tests, case-collision scan, docs size budget, verify_execution process tests); build lane PASS. Aggregate gate therefore NOT passed.
+
+## 2026-11-03 — web generation: architecture and interface isolation cleanup
+
+- Scope: shared `tools/bridge/webdriver/` (browser/cdp/cookies, feature names injected via `naming`; `gettyweb/{browser,cdp,sessioncookies}.mjs` are Getty-bound shims), `aichat/session.mjs` split into `browser.mjs` + `pool.mjs`, app `WebTransport` interface (`runweb.ts` `createWebTransport`), `answerer.ts`, neutral `src/lib/helperurl.ts`.
+- Fixed: web versions/journal recorded the unused API model (now `ChatGPT (web)`); parallel runs' web turns collided at the helper (now one at a time, cancel-aware); pool progress grew per request (now latest turn only); a nameless cancel aborted any turn; ChatGPT errors named GETTY_WEB_* variables.
+- Measured: Getty suites identical before/after (235 pass, same 8 environmental failures); 11 new tests; `tsc` clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3663 pass / 16 fail, all 16 in the pre-existing environmental set (one flaky baseline test passed); build PASS. Aggregate gate NOT passed.

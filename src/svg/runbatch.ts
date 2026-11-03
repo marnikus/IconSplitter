@@ -13,9 +13,9 @@
 // charge. Only a failure the provider itself confirmed may be retried.
 
 import { batchManifest, batchOutcome, type BatchPlan } from "../lib/svgbatch";
-import { extractSvgBlocks, matchBlocks, matchLoneBlock } from "../lib/svgextract";
+import { extractSvgBlocks } from "../lib/svgextract";
 import { expandUses } from "../lib/svguse";
-import { webProviderOf } from "../lib/webchatprefs";
+import { modelOf, providerOf, replyMatcherOf } from "./answerer";
 import type { Failure, Usage } from "../lib/svgrequest";
 import { endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
@@ -114,7 +114,7 @@ async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
 function finishBatch(ctx: BatchCtx): void {
   const { state, plan, index, tally } = ctx;
   const report = batchOutcome({
-    plan, index, model: state.args.config.model,
+    plan, index, model: modelOf(state.args),
     saved: tally.saved, failed: tally.failed, missing: tally.missing,
     usage: ctx.usage ?? zeroUsage(), error: ctx.error,
     unknown: ctx.unsettled, elapsedMs: Date.now() - ctx.startedAt, requestId: ctx.requestId,
@@ -129,9 +129,7 @@ function finishBatch(ctx: BatchCtx): void {
 }
 
 async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<void> {
-  // A web reply is "only SVG code" for its one icon: nothing in it names the icon.
-  const match = ctx.state.args.web ? matchLoneBlock : matchBlocks;
-  const matched = match(extractSvgBlocks(text), batchManifest(ctx.plan.items));
+  const matched = replyMatcherOf(ctx.state.args)(extractSvgBlocks(text), batchManifest(ctx.plan.items));
   ctx.state.usages.push(usage);
   ctx.usage = usage;
   ctx.share = allocateUsage(usage, ctx.items.length);
@@ -160,7 +158,7 @@ async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: s
   const isRegen = state.args.regen.kind === "current-svg";
   const args: SaveArgs = {
     root: state.args.root, source: item, code, prompt: ctx.records.get(item.id) ?? ctx.recorded,
-    provider: providerOf(state), model: state.args.config.model, requestedAt: new Date().toISOString(),
+    provider: providerOf(state.args), model: modelOf(state.args), requestedAt: new Date().toISOString(),
     usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, meta,
     review: isRegen ? "needs-review" : "pending",
   };
@@ -174,11 +172,6 @@ async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: s
 
 function toBatchRef(plan: BatchPlan, position: number, hash: string, manifest: { position: number; name: string }[]): SaveArgs["batch"] {
   return { batchId: plan.id, position, compositeHash: hash, manifest: manifest.map((m) => `${m.position} — ${m.name}`).join("\n") };
-}
-
-/** Who answered: the API gateway, or the web chat the run typed into. */
-function providerOf(state: RunState): string {
-  return state.args.web ? webProviderOf(state.args.web.target.url) : "Requesty";
 }
 
 function zeroUsage(): Usage {
@@ -195,7 +188,7 @@ async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error
   // A charged attempt keeps its share of the usage, and a pair without a file
   // gets one so no task can vanish without its cost (I-41).
   const next = metaAfterFailure({
-    source: item, prompt: ctx.recorded, provider: providerOf(state), model: state.args.config.model,
+    source: item, prompt: ctx.recorded, provider: providerOf(state.args), model: modelOf(state.args),
     requestedAt: new Date().toISOString(), error, meta, usage: ctx.share ?? zeroUsage(),
   });
   await persist(state, item, next);

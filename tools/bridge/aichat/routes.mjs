@@ -8,9 +8,11 @@
 // the user confirmed a web generation in the app.
 
 /* global AbortController */
-import { findBrowser } from "../gettyweb/browser.mjs";
+import { openChatBrowser } from "./browser.mjs";
 import { chatUrlOf } from "./chatflow.mjs";
-import { aichatHeaded, aichatProfileDir, createAichat } from "./session.mjs";
+import { createAichat } from "./pool.mjs";
+
+export { aichatHealth } from "./browser.mjs";
 
 const MAX_PROMPT = 400_000;
 const MAX_IMAGE_BYTES = 24 * 1024 * 1024;
@@ -19,7 +21,7 @@ const WAIT = { min: 60_000, max: 3_600_000, fallback: 600_000 };
 const READY = { min: 10_000, max: 1_800_000, fallback: 180_000 };
 const PNG_MAGIC = "89504e47";
 
-const pool = createAichat();
+const pool = createAichat({ open: () => openChatBrowser() });
 
 function clamp(value, range) {
   const n = Number(value);
@@ -67,11 +69,6 @@ const STATUS = { "bad-request": 400, auth: 401, busy: 409, reply_was_file: 422, 
 
 export function statusOfCode(code) {
   return STATUS[code] ?? 502;
-}
-
-/** `/health` block; never launches a browser. */
-export function aichatHealth(env = process.env) {
-  return { ready: true, browser: findBrowser(env).found ? "found" : "missing", headed: aichatHeaded(env), profile: aichatProfileDir(env) };
 }
 
 /** A turn in flight: the helper must not restart under it. */

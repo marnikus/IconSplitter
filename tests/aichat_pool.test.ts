@@ -1,11 +1,11 @@
 // @vitest-environment node
-// The bridge's ChatGPT session pool and request parsing, with a fake page: one
+// The bridge's ChatGPT turn pool (aichat/pool.mjs) and request parsing, with a fake page: one
 // turn at a time, the staged PNG is removed afterwards, live progress, cancel,
 // and the honest request refusals. No browser is launched.
 
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { createAichat } from "../tools/bridge/aichat/session.mjs";
+import { createAichat } from "../tools/bridge/aichat/pool.mjs";
 import { parseSendBody, statusOfCode } from "../tools/bridge/aichat/routes.mjs";
 
 const SVG = "<svg><path d=\"M0 0\"/></svg>";
@@ -14,17 +14,18 @@ const PNG_B64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 
 function fakeDeps(script: { replyAfter?: number; failOpen?: boolean } = {}) {
   const seen: { files: string[]; bytes: Buffer[]; opens: number; closes: number } = { files: [], bytes: [], opens: 0, closes: 0 };
   let sent = false;
+  let submits = 0;
   let reads = 0;
   const page = {
     async open() {}, async href() { return "https://chatgpt.com/c/k1"; },
     async read() {
       reads += 1;
-      const reply = sent && reads > (script.replyAfter ?? 0) ? { id: "n", text: SVG, file: false } : null;
+      const reply = sent && reads > (script.replyAfter ?? 0) ? { id: `n${submits}`, text: SVG, file: false } : null;
       return { signedIn: true, ready: true, busy: false, attached: seen.files.length > 0, reply };
     },
     async attach(file: string) { seen.files.push(file); seen.bytes.push(readFileSync(file)); return { ok: true }; },
     async type() { return true; },
-    async submit() { sent = true; reads = 0; return { ok: true }; },
+    async submit() { sent = true; submits += 1; reads = 0; return { ok: true }; },
     async newChat() {},
   };
   const deps = {
@@ -83,6 +84,26 @@ describe("createAichat", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(chat.cancel("other")).toBe(false);
     expect(chat.cancel("s1")).toBe(true);
+    expect(await run).toMatchObject({ ok: false, code: "cancelled" });
+  });
+
+  it("keeps progress only for the latest turn, so a long session holds no history", async () => {
+    const { deps } = fakeDeps();
+    const chat = createAichat(deps);
+    await chat.send(input({ sessionKey: "s1" }));
+    await chat.send(input({ sessionKey: "s2" }));
+    expect(chat.progress("s1")).toBeNull();
+    expect(chat.progress("s2")?.phase).toBe("done");
+  });
+
+  it("never cancels without naming the turn", async () => {
+    const { deps } = fakeDeps({ replyAfter: 100_000 });
+    const chat = createAichat(deps);
+    const controller = new AbortController();
+    const run = chat.send(input({ maxWaitMs: 60_000, signal: controller.signal }));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(chat.cancel("")).toBe(false);
+    controller.abort();
     expect(await run).toMatchObject({ ok: false, code: "cancelled" });
   });
 

@@ -5,7 +5,7 @@
 // `cdpChatPage` binds them to one CDP page session.
 /* global document, location */
 
-import { evaluate, insertText, navigate, setFiles } from "../gettyweb/cdp.mjs";
+import { evaluate, insertText, navigate, setFiles } from "../webdriver/cdp.mjs";
 import { chatIdOf } from "./chatflow.mjs";
 
 const IMAGE_INPUT = 'input[type="file"][accept*="image"]:not([capture])';

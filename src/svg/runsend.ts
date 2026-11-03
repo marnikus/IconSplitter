@@ -15,7 +15,7 @@ import { attachRequestId, beginRequest } from "./journal";
 import { requestTextOf } from "./regenprompt";
 import type { BatchCtx } from "./runbatch";
 import type { RunState } from "./runtypes";
-import { sendWebRequest } from "./runweb";
+import { modelOf } from "./answerer";
 
 interface SendOk { ok: true; text: string; usage: Usage; requestId: string | null }
 interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
@@ -28,7 +28,7 @@ export async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promi
   ctx.records = text.text.records;
   journalRequest(ctx);
   const web = state.args.web;
-  if (web) return sendWebRequest(ctx, web, composite, text.text.prompt);
+  if (web) return web.send({ prompt: text.text.prompt, image: composite.dataUrl, key: `${state.runId}:${ctx.plan.id}`, signal: ctx.signal });
   const request = buildChatRequest({
     model: state.args.config.model, prompt: text.text.prompt, image: composite.dataUrl,
     caps: state.args.caps, params: state.args.params,
@@ -66,7 +66,7 @@ function journalRequest(ctx: BatchCtx): void {
   beginRequest({
     runId: state.runId, batchId: plan.id, index: ctx.index,
     sourceIds: items.map((i) => i.id), sourceNames: items.map((i) => i.name),
-    model: state.args.config.model, startedAt: new Date(ctx.startedAt).toISOString(),
+    model: modelOf(state.args), startedAt: new Date(ctx.startedAt).toISOString(),
   });
 }
 

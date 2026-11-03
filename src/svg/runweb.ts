@@ -1,22 +1,33 @@
-// runweb.ts — the web-page transport of ONE request (2026-11-03): instead of
-// the provider API, the local helper types the prompt and the reference image
-// into the user's ChatGPT conversation and hands back the reply text. Never
-// retried automatically (the chat may still be answering). A reply from a NEW
-// chat (the helper restarted after the max wait) moves the run — and the saved
-// setting, through `onChatUrl` — to that chat.
+// runweb.ts — the web-page transport (2026-11-03): instead of the provider
+// API, the local helper types each request into the user's ChatGPT chat and
+// hands back the reply text. One transport per run, created at launch; it
+// OWNS its chat URL, so a reply from a new chat (the helper restarted after
+// the max wait) moves this transport — and, through `onChatUrl`, the saved
+// setting — without mutating anything the run was given. Never retried
+// automatically (the chat may still be answering).
+//
+// The helper drives ONE browser page, so the turns of every run in this tab go
+// through it one at a time (parallel SVG runs queue here instead of failing
+// with "busy"). A turn cancelled while it waits is never sent.
 
 import { sendWebChat, type WebChatCode } from "../lib/webchatclient";
+import { isConversationUrl, webProviderOf, type WebChatTarget } from "../lib/webchatprefs";
 import type { Failure, Usage } from "../lib/svgrequest";
-import type { BuiltComposite } from "./composite";
-import type { BatchCtx } from "./runbatch";
-import type { WebRun } from "./runtypes";
+import type { WebRequest, WebSend, WebTransport } from "./runtypes";
 
-export type WebSend =
-  | { ok: true; text: string; usage: Usage; requestId: string | null }
-  | { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null };
+/** What a web version records as its model: what answered, never the API model. */
+export const WEB_MODEL = "ChatGPT (web)";
 
 /** A web turn costs no metered tokens: every count is unknown, never zero-billed. */
 export const WEB_USAGE: Usage = { input: null, output: null, total: null, cost: null, currency: "USD" };
+
+export interface WebHooks {
+  bridgeUrl?: string;
+  /** The helper answered from a new chat: replace the saved URL with it. */
+  onChatUrl?: (url: string) => void;
+  /** The helper's live phase (waiting-for-login, uploading, generating, …). */
+  onPhase?: (phase: string) => void;
+}
 
 const KINDS: Partial<Record<WebChatCode, Failure["kind"]>> = {
   auth: "auth", cancelled: "aborted", timeout: "provider_timeout", "bad-request": "payload",
@@ -27,20 +38,53 @@ export function failureKindOf(code: WebChatCode): Failure["kind"] {
   return KINDS[code] ?? "provider";
 }
 
-/** Sends the request text and the composite through the helper's browser. */
-export async function sendWebRequest(ctx: BatchCtx, web: WebRun, composite: BuiltComposite, prompt: string): Promise<WebSend> {
-  const out = await sendWebChat({
-    bridgeUrl: web.bridgeUrl, target: web.target, prompt, image: composite.dataUrl,
-    sessionKey: `${ctx.state.runId}:${ctx.plan.id}`, signal: ctx.signal, onPhase: web.onPhase,
+const CANCELLED: WebSend = { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
+
+/** The end of the line every web turn of this tab waits behind. */
+let tail: Promise<void> = Promise.resolve();
+
+function untilAborted(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve();
+    else signal.addEventListener("abort", () => resolve(), { once: true });
   });
-  if (!out.ok) return { ok: false, error: `ChatGPT web: ${out.reason}`, failure: failureKindOf(out.code), retryAfterMs: null };
-  followChat(web, out.chatUrl);
-  return { ok: true, text: out.text, usage: WEB_USAGE, requestId: null };
 }
 
-/** The next request goes to the chat that answered; the setting follows it. */
-function followChat(web: WebRun, chatUrl: string | null): void {
-  if (chatUrl === null || chatUrl === web.target.url || !/^https:\/\/[^/]+\/(?:.*\/)?c\//.test(chatUrl)) return;
-  web.target = { ...web.target, url: chatUrl };
-  web.onChatUrl?.(chatUrl);
+/** Runs `work` after every earlier turn has finished; null when cancelled while waiting. */
+async function oneAtATime<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T | null> {
+  let release: () => void = () => undefined;
+  const mine = new Promise<void>((resolve) => { release = resolve; });
+  const before = tail;
+  // The next turn waits for the previous one AND this one, even if this one
+  // gives up early — so leaving the line never lets two turns overlap.
+  tail = before.then(() => mine);
+  try {
+    await Promise.race([before, untilAborted(signal)]);
+    return signal.aborted ? null : await work();
+  } finally {
+    release();
+  }
+}
+
+export function createWebTransport(target: WebChatTarget, hooks: WebHooks = {}): WebTransport {
+  let url = target.url;
+  const follow = (chatUrl: string | null) => {
+    if (chatUrl === null || chatUrl === url || !isConversationUrl(chatUrl)) return;
+    url = chatUrl;
+    hooks.onChatUrl?.(chatUrl);
+  };
+  const turn = async (request: WebRequest): Promise<WebSend> => {
+    const out = await sendWebChat({
+      bridgeUrl: hooks.bridgeUrl, target: { ...target, url }, prompt: request.prompt, image: request.image,
+      sessionKey: request.key, signal: request.signal, onPhase: hooks.onPhase,
+    });
+    if (!out.ok) return { ok: false, error: `ChatGPT web: ${out.reason}`, failure: failureKindOf(out.code), retryAfterMs: null };
+    follow(out.chatUrl);
+    return { ok: true, text: out.text, usage: WEB_USAGE, requestId: null };
+  };
+  return {
+    model: WEB_MODEL,
+    provider: () => webProviderOf(url),
+    send: async (request) => (await oneAtATime(request.signal, () => turn(request))) ?? CANCELLED,
+  };
 }

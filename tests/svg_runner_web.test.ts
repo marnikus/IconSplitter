@@ -14,6 +14,7 @@ import type { RegenPlan } from "../src/lib/svgregen";
 import type { SvgSource } from "../src/svg/sources";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { svgSource } from "./helpers/svgpair";
+import { createWebTransport, WEB_MODEL } from "../src/svg/runweb";
 
 vi.mock("../src/svg/composite", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/svg/composite")>();
@@ -64,7 +65,7 @@ function webArgs(root: FakeDir, sources: SvgSource[], onChatUrl = vi.fn()) {
       root, apiKey: "", config, caps: capsFor(config.model), params: { temperature: null, maxTokens: 8_000, effort: "low" as const },
       prompt: "fix svg to match the reference", regen: { kind: "main" } as RegenPlan, sources, metas: new Map(),
       onEvent: (e: RunEvent) => events.push(e), signal: new AbortController().signal,
-      web: { target: { url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000, readyTimeoutMs: 180_000 }, onChatUrl },
+      web: createWebTransport({ url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000, readyTimeoutMs: 180_000 }, { onChatUrl }),
     },
   };
 }
@@ -95,8 +96,11 @@ describe("runGeneration — web page transport", () => {
     const saved = await svgText(root, sources[0]);
     expect(saved).not.toContain("<use");
     expect(saved?.match(/<path/g)).toHaveLength(2);
-    const meta = args.metas.get("pair_1") as { versions?: { provider: string; usage: { total: number | null }; cost: { actual: number | null; estimated: number | null } }[] } | undefined;
+    const meta = args.metas.get("pair_1") as { versions?: { provider: string; model: string; usage: { total: number | null }; cost: { actual: number | null; estimated: number | null } }[] } | undefined;
     expect(meta?.versions?.[0]?.provider).toBe("Web: chatgpt.com");
+    // what really answered — never the configured API model, which was not called
+    expect(meta?.versions?.[0]?.model).toBe(WEB_MODEL);
+    expect(summary.outcomes[0].cost).toMatchObject({ actual: null, estimated: null });
     expect(meta?.versions?.[0]?.usage.total).toBeNull();
     expect(meta?.versions?.[0]?.cost).toMatchObject({ actual: null, estimated: null });
     expect(onChatUrl).not.toHaveBeenCalled();

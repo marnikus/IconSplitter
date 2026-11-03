@@ -24,6 +24,7 @@ import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
+import { loadWebChat } from "./webchatstore";
 import { guard, perRequestOf, planOf } from "./runplan";
 import { confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
 import { hasJobs } from "./jobstate";
@@ -208,7 +209,7 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
   const requestGenerate = useCallback((ids: string[], placement: Placement = "back", operation: SvgOperation = "generate") => {
     const c = latest.current;
     const regenForGuard: RegenPlan | null = operation === "regenerate" ? dummyRegen(c) : null;
-    const why = guard(c, ids, regenForGuard);
+    const why = guard(c, ids, regenForGuard, !loadWebChat().enabled);
     if (why !== null) return c.say(why, true);
     const perReq = perRequestOf(c, regenForGuard);
     const problems = validateBatchPlan(planOf(c, ids, regenForGuard), perReq);

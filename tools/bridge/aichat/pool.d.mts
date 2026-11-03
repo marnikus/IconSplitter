@@ -14,7 +14,4 @@ export interface Aichat {
   close(): void;
   send(input: AichatInput): Promise<ChatTurnResult | { ok: false; code: string; reason: string }>;
 }
-export function aichatProfileDir(env?: Record<string, string | undefined>): string;
-export function aichatHeaded(env?: Record<string, string | undefined>): boolean;
-export function openChatBrowser(env?: Record<string, string | undefined>): ReturnType<AichatOpen>;
-export function createAichat(deps?: { open: AichatOpen; turnOptions?: ChatTurnOptions }): Aichat;
+export function createAichat(deps: { open: AichatOpen; turnOptions?: ChatTurnOptions }): Aichat;

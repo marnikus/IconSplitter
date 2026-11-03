@@ -13,7 +13,6 @@ import type { SvgSource } from "./sources";
 import type { RegenPlan } from "../lib/svgregen";
 import type { PromptChoice } from "../lib/prompttasks";
 import type { RegenCode } from "./regencodes";
-import type { WebChatTarget } from "../lib/webchatprefs";
 
 export type RunEvent =
   /** `images` = the run's image total, so every reader can say "N of M done". */
@@ -65,17 +64,34 @@ export interface RunArgs {
    * Generate through the user's ChatGPT page via the local helper instead of
    * the provider API (2026-11-03). One icon per request; no key, no cost.
    */
-  web?: WebRun;
+  web?: WebTransport;
 }
 
-/** The web transport of one run; `target.url` follows a restarted chat. */
-export interface WebRun {
-  target: WebChatTarget;
-  bridgeUrl?: string;
-  /** The helper answered from a new chat: the saved URL is replaced with it. */
-  onChatUrl?: (url: string) => void;
-  /** The helper's live phase (waiting-for-login, uploading, generating, …). */
-  onPhase?: (phase: string) => void;
+/** One request handed to the web transport: the text, the picture, its name and its cancel. */
+export interface WebRequest {
+  prompt: string;
+  /** The request's reference image as a PNG data URL. */
+  image: string;
+  /** Names the turn for the helper's progress and cancel. */
+  key: string;
+  signal: AbortSignal;
+}
+
+/** The same answer shape the API path gives the run: reply text, or a classified failure. */
+export type WebSend =
+  | { ok: true; text: string; usage: Usage; requestId: string | null }
+  | { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: null };
+
+/**
+ * Who answers instead of the provider API (runweb.ts createWebTransport). It
+ * keeps its own state (the chat it is in); the run only calls it.
+ */
+export interface WebTransport {
+  /** Recorded as each version's model: what answered, never the API model. */
+  readonly model: string;
+  /** Recorded as each version's provider ("Web: chatgpt.com"); follows a restarted chat. */
+  provider(): string;
+  send(request: WebRequest): Promise<WebSend>;
 }
 
 export interface RunSummary {

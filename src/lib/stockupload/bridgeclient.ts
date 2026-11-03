@@ -2,11 +2,12 @@
 // (`http://127.0.0.1:47391/ftps/*`). Redacts credentials from any error message.
 
 import { isRecord } from "../isrecord";
+import { DEFAULT_HELPER_URL, HELPER_FIX_HINT } from "../helperurl";
 import { redactCredentials, type FtpCredentials } from "./credvault";
 import type { FtpProtocol, StockFtpPreset } from "./types";
 
-export const DEFAULT_FTP_BRIDGE_URL = "http://127.0.0.1:47391";
-export const BRIDGE_FIX_HINT = "start run_ftp_bridge.bat (or run_inkscape_bridge.bat) on this machine";
+export const DEFAULT_FTP_BRIDGE_URL = DEFAULT_HELPER_URL;
+export const BRIDGE_FIX_HINT = HELPER_FIX_HINT;
 const OUTDATED_SFTP_REASON = "Local helper on 127.0.0.1:47391 is an older FTPS-only instance — close that helper cmd window and run run_ftp_bridge.bat to enable SFTP (:22)";
 const OUTDATED_ESP_REASON = "Local helper on 127.0.0.1:47391 predates Getty ESP support — restart run_ftp_bridge.bat to enable Getty ESP HTTPS (:443)";
 
