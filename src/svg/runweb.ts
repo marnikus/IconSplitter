@@ -31,7 +31,7 @@ export interface WebHooks {
 
 const KINDS: Partial<Record<WebChatCode, Failure["kind"]>> = {
   auth: "auth", cancelled: "aborted", timeout: "provider_timeout", "bad-request": "payload",
-  "helper-down": "network", "helper-old": "network", browser: "network", busy: "rate_limit", reply_was_file: "malformed",
+  "helper-down": "network", "helper-old": "network", browser: "network", busy: "rate_limit", limit: "rate_limit", reply_was_file: "malformed",
 };
 
 export function failureKindOf(code: WebChatCode): Failure["kind"] {

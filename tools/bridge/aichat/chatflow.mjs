@@ -62,6 +62,9 @@ function sleep(ms, signal) {
 
 const cancelled = () => ({ ok: false, code: "cancelled", reason: "the web generation was cancelled" });
 
+/** ChatGPT said it will not take more right now: its own words, never a retry. */
+const limited = (notice) => ({ ok: false, code: "limit", reason: notice });
+
 /** One pause of `ms`, varied to 75–125 % by `r` in [0, 1]. */
 export function jitteredDelay(ms, r) {
   if (!(ms > 0)) return 0;
@@ -134,11 +137,15 @@ async function waitReply(page, baseline, timeoutMs, o) {
 async function attachImage(page, imagePath, o) {
   o.onPhase?.("uploading");
   if (!(await pause(o))) return cancelled(); // before the attach
+  const before = await page.read();
+  if (before.notice) return limited(before.notice); // e.g. "out of attachments": do not even try
   const put = await page.attach(imagePath);
   if (!put.ok) return { ok: false, code: "page", reason: put.reason ?? "the image could not be attached to the ChatGPT composer" };
   const seen = await pollUntil(page, (r) => r.attached === true, o.attachTimeoutMs, o);
   if (o.signal?.aborted) return cancelled();
-  return seen ? { ok: true } : { ok: false, code: "page", reason: "ChatGPT did not show the attached image in time" };
+  if (seen) return { ok: true };
+  const after = await page.read();
+  return after.notice ? limited(after.notice) : { ok: false, code: "page", reason: "ChatGPT did not show the attached image in time" };
 }
 
 /** A file-card reply gets one follow-up asking for the code inline. */

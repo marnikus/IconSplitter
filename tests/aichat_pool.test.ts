@@ -150,6 +150,7 @@ describe("parseSendBody", () => {
     expect(statusOfCode("cancelled")).toBe(499);
     expect(statusOfCode("browser")).toBe(503);
     expect(statusOfCode("reply_was_file")).toBe(422);
+    expect(statusOfCode("limit")).toBe(429);
     expect(statusOfCode("page")).toBe(502);
   });
 });

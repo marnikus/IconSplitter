@@ -55,7 +55,7 @@ or `{ ok:false, code, reason }`. `GET /aichat/progress?sessionKey=` →
 `waiting-for-login`, `uploading`, `typing`, `generating`, `restarting-chat`,
 `scraping`, `done`, `failed`). `POST /aichat/cancel` `{ sessionKey }`.
 `POST /aichat/close`. Status: 400, 401 not signed in, 409 busy, 422 file reply,
-499 cancelled, 503 browser, 504 timeout, 502 page. `/health` →
+429 ChatGPT limit, 499 cancelled, 503 browser, 504 timeout, 502 page. `/health` →
 `aichat: { ready, browser, headed, profile }`; a running turn blocks self-restart.
 
 Flags/env: `--aichat-profile` (`AICHAT_PROFILE`, default
@@ -68,12 +68,18 @@ Composer `form[data-composer-placement="thread"] [contenteditable][role=textbox]
 attachments `[data-composer-attachments]`; image input
 `input[type=file][accept*=image]:not([capture])`; send
 `button[data-testid=send-button]` / `aria-label^=Send`; stop
-`button[data-testid=stop-button]` / `aria-label^=Stop`; turns `[data-turn-key]`
-with `[data-conversation-role]` (fallback `[data-message-author-role]`); reply
-`[data-markdown-text-style=assistant-message]` `textContent`; file card
-`[data-file-reference]`; new chat `button[aria-label="New chat"]`. Send, stop
-and attachment handles are not yet confirmed on a live page. When ChatGPT
-changes, update `aichat/chatpage.mjs` and `tests/aichat_page.test.ts`.
+`button[data-testid=stop-button]` / `aria-label^=Stop`; file card
+`[data-file-reference]`; new chat `button[aria-label="New chat"]`.
+Reply: the LAST `[data-markdown-text-style=assistant-message]` — kept by every
+layout seen (the 2026-11-05 layout has no `[data-turn-key]`) — its
+`textContent`, id from `[data-turn-key]` / `[data-chatgpt-selection-message-id]`;
+fallback `[data-message-author-role=assistant]`. User messages never count.
+Limit notice ("out of attachments… try again after…"): matching text OUTSIDE
+any message, checked before the attach and when the image never appears →
+`limit` (429) with ChatGPT's words; never retried, no new chat.
+Send, stop and attachment handles are not yet confirmed on a live page. When
+ChatGPT changes, update `aichat/chatpage.mjs` and `tests/aichat_page.test.ts`
+(fixtures built from the user's DOM dumps).
 
 ## Privacy
 

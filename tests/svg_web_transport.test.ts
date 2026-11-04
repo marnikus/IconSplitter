@@ -71,4 +71,12 @@ describe("createWebTransport", () => {
     await first;
     expect(fetchFn).toHaveBeenCalledTimes(1);
   });
+
+  it("passes ChatGPT's own limit message to the run, never as a retryable success", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      ok: false, code: "limit", reason: "You’re out of attachments for now. Try again after 11:47 PM.",
+    }), { status: 429 })));
+    const out = await createWebTransport(TARGET).send(request());
+    expect(out).toMatchObject({ ok: false, failure: "rate_limit", error: "ChatGPT web: You’re out of attachments for now. Try again after 11:47 PM." });
+  });
 });

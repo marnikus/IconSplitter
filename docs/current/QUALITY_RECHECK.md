@@ -4765,3 +4765,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `chatflow.mjs` pauses before attach, paste and Send click (`jitteredDelay`, 75–125 %, cancel-aware); `/aichat/send` `stepDelayMs` (0–10 s, default 1 s); app setting `stepDelaySec` with popup field `svg-web-step`.
 - Measured: 5 new tests + 4 extended; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3723 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT reply reading on the new layout + limit notice
+
+- Scope: `aichat/chatpage.mjs` `readChat` finds the reply by `[data-markdown-text-style=assistant-message]` (the 2026-11-05 layout has no `[data-turn-key]`), plus `notice` (limit text outside messages); `chatflow.mjs` stops with `limit` (429) before attaching or when the image never appears; client/run map it.
+- Measured: 9 new tests incl. fixtures from the user's DOM; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3732 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).

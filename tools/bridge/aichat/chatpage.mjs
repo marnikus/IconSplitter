@@ -11,7 +11,15 @@ import { chatIdOf } from "./chatflow.mjs";
 const IMAGE_INPUT = 'input[type="file"][accept*="image"]:not([capture])';
 const NEW_CHAT_URL = "https://chatgpt.com/";
 
-/** Everything the turn flow needs to know about the page, in one reading. */
+/**
+ * Everything the turn flow needs to know about the page, in one reading.
+ * The reply is found by the one marker every ChatGPT layout seen so far keeps
+ * on the answer body — [data-markdown-text-style="assistant-message"] — so a
+ * layout without [data-turn-key] (2026-11-05) still yields the reply; the
+ * older turn / author-role markup is the fallback. `notice` is ChatGPT's own
+ * limit message ("out of attachments… try again after…"), read only from text
+ * OUTSIDE the chat messages, so a prompt or reply quoting it never counts.
+ */
 export function readChat() {
   const q = (sel, root = document) => root.querySelector(sel);
   const box = q('form[data-composer-placement="thread"] [contenteditable="true"][role="textbox"]')
@@ -19,21 +27,36 @@ export function readChat() {
   const busy = q('button[data-testid="stop-button"], button[aria-label^="Stop" i]') !== null;
   const tray = q("[data-composer-attachments]");
   const attached = tray !== null && (tray.querySelector("img") !== null || tray.childElementCount > 0);
-  const roleOf = (el) => el.querySelector("[data-conversation-role]")?.getAttribute("data-conversation-role")
-    ?? el.querySelector("[data-message-author-role]")?.getAttribute("data-message-author-role") ?? null;
-  const turns = [...document.querySelectorAll("[data-turn-key]")];
-  const pool = turns.length > 0
-    ? turns.filter((el) => roleOf(el) === "assistant")
-    : [...document.querySelectorAll('[data-message-author-role="assistant"]')];
-  const last = pool[pool.length - 1] ?? null;
-  let reply = null;
-  if (last !== null) {
-    const body = last.querySelector('[data-markdown-text-style="assistant-message"]') ?? last.querySelector(".markdown") ?? last;
-    const id = last.getAttribute("data-turn-key") ?? last.getAttribute("data-message-id")
-      ?? last.querySelector("[data-chatgpt-selection-message-id]")?.getAttribute("data-chatgpt-selection-message-id") ?? String(pool.length);
-    reply = { id, text: String(body.textContent ?? "").trim(), file: last.querySelector("[data-file-reference]") !== null };
-  }
-  return { signedIn: box !== null, ready: box !== null && !busy, busy, attached, reply, href: String(location.href) };
+  const MESSAGE = "[data-chatgpt-search-message-ids], [data-turn-key], [data-message-author-role], [data-user-message-bubble], [data-markdown-text-style], [data-conversation-role], form";
+  const latestReply = () => {
+    const bodies = [...document.querySelectorAll('[data-markdown-text-style="assistant-message"]')];
+    if (bodies.length > 0) {
+      const body = bodies[bodies.length - 1];
+      const id = body.closest("[data-turn-key]")?.getAttribute("data-turn-key")
+        ?? body.closest("[data-chatgpt-selection-message-id]")?.getAttribute("data-chatgpt-selection-message-id")
+        ?? body.closest("[data-message-id]")?.getAttribute("data-message-id") ?? `#${bodies.length}`;
+      const unit = body.closest("[data-turn-key], [data-chatgpt-search-message-ids], [data-message-author-role]") ?? body;
+      return { id, text: String(body.textContent ?? "").trim(), file: unit.querySelector("[data-file-reference]") !== null };
+    }
+    const authors = [...document.querySelectorAll('[data-message-author-role="assistant"]')];
+    const last = authors[authors.length - 1];
+    if (last === undefined) return null;
+    const text = (last.querySelector(".markdown") ?? last).textContent;
+    return { id: last.getAttribute("data-message-id") ?? `#${authors.length}`, text: String(text ?? "").trim(), file: last.querySelector("[data-file-reference]") !== null };
+  };
+  const limitNotice = () => {
+    const LIMIT = /out of attachments|reached (?:the|your|our) [a-z ]*limit|usage cap|try again after/i;
+    const walker = document.createTreeWalker(document.body, 4); // text nodes only
+    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const el = node.parentElement;
+      if (el !== null && LIMIT.test(node.nodeValue ?? "") && el.closest(MESSAGE) === null) return String(el.textContent ?? "").trim().slice(0, 300);
+    }
+    return null;
+  };
+  return {
+    signedIn: box !== null, ready: box !== null && !busy, busy, attached, reply: latestReply(), notice: limitNotice(),
+    href: String(location.href),
+  };
 }
 
 /** Puts the caret into the composer so `Input.insertText` lands there. */

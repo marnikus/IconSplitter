@@ -2,6 +2,8 @@ export interface ChatReply { id: string; text: string; file: boolean }
 export interface ChatReading {
   signedIn: boolean; ready: boolean; busy: boolean; attached: boolean;
   reply: ChatReply | null; href?: string;
+  /** ChatGPT's own limit message shown outside the chat messages, if any. */
+  notice?: string | null;
 }
 export interface ChatPage {
   open(url: string): Promise<void>;

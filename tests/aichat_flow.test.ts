@@ -11,6 +11,7 @@ const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d
 interface Reading {
   signedIn: boolean; ready: boolean; busy: boolean; attached: boolean;
   reply: { id: string; text: string; file: boolean } | null; href: string;
+  notice?: string | null;
 }
 
 /** A scripted page: every `read()` returns the next reading after the send. */
@@ -203,5 +204,37 @@ describe("human-paced steps (2026-11-05)", () => {
     expect(out).toMatchObject({ ok: false, code: "cancelled" });
     expect(Date.now() - started).toBeLessThan(1000);
     expect(page.log).not.toContain("attach");
+  });
+});
+
+describe("ChatGPT's own limit notices (2026-11-05)", () => {
+  const LIMIT = "You’re out of attachments for now. Start a free Plus trial for more, or try again after 11:47 PM.";
+
+  it("stops before attaching when the page already shows a limit, quoting it", async () => {
+    const page = fakePage({ before: { notice: LIMIT } as Partial<Reading> });
+    const out = await runChatTurn(page, input, fast);
+    expect(out).toMatchObject({ ok: false, code: "limit", reason: LIMIT });
+    expect(page.log).not.toContain("attach");
+    expect(page.log).not.toContain("newChat");
+  });
+
+  it("names the limit instead of a vague timeout when the image never appears", async () => {
+    const page = fakePage();
+    const reads = page.read.bind(page);
+    let attachedCalls = 0;
+    page.attach = async () => { page.log.push("attach"); return { ok: true }; };
+    page.read = async () => {
+      const r = await reads();
+      attachedCalls += page.log.includes("attach") ? 1 : 0;
+      return attachedCalls > 1 ? { ...r, attached: false, notice: LIMIT } : { ...r, attached: false };
+    };
+    const out = await runChatTurn(page, input, fast);
+    expect(out).toMatchObject({ ok: false, code: "limit", reason: LIMIT });
+  });
+
+  it("a notice that appears next to a finished reply does not spoil that reply", async () => {
+    const page = fakePage({ after: [{ reply: { id: "n1", text: SVG, file: false }, notice: LIMIT } as Partial<Reading>] });
+    const out = await runChatTurn(page, input, fast);
+    expect(out).toMatchObject({ ok: true, text: SVG });
   });
 });

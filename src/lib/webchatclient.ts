@@ -9,7 +9,7 @@ import type { WebChatTarget } from "./webchatprefs";
 
 export type WebChatCode =
   | "helper-down" | "helper-old" | "bad-request" | "auth" | "busy" | "browser" | "page"
-  | "timeout" | "cancelled" | "reply_was_file";
+  | "timeout" | "cancelled" | "reply_was_file" | "limit";
 
 export type WebChatResult =
   | { ok: true; text: string; chatUrl: string | null; restarted: boolean }
@@ -30,7 +30,7 @@ export interface WebChatInput {
   pollMs?: number;
 }
 
-const CODES: readonly WebChatCode[] = ["bad-request", "auth", "busy", "browser", "page", "timeout", "cancelled", "reply_was_file"];
+const CODES: readonly WebChatCode[] = ["bad-request", "auth", "busy", "browser", "page", "timeout", "cancelled", "reply_was_file", "limit"];
 
 function failureOf(status: number, body: unknown): WebChatResult {
   if (status === 404) return { ok: false, code: "helper-old", reason: `the local helper predates web generation — restart it (${HELPER_FIX_HINT})` };

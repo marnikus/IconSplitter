@@ -68,7 +68,7 @@ export function parseSendBody(text) {
   };
 }
 
-const STATUS = { "bad-request": 400, auth: 401, busy: 409, reply_was_file: 422, cancelled: 499, browser: 503, timeout: 504 };
+const STATUS = { "bad-request": 400, auth: 401, busy: 409, reply_was_file: 422, limit: 429, cancelled: 499, browser: 503, timeout: 504 };
 
 export function statusOfCode(code) {
   return STATUS[code] ?? 502;

@@ -98,3 +98,52 @@ describe("composer actions", () => {
     expect(value.reply.id).toBe("t2");
   });
 });
+
+/**
+ * ChatGPT's 2026-11-05 layout, from the user's DOM: no [data-turn-key] and no
+ * [data-message-author-role]; turns are hashed-class blocks, roles live on
+ * h4[data-conversation-role], the reply body is
+ * [data-markdown-text-style="assistant-message"] with its id on
+ * [data-chatgpt-selection-message-id]. The USER message also holds SVG code.
+ */
+const SVG_REPLY = '&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"&gt;&lt;title&gt;icon-24_AI_03&lt;/title&gt;&lt;path d="M61 141"/&gt;&lt;/svg&gt;';
+function layout2026(opts: { reply?: boolean; notice?: string } = {}): string {
+  const user = `<div class="block-BQZwFn"><h4 data-conversation-role="user"><span>You said:</span></h4>
+    <div data-chatgpt-search-message-ids="u-1"><img alt="User attachment" src="blob:x">
+    <div data-user-message-bubble="true"><div data-markdown-text-tone="user-message"><p><span>fix svg</span></p>
+    <p><span>&lt;svg xmlns="http://www.w3.org/2000/svg"&gt;&lt;path d="M208 549"/&gt;&lt;/svg&gt;</span></p></div></div></div></div>`;
+  const worked = '<div class="block-BQZwFn"><button><span>Worked for 55s</span></button></div>';
+  const reply = opts.reply === false ? "" : `<div class="block-BQZwFn"><div data-chatgpt-search-message-ids="6147bb6c 6147bb6c">
+    <h4 data-conversation-role="assistant"><span>ChatGPT said:</span></h4><div>
+    <div data-chatgpt-selection-conversation-id="local-chatgpt:f3a5" data-chatgpt-selection-message-id="6147bb6c-7961">
+    <div data-markdown-text-style="assistant-message"><div data-dil-message-id="6147bb6c-7961"><p data-d-component="text">
+    <span data-d-stream-run="">${SVG_REPLY}</span></p></div></div></div></div></div></div>`;
+  const notice = opts.notice ? `<div class="notice-xyz"><span>${opts.notice}</span><button>Try Plus free</button></div>` : "";
+  return `<div role="region" aria-label="Conversation">${user}${worked}${reply}</div>${notice}${composer()}`;
+}
+
+describe("readChat on ChatGPT's 2026-11-05 layout", () => {
+  it("finds ChatGPT's reply — not the user's SVG — with its message id", () => {
+    document.body.innerHTML = layout2026();
+    const r = readChat();
+    expect(r.reply?.id).toBe("6147bb6c-7961");
+    expect(r.reply?.text).toBe('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><title>icon-24_AI_03</title><path d="M61 141"/></svg>');
+    expect(r.reply?.file).toBe(false);
+    expect(r.notice).toBeNull();
+  });
+
+  it("has no reply while ChatGPT has not answered (the user's own SVG never counts)", () => {
+    document.body.innerHTML = layout2026({ reply: false });
+    expect(readChat().reply).toBeNull();
+  });
+
+  it("reports ChatGPT's limit notice in its own words", () => {
+    document.body.innerHTML = layout2026({ notice: "You’re out of attachments for now. Start a free Plus trial for more, or try again after 11:47 PM." });
+    expect(readChat().notice).toBe("You’re out of attachments for now. Start a free Plus trial for more, or try again after 11:47 PM.");
+  });
+
+  it("never mistakes the same words inside a chat message for a notice", () => {
+    document.body.innerHTML = layout2026().replace("fix svg", "You’re out of attachments for now, said my friend");
+    expect(readChat().notice).toBeNull();
+  });
+});
