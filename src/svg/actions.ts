@@ -28,6 +28,7 @@ import { loadWebChat } from "./webchatstore";
 import { guard, perRequestOf, planOf } from "./runplan";
 import { confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
 import { hasJobs } from "./jobstate";
+import { useDecisionFollower, useRemoveAction } from "./removerows";
 import { skipCurrentSvgRequest, stopSvgRuns } from "./runjobs";
 import type { CancelNote } from "./runcontext";
 import type { ConfirmedBatch } from "./types";
@@ -77,6 +78,8 @@ export interface SvgActions extends SvgPromptActions {
   /** Take the AI source images already in the folder into the pair, newest main (2026-11-02). */
   registerImages: (ids: string[]) => void;
   copyCode: (id: string, version: number) => void; openLocation: (id: string) => void;
+  /** Take rows out of the list by declining their images in Selection V2 (2026-11-04). */
+  removeRows: (ids: string[]) => void;
 }
 export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 export function useSvgActions(ctx: SvgCtx): SvgActions {
@@ -84,8 +87,17 @@ export function useSvgActions(ctx: SvgCtx): SvgActions {
   return {
     ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx), ...useImgRegenActions(ctx),
     ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx),
-    ...useRegisterActions(ctx), ...useRegisterImageActions(ctx), ...useSvgPromptActions(ctx),
+    ...useRegisterActions(ctx), ...useRegisterImageActions(ctx), ...useSvgPromptActions(ctx), ...useRemoveRows(ctx),
   };
+}
+/** Remove + the list following every written pair decision (a click, an undo, a redo). */
+function useRemoveRows(ctx: SvgCtx): Slice<"removeRows"> {
+  const rescanIfIdle = () => {
+    if (!hasJobs(ctx.refs)) void scanSources(ctx.refs, ctx);
+    else ctx.say("An image was approved again — it is listed after the running process finishes (Rescan)");
+  };
+  useDecisionFollower({ rows: ctx.rows, setRowsFn: ctx.setRowsFn, rescanIfIdle });
+  return { removeRows: useRemoveAction(ctx) };
 }
 function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   const latest = useRef(ctx); latest.current = ctx;

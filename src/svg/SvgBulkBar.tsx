@@ -56,6 +56,8 @@ export interface SvgBulkBarProps {
   onRegisterExisting: () => void;
   /** Take AI source images already sitting in the selected folders into their pairs (2026-11-02). */
   onRegisterImages: () => void;
+  /** Take the selected rows out of the list: their images become declined in Selection V2. */
+  onRemove: () => void;
 }
 
 export default function SvgBulkBar(p: SvgBulkBarProps) {
@@ -122,6 +124,9 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("approved")}>✓ Approve selected</button>
       <button type="button" className="svg-btn danger" data-testid="svg-decline-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("declined")}>✕ Decline selected</button>
+      <button type="button" className="svg-btn danger" data-testid="svg-remove-selected" disabled={p.checkedCount === 0}
+        title="Remove the selected images from this list: they become declined in Selection V2 (Undo brings them back)"
+        onClick={p.onRemove}>🗑 Remove selected</button>
     </>
   );
 }

@@ -4750,3 +4750,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `src/lib/activity.ts` (app-wide activity list, label counts, `withActivity`), `src/ui/useBusyActivity.ts` (every tab's busy text → bar), `src/ui/ActivityBars.tsx` in Workbench, `src/ui/ProgressFrame.tsx` (shared frame extracted from ProcessProgressBar); explicit `withActivity` for SVG review writes, Selection V2 bulk saves/Retry, Batch review-outcome writes. Activity bars close themselves when the work ends; job bars unchanged.
 - Measured: `activity_bars` 16 new tests; tsc clean; lint 0 errors; quality:changed PASSED (createActivityStore flattened to fit 30 lines); verify:fast tests 3692 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-04 — Remove a row from Generate SVG (= declined in Selection V2)
+
+- Scope: `src/svg/removerows.ts` (Remove via Selection's `applyDecisionPatch`, Selection's own "decisions" history entry, list follower), `selection/offline.ts` (Generate SVG folder fallback, `onDecisionsWritten`), `state/handlekeys.ts`; row `svg-remove-<id>` and bulk `svg-remove-selected`.
+- Measured: `svg_remove_row` 9 new tests (incl. undo/redo through `applyEntry`); tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3701 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).

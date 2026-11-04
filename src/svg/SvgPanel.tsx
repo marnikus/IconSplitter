@@ -120,7 +120,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
           onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}
           onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun}
           onRegisterExisting={() => g.registerExisting(g.checked)}
-          onRegisterImages={() => g.registerImages(g.checked)} />
+          onRegisterImages={() => g.registerImages(g.checked)} onRemove={() => g.removeRows(g.checked)} />
       </div>
       <SvgList g={g} actions={actions} />
       <SvgRuns refs={g.refs} onStop={g.cancelRun} />

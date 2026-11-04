@@ -35,6 +35,8 @@ export interface SvgRowActions {
   selectRow: (id: string, intent: SelectIntent) => void;
   generate: (ids: string[], placement?: Placement, operation?: SvgOperation) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
+  /** Takes the row out of the list by declining its image in Selection V2. */
+  remove: (ids: string[]) => void;
   copyCode: (id: string, version: number) => void;
   showCode: (id: string, version: number) => void;
   showHistory: (id: string) => void;
@@ -101,6 +103,10 @@ function FileActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
         onClick={click(() => a.showCode(id, version))}>Code</button>
       <button type="button" className="svg-btn tiny" data-testid={`svg-history-${id}`} disabled={(row.meta?.versions.length ?? 0) === 0}
         onClick={click(() => a.showHistory(id))}>Versions</button>
+      <button type="button" className="svg-btn tiny danger" data-testid={`svg-remove-${id}`} disabled={row.running || row.queued}
+        title={row.running || row.queued ? "Generating or queued — wait, or drop it from the queue first"
+          : "Remove from this list: marks the image declined in Selection V2 (Undo brings it back)"}
+        onClick={click(() => a.remove([id]))}>Remove</button>
     </div>
   );
 }

@@ -13,7 +13,8 @@ import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
 import { metaFromRecord } from "../selection/pairrecord";
 import { loadSourceIndex, metaPathOfEntry, type IndexEntry } from "../state/sourceindex";
 
-export const SVG_HANDLE_KEY = "__svg__";
+export { SVG_HANDLE_KEY } from "../state/handlekeys";
+import { SVG_HANDLE_KEY } from "../state/handlekeys";
 
 /**
  * One decision a history entry carries: which source, and the ITEM status it
