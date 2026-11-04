@@ -16,6 +16,7 @@ import { requestTextOf } from "./regenprompt";
 import type { BatchCtx } from "./runbatch";
 import type { RunState } from "./runtypes";
 import { modelOf } from "./answerer";
+import { iconNameLine } from "../lib/svgprompt";
 
 interface SendOk { ok: true; text: string; usage: Usage; requestId: string | null }
 interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
@@ -28,7 +29,7 @@ export async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promi
   ctx.records = text.text.records;
   journalRequest(ctx);
   const web = state.args.web;
-  if (web) return web.send({ prompt: text.text.prompt, image: composite.dataUrl, key: `${state.runId}:${ctx.plan.id}`, signal: ctx.signal });
+  if (web) return web.send({ prompt: text.text.prompt, image: composite.dataUrl, key: `${state.runId}:${ctx.plan.id}`, signal: ctx.signal, ...webAnchorOf(ctx) });
   const request = buildChatRequest({
     model: state.args.config.model, prompt: text.text.prompt, image: composite.dataUrl,
     caps: state.args.caps, params: state.args.params,
@@ -68,6 +69,12 @@ function journalRequest(ctx: BatchCtx): void {
     sourceIds: items.map((i) => i.id), sourceNames: items.map((i) => i.name),
     model: modelOf(state.args), startedAt: new Date(ctx.startedAt).toISOString(),
   });
+}
+
+/** A web request carries one icon: its prompt line is the anchor, its name the label. */
+function webAnchorOf(ctx: BatchCtx): { anchor?: string; label?: string } {
+  const stem = ctx.items[0]?.stem;
+  return stem === undefined ? {} : { anchor: iconNameLine(stem), label: stem };
 }
 
 /** The id is written the moment it arrives — the journal, then the record. */

@@ -11,6 +11,7 @@
 // with "busy"). A turn cancelled while it waits is never sent.
 
 import { sendWebChat, type WebChatCode } from "../lib/webchatclient";
+import { beginActivity } from "../lib/activity";
 import { isConversationUrl, webProviderOf, type WebChatTarget } from "../lib/webchatprefs";
 import type { Failure, Usage } from "../lib/svgrequest";
 import type { WebRequest, WebSend, WebTransport } from "./runtypes";
@@ -27,6 +28,19 @@ export interface WebHooks {
   onChatUrl?: (url: string) => void;
   /** The helper's live phase (waiting-for-login, uploading, generating, …). */
   onPhase?: (phase: string) => void;
+  /** How often the helper's progress is read (tests only). */
+  pollMs?: number;
+}
+
+/** The helper's steps in the words the activity bar shows. */
+const STEP_WORDS: Record<string, string> = {
+  opening: "opening the chat", "waiting-for-login": "waiting for you to sign in", uploading: "attaching the image",
+  typing: "pasting the prompt", sent: "prompt sent", generating: "ChatGPT is generating",
+  "restarting-chat": "no reply — trying a new chat", scraping: "reading the reply",
+};
+
+function stepLabel(request: WebRequest, phase: string): string {
+  return `ChatGPT web · ${request.label ?? "request"} — ${STEP_WORDS[phase] ?? phase}…`;
 }
 
 const KINDS: Partial<Record<WebChatCode, Failure["kind"]>> = {
@@ -74,10 +88,13 @@ export function createWebTransport(target: WebChatTarget, hooks: WebHooks = {}):
     hooks.onChatUrl?.(chatUrl);
   };
   const turn = async (request: WebRequest): Promise<WebSend> => {
+    // Visible from every tab while the chat works; closes itself when the reply is in.
+    const activity = beginActivity("svg", stepLabel(request, "opening"));
+    const onPhase = (phase: string) => { activity.update(stepLabel(request, phase)); hooks.onPhase?.(phase); };
     const out = await sendWebChat({
       bridgeUrl: hooks.bridgeUrl, target: { ...target, url }, prompt: request.prompt, image: request.image,
-      sessionKey: request.key, signal: request.signal, onPhase: hooks.onPhase,
-    });
+      sessionKey: request.key, signal: request.signal, anchor: request.anchor, onPhase, pollMs: hooks.pollMs,
+    }).finally(() => activity.end());
     if (!out.ok) return { ok: false, error: `ChatGPT web: ${out.reason}`, failure: failureKindOf(out.code), retryAfterMs: null };
     follow(out.chatUrl);
     return { ok: true, text: out.text, usage: WEB_USAGE, requestId: null };

@@ -147,3 +147,50 @@ describe("readChat on ChatGPT's 2026-11-05 layout", () => {
     expect(readChat().notice).toBeNull();
   });
 });
+
+/**
+ * Anchored reading (2026-11-05): the request names its icon in the prompt
+ * ("Icon name (use it as the SVG <title>): <name>"). The reply is the first
+ * ChatGPT answer BELOW the last prompt carrying that line — never simply the
+ * newest answer on the page.
+ */
+const lineOf = (name: string) => `Icon name (use it as the SVG &lt;title&gt;): ${name}`;
+const ANCHOR = (name: string) => `Icon name (use it as the SVG <title>): ${name}`;
+function prompt(name: string, uid: string): string {
+  return `<div class="block-a"><h4 data-conversation-role="user">You said:</h4><div data-chatgpt-search-message-ids="${uid}">
+    <div data-user-message-bubble="true"><div data-markdown-text-tone="user-message"><p><span>fix svg</span></p>
+    <p><span>${lineOf(name)}</span></p></div></div></div></div>`;
+}
+function answer(id: string, svgTitle: string): string {
+  return `<div class="block-a"><div data-chatgpt-search-message-ids="${id}"><h4 data-conversation-role="assistant">ChatGPT said:</h4>
+    <div data-chatgpt-selection-message-id="${id}"><div data-markdown-text-style="assistant-message"><p><span>&lt;svg&gt;&lt;title&gt;${svgTitle}&lt;/title&gt;&lt;/svg&gt;</span></p></div></div></div></div>`;
+}
+const chat = (inner: string) => { document.body.innerHTML = `<div role="region" aria-label="Conversation">${inner}</div>${composer()}`; };
+
+describe("readChat anchored on the prompt's icon name", () => {
+  it("takes the answer right below the matching prompt, not the newest answer on the page", () => {
+    chat(prompt("icon-24_AI_03", "u1") + answer("r1", "icon-24_AI_03") + prompt("icon-25_AI_01", "u2") + answer("r2", "icon-25_AI_01"));
+    const r = (0, eval)(stepSource(readChat, ANCHOR("icon-24_AI_03"))) as ReturnType<typeof readChat>;
+    expect(r.prompts).toBe(1);
+    expect(r.reply).toMatchObject({ id: "r1", text: "<svg><title>icon-24_AI_03</title></svg>" });
+  });
+
+  it("uses the LAST prompt for the icon: no answer yet below a re-sent prompt", () => {
+    chat(prompt("icon-24_AI_03", "u1") + answer("r1", "old") + prompt("icon-24_AI_03", "u2"));
+    const r = readChat(ANCHOR("icon-24_AI_03"));
+    expect(r.prompts).toBe(2);
+    expect(r.reply).toBeNull();
+  });
+
+  it("never takes the next prompt's answer when this prompt has none yet", () => {
+    chat(prompt("icon-24_AI_03", "u1") + prompt("icon-25_AI_01", "u2") + answer("r2", "icon-25_AI_01"));
+    expect(readChat(ANCHOR("icon-24_AI_03")).reply).toBeNull();
+  });
+
+  it("finds nothing when the prompt is not on the page", () => {
+    chat(prompt("icon-25_AI_01", "u2") + answer("r2", "icon-25_AI_01"));
+    const r = readChat(ANCHOR("icon-24_AI_03"));
+    expect(r.prompts).toBe(0);
+    expect(r.reply).toBeNull();
+  });
+});

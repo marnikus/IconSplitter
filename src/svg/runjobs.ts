@@ -77,7 +77,6 @@ export function webTransportOf(item: QueueItem, say: (line: string) => void): We
   if (item.web === null) return undefined;
   return createWebTransport(item.web, {
     onChatUrl: (url) => { saveWebChatUrl(url); say("ChatGPT web: no reply in time — continued in a new chat; its URL is now the saved chat URL"); },
-    onPhase: (phase) => say(`ChatGPT web: ${phase.replace(/-/g, " ")}…`),
   });
 }
 

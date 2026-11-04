@@ -63,6 +63,8 @@ export function parseSendBody(text) {
     input: {
       url, prompt, image, maxWaitMs: clamp(raw.maxWaitMs, WAIT), readyTimeoutMs: clamp(raw.readyTimeoutMs, READY),
       stepDelayMs: clamp(raw.stepDelayMs, STEP),
+      // The prompt's own icon line: the reply is read from below THAT prompt.
+      anchor: typeof raw.anchor === "string" ? raw.anchor.slice(0, 500) : "",
       sessionKey: typeof raw.sessionKey === "string" ? raw.sessionKey.slice(0, 100) : "",
     },
   };

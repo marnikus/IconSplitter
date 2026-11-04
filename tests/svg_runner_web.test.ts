@@ -92,6 +92,9 @@ describe("runGeneration — web page transport", () => {
     expect(helper.calls[0].url).toBe("http://127.0.0.1:47391/aichat/send");
     expect(helper.calls[0].body).toMatchObject({ url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000 });
     expect(String(helper.calls[0].body.prompt)).toContain("fix svg to match the reference");
+    // the anchor is exactly the icon line the prompt carries, so the helper finds THIS prompt
+    expect(String(helper.calls[0].body.prompt)).toContain(String(helper.calls[0].body.anchor));
+    expect(helper.calls[0].body.anchor).toBe("Icon name (use it as the SVG <title>): icon-1_AI");
     expect(String(helper.calls[0].body.image)).toBe("data:image/png;base64,architecture/icon-1_AI.png");
     const saved = await svgText(root, sources[0]);
     expect(saved).not.toContain("<use");

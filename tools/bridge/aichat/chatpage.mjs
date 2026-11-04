@@ -19,8 +19,14 @@ const NEW_CHAT_URL = "https://chatgpt.com/";
  * older turn / author-role markup is the fallback. `notice` is ChatGPT's own
  * limit message ("out of attachments… try again after…"), read only from text
  * OUTSIDE the chat messages, so a prompt or reply quoting it never counts.
+ *
+ * Anchored (2026-11-05): with `anchor` - the prompt's own line "Icon name (use
+ * it as the SVG <title>): <name>" - the reply is the first answer BELOW the
+ * LAST prompt carrying that line (and above the next prompt), never just the
+ * newest answer on the page; `prompts` counts the prompts carrying it, so the
+ * flow can see its own prompt arrive.
  */
-export function readChat() {
+export function readChat(anchor) {
   const q = (sel, root = document) => root.querySelector(sel);
   const box = q('form[data-composer-placement="thread"] [contenteditable="true"][role="textbox"]')
     ?? q('#prompt-textarea[contenteditable="true"]') ?? q('[contenteditable="true"][role="textbox"]');
@@ -28,22 +34,33 @@ export function readChat() {
   const tray = q("[data-composer-attachments]");
   const attached = tray !== null && (tray.querySelector("img") !== null || tray.childElementCount > 0);
   const MESSAGE = "[data-chatgpt-search-message-ids], [data-turn-key], [data-message-author-role], [data-user-message-bubble], [data-markdown-text-style], [data-conversation-role], form";
-  const latestReply = () => {
-    const bodies = [...document.querySelectorAll('[data-markdown-text-style="assistant-message"]')];
-    if (bodies.length > 0) {
-      const body = bodies[bodies.length - 1];
-      const id = body.closest("[data-turn-key]")?.getAttribute("data-turn-key")
-        ?? body.closest("[data-chatgpt-selection-message-id]")?.getAttribute("data-chatgpt-selection-message-id")
-        ?? body.closest("[data-message-id]")?.getAttribute("data-message-id") ?? `#${bodies.length}`;
-      const unit = body.closest("[data-turn-key], [data-chatgpt-search-message-ids], [data-message-author-role]") ?? body;
-      return { id, text: String(body.textContent ?? "").trim(), file: unit.querySelector("[data-file-reference]") !== null };
-    }
-    const authors = [...document.querySelectorAll('[data-message-author-role="assistant"]')];
-    const last = authors[authors.length - 1];
-    if (last === undefined) return null;
-    const text = (last.querySelector(".markdown") ?? last).textContent;
-    return { id: last.getAttribute("data-message-id") ?? `#${authors.length}`, text: String(text ?? "").trim(), file: last.querySelector("[data-file-reference]") !== null };
+  const all = (sel) => [...document.querySelectorAll(sel)];
+  const firstFound = (sels) => sels.map(all).find((list) => list.length > 0) ?? [];
+  // Answer bodies: the marker every layout keeps; the author-role markup as fallback.
+  const answers = firstFound(['[data-markdown-text-style="assistant-message"]', '[data-message-author-role="assistant"]']);
+  const prompts = firstFound(["[data-user-message-bubble]", '[data-message-author-role="user"]',
+    '[data-markdown-text-style="user-message"]', '[data-markdown-text-tone="user-message"]']);
+  const replyOf = (el, n) => {
+    const body = el.matches('[data-markdown-text-style="assistant-message"]') ? el : el.querySelector(".markdown") ?? el;
+    const id = el.closest("[data-turn-key]")?.getAttribute("data-turn-key")
+      ?? el.closest("[data-chatgpt-selection-message-id]")?.getAttribute("data-chatgpt-selection-message-id")
+      ?? el.closest("[data-message-id]")?.getAttribute("data-message-id") ?? `#${n}`;
+    const unit = el.closest("[data-turn-key], [data-chatgpt-search-message-ids], [data-message-author-role]") ?? el;
+    return { id, text: String(body.textContent ?? "").trim(), file: unit.querySelector("[data-file-reference]") !== null };
   };
+  const below = (a, b) => (a.compareDocumentPosition(b) & 4) !== 0 && !a.contains(b); // b comes after a
+  const flat = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
+  const anchored = () => {
+    const wanted = flat(anchor);
+    const mine = prompts.filter((el) => flat(el.textContent).includes(wanted));
+    const last = mine[mine.length - 1];
+    if (last === undefined) return { count: 0, reply: null };
+    const next = prompts.find((el) => below(last, el));
+    const index = answers.findIndex((a) => below(last, a) && (next === undefined || below(a, next)));
+    return { count: mine.length, reply: index < 0 ? null : replyOf(answers[index], index + 1) };
+  };
+  const latestReply = () => (answers.length === 0 ? null : replyOf(answers[answers.length - 1], answers.length));
+  const found = typeof anchor === "string" && anchor !== "" ? anchored() : { count: null, reply: latestReply() };
   const limitNotice = () => {
     const LIMIT = /out of attachments|reached (?:the|your|our) [a-z ]*limit|usage cap|try again after/i;
     const walker = document.createTreeWalker(document.body, 4); // text nodes only
@@ -54,7 +71,7 @@ export function readChat() {
     return null;
   };
   return {
-    signedIn: box !== null, ready: box !== null && !busy, busy, attached, reply: latestReply(), notice: limitNotice(),
+    signedIn: box !== null, ready: box !== null && !busy, busy, attached, reply: found.reply, prompts: found.count, notice: limitNotice(),
     href: String(location.href),
   };
 }
@@ -85,14 +102,14 @@ export function clickNewChat() {
   return true;
 }
 
-/** A step as one self-contained page expression. */
-export function stepSource(fn) {
-  return `(${fn.toString()})()`;
+/** A step as one self-contained page expression, with its one JSON argument. */
+export function stepSource(fn, arg) {
+  return `(${fn.toString()})(${arg === undefined ? "" : JSON.stringify(arg)})`;
 }
 
 /** The ChatGPT page of one CDP session, in the shape chatflow.mjs drives. */
 export function cdpChatPage(connection, sessionId) {
-  const run = (fn) => evaluate(connection, stepSource(fn), sessionId);
+  const run = (fn, arg) => evaluate(connection, stepSource(fn, arg), sessionId);
   const href = async () => String(await evaluate(connection, "location.href", sessionId));
   return {
     href,
@@ -101,7 +118,7 @@ export function cdpChatPage(connection, sessionId) {
       const same = chatIdOf(url) !== null && chatIdOf(url) === chatIdOf(now);
       if (!same) await navigate(connection, url, sessionId);
     },
-    read: () => run(readChat),
+    read: (anchor) => run(readChat, anchor),
     attach: (file) => setFiles(connection, [file], { selector: IMAGE_INPUT, sessionId }),
     async type(text) {
       if (!(await run(focusComposer))) return false;

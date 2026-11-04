@@ -79,4 +79,25 @@ describe("createWebTransport", () => {
     const out = await createWebTransport(TARGET).send(request());
     expect(out).toMatchObject({ ok: false, failure: "rate_limit", error: "ChatGPT web: You’re out of attachments for now. Try again after 11:47 PM." });
   });
+
+  it("sends the prompt's icon line as the anchor and shows an activity bar until the reply is in", async () => {
+    const { activities } = await import("../src/lib/activity");
+    activities.clear();
+    let release: () => void = () => undefined;
+    const sent: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      if (String(url).includes("/aichat/progress")) {
+        return new Response(JSON.stringify({ ok: true, progress: { phase: "generating", at: 1 } }), { status: 200 });
+      }
+      sent.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      await new Promise<void>((r) => { release = r; });
+      return reply();
+    }));
+    const run = createWebTransport(TARGET, { pollMs: 5 }).send({ ...request(), anchor: "Icon name (use it as the SVG <title>): fog_AI", label: "fog_AI" });
+    await vi.waitFor(() => expect(activities.list()[0]?.label).toBe("ChatGPT web · fog_AI — ChatGPT is generating…"));
+    release();
+    expect((await run).ok).toBe(true);
+    expect(sent[0].anchor).toBe("Icon name (use it as the SVG <title>): fog_AI");
+    expect(activities.list()).toEqual([]); // closes itself once the reply is in
+  });
 });

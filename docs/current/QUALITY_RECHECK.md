@@ -4770,3 +4770,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `aichat/chatpage.mjs` `readChat` finds the reply by `[data-markdown-text-style=assistant-message]` (the 2026-11-05 layout has no `[data-turn-key]`), plus `notice` (limit text outside messages); `chatflow.mjs` stops with `limit` (429) before attaching or when the image never appears; client/run map it.
 - Measured: 9 new tests incl. fixtures from the user's DOM; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3732 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT reply anchored on the prompt's icon line
+
+- Scope: `readChat(anchor)` takes the first answer below the LAST prompt carrying `Icon name (use it as the SVG <title>): <name>`; flow waits for that prompt to appear (`sent`) before waiting for the finished answer; `/aichat/send` `anchor`; app sends `iconNameLine(stem)` (shared with both prompt builders); activity bar 'ChatGPT web · <icon> — <step>…' during a request.
+- Measured: 9 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3740 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).

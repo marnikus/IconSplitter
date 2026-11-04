@@ -131,6 +131,14 @@ describe("parseSendBody", () => {
     expect([pick(0), pick(2500), pick(-5), pick(99_999), pick("x")]).toEqual([0, 2500, 0, 10_000, 1000]);
   });
 
+  it("carries the prompt's icon line as the anchor, bounded", () => {
+    const pick = (v: unknown) => { const r = parseSendBody(body({ anchor: v })); return r.ok ? r.input.anchor : null; };
+    expect(pick("Icon name (use it as the SVG <title>): fog_AI")).toBe("Icon name (use it as the SVG <title>): fog_AI");
+    expect(pick(undefined)).toBe("");
+    expect(pick(42)).toBe("");
+    expect(pick("x".repeat(900))).toHaveLength(500);
+  });
+
   it("clamps the waits into their safe ranges", () => {
     const parsed = parseSendBody(body({ maxWaitMs: 5, readyTimeoutMs: 1e12 }));
     expect(parsed.ok && parsed.input.maxWaitMs).toBe(60_000);

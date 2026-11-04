@@ -1,6 +1,6 @@
 import type { ChatPage, ChatTurnOptions, ChatTurnResult } from "./chatflow.mjs";
 export interface AichatInput {
-  url: string; prompt: string; image: Buffer; maxWaitMs: number; readyTimeoutMs: number; stepDelayMs?: number;
+  url: string; prompt: string; image: Buffer; maxWaitMs: number; readyTimeoutMs: number; stepDelayMs?: number; anchor?: string;
   sessionKey?: string; signal?: AbortSignal;
 }
 export type AichatOpen = () => Promise<

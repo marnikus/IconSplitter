@@ -43,6 +43,15 @@ export function batchPrompt(userPrompt: string, items: readonly ManifestItem[]):
 }
 
 /** The text sent for a single image: no manifest, just the quality prompt. */
+/**
+ * The line every single-icon prompt carries. The web generation also hands it
+ * to the helper as the anchor: the reply is read from below the prompt that
+ * holds exactly this line (2026-11-05).
+ */
+export function iconNameLine(name: string): string {
+  return `Icon name (use it as the SVG <title>): ${name}`;
+}
+
 export function singlePrompt(userPrompt: string, name: string): string {
-  return `${userPrompt.trim()}\n\nIcon name (use it as the SVG <title>): ${name}`;
+  return `${userPrompt.trim()}\n\n${iconNameLine(name)}`;
 }

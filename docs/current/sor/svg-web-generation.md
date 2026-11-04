@@ -70,10 +70,19 @@ attachments `[data-composer-attachments]`; image input
 `button[data-testid=send-button]` / `aria-label^=Send`; stop
 `button[data-testid=stop-button]` / `aria-label^=Stop`; file card
 `[data-file-reference]`; new chat `button[aria-label="New chat"]`.
-Reply: the LAST `[data-markdown-text-style=assistant-message]` — kept by every
-layout seen (the 2026-11-05 layout has no `[data-turn-key]`) — its
-`textContent`, id from `[data-turn-key]` / `[data-chatgpt-selection-message-id]`;
-fallback `[data-message-author-role=assistant]`. User messages never count.
+Reply, **anchored on the prompt**: each request sends its prompt's own line
+`Icon name (use it as the SVG <title>): <name>` (`iconNameLine`, the same
+function that writes it into the prompt) as `anchor`. The helper waits until a
+prompt carrying that line appears (phase `sent`; never appearing = `page`
+error), then takes the first answer body BELOW the last such prompt and above
+the next prompt — never just the newest answer — and saves it only once it is
+finished (no stop button, text stable, `</svg>` present). Answer bodies are
+`[data-markdown-text-style=assistant-message]` (every layout seen; the
+2026-11-05 layout has no `[data-turn-key]`), fallback
+`[data-message-author-role=assistant]`; prompts are `[data-user-message-bubble]`
+(fallbacks: author-role/markdown user markup). Without an anchor: the newest
+answer. While a request runs, an activity bar shows
+"ChatGPT web · <icon> — <step>…" and closes when the reply is in.
 Limit notice ("out of attachments… try again after…"): matching text OUTSIDE
 any message, checked before the attach and when the image never appears →
 `limit` (429) with ChatGPT's words; never retried, no new chat.

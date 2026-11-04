@@ -23,6 +23,8 @@ export interface WebChatInput {
   image: string;
   /** Names this turn for progress and cancel. */
   sessionKey: string;
+  /** The prompt's own icon line: the helper reads the reply below that prompt. */
+  anchor?: string;
   signal?: AbortSignal;
   /** The helper's phase: opening, waiting-for-login, uploading, typing, generating, restarting-chat, scraping. */
   onPhase?: (phase: string) => void;
@@ -84,7 +86,7 @@ export async function sendWebChat(input: WebChatInput): Promise<WebChatResult> {
   try {
     const res = await fetchFn(`${base}/aichat/send`, {
       method: "POST", signal: input.signal, headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...input.target, prompt: input.prompt, image: input.image, sessionKey: input.sessionKey }),
+      body: JSON.stringify({ ...input.target, prompt: input.prompt, image: input.image, sessionKey: input.sessionKey, anchor: input.anchor }),
     });
     const body = await bodyOf(res);
     return res.ok ? successOf(body) : failureOf(res.status, body);

@@ -10,6 +10,7 @@
 import { isRecord } from "./isrecord";
 import { clampImagesPerRequest } from "./svgconfig";
 import { findPreset, validPresetName, type PromptPreset } from "./promptpresets";
+import { iconNameLine } from "./svgprompt";
 
 export const REGEN_VERSION = 1;
 
@@ -161,7 +162,7 @@ export function regenPromptProblem(presetText: string, items: readonly RegenCode
 export function currentSvgPrompt(presetText: string, name: string, code: string): string {
   return [
     presetText.trim(),
-    `Icon name (use it as the SVG <title>): ${name}`,
+    iconNameLine(name),
     "Current SVG code of this icon — regenerate it from the attached image following the instructions above:",
     code.trim(),
   ].join("\n\n");

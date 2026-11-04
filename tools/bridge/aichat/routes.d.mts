@@ -1,6 +1,6 @@
 export const AICHAT_MAX_BODY: number;
 export function parseSendBody(text: unknown):
-  | { ok: true; input: { url: string; prompt: string; image: Buffer; maxWaitMs: number; readyTimeoutMs: number; stepDelayMs: number; sessionKey: string } }
+  | { ok: true; input: { url: string; prompt: string; image: Buffer; maxWaitMs: number; readyTimeoutMs: number; stepDelayMs: number; anchor: string; sessionKey: string } }
   | { ok: false; reason: string };
 export function statusOfCode(code: string): number;
 export function aichatHealth(env?: Record<string, string | undefined>): { ready: boolean; browser: string; headed: boolean; profile: string };

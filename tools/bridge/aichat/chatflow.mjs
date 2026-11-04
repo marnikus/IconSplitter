@@ -82,7 +82,7 @@ async function pause(o) {
 async function pollUntil(page, test, timeoutMs, o) {
   const deadline = Date.now() + timeoutMs;
   while (!o.signal?.aborted) {
-    const reading = await page.read();
+    const reading = await page.read(o.anchor);
     if (test(reading)) return reading;
     if (Date.now() >= deadline) return null;
     await sleep(o.pollMs, o.signal);
@@ -137,14 +137,14 @@ async function waitReply(page, baseline, timeoutMs, o) {
 async function attachImage(page, imagePath, o) {
   o.onPhase?.("uploading");
   if (!(await pause(o))) return cancelled(); // before the attach
-  const before = await page.read();
+  const before = await page.read(o.anchor);
   if (before.notice) return limited(before.notice); // e.g. "out of attachments": do not even try
   const put = await page.attach(imagePath);
   if (!put.ok) return { ok: false, code: "page", reason: put.reason ?? "the image could not be attached to the ChatGPT composer" };
   const seen = await pollUntil(page, (r) => r.attached === true, o.attachTimeoutMs, o);
   if (o.signal?.aborted) return cancelled();
   if (seen) return { ok: true };
-  const after = await page.read();
+  const after = await page.read(o.anchor);
   return after.notice ? limited(after.notice) : { ok: false, code: "page", reason: "ChatGPT did not show the attached image in time" };
 }
 
@@ -158,14 +158,27 @@ async function inlineFollowUp(page, reply, maxWaitMs, o) {
   return { ok: false, code: "reply_was_file", reason: "ChatGPT answered with a file instead of SVG code, also after asking for inline code" };
 }
 
+/** The prompt just sent shows up in the chat (one more prompt carries its icon line). */
+async function waitPromptShown(page, countBefore, o) {
+  const seen = await pollUntil(page, (r) => (r.prompts ?? 0) > countBefore, o.submitTimeoutMs, o);
+  if (o.signal?.aborted) return cancelled();
+  if (seen === null) return { ok: false, code: "page", reason: "the prompt never appeared in the ChatGPT chat - it was not sent" };
+  o.onPhase?.("sent");
+  return { ok: true };
+}
+
 /** Attach → type → submit → wait, in the chat that is open now. */
 async function sendOnce(page, input, o) {
-  const before = await page.read();
+  const before = await page.read(o.anchor);
   const baseline = before.reply?.id ?? null;
   const attached = await attachImage(page, input.imagePath, o);
   if (!attached.ok) return attached;
   const typed = await typeAndSubmit(page, input.prompt, o);
   if (!typed.ok) return typed;
+  if (o.anchor) {
+    const shown = await waitPromptShown(page, before.prompts ?? 0, o);
+    if (!shown.ok) return shown;
+  }
   const answer = await waitReply(page, baseline, input.maxWaitMs, o);
   if (!answer.ok || answer.reply.file !== true) return answer;
   return inlineFollowUp(page, answer.reply, input.maxWaitMs, o);
@@ -173,7 +186,11 @@ async function sendOnce(page, input, o) {
 
 /** Opens the chat, waits for it, sends, and on a timeout retries once in a new chat. */
 export async function runChatTurn(page, input, options = {}) {
-  const o = { ...DEFAULTS, ...options, stepDelayMs: Number(input.stepDelayMs) || 0 };
+  const o = {
+    ...DEFAULTS, ...options, stepDelayMs: Number(input.stepDelayMs) || 0,
+    // The prompt's own icon line: every reading looks for the answer below THAT prompt.
+    anchor: typeof input.anchor === "string" && input.anchor !== "" ? input.anchor : undefined,
+  };
   o.onPhase?.("opening");
   await page.open(input.url);
   const ready = await waitReady(page, input.readyTimeoutMs, o);

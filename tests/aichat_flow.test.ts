@@ -12,6 +12,7 @@ interface Reading {
   signedIn: boolean; ready: boolean; busy: boolean; attached: boolean;
   reply: { id: string; text: string; file: boolean } | null; href: string;
   notice?: string | null;
+  prompts?: number;
 }
 
 /** A scripted page: every `read()` returns the next reading after the send. */
@@ -236,5 +237,29 @@ describe("ChatGPT's own limit notices (2026-11-05)", () => {
     const page = fakePage({ after: [{ reply: { id: "n1", text: SVG, file: false }, notice: LIMIT } as Partial<Reading>] });
     const out = await runChatTurn(page, input, fast);
     expect(out).toMatchObject({ ok: true, text: SVG });
+  });
+});
+
+describe("anchored turns (2026-11-05)", () => {
+  const anchored = { ...input, anchor: "Icon name (use it as the SVG <title>): fog_AI" };
+
+  it("waits for its own prompt to appear, then for the answer below it", async () => {
+    const reads: (string | undefined)[] = [];
+    const page = fakePage({ after: [{ prompts: 1 } as Partial<Reading>, { prompts: 1, reply: { id: "n1", text: SVG, file: false } } as Partial<Reading>] });
+    const read = page.read.bind(page);
+    page.read = async (anchor?: string) => { reads.push(anchor); return read(); };
+    const phases: string[] = [];
+    const out = await runChatTurn(page, anchored, { ...fast, onPhase: (p: string) => phases.push(p) });
+    expect(out).toMatchObject({ ok: true, text: SVG });
+    expect(reads.every((a) => a === anchored.anchor)).toBe(true); // every reading is anchored
+    expect(phases).toEqual(["opening", "uploading", "typing", "sent", "generating", "scraping"]);
+  });
+
+  it("fails honestly when its prompt never shows up in the chat", async () => {
+    const page = fakePage({ after: [{ prompts: 0 } as Partial<Reading>] });
+    const out = await runChatTurn(page, anchored, { ...fast, submitTimeoutMs: 40 });
+    expect(out).toMatchObject({ ok: false, code: "page" });
+    expect((out as { reason: string }).reason).toMatch(/prompt/);
+    expect(page.log).not.toContain("newChat");
   });
 });

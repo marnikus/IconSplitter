@@ -75,6 +75,10 @@ export interface WebRequest {
   /** Names the turn for the helper's progress and cancel. */
   key: string;
   signal: AbortSignal;
+  /** The prompt's own icon line: the helper reads the reply below THIS prompt. */
+  anchor?: string;
+  /** What the activity bar calls this request (the icon's name). */
+  label?: string;
 }
 
 /** The same answer shape the API path gives the run: reply text, or a classified failure. */
