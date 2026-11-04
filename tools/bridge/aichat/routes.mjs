@@ -19,6 +19,8 @@ const MAX_IMAGE_BYTES = 24 * 1024 * 1024;
 export const AICHAT_MAX_BODY = 40 * 1024 * 1024;
 const WAIT = { min: 60_000, max: 3_600_000, fallback: 600_000 };
 const READY = { min: 10_000, max: 1_800_000, fallback: 180_000 };
+/** The pause between page actions (attach, paste, send click). */
+const STEP = { min: 0, max: 10_000, fallback: 1000 };
 const PNG_MAGIC = "89504e47";
 
 const pool = createAichat({ open: () => openChatBrowser() });
@@ -60,6 +62,7 @@ export function parseSendBody(text) {
     ok: true,
     input: {
       url, prompt, image, maxWaitMs: clamp(raw.maxWaitMs, WAIT), readyTimeoutMs: clamp(raw.readyTimeoutMs, READY),
+      stepDelayMs: clamp(raw.stepDelayMs, STEP),
       sessionKey: typeof raw.sessionKey === "string" ? raw.sessionKey.slice(0, 100) : "",
     },
   };

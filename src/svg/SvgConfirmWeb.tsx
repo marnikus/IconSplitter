@@ -4,7 +4,7 @@
 // the chat URL and the two waits (stored as they are typed), and the policy
 // note that says exactly what leaves the machine and where it goes.
 
-import { clampMinutes, webChatTargetOf, type WebChatTarget } from "../lib/webchatprefs";
+import { clampMinutes, clampSeconds, webChatTargetOf, type WebChatTarget } from "../lib/webchatprefs";
 import { patchWebChat, useWebChatPrefs } from "./webchatstore";
 
 /** The stored settings as a run target, or the reason the popup cannot confirm. */
@@ -38,6 +38,7 @@ export function WebFacts({ count, requests }: { count: number; requests: number 
         onChange={(n) => patchWebChat({ maxWaitMin: n })} />
       <MinutesField label="Wait for the chat / sign-in (min)" testid="svg-web-ready" value={prefs.readyTimeoutMin}
         onChange={(n) => patchWebChat({ readyTimeoutMin: n })} />
+      <SecondsField value={prefs.stepDelaySec} onChange={(n) => patchWebChat({ stepDelaySec: n })} />
     </div>
   );
 }
@@ -48,6 +49,17 @@ function MinutesField(p: { label: string; testid: string; value: number; onChang
       <span>{p.label}</span>
       <input type="number" min={1} max={60} className="svg-input" data-testid={p.testid} value={p.value}
         onChange={(e) => p.onChange(clampMinutes(e.target.value === "" ? p.value : Number(e.target.value), p.value))} />
+    </label>
+  );
+}
+
+/** The pause between page actions, so the chat is not driven faster than a person types. */
+function SecondsField(p: { value: number; onChange: (n: number) => void }) {
+  return (
+    <label className="svg-fact" title="Each pause varies ±25 % so the rhythm is not machine-regular; 0 = no pause">
+      <span>Pause between steps — attach, paste, Send (s)</span>
+      <input type="number" min={0} max={10} step={0.1} className="svg-input" data-testid="svg-web-step" value={p.value}
+        onChange={(e) => p.onChange(clampSeconds(e.target.value === "" ? p.value : Number(e.target.value), p.value))} />
     </label>
   );
 }

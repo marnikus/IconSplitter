@@ -90,12 +90,13 @@ describe("SvgConfirm — LIVE WEB variant", () => {
     expect(q("[data-testid=svg-web-url-problem]")).not.toBeNull();
     await type("[data-testid=svg-web-url]", "https://chatgpt.com/c/6ae94331-8210");
     await type("[data-testid=svg-web-maxwait]", "15");
-    expect(loadWebChat()).toMatchObject({ url: "https://chatgpt.com/c/6ae94331-8210", maxWaitMin: 15 });
+    await type("[data-testid=svg-web-step]", "2.5");
+    expect(loadWebChat()).toMatchObject({ url: "https://chatgpt.com/c/6ae94331-8210", maxWaitMin: 15, stepDelaySec: 2.5 });
     expect(go.disabled).toBe(false);
     await act(async () => { go.click(); });
     const batch = onConfirm.mock.calls[0][0] as ConfirmedBatch;
     expect(batch.size).toBe(1);
-    expect(batch.web).toEqual({ url: "https://chatgpt.com/c/6ae94331-8210", maxWaitMs: 900_000, readyTimeoutMs: 180_000 });
+    expect(batch.web).toEqual({ url: "https://chatgpt.com/c/6ae94331-8210", maxWaitMs: 900_000, readyTimeoutMs: 180_000, stepDelayMs: 2500 });
   });
 
   it("the API popup carries no web target", async () => {

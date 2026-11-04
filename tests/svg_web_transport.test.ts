@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWebTransport } from "../src/svg/runweb";
 
-const TARGET = { url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000, readyTimeoutMs: 180_000 };
+const TARGET = { url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000, readyTimeoutMs: 180_000, stepDelayMs: 0 };
 const request = (signal = new AbortController().signal) => ({ prompt: "p", image: "data:image/png;base64,AA", key: "k", signal });
 const reply = (chatUrl: string | null = null) => new Response(JSON.stringify({ ok: true, text: "<svg/>", chatUrl, restarted: chatUrl !== null }), { status: 200 });
 

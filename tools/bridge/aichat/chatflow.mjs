@@ -7,6 +7,10 @@
 // whose URL is reported so the app can replace the saved one. A reply that is a
 // file card gets one follow-up asking for inline code. Page text never leaves
 // this module except as the returned reply.
+// Paced like a person (2026-11-05): `input.stepDelayMs` pauses before the
+// attach, before the paste and before the send click, each pause varied
+// between 75 % and 125 % so the rhythm is not machine-regular. A Cancel ends a
+// pause at once.
 
 const CHAT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
 const DEFAULTS = { pollMs: 1000, attachTimeoutMs: 90_000, stableReads: 3, submitTimeoutMs: 90_000 };
@@ -58,6 +62,19 @@ function sleep(ms, signal) {
 
 const cancelled = () => ({ ok: false, code: "cancelled", reason: "the web generation was cancelled" });
 
+/** One pause of `ms`, varied to 75–125 % by `r` in [0, 1]. */
+export function jitteredDelay(ms, r) {
+  if (!(ms > 0)) return 0;
+  return Math.round(ms * (0.75 + 0.5 * Math.min(1, Math.max(0, r))));
+}
+
+/** The human pause between two page actions; false when Cancel arrived meanwhile. */
+async function pause(o) {
+  const ms = jitteredDelay(o.stepDelayMs, (o.random ?? Math.random)());
+  if (ms > 0) await sleep(ms, o.signal);
+  return !o.signal?.aborted;
+}
+
 /** Polls `read` until `test` is true; resolves the reading, or null on timeout/cancel. */
 async function pollUntil(page, test, timeoutMs, o) {
   const deadline = Date.now() + timeoutMs;
@@ -89,7 +106,9 @@ async function waitReady(page, timeoutMs, o) {
 /** Puts the text into the composer and presses send once it is enabled. */
 async function typeAndSubmit(page, text, o) {
   o.onPhase?.("typing");
+  if (!(await pause(o))) return cancelled(); // before the paste
   if (!(await page.type(text))) return { ok: false, code: "page", reason: "the prompt could not be typed into ChatGPT" };
+  if (!(await pause(o))) return cancelled(); // before the send click
   const deadline = Date.now() + o.submitTimeoutMs;
   while (!o.signal?.aborted) {
     const sent = await page.submit();
@@ -114,6 +133,7 @@ async function waitReply(page, baseline, timeoutMs, o) {
 
 async function attachImage(page, imagePath, o) {
   o.onPhase?.("uploading");
+  if (!(await pause(o))) return cancelled(); // before the attach
   const put = await page.attach(imagePath);
   if (!put.ok) return { ok: false, code: "page", reason: put.reason ?? "the image could not be attached to the ChatGPT composer" };
   const seen = await pollUntil(page, (r) => r.attached === true, o.attachTimeoutMs, o);
@@ -146,7 +166,7 @@ async function sendOnce(page, input, o) {
 
 /** Opens the chat, waits for it, sends, and on a timeout retries once in a new chat. */
 export async function runChatTurn(page, input, options = {}) {
-  const o = { ...DEFAULTS, ...options };
+  const o = { ...DEFAULTS, ...options, stepDelayMs: Number(input.stepDelayMs) || 0 };
   o.onPhase?.("opening");
   await page.open(input.url);
   const ready = await waitReady(page, input.readyTimeoutMs, o);

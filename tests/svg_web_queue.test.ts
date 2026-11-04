@@ -13,7 +13,7 @@ import type { SvgCtx } from "../src/svg/actions";
 import type { RunCtx } from "../src/svg/runcontext";
 import { FakeDir } from "./helpers/fakefs";
 
-const TARGET = { url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000, readyTimeoutMs: 180_000 };
+const TARGET = { url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000, readyTimeoutMs: 180_000, stepDelayMs: 0 };
 
 function ctx(key: string | null) {
   return {

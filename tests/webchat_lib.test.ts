@@ -12,12 +12,14 @@ import { sendWebChat, type WebChatInput } from "../src/lib/webchatclient";
 describe("webchatprefs", () => {
   it("defaults to off with a 10-minute max wait", () => {
     expect(parseWebChatPrefs(null)).toEqual(DEFAULT_WEBCHAT_PREFS);
-    expect(DEFAULT_WEBCHAT_PREFS).toMatchObject({ enabled: false, url: "", maxWaitMin: 10 });
+    expect(DEFAULT_WEBCHAT_PREFS).toMatchObject({ enabled: false, url: "", maxWaitMin: 10, stepDelaySec: 1 });
   });
 
   it("keeps valid values and repairs bad ones", () => {
     const p = parseWebChatPrefs({ enabled: true, url: " https://chatgpt.com/c/ab-1 ", maxWaitMin: 25, readyTimeoutMin: 0 });
-    expect(p).toEqual({ enabled: true, url: "https://chatgpt.com/c/ab-1", maxWaitMin: 25, readyTimeoutMin: 1 });
+    expect(p).toEqual({ enabled: true, url: "https://chatgpt.com/c/ab-1", maxWaitMin: 25, readyTimeoutMin: 1, stepDelaySec: 1 });
+    // the pause between steps: seconds, tenths kept, 0–10, anything else the default
+    expect([0, 2.5, 2.54, -1, 99, "x"].map((v) => parseWebChatPrefs({ stepDelaySec: v }).stepDelaySec)).toEqual([0, 2.5, 2.5, 0, 10, 1]);
     expect(parseWebChatPrefs({ maxWaitMin: "x", enabled: "yes" })).toMatchObject({ maxWaitMin: 10, enabled: false });
     expect(parseWebChatPrefs({ maxWaitMin: 999 }).maxWaitMin).toBe(60);
   });
@@ -39,7 +41,7 @@ describe("webchatprefs", () => {
 
   it("turns the settings into a run target, or names why it cannot run", () => {
     expect(webChatTargetOf({ ...DEFAULT_WEBCHAT_PREFS, url: "https://chatgpt.com/c/x", maxWaitMin: 2, readyTimeoutMin: 3 }))
-      .toEqual({ ok: true, target: { url: "https://chatgpt.com/c/x", maxWaitMs: 120_000, readyTimeoutMs: 180_000 } });
+      .toEqual({ ok: true, target: { url: "https://chatgpt.com/c/x", maxWaitMs: 120_000, readyTimeoutMs: 180_000, stepDelayMs: 1000 } });
     const bad = webChatTargetOf({ ...DEFAULT_WEBCHAT_PREFS, url: "https://example.com" });
     expect(bad.ok).toBe(false);
   });
@@ -49,7 +51,7 @@ const PNG = "data:image/png;base64,iVBORw0KGgo=";
 
 function input(fetchImpl: typeof fetch, over: Partial<WebChatInput> = {}): WebChatInput {
   return {
-    bridgeUrl: "http://127.0.0.1:47391/", target: { url: "https://chatgpt.com/c/x", maxWaitMs: 600_000, readyTimeoutMs: 180_000 },
+    bridgeUrl: "http://127.0.0.1:47391/", target: { url: "https://chatgpt.com/c/x", maxWaitMs: 600_000, readyTimeoutMs: 180_000, stepDelayMs: 1500 },
     prompt: "fix svg", image: PNG, sessionKey: "run-1", fetchImpl, pollMs: 5, ...over,
   };
 }
@@ -66,7 +68,7 @@ describe("sendWebChat", () => {
     const out = await sendWebChat(input(fetchImpl));
     expect(out).toEqual({ ok: true, text: "<svg/>", chatUrl: "https://chatgpt.com/c/x", restarted: false });
     expect(calls[0].url).toBe("http://127.0.0.1:47391/aichat/send");
-    expect(calls[0].body).toMatchObject({ url: "https://chatgpt.com/c/x", prompt: "fix svg", image: PNG, maxWaitMs: 600_000, sessionKey: "run-1" });
+    expect(calls[0].body).toMatchObject({ url: "https://chatgpt.com/c/x", prompt: "fix svg", image: PNG, maxWaitMs: 600_000, stepDelayMs: 1500, sessionKey: "run-1" });
   });
 
   it("reports the helper's failure with its code", async () => {

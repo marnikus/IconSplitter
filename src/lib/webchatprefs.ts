@@ -14,6 +14,8 @@ export interface WebChatPrefs {
   maxWaitMin: number;
   /** Minutes to wait for the composer (the user may still have to sign in). */
   readyTimeoutMin: number;
+  /** Seconds the helper pauses between page actions (attach, paste, send click), 0–10. */
+  stepDelaySec: number;
 }
 
 /** What one run sends to the helper, in milliseconds. */
@@ -21,9 +23,11 @@ export interface WebChatTarget {
   url: string;
   maxWaitMs: number;
   readyTimeoutMs: number;
+  /** The pause between page actions, varied ±25 % by the helper. */
+  stepDelayMs: number;
 }
 
-export const DEFAULT_WEBCHAT_PREFS: WebChatPrefs = { enabled: false, url: "", maxWaitMin: 10, readyTimeoutMin: 3 };
+export const DEFAULT_WEBCHAT_PREFS: WebChatPrefs = { enabled: false, url: "", maxWaitMin: 10, readyTimeoutMin: 3, stepDelaySec: 1 };
 
 const CHAT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
 const MINUTES = { min: 1, max: 60 };
@@ -49,6 +53,12 @@ export function clampMinutes(value: unknown, fallback: number): number {
   return Math.min(MINUTES.max, Math.max(MINUTES.min, Math.round(n)));
 }
 
+/** Seconds 0–10 with tenths kept; anything that is not a number is the fallback. */
+export function clampSeconds(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(10, Math.max(0, Math.round(value * 10) / 10));
+}
+
 export function parseWebChatPrefs(raw: unknown): WebChatPrefs {
   if (!isRecord(raw)) return DEFAULT_WEBCHAT_PREFS;
   return {
@@ -56,6 +66,7 @@ export function parseWebChatPrefs(raw: unknown): WebChatPrefs {
     url: typeof raw.url === "string" ? raw.url.trim() : "",
     maxWaitMin: clampMinutes(raw.maxWaitMin, DEFAULT_WEBCHAT_PREFS.maxWaitMin),
     readyTimeoutMin: clampMinutes(raw.readyTimeoutMin, DEFAULT_WEBCHAT_PREFS.readyTimeoutMin),
+    stepDelaySec: clampSeconds(raw.stepDelaySec, DEFAULT_WEBCHAT_PREFS.stepDelaySec),
   };
 }
 
@@ -64,7 +75,10 @@ export function webChatTargetOf(prefs: WebChatPrefs): { ok: true; target: WebCha
   if (!isChatUrl(prefs.url)) return { ok: false, problem: "Enter the ChatGPT chat URL (https://chatgpt.com/c/…) first" };
   return {
     ok: true,
-    target: { url: prefs.url.trim(), maxWaitMs: prefs.maxWaitMin * 60_000, readyTimeoutMs: prefs.readyTimeoutMin * 60_000 },
+    target: {
+      url: prefs.url.trim(), maxWaitMs: prefs.maxWaitMin * 60_000, readyTimeoutMs: prefs.readyTimeoutMin * 60_000,
+      stepDelayMs: Math.round(prefs.stepDelaySec * 1000),
+    },
   };
 }
 

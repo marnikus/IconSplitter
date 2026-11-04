@@ -4760,3 +4760,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `src/lib/textsearch.ts` (one matcher: every word in some field), `src/ui/SearchField.tsx` (one field); Batch folders and Selection V2 get a search box; SVG to upload and Upload also match status words; five per-tab matchers and three input copies replaced. `FilterGrid` selects extracted to keep it ≤ 30 lines.
 - Measured: `textsearch_tabs` 18 new tests; one stale fixture query (`o`) in `upload_row_gestures` updated because status words now match; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3719 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT web steps paced like a person
+
+- Scope: `chatflow.mjs` pauses before attach, paste and Send click (`jitteredDelay`, 75–125 %, cancel-aware); `/aichat/send` `stepDelayMs` (0–10 s, default 1 s); app setting `stepDelaySec` with popup field `svg-web-step`.
+- Measured: 5 new tests + 4 extended; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3723 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).

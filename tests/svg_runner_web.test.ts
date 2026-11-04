@@ -65,7 +65,7 @@ function webArgs(root: FakeDir, sources: SvgSource[], onChatUrl = vi.fn()) {
       root, apiKey: "", config, caps: capsFor(config.model), params: { temperature: null, maxTokens: 8_000, effort: "low" as const },
       prompt: "fix svg to match the reference", regen: { kind: "main" } as RegenPlan, sources, metas: new Map(),
       onEvent: (e: RunEvent) => events.push(e), signal: new AbortController().signal,
-      web: createWebTransport({ url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000, readyTimeoutMs: 180_000 }, { onChatUrl }),
+      web: createWebTransport({ url: "https://chatgpt.com/c/abc", maxWaitMs: 600_000, readyTimeoutMs: 180_000, stepDelayMs: 0 }, { onChatUrl }),
     },
   };
 }

@@ -43,12 +43,13 @@ as the next version like an API answer.
 | Versions record provider `Web: <host>` and model `ChatGPT (web)` (never the API model), unknown tokens, no cost; the journal names the same model | `answerer.ts`, `runbatch.ts`, `runsend.ts` |
 | No finished reply within the max wait → new chat once, resend; a new `/c/<id>` URL moves the transport and replaces the saved URL | `chatflow.mjs`, `runweb.ts`, `runjobs.ts` |
 | A file-card reply gets one follow-up asking for inline code, else `reply_was_file` | `chatflow.mjs` |
+| Paced like a person: a pause before the attach, the paste and the Send click (also in a follow-up and a restarted chat), each varied 75–125 %; a Cancel ends it at once. Popup setting "Pause between steps" (`svg-web-step`, stored `stepDelaySec`, default 1 s, 0–10 s) → `stepDelayMs` | `chatflow.mjs` `jitteredDelay`, `SvgConfirmWeb.tsx`, `lib/webchatprefs.ts` |
 | Skip / cancel aborts the fetch; the helper cancels the named turn (a nameless cancel does nothing) and on connection close | `webchatclient.ts`, `routes.mjs`, `pool.mjs` |
 
 ## Helper routes
 
 `POST /aichat/send` `{ url, prompt, image: PNG data URL, maxWaitMs (1–60 min),
-readyTimeoutMs (10 s–30 min), sessionKey }` → `{ ok, text, chatUrl, restarted }`
+readyTimeoutMs (10 s–30 min), stepDelayMs (0–10 s, default 1 s), sessionKey }` → `{ ok, text, chatUrl, restarted }`
 or `{ ok:false, code, reason }`. `GET /aichat/progress?sessionKey=` →
 `{ ok, busy, progress }` (latest turn only; phases `opening`,
 `waiting-for-login`, `uploading`, `typing`, `generating`, `restarting-chat`,
