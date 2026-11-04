@@ -125,6 +125,12 @@ describe("parseSendBody", () => {
     expect(parsed.input.image.subarray(0, 4).toString("hex")).toBe("89504e47");
     expect(parsed.input.maxWaitMs).toBe(600000);
   });
+  it("carries the pause between steps: default 1 s, clamped to 0–10 s", () => {
+    expect(parseSendBody(body()).ok && (parseSendBody(body()) as { input: { stepDelayMs: number } }).input.stepDelayMs).toBe(1000);
+    const pick = (v: unknown) => { const r = parseSendBody(body({ stepDelayMs: v })); return r.ok ? r.input.stepDelayMs : null; };
+    expect([pick(0), pick(2500), pick(-5), pick(99_999), pick("x")]).toEqual([0, 2500, 0, 10_000, 1000]);
+  });
+
   it("clamps the waits into their safe ranges", () => {
     const parsed = parseSendBody(body({ maxWaitMs: 5, readyTimeoutMs: 1e12 }));
     expect(parsed.ok && parsed.input.maxWaitMs).toBe(60_000);

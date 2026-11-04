@@ -4,7 +4,7 @@
 // max-wait restart in a new chat and cancellation. No browser, no chatgpt.com.
 
 import { describe, expect, it } from "vitest";
-import { chatIdOf, chatUrlOf, replyProgress, runChatTurn } from "../tools/bridge/aichat/chatflow.mjs";
+import { chatIdOf, chatUrlOf, jitteredDelay, replyProgress, runChatTurn } from "../tools/bridge/aichat/chatflow.mjs";
 
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0h10"/></svg>';
 
@@ -154,5 +154,54 @@ describe("runChatTurn", () => {
     const page = fakePage();
     const out = await runChatTurn(page, { ...input, imagePath: "" }, fast);
     expect(out).toMatchObject({ ok: false, code: "page" });
+  });
+});
+
+describe("human-paced steps (2026-11-05)", () => {
+  /** A page that stamps every action with the time it happened. */
+  function timedPage() {
+    const at: Record<string, number> = {};
+    const page = fakePage({ after: [{ reply: { id: "n1", text: SVG, file: false } }] });
+    const wrap = <K extends "attach" | "type" | "submit">(k: K) => {
+      const real = page[k].bind(page) as (...a: unknown[]) => Promise<unknown>;
+      (page as Record<string, unknown>)[k] = async (...a: unknown[]) => { at[k] ??= Date.now(); return real(...a); };
+    };
+    wrap("attach"); wrap("type"); wrap("submit");
+    return { page, at };
+  }
+
+  it("pauses before attaching, before pasting and before clicking send", async () => {
+    const { page, at } = timedPage();
+    const started = Date.now();
+    const out = await runChatTurn(page, { ...input, stepDelayMs: 60 }, { ...fast, random: () => 0.5 });
+    expect(out.ok).toBe(true);
+    expect(at.attach - started).toBeGreaterThanOrEqual(55);
+    expect(at.type - at.attach).toBeGreaterThanOrEqual(55);
+    expect(at.submit - at.type).toBeGreaterThanOrEqual(55);
+  });
+
+  it("does not pause when the setting is 0", async () => {
+    const { page, at } = timedPage();
+    const started = Date.now();
+    await runChatTurn(page, { ...input, stepDelayMs: 0 }, fast);
+    expect(at.submit - started).toBeLessThan(50);
+  });
+
+  it("varies each pause between 75 % and 125 % of the setting", () => {
+    expect(jitteredDelay(1000, 0)).toBe(750);
+    expect(jitteredDelay(1000, 0.5)).toBe(1000);
+    expect(jitteredDelay(1000, 1)).toBe(1250);
+    expect(jitteredDelay(0, 0.9)).toBe(0);
+  });
+
+  it("a Cancel during a pause stops the turn at once", async () => {
+    const controller = new AbortController();
+    const page = fakePage();
+    setTimeout(() => controller.abort(), 20);
+    const started = Date.now();
+    const out = await runChatTurn(page, { ...input, stepDelayMs: 5000 }, { ...fast, signal: controller.signal });
+    expect(out).toMatchObject({ ok: false, code: "cancelled" });
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(page.log).not.toContain("attach");
   });
 });
