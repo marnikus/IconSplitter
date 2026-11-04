@@ -5,6 +5,7 @@
 import { monthKey as reviewMonthKey } from "./reviewfilter";
 import type { SourceStatus, BatchReviewStatus } from "./statefile";
 import { isRecord } from "./isrecord";
+import { matchesSearch } from "./textsearch";
 
 export type DateFilter =
   | { mode: "all" }
@@ -56,10 +57,9 @@ function inReview(r: BatchRowLike, review: BatchReviewFilter | undefined): boole
   return (r.review ?? "pending") === review;
 }
 
-function inSearch(r: BatchRowLike, q: string): boolean {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return true;
-  return `${r.dirPath}/${r.name}`.toLowerCase().includes(needle) || r.relPath.toLowerCase().includes(needle);
+/** File name, folder, processing status and review (lib/textsearch). */
+function inSearch(r: BatchRowLike, query: string): boolean {
+  return matchesSearch(query, [r.name, r.dirPath, r.relPath, r.status, r.review]);
 }
 
 export function monthKey(t: number): string {

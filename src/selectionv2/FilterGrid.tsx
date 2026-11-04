@@ -7,6 +7,7 @@ import { ALL_FILTER, monthKey, type DateFilter, type ListFilter } from "../lib/r
 import { stateOrderOptions } from "../lib/statesort";
 import { DEFAULT_SORT, type SortState } from "../lib/reviewsort";
 import SegButton from "./SegButton";
+import SearchField from "../ui/SearchField";
 
 export interface FilterGridProps {
   filter: ListFilter;
@@ -35,6 +36,19 @@ export default function FilterGrid(p: FilterGridProps) {
       <Field label="Date filter"><DateTabs p={p} /></Field>
       <FromField p={p} range={range} setRange={setRange} />
       <ToField p={p} range={range} setRange={setRange} />
+      <Selects p={p} />
+      <SearchField look="v2" testid="v2-search" value={p.filter.search} placeholder="Name, folder or status…"
+        onChange={(search) => p.setFilter({ ...p.filter, search })} />
+      <p className="v2-result-copy" data-testid="v2-shown">Showing {p.shown} {plural(p.shown, "pair")}</p>
+      <button type="button" className="v2-btn ghost" data-testid="v2-clear" onClick={clear}>× Clear filters</button>
+    </div>
+  );
+}
+
+/** The list's select controls: decision status, pairing, sort field and order. */
+function Selects({ p }: { p: FilterGridProps }) {
+  return (
+    <>
       <SelectField label="Status" testid="v2-status" value={p.filter.status}
         onChange={(v) => p.setFilter({ ...p.filter, status: v as ListFilter["status"] })}
         options={[["all", "All statuses"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"]]} />
@@ -47,9 +61,7 @@ export default function FilterGrid(p: FilterGridProps) {
       <SelectField label="Order" testid="v2-dir" value={p.sort.dir}
         onChange={(v) => p.setSort({ ...p.sort, dir: v as SortState["dir"] })}
         options={stateOrderOptions(p.sort.by)} />
-      <p className="v2-result-copy" data-testid="v2-shown">Showing {p.shown} {plural(p.shown, "pair")}</p>
-      <button type="button" className="v2-btn ghost" data-testid="v2-clear" onClick={clear}>× Clear filters</button>
-    </div>
+    </>
   );
 }
 

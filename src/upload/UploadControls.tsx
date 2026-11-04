@@ -27,6 +27,7 @@ import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import SearchField from "../ui/SearchField";
 
 export interface UploadControlsProps {
   rootName: string;
@@ -233,12 +234,8 @@ function FilterLine({ p }: { p: UploadControlsProps }) {
         options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"], ...STATE_SORT_OPTIONS]}
         onChange={(v) => p.onSort(v as UploadSort)} />
       <UploadRowBadgeFilter filter={p.filter} catalog={p.badgeCatalog} onFilter={p.onFilter} onOpen={p.onOpenRowBadges} />
-      <label className="svg-field">
-        <span className="svg-label">Search</span>
-        <input className="svg-input" data-testid="upload-search" type="search" aria-label="Search icons"
-          placeholder="Filename, folder or version…" value={p.filter.search}
-          onChange={(e) => p.onFilter({ search: e.target.value })} />
-      </label>
+      <SearchField testid="upload-search" value={p.filter.search} placeholder="Filename, folder, version or status…"
+        onChange={(search) => p.onFilter({ search })} />
       <span className="svg-result-copy" data-testid="upload-shown">Showing {p.shown} of {p.total}</span>
       <button type="button" className="svg-btn" data-testid="upload-clear-filters" onClick={p.onClearFilters}>× Clear filters</button>
     </div>

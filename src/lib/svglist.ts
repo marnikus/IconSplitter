@@ -4,6 +4,7 @@
 // the logic stays testable without a DOM (RULE 3/8) and the UI keeps no rule.
 
 import { isSelectionSort, isStateSort, sortByFlag, type StateSort } from "./statesort";
+import { matchesSearch } from "./textsearch";
 
 export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed" | "unknown";
 export type ReviewFilter = "all" | "pending" | "approved" | "declined" | "needs-review";
@@ -53,8 +54,7 @@ export interface SvgListRow {
 }
 
 export function applySvgFilters(rows: readonly SvgListRow[], f: SvgListFilter): SvgListRow[] {
-  const needle = f.search.trim().toLowerCase();
-  return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, needle));
+  return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, f.search));
 }
 
 function inGeneration(row: SvgListRow, want: GenFilter): boolean {
@@ -65,9 +65,9 @@ function inReview(row: SvgListRow, want: ReviewFilter): boolean {
   return want === "all" || row.review === want;
 }
 
-function inSearch(row: SvgListRow, needle: string): boolean {
-  if (needle === "") return true;
-  return `${row.name} ${row.relPath} v${row.version} ${row.generation} ${row.review}`.toLowerCase().includes(needle);
+/** File name, folder, shown version and both status words (lib/textsearch). */
+function inSearch(row: SvgListRow, query: string): boolean {
+  return matchesSearch(query, [row.name, row.relPath, `v${row.version}`, row.generation, row.review]);
 }
 
 /**

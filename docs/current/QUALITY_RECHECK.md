@@ -4755,3 +4755,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `src/svg/removerows.ts` (Remove via Selection's `applyDecisionPatch`, Selection's own "decisions" history entry, list follower), `selection/offline.ts` (Generate SVG folder fallback, `onDecisionsWritten`), `state/handlekeys.ts`; row `svg-remove-<id>` and bulk `svg-remove-selected`.
 - Measured: `svg_remove_row` 9 new tests (incl. undo/redo through `applyEntry`); tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3701 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-04 — one list search in every tab
+
+- Scope: `src/lib/textsearch.ts` (one matcher: every word in some field), `src/ui/SearchField.tsx` (one field); Batch folders and Selection V2 get a search box; SVG to upload and Upload also match status words; five per-tab matchers and three input copies replaced. `FilterGrid` selects extracted to keep it ≤ 30 lines.
+- Measured: `textsearch_tabs` 18 new tests; one stale fixture query (`o`) in `upload_row_gestures` updated because status words now match; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3719 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).

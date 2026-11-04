@@ -7,6 +7,7 @@ import StockFtpPanel from "./StockFtpPanel";
 import type { StockUploadSort } from "./rowlist";
 import { stockAuditLine } from "./scan";
 import type { StockUploadApi } from "./useStockUpload";
+import SearchField from "../ui/SearchField";
 
 export default function StockUploadControls({ g }: { g: StockUploadApi }) {
   return (
@@ -71,12 +72,8 @@ function SearchAndFormatFilters({ g }: { g: StockUploadApi }) {
   const f = g.model.filter;
   return (
     <>
-      <label className="svg-field">
-        <span className="svg-label">Search</span>
-        <input className="svg-input" type="search" placeholder="Name, folder, title, tag…"
-          data-testid="stock-filter-search" value={f.search}
-          onChange={(e) => g.setFilter({ search: e.target.value })} />
-      </label>
+      <SearchField testid="stock-filter-search" value={f.search} placeholder="Name, folder, title, tag or status…"
+        onChange={(search) => g.setFilter({ search })} />
       <label className="svg-field">
         <span className="svg-label">Format present</span>
         <select className="svg-input" data-testid="stock-filter-format" value={f.format}

@@ -10,6 +10,7 @@ import DateTabs from "./filter/DateTabs";
 import FromField from "./filter/FromField";
 import ToField from "./filter/ToField";
 import type { Range } from "./filter/useRange";
+import SearchField from "../ui/SearchField";
 
 export interface BatchFilterGridProps {
   filter: BatchFilter;
@@ -77,6 +78,8 @@ export default function BatchFilterGrid(p: BatchFilterGridProps) {
   return (
     <div className="v2-toolbar v2-filters" data-testid="batch-filters">
       <Filters p={p} range={range} setRange={setRange} />
+      <SearchField look="v2" testid="batch-search" value={p.filter.search} placeholder="Name, folder or status…"
+        onChange={(search) => p.setFilter({ ...p.filter, search })} />
       <p className="v2-result-copy" data-testid="batch-shown">
         Showing {p.shown} {p.shown === 1 ? "image" : "images"}
       </p>

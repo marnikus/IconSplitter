@@ -5,6 +5,7 @@ import type { ExportedItem, UploadFormatKey } from "../lib/stockupload/types";
 import type { IconMetadata, MetadataValidation } from "../lib/upload/meta";
 import { metadataRights } from "../lib/upload/rights";
 import { badgesOf, rowMatchesBadge, type RowBadgeState } from "../lib/upload/rowbadge";
+import { matchesSearch } from "../lib/textsearch";
 
 export type StockUploadSort = "name" | "path" | "selected";
 
@@ -58,12 +59,10 @@ function hasFormat(item: ExportedItem, fmt: UploadFormatKey): boolean {
   return item.files[fmt] !== null;
 }
 
-function matchesSearch(item: ExportedItem, needle: string): boolean {
-  const q = needle.trim().toLowerCase();
-  if (q === "") return true;
-  const title = item.record.metadata?.title ?? "";
-  const tags = item.record.metadata?.tags.join(" ") ?? "";
-  return `${item.stem} ${item.exportDir} ${title} ${tags}`.toLowerCase().includes(q);
+/** Name, folder, title, tags, metadata state and source approval (lib/textsearch). */
+function inSearch(item: ExportedItem, query: string): boolean {
+  const meta = item.record.metadata;
+  return matchesSearch(query, [item.stem, item.exportDir, meta?.title, meta?.tags, meta?.state, item.record.source?.approval]);
 }
 
 export function filterAndSortItems(args: {
@@ -75,7 +74,7 @@ export function filterAndSortItems(args: {
 }): ExportedItem[] {
   const checkedSet = new Set(args.checked);
   const filtered = args.items.filter((item) =>
-    matchesSearch(item, args.filter.search)
+    inSearch(item, args.filter.search)
     && rowMatchesBadge(badgesOf(args.rowBadges, item.id), args.filter.badge)
     && (args.filter.format === "all" || hasFormat(item, args.filter.format)),
   );

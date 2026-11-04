@@ -6,6 +6,7 @@
 import { Select } from "../ui/fields";
 import { STATE_SORT_OPTIONS } from "../lib/statesort";
 import { sortDirOf, type SvgDir, type SvgListFilter, type SvgSort } from "../lib/svglist";
+import SearchField from "../ui/SearchField";
 
 /** Every order the list offers: files, time, cost, status and the two groups. */
 const SORT_OPTIONS: [SvgSort, string][] = [
@@ -54,12 +55,8 @@ export default function SvgListFilters({ filter, sort, sortDir, shown, total, on
         options={SORT_OPTIONS}
         onChange={(v) => onSort(v as SvgSort)} />
       <SortDirection dir={dir} onDir={onSortDir} />
-      <label className="svg-field">
-        <span className="svg-label">Search</span>
-        <input className="svg-input" data-testid="svg-search" type="search" aria-label="Search sources"
-          placeholder="Filename, folder, version or status…" value={filter.search}
-          onChange={(e) => onFilter({ search: e.target.value })} />
-      </label>
+      <SearchField testid="svg-search" value={filter.search} placeholder="Filename, folder, version or status…"
+        onChange={(search) => onFilter({ search })} />
       <span className="svg-result-copy" data-testid="svg-shown">Showing {shown} of {total}</span>
       <button type="button" className="svg-btn" data-testid="svg-clear-filters" onClick={onClear}>× Clear filters</button>
     </div>

@@ -9,6 +9,7 @@ import { checkState } from "../lib/reviewselect";
 import type {
   UploadListFilter, UploadListRow, UploadRow, UploadSort,
 } from "./types";
+import { matchesSearch } from "../lib/textsearch";
 
 export function toListRow(row: UploadRow, assigned: Record<string, string[]> = {}): UploadListRow {
   return {
@@ -23,8 +24,7 @@ export function toListRow(row: UploadRow, assigned: Record<string, string[]> = {
 }
 
 export function applyUploadFilters(rows: readonly UploadListRow[], f: UploadListFilter): UploadListRow[] {
-  const needle = f.search.trim().toLowerCase();
-  return rows.filter((r) => inStatus(r, f.status) && inMeta(r, f.metadata) && inSearch(r, needle) && inBadge(r, f.badge));
+  return rows.filter((r) => inStatus(r, f.status) && inMeta(r, f.metadata) && inSearch(r, f.search) && inBadge(r, f.badge));
 }
 
 function inStatus(row: UploadListRow, want: UploadListFilter["status"]): boolean {
@@ -35,9 +35,9 @@ function inMeta(row: UploadListRow, want: UploadListFilter["metadata"]): boolean
   return want === "all" || row.metadata === want;
 }
 
-function inSearch(row: UploadListRow, needle: string): boolean {
-  if (needle === "") return true;
-  return `${row.name} ${row.relPath} v${row.approvedValid}`.toLowerCase().includes(needle);
+/** File name, folder, approved version, package status and metadata state (lib/textsearch). */
+function inSearch(row: UploadListRow, query: string): boolean {
+  return matchesSearch(query, [row.name, row.relPath, `v${row.approvedValid}`, row.status, row.metadata]);
 }
 
 function inBadge(row: UploadListRow, want: UploadListFilter["badge"]): boolean {

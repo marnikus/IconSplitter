@@ -5,6 +5,7 @@
 
 import { attentionInfo, type ReviewPair } from "./pairing";
 import { isRecord } from "./isrecord";
+import { matchesSearch } from "./textsearch";
 
 export type Decision = "pending" | "approved" | "declined";
 
@@ -58,10 +59,9 @@ function inStatus(p: ViewPair, s: ListFilter["status"]): boolean {
   return s === "all" || p.decision === s;
 }
 
-function inSearch(p: ViewPair, q: string): boolean {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return true;
-  return `${p.relDir}/${p.base}`.toLowerCase().includes(needle);
+/** The pair's name, folder, both files and its decision (lib/textsearch). */
+function inSearch(p: ViewPair, query: string): boolean {
+  return matchesSearch(query, [`${p.relDir}/${p.base}`, p.source?.relPath, p.ai?.relPath, p.decision]);
 }
 
 /** Epoch ms -> "YYYY-MM" in local time (month filter buckets). */
