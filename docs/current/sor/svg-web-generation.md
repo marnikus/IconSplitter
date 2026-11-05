@@ -76,7 +76,10 @@ function that writes it into the prompt) as `anchor`. The helper waits until a
 prompt carrying that line appears (phase `sent`; never appearing = `page`
 error), then takes the first answer body BELOW the last such prompt and above
 the next prompt — never just the newest answer — and saves it only once it is
-finished (no stop button, text stable, `</svg>` present). Answer bodies are
+finished (no stop button, text stable, `</svg>` present). Reply text, in order: a code
+block's `[data-markdown-copy-text]` (a block shown as a preview picture has no
+visible code), else its preview `img[src^="data:image/svg+xml"]` decoded, else
+the answer's visible text. Answer bodies are
 `[data-markdown-text-style=assistant-message]` (every layout seen; the
 2026-11-05 layout has no `[data-turn-key]`), fallback
 `[data-message-author-role=assistant]`; prompts are `[data-user-message-bubble]`

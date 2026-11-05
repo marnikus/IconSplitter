@@ -3,7 +3,7 @@
 // so each one is self-contained. They use only data-* / aria handles: ChatGPT's
 // class names are build hashes that change between deploys (2026-11-03 dumps).
 // `cdpChatPage` binds them to one CDP page session.
-/* global document, location */
+/* global document, location, atob */
 
 import { evaluate, insertText, navigate, setFiles } from "../webdriver/cdp.mjs";
 import { chatIdOf } from "./chatflow.mjs";
@@ -40,13 +40,30 @@ export function readChat(anchor) {
   const answers = firstFound(['[data-markdown-text-style="assistant-message"]', '[data-message-author-role="assistant"]']);
   const prompts = firstFound(["[data-user-message-bubble]", '[data-message-author-role="user"]',
     '[data-markdown-text-style="user-message"]', '[data-markdown-text-tone="user-message"]']);
+  // A code block may show a PREVIEW (a picture): its code is then only in the
+  // block's copy text, or in the preview image's SVG data URL (2026-11-05).
+  const svgOfDataUrl = (src) => {
+    const comma = src.indexOf(",");
+    const data = src.slice(comma + 1);
+    try { return /;base64/i.test(src.slice(0, comma)) ? atob(data) : decodeURIComponent(data); } catch { return ""; }
+  };
+  const codeOf = (body) => {
+    const copies = [...body.querySelectorAll("[data-markdown-copy-text]")].map((el) => el.getAttribute("data-markdown-copy-text") ?? "");
+    const copied = copies.filter((t) => t.trim() !== "");
+    if (copied.length > 0) return copied.join("\n").trim();
+    const previews = [...body.querySelectorAll('img[src^="data:image/svg+xml"]')].map((img) => svgOfDataUrl(img.getAttribute("src") ?? ""));
+    const shown = previews.filter((t) => t.trim() !== "");
+    return shown.length > 0 ? shown.join("\n").trim() : null;
+  };
   const replyOf = (el, n) => {
     const body = el.matches('[data-markdown-text-style="assistant-message"]') ? el : el.querySelector(".markdown") ?? el;
     const id = el.closest("[data-turn-key]")?.getAttribute("data-turn-key")
       ?? el.closest("[data-chatgpt-selection-message-id]")?.getAttribute("data-chatgpt-selection-message-id")
       ?? el.closest("[data-message-id]")?.getAttribute("data-message-id") ?? `#${n}`;
     const unit = el.closest("[data-turn-key], [data-chatgpt-search-message-ids], [data-message-author-role]") ?? el;
-    return { id, text: String(body.textContent ?? "").trim(), file: unit.querySelector("[data-file-reference]") !== null };
+    // Code first (copy text, then preview data); a plain-text reply keeps its visible text.
+    const text = codeOf(body) ?? String(body.textContent ?? "").trim();
+    return { id, text, file: unit.querySelector("[data-file-reference]") !== null };
   };
   const below = (a, b) => (a.compareDocumentPosition(b) & 4) !== 0 && !a.contains(b); // b comes after a
   const flat = (text) => String(text ?? "").replace(/\s+/g, " ").trim();

@@ -4780,3 +4780,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: regeneration popup checkbox `svg-confirm-attach-image` (default on) → `ConfirmedBatch.attachImage` → `QueueItem.attachImage` → `RunArgs.attachImage`; off = no contact sheet (`textOnlyComposite`), API request without image part, web helper `image: null` (no staging, no attach, no attachment limit); strip `svg-batch-no-image`.
 - Measured: 12 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3751 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT code-block replies (preview mode)
+
+- Scope: `readChat` reply text = code block `[data-markdown-copy-text]`, else preview `img[src^=data:image/svg+xml]` decoded, else visible text; in-page `atob` declared for lint.
+- Measured: 4 new tests from the user's DOM; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3756 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
