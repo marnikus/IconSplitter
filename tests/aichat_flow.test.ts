@@ -280,3 +280,32 @@ describe("text-only turns (2026-11-05)", () => {
     expect(out.ok).toBe(true);
   });
 });
+
+describe("Copy-button fallback (2026-11-05)", () => {
+  it("uses ChatGPT's Copy button when the finished reply shows no SVG code", async () => {
+    const page = fakePage({ after: [{ prompts: 1, reply: { id: "n1", text: "svg", file: false } } as Partial<Reading>] });
+    const asked: (string | undefined)[] = [];
+    (page as unknown as { copyReply: (a?: string) => Promise<string | null> }).copyReply = async (a) => { asked.push(a); return `\`\`\`svg\n${SVG}\n\`\`\``; };
+    const phases: string[] = [];
+    const out = await runChatTurn(page, { ...input, anchor: "Request id: r-1" }, { ...fast, onPhase: (p: string) => phases.push(p) });
+    expect(out).toMatchObject({ ok: true });
+    expect((out as { text: string }).text).toContain(SVG);
+    expect(asked).toEqual(["Request id: r-1"]);
+    expect(phases).toContain("copying");
+  });
+
+  it("never clicks Copy when the reply already has its SVG", async () => {
+    const page = fakePage({ after: [{ reply: { id: "n1", text: SVG, file: false } }] });
+    let clicked = false;
+    (page as unknown as { copyReply: () => Promise<string | null> }).copyReply = async () => { clicked = true; return null; };
+    await runChatTurn(page, input, fast);
+    expect(clicked).toBe(false);
+  });
+
+  it("keeps the reply as it was when the clipboard gives nothing usable", async () => {
+    const page = fakePage({ after: [{ reply: { id: "n1", text: "svg", file: false } }] });
+    (page as unknown as { copyReply: () => Promise<string | null> }).copyReply = async () => null;
+    const out = await runChatTurn(page, input, fast);
+    expect(out).toMatchObject({ ok: true, text: "svg" });
+  });
+});

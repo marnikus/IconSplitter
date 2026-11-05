@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { extractSvgBlocks, matchLoneBlock } from "../src/lib/svgextract";
 import { expandUses } from "../src/lib/svguse";
+import { requestRefLine, withRequestRef } from "../src/lib/svgprompt";
 
 const BARE = '<svg viewBox="0 0 10 10"><path d="M0 0h10"/></svg>';
 
@@ -45,5 +46,16 @@ describe("expandUses", () => {
     const dangling = '<svg xmlns="http://www.w3.org/2000/svg"><use href="#nope"/></svg>';
     expect(expandUses(dangling)).toBe(dangling);
     expect(expandUses("<svg><broken")).toBe("<svg><broken");
+  });
+});
+
+describe("withRequestRef — the one-off id a web request carries (2026-11-05)", () => {
+  it("goes right under the icon line, so the prompt still ends with the instructions", () => {
+    const prompt = "Icon name (use it as the SVG <title>): fog_AI\n\nCurrent SVG code of this icon:\n\n<svg/>\n\nfix it";
+    expect(withRequestRef(prompt, "r-1")).toBe(`Icon name (use it as the SVG <title>): fog_AI\n\n${requestRefLine("r-1")}\n\nCurrent SVG code of this icon:\n\n<svg/>\n\nfix it`);
+  });
+  it("is placed after the icon line of a first-generation prompt too, and leads when there is none", () => {
+    expect(withRequestRef("fix it\n\nIcon name (use it as the SVG <title>): fog_AI", "r-2")).toBe(`fix it\n\nIcon name (use it as the SVG <title>): fog_AI\n\n${requestRefLine("r-2")}`);
+    expect(withRequestRef("fix it", "r-3")).toBe(`${requestRefLine("r-3")}\n\nfix it`);
   });
 });

@@ -80,8 +80,6 @@ export interface WebRequest {
   /** Names the turn for the helper's progress and cancel. */
   key: string;
   signal: AbortSignal;
-  /** The prompt's own icon line: the helper reads the reply below THIS prompt. */
-  anchor?: string;
   /** What the activity bar calls this request (the icon's name). */
   label?: string;
 }

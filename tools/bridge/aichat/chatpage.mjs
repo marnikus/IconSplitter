@@ -12,6 +12,33 @@ const IMAGE_INPUT = 'input[type="file"][accept*="image"]:not([capture])';
 const NEW_CHAT_URL = "https://chatgpt.com/";
 
 /**
+ * Which answer belongs to the request (runs IN the page; shipped with every step
+ * that needs it, see `stepSource`). With `anchor` — a line only this request's
+ * prompt carries (its unique "Request id: …", 2026-11-05) — it is the first
+ * answer BELOW the LAST prompt holding that line and above the next prompt;
+ * without one, the newest answer. `count` = prompts holding the anchor.
+ */
+export function pickAnswer(anchor) {
+  const all = (sel) => [...document.querySelectorAll(sel)];
+  const firstFound = (sels) => sels.map(all).find((list) => list.length > 0) ?? [];
+  const answers = firstFound(['[data-markdown-text-style="assistant-message"]', '[data-message-author-role="assistant"]']);
+  const prompts = firstFound(["[data-user-message-bubble]", '[data-message-author-role="user"]',
+    '[data-markdown-text-style="user-message"]', '[data-markdown-text-tone="user-message"]']);
+  const below = (a, b) => (a.compareDocumentPosition(b) & 4) !== 0 && !a.contains(b); // b comes after a
+  if (typeof anchor !== "string" || anchor === "") {
+    return { el: answers[answers.length - 1] ?? null, n: answers.length, count: null, next: null };
+  }
+  const flat = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
+  const wanted = flat(anchor);
+  const mine = prompts.filter((el) => flat(el.textContent).includes(wanted));
+  const last = mine[mine.length - 1];
+  if (last === undefined) return { el: null, n: 0, count: 0, next: null };
+  const next = prompts.find((el) => below(last, el)) ?? null;
+  const index = answers.findIndex((a) => below(last, a) && (next === null || below(a, next)));
+  return { el: index < 0 ? null : answers[index], n: index + 1, count: mine.length, next };
+}
+
+/**
  * Everything the turn flow needs to know about the page, in one reading.
  * The reply is found by the one marker every ChatGPT layout seen so far keeps
  * on the answer body — [data-markdown-text-style="assistant-message"] — so a
@@ -34,12 +61,6 @@ export function readChat(anchor) {
   const tray = q("[data-composer-attachments]");
   const attached = tray !== null && (tray.querySelector("img") !== null || tray.childElementCount > 0);
   const MESSAGE = "[data-chatgpt-search-message-ids], [data-turn-key], [data-message-author-role], [data-user-message-bubble], [data-markdown-text-style], [data-conversation-role], form";
-  const all = (sel) => [...document.querySelectorAll(sel)];
-  const firstFound = (sels) => sels.map(all).find((list) => list.length > 0) ?? [];
-  // Answer bodies: the marker every layout keeps; the author-role markup as fallback.
-  const answers = firstFound(['[data-markdown-text-style="assistant-message"]', '[data-message-author-role="assistant"]']);
-  const prompts = firstFound(["[data-user-message-bubble]", '[data-message-author-role="user"]',
-    '[data-markdown-text-style="user-message"]', '[data-markdown-text-tone="user-message"]']);
   // A code block may show a PREVIEW (a picture): its code is then only in the
   // block's copy text, or in the preview image's SVG data URL (2026-11-05).
   const svgOfDataUrl = (src) => {
@@ -65,19 +86,8 @@ export function readChat(anchor) {
     const text = codeOf(body) ?? String(body.textContent ?? "").trim();
     return { id, text, file: unit.querySelector("[data-file-reference]") !== null };
   };
-  const below = (a, b) => (a.compareDocumentPosition(b) & 4) !== 0 && !a.contains(b); // b comes after a
-  const flat = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
-  const anchored = () => {
-    const wanted = flat(anchor);
-    const mine = prompts.filter((el) => flat(el.textContent).includes(wanted));
-    const last = mine[mine.length - 1];
-    if (last === undefined) return { count: 0, reply: null };
-    const next = prompts.find((el) => below(last, el));
-    const index = answers.findIndex((a) => below(last, a) && (next === undefined || below(a, next)));
-    return { count: mine.length, reply: index < 0 ? null : replyOf(answers[index], index + 1) };
-  };
-  const latestReply = () => (answers.length === 0 ? null : replyOf(answers[answers.length - 1], answers.length));
-  const found = typeof anchor === "string" && anchor !== "" ? anchored() : { count: null, reply: latestReply() };
+  const pick = pickAnswer(anchor);
+  const found = { count: pick.count, reply: pick.el === null ? null : replyOf(pick.el, pick.n) };
   const limitNotice = () => {
     const LIMIT = /out of attachments|reached (?:the|your|our) [a-z ]*limit|usage cap|try again after/i;
     const walker = document.createTreeWalker(document.body, 4); // text nodes only
@@ -91,6 +101,25 @@ export function readChat(anchor) {
     signedIn: box !== null, ready: box !== null && !busy, busy, attached, reply: found.reply, prompts: found.count, notice: limitNotice(),
     href: String(location.href),
   };
+}
+
+/**
+ * Clicks ChatGPT's own Copy control for the request's answer: the code block's
+ * copy button first, else the answer's "Copy" action — only a button between
+ * that answer and the next prompt, never another answer's (2026-11-05).
+ */
+export function clickReplyCopy(anchor) {
+  const pick = pickAnswer(anchor);
+  if (pick.el === null) return false;
+  const COPY = 'button[aria-label="Copy"], button[aria-label="Copy code"], button[aria-label="Copy message"], button[data-testid="copy-turn-action-button"]';
+  const below = (a, b) => (a.compareDocumentPosition(b) & 4) !== 0 && !a.contains(b);
+  const inside = pick.el.querySelector(COPY);
+  const after = [...document.querySelectorAll(COPY)].find((b) => below(pick.el, b) && (pick.next === null || below(b, pick.next))
+    && b.closest("[data-user-message-bubble]") === null);
+  const button = inside ?? after ?? null;
+  if (button === null) return false;
+  button.click();
+  return true;
 }
 
 /** Puts the caret into the composer so `Input.insertText` lands there. */
@@ -119,9 +148,13 @@ export function clickNewChat() {
   return true;
 }
 
-/** A step as one self-contained page expression, with its one JSON argument. */
+/**
+ * A step as one self-contained page expression, with its one JSON argument.
+ * The shared reply finder travels along, so steps can call `pickAnswer`.
+ */
 export function stepSource(fn, arg) {
-  return `(${fn.toString()})(${arg === undefined ? "" : JSON.stringify(arg)})`;
+  const call = `(${fn.toString()})(${arg === undefined ? "" : JSON.stringify(arg)})`;
+  return `(() => { const pickAnswer = ${pickAnswer.toString()}; return ${call}; })()`;
 }
 
 /** The ChatGPT page of one CDP session, in the shape chatflow.mjs drives. */
@@ -142,6 +175,22 @@ export function cdpChatPage(connection, sessionId) {
       return insertText(connection, text, sessionId);
     },
     submit: () => run(clickSend),
+    /**
+     * The last resort for a reply that shows no SVG code: click its Copy
+     * control and read the clipboard (granted to the chat page; the page is
+     * told it has focus, which a clipboard read requires). Overwrites the
+     * user's clipboard. null when nothing could be copied.
+     */
+    async copyReply(anchor) {
+      const origin = new URL(await href()).origin;
+      await connection.send("Browser.grantPermissions", { origin, permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"] }).catch(() => null);
+      await connection.send("Page.bringToFront", {}, sessionId).catch(() => null);
+      await connection.send("Emulation.setFocusEmulationEnabled", { enabled: true }, sessionId).catch(() => null);
+      if (!(await run(clickReplyCopy, anchor))) return null;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const text = await evaluate(connection, "navigator.clipboard.readText()", sessionId).catch(() => null);
+      return typeof text === "string" ? text : null;
+    },
     async newChat() {
       if (!(await run(clickNewChat))) await navigate(connection, NEW_CHAT_URL, sessionId);
     },

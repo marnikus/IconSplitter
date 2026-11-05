@@ -12,6 +12,7 @@
 
 import { sendWebChat, type WebChatCode } from "../lib/webchatclient";
 import { beginActivity } from "../lib/activity";
+import { requestRefLine, withRequestRef } from "../lib/svgprompt";
 import { isConversationUrl, webProviderOf, type WebChatTarget } from "../lib/webchatprefs";
 import type { Failure, Usage } from "../lib/svgrequest";
 import type { WebRequest, WebSend, WebTransport } from "./runtypes";
@@ -47,6 +48,11 @@ const KINDS: Partial<Record<WebChatCode, Failure["kind"]>> = {
   auth: "auth", cancelled: "aborted", timeout: "provider_timeout", "bad-request": "payload",
   "helper-down": "network", "helper-old": "network", browser: "network", busy: "rate_limit", limit: "rate_limit", reply_was_file: "malformed",
 };
+
+/** "r-<time>-<random>": unique per request, short enough to read in the chat. */
+function newRequestRef(): string {
+  return `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export function failureKindOf(code: WebChatCode): Failure["kind"] {
   return KINDS[code] ?? "provider";
@@ -91,9 +97,12 @@ export function createWebTransport(target: WebChatTarget, hooks: WebHooks = {}):
     // Visible from every tab while the chat works; closes itself when the reply is in.
     const activity = beginActivity("svg", stepLabel(request, "opening"));
     const onPhase = (phase: string) => { activity.update(stepLabel(request, phase)); hooks.onPhase?.(phase); };
+    // A one-off id in the prompt: the helper reads the answer below THIS prompt,
+    // even when the same icon was sent before in this chat.
+    const ref = newRequestRef();
     const out = await sendWebChat({
-      bridgeUrl: hooks.bridgeUrl, target: { ...target, url }, prompt: request.prompt, image: request.image,
-      sessionKey: request.key, signal: request.signal, anchor: request.anchor, onPhase, pollMs: hooks.pollMs,
+      bridgeUrl: hooks.bridgeUrl, target: { ...target, url }, prompt: withRequestRef(request.prompt, ref), image: request.image,
+      sessionKey: request.key, signal: request.signal, anchor: requestRefLine(ref), onPhase, pollMs: hooks.pollMs,
     }).finally(() => activity.end());
     if (!out.ok) return { ok: false, error: `ChatGPT web: ${out.reason}`, failure: failureKindOf(out.code), retryAfterMs: null };
     follow(out.chatUrl);

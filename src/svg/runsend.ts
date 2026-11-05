@@ -16,7 +16,6 @@ import { requestTextOf } from "./regenprompt";
 import type { BatchCtx } from "./runbatch";
 import type { RunState } from "./runtypes";
 import { modelOf } from "./answerer";
-import { iconNameLine } from "../lib/svgprompt";
 
 interface SendOk { ok: true; text: string; usage: Usage; requestId: string | null }
 interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
@@ -72,10 +71,10 @@ function journalRequest(ctx: BatchCtx): void {
   });
 }
 
-/** A web request carries one icon: its prompt line is the anchor, its name the label. */
-function webAnchorOf(ctx: BatchCtx): { anchor?: string; label?: string } {
+/** A web request carries one icon: its name labels the activity bar. */
+function webAnchorOf(ctx: BatchCtx): { label?: string } {
   const stem = ctx.items[0]?.stem;
-  return stem === undefined ? {} : { anchor: iconNameLine(stem), label: stem };
+  return stem === undefined ? {} : { label: stem };
 }
 
 /** The id is written the moment it arrives — the journal, then the record. */

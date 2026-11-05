@@ -187,6 +187,18 @@ async function sendOnce(page, input, o) {
   return inlineFollowUp(page, answer.reply, input.maxWaitMs, o);
 }
 
+/**
+ * A finished reply that shows no SVG code (e.g. a code block shown as a
+ * preview whose code the page does not expose) gets one try with ChatGPT's own
+ * Copy button; the copied text is used only when it holds an SVG.
+ */
+async function withCopiedCode(page, text, o) {
+  if (text.includes("<svg") || typeof page.copyReply !== "function") return text;
+  o.onPhase?.("copying");
+  const copied = await page.copyReply(o.anchor).catch(() => null);
+  return typeof copied === "string" && copied.includes("<svg") ? copied : text;
+}
+
 /** Opens the chat, waits for it, sends, and on a timeout retries once in a new chat. */
 export async function runChatTurn(page, input, options = {}) {
   const o = {
@@ -209,5 +221,6 @@ export async function runChatTurn(page, input, options = {}) {
   }
   if (!answer.ok) return { ...answer, restarted };
   o.onPhase?.("scraping");
-  return { ok: true, text: answer.reply.text, chatUrl: await page.href(), restarted };
+  const text = await withCopiedCode(page, answer.reply.text, o);
+  return { ok: true, text, chatUrl: await page.href(), restarted };
 }

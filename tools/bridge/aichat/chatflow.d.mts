@@ -15,6 +15,8 @@ export interface ChatPage {
   submit(): Promise<{ ok: boolean }>;
   newChat(): Promise<void>;
   href(): Promise<string>;
+  /** Last resort: click the reply's Copy control and read the clipboard. */
+  copyReply?(anchor?: string): Promise<string | null>;
 }
 export interface ChatTurnInput { url: string; prompt: string; imagePath: string | null; maxWaitMs: number; readyTimeoutMs: number; stepDelayMs?: number; anchor?: string }
 export interface ChatTurnOptions {

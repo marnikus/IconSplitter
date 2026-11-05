@@ -93,11 +93,25 @@ describe("createWebTransport", () => {
       await new Promise<void>((r) => { release = r; });
       return reply();
     }));
-    const run = createWebTransport(TARGET, { pollMs: 5 }).send({ ...request(), anchor: "Icon name (use it as the SVG <title>): fog_AI", label: "fog_AI" });
+    const run = createWebTransport(TARGET, { pollMs: 5 }).send({ ...request(), prompt: "Icon name (use it as the SVG <title>): fog_AI\n\nfix", label: "fog_AI" });
     await vi.waitFor(() => expect(activities.list()[0]?.label).toBe("ChatGPT web · fog_AI — ChatGPT is generating…"));
     release();
     expect((await run).ok).toBe(true);
-    expect(sent[0].anchor).toBe("Icon name (use it as the SVG <title>): fog_AI");
+    // a one-off request id, written right under the icon line, is what the helper looks for
+    expect(String(sent[0].anchor)).toMatch(/^Request id: r-[a-z0-9]+-[a-z0-9]+$/);
+    expect(String(sent[0].prompt)).toBe(`Icon name (use it as the SVG <title>): fog_AI\n\n${String(sent[0].anchor)}\n\nfix`);
     expect(activities.list()).toEqual([]); // closes itself once the reply is in
+  });
+
+  it("gives every request its own id, so the same icon sent twice is still told apart", async () => {
+    const anchors: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_u: RequestInfo | URL, init?: RequestInit) => {
+      anchors.push(String((JSON.parse(String(init?.body)) as { anchor: string }).anchor));
+      return reply();
+    }));
+    const web = createWebTransport(TARGET);
+    await web.send({ ...request(), prompt: "Icon name (use it as the SVG <title>): fog_AI\n\nfix" });
+    await web.send({ ...request(), prompt: "Icon name (use it as the SVG <title>): fog_AI\n\nfix" });
+    expect(anchors[0]).not.toBe(anchors[1]);
   });
 });

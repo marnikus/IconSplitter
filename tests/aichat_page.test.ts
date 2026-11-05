@@ -3,7 +3,7 @@
 // (2026-11-03 dumps): data-*/aria handles only, never hashed class names.
 
 import { afterEach, describe, expect, it } from "vitest";
-import { clickNewChat, clickSend, focusComposer, readChat, stepSource } from "../tools/bridge/aichat/chatpage.mjs";
+import { clickNewChat, clickReplyCopy, clickSend, focusComposer, readChat, stepSource } from "../tools/bridge/aichat/chatpage.mjs";
 
 const SVG_TEXT = '&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"&gt;&lt;path d="M0 0h10"/&gt;&lt;/svg&gt;';
 
@@ -236,5 +236,48 @@ describe("readChat on a code-block reply", () => {
   it("still reads a plain-text reply as before", () => {
     chat(prompt("icon-24_AI_03", "u1") + answer("r1", "icon-24_AI_03"));
     expect(readChat(ANCHOR("icon-24_AI_03")).reply?.text).toBe("<svg><title>icon-24_AI_03</title></svg>");
+  });
+});
+
+describe("a repeated job is told apart by its request id (2026-11-05)", () => {
+  const promptRef = (name: string, ref: string, uid: string) => prompt(name, uid).replace(
+    `<p><span>${lineOf(name)}</span></p>`, `<p><span>${lineOf(name)}</span></p><p><span>Request id: ${ref}</span></p>`);
+
+  it("takes the answer below the prompt with ITS request id, even when the icon was sent twice", () => {
+    chat(promptRef("icon-24_AI_03", "r-aaa", "u1") + answer("first", "icon-24_AI_03")
+      + promptRef("icon-24_AI_03", "r-bbb", "u2") + answer("second", "icon-24_AI_03"));
+    expect(readChat("Request id: r-aaa").reply?.id).toBe("first");
+    expect(readChat("Request id: r-bbb").reply?.id).toBe("second");
+    expect(readChat("Request id: r-bbb").prompts).toBe(1);
+  });
+});
+
+describe("clickReplyCopy — ChatGPT's own Copy button as the last resort", () => {
+  const copyButton = (label: string) => `<button aria-label="${label}">copy</button>`;
+
+  it("clicks the Copy button of the answer below THIS prompt, never another answer's", () => {
+    chat(prompt("icon-a", "u1") + answer("ra", "icon-a") + copyButton("Copy")
+      + prompt("icon-b", "u2") + answer("rb", "icon-b") + copyButton("Copy"));
+    const clicked: number[] = [];
+    document.querySelectorAll('button[aria-label="Copy"]').forEach((b, i) => b.addEventListener("click", () => clicked.push(i)));
+    expect(clickReplyCopy(ANCHOR("icon-b"))).toBe(true);
+    expect(clicked).toEqual([1]);
+    expect(clickReplyCopy(ANCHOR("icon-a"))).toBe(true);
+    expect(clicked).toEqual([1, 0]);
+  });
+
+  it("prefers the code block's own copy control, and reports when there is none", () => {
+    chat(prompt("icon-a", "u1") + answer("ra", "icon-a").replace("<p>", `<div data-code-block-controls="true"><button aria-label="Copy code">c</button></div><p>`));
+    let hit = "";
+    document.querySelector('button[aria-label="Copy code"]')?.addEventListener("click", () => { hit = "code"; });
+    expect(clickReplyCopy(ANCHOR("icon-a"))).toBe(true);
+    expect(hit).toBe("code");
+    chat(prompt("icon-a", "u1"));
+    expect(clickReplyCopy(ANCHOR("icon-a"))).toBe(false);
+  });
+
+  it("serializes with the shared reply finder, so it runs inside the page alone", () => {
+    chat(prompt("icon-a", "u1") + answer("ra", "icon-a") + copyButton("Copy"));
+    expect((0, eval)(stepSource(clickReplyCopy, ANCHOR("icon-a")))).toBe(true);
   });
 });

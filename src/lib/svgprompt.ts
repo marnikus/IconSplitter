@@ -52,6 +52,23 @@ export function iconNameLine(name: string): string {
   return `Icon name (use it as the SVG <title>): ${name}`;
 }
 
+/** The one-off line a web request adds so its own prompt can be found again. */
+export function requestRefLine(ref: string): string {
+  return `Request id: ${ref}`;
+}
+
+/**
+ * The prompt with its request id (2026-11-05). The icon name alone repeats when
+ * the same icon is sent twice; this id never does. It goes right under the icon
+ * line (the instructions stay last), or leads a prompt that has no icon line.
+ */
+export function withRequestRef(prompt: string, ref: string): string {
+  const lines = prompt.split("\n");
+  const at = lines.findIndex((line) => line.startsWith(iconNameLine("")));
+  if (at < 0) return `${requestRefLine(ref)}\n\n${prompt}`;
+  return [...lines.slice(0, at + 1), "", requestRefLine(ref), ...lines.slice(at + 1)].join("\n");
+}
+
 export function singlePrompt(userPrompt: string, name: string): string {
   return `${userPrompt.trim()}\n\n${iconNameLine(name)}`;
 }
