@@ -37,6 +37,8 @@ export interface QueueItem {
   codes: ReadonlyMap<string, RegenCode>;
   /** The chat page a LIVE WEB batch is typed into; null = the provider API. */
   web: WebChatTarget | null;
+  /** false = text-only: the prompt and the current SVG code, no image (2026-11-05). */
+  attachImage: boolean;
 }
 
 /** One confirmed batch, described once — no seven-argument call sites. */
@@ -48,6 +50,7 @@ export interface QueueSpec {
   prompt?: PromptChoice;
   codes?: ReadonlyMap<string, RegenCode>;
   web?: WebChatTarget | null;
+  attachImage?: boolean;
 }
 
 let seq = 0;
@@ -60,7 +63,7 @@ export function queueItem(spec: QueueSpec): QueueItem {
   return {
     id: `q${seq}`, ids: [...spec.ids], count: spec.ids.length, requests: Math.max(1, spec.requests),
     label: spec.label, regen: spec.regen ?? null, prompt: spec.prompt ?? { kind: "main" }, codes: spec.codes ?? NO_CODES,
-    web: spec.web ?? null,
+    web: spec.web ?? null, attachImage: spec.attachImage !== false,
   };
 }
 

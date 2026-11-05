@@ -51,7 +51,7 @@ async function executeRun(snapshot: RunSnapshot, item: QueueItem, job: SvgJob): 
   try {
     const summary = await runGeneration({ root, apiKey: key, runId: job.id,
       config: { ...c.m.config, imagesPerRequest: item.regen?.kind === "current-svg" ? item.regen.size : c.m.config.imagesPerRequest }, caps: c.m.caps, params: c.m.params,
-      prompt: c.m.prompt, regen: item.regen ?? MAIN_PLAN, promptChoice: item.prompt, regenCodes: item.codes,
+      prompt: c.m.prompt, regen: item.regen ?? MAIN_PLAN, promptChoice: item.prompt, regenCodes: item.codes, attachImage: item.attachImage,
       sources: inIdOrder(c.rows, item.ids, (r) => r.source.id).map((r) => r.source), metas: c.refs.metas,
       onRequestController: (controller) => { job.requestController = controller; }, web: webTransportOf(item, (line) => c.say(line)),
       signal: job.controller.signal, onEvent: withRunLog((event) => jobEvent(c, job, event)) });

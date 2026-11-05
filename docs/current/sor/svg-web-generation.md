@@ -48,7 +48,7 @@ as the next version like an API answer.
 
 ## Helper routes
 
-`POST /aichat/send` `{ url, prompt, image: PNG data URL, maxWaitMs (1–60 min),
+`POST /aichat/send` `{ url, prompt, image: PNG data URL or null (text-only: no attach, no attachment limit), maxWaitMs (1–60 min),
 readyTimeoutMs (10 s–30 min), stepDelayMs (0–10 s, default 1 s), sessionKey }` → `{ ok, text, chatUrl, restarted }`
 or `{ ok:false, code, reason }`. `GET /aichat/progress?sessionKey=` →
 `{ ok, busy, progress }` (latest turn only; phases `opening`,

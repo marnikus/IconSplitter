@@ -21,6 +21,7 @@ export interface BatchSpec {
   prompt?: PromptChoice;
   codes?: ReadonlyMap<string, RegenCode>;
   web?: WebChatTarget | null;
+  attachImage?: boolean;
 }
 
 /** Record one explicit confirmation; only the scheduler may start it. */
@@ -28,7 +29,7 @@ export function enqueueBatch(ctx: RunCtx, spec: BatchSpec): void {
   const { ids, regen = null } = spec;
   // A web batch is one chat turn per icon, whatever the configured size.
   const requests = spec.web ? ids.length : requestsOf(ctx, ids, regen);
-  const item = queueItem({ ids, requests, label: labelOf(ctx, ids), regen, prompt: spec.prompt, codes: spec.codes, web: spec.web });
+  const item = queueItem({ ids, requests, label: labelOf(ctx, ids), regen, prompt: spec.prompt, codes: spec.codes, web: spec.web, attachImage: spec.attachImage });
   captureRun(ctx, item.id);
   const queue = enqueue(ctx.refs.queue.current, item);
   setQueue(ctx, queue);

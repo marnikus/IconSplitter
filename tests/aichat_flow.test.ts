@@ -263,3 +263,20 @@ describe("anchored turns (2026-11-05)", () => {
     expect(page.log).not.toContain("newChat");
   });
 });
+
+describe("text-only turns (2026-11-05)", () => {
+  it("types and sends without attaching when there is no image", async () => {
+    const page = fakePage({ after: [{ reply: { id: "n1", text: SVG, file: false } }] });
+    const phases: string[] = [];
+    const out = await runChatTurn(page, { ...input, imagePath: null }, { ...fast, onPhase: (p: string) => phases.push(p) });
+    expect(out).toMatchObject({ ok: true, text: SVG });
+    expect(page.log).toEqual(["open https://chatgpt.com/c/abc", "type fix svg", "submit"]);
+    expect(phases).not.toContain("uploading");
+  });
+
+  it("is not stopped by an attachment limit it does not need", async () => {
+    const page = fakePage({ before: { notice: "You’re out of attachments for now." } as Partial<Reading>, after: [{ reply: { id: "n1", text: SVG, file: false } }] });
+    const out = await runChatTurn(page, { ...input, imagePath: null }, fast);
+    expect(out.ok).toBe(true);
+  });
+});

@@ -4775,3 +4775,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `readChat(anchor)` takes the first answer below the LAST prompt carrying `Icon name (use it as the SVG <title>): <name>`; flow waits for that prompt to appear (`sent`) before waiting for the finished answer; `/aichat/send` `anchor`; app sends `iconNameLine(stem)` (shared with both prompt builders); activity bar 'ChatGPT web · <icon> — <step>…' during a request.
 - Measured: 9 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3740 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — regenerate with or without the reference image
+
+- Scope: regeneration popup checkbox `svg-confirm-attach-image` (default on) → `ConfirmedBatch.attachImage` → `QueueItem.attachImage` → `RunArgs.attachImage`; off = no contact sheet (`textOnlyComposite`), API request without image part, web helper `image: null` (no staging, no attach, no attachment limit); strip `svg-batch-no-image`.
+- Measured: 12 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3751 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).

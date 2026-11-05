@@ -45,6 +45,13 @@ const input = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("createAichat", () => {
+  it("stages nothing for a text-only turn", async () => {
+    const { deps, seen } = fakeDeps();
+    const out = await createAichat(deps).send(input({ image: null }));
+    expect(out.ok).toBe(true);
+    expect(seen.files).toHaveLength(0);
+  });
+
   it("runs one turn, stages the PNG, then deletes it", async () => {
     const { deps, seen } = fakeDeps();
     const chat = createAichat(deps);
@@ -122,7 +129,7 @@ describe("parseSendBody", () => {
     const parsed = parseSendBody(body());
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
-    expect(parsed.input.image.subarray(0, 4).toString("hex")).toBe("89504e47");
+    expect(parsed.input.image?.subarray(0, 4).toString("hex")).toBe("89504e47");
     expect(parsed.input.maxWaitMs).toBe(600000);
   });
   it("carries the pause between steps: default 1 s, clamped to 0–10 s", () => {
@@ -137,6 +144,12 @@ describe("parseSendBody", () => {
     expect(pick(undefined)).toBe("");
     expect(pick(42)).toBe("");
     expect(pick("x".repeat(900))).toHaveLength(500);
+  });
+
+  it("accepts a text-only turn (no image) but still refuses a non-PNG image", () => {
+    const none = parseSendBody(body({ image: null }));
+    expect(none.ok && none.input.image).toBeNull();
+    expect(parseSendBody(body({ image: Buffer.from("GIF89a").toString("base64") })).ok).toBe(false);
   });
 
   it("clamps the waits into their safe ranges", () => {

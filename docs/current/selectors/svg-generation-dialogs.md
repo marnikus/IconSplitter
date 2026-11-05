@@ -58,6 +58,11 @@ path sends paid requests. See [parallel runs](../sor/svg-parallel-runs.md).
 | `svg-confirm-prompt-note` | small | what the choice does to this batch, or that the other shape's default is not used by it |
 | `svg-confirm-problem` | p | when no presets, says why confirm is disabled |
 
+Regeneration only: `svg-confirm-attach-image` ("Attach the reference image", on by
+default); off → `svg-confirm-text-only` note, `ConfirmedBatch.attachImage: false`:
+no contact sheet, no image part (API) / no attach (web) — prompt + current SVG
+code only; the request strip shows `svg-batch-no-image`.
+
 LIVE WEB variant ([owner](../sor/svg-web-generation.md)): `svg-web-mode` (bulk-bar
 checkbox), `svg-confirm-live-web` (badge), `svg-web-url`, `svg-web-url-problem`,
 `svg-web-maxwait`, `svg-web-ready`, `svg-web-policy`; `svg-confirm-requests` reads `N × 1 max`.

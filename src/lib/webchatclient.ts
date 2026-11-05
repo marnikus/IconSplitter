@@ -19,8 +19,8 @@ export interface WebChatInput {
   bridgeUrl?: string;
   target: WebChatTarget;
   prompt: string;
-  /** The reference image as a PNG data URL. */
-  image: string;
+  /** The reference image as a PNG data URL; null = a text-only turn. */
+  image: string | null;
   /** Names this turn for progress and cancel. */
   sessionKey: string;
   /** The prompt's own icon line: the helper reads the reply below that prompt. */

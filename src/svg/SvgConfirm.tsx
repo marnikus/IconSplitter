@@ -64,6 +64,7 @@ export default function SvgConfirm(p: SvgConfirmProps) {
             entries={s.entries} onEntry={s.chooseEntry} sources={s.sources} note={s.note} />
           {p.web === true ? <WebFacts count={s.plan.picked.length} requests={s.plan.plans.length} />
             : <Facts plan={s.plan} p={p} choice={s.own.choice} />}
+          {p.operation === "regenerate" && <AttachImageToggle on={s.attach} onChange={s.setAttach} />}
           <ExclusionNote names={s.plan.excluded} />
           <PlanBody plan={s.plan} p={p} />
           <FullPromptPreview operation={p.operation} prompt={p.prompt} choice={s.own.choice} active={s.plan.active}
@@ -87,6 +88,9 @@ interface ConfirmState {
   size: number;
   codes: ReturnType<typeof useRegenCodes>;
   plan: ConfirmPlan;
+  /** Regeneration only: send the reference image too (default), or only the prompt + SVG code. */
+  attach: boolean;
+  setAttach: (on: boolean) => void;
 }
 
 /** Everything the dialog decides, in one place: its task, size, codes and plan. */
@@ -106,7 +110,8 @@ function useConfirmState(p: SvgConfirmProps): ConfirmState {
     p.onTaskEntry(task, entry);
   };
   const note = noteFor(ownTask, own, plan.perRequest);
-  return { work, ownTask, entries, chooseEntry, sources, own, note, size: plan.perRequest, codes, plan };
+  const [attach, setAttach] = useState(true);
+  return { work, ownTask, entries, chooseEntry, sources, own, note, size: plan.perRequest, codes, plan, attach, setAttach };
 }
 
 /** What this task's prompt does for the batch in flight. */
@@ -162,6 +167,17 @@ function PlanBody({ plan, p }: { plan: ConfirmPlan; p: SvgConfirmProps }) {
     picked={plan.picked} rootRef={p.rootRef} cache={plan.cache} onPage={plan.setPage} />;
 }
 
+/** Regenerate with or without the picture: without it only the prompt and the current SVG code go out. */
+function AttachImageToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <label className="svg-note" title="Without the image, the request is lighter and does not use ChatGPT's image attachments">
+      <input type="checkbox" className="svg-check" data-testid="svg-confirm-attach-image" checked={on}
+        onChange={(e) => onChange(e.target.checked)} />{" "}Attach the reference image
+      {!on && <strong data-testid="svg-confirm-text-only"> — Only the prompt and the current SVG code are sent (no image).</strong>}
+    </label>
+  );
+}
+
 /** A row left out is named before anything is sent, never dropped in silence. */
 function ExclusionNote({ names }: { names: string[] }) {
   if (names.length === 0) return null;
@@ -180,6 +196,7 @@ function Actions({ state, p }: { state: ConfirmState; p: SvgConfirmProps }) {
   const blocked = plan.problems.length > 0 || plan.active === null || (p.web === true && target === null);
   const confirm = () => p.onConfirm({
     choice: state.own.choice, size: state.size, codes: state.codes.codes, ...(target === null ? {} : { web: target }),
+    ...(p.operation === "regenerate" && !state.attach ? { attachImage: false } : {}),
   });
   return (
     <div className="svg-modal-actions">

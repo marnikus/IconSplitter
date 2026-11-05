@@ -34,7 +34,7 @@ export async function confirmRun(ctx: RunCtx, confirmed: ConfirmedBatch): Promis
   ctx.dispatch({ type: "dialog", dialog: null });
   armCompletionSound();
   const frozen = { ...ctx, m: { ...ctx.m, config: { ...ctx.m.config, imagesPerRequest: confirmed.size } } };
-  enqueueBatch(frozen, { ids, regen, prompt: confirmed.choice, codes: confirmed.codes, web: confirmed.web ?? null });
+  enqueueBatch(frozen, { ids, regen, prompt: confirmed.choice, codes: confirmed.codes, web: confirmed.web ?? null, attachImage: confirmed.attachImage });
   pumpRuns(ctx);
   const waiting = ctx.refs.queue.current.length;
   if (waiting > 0) {

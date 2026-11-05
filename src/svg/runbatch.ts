@@ -23,6 +23,7 @@ import { type PairMeta } from "../lib/pairmeta";
 import { sendBatch } from "./runsend";
 import { saveMetaAt } from "../selection/pairstore";
 import { buildComposite, type BuiltComposite } from "./composite";
+import { compositeLayout } from "../lib/svgcomposite";
 import { mainImageOf, withImagesOf } from "../lib/svgimgreg";
 import { metaAfterFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import type { SvgSource } from "./sources";
@@ -99,8 +100,14 @@ function newBatchCtx(ctx: Omit<BatchCtx, "tally">): BatchCtx {
   return { ...ctx, tally: { saved: 0, failed: 0, missing: 0 } };
 }
 
+/** A text-only request sends no picture: nothing is read or drawn, the hash says so. */
+function textOnlyComposite(count: number): BuiltComposite {
+  return { dataUrl: "", hash: "text-only", layout: compositeLayout(count), bytes: 0 };
+}
+
 /** A composite that cannot be built must produce no request at all. */
 async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
+  if (ctx.state.args.attachImage === false) return textOnlyComposite(ctx.items.length);
   try {
     const metas = ctx.state.args.metas; // the main AI image is the source (RC8)
     return await buildComposite(ctx.state.args.root, ctx.items, (s) => mainImageOf(metas.get(s.id) ?? null, s.relPath));

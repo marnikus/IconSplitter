@@ -16,7 +16,7 @@ export interface ChatPage {
   newChat(): Promise<void>;
   href(): Promise<string>;
 }
-export interface ChatTurnInput { url: string; prompt: string; imagePath: string; maxWaitMs: number; readyTimeoutMs: number; stepDelayMs?: number; anchor?: string }
+export interface ChatTurnInput { url: string; prompt: string; imagePath: string | null; maxWaitMs: number; readyTimeoutMs: number; stepDelayMs?: number; anchor?: string }
 export interface ChatTurnOptions {
   pollMs?: number; attachTimeoutMs?: number; stableReads?: number; submitTimeoutMs?: number;
   onPhase?: (phase: string) => void; signal?: AbortSignal;

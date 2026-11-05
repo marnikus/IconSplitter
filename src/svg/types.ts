@@ -101,6 +101,8 @@ export interface ConfirmedBatch {
   codes: ReadonlyMap<string, RegenCode>;
   /** Set only by the LIVE WEB popup: the chat page that answers (2026-11-03). */
   web?: WebChatTarget;
+  /** false only when a regeneration popup unticked "Attach the reference image". */
+  attachImage?: boolean;
 }
 
 export type Dialog =

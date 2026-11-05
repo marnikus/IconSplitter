@@ -56,8 +56,10 @@ export function parseSendBody(text) {
   if (url === null) return { ok: false, reason: "the chat URL must be an https://chatgpt.com/ page" };
   const prompt = typeof raw.prompt === "string" ? raw.prompt : "";
   if (prompt.trim() === "" || prompt.length > MAX_PROMPT) return { ok: false, reason: "the prompt is empty or too long" };
-  const image = pngOf(raw.image);
-  if (image === null) return { ok: false, reason: "the reference image must be one PNG" };
+  // No image at all = a text-only turn (regenerate from the SVG code alone);
+  // an image that is sent must be one PNG.
+  const image = raw.image === null || raw.image === undefined ? null : pngOf(raw.image);
+  if (image === null && raw.image !== null && raw.image !== undefined) return { ok: false, reason: "the reference image must be one PNG" };
   return {
     ok: true,
     input: {

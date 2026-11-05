@@ -37,7 +37,8 @@ export function createAichat(deps) {
     return next;
   };
   const turn = async (input, signal) => {
-    const staged = stageImage(input.image);
+    // A text-only turn stages nothing and attaches nothing.
+    const staged = input.image === null || input.image === undefined ? { file: null, drop: () => undefined } : stageImage(input.image);
     try {
       const page = await pageOf();
       if (!page.ok) return page;

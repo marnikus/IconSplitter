@@ -23,8 +23,10 @@ export interface SvgBatchStripProps {
 export default function SvgBatchStrip({ progress, running, onCancel }: SvgBatchStripProps) {
   return (
     <section className="svg-batch" data-testid="svg-batch" aria-label="Request progress">
-      <img className="svg-batch-img" data-testid="svg-batch-composite" src={progress.composite}
-        alt={`Contact sheet of request ${progress.index}: ${progress.count} images in a ${progress.cols} by ${progress.rows} grid`} />
+      {progress.composite === ""
+        ? <span className="svg-batch-img svg-batch-noimg" data-testid="svg-batch-no-image">no image — prompt and SVG code only</span>
+        : <img className="svg-batch-img" data-testid="svg-batch-composite" src={progress.composite}
+          alt={`Contact sheet of request ${progress.index}: ${progress.count} images in a ${progress.cols} by ${progress.rows} grid`} />}
       <div className="svg-batch-meta">
         <strong data-testid="svg-batch-id">{progress.batchId}</strong>
         <span data-testid="svg-batch-grid">

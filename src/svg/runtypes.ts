@@ -58,6 +58,11 @@ export interface RunArgs {
   metas: Map<string, PairMeta | null>;
   onEvent: (event: RunEvent) => void;
   signal: AbortSignal;
+  /**
+   * false = text-only regeneration: no contact sheet is built and no image is
+   * sent, only the prompt and the current SVG code (2026-11-05). Absent = true.
+   */
+  attachImage?: boolean;
   /** Request-local cancellation never aborts the owning run. Cleared in finally. */
   onRequestController?: (controller: AbortController | null) => void;
   /**
@@ -70,8 +75,8 @@ export interface RunArgs {
 /** One request handed to the web transport: the text, the picture, its name and its cancel. */
 export interface WebRequest {
   prompt: string;
-  /** The request's reference image as a PNG data URL. */
-  image: string;
+  /** The request's reference image as a PNG data URL; null = text only. */
+  image: string | null;
   /** Names the turn for the helper's progress and cancel. */
   key: string;
   signal: AbortSignal;

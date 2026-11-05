@@ -171,8 +171,11 @@ async function waitPromptShown(page, countBefore, o) {
 async function sendOnce(page, input, o) {
   const before = await page.read(o.anchor);
   const baseline = before.reply?.id ?? null;
-  const attached = await attachImage(page, input.imagePath, o);
-  if (!attached.ok) return attached;
+  // A text-only turn (no image) skips the attach — and any attachment limit with it.
+  if (input.imagePath !== null && input.imagePath !== undefined) {
+    const attached = await attachImage(page, input.imagePath, o);
+    if (!attached.ok) return attached;
+  }
   const typed = await typeAndSubmit(page, input.prompt, o);
   if (!typed.ok) return typed;
   if (o.anchor) {

@@ -29,9 +29,10 @@ export async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promi
   ctx.records = text.text.records;
   journalRequest(ctx);
   const web = state.args.web;
-  if (web) return web.send({ prompt: text.text.prompt, image: composite.dataUrl, key: `${state.runId}:${ctx.plan.id}`, signal: ctx.signal, ...webAnchorOf(ctx) });
+  const image = composite.dataUrl === "" ? null : composite.dataUrl; // "" = text-only (runbatch)
+  if (web) return web.send({ prompt: text.text.prompt, image, key: `${state.runId}:${ctx.plan.id}`, signal: ctx.signal, ...webAnchorOf(ctx) });
   const request = buildChatRequest({
-    model: state.args.config.model, prompt: text.text.prompt, image: composite.dataUrl,
+    model: state.args.config.model, prompt: text.text.prompt, image,
     caps: state.args.caps, params: state.args.params,
   });
   return attemptSend(ctx, request);
