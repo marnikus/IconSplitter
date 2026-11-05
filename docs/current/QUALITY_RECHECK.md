@@ -4805,3 +4805,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `src/lib/stockupload/uploadlimit.ts` (`parseUploadLimit`, `limitStockUploadPlan`, `uploadIsRandomized`), pref `uploadLimit`, `LimitOption` + implied Random batches in the bulk bar, `LimitNote` in the confirmation, panelops wiring.
 - Measured: 11 new tests incl. end-to-end batches; tsc clean; lint 0 errors; quality:changed PASSED (ConfirmPlanBody kept ≤ 30 lines); verify:fast tests: no failure outside the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — lazy row previews in every list tab
+
+- Scope: `src/ui/LazyPreview.tsx` (`LazyPreview`, `withRowIndexes`, shared IntersectionObservers per scroll area), `src/ui/lazypreviews.ts` + `LazyPreviewsToggle` in the top bar; 5 row previews wrapped, 5 lists numbered; `.lazy-preview` style.
+- Measured: 17 new tests; tsc clean; lint 0 errors; quality:changed PASSED; full suite run twice: 3804 pass / 16 fail on the second run (all pre-existing environmental); the first run's one extra failure (process_completion_sound folder-scan cue) passes alone 3/3 and on HEAD — load flake. Build PASS. Aggregate gate NOT passed (environment).

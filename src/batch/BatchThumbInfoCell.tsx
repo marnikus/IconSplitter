@@ -4,6 +4,7 @@
 import { memo } from "react";
 import type { Row } from "./useBatch";
 import ScanThumb from "./ScanThumb";
+import LazyPreview from "../ui/LazyPreview";
 
 interface Props {
   r: Row;
@@ -14,7 +15,9 @@ interface Props {
 function Inner({ r, thumbFor, thumb }: Props) {
   return (
     <div className="flex min-w-0 w-full flex-col gap-1.5" data-testid={`batch-thumbinfo-${r.relPath}`}>
-      <ScanThumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
+      <LazyPreview size={Math.max(48, Math.min(200, thumb))}>
+        <ScanThumb relPath={r.relPath} thumbFor={thumbFor} thumb={thumb} />
+      </LazyPreview>
       <div className="min-w-0 w-full">
         <div className="truncate text-[11px] font-semibold text-slate-200" title={r.name}>{r.name}</div>
         <div className="truncate text-[10px] text-slate-400" title={r.relPath}>{r.relPath}{r.refRelPath === null ? " · ⚠ ref missing" : ""}</div>

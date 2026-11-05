@@ -20,6 +20,7 @@ import RebuildToast, { useRebuildWatch } from "./rebuildwatch";
 import { armCompletionSound } from "./completionSound";
 import ScrollTopButton from "./ScrollTopButton";
 import ActivityBars from "./ActivityBars";
+import LazyPreviewsToggle from "./LazyPreviewsToggle";
 
 const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "sheets", label: "Single sheets", testid: "tab-sheets" },
@@ -71,7 +72,8 @@ function Nav({ tab }: { tab: AppState["tab"] }) {
     <nav className="border-b border-white/10 bg-slate-900/60 px-4 py-2">
       <div className="flex w-full flex-wrap items-center gap-3">
         <TabBar tab={tab} />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          <LazyPreviewsToggle />
           <HistoryBar />
         </div>
       </div>

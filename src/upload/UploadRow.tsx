@@ -26,6 +26,7 @@ import UploadMetaFields from "./UploadMetaFields";
 import type { UploadJobStatus, UploadRow } from "./types";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import UploadRowBadges from "./UploadRowBadges";
+import LazyPreview from "../ui/LazyPreview";
 
 export interface UploadRowActions {
   activeId: string | null;
@@ -84,10 +85,12 @@ const RowContent = memo(function RowContent({ row, a }: { row: UploadRow; a: Upl
   const id = row.source.id;
   const status = statusOf(row);
   return <>
-      <UploadPreview rootRef={a.rootRef} rootToken={a.rootToken} path={row.source.svgPath}
-        thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
-        label={`${row.source.svgName} v${row.source.version}`} version={row.source.version}
-        settings={rowSettings(a.defaults, id, a.overrides, a.applied)} />
+      <LazyPreview size={a.thumb}>
+        <UploadPreview rootRef={a.rootRef} rootToken={a.rootToken} path={row.source.svgPath}
+          thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
+          label={`${row.source.svgName} v${row.source.version}`} version={row.source.version}
+          settings={rowSettings(a.defaults, id, a.overrides, a.applied)} />
+      </LazyPreview>
       <FileCell row={row} a={a} />
       <StatusCell row={row} status={status} />
       <MetaCell row={row} />

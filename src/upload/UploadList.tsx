@@ -9,6 +9,7 @@ import { useRowPresentation } from "../ui/rowpresentation";
 
 import UploadRowView, { type UploadRowActions } from "./UploadRow";
 import type { UploadApi } from "./useUpload";
+import { withRowIndexes } from "../ui/LazyPreview";
 
 export interface UploadListProps {
   g: UploadApi;
@@ -25,10 +26,10 @@ export default function UploadList({ g, actions }: UploadListProps) {
   // Only the active row gets a new element (it mounts its metadata fields).
   const rows = useMemo(() => {
     const at = g.visible.findIndex((row) => row.source.id === activeId);
-    if (at < 0) return base;
+    if (at < 0) return withRowIndexes(base);
     const out = base.slice();
     out[at] = cloneElement(base[at], { active: true });
-    return out;
+    return withRowIndexes(out);
   }, [base, g.visible, activeId]);
   return (
     <div className="svg-panel" data-testid="upload-list">

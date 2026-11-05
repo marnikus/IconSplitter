@@ -2108,3 +2108,5 @@
 .stock-test-banner.err { background: rgba(255, 92, 92, 0.14); border-color: rgba(255, 92, 92, 0.55); color: #ff8585; }
 .stock-test-banner.busy { background: rgba(94, 158, 255, 0.14); border-color: rgba(94, 158, 255, 0.45); color: #9cc4ff; }
 
+/* A row preview waiting to come near (ui/LazyPreview): same size, deliberately quiet. */
+.lazy-preview { display: inline-block; flex: none; border-radius: 6px; background: rgba(127, 127, 127, 0.08); }

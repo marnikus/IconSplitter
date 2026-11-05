@@ -10,6 +10,7 @@ import { useRowPresentation } from "../ui/rowpresentation";
 import { shownLabel } from "../lib/svglist";
 import SvgRow, { type SvgRowActions } from "./SvgRow";
 import type { SvgGenApi } from "./useSvgGen";
+import { withRowIndexes } from "../ui/LazyPreview";
 
 export interface SvgListProps {
   g: SvgGenApi;
@@ -21,9 +22,9 @@ export default function SvgList({ g, actions }: SvgListProps) {
   const a = useRowPresentation(presentation);
   const register = useCheckedRows(checked, activeId, true);
   // Checked and active are projected, so this array is stable through a gesture.
-  const rows = useMemo(() => g.visible.map((row) => (
+  const rows = useMemo(() => withRowIndexes(g.visible.map((row) => (
     <SvgRow key={row.source.id} row={row} a={a} register={register} />
-  )), [g.visible, a, register]);
+  ))), [g.visible, a, register]);
   return (
     <div className="svg-panel" data-testid="svg-list">
       <ListHead g={g} />

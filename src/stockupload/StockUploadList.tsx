@@ -5,6 +5,7 @@ import { useCheckedRows } from "../ui/checkedrows";
 import { useRowPresentation } from "../ui/rowpresentation";
 import StockUploadRowView, { type StockRowPresentation } from "./StockUploadRow";
 import type { StockUploadApi } from "./useStockUpload";
+import { withRowIndexes } from "../ui/LazyPreview";
 
 function toRowPresentation(g: StockUploadApi): StockRowPresentation {
   return {
@@ -33,10 +34,10 @@ function useRenderedRows(g: StockUploadApi) {
   )), [g.visible, a, register]);
   return useMemo(() => {
     const at = g.visible.findIndex((item) => item.id === g.activeId);
-    if (at < 0) return base;
+    if (at < 0) return withRowIndexes(base);
     const copy = base.slice();
     copy[at] = cloneElement(base[at], { active: true });
-    return copy;
+    return withRowIndexes(copy);
   }, [base, g.visible, g.activeId]);
 }
 

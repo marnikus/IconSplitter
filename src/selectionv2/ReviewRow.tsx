@@ -13,6 +13,7 @@ import { fmtBytes, fmtDate, fmtFormat, fmtTime } from "../selection/fmt";
 import { isRowGestureClick } from "../ui/rowgesture";
 import ThumbPair, { type Dims } from "./ThumbPair";
 import type { ReviewPresentation } from "./ReviewList";
+import LazyPreview from "../ui/LazyPreview";
 
 function ReviewRow({ row, p, register }: { row: ViewPair; p: ReviewPresentation; register: RegisterCheckedRow }) {
   const ref = useRowBinding(row.pairId, register);
@@ -33,7 +34,9 @@ export default memo(ReviewRow);
 const RowContent = memo(function RowContent({ row, p }: { row: ViewPair; p: ReviewPresentation }) {
   const [dims, setDims] = useState<Dims | null>(null);
   return <>
-      <ThumbPair row={row} maxH={p.thumb} thumbFor={p.thumbFor} onDims={setDims} />
+      <LazyPreview size={p.thumb} width={p.thumb * 2 + 24}>
+        <ThumbPair row={row} maxH={p.thumb} thumbFor={p.thumbFor} onDims={setDims} />
+      </LazyPreview>
       <FileCell row={row} />
       <div className="v2-cell" data-testid={`v2-created-${row.pairId}`}>{fmtDate(row.created)}<small>{fmtTime(row.created)} local</small></div>
       <DimsCell row={row} dims={dims} />

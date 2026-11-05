@@ -8,6 +8,7 @@ import type { SideThumbFor } from "../selection/thumbs";
 import ReviewRow from "./ReviewRow";
 import { useCheckedRows } from "../ui/checkedrows";
 import { useRowPresentation } from "../ui/rowpresentation";
+import { withRowIndexes } from "../ui/LazyPreview";
 
 export type ReviewPresentation = Pick<ReviewListProps, "thumb" | "thumbFor" | "onRowClick" | "toggleCheck" | "decide" | "openSide">;
 
@@ -47,9 +48,9 @@ export default function ReviewList(p: ReviewListProps) {
   const presentation = useRowPresentation({ thumb: p.thumb, thumbFor: p.thumbFor, onRowClick: p.onRowClick,
     toggleCheck: p.toggleCheck, decide: p.decide, openSide: p.openSide }, ["thumbFor"]);
   const style = { "--v2-thumb": `${p.thumb}px` } as CSSProperties;
-  const rows = useMemo(() => p.rows.map((row) => (
+  const rows = useMemo(() => withRowIndexes(p.rows.map((row) => (
     <ReviewRow key={row.pairId} row={row} p={presentation} register={register} />
-  )), [p.rows, presentation, register]);
+  ))), [p.rows, presentation, register]);
   return (
     <section className="v2-panel" data-testid="v2-list" style={style}>
       <ListHead shown={p.rows.length} total={p.total} autoNext={p.autoNext} setAutoNext={p.setAutoNext} />

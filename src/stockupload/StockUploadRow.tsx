@@ -14,6 +14,7 @@ import UploadRowBadges from "../upload/UploadRowBadges";
 import StockUploadMetaFields from "./StockUploadMetaFields";
 import StockUploadPreview from "./StockUploadPreview";
 import type { StockMetaDraft } from "./rowlist";
+import LazyPreview from "../ui/LazyPreview";
 
 export interface StockRowPresentation {
   thumb: number;
@@ -51,7 +52,9 @@ function StockUploadRowView({ item, a, active = false, register }: {
       <input type="checkbox" className="up-check" data-testid={`stock-check-${item.id}`}
         aria-label={`Select ${item.stem}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(item.id)} />
-      <StockUploadPreview rootRef={a.rootRef} rootToken={a.rootToken} item={item} thumb={a.thumb} bg={a.bg} />
+      <LazyPreview size={a.thumb}>
+        <StockUploadPreview rootRef={a.rootRef} rootToken={a.rootToken} item={item} thumb={a.thumb} bg={a.bg} />
+      </LazyPreview>
       <FileIdentityCell item={item} a={a} />
       <FormatsCell item={item} />
       <MetadataSummaryCell item={item} draft={a.metaDraftOf(item)} />

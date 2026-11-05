@@ -22,6 +22,7 @@ import { previewTargetOf, shownVersion, targetPathOf } from "./rowmodel";
 import SvgThumbs from "./SvgThumbs";
 import { PROBLEM_LABEL, type SvgSource } from "./sources";
 import type { Placement, SvgOperation, SvgRow } from "./types";
+import LazyPreview from "../ui/LazyPreview";
 
 export interface SvgRowActions {
   activeId: string | null;
@@ -73,9 +74,11 @@ export default memo(SvgRowView);
 const RowContent = memo(function RowContent({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
   const id = row.source.id;
   return <>
-      <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg}
-        aiActions={{ running: a.imgRunning.includes(id), onMain: a.setImageVersion }}
-        onPreferSvg={(sourceId, version) => void a.preferVersion(sourceId, version)} />
+      <LazyPreview size={a.thumb} width={a.thumb * 2 + 24}>
+        <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg}
+          aiActions={{ running: a.imgRunning.includes(id), onMain: a.setImageVersion }}
+          onPreferSvg={(sourceId, version) => void a.preferVersion(sourceId, version)} />
+      </LazyPreview>
       <FileCell row={row} />
       <StatusCell row={row} />
       <ReviewCell row={row} />
