@@ -104,3 +104,14 @@ Version controls [accept the chosen version for actual use/export](version-accep
 * The API key is user-provided, stored in the browser's IndexedDB secret
   store (memory-only fallback), masked in the UI, redacted in every error and
   excluded from presets/reports/exports (RULE 20).
+
+## Anchor points on the preview (2026-11-05)
+
+Hover any SVG preview (row thumbnail, Code and Versions dialogs) with **Ctrl**
+held: every node shows as a small hollow circle inside the preview's own SVG
+(`src/svg/anchoroverlay.ts`, points from `src/lib/svganchors.ts`: each path
+segment's end — an arc is one node — plus line/poly points, rect corners and
+circle/ellipse quarter points, all group/element transforms applied; defs,
+clip paths, masks and symbols skipped). Inline `!important` styles beat the
+preview stroke sheet. Releasing Ctrl, leaving the preview or a window blur
+removes it; the file is never changed. Tests: `svg_anchors.test.tsx`.

@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { buildSvgPreview, PREVIEW_CSS } from "../lib/svgpreview";
 import type { StrokeSheet } from "./strokesheet";
+import { useAnchorOverlay, useCtrlHover } from "./anchoroverlay";
 
 export interface SvgPreviewProps {
   code: string | null;
@@ -59,6 +60,8 @@ interface ShadowProps {
 function ShadowSvg({ html, box, testid, label, version, stroke }: ShadowProps) {
   const host = useRef<HTMLDivElement | null>(null);
   useShadowArt(html, host, stroke);
+  // Ctrl + hover: the drawing's anchor points (2026-11-05).
+  useAnchorOverlay(host, html, useCtrlHover(host));
   return (
     <div ref={host} className="svg-preview" style={{ width: box.width, height: box.height }}
       role="img" aria-label={label} data-testid={testid} data-version={version} />

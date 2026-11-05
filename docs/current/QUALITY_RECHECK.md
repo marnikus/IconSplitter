@@ -4795,3 +4795,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `withRequestRef`/`requestRefLine` (one-off 'Request id' line under the icon line, the anchor); one in-page reply finder `pickAnswer` shipped with every step; `clickReplyCopy` + `copyReply` (clipboard read, permission granted, focus emulated) as the last resort when a finished reply shows no SVG.
 - Measured: 11 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3767 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — Ctrl-hover anchor points on SVG previews
+
+- Scope: `src/lib/svganchors.ts` (nodes from the shared path tokenizer, shapes, transforms), `src/svg/anchoroverlay.ts` (`useCtrlHover`, `useAnchorOverlay`), two hook calls in `SvgPreview.tsx`.
+- Measured: 8 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3775 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
