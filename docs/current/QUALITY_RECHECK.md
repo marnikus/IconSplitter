@@ -4800,3 +4800,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `src/lib/svganchors.ts` (nodes from the shared path tokenizer, shapes, transforms), `src/svg/anchoroverlay.ts` (`useCtrlHover`, `useAnchorOverlay`), two hook calls in `SvgPreview.tsx`.
 - Measured: 8 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3775 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — Upload tab 'Limit'
+
+- Scope: `src/lib/stockupload/uploadlimit.ts` (`parseUploadLimit`, `limitStockUploadPlan`, `uploadIsRandomized`), pref `uploadLimit`, `LimitOption` + implied Random batches in the bulk bar, `LimitNote` in the confirmation, panelops wiring.
+- Measured: 11 new tests incl. end-to-end batches; tsc clean; lint 0 errors; quality:changed PASSED (ConfirmPlanBody kept ≤ 30 lines); verify:fast tests: no failure outside the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).

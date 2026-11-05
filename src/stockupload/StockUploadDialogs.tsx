@@ -75,6 +75,15 @@ function targetPlanLabel(t: StockUploadPlan["targets"][number]): string {
   return `${t.name} (${t.host}:${t.port})`;
 }
 
+/** What "Limit" drew for this run, and what stays for a later one. */
+function LimitNote({ limit }: { limit: NonNullable<StockUploadPlan["limit"]> }) {
+  return (
+    <p className="svg-note strong" data-testid="stock-upload-limit-note">
+      {`Limit ${limit.limit}: ${limit.chosen} of ${limit.total} icons drawn at random, sent in random batches of 100 — ${limit.total - limit.chosen} stay for a later run.`}
+    </p>
+  );
+}
+
 function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
   return (
     <div className="svg-modal-body">
@@ -86,6 +95,7 @@ function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
       <p className="svg-note">
         Formats: <strong>{plan.selectedFormats.join(", ").toUpperCase()}</strong>
       </p>
+      {plan.limit !== undefined && <LimitNote limit={plan.limit} />}
       {plan.targets.some((t) => t.protocol === "getty-web") && (
         <p className="svg-note" data-testid="stock-upload-getty-batches">
           Getty Images: {gettyWebBatchSummaryOf(gettyWebIconSizes(plan.tasks, gettyTargetIds(plan)))}

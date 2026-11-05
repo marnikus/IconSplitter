@@ -6,6 +6,7 @@ import type { UploadFormatKey } from "../lib/stockupload/types";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import UploadRowBadgeApply from "../upload/UploadRowBadgeApply";
 import type { StockUploadApi } from "./useStockUpload";
+import { parseUploadLimit } from "../lib/stockupload/uploadlimit";
 
 const FORMAT_LABELS: { key: UploadFormatKey; label: string }[] = [
   { key: "raster", label: "JPEG/PNG" },
@@ -56,6 +57,7 @@ function ActionCluster({ g }: { g: StockUploadApi }) {
       <FormatCheckboxes g={g} />
       <CombinedTitleOption g={g} />
       <RandomBatchesOption g={g} />
+      <LimitOption g={g} />
       <span className="svg-divider" aria-hidden="true" />
       <TargetSiteCheckboxes g={g} />
       <UploadButtons g={g} />
@@ -115,14 +117,33 @@ function CombinedTitleOption({ g }: { g: StockUploadApi }) {
   );
 }
 
-function RandomBatchesOption({ g }: { g: StockUploadApi }) {
+export function RandomBatchesOption({ g }: { g: StockUploadApi }) {
+  // A limit always draws at random: the box shows that, and cannot be unticked then.
+  const forced = g.model.prefs.uploadLimit > 0;
   return (
     <label className="svg-chip" style={{ cursor: "pointer" }}
       title="Every site takes 100 icons per batch: draw each batch at random from what is left, mix the files inside it, and send each under a shuffled number in front of its name (0001-icon-snowflake.jpg) so the site's own name sort cannot put similar icons side by side. Getty web sorts by that name; Shutterstock and Adobe Stock get the same number on a re-upload, so the file is replaced instead of duplicated">
       <input type="checkbox" data-testid="stock-random-batches"
-        checked={g.model.prefs.randomBatches}
+        checked={g.model.prefs.randomBatches || forced} disabled={forced}
         onChange={(e) => g.setPrefs({ randomBatches: e.target.checked })} />
       <span>Random batches</span>
+    </label>
+  );
+}
+
+/**
+ * "Limit" (2026-11-05): upload only this many icons this time, drawn at random
+ * from the selection, in random batches of 100; the rest stay for a later run.
+ * Empty / 0 = no limit.
+ */
+export function LimitOption({ g }: { g: StockUploadApi }) {
+  const limit = g.model.prefs.uploadLimit;
+  return (
+    <label className="svg-chip" title="Upload only this many icons now, drawn at random from the selection, in random batches of 100 (Random batches is implied). The rest stay selected for a later run. Empty = no limit.">
+      <span>Limit</span>
+      <input type="number" min={0} step={1} className="svg-input" style={{ width: 72 }} data-testid="stock-upload-limit"
+        placeholder="none" value={limit > 0 ? limit : ""}
+        onChange={(e) => g.setPrefs({ uploadLimit: parseUploadLimit(e.target.value) })} />
     </label>
   );
 }

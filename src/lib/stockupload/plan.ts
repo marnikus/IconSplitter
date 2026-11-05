@@ -43,6 +43,8 @@ export interface StockUploadPlan {
   warnings: string[];
   preflightErrors: string[];
   totalBytes: number;
+  /** Set when "Limit" drew only some icons (uploadlimit.ts); absent = the whole selection. */
+  limit?: import("./uploadlimit").PlanLimit;
 }
 
 function selectedFormatsOf(flags: StockFormatFlags): UploadFormatKey[] {

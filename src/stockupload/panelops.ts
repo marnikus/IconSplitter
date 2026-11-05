@@ -8,6 +8,7 @@ import { probeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import { buildGettyEspCsv } from "../lib/stockupload/gettycsv";
 import { gettyWebRequestBytes } from "../lib/stockupload/gettyweb";
 import { buildStockUploadPlan, type StockUploadPlan } from "../lib/stockupload/plan";
+import { limitStockUploadPlan, uploadIsRandomized } from "../lib/stockupload/uploadlimit";
 import type { ExportedItem, StockFtpPreset, StockPresetState } from "../lib/stockupload/types";
 import type { IconMetadata } from "../lib/upload/meta";
 import { pickFolderFor } from "../ui/pickroot";
@@ -172,7 +173,8 @@ function depsFor(
     // The batch bytes the running helper can take, so no request is sent blind.
     gettyWebMaxBytes: run.gettyMaxBytes,
     // Random batch selection: each 100-icon batch is a random draw from what is left.
-    gettyWebRandomBatches: c.model.prefs.randomBatches,
+    // A limit always draws at random (uploadlimit.ts), as Random batches does.
+    gettyWebRandomBatches: uploadIsRandomized(c.model.prefs),
     // Every live step carries the run id, so the bar's cue is one per run.
     onProgress: (progress: UploadProgressStep) => c.dispatch({ type: "patch", patch: { progress: { ...progress, runId: run.runId } } }),
     logFn: log,
@@ -202,11 +204,13 @@ function finishedProgress(
 
 function performStartUpload(c: OpsCtx): void {
   if (c.model.uploading) { c.say("An upload batch is already running", true); return; }
-  const plan = buildStockUploadPlan({
+  const full = buildStockUploadPlan({
     items: c.items, checkedIds: c.checked, presets: c.presetState.presets,
     checkedTargets: c.presetState.checkedTargets, formats: c.presetState.formats,
     combineTitleDescription: c.model.prefs.combineTitleDescription,
   });
+  // "Limit": only N icons, drawn now so the confirmation shows the real run.
+  const plan = limitStockUploadPlan(full, c.model.prefs.uploadLimit);
   if (plan.preflightErrors.length > 0) { c.say(plan.preflightErrors[0], true); return; }
   c.dispatch({ type: "patch", patch: { dialog: { kind: "confirmUpload", plan } } });
 }
