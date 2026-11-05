@@ -156,6 +156,10 @@ describe("the popup checkbox", () => {
     expect(box.checked).toBe(true);
     await act(async () => { box.click(); });
     expect(host.textContent).toContain("Only the prompt and the current SVG code are sent");
+    // the full-prompt preview is the text-only wording, prompt at the bottom
+    const preview = host.querySelector("[data-testid=svg-confirm-full-prompt]")?.textContent ?? "";
+    expect(preview).toContain("no image is attached");
+    expect(preview.trim().endsWith("Fix it.")).toBe(true);
     const go = q("[data-testid=svg-confirm-generate]") as unknown as HTMLButtonElement;
     expect(go.disabled).toBe(false);
     await act(async () => { go.click(); });

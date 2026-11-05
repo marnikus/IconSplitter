@@ -71,7 +71,7 @@ function regenTextOf(args: RunArgs, items: readonly SvgSource[], plan: BatchPlan
   return {
     ok: true,
     text: {
-      prompt: regenBatchPrompt(presetText, carry.codes),
+      prompt: regenBatchPrompt(presetText, carry.codes, args.attachImage !== false),
       record: regenRecordText(presetText, carry.codes.length, carry.codes[0].position),
       records,
     },

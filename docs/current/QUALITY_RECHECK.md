@@ -4785,3 +4785,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `readChat` reply text = code block `[data-markdown-copy-text]`, else preview `img[src^=data:image/svg+xml]` decoded, else visible text; in-page `atob` declared for lint.
 - Measured: 4 new tests from the user's DOM; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3756 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — regeneration prompt below the SVG code
+
+- Scope: `currentSvgPrompt` / `regenBatchPrompt` put the saved prompt LAST (after the code), lead-in points down; `withImage` false = no-image wording (run via `args.attachImage`, popup preview via `attachImage`).
+- Measured: 4 new + 4 updated order assertions; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3757 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).

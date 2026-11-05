@@ -113,27 +113,45 @@ export interface RegenCodeItem {
   code: string;
 }
 
-const REGEN_RULES =
+const REGEN_RULES_HEAD =
   "Rules: Return exactly one complete SVG document for every position, in the same numeric order starting from 1. " +
   "Each SVG's <title> must be exactly the name of its position, with no extra words and no file extension. " +
-  "Do not merge, move, swap, add, remove or renumber icons. Use the attached grid only as the picture of the same " +
-  "numbered icons: keep each icon's artwork, proportions and orientation, and change only what the instructions above " +
-  "ask for. Return only the SVGs — no commentary, no introduction, no explanations.";
+  "Do not merge, move, swap, add, remove or renumber icons.";
+const REGEN_RULES_TAIL =
+  "keep each icon's artwork, proportions and orientation, and change only what the instructions at the end ask for. " +
+  "Return only the SVGs — no commentary, no introduction, no explanations.";
+
+/** The batch rules; the picture sentence only when the grid image is really attached. */
+function regenRules(withImage: boolean): string {
+  const picture = withImage
+    ? "Use the attached grid only as the picture of the same numbered icons:"
+    : "No image is attached — work from each icon's SVG code below:";
+  return `${REGEN_RULES_HEAD} ${picture} ${REGEN_RULES_TAIL}`;
+}
+
+/** The line that hands over to the user's instructions, which always come LAST (2026-11-05). */
+function instructionsLead(withImage: boolean): string {
+  return withImage
+    ? "Regenerate it from the attached image following these instructions:"
+    : "Regenerate it following these instructions (no image is attached — work from the SVG code above):";
+}
 
 /**
- * The text one batch regeneration request carries: the saved prompt, the ordered
- * manifest, the response contract, then every icon's own current SVG code. One
- * icon keeps the original single-icon text, so size 1 is unchanged.
+ * The text one batch regeneration request carries: the ordered manifest, the
+ * response contract, every icon's own current SVG code, and the saved prompt
+ * LAST — below the code (2026-11-05). One icon is the single-icon text.
+ * `withImage` false = text-only: nothing claims an attached picture.
  */
-export function regenBatchPrompt(presetText: string, items: readonly RegenCodeItem[]): string {
-  if (items.length === 1) return currentSvgPrompt(presetText, items[0].name, items[0].code);
+export function regenBatchPrompt(presetText: string, items: readonly RegenCodeItem[], withImage = true): string {
+  if (items.length === 1) return currentSvgPrompt(presetText, items[0].name, items[0].code, withImage);
   const manifest = items.map((i) => `${i.position} — ${i.name}`).join("\n");
   const codes = items.map((i) => `Current SVG code for position ${i.position} (${i.name}):\n${i.code.trim()}`);
   return [
-    presetText.trim(),
     `Here is a batch of ${items.length} icons to regenerate, in numbered grid order:\n${manifest}`,
-    REGEN_RULES,
+    regenRules(withImage),
     ...codes,
+    "Instructions:",
+    presetText.trim(),
   ].join("\n\n");
 }
 
@@ -158,13 +176,17 @@ export function regenPromptProblem(presetText: string, items: readonly RegenCode
   return null;
 }
 
-/** The saved prompt, the icon-name line, then the icon's current SVG code verbatim. */
-export function currentSvgPrompt(presetText: string, name: string, code: string): string {
+/**
+ * The icon-name line, the icon's current SVG code verbatim, then the saved
+ * prompt at the BOTTOM (2026-11-05). `withImage` false = text-only wording.
+ */
+export function currentSvgPrompt(presetText: string, name: string, code: string, withImage = true): string {
   return [
-    presetText.trim(),
     iconNameLine(name),
-    "Current SVG code of this icon — regenerate it from the attached image following the instructions above:",
+    "Current SVG code of this icon:",
     code.trim(),
+    instructionsLead(withImage),
+    presetText.trim(),
   ].join("\n\n");
 }
 

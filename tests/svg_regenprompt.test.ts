@@ -68,7 +68,7 @@ describe("Feature 2 — the saved prompt + every carried icon's current SVG code
     const plan = planFor([a], 1);
     const out = await requestTextOf(argsFor([a], [codeFor(a, CODE_1)], CURRENT(1)), [a], plan);
     expect(out.ok && out.text.prompt).toBe(regenBatchPrompt(PRESET, [{ position: 1, name: a.stem, code: CODE_1 }]));
-    expect(out.ok && out.text.prompt.startsWith(PRESET)).toBe(true);
+    expect(out.ok && out.text.prompt.endsWith(PRESET)).toBe(true); // the prompt at the bottom (2026-11-05)
     expect(out.ok && out.text.prompt).toContain(CODE_1);
   });
 

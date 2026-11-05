@@ -68,7 +68,7 @@ export default function SvgConfirm(p: SvgConfirmProps) {
           <ExclusionNote names={s.plan.excluded} />
           <PlanBody plan={s.plan} p={p} />
           <FullPromptPreview operation={p.operation} prompt={p.prompt} choice={s.own.choice} active={s.plan.active}
-            picked={s.plan.picked} codes={s.codes.codes} loading={s.codes.loading} />
+            picked={s.plan.picked} codes={s.codes.codes} loading={s.codes.loading} attachImage={s.attach} />
           {p.web === true ? <WebPolicyNote /> : <PolicyNote operation={p.operation} />}
           <Actions state={s} p={p} />
         </div>
