@@ -13,7 +13,7 @@ import { parseAiName } from "../lib/naming";
 import { pairId } from "../lib/pairing";
 import { preferredVersion, svgStem } from "../lib/svgfile";
 import type { PairMeta } from "../lib/pairmeta";
-import { loadMetaAt } from "../selection/pairstore";
+import { loadPairFiles } from "../selection/pairstore";
 import type { SvgVersion } from "../lib/svgmodel";
 
 /** The export folder is never a discovery source (no export loops). */
@@ -131,14 +131,10 @@ function unreadableOf(entries: readonly FileEntry[]): { relPath: string; reason:
 interface LoadedSidecar { meta: PairMeta; path: string; corrupt: boolean }
 
 /** Every `.svg.json` the walk found, read and rebased onto this root (I-49). */
+/** Every pair file, through the shared parallel + session-cached loader (2026-11-06). */
 async function loadSidecars(root: DirHandleLike, entries: readonly FileEntry[]): Promise<LoadedSidecar[]> {
-  const out: LoadedSidecar[] = [];
-  for (const e of entries) {
-    if (!e.name.toLowerCase().endsWith(".svg.json")) continue;
-    const read = await loadMetaAt(root, e.relPath);
-    out.push({ meta: read.meta as PairMeta, path: e.relPath, corrupt: read.corrupt || read.meta === null });
-  }
-  return out;
+  const reads = await loadPairFiles(root, entries);
+  return [...reads].map(([path, read]) => ({ meta: read.meta as PairMeta, path, corrupt: read.corrupt || read.meta === null }));
 }
 
 interface SvgFile {

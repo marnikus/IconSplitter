@@ -7,6 +7,7 @@
 // disk changes, which is exactly what a concurrent write looks like.
 
 import type { TreeNode } from "./scan";
+import { createLimiter, type Limiter } from "./limiter";
 
 export interface WritableLike {
   write(data: Blob): Promise<void>;
@@ -32,26 +33,36 @@ export interface DirHandleLike {
   isSameEntry?(other: DirHandleLike): Promise<boolean>;
 }
 
+/**
+ * How many listings / file opens one walk keeps in flight (2026-11-06). The
+ * walk used to do them one at a time — thousands of sequential round trips on
+ * a 1000-pair folder. The result is identical: same nodes, same order.
+ */
+export const WALK_CONCURRENCY = 24;
+
 /** Recursively snapshots a directory into a TreeNode (files get size/mtime). */
 export async function readDirTree(root: DirHandleLike, ignore: string[]): Promise<TreeNode> {
-  return { name: root.name, dir: true, children: await readChildren(root, ignore) };
+  const limit = createLimiter(WALK_CONCURRENCY);
+  return { name: root.name, dir: true, children: await readChildren(root, ignore, limit) };
 }
 
-async function readChildren(dir: DirHandleLike, ignore: string[]): Promise<TreeNode[]> {
-  const out: TreeNode[] = [];
-  for await (const [, handle] of dir.entries()) {
-    const node = await toNode(handle, ignore);
-    if (node) out.push(node);
-  }
-  return out;
+async function readChildren(dir: DirHandleLike, ignore: string[], limit: Limiter): Promise<TreeNode[]> {
+  // The slot is held only while listing, never while the children are walked.
+  const handles = await limit(async () => {
+    const list: (DirHandleLike | FileHandleLike)[] = [];
+    for await (const [, handle] of dir.entries()) list.push(handle);
+    return list;
+  });
+  const nodes = await Promise.all(handles.map((handle) => toNode(handle, ignore, limit)));
+  return nodes.filter((node): node is TreeNode => node !== null);
 }
 
-async function toNode(handle: DirHandleLike | FileHandleLike, ignore: string[]): Promise<TreeNode | null> {
+async function toNode(handle: DirHandleLike | FileHandleLike, ignore: string[], limit: Limiter): Promise<TreeNode | null> {
   if (handle.kind === "directory") {
     if (isIgnored(handle.name, ignore)) return null;
-    return { name: handle.name, dir: true, children: await readChildren(handle, ignore) };
+    return { name: handle.name, dir: true, children: await readChildren(handle, ignore, limit) };
   }
-  return fileNode(handle);
+  return limit(() => fileNode(handle));
 }
 
 /** Two attempts: one immediate retry covers a temp-file swap mid-write. */
