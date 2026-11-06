@@ -44,3 +44,13 @@ an unchanged SVG is never read or hashed again — a changed fingerprint is.
 Measured (`tests/upload_assemble_perf.test.ts`, 60 pairs, slow-drive fake):
 old **7.58 s** → nothing remembered **0.23 s** (−97 %) → after a restart
 **0.22 s** with no SVG read. Row previews stay behind Lazy previews.
+
+## Batch state sync (2026-11-06)
+
+After the walk, Batch synced every source group one at a time and rewrote its
+`<base>.json` on every scan — the top-level `updated` stamp made every file
+differ. Now (`src/batch/statewrite.ts`) a group is written only when something
+besides that stamp changed (`sameExceptScanTime`), and groups sync 16 at a
+time with results merged in group order. Measured
+(`tests/batch_sync_perf.test.ts`, 60 groups, slow-drive fake, unchanged
+rescan): ≈ 4.7 s → **0.18 s** (−96 %), no state file written.

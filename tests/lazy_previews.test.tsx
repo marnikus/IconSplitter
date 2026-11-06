@@ -38,12 +38,31 @@ function Art({ id }: { id: string }) {
   return <i data-testid={`art-${id}`} />;
 }
 
-/** `n` rows in a scrolling list, each with a lazy preview. */
+/**
+ * `n` rows laid out like the app: `.app-main` really scrolls; inside it the
+ * list's `.pair-table` only scrolls SIDEWAYS (overflow-x: auto makes its
+ * overflow-y compute to auto too, yet it is as tall as all its rows).
+ */
 function List({ n }: { n: number }) {
   const rows = Array.from({ length: n }, (_, i) => (
     <div key={`r${i}`} data-testid={`row-${i}`}>row {i}<LazyPreview size={80}><Art id={String(i)} /></LazyPreview></div>
   ));
-  return <div data-testid="scroller" style={{ overflowY: "auto", height: 300 }}>{withRowIndexes(rows)}</div>;
+  return (
+    <main className="app-main" data-testid="scroller" style={{ overflow: "auto" }} ref={scrolls(5000, 600)}>
+      <div className="pair-table" data-testid="table" style={{ overflowX: "auto", overflowY: "auto" }} ref={scrolls(4000, 4000)}>
+        {withRowIndexes(rows)}
+      </div>
+    </main>
+  );
+}
+
+/** happy-dom has no layout: give an element the heights a browser would measure. */
+function scrolls(scrollHeight: number, clientHeight: number) {
+  return (el: HTMLElement | null) => {
+    if (el === null) return;
+    Object.defineProperty(el, "scrollHeight", { configurable: true, value: scrollHeight });
+    Object.defineProperty(el, "clientHeight", { configurable: true, value: clientHeight });
+  };
 }
 
 const render = (node: React.ReactNode) => act(async () => { ui.render(<>{node}</>); });
@@ -91,10 +110,12 @@ describe("LazyPreview in a list", () => {
     expect(mounts).toBe(30);
   });
 
-  it("uses ONE observer for the whole list, on the list's own scroll area, looking 15 rows ahead", async () => {
+  it("uses ONE observer for the whole list, on the area that REALLY scrolls, looking 15 rows ahead", async () => {
     await render(<List n={60} />);
     expect(FakeObserver.all).toHaveLength(1);
     const { root, rootMargin } = FakeObserver.all[0].options;
+    // not the sideways-only table: watched there, every row would count as visible
+    expect(root).not.toBe(q("[data-testid=table]"));
     expect(root).toBe(q("[data-testid=scroller]"));
     const ahead = Number.parseInt(String(rootMargin), 10);
     expect(ahead).toBeGreaterThanOrEqual(EDGE_ROWS * 80);
@@ -127,4 +148,15 @@ describe("wired into every list tab and the top bar", () => {
     "src/batch/BatchThumbInfoCell.tsx", "src/selectionv2/ReviewRow.tsx", "src/svg/SvgRow.tsx", "src/upload/UploadRow.tsx", "src/stockupload/StockUploadRow.tsx",
   ])("%s wraps its preview", (file) => { expect(src(file)).toContain("<LazyPreview"); });
   it("the top bar has the switch", () => { expect(src("src/ui/Workbench.tsx")).toContain("<LazyPreviewsToggle"); });
+});
+
+describe("a hidden tab (no layout yet)", () => {
+  it("watches the app's scrolling area, never the window, so the look-ahead still works", async () => {
+    await render(
+      <main className="app-main" data-testid="main"><div style={{ overflowY: "auto" }}>{withRowIndexes(
+        Array.from({ length: 25 }, (_, i) => <div key={i}><LazyPreview size={40}><Art id={`h${i}`} /></LazyPreview></div>),
+      )}</div></main>,
+    );
+    expect(FakeObserver.all[0].options.root).toBe(q("[data-testid=main]"));
+  });
 });

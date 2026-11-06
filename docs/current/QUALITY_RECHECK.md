@@ -4820,3 +4820,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `src/upload/rowreads.ts` (shared folder lookups, bounded reads, source-hash store by fingerprint across restarts), parallel `assembleRows`; shared test helper `tests/helpers/slowfs.ts` (scan_perf switched to it).
 - Measured (60 pairs, slow-drive fake): old 7.58 s → 0.23 s cold (−97 %) → 0.22 s after a restart, no SVG re-read; 4 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests: no failure outside the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — lazy previews really lazy; Batch sync writes only changes
+
+- Scope: `LazyPreview` scroll root = the ancestor that really scrolls (overflow-y auto|scroll AND scrollHeight > clientHeight), else `.app-main` — `.svg-panel .pair-table` (overflow-x only) had made every row visible in Batch, Generate SVG, SVG to upload and Upload; Batch `syncAndCollect` writes a state file only when more than the scan stamp changed, groups in parallel.
+- Measured: Batch unchanged rescan (60 groups, slow-drive fake) ≈ 4.7 s → 0.18 s, 0 writes; 5 new/changed tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3819 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).

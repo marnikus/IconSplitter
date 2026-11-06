@@ -63,13 +63,21 @@ function release(root: Element | null, margin: number): void {
   if (byMargin?.size === 0) watches.delete(root);
 }
 
-/** The nearest scrolling ancestor; null = the window. */
+/**
+ * The ancestor that REALLY scrolls vertically: overflow-y auto/scroll AND taller
+ * content than its box. `overflow-y` alone is not enough — a list table with
+ * only `overflow-x: auto` computes `overflow-y: auto` too, yet is as tall as all
+ * its rows; watched there, every row counts as visible and every preview loads
+ * (the 2026-11-06 bug). Nothing measurable yet (a hidden tab has no layout):
+ * the app's scrolling area, never the window — whose clipping would cut the
+ * look-ahead away.
+ */
 function scrollRootOf(el: Element): Element | null {
   for (let p = el.parentElement; p !== null; p = p.parentElement) {
     const overflow = getComputedStyle(p).overflowY;
-    if (overflow === "auto" || overflow === "scroll") return p;
+    if ((overflow === "auto" || overflow === "scroll") && p.scrollHeight > p.clientHeight + 1) return p;
   }
-  return null;
+  return el.closest(".app-main");
 }
 
 /** Calls `ready` once when `el` comes within EDGE_ROWS rows; returns the cleanup. */

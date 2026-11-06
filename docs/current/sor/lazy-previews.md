@@ -22,9 +22,13 @@ everything loads at once.
   zoom height, `width` for wide preview columns) and `withRowIndexes(rows)`
   (each list's final row array gets its positions through a context, keys kept,
   applied after any active-row `cloneElement`).
-- **One IntersectionObserver per scroll area and look-ahead**, on the list's
-  real scroll container (the nearest `overflow-y: auto|scroll` ancestor, e.g.
-  `.app-main`) — watching the window would let that container clip the
+- **One IntersectionObserver per scroll area and look-ahead**, on the ancestor
+  that REALLY scrolls vertically: `overflow-y: auto|scroll` **and**
+  `scrollHeight > clientHeight`. A list's `.svg-panel .pair-table` has only
+  `overflow-x: auto`, which computes `overflow-y: auto` too while being as tall
+  as all its rows — watched there, every row counted as visible and every
+  preview loaded (fixed 2026-11-06). Nothing measurable yet (a hidden tab): the
+  closest `.app-main`, never the window, whose clipping would cut the
   look-ahead away. Look-ahead = 15 × (row height + 24 px), in 250 px steps so
   rows of one list share an observer. An observer with nothing left to wait for
   disconnects.
