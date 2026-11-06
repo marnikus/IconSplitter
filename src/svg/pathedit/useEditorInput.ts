@@ -24,21 +24,20 @@ export function toPathSpace(path: Element, clientX: number, clientY: number): { 
 
 export interface EditorInputCtx {
   host: RefObject<HTMLElement | null>;
-  /** The edited path inside the preview, or null while the user still has to pick one. */
+  /** The element whose units the editor works in: the icon's root <svg>. */
   pathEl: () => Element | null;
   state: EditorState | null;
   setState: (next: EditorState) => void;
-  /** A click on a path of a multi-path icon picks it. */
-  onPick: (index: number) => void;
   onFinish: () => void;
 }
 
 function inputOf(path: Element, e: PointerEvent | MouseEvent): PointerInput | null {
   const at = toPathSpace(path, e.clientX, e.clientY);
-  return at === null ? null : { p: { x: at.x, y: at.y }, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey, unitsPerPx: at.unitsPerPx };
+  if (at === null) return null;
+  return { p: { x: at.x, y: at.y }, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey, unitsPerPx: at.unitsPerPx, target: pickedPath(e) };
 }
 
-/** The path a click landed on in a multi-path icon (its data-edit-path number). */
+/** The icon path a click landed on (its data-edit-path number), if any. */
 function pickedPath(e: Event): number | null {
   const target = e.composedPath()[0] as Element | undefined;
   const raw = target?.getAttribute?.("data-edit-path");
@@ -70,7 +69,7 @@ function pointerHandlers(c: { current: EditorInputCtx }, node: HTMLElement): Rec
       if (e.button !== 0) return;
       e.stopPropagation();
       e.preventDefault();
-      if (c.current.state === null) { const n = pickedPath(e); if (n !== null) c.current.onPick(n); return; }
+      if (c.current.state === null) return;
       node.setPointerCapture?.(e.pointerId);
       applyPointer(c, e, pointerDown);
     },

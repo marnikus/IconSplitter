@@ -12,7 +12,10 @@ the SVG file is rewritten. **⚙ Edit settings** (bulk bar) sets the anchor size
 | Rule | Where |
 |---|---|
 | Edit is offered for a drawn SVG with a `<path>`, not while the row generates or waits | `svg/svgeditslot.tsx` `editBlocked` |
-| A multi-path icon waits for a click on the path to edit (only `<path>`, never a group) | `pathedit/SvgPathEditor.tsx`, `lib/pathedit/svgdoc.ts` |
+| Every `<path>` is an **object** of the session, loaded into one model in the icon's root space through its own matrix (`lib/pathedit/objects.ts`). A one-path icon starts selected; otherwise click a path to edit | `SvgPathEditor.tsx`, `objects.ts` |
+| Click a path = only that path; another click switches; **Shift+click** adds / removes. Only selected paths show anchors and can be edited; anchors of several selected paths move together | `gesture.ts` `selectObject`, `session.editableSub` |
+| The **marquee** selects anchors of every path inside it and selects those paths | `gesture.ts` `marqueeMove` |
+| **Esc**: ends a draw in progress → clears selected anchors → clears selected paths | `gesture.ts` `escape` |
 | Every anchor drawn all session; handles + arms only for the selection; Shift-snap target in red; marquee dashed; sizes in **screen px** (the path zooms, the chrome does not) | `pathedit/editoroverlay.ts` |
 | Working copy only: the preview's path follows the model live; nothing written on drag | `SvgPathEditor.tsx` |
 | Finish (button or Enter) — disabled while nothing changed — writes the file once; Cancel drops the session | `SvgPathEditor.tsx`, `svg/svgedit.ts` |
@@ -35,8 +38,9 @@ Two tools: **Select** (default) and **Draw**; switching keeps anchors and the se
   moves; never creates handles; releasing Alt never re-smooths.
 - Handle drag without Alt: smooth mirrors (same length), broken moves alone.
 - **Shift + drag** an anchor snaps (8 px): a line end first, then the nearest
-  point on a segment, against the drag-start path, never itself or its own two
-  segments; other selected anchors move by the same delta.
+  point on a segment, against the drag-start path of **every** path (selected or
+  not), never itself or its own two segments; other selected anchors move by
+  the same delta.
 - **Delete** removes selected anchors (neighbours join, their handles stay;
   an open end shortens; a two-point open path goes; a closed path stays closed
   with ≥ 3 points). Esc deselects; Enter = Finish.
@@ -50,7 +54,9 @@ mode `corner` / `smooth` / `broken`, read through the shared outline reader
 (arcs, quadratics, relative commands → absolute cubics). A segment is a line
 only when neither side has a handle. Finish writes only `M`, `L`, `C`, `Z`
 (a missing handle sits on its anchor), 2 decimals, and replaces **only that
-path's `d`** in the file text (`svgdoc.withPathD`) — every other byte stays.
+changed path's `d`** in the file text (`objects.writeObjects` → `svgdoc.withPathD`,
+each through the inverse of its matrix back into its own units) — untouched
+paths and every other byte stay.
 
 **Undo**: Finish records ONE `svgEdit` entry whose sides are the complete SVG
 text before and after; undo / redo write it back (`applySvgEdit`) and every
@@ -74,5 +80,6 @@ dots (`anchoroverlay.ts`).
 
 ## Tests
 
-`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_ui.test.tsx`
+`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`
+(objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_ui.test.tsx`
 (session in the page, Finish + undo/redo, Edit settings, wiring).

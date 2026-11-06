@@ -106,6 +106,24 @@ describe("the edit session", () => {
   });
 });
 
+describe("several paths in the page", () => {
+  it("click selects one path, Shift+click adds another (both show anchors), Esc clears them", async () => {
+    await mount(SRC.replace("</svg>", '<path d="M20 20L22 22"/></svg>'));
+    const first = shadow().querySelector("[data-edit-path='0']") as Element;
+    const second = shadow().querySelector("[data-edit-path='1']") as Element;
+    await act(async () => { pointer(first, "pointerdown", 7, 7); pointer(first, "pointerup", 7, 7); });
+    expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(3);
+    await act(async () => {
+      second.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true, button: 0, clientX: 210, clientY: 210, shiftKey: true, pointerId: 1 }));
+      second.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, composed: true, button: 0, clientX: 210, clientY: 210, pointerId: 1 }));
+    });
+    expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(5);
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(0);
+    expect(q("[data-testid=e-pick]")).not.toBeNull();
+  });
+});
+
 describe("Finish edit", () => {
   function Bind({ root, push }: { root: FakeDir | null; push: (e: unknown) => void }) {
     useSvgEditBinding({ current: root as never }, { push: push as never });

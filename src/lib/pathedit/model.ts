@@ -6,7 +6,7 @@
 // absolute M/L/C/Z); Finish writes M, L, C and Z back from the model, rounded
 // to a fixed precision so undo diffs stay stable. Pure.
 
-import { pathOutline } from "../upload/geom/outline";
+import { pathOutline, type OutlineOp } from "../upload/geom/outline";
 
 export interface Pt { x: number; y: number }
 export type PointMode = "corner" | "smooth" | "broken";
@@ -19,7 +19,12 @@ export interface Anchor {
   mode: PointMode;
 }
 
-export interface SubPath { anchors: Anchor[]; closed: boolean }
+/**
+ * One subpath. `owner` (2026-11-06) is the icon path ("object") it belongs to:
+ * the editor loads every path of the icon into one model, edits the selected
+ * objects and snaps against all of them; Finish writes each changed object back.
+ */
+export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number }
 export interface PathModel { subs: SubPath[] }
 /** One anchor: its subpath and its index there. */
 export interface AnchorRef { sub: number; i: number }
@@ -66,23 +71,26 @@ function closeSub(r: Reader): void {
   }
 }
 
-/** Path data → anchors; an empty model when the path has no geometry. */
-export function fromPathData(d: string | null): PathModel {
-  const outline = pathOutline(d);
-  const r: Reader = { subs: [], cur: null };
-  for (const op of outline?.ops ?? []) {
-    if (op.op === "M") { r.cur = { anchors: [corner(op.x, op.y)], closed: false }; r.subs.push(r.cur); continue; }
-    if (op.op === "Z") { closeSub(r); continue; }
-    const sub = openSub(r);
-    const prev = sub.anchors[sub.anchors.length - 1];
-    const next = corner(op.x, op.y);
-    if (op.op === "C") {
-      prev.out = handle({ x: op.x1, y: op.y1 }, prev);
-      next.in = handle({ x: op.x2, y: op.y2 }, next);
-    }
-    sub.anchors.push(next);
+/** One outline command into the reader: M starts a subpath, Z closes, L/C add an anchor. */
+function readOp(r: Reader, op: OutlineOp): void {
+  if (op.op === "M") { r.cur = { anchors: [corner(op.x, op.y)], closed: false }; r.subs.push(r.cur); return; }
+  if (op.op === "Z") { closeSub(r); return; }
+  const sub = openSub(r);
+  const prev = sub.anchors[sub.anchors.length - 1];
+  const next = corner(op.x, op.y);
+  if (op.op === "C") {
+    prev.out = handle({ x: op.x1, y: op.y1 }, prev);
+    next.in = handle({ x: op.x2, y: op.y2 }, next);
   }
+  sub.anchors.push(next);
+}
+
+/** Path data → anchors; an empty model when the path has no geometry. `owner` tags every subpath. */
+export function fromPathData(d: string | null, owner?: number): PathModel {
+  const r: Reader = { subs: [], cur: null };
+  for (const op of pathOutline(d)?.ops ?? []) readOp(r, op);
   for (const sub of r.subs) for (const a of sub.anchors) a.mode = modeOf(a);
+  if (owner !== undefined) for (const sub of r.subs) sub.owner = owner;
   return { subs: r.subs };
 }
 
@@ -164,7 +172,53 @@ export function cloneModel(m: PathModel): PathModel {
   return {
     subs: m.subs.map((s) => ({
       closed: s.closed,
+      ...(s.owner === undefined ? {} : { owner: s.owner }),
       anchors: s.anchors.map((a) => ({ ...a, in: a.in && { ...a.in }, out: a.out && { ...a.out } })),
     })),
   };
+}
+
+/** The subpaths of one object, in order. */
+export function subsOf(m: PathModel, owner: number): PathModel {
+  return { subs: m.subs.filter((s) => s.owner === owner) };
+}
+
+/** Every object (owner) in the model. */
+export function ownersOf(m: PathModel): number[] {
+  return [...new Set(m.subs.map((s) => s.owner).filter((o): o is number => o !== undefined))];
+}
+
+/** A 2-D affine matrix (SVG's a b c d e f). */
+export interface Affine { a: number; b: number; c: number; d: number; e: number; f: number }
+
+export const IDENTITY: Affine = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+
+export function applyAffine(m: Affine, p: Pt): Pt {
+  return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
+}
+
+/** m1 × m2 (m2 first). */
+export function multiplyAffine(m1: Affine, m2: Affine): Affine {
+  return {
+    a: m1.a * m2.a + m1.c * m2.b, b: m1.b * m2.a + m1.d * m2.b,
+    c: m1.a * m2.c + m1.c * m2.d, d: m1.b * m2.c + m1.d * m2.d,
+    e: m1.a * m2.e + m1.c * m2.f + m1.e, f: m1.b * m2.e + m1.d * m2.f + m1.f,
+  };
+}
+
+export function invertAffine(m: Affine): Affine {
+  const det = m.a * m.d - m.b * m.c || 1;
+  return {
+    a: m.d / det, b: -m.b / det, c: -m.c / det, d: m.a / det,
+    e: (m.c * m.f - m.d * m.e) / det, f: (m.b * m.e - m.a * m.f) / det,
+  };
+}
+
+/** Every anchor and handle through `m` (an object into the icon's root space, and back). */
+export function transformModel(model: PathModel, m: Affine): PathModel {
+  const out = cloneModel(model);
+  for (const s of out.subs) {
+    s.anchors = s.anchors.map((a) => ({ ...a, ...applyAffine(m, a), in: a.in && applyAffine(m, a.in), out: a.out && applyAffine(m, a.out) }));
+  }
+  return out;
 }

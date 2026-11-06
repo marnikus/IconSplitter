@@ -2,12 +2,13 @@
 // a thin guide along the working path, EVERY anchor (blue circles, the selected
 // ones filled), and only for the selection its handle arms and diamonds. A
 // Shift-snap target is shown in red: the segment, or a ring on a line end. The
-// marquee is a dashed box. Everything sits right after the edited <path> in its
-// own parent (so it shares the path's coordinates) and is sized in SCREEN
-// pixels: the path zooms, the chrome does not. Inline !important beats the
+// marquee is a dashed box. Only the SELECTED paths show anchors (2026-11-06:
+// several paths per session). Everything is drawn at the end of the icon's root
+// <svg>, in its root space, and sized in SCREEN pixels: the path zooms, the chrome does not. Inline !important beats the
 // preview stroke sheet. Nothing here is ever written to the file.
 
 import type { EditorState } from "../../lib/pathedit/gesture";
+import { editableSub } from "../../lib/pathedit/session";
 import { nextIndex, segmentCubic, toPathData, type Anchor, type Pt } from "../../lib/pathedit/model";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -80,14 +81,14 @@ export function clearEditOverlay(root: ParentNode): void {
   root.querySelectorAll(`[${OVERLAY_ATTR}]`).forEach((g) => g.remove());
 }
 
-/** Draws the whole overlay right after the edited path (same coordinates). */
-export function drawEditOverlay(path: Element, st: EditorState, look: OverlayLook): void {
-  const doc = path.ownerDocument;
-  clearEditOverlay(path.parentNode ?? doc);
+/** Draws the whole overlay at the end of the icon's root <svg> (root space). */
+export function drawEditOverlay(svg: Element, st: EditorState, look: OverlayLook): void {
+  const doc = svg.ownerDocument;
+  clearEditOverlay(svg);
   const g = doc.createElementNS(SVG_NS, "g");
   g.setAttribute(OVERLAY_ATTR, "");
   g.setAttribute("pointer-events", "none");
-  const model = st.session.model;
+  const model = { subs: st.session.model.subs.map((s, i) => (editableSub(st.session, i) ? s : { ...s, anchors: [] })) };
   const selected = new Set(st.session.selection.map((r) => `${r.sub}:${r.i}`));
   const parts: Element[] = [el(doc, "path", { d: toPathData(model, 3) }, "fill:none;stroke:#c8d2e0;stroke-width:1px"), ...snapMarks(doc, st, look)];
   // anchors first; a selected point's handles above them
@@ -95,5 +96,5 @@ export function drawEditOverlay(path: Element, st: EditorState, look: OverlayLoo
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => { if (selected.has(`${sub}:${i}`)) parts.push(...handlesOf(doc, a, look)); }));
   parts.push(...marqueeBox(doc, st));
   for (const p of parts) g.appendChild(p);
-  path.parentNode?.insertBefore(g, path.nextSibling);
+  svg.appendChild(g);
 }

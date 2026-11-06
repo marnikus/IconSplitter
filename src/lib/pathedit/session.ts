@@ -16,10 +16,18 @@ export interface EditSession {
   tool: Tool;
   /** Draw's open subpath that new clicks extend; null = the next click starts one. */
   active: number | null;
+  /** The selected objects (icon paths): only their anchors are drawn and editable; all paths snap. */
+  objects: number[];
 }
 
-export function newSession(model: PathModel): EditSession {
-  return { original: cloneModel(model), model: cloneModel(model), undo: [], redo: [], selection: [], tool: "select", active: null };
+export function newSession(model: PathModel, objects: number[] = []): EditSession {
+  return { original: cloneModel(model), model: cloneModel(model), undo: [], redo: [], selection: [], tool: "select", active: null, objects };
+}
+
+/** Can subpath `sub` be hit and edited — does it belong to a selected object? Unowned subpaths always can. */
+export function editableSub(s: EditSession, sub: number): boolean {
+  const owner = s.model.subs[sub]?.owner;
+  return owner === undefined || s.objects.includes(owner);
 }
 
 /** A finished step: `before` goes on the undo stack (the model when the gesture began). */

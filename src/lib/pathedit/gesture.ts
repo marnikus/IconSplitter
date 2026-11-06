@@ -15,7 +15,7 @@ import {
   addAnchor, breakSmooth, closeSubpath, deleteAnchors, insertOnSegment, joinSubpaths,
   moveAnchors, moveHandle, pullHandles, toggleSmooth,
 } from "./ops";
-import { commit, preview, redoSession, undoSession, type EditSession } from "./session";
+import { commit, editableSub, preview, redoSession, undoSession, type EditSession } from "./session";
 
 export interface PointerInput {
   p: Pt;
@@ -24,12 +24,14 @@ export interface PointerInput {
   shift: boolean;
   /** Path units per screen pixel — hit radii are pixels. */
   unitsPerPx: number;
+  /** The icon path ("object") under the pointer, when the click landed on one. */
+  target?: number | null;
 }
 
 type Drag =
   | { kind: "anchors"; before: PathModel; refs: AnchorRef[]; grab: AnchorRef; start: Pt; grabStart: Pt }
   | { kind: "handle"; before: PathModel; base: PathModel; ref: AnchorRef; side: "in" | "out" }
-  | { kind: "marquee"; start: Pt }
+  | { kind: "marquee"; start: Pt; objects: number[] }
   | { kind: "draw"; before: PathModel; base: PathModel; ref: AnchorRef };
 
 export interface EditorState {
@@ -55,9 +57,22 @@ const at = (m: PathModel, r: AnchorRef): Pt => m.subs[r.sub].anchors[r.i];
 const hasRef = (list: readonly AnchorRef[], r: AnchorRef): boolean => list.some((x) => x.sub === r.sub && x.i === r.i);
 const withSession = (st: EditorState, session: EditSession): EditorState => ({ ...st, session });
 
+/** What is under the pointer among the SELECTED objects (others are not editable, only snappable). */
+function hitOf(s: EditSession, input: PointerInput, selection: readonly AnchorRef[] = s.selection): Hit {
+  return hitTest(s.model, input.p, { radii: radii(input.unitsPerPx), selected: selection, editable: (sub) => editableSub(s, sub) });
+}
+
 export function pointerDown(st: EditorState, input: PointerInput): EditorState {
-  const hit = hitTest(st.session.model, input.p, radii(input.unitsPerPx), st.session.selection);
+  const hit = hitOf(st.session, input);
   return st.session.tool === "draw" ? drawDown(st, input, hit) : selectDown(st, input, hit);
+}
+
+/** A click on a path: it alone becomes the selection; with Shift it is added or removed. */
+function selectObject(s: EditSession, target: number, additive: boolean): EditSession {
+  if (!additive) return { ...s, objects: [target], selection: [], active: null };
+  const objects = s.objects.includes(target) ? s.objects.filter((o) => o !== target) : [...s.objects, target];
+  const selection = s.selection.filter((r) => objects.includes(s.model.subs[r.sub]?.owner ?? -1));
+  return { ...s, objects, selection, active: null };
 }
 
 function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState {
@@ -67,16 +82,30 @@ function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState
     const base = input.alt ? breakSmooth(s.model, hit.ref) : s.model;
     return { ...st, session: preview(s, base), drag: { kind: "handle", before: s.model, base, ref: hit.ref, side: hit.side } };
   }
+  if (hit.kind === "anchor" || hit.kind === "segment") return grab(st, input.p, hit);
+  if (input.target !== undefined && input.target !== null) return withSession(st, selectObject(s, input.target, input.shift));
+  return { ...st, session: { ...s, selection: [] }, drag: { kind: "marquee", start: input.p, objects: s.objects }, marquee: null };
+}
+
+/** The marquee takes anchors of every path inside it, and selects those paths too. */
+function marqueeMove(st: EditorState, d: Extract<Drag, { kind: "marquee" }>, p: Pt): EditorState {
+  const s = st.session;
+  const selection = anchorsInRect(s.model, d.start, p);
+  const owners = selection.map((r) => s.model.subs[r.sub].owner).filter((o): o is number => o !== undefined);
+  const objects = [...new Set([...d.objects, ...owners])];
+  return { ...st, marquee: { a: d.start, b: p }, session: { ...s, selection, objects } };
+}
+
+/** Press on an anchor (keeps a multi-selection that holds it) or a segment (its two anchors): starts a move. */
+function grab(st: EditorState, p: Pt, hit: Extract<Hit, { kind: "anchor" | "segment" }>): EditorState {
+  const s = st.session;
   if (hit.kind === "anchor") {
     const selection = hasRef(s.selection, hit.ref) ? s.selection : [hit.ref];
-    return { ...st, session: { ...s, selection }, drag: anchorDrag(s.model, selection, hit.ref, input.p) };
+    return { ...st, session: { ...s, selection }, drag: anchorDrag(s.model, selection, hit.ref, p) };
   }
-  if (hit.kind === "segment") {
-    const j = nextIndex(s.model.subs[hit.sub], hit.i) ?? hit.i;
-    const refs = [{ sub: hit.sub, i: hit.i }, { sub: hit.sub, i: j }];
-    return { ...st, session: { ...s, selection: refs }, drag: anchorDrag(s.model, refs, refs[0], input.p) };
-  }
-  return { ...st, session: { ...s, selection: [] }, drag: { kind: "marquee", start: input.p }, marquee: null };
+  const j = nextIndex(s.model.subs[hit.sub], hit.i) ?? hit.i;
+  const refs = [{ sub: hit.sub, i: hit.i }, { sub: hit.sub, i: j }];
+  return { ...st, session: { ...s, selection: refs }, drag: anchorDrag(s.model, refs, refs[0], p) };
 }
 
 function anchorDrag(model: PathModel, refs: AnchorRef[], grab: AnchorRef, start: Pt): Drag {
@@ -104,7 +133,8 @@ function drawDown(st: EditorState, input: PointerInput, hit: Hit): EditorState {
     const ins = insertOnSegment(s.model, hit.sub, hit.i, hit.t);
     return ins === null ? st : withSession(st, { ...commit(s, ins.model), selection: [ins.ref] });
   }
-  const added = addAnchor(s.model, s.active, input.p);
+  const owner = s.active === null ? s.objects[0] : s.model.subs[s.active]?.owner;
+  const added = addAnchor(s.model, s.active, input.p, owner);
   const session = { ...preview(s, added.model), active: added.ref.sub, selection: [added.ref] };
   return { ...st, session, drag: { kind: "draw", before: s.model, base: added.model, ref: added.ref } };
 }
@@ -125,9 +155,7 @@ export function pointerMove(st: EditorState, input: PointerInput): EditorState {
   if (d === null) return st;
   if (d.kind === "anchors") return anchorMove(st, d, input);
   if (d.kind === "handle") return withSession(st, preview(st.session, moveHandle(d.base, d.ref, d.side, input.p)));
-  if (d.kind === "marquee") {
-    return { ...st, marquee: { a: d.start, b: input.p }, session: { ...st.session, selection: anchorsInRect(st.session.model, d.start, input.p) } };
-  }
+  if (d.kind === "marquee") return marqueeMove(st, d, input.p);
   const a = at(d.base, d.ref);
   const far = Math.hypot(input.p.x - a.x, input.p.y - a.y) > HIT_PX.pull * input.unitsPerPx;
   return withSession(st, preview(st.session, far ? pullHandles(d.base, d.ref, input.p) : d.base));
@@ -143,7 +171,7 @@ export function pointerUp(st: EditorState): EditorState {
 
 /** Double-click on a segment in Select inserts an anchor there (the shape is kept). */
 export function doubleClick(st: EditorState, input: PointerInput): EditorState {
-  const hit = hitTest(st.session.model, input.p, radii(input.unitsPerPx), []);
+  const hit = hitOf(st.session, input, []);
   if (st.session.tool !== "select" || hit.kind !== "segment") return st;
   const ins = insertOnSegment(st.session.model, hit.sub, hit.i, hit.t);
   return ins === null ? st : withSession(st, { ...commit(st.session, ins.model), selection: [ins.ref] });
@@ -154,8 +182,11 @@ export interface KeyInput { key: string; ctrl: boolean; shift: boolean }
 const removeSelected = (s: EditSession): EditSession =>
   (s.selection.length === 0 ? s : { ...commit(s, deleteAnchors(s.model, s.selection)), selection: [], active: null });
 
-/** Esc ends a draw in progress, else deselects. */
-const escape = (s: EditSession): EditSession => (s.active !== null ? { ...s, active: null } : { ...s, selection: [] });
+/** Esc ends a draw in progress, else clears the selected anchors, else the selected paths. */
+function escape(s: EditSession): EditSession {
+  if (s.active !== null) return { ...s, active: null };
+  return s.selection.length > 0 ? { ...s, selection: [] } : { ...s, objects: [] };
+}
 
 /** One entry per key (with Ctrl, without): adding a key never deepens a branch chain. */
 const CTRL_KEYS: Record<string, (s: EditSession, shift: boolean) => EditSession> = {

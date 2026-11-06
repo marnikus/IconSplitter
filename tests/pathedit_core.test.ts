@@ -116,10 +116,10 @@ describe("edit operations", () => {
 describe("hit testing and snap", () => {
   it("a selected point's handle wins over an anchor under it; segments are hit by a band", () => {
     const m = toggleSmooth(fromPathData("M0 0 L3 0 L6 0"), { sub: 0, i: 1 });
-    expect(hitTest(m, { x: 4, y: 0 }, R, [{ sub: 0, i: 1 }]).kind).toBe("handle");
-    expect(hitTest(m, { x: 3, y: 0 }, R, []).kind).toBe("anchor");
-    expect(hitTest(fromPathData("M0 0 L100 0"), { x: 50, y: 0.5 }, R, []).kind).toBe("segment");
-    expect(hitTest(fromPathData("M0 0 L100 0"), { x: 50, y: 5 }, R, []).kind).toBe("none");
+    expect(hitTest(m, { x: 4, y: 0 }, { radii: R, selected: [{ sub: 0, i: 1 }] }).kind).toBe("handle");
+    expect(hitTest(m, { x: 3, y: 0 }, { radii: R, selected: [] }).kind).toBe("anchor");
+    expect(hitTest(fromPathData("M0 0 L100 0"), { x: 50, y: 0.5 }, { radii: R, selected: [] }).kind).toBe("segment");
+    expect(hitTest(fromPathData("M0 0 L100 0"), { x: 50, y: 5 }, { radii: R, selected: [] }).kind).toBe("none");
   });
 
   it("snaps to a line end first, then onto a segment, never to itself or its own segments", () => {

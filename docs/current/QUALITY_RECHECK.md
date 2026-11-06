@@ -4850,3 +4850,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: lib/pathedit (model, ops, hit/snap, session, gesture state machine, svgdoc one-d rewrite); svg/pathedit (SvgPathEditor, editoroverlay, useEditorInput); svg/svgedit (Finish = one write + one `svgEdit` history entry with both texts, undo/redo write back, panel-lent folder + push); svg/svgeditslot (Edit button, larger frame); usesvgtext revision bump; Edit settings (anchor px) for editor and Ctrl-hover dots; shared ui/usedismiss.
 - Measured: 34 new tests (pathedit_core 25, pathedit_ui 9 incl. Finish/undo); apply.test pinned type list updated; selection_response guard caught per-row history subscription (fixed via binding); tsc PASS; lint PASS; quality:changed PASSED; verify:fast tests 3903 pass / 16 fail = the pre-existing set; build PASS. Not exercised in a real browser (happy-dom has no layout; screen matrix stubbed). Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — Path editor: several paths (objects) per session
+
+- Scope: every <path> loaded as an owned object in root space (objects.ts, affine helpers); click selects one path, Shift+click toggles, marquee selects anchors across paths and their paths, Esc clears anchors then paths, joint moves, snap against all paths, Finish writes only changed objects through their inverse matrices; hitTest takes a query object; overlay in root svg.
+- Measured: 9 new tests (pathedit_objects) + 1 UI test; pathedit suites 42 + UI pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast 3911 pass / 17 fail = the pre-existing 16 + flaky process_completion_sound (passes alone); build PASS. Not exercised in a real browser.

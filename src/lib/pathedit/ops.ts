@@ -7,7 +7,7 @@
 
 import {
   cloneModel, modeOf, nextIndex, prevIndex, segmentCubic, splitCubic,
-  type Anchor, type AnchorRef, type PathModel, type Pt,
+  type Anchor, type AnchorRef, type PathModel, type Pt, type SubPath,
 } from "./model";
 
 const shift = (p: Pt | null, dx: number, dy: number): Pt | null => (p === null ? null : { x: p.x + dx, y: p.y + dy });
@@ -73,9 +73,9 @@ export function toggleSmooth(m: PathModel, ref: AnchorRef): PathModel {
 }
 
 /** What is left of one subpath after removing anchors: kept, opened, or gone. */
-function trimmed(anchors: Anchor[], closed: boolean): { anchors: Anchor[]; closed: boolean } | null {
+function trimmed(sub: SubPath, anchors: Anchor[]): SubPath | null {
   if (anchors.length < 2) return null; // a lone point is no subpath
-  return { anchors, closed: closed && anchors.length >= 3 };
+  return { ...sub, anchors, closed: sub.closed && anchors.length >= 3 };
 }
 
 /** Delete: neighbours join, their own handles stay; the subpath rules decide what remains. */
@@ -84,7 +84,7 @@ export function deleteAnchors(m: PathModel, refs: readonly AnchorRef[]): PathMod
   const subs = out.subs.flatMap((sub, s) => {
     const drop = new Set(refs.filter((r) => r.sub === s).map((r) => r.i));
     if (drop.size === 0) return [sub];
-    const kept = trimmed(sub.anchors.filter((_, i) => !drop.has(i)), sub.closed);
+    const kept = trimmed(sub, sub.anchors.filter((_, i) => !drop.has(i)));
     return kept === null ? [] : [kept];
   });
   return { subs };
@@ -108,13 +108,13 @@ export function insertOnSegment(m: PathModel, sub: number, i: number, t: number)
   return { model: out, ref: { sub, i: i + 1 } };
 }
 
-/** Draw: a new anchor at the end of the active open subpath, or the start of a new one. */
-export function addAnchor(m: PathModel, active: number | null, p: Pt): { model: PathModel; ref: AnchorRef } {
+/** Draw: a new anchor at the end of the active open subpath, or the start of a new one (in object `owner`). */
+export function addAnchor(m: PathModel, active: number | null, p: Pt, owner?: number): { model: PathModel; ref: AnchorRef } {
   const out = cloneModel(m);
   const anchor: Anchor = { x: p.x, y: p.y, in: null, out: null, mode: "corner" };
   const sub = active === null ? undefined : out.subs[active];
   if (sub === undefined || sub.closed) {
-    out.subs.push({ anchors: [anchor], closed: false });
+    out.subs.push({ anchors: [anchor], closed: false, ...(owner === undefined ? {} : { owner }) });
     return { model: out, ref: { sub: out.subs.length - 1, i: 0 } };
   }
   sub.anchors.push(anchor);
@@ -142,14 +142,20 @@ function reversed(anchors: Anchor[]): Anchor[] {
 }
 
 /** Joins the end of the active open subpath to an endpoint of another open one. */
-export function joinSubpaths(m: PathModel, active: number, other: AnchorRef): { model: PathModel; active: number } | null {
+/** Two different open subpaths, `other` naming an endpoint of its own. */
+function joinable(m: PathModel, active: number, other: AnchorRef): boolean {
   const a = m.subs[active];
   const b = m.subs[other.sub];
-  if (a === undefined || b === undefined || active === other.sub || a.closed || b.closed) return null;
-  const last = b.anchors.length - 1;
-  if (other.i !== 0 && other.i !== last) return null;
+  if (a === undefined || b === undefined || active === other.sub || a.closed || b.closed) return false;
+  return other.i === 0 || other.i === b.anchors.length - 1;
+}
+
+export function joinSubpaths(m: PathModel, active: number, other: AnchorRef): { model: PathModel; active: number } | null {
+  if (!joinable(m, active, other)) return null;
+  const a = m.subs[active];
+  const b = m.subs[other.sub];
   const tail = other.i === 0 ? b.anchors : reversed(b.anchors);
-  const joined = { anchors: [...cloneModel({ subs: [a] }).subs[0].anchors, ...cloneModel({ subs: [{ anchors: tail, closed: false }] }).subs[0].anchors], closed: false };
+  const joined: SubPath = { ...(a.owner === undefined ? {} : { owner: a.owner }), anchors: [...cloneModel({ subs: [a] }).subs[0].anchors, ...cloneModel({ subs: [{ anchors: tail, closed: false }] }).subs[0].anchors], closed: false };
   const subs = m.subs.map((s, i) => (i === active ? joined : s)).filter((_, i) => i !== other.sub);
   return { model: cloneModel({ subs }), active: active > other.sub ? active - 1 : active };
 }

@@ -57,19 +57,25 @@ function handleHit(m: PathModel, p: Pt, r: number, selected: readonly AnchorRef[
   return null;
 }
 
-function anchorHit(m: PathModel, p: Pt, r: number): Hit | null {
+/** Which subpaths can be hit (the selected objects); all when absent. */
+export type Editable = (sub: number) => boolean;
+const ALL: Editable = () => true;
+
+function anchorHit(m: PathModel, p: Pt, r: number, can: Editable): Hit | null {
   let best: { ref: AnchorRef; d: number } | null = null;
   m.subs.forEach((s, sub) => s.anchors.forEach((a, i) => {
+    if (!can(sub)) return;
     const d = dist(a, p);
     if (d <= r && (best === null || d < best.d)) best = { ref: { sub, i }, d };
   }));
   return best === null ? null : { kind: "anchor", ref: (best as { ref: AnchorRef }).ref };
 }
 
-function segmentHit(m: PathModel, p: Pt, r: number): Hit | null {
+function segmentHit(m: PathModel, p: Pt, r: number, can: Editable): Hit | null {
   let best: Extract<Hit, { kind: "segment" }> | null = null;
   let bestD = Infinity;
   m.subs.forEach((s, sub) => s.anchors.forEach((_, i) => {
+    if (!can(sub)) return;
     const n = nearestOnSegment(s, i, p);
     if (n !== null && n.d <= r && n.d < bestD) { bestD = n.d; best = { kind: "segment", sub, i, t: n.t, pt: n.pt }; }
   }));
@@ -77,8 +83,13 @@ function segmentHit(m: PathModel, p: Pt, r: number): Hit | null {
 }
 
 /** What is under `p`: a selected point's handle wins over an anchor, an anchor over a segment. */
-export function hitTest(m: PathModel, p: Pt, r: HitRadii, selected: readonly AnchorRef[]): Hit {
-  return handleHit(m, p, r.handle, selected) ?? anchorHit(m, p, r.anchor) ?? segmentHit(m, p, r.segment) ?? { kind: "none" };
+/** How to look: the radii, the selected anchors (their handles are live) and which subpaths may be hit. */
+export interface HitQuery { radii: HitRadii; selected: readonly AnchorRef[]; editable?: Editable }
+
+export function hitTest(m: PathModel, p: Pt, q: HitQuery): Hit {
+  const can = q.editable ?? ALL;
+  return handleHit(m, p, q.radii.handle, q.selected) ?? anchorHit(m, p, q.radii.anchor, can)
+    ?? segmentHit(m, p, q.radii.segment, can) ?? { kind: "none" };
 }
 
 export type Snap =
