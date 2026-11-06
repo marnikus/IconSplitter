@@ -26,6 +26,8 @@ export interface PointerInput {
   unitsPerPx: number;
   /** The icon path ("object") under the pointer, when the click landed on one. */
   target?: number | null;
+  /** How far (screen px) from a shape a single click still picks it — Edit settings; HIT_PX.pick when absent. */
+  pickPx?: number;
 }
 
 type Drag =
@@ -43,7 +45,7 @@ export interface EditorState {
 }
 
 /** Hit radii in screen pixels: generous anchors and handles, a 6 px band around a segment. */
-export const HIT_PX = { anchor: 9, handle: 9, segment: 6, snap: 8, pull: 3 };
+export const HIT_PX = { anchor: 9, handle: 9, segment: 6, snap: 8, pull: 3, pick: 14 };
 
 export function editorState(session: EditSession): EditorState {
   return { session, drag: null, snap: null, marquee: null };
@@ -83,9 +85,15 @@ function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState
     return { ...st, session: preview(s, base), drag: { kind: "handle", before: s.model, base, ref: hit.ref, side: hit.side } };
   }
   if (hit.kind === "anchor" || hit.kind === "segment") return grab(st, input.p, hit);
-  const target = objectAt(s.model, input.p, radii(input.unitsPerPx), (o) => s.objects.includes(o)) ?? input.target ?? null;
+  const target = pickedObject(s, input);
   if (target !== null) return withSession(st, selectObject(s, target, input.shift));
   return { ...st, session: { ...s, selection: [] }, drag: { kind: "marquee", start: input.p, objects: s.objects }, marquee: null };
+}
+
+/** The shape a single click picks: within the click tolerance (Edit settings, screen px) of its line, or inside it. */
+function pickedObject(s: EditSession, input: PointerInput): number | null {
+  const r = (input.pickPx ?? HIT_PX.pick) * input.unitsPerPx;
+  return objectAt(s.model, input.p, { anchor: r, handle: r, segment: r }, (o) => s.objects.includes(o)) ?? input.target ?? null;
 }
 
 /** The marquee takes anchors of every path inside it, and selects those paths too. */

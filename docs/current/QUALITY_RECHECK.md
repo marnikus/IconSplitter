@@ -4860,3 +4860,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: svgdoc reads circle/ellipse/rect/line/polyline/polygon as objects (skips non-drawn containers), writes a changed shape as <path> keeping other attributes; hit.objectAt picks by geometry (9 px band of any shape, else inside an unselected closed shape, topmost first) — fixes the reported icon (stroke-width 1 in 1024 viewBox, five circles not editable).
 - Measured: 6 new tests (pathedit_shapes, written first, seen failing); editor suites 48 pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast 3917 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Path editor: click tolerance setting
+
+- Scope: Edit settings gains pickPx (2–40, default 14 screen px), passed into the pointer input; a single click within it of a shape's line picks the shape (gesture.pickedObject → hit.objectAt).
+- Measured: 3 new tests (pathedit_pick_tolerance, written first, seen failing); editor + quality_base suites 58 pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast before the final split: only the pre-existing failures plus quality_base (gate-coupled, green after the fix); build PASS.

@@ -75,7 +75,7 @@ function usePaintSession(host: { current: HTMLDivElement | null }, p: { source: 
 export default function SvgPathEditor(p: SvgPathEditorProps) {
   const html = useMemo(() => buildSvgPreview(annotatePaths(p.source)).html, [p.source]);
   const host = useRef<HTMLDivElement | null>(null);
-  const { anchorPx } = useEditSettings();
+  const { anchorPx, pickPx } = useEditSettings();
   useShadowArt(html, host, undefined);
   const { st, setSt, matrices } = useStartSession(host, p.source, html);
   const finish = useCallback(() => {
@@ -83,7 +83,7 @@ export default function SvgPathEditor(p: SvgPathEditorProps) {
     if (out !== null) p.onFinish(out);
   }, [st, p, matrices]);
   usePaintSession(host, { source: p.source, st, matrices: matrices.current, anchorPx });
-  useEditorInput({ host, pathEl: () => host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish });
+  useEditorInput({ host, pathEl: () => host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish, pickPx });
   return (
     <div className="svg-path-editor" data-testid={`${p.testid}-editor`} style={{ width: p.box.width, height: p.box.height }}
       onClick={(e) => e.stopPropagation()}>

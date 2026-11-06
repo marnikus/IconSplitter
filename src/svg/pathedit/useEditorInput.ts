@@ -29,12 +29,14 @@ export interface EditorInputCtx {
   state: EditorState | null;
   setState: (next: EditorState) => void;
   onFinish: () => void;
+  /** Edit settings' click tolerance for picking a shape, in screen px. */
+  pickPx?: number;
 }
 
-function inputOf(path: Element, e: PointerEvent | MouseEvent): PointerInput | null {
+function inputOf(path: Element, e: PointerEvent | MouseEvent, pickPx?: number): PointerInput | null {
   const at = toPathSpace(path, e.clientX, e.clientY);
   if (at === null) return null;
-  return { p: { x: at.x, y: at.y }, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey, unitsPerPx: at.unitsPerPx, target: pickedPath(e) };
+  return { p: { x: at.x, y: at.y }, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey, unitsPerPx: at.unitsPerPx, target: pickedPath(e), ...(pickPx === undefined ? {} : { pickPx }) };
 }
 
 /** The icon path a click landed on (its data-edit-path number), if any. */
@@ -56,7 +58,7 @@ type Step = (st: EditorState, i: PointerInput) => EditorState;
 function applyPointer(c: { current: EditorInputCtx }, e: PointerEvent | MouseEvent, step: Step): void {
   const { state, pathEl, setState } = c.current;
   const path = pathEl();
-  const input = path === null || state === null ? null : inputOf(path, e);
+  const input = path === null || state === null ? null : inputOf(path, e, c.current.pickPx);
   if (input !== null && state !== null) setState(step(state, input));
 }
 
