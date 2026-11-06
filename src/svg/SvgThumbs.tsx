@@ -26,7 +26,7 @@ import { lastImageFailure, mainImageOf } from "../lib/svgimgreg";
 import { useSvgText } from "./usesvgtext";
 import { previewTargetOf, shownVersion } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
-import { EDIT_FRAME_PX, editSlot, PairBars, svgBarOf, useEditSession } from "./svgeditslot";
+import { PairBars, svgBarOf } from "./svgeditslot";
 import { SVG_STROKE_SHEET } from "./strokesheet";
 import type { SvgRow } from "./types";
 
@@ -58,14 +58,10 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   // Both boxes come from the one rule: the raster from its own pixels, the
   // vector from the ratio of the document it is about to draw.
   const aiBox = zoomBox(thumb, aiNat);
-  const edit = useEditSession({ row, svg, svgPath: target?.svgPath ?? "", version: target?.version ?? 0 });
   const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg) };
-  const big = Math.max(thumb, EDIT_FRAME_PX);
-  const svgSide = edit.editing && svg !== null
-    ? editSlot({ base: svgSlot({ ...slotArgs, thumb: big }), box: svgBox(svg, big), svg, id, stem: row.source.stem, version: slotArgs.version }, edit)
-    : svgSlot(slotArgs);
+  const svgSide = svgSlot(slotArgs);
   const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
-  const svgBar = svgBarOf(row, edit, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />);
+  const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />);
   return (
     <div className="svg-pair-with-bar">
       <PairedThumbs slots={[

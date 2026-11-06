@@ -2,9 +2,9 @@
 // (lib/pathedit/gesture), 2026-11-06. A pointer position becomes a point in the
 // edited path's OWN units through the path's screen matrix (so transforms and
 // zoom are honoured) together with the units-per-pixel scale the hit radii
-// need. While a session is open the window's keys belong to the editor: Delete,
-// Esc, Enter (Finish), Ctrl+Z / Ctrl+Y act on the session, and plain keys never
-// reach the list's row shortcuts. Text fields keep their keys.
+// need. While edit mode is on the window's keys belong to it: the edit mode's
+// own keys first (onKey), then the session's (Delete, Esc, Enter, Ctrl+Z,
+// Ctrl+Shift+Z / Ctrl+Y); no other app shortcut runs. Text fields keep theirs.
 
 import { useEffect, useRef, type RefObject } from "react";
 import { doubleClick, keyDown, pointerDown, pointerMove, pointerUp, type EditorState, type PointerInput } from "../../lib/pathedit/gesture";
@@ -31,6 +31,8 @@ export interface EditorInputCtx {
   onFinish: () => void;
   /** Edit settings' click tolerance for picking a shape, in screen px. */
   pickPx?: number;
+  /** The edit mode's own keys (rows, stroke view, tools), asked first; true = used. */
+  onKey?: (e: KeyboardEvent) => boolean;
 }
 
 function inputOf(path: Element, e: PointerEvent | MouseEvent, pickPx?: number): PointerInput | null {
@@ -98,9 +100,12 @@ function useKeys(c: { current: EditorInputCtx }): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const st = c.current.state;
-      if (st === null || isTextField(e.target)) return;
+      if (isTextField(e.target)) return;
+      // edit mode on: no other app shortcut runs until it is off
+      e.stopImmediatePropagation();
+      if (c.current.onKey?.(e)) { e.preventDefault(); return; }
+      if (st === null) return;
       const r = keyDown(st, { key: e.key, ctrl: e.ctrlKey || e.metaKey, shift: e.shiftKey });
-      if (r.handled || !(e.ctrlKey || e.metaKey)) e.stopImmediatePropagation();
       if (!r.handled) return;
       e.preventDefault();
       c.current.setState(r.state);

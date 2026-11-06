@@ -30,6 +30,7 @@ import type { Discovery, SourceProblem } from "./sources";
 
 import { exclusionSummary } from "./sourcelist";
 import { useBusyActivity } from "../ui/useBusyActivity";
+import SvgEditModal from "./pathedit/SvgEditModal";
 
 /**
  * `active` (2026-10-08): the Workbench keeps this panel mounted on every tab
@@ -63,6 +64,7 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
       <PanelDialogs g={g} rootRef={rootRef} />
       {g.imgReview && <SvgImgReview review={g.imgReview} onApply={g.applyImageReview} onDiscard={g.discardImageReview} />}
       <Overlay g={g} />
+      <SvgEditModal rows={g.visible} rootRef={rootRef} rootToken={g.rootToken} />
     </div>
   );
 }

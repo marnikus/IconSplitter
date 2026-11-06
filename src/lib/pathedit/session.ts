@@ -7,6 +7,10 @@ import { cloneModel, toPathData, type AnchorRef, type PathModel } from "./model"
 
 export type Tool = "select" | "draw";
 
+/** The session's own undo / redo depth: local to the session, gone on Finish or Cancel. */
+export const MAX_SESSION_HISTORY = 50;
+function capped<T>(list: T[]): T[] { return list.slice(-MAX_SESSION_HISTORY); }
+
 export interface EditSession {
   original: PathModel;
   model: PathModel;
@@ -33,7 +37,7 @@ export function editableSub(s: EditSession, sub: number): boolean {
 /** A finished step: `before` goes on the undo stack (the model when the gesture began). */
 export function commit(s: EditSession, model: PathModel, before: PathModel = s.model): EditSession {
   if (toPathData(model, 4) === toPathData(before, 4)) return { ...s, model };
-  return { ...s, model, undo: [...s.undo, before], redo: [] };
+  return { ...s, model, undo: capped([...s.undo, before]), redo: [] };
 }
 
 /** A step still in progress (a drag): shown, not yet on the undo stack. */
@@ -44,13 +48,13 @@ export function preview(s: EditSession, model: PathModel): EditSession {
 export function undoSession(s: EditSession): EditSession {
   const prev = s.undo[s.undo.length - 1];
   if (prev === undefined) return s;
-  return { ...s, model: prev, undo: s.undo.slice(0, -1), redo: [...s.redo, s.model], selection: [], active: null };
+  return { ...s, model: prev, undo: s.undo.slice(0, -1), redo: capped([...s.redo, s.model]), selection: [], active: null };
 }
 
 export function redoSession(s: EditSession): EditSession {
   const next = s.redo[s.redo.length - 1];
   if (next === undefined) return s;
-  return { ...s, model: next, redo: s.redo.slice(0, -1), undo: [...s.undo, s.model], selection: [], active: null };
+  return { ...s, model: next, redo: s.redo.slice(0, -1), undo: capped([...s.undo, s.model]), selection: [], active: null };
 }
 
 /** Switching tools keeps the anchors and the selection. */

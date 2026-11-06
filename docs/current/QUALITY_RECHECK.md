@@ -4870,3 +4870,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: state/listviewstore (load/save/useSaveListView), per-tab parsers (svg/upload/stockupload listview.ts, parseMulti/parseAnyMulti), initial models read the saved view, hooks save filter+search+sort(+dir).
 - Measured: 6 new tests (list_view_persist, written first, seen failing); verify:fast 3927 pass / 16 fail = the pre-existing set; lint fixed (no-useless-assignment) and green; tsc PASS; quality:changed PASSED; build PASS.
+
+## 2026-11-06 — Full-screen SVG edit mode
+
+- Scope: one modal per tab (SvgEditModal + editmodalstore) opened by a row's Edit; controls outside the artboard (top bar, side arrows, hotkey legend); edit mode owns all keys; session history capped at 50, Ctrl+Shift+Z redo; ←/→ row navigation with Save/Discard/Stay, Ctrl+Shift+S / Ctrl+Shift+X; I thin/preset stroke, V/P tools; useEditMode hook; rows no longer edit in place.
+- Measured: 11 new tests (pathedit_modal, written first, seen failing); editor suites 61 pass; verify:fast 3937 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.

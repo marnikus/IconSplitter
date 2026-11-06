@@ -2,24 +2,45 @@
 
 [Generate SVG owner](svg-generation.md) · [regen marks](svg-regen-statuses.md) · [state history](topics/state-history.md)
 
-**✎ Edit** beside a row's SVG version turns that preview into a short-lived
-**edit session** on one icon (no new page; the frame grows to ≥ 440 px).
-Anchors stay drawn for the whole session; **Finish edit** is the only moment
-the SVG file is rewritten. **⚙ Edit settings** (bulk bar) sets the anchor size.
+**✎ Edit** beside a row's SVG version opens the tab's **full-screen edit
+mode** on that row (`pathedit/SvgEditModal.tsx`, one modal for the tab; the
+open row lives in `editmodalstore.ts`). Every control is OUTSIDE the artboard:
+the top bar (Select / Draw, **thin lines ↔ preset stroke** switch, "row n / N ·
+name", Finish edit, Cancel), **‹ ›** arrows on the artboard's sides, and the
+**hotkey legend** at the bottom (`hotkeys.ts` `EDIT_HOTKEYS`: icon + keys +
+short text). The artboard fits the window at the icon's ratio. Finish is the
+only moment the SVG file is rewritten; **Cancel closes** the mode and drops the
+session. **⚙ Edit settings** (bulk bar) sets anchor size and click tolerance.
+
+## Edit mode keys and rows
+
+- While the mode is on, **only edit keys work** — every other app shortcut is
+  held back (`useEditorInput`: edit-mode keys first, then the session's); off,
+  none of them exist. Text fields keep their keys.
+- Session history is local: **Ctrl+Z** undo, **Ctrl+Shift+Z** (or Ctrl+Y)
+  redo, at most **50** steps (`session.MAX_SESSION_HISTORY`); gone on Finish or
+  Cancel.
+- **← / →** (or the side arrows) open the previous / next editable row in the
+  list's order (`editnav.neighborRow`, no wrap) at once, ready to edit. With
+  unsaved changes a question asks **Save and go** (Enter) / **Discard and go** /
+  **Stay** (Esc). **Ctrl+Shift+S** saves and goes next; **Ctrl+Shift+X**
+  discards and goes next. A failed save keeps the artboard.
+- **I** switches thin hairlines / the tab's preset stroke sheet; **V** / **P**
+  pick Select / Draw.
 
 ## Session
 
 | Rule | Where |
 |---|---|
-| Edit is offered for a drawn SVG with a `<path>`, not while the row generates or waits | `svg/svgeditslot.tsx` `editBlocked` |
+| Edit is offered for a drawn SVG with a shape, not while the row generates or waits | `svg/svgeditslot.tsx` `editBlocked` |
 | Every drawn shape — `<path>`, `<circle>`, `<ellipse>`, `<rect>`, `<line>`, `<polyline>`, `<polygon>` (never inside defs/clipPath/mask/symbol/marker/pattern) — is an **object** of the session; a changed basic shape is written back as a `<path>` keeping its other attributes (`svgdoc.ts`). Objects are loaded into one model in the icon's root space through its own matrix (`lib/pathedit/objects.ts`). A one-path icon starts selected; otherwise click a path to edit | `SvgPathEditor.tsx`, `objects.ts` |
 | Picking is by geometry (`hit.objectAt`), so a half-pixel stroke or an unfilled shape is still easy to pick: within the **click tolerance** (Edit settings, default 14 px) of any shape, else inside an unselected closed shape (topmost first). Click a path = only that path; another click switches; **Shift+click** adds / removes. Only selected paths show anchors and can be edited; anchors of several selected paths move together | `gesture.ts` `selectObject`, `session.editableSub` |
 | The **marquee** selects anchors of every path inside it and selects those paths | `gesture.ts` `marqueeMove` |
 | **Esc**: ends a draw in progress → clears selected anchors → clears selected paths | `gesture.ts` `escape` |
 | Every anchor drawn all session; handles + arms only for the selection; Shift-snap target in red; marquee dashed; sizes in **screen px** (the path zooms, the chrome does not) | `pathedit/editoroverlay.ts` |
 | Working copy only: the preview's path follows the model live; nothing written on drag | `SvgPathEditor.tsx` |
-| Finish (button or Enter) — disabled while nothing changed — writes the file once; Cancel drops the session | `SvgPathEditor.tsx`, `svg/svgedit.ts` |
-| In-session Ctrl+Z / Ctrl+Y step through edits (discarded by Cancel); the window's keys belong to the editor, row shortcuts never see them | `lib/pathedit/session.ts`, `pathedit/useEditorInput.ts` |
+| Finish (button or Enter) — disabled while nothing changed — writes the file once and closes; Cancel closes and drops the session | `useEditMode.ts`, `SvgEditModal.tsx`, `svg/svgedit.ts` |
+
 
 ## Tools, pointer and keys
 
@@ -75,12 +96,14 @@ dots (`anchoroverlay.ts`); **click tolerance to select a shape** 2–40 px
 
 ## Handles
 
-`svg-edit-btn-<id>`, `svg-edit-<id>` (canvas), `-editor`, `-toolbar`,
-`-tool-select`, `-tool-draw`, `-finish`, `-cancel`, `-pick`;
-`svg-edit-settings`, `svg-edit-settings-dialog`, `svg-edit-anchor-px`, `svg-edit-pick-px`.
+`svg-edit-btn-<id>`, `svg-edit-modal`, `svg-edit-<id>` (artboard, `data-stroke`
+thin / preset), `-editor`, `-toolbar`, `-tool-select`, `-tool-draw`, `-stroke`,
+`-position`, `-prev`, `-next`, `-legend`, `-finish`, `-cancel`, `-pick`,
+`-leave`, `-leave-save`, `-leave-discard`, `-leave-stay`; `svg-edit-settings`,
+`svg-edit-settings-dialog`, `svg-edit-anchor-px`, `svg-edit-pick-px`.
 
 ## Tests
 
 `pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
-(objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_ui.test.tsx`
+(objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_modal.test.tsx` (full-screen mode: layout, keys, rows, Save/Discard, 50-step history), `pathedit_ui.test.tsx`
 (session in the page, Finish + undo/redo, Edit settings, wiring).
