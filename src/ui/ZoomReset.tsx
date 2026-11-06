@@ -8,7 +8,7 @@ export default function ZoomReset({ testid, zoom }: { testid: string; zoom: Prev
   if (!isZoomed(zoom.view)) return null;
   return (
     <button type="button" className="zoom-reset" data-testid={`${testid}-zoom`}
-      title="Back to 100 % (Ctrl+Shift + scroll zooms 10–400 %)"
+      title="Back to 100 % and the centre (Ctrl+Shift + scroll zooms 10–400 %, middle-drag moves)"
       onClick={(e) => { e.stopPropagation(); zoom.reset(); }}>{Math.round(zoom.view.scale * 100)}% ↺ 100%</button>
   );
 }

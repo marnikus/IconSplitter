@@ -28,3 +28,8 @@ export function zoomTransform(v: ZoomView): string {
 }
 
 export const isZoomed = (v: ZoomView): boolean => v.scale !== 1 || v.x !== 0 || v.y !== 0;
+
+/** A middle-button drag: the artwork moves with the pointer, its scale kept. */
+export function panBy(v: ZoomView, dx: number, dy: number): ZoomView {
+  return dx === 0 && dy === 0 ? v : { ...v, x: v.x + dx, y: v.y + dy };
+}

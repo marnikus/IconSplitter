@@ -4905,3 +4905,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: lib/zoomview (10–400 %, pointer-anchored), ui/usePreviewZoom + ui/ZoomReset; SvgPreview (Generate SVG + SVG to upload rows) and the edit mode artboard (overlay redraws on zoom); legend entry.
 - Measured: 6 new tests (preview_zoom, written first, seen failing; happy-dom WheelEvent drops modifiers — set on the event in the test); verify:fast 3957 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Middle-drag pan in SVG previews
+
+- Scope: lib/zoomview panBy; ui/usePreviewZoom usePan (middle button, pointer capture, auto-scroll suppressed); row previews and the edit artboard; legend entry; reset restores position.
+- Measured: 4 new tests (preview_pan, written first, seen failing); zoom/pan/editor suites 84 pass; verify:fast 3960 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
