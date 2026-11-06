@@ -1,5 +1,6 @@
 // useStockUpload.ts — flat orchestration hook for the "Upload" (stockUpload) tab.
 
+import { LIST_VIEW_KEYS, useSaveListView } from "../state/listviewstore";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
@@ -136,6 +137,7 @@ function dropBadgeFromFilter(model: StockUploadModel, dispatch: (a: StockModelAc
 
 export function useStockUpload(): StockUploadApi {
   const [model, dispatch] = useReducer(reduceStockModel, undefined, initialStockModel);
+  useSaveListView(LIST_VIEW_KEYS.stock, { filter: model.filter, sort: model.sort });
   const refs = useRef<StockRefs | null>(null);
   if (refs.current === null) refs.current = createStockRefs();
   const r = refs.current;

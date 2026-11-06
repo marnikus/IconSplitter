@@ -14,7 +14,7 @@ import {
   type ModelCaps,
   type SamplingParams,
 } from "../lib/modelcaps";
-import { ALL_SVG_FILTER, naturalDir, type SvgDir, type SvgListFilter, type SvgSort } from "../lib/svglist";
+import { naturalDir, type SvgDir, type SvgListFilter, type SvgSort } from "../lib/svglist";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { findPreset, type PromptPreset } from "../lib/promptpresets";
 import type { Discovery } from "./sources";
@@ -23,6 +23,8 @@ import type { Dialog, ImageReview, RunProgress, SvgRow } from "./types";
 import { loadImageJournal, type ImageRequestEvidence } from "./imgjournal";
 import { sortedIds } from "./rowmodel";
 import { NO_CHAIN, type Chain } from "./runtotals";
+import { loadSvgListView } from "./listview";
+import { LIST_VIEW_KEYS, useSaveListView } from "../state/listviewstore";
 
 export interface Toast {
   msg: string;
@@ -248,12 +250,15 @@ export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs
     params: { ...DEFAULT_PARAMS }, caps: capsFor(live.model), catalog: null, paramNote: null,
     prompt, presets: extras.presets ?? [], presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg, stroke: prefs.stroke,
-    filter: ALL_SVG_FILTER, sort: "date", sortDir: naturalDir("date"), order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null, imgRunning: [],
+    ...loadSvgListView(), order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null, imgRunning: [],
     imgReview: null, imgJournal: journal.entries, imgJournalWarning: journal.warning,
   };
 }
 
 /** One hook, one line of state: the panel never holds a second copy. */
 export function useSvgModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, extras: { presets?: PromptPreset[]; conns?: ConnectionsStore }): [SvgModel, Dispatch<SvgAction>] {
-  return useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs, extras));
+  const state = useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs, extras));
+  const [m] = state;
+  useSaveListView(LIST_VIEW_KEYS.svg, { filter: m.filter, sort: m.sort, sortDir: m.sortDir });
+  return state;
 }

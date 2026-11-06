@@ -60,3 +60,11 @@ export function parseMulti<T extends string>(raw: unknown, allowed: readonly T[]
 export function multiText<T extends string>(want: Multi<T> | undefined, all: T, labelOf: (v: T) => string = (v) => v): string {
   return pickedOf(want, all).map(labelOf).join(" + ");
 }
+
+/** A stored value whose options are not fixed (badge ids): any string, or a list of strings. */
+export function parseAnyMulti(raw: unknown, all: string): Multi<string> {
+  if (typeof raw === "string" && raw !== "") return raw;
+  if (!Array.isArray(raw)) return all;
+  const kept = [...new Set(raw.filter((v): v is string => typeof v === "string" && v !== "" && v !== all))];
+  return kept.length === 0 ? all : kept.length === 1 ? kept[0] : kept;
+}

@@ -10,8 +10,9 @@ import { loadStockHistory } from "./historystore";
 import { recoverInterruptedUploads } from "./journal";
 import { loadStockPrefs, saveStockPrefs, type StockUploadPrefs } from "./prefsstore";
 import { loadStockPresets } from "./presetstore";
-import { ALL_STOCK_FILTER, type StockListFilter, type StockMetaDraft, type StockUploadSort } from "./rowlist";
+import { type StockListFilter, type StockMetaDraft, type StockUploadSort } from "./rowlist";
 import type { UploadProgressStep } from "./runupload";
+import { loadStockListView } from "./listview";
 
 export type StockDialog = null | { kind: "rowBadges" } | { kind: "confirmUpload"; plan: StockUploadPlan };
 
@@ -81,7 +82,7 @@ export function initialStockModel(): StockUploadModel {
   recoverInterruptedUploads();
   return {
     rootName: "", rootToken: 0, discovery: null, busy: null,
-    prefs: loadStockPrefs(), filter: ALL_STOCK_FILTER, sort: "path",
+    prefs: loadStockPrefs(), ...loadStockListView(),
     dialog: null, toast: null, drafts: {}, credSaved: {},
     testStatus: { busy: false, ok: null, note: "", certSha256: null },
     uploading: false, progress: null,

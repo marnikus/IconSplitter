@@ -4865,3 +4865,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: Edit settings gains pickPx (2–40, default 14 screen px), passed into the pointer input; a single click within it of a shape's line picks the shape (gesture.pickedObject → hit.objectAt).
 - Measured: 3 new tests (pathedit_pick_tolerance, written first, seen failing); editor + quality_base suites 58 pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast before the final split: only the pre-existing failures plus quality_base (gate-coupled, green after the fix); build PASS.
+
+## 2026-11-06 — List view remembered across reload (Generate SVG, SVG to upload, Upload)
+
+- Scope: state/listviewstore (load/save/useSaveListView), per-tab parsers (svg/upload/stockupload listview.ts, parseMulti/parseAnyMulti), initial models read the saved view, hooks save filter+search+sort(+dir).
+- Measured: 6 new tests (list_view_persist, written first, seen failing); verify:fast 3927 pass / 16 fail = the pre-existing set; lint fixed (no-useless-assignment) and green; tsc PASS; quality:changed PASSED; build PASS.

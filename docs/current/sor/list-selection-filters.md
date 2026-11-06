@@ -35,6 +35,17 @@ button says what is picked. Sort dropdowns stay single-choice.
 | SVG to upload package + metadata + badge | `upload/rowlist.ts`, `upload/UploadControls.tsx`, `upload/UploadRowBadgeFilter.tsx` |
 | Upload format + badge; both upload tabs share `rowMatchesBadges` / `badgeFilterOptions`; a deleted badge leaves the picks | `stockupload/rowlist.ts`, `stockupload/StockUploadControls.tsx`, `lib/upload/rowbadge.ts` |
 
+## Remembered across a reload
+
+Every list tab keeps the view it was left with: Batch (`lib/batchprefs`) and
+Selection V2 (`lib/session`) already did; Generate SVG, SVG to upload and
+Upload now store their filters (one value or several), the search text, the
+sort and Generate SVG's direction in `state/listviewstore.ts`
+(`iconSplitter.{svg,upload,stockUpload}.listView.v1`), each read back through
+the tab's own parser (`svg/listview.ts`, `upload/listview.ts`,
+`stockupload/listview.ts`; unknown values → the default, RULE 13). Clear
+filters resets and that is saved too. Tests: `list_view_persist.test.tsx`.
+
 Test helper `tests/helpers/multiselect.ts` `pickOnly` sets one value the way
 the old single-choice select did.
 
