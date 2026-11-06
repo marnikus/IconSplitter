@@ -11,7 +11,7 @@ import { editorState, type EditorState } from "../../lib/pathedit/gesture";
 import { IDENTITY, invertAffine, multiplyAffine, type Affine } from "../../lib/pathedit/model";
 import { loadObjects, previewData, writeObjects } from "../../lib/pathedit/objects";
 import { newSession, setTool } from "../../lib/pathedit/session";
-import { pathTags } from "../../lib/pathedit/svgdoc";
+import { GEOMETRY, pathTags, type PathTag } from "../../lib/pathedit/svgdoc";
 import { PREVIEW_CSS } from "../../lib/svgpreview";
 import { useEditSettings } from "../editsettings";
 import { SVG_STROKE_SHEET } from "../strokesheet";
@@ -76,17 +76,32 @@ function useStartSession(host: RefObject<HTMLDivElement | null>, source: string,
 }
 
 /** The changed shapes follow the working model; the overlay is redrawn at screen size. */
-function usePaintSession(host: RefObject<HTMLDivElement | null>, p: { source: string; st: EditorState | null; matrices: Affine[]; anchorPx: number; painted: number }): void {
+function usePaintSession(host: RefObject<HTMLDivElement | null>, p: { source: string; st: EditorState | null; matrices: Affine[]; anchorPx: number; painted: number; view: StrokeView }): void {
   useEffect(() => {
     const root = host.current?.shadowRoot ?? null;
     const svg = root?.querySelector("svg") ?? null;
     if (root === null || svg === null) return;
     if (p.st === null) { clearEditOverlay(root); return; }
     const st = p.st;
-    pathTags(p.source).forEach((t) => root.querySelector(`[data-edit-path="${t.index}"]`)
-      ?.setAttribute("d", previewData(p.source, st.session, t.index, p.matrices[t.index] ?? IDENTITY)));
-    drawEditOverlay(svg, st, { u: toPathSpace(svg, 0, 0)?.unitsPerPx ?? 1, anchorPx: p.anchorPx });
-  }, [host, p.source, p.st, p.matrices, p.anchorPx, p.painted]);
+    pathTags(p.source).forEach((t) => liveShape(root, t, previewData(p.source, st.session, t.index, p.matrices[t.index] ?? IDENTITY)));
+    drawEditOverlay(svg, st, { u: toPathSpace(svg, 0, 0)?.unitsPerPx ?? 1, anchorPx: p.anchorPx, guide: p.view === "thin" });
+  }, [host, p.source, p.st, p.matrices, p.anchorPx, p.painted, p.view]);
+}
+
+/**
+ * Shows one shape as the working model has it. A <circle>, <rect>, … ignores
+ * `d`, so a CHANGED basic shape is swapped for the <path> Finish will write
+ * (same attributes, geometry attributes gone); an untouched one stays as it is.
+ */
+function liveShape(root: ShadowRoot, t: PathTag, d: string): void {
+  const el = root.querySelector(`[data-edit-path="${t.index}"]`);
+  if (el === null) return;
+  if (el.tagName.toLowerCase() === "path") { el.setAttribute("d", d); return; }
+  if (d === t.d) return;
+  const path = el.ownerDocument.createElementNS("http://www.w3.org/2000/svg", "path");
+  for (const a of Array.from(el.attributes)) if (!GEOMETRY[t.kind].includes(a.name)) path.setAttribute(a.name, a.value);
+  path.setAttribute("d", d);
+  el.replaceWith(path);
 }
 
 export interface EditModeArgs {
@@ -116,7 +131,7 @@ export function useEditMode(a: EditModeArgs): EditMode {
   const [leave, setLeave] = useState<1 | -1 | null>(null);
   const painted = useArtboard(a.host, a.html, view);
   const { st, setSt, matrices } = useStartSession(a.host, a.source, a.html);
-  usePaintSession(a.host, { source: a.source, st, matrices: matrices.current, anchorPx, painted });
+  usePaintSession(a.host, { source: a.source, st, matrices: matrices.current, anchorPx, painted, view });
   const markup = useCallback(() => (st === null ? null : writeObjects(a.source, st.session, matrices.current)), [st, a.source, matrices]);
   const go = useCallback((dir: 1 | -1, mode: "ask" | "save" | "discard") => {
     const nav = a.nav;

@@ -21,6 +21,8 @@ export interface OverlayLook {
   u: number;
   /** The anchor's drawn diameter in screen pixels (Edit settings). */
   anchorPx: number;
+  /** The thin guide along the working path: only in the thin view — over the preset stroke it doubled the line. */
+  guide?: boolean;
 }
 
 const style = (css: string): string => css.split(";").filter(Boolean).map((d) => `${d.trim()} !important`).join(";")
@@ -90,7 +92,8 @@ export function drawEditOverlay(svg: Element, st: EditorState, look: OverlayLook
   g.setAttribute("pointer-events", "none");
   const model = { subs: st.session.model.subs.map((s, i) => (editableSub(st.session, i) ? s : { ...s, anchors: [] })) };
   const selected = new Set(st.session.selection.map((r) => `${r.sub}:${r.i}`));
-  const parts: Element[] = [el(doc, "path", { d: toPathData(model, 3) }, "fill:none;stroke:#c8d2e0;stroke-width:1px"), ...snapMarks(doc, st, look)];
+  const guide = look.guide === false ? [] : [el(doc, "path", { d: toPathData(model, 3) }, "fill:none;stroke:#c8d2e0;stroke-width:1px")];
+  const parts: Element[] = [...guide, ...snapMarks(doc, st, look)];
   // anchors first; a selected point's handles above them
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => parts.push(anchorDot(doc, a, selected.has(`${sub}:${i}`), look))));
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => { if (selected.has(`${sub}:${i}`)) parts.push(...handlesOf(doc, a, look)); }));

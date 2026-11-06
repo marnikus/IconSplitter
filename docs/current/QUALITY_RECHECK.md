@@ -4890,3 +4890,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: gesture SelectMode (replace/add/remove) for anchor presses and the marquee; Shift-drag still moves the whole selection with snap; Alt-drag on handles still breaks; legend updated.
 - Measured: 6 new tests (pathedit_select_mods, written first, seen failing); editor suites 72 pass; verify:fast 3948 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit mode: moved circles drawn live; no double line in preset
+
+- Scope: useEditMode liveShape swaps a changed basic shape for the <path> Finish writes (circles ignored d); overlay guide only in the thin view.
+- Measured: 3 new tests (pathedit_live_shapes, reproduced first); editor suites 75 pass; verify:fast 3950 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); tsc, lint, quality:changed, build PASS.

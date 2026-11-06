@@ -39,7 +39,7 @@ session. **⚙ Edit settings** (bulk bar) sets anchor size and click tolerance.
 | The **marquee** selects anchors of every path inside it and selects those paths | `gesture.ts` `marqueeMove` |
 | **Esc**: ends a draw in progress → clears selected anchors → clears selected paths | `gesture.ts` `escape` |
 | Every anchor drawn all session; handles + arms only for the selection; Shift-snap target in red; marquee dashed; sizes in **screen px** (the path zooms, the chrome does not) | `pathedit/editoroverlay.ts` |
-| Working copy only: the preview's path follows the model live; nothing written on drag | `SvgPathEditor.tsx` |
+| Working copy only: changed shapes follow the model live (a changed `<circle>`/`<rect>`/… is swapped for the `<path>` Finish writes, since it ignores `d`); nothing written on drag. The thin guide line is drawn only in the thin view — preset shows the thick stroke and anchors | `useEditMode.ts` `liveShape`, `editoroverlay.ts` |
 | Finish (button or Enter) — disabled while nothing changed — writes the file once and closes; Cancel closes and drops the session | `useEditMode.ts`, `SvgEditModal.tsx`, `svg/svgedit.ts` |
 
 
@@ -110,6 +110,6 @@ thin / preset), `-editor`, `-toolbar`, `-tool-select`, `-tool-draw`, `-stroke`,
 
 ## Tests
 
-`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
+`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_live_shapes.test.tsx` (moved circle drawn live, no guide in preset), `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
 (objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_bg.test.tsx` (artboard background), `pathedit_modal.test.tsx` (full-screen mode: layout, keys, rows, Save/Discard, 50-step history), `pathedit_ui.test.tsx`
 (session in the page, Finish + undo/redo, Edit settings, wiring).

@@ -23,7 +23,8 @@ export interface PathTag {
 const D_ATTR = /\sd\s*=\s*("([^"]*)"|'([^']*)')/;
 const SHAPE_TAG = /<(path|circle|ellipse|rect|line|polyline|polygon)\b[^>]*>/gi;
 const NOT_DRAWN = /<(defs|clipPath|mask|symbol|marker|pattern)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
-const GEOMETRY: Record<ShapeKind, string[]> = {
+/** The attributes that only describe a shape's geometry (they go when it becomes a <path>). */
+export const GEOMETRY: Record<ShapeKind, string[]> = {
   path: ["d"], circle: ["cx", "cy", "r"], ellipse: ["cx", "cy", "rx", "ry"], rect: ["x", "y", "width", "height", "rx", "ry"],
   line: ["x1", "y1", "x2", "y2"], polyline: ["points"], polygon: ["points"],
 };
