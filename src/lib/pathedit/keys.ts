@@ -7,7 +7,7 @@
 import { copyPieces, pasteOffset, pastePieces } from "./clipboard";
 import type { EditorState } from "./gesture";
 import type { SubPath } from "./model";
-import { breakAtAnchors, deleteAnchors } from "./ops";
+import { breakAtAnchors, deleteAnchors, moveAnchors } from "./ops";
 import { commit, redoSession, undoSession, type EditSession } from "./session";
 
 const withSession = (st: EditorState, session: EditSession): EditorState => ({ ...st, session });
@@ -49,6 +49,25 @@ function pasteClipboard(s: EditSession): EditSession {
   return { ...commit(s, pasted.model), selection: pasted.selection, active: null };
 }
 
+/** Arrow keys (2026-11-06): the selected points move 1 icon unit, Shift 10. */
+const ARROWS: Record<string, [number, number]> = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
+/** Presses closer together than this are one burst — one undo step. */
+const NUDGE_BURST_MS = 800;
+
+/** An arrow with points selected nudges them; null when the key is not that. */
+function arrowKey(st: EditorState, k: KeyInput, key: string): EditorState | null {
+  const arrow = k.ctrl ? undefined : ARROWS[key];
+  return arrow === undefined || st.session.selection.length === 0 ? null : nudge(st, arrow, k.shift ? 10 : 1);
+}
+
+function nudge(st: EditorState, [dx, dy]: [number, number], step: number): EditorState {
+  const s = st.session;
+  const now = Date.now();
+  const moved = moveAnchors(s.model, s.selection, dx * step, dy * step);
+  const inBurst = st.nudgeAt !== undefined && now - st.nudgeAt < NUDGE_BURST_MS && s.undo.length > 0;
+  return { ...st, nudgeAt: now, session: inBurst ? { ...s, model: moved, redo: [] } : commit(s, moved) };
+}
+
 /** One entry per key (with Ctrl, without): adding a key never deepens a branch chain. */
 const CTRL_KEYS: Record<string, (s: EditSession, shift: boolean) => EditSession> = {
   z: (s, shift) => (shift ? redoSession(s) : undoSession(s)),
@@ -63,6 +82,8 @@ const PLAIN_KEYS: Record<string, (s: EditSession) => EditSession> = { delete: re
 /** Keys: what they did, whether the editor used them, and whether Enter asked to finish. */
 export function keyDown(st: EditorState, k: KeyInput): { state: EditorState; handled: boolean; finish: boolean } {
   const key = k.key.toLowerCase();
+  const nudged = arrowKey(st, k, key);
+  if (nudged !== null) return { state: nudged, handled: true, finish: false };
   if (!k.ctrl && key === "enter") return { state: st, handled: true, finish: true };
   const ctrl = k.ctrl ? CTRL_KEYS[key] : undefined;
   if (ctrl !== undefined) return { state: withSession(st, ctrl(st.session, k.shift)), handled: true, finish: false };

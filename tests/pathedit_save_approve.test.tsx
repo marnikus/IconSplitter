@@ -63,6 +63,8 @@ describe("Ctrl+Shift+S = save, approve & next", () => {
     const onGo = await mount();
     const node = host.querySelector("[data-testid=e]") as HTMLElement;
     await act(async () => { pointer(node, "pointerdown", 12, 2); pointer(node, "pointermove", 14, 4); pointer(node, "pointerup", 14, 4); });
+    // Esc first: the arrows nudge a selection
+    await act(async () => { window.dispatchEvent(key("Escape")); });
     await act(async () => { window.dispatchEvent(key("ArrowRight")); });
     await act(async () => { (host.querySelector("[data-testid=e-leave-save]") as HTMLButtonElement).click(); });
     expect(onGo.mock.calls.at(-1)?.[2] ?? false).toBe(false);

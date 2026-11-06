@@ -34,7 +34,8 @@ export const EDIT_HOTKEYS: readonly HotkeyHelp[] = [
   { keys: "I", icon: "◫", text: "Thin / preset stroke" },
   { keys: "Ctrl+Shift+Scroll", icon: "🔍", text: "Zoom 10–400% · 100% button resets" },
   { keys: "Middle-drag", icon: "✋", text: "Move the zoomed artboard" },
-  { keys: "←  →", icon: "⇆", text: "Previous / next SVG" },
+  { keys: "Arrows", icon: "✣", text: "Nudge selected points 1 unit (Shift 10)" },
+  { keys: "←  →", icon: "⇆", text: "Previous / next SVG (nothing selected)" },
   { keys: "Ctrl+Shift+S", icon: "💾", text: "Save, approve & next SVG" },
   { keys: "Ctrl+Shift+X", icon: "🗑", text: "Discard & next SVG" },
 ];

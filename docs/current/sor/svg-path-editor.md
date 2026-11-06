@@ -31,6 +31,8 @@ session. **⚙ Edit settings** (bulk bar) sets anchor size and click tolerance.
   **Stay** (Esc). **Ctrl+Shift+S** saves, **approves** (Generate SVG review, its own
   undo step, even when nothing changed — `svgedit.approveEditedSvg`) and goes next; **Ctrl+Shift+X**
   discards and goes next. A failed save keeps the artboard.
+- **Arrows** nudge the selected points 1 icon unit (Shift 10); a quick burst is one
+  undo step. With nothing selected, ← / → change SVG (Esc deselects first).
 - **I** switches thin hairlines / the tab's preset stroke sheet; **V** / **P**
   pick Select / Draw.
 

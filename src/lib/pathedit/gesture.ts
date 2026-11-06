@@ -48,6 +48,8 @@ export interface EditorState {
   /** The Shift-snap target shown while dragging. */
   snap: Snap | null;
   marquee: { a: Pt; b: Pt } | null;
+  /** When the last arrow-key nudge happened: a quick burst is one undo step (keys.ts). */
+  nudgeAt?: number;
 }
 
 /** Hit radii in screen pixels: generous anchors and handles, a 6 px band around a segment. */

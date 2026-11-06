@@ -110,6 +110,8 @@ describe("the edit surface", () => {
     await act(async () => { window.dispatchEvent(key("ArrowRight")); });
     expect(onGo).toHaveBeenLastCalledWith(1, null);
     await edit();
+    // after an edit the point stays selected: Esc first (the arrows nudge a selection)
+    await act(async () => { window.dispatchEvent(key("Escape")); });
     await act(async () => { window.dispatchEvent(key("ArrowRight")); });
     expect(q("[data-testid=e-leave]")).not.toBeNull();
     await act(async () => { (q("[data-testid=e-leave-discard]") as HTMLButtonElement).click(); });

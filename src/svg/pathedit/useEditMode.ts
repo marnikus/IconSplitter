@@ -180,6 +180,8 @@ function useModeKeys(k: KeyParts): (e: KeyboardEvent) => boolean {
     }
     const action = modalKeyAction(e);
     if (action === null) return false;
+    // with points selected, the arrows nudge them (keys.ts) instead of changing SVG (2026-11-06)
+    if ((action === "prev" || action === "next") && (k.st?.session.selection.length ?? 0) > 0) return false;
     runAction(action, k);
     return true;
   };
