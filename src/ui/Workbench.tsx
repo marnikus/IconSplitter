@@ -21,6 +21,7 @@ import { armCompletionSound } from "./completionSound";
 import ScrollTopButton from "./ScrollTopButton";
 import ActivityBars from "./ActivityBars";
 import LazyPreviewsToggle from "./LazyPreviewsToggle";
+import { useScrollMemory } from "./scrollmemory";
 
 const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "sheets", label: "Single sheets", testid: "tab-sheets" },
@@ -45,6 +46,8 @@ function Shell() {
   const rebuild = useRebuildWatch();
   useSessionAutosave();
   usePrefsAutosave();
+  // each tab keeps its scroll position across a reload and a tab switch (2026-11-06)
+  useScrollMemory(mainRef, tab);
   return (
     <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell" onPointerDownCapture={armCompletionSound} onKeyDownCapture={armCompletionSound}>
       <div className="progress-mounts flex flex-col gap-1">

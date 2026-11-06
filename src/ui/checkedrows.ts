@@ -80,8 +80,15 @@ export function useCheckedRows(checked: readonly string[], activeId?: string | n
   active.current = activeId;
   const rovingRef = useRef(roving);
   rovingRef.current = roving;
+  // After a reload the active row is known before its row exists (the rows load
+  // later): the first time it appears it is scrolled into view, once (2026-11-06).
+  const revealed = useRef(false);
   const register = useCallback<RegisterCheckedRow>((id, node) => {
     if (node === null) { bindings.current.delete(id); return; }
+    if (!revealed.current && active.current === id) {
+      revealed.current = true;
+      if (!bindings.current.has(id)) window.setTimeout(() => { if (!scrollHeld()) node.scrollIntoView?.({ block: "nearest" }); }, 60);
+    }
     const input = node.querySelector<HTMLInputElement>('input[type="checkbox"]');
     if (input === null) return;
     const binding = { node, input };

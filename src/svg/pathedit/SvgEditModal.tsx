@@ -4,7 +4,9 @@
 // the list's order at once — after Save writes the current one when asked.
 // Finish writes and closes; Cancel closes and drops the session.
 
+import { useEffect } from "react";
 import type { DirHandleLike } from "../../lib/fs";
+import { patchSvg } from "../../state/appstore";
 import { previewTargetOf } from "../rowmodel";
 import { finishSvgEdit } from "../svgedit";
 import type { SvgRow } from "../types";
@@ -29,6 +31,8 @@ export default function SvgEditModal(p: SvgEditModalProps) {
 }
 
 function ModalBody({ id, rows, rootRef, rootToken }: SvgEditModalProps & { id: string }) {
+  // the row being edited is the active row: after a reload the list comes back to it (2026-11-06)
+  useEffect(() => { patchSvg({ activeId: id }); }, [id]);
   const row = rows.find((r) => r.source.id === id) ?? null;
   const target = row === null ? null : previewTargetOf(row);
   const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
