@@ -4885,3 +4885,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: .svg-edit-board .svg-preview { background: none } — the preview's checkerboard covered the chosen PREVIEW BG (reported: white selected, transparent shown).
 - Measured: pathedit_bg 5 tests pass (new CSS guard).
+
+## 2026-11-06 — Path editor: Shift adds / Alt removes (click and box)
+
+- Scope: gesture SelectMode (replace/add/remove) for anchor presses and the marquee; Shift-drag still moves the whole selection with snap; Alt-drag on handles still breaks; legend updated.
+- Measured: 6 new tests (pathedit_select_mods, written first, seen failing); editor suites 72 pass; verify:fast 3948 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.

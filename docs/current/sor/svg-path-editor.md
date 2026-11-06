@@ -47,6 +47,11 @@ session. **⚙ Edit settings** (bulk bar) sets anchor size and click tolerance.
 
 Two tools: **Select** (default) and **Draw**; switching keeps anchors and the selection.
 
+- Selection modifiers: **Shift + click** adds a point (a Shift-drag then moves
+  the whole selection, snapping), **Shift + box** adds the boxed points;
+  **Alt + click** removes a point (no move), **Alt + box** removes the boxed
+  points; a Shift / Alt click on empty space keeps the selection
+  (`gesture.ts` `SelectMode`).
 - Select: click selects / empty click deselects; drag moves an anchor, a handle
   or a segment (its two anchors); empty drag = marquee; double-click a segment
   inserts.
@@ -105,6 +110,6 @@ thin / preset), `-editor`, `-toolbar`, `-tool-select`, `-tool-draw`, `-stroke`,
 
 ## Tests
 
-`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
+`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
 (objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_bg.test.tsx` (artboard background), `pathedit_modal.test.tsx` (full-screen mode: layout, keys, rows, Save/Discard, 50-step history), `pathedit_ui.test.tsx`
 (session in the page, Finish + undo/redo, Edit settings, wiring).

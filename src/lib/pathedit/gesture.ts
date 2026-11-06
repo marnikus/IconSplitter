@@ -33,8 +33,12 @@ export interface PointerInput {
 type Drag =
   | { kind: "anchors"; before: PathModel; refs: AnchorRef[]; grab: AnchorRef; start: Pt; grabStart: Pt }
   | { kind: "handle"; before: PathModel; base: PathModel; ref: AnchorRef; side: "in" | "out" }
-  | { kind: "marquee"; start: Pt; objects: number[] }
+  | { kind: "marquee"; start: Pt; objects: number[]; base: AnchorRef[]; mode: SelectMode }
   | { kind: "draw"; before: PathModel; base: PathModel; ref: AnchorRef };
+
+/** How a click or box changes the anchor selection: plain replaces, Shift adds, Alt removes. */
+export type SelectMode = "replace" | "add" | "remove";
+const modeOf = (input: PointerInput): SelectMode => (input.alt ? "remove" : input.shift ? "add" : "replace");
 
 export interface EditorState {
   session: EditSession;
@@ -84,10 +88,12 @@ function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState
     const base = input.alt ? breakSmooth(s.model, hit.ref) : s.model;
     return { ...st, session: preview(s, base), drag: { kind: "handle", before: s.model, base, ref: hit.ref, side: hit.side } };
   }
-  if (hit.kind === "anchor" || hit.kind === "segment") return grab(st, input.p, hit);
-  const target = pickedObject(s, input);
+  if (hit.kind === "anchor" || hit.kind === "segment") return grab(st, input, hit);
+  const mode = modeOf(input);
+  const target = mode === "remove" ? null : pickedObject(s, input);
   if (target !== null) return withSession(st, selectObject(s, target, input.shift));
-  return { ...st, session: { ...s, selection: [] }, drag: { kind: "marquee", start: input.p, objects: s.objects }, marquee: null };
+  const base = mode === "replace" ? [] : s.selection;
+  return { ...st, session: { ...s, selection: base }, drag: { kind: "marquee", start: input.p, objects: s.objects, base, mode }, marquee: null };
 }
 
 /** The shape a single click picks: within the click tolerance (Edit settings, screen px) of its line, or inside it. */
@@ -96,20 +102,40 @@ function pickedObject(s: EditSession, input: PointerInput): number | null {
   return objectAt(s.model, input.p, { anchor: r, handle: r, segment: r }, (o) => s.objects.includes(o)) ?? input.target ?? null;
 }
 
-/** The marquee takes anchors of every path inside it, and selects those paths too. */
+const sameRef = (a: AnchorRef, b: AnchorRef): boolean => a.sub === b.sub && a.i === b.i;
+
+/** The box's anchors applied by mode: replace, add to (Shift) or remove from (Alt) the selection at its start. */
+function boxSelection(d: Extract<Drag, { kind: "marquee" }>, inRect: AnchorRef[]): AnchorRef[] {
+  if (d.mode === "replace") return inRect;
+  if (d.mode === "remove") return d.base.filter((r) => !inRect.some((x) => sameRef(x, r)));
+  return [...d.base, ...inRect.filter((r) => !d.base.some((x) => sameRef(x, r)))];
+}
+
+/** The marquee takes anchors of every path inside it (Shift adds, Alt removes) and selects the paths it adds. */
 function marqueeMove(st: EditorState, d: Extract<Drag, { kind: "marquee" }>, p: Pt): EditorState {
   const s = st.session;
-  const selection = anchorsInRect(s.model, d.start, p);
-  const owners = selection.map((r) => s.model.subs[r.sub].owner).filter((o): o is number => o !== undefined);
+  const inRect = anchorsInRect(s.model, d.start, p);
+  const selection = boxSelection(d, inRect);
+  const owners = d.mode === "remove" ? [] : inRect.map((r) => s.model.subs[r.sub].owner).filter((o): o is number => o !== undefined);
   const objects = [...new Set([...d.objects, ...owners])];
   return { ...st, marquee: { a: d.start, b: p }, session: { ...s, selection, objects } };
 }
 
-/** Press on an anchor (keeps a multi-selection that holds it) or a segment (its two anchors): starts a move. */
-function grab(st: EditorState, p: Pt, hit: Extract<Hit, { kind: "anchor" | "segment" }>): EditorState {
+/** The selection a press on an anchor makes: Alt removes it, Shift adds it, plain keeps a selection that holds it. */
+function pressSelection(selection: AnchorRef[], ref: AnchorRef, mode: SelectMode): AnchorRef[] {
+  if (mode === "remove") return selection.filter((r) => !sameRef(r, ref));
+  if (hasRef(selection, ref)) return selection;
+  return mode === "add" ? [...selection, ref] : [ref];
+}
+
+/** Press on an anchor (Shift adds it, Alt removes it — no move) or a segment (its two anchors): starts a move. */
+function grab(st: EditorState, input: PointerInput, hit: Extract<Hit, { kind: "anchor" | "segment" }>): EditorState {
   const s = st.session;
+  const p = input.p;
   if (hit.kind === "anchor") {
-    const selection = hasRef(s.selection, hit.ref) ? s.selection : [hit.ref];
+    const mode = modeOf(input);
+    const selection = pressSelection(s.selection, hit.ref, mode);
+    if (mode === "remove") return withSession(st, { ...s, selection });
     return { ...st, session: { ...s, selection }, drag: anchorDrag(s.model, selection, hit.ref, p) };
   }
   const j = nextIndex(s.model.subs[hit.sub], hit.i) ?? hit.i;

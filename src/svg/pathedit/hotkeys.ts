@@ -8,9 +8,12 @@ export interface HotkeyHelp { keys: string; icon: string; text: string }
 
 export const EDIT_HOTKEYS: readonly HotkeyHelp[] = [
   { keys: "Click", icon: "⬉", text: "Select an anchor or a shape" },
-  { keys: "Shift+Click", icon: "⊕", text: "Add / remove a shape" },
+  { keys: "Shift+Click", icon: "⊕", text: "Add a point · add / remove a shape" },
+  { keys: "Alt+Click", icon: "⊖", text: "Remove a point from the selection" },
   { keys: "Drag", icon: "✥", text: "Move anchor, handle or segment" },
-  { keys: "Drag empty", icon: "⬚", text: "Box-select anchors" },
+  { keys: "Drag empty", icon: "⬚", text: "Box-select anchors (replaces)" },
+  { keys: "Shift+Box", icon: "⊞", text: "Add the boxed points" },
+  { keys: "Alt+Box", icon: "⊟", text: "Remove the boxed points" },
   { keys: "Double-click", icon: "＋", text: "Insert an anchor on a segment" },
   { keys: "Ctrl+Click", icon: "◐", text: "Smooth ↔ corner point" },
   { keys: "Alt+Drag", icon: "⟀", text: "Break a handle pair" },
