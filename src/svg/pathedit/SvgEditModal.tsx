@@ -14,6 +14,9 @@ import { useSvgText } from "../usesvgtext";
 import { closeSvgEditor, openSvgEditor, useSvgEditorId } from "./editmodalstore";
 import { editableRow as editable, neighborRow } from "./editnav";
 import SvgPathEditor from "./SvgPathEditor";
+import AiSourcePanel from "./AiSourcePanel";
+import { useImageUrl } from "../useimageurl";
+import { mainImageOf } from "../../lib/svgimgreg";
 
 export interface SvgEditModalProps {
   rows: readonly SvgRow[];
@@ -28,15 +31,21 @@ export default function SvgEditModal(p: SvgEditModalProps) {
   return <ModalBody key={id} id={id} {...p} />;
 }
 
-function ModalBody({ id, rows, rootRef, rootToken }: SvgEditModalProps & { id: string }) {
+/** Everything the open row needs: its SVG text, its AI source image, its neighbours and its name. */
+function useEditedRow({ id, rows, rootRef, rootToken }: SvgEditModalProps & { id: string }) {
   // the row being edited is the active row: after a reload the list comes back to it (2026-11-06)
   useEffect(() => { patchSvg({ activeId: id }); }, [id]);
   const row = rows.find((r) => r.source.id === id) ?? null;
   const target = row === null ? null : previewTargetOf(row);
   const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
-  const prev = neighborRow(rows, id, -1, editable);
-  const next = neighborRow(rows, id, 1, editable);
+  const aiUrl = useImageUrl(rootRef, row === null ? "" : mainImageOf(row.meta, row.source.relPath));
   const label = row === null || target === null ? "" : `${row.source.stem} SVG v${target.version}`;
+  return { row, target, svg, aiUrl, label, prev: neighborRow(rows, id, -1, editable), next: neighborRow(rows, id, 1, editable) };
+}
+
+function ModalBody(p: SvgEditModalProps & { id: string }) {
+  const { id, rows } = p;
+  const { row, target, svg, aiUrl, label, prev, next } = useEditedRow(p);
   const save = async (markup: string) => (row !== null && target !== null && svg !== null
     ? finishSvgEdit({ id, svgPath: target.svgPath, label, before: svg, after: markup }) : false);
   const onGo = (dir: 1 | -1, markup: string | null, approve = false) => {
@@ -54,7 +63,8 @@ function ModalBody({ id, rows, rootRef, rootToken }: SvgEditModalProps & { id: s
         ? <ModalWaiting missing={row === null} />
         : <SvgPathEditor source={svg} testid={`svg-edit-${id}`} label={label}
             onFinish={(m) => { void save(m).then((ok) => { if (ok) closeSvgEditor(); }); }} onCancel={closeSvgEditor}
-            nav={{ canPrev: prev !== null, canNext: next !== null, position, onGo }} />}
+            nav={{ canPrev: prev !== null, canNext: next !== null, position, onGo }}
+            aside={<AiSourcePanel url={aiUrl} name={row.source.name} testid="svg-edit-ai" />} />}
     </div>
   );
 }

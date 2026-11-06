@@ -15,15 +15,15 @@
 // (2026-10-19, archive/2026-10-19-svg-version-chips) — one click shows that
 // version, through the same preferVersion owner as the Versions dialog.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
 import { buildSvgPreview } from "../lib/svgpreview";
 import { zoomBox, zoomBoxRatio } from "../lib/zoom";
-import { useSideThumbs } from "../selection/thumbs";
 import PairedThumbs, { type PreviewSlot } from "../ui/PairedThumbs";
 import { lastImageFailure, mainImageOf } from "../lib/svgimgreg";
 import { useSvgText } from "./usesvgtext";
+import { useImageUrl } from "./useimageurl";
 import { previewTargetOf, shownVersion } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
 import { editBlocked, PairBars, svgBarOf } from "./svgeditslot";
@@ -144,16 +144,6 @@ function Thumb({ url, alt, testid, onDims }: ThumbProps) {
 }
 
 /** Object URL for the AI image, cached for the session (RULE 10). */
-function useImageUrl(rootRef: { current: DirHandleLike | null }, relPath: string): string | null {
-  const thumbFor = useSideThumbs(rootRef);
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    thumbFor(relPath).then((u) => live && setUrl(u)).catch(() => live && setUrl(null));
-    return () => { live = false; };
-  }, [relPath, thumbFor]);
-  return url;
-}
 
 /** What the AI-source strip shows and does for its row (wired from the panel's actions). */
 interface AiBarActions {

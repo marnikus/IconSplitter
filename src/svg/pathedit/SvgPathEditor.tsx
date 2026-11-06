@@ -5,7 +5,7 @@
 // The logic lives in useEditMode; nothing is written here: Finish and "save &
 // go" hand the rewritten file text to the caller.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { EditorState } from "../../lib/pathedit/gesture";
 import { setTool, type Tool } from "../../lib/pathedit/session";
 import { annotatePaths } from "../../lib/pathedit/svgdoc";
@@ -30,13 +30,17 @@ export interface SvgPathEditorProps {
   onFinish: (markup: string) => void;
   onCancel: () => void;
   nav?: EditNav;
+  /** Shown to the left of the artboard, outside it (the AI source panel). */
+  aside?: ReactNode;
 }
 
 /** Room the top bar, the legend and the side arrows take around the artboard. */
 const CHROME = { w: 160, h: 260 };
+/** The side panel's width (CSS .svg-edit-aside) plus its gap. */
+const ASIDE_W = 380;
 
 /** The largest box of the icon's ratio that fits the window beside the chrome. */
-function useFittedBox(ratio: number, given?: { width: number; height: number }): { width: number; height: number } {
+function useFittedBox(ratio: number, given?: { width: number; height: number }, aside = false): { width: number; height: number } {
   const [win, setWin] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => {
     const on = () => setWin({ w: window.innerWidth, h: window.innerHeight });
@@ -44,7 +48,7 @@ function useFittedBox(ratio: number, given?: { width: number; height: number }):
     return () => window.removeEventListener("resize", on);
   }, []);
   if (given !== undefined) return given;
-  const h = Math.max(200, Math.min(win.h - CHROME.h, (win.w - CHROME.w) / ratio));
+  const h = Math.max(200, Math.min(win.h - CHROME.h, (win.w - CHROME.w - (aside ? ASIDE_W : 0)) / ratio));
   return { width: Math.round(h * ratio), height: Math.round(h) };
 }
 
@@ -52,12 +56,13 @@ export default function SvgPathEditor(p: SvgPathEditorProps) {
   const art = useMemo(() => buildSvgPreview(annotatePaths(p.source)), [p.source]);
   const host = useRef<HTMLDivElement | null>(null);
   const board = useRef<HTMLDivElement | null>(null);
-  const box = useFittedBox(art.ok ? art.ratio : 1, p.box);
+  const box = useFittedBox(art.ok ? art.ratio : 1, p.box, p.aside !== undefined);
   const mode = useEditMode({ host, board, source: p.source, html: art.html, onFinish: p.onFinish, nav: p.nav });
   return (
     <div className="svg-edit-surface" data-testid={`${p.testid}-editor`} onClick={(e) => e.stopPropagation()}>
       <TopBar testid={p.testid} mode={mode} position={p.nav?.position ?? p.label} onCancel={p.onCancel} />
       <div className="svg-edit-stage">
+        {p.aside !== undefined && <div className="svg-edit-aside">{p.aside}</div>}
         <SideArrow testid={`${p.testid}-prev`} glyph="‹" title="Previous SVG (←)" disabled={!(p.nav?.canPrev ?? false)} onClick={() => mode.go(-1, "ask")} />
         <Board host={host} board={board} box={box} testid={p.testid} label={p.label} mode={mode} />
         <SideArrow testid={`${p.testid}-next`} glyph="›" title="Next SVG (→)" disabled={!(p.nav?.canNext ?? false)} onClick={() => mode.go(1, "ask")} />

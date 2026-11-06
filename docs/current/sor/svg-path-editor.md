@@ -7,7 +7,9 @@
 run on the row; Enter on a focused button stays the button's) — opens the tab's
 **full-screen edit mode** on that row (`pathedit/SvgEditModal.tsx`, one modal for the tab; the
 open row lives in `editmodalstore.ts`). Every control is OUTSIDE the artboard:
-the top bar (Select / Draw, **thin lines ↔ preset stroke** switch, **PREVIEW BG**
+the **AI SOURCE** panel left of the artboard (the row's main AI image —
+`pathedit/AiSourcePanel.tsx`, `svg/useimageurl.ts`; the artboard leaves room
+for it), the top bar (Select / Draw, **thin lines ↔ preset stroke** switch, **PREVIEW BG**
 (the shared `ui/PreviewBgPicker`: presets or a custom colour, white by default,
 remembered in Edit settings `bg`), "row n / N · name", Finish edit, Cancel), **‹ ›** arrows on the artboard's sides, and the
 **hotkey legend** at the bottom (`hotkeys.ts` `EDIT_HOTKEYS`: icon + keys +

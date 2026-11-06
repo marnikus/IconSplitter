@@ -2189,3 +2189,10 @@
 /* Tail cutter (svg/tailcut, 2026-11-06). */
 .svg-field-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--v2-text); }
 .svg-cut-none { color: var(--v2-muted); font-size: 11px; }
+
+/* The AI source beside the edit artboard (svg/pathedit/AiSourcePanel, 2026-11-06). */
+.svg-edit-aside { align-self: flex-start; width: 360px; flex: none; }
+.svg-edit-ai { position: relative; margin: 0; aspect-ratio: 1; background: #fff; border-radius: 4px; box-shadow: 0 10px 30px rgb(0 0 0 / 50%); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.svg-edit-ai img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.svg-edit-ai-tag { position: absolute; top: 6px; left: 6px; padding: 1px 5px; border-radius: 4px; background: rgb(12 18 34 / 85%); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .04em; }
+.svg-edit-ai-missing { color: #667; font-size: 12px; }

@@ -4945,3 +4945,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: SvgHotkeys Enter on the active row (Enter on a focused control stays native); SvgThumbs double-click on the SVG thumbnail; one rule editnav.editableRow shared with the modal.
 - Measured: 4 new tests (svg_open_editor, seen failing first); svg/editor suites 88 files pass; verify:fast 4011 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — AI source panel in the edit mode
+
+- Scope: pathedit/AiSourcePanel beside the artboard (row's main AI image); SvgPathEditor aside slot + fitted box leaves room; shared svg/useimageurl (moved from SvgThumbs); SvgEditModal useEditedRow hook for the RULE 16 budget.
+- Measured: 4 new tests (pathedit_ai_source, seen failing first); editor + svg suites pass; verify:fast 4015 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
