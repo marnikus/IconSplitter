@@ -4815,3 +4815,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: parallel bounded `readDirTree` (`src/lib/limiter.ts`, 24 in flight), parallel shared pair-file loader `loadPairFiles` (16), session cache `src/selection/paircache.ts` keyed by (folder, path, size, mtime), invalidated by `saveMetaAt`; upload discovery uses the shared loader.
 - Measured (scan_perf, slow-drive fake, 120 pairs): old ≈ 16.8 s → first scan 0.93 s (−94 %), unchanged rescan 0.44 s (−97 %); 7 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests: no failure outside the pre-existing environmental set (quality_base fixed with the gate); build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — SVG to upload row assembly ≥ 80 % quicker
+
+- Scope: `src/upload/rowreads.ts` (shared folder lookups, bounded reads, source-hash store by fingerprint across restarts), parallel `assembleRows`; shared test helper `tests/helpers/slowfs.ts` (scan_perf switched to it).
+- Measured (60 pairs, slow-drive fake): old 7.58 s → 0.23 s cold (−97 %) → 0.22 s after a restart, no SVG re-read; 4 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests: no failure outside the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).

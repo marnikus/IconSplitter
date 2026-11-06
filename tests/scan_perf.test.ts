@@ -15,45 +15,8 @@ import { discoverApprovedSources } from "../src/svg/sources";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { pairFile } from "./helpers/pairfile";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { meter, perOpMs, slow, timed, type Meter } from "./helpers/slowfs";
 import type { TreeNode } from "../src/lib/scan";
-
-const MS = 2;
-const delay = () => new Promise<void>((r) => setTimeout(r, MS));
-
-interface Meter { ops: number; inFlight: number; peak: number; pairReads: number }
-
-/** Makes every listing, handle lookup and file open of the tree cost MS. */
-function slow(dir: FakeDir, m: Meter): FakeDir {
-  const timed = async <T>(work: () => Promise<T>): Promise<T> => {
-    m.ops += 1; m.inFlight += 1; m.peak = Math.max(m.peak, m.inFlight);
-    try { await delay(); return await work(); } finally { m.inFlight -= 1; }
-  };
-  const entries = dir.entries.bind(dir);
-  dir.entries = async function* () {
-    const list: [string, FakeDir | FakeFile][] = [];
-    await timed(async () => { for await (const e of entries()) list.push(e); });
-    yield* list;
-  } as typeof dir.entries;
-  const gd = dir.getDirectoryHandle.bind(dir);
-  dir.getDirectoryHandle = (n, o) => timed(() => gd(n, o));
-  const gf = dir.getFileHandle.bind(dir);
-  dir.getFileHandle = (n, o) => timed(() => gf(n, o));
-  for (const child of dir.children.values()) {
-    if (child instanceof FakeDir) slow(child, m);
-    else {
-      const get = child.getFile.bind(child);
-      child.getFile = () => timed(async () => {
-        const f = await get();
-        if (child.name.endsWith(".svg.json")) {
-          const text = f.text.bind(f);
-          Object.defineProperty(f, "text", { value: () => { m.pairReads += 1; return text(); } });
-        }
-        return f;
-      });
-    }
-  }
-  return dir;
-}
 
 /** `n` approved pairs, 4 files each, two folder levels deep. */
 function tree(n: number): FakeDir {
@@ -84,29 +47,18 @@ async function sequentialTree(dir: DirHandleLike): Promise<TreeNode> {
   return { name: dir.name, dir: true, children };
 }
 
-const timed = async <T>(work: () => Promise<T>) => { const t0 = performance.now(); const value = await work(); return { value, ms: performance.now() - t0 }; };
-
-/**
- * What one slow operation really costs on THIS machine (a 2 ms timer can wait
- * ~15 ms on Windows): the old one-at-a-time cost is operations × this.
- */
-async function perOpMs(): Promise<number> {
-  const { ms } = await timed(async () => { for (let i = 0; i < 20; i += 1) await delay(); });
-  return ms / 20;
-}
-
 beforeEach(() => clearPairCache());
 
 describe("the folder walk", () => {
   it("gives exactly the result of the one-at-a-time walk", { timeout: 60_000 }, async () => {
-    const m: Meter = { ops: 0, inFlight: 0, peak: 0, pairReads: 0 };
-    const root = slow(tree(30), m);
+    const m: Meter = meter();
+    const root = slow(tree(30), m, [".svg.json"]);
     expect(await readDirTree(root, [])).toEqual(await sequentialTree(root));
   });
 
   it("is at least 80 % quicker than walking one file at a time, with bounded parallelism", { timeout: 60_000 }, async () => {
-    const m: Meter = { ops: 0, inFlight: 0, peak: 0, pairReads: 0 };
-    const root = slow(tree(120), m);
+    const m: Meter = meter();
+    const root = slow(tree(120), m, [".svg.json"]);
     const { ms } = await timed(() => readDirTree(root, []));
     const oneAtATime = m.ops * (await perOpMs()); // the old cost: every operation waited for the previous one
     expect(ms).toBeLessThan(oneAtATime * 0.2);
@@ -121,32 +73,32 @@ describe("the pair-file loader", () => {
   }
 
   it("reads every pair file once, then serves an unchanged folder from the session cache", async () => {
-    const m: Meter = { ops: 0, inFlight: 0, peak: 0, pairReads: 0 };
-    const root = slow(tree(40), m);
+    const m: Meter = meter();
+    const root = slow(tree(40), m, [".svg.json"]);
     const first = await loadPairDecisions(root, await entriesOf(root));
-    expect(m.pairReads).toBe(40);
+    expect((m.reads[".svg.json"] ?? 0)).toBe(40);
     expect(first.metas.size).toBe(40);
     const again = await loadPairDecisions(root, await entriesOf(root));
-    expect(m.pairReads).toBe(40); // nothing re-read
+    expect((m.reads[".svg.json"] ?? 0)).toBe(40); // nothing re-read
     expect([...again.metas.keys()]).toEqual([...first.metas.keys()]);
     expect(again.records).toEqual(first.records);
   });
 
   it("re-reads a pair file whose size or time changed on disk", async () => {
-    const m: Meter = { ops: 0, inFlight: 0, peak: 0, pairReads: 0 };
+    const m: Meter = meter();
     const raw = tree(5);
-    const root = slow(raw, m);
+    const root = slow(raw, m, [".svg.json"]);
     await loadPairDecisions(root, await entriesOf(root));
     const file = ((raw.children.get("cat_0") as FakeDir).children.get("pair_0") as FakeDir).children.get("icon_0_AI.svg.json") as FakeFile;
     file.mtime += 1; // changed by something outside the app
-    const before = m.pairReads;
+    const before = (m.reads[".svg.json"] ?? 0);
     await loadPairDecisions(root, await entriesOf(root));
-    expect(m.pairReads).toBe(before + 1);
+    expect((m.reads[".svg.json"] ?? 0)).toBe(before + 1);
   });
 
   it("forgets a pair file the app itself writes, even when size and time look the same", async () => {
-    const m: Meter = { ops: 0, inFlight: 0, peak: 0, pairReads: 0 };
-    const root = slow(tree(3), m);
+    const m: Meter = meter();
+    const root = slow(tree(3), m, [".svg.json"]);
     const entries = await entriesOf(root);
     const first = await loadPairDecisions(root, entries);
     const meta = [...first.metas.values()][0];
@@ -169,17 +121,17 @@ describe("the pair-file loader", () => {
 
 describe("a Generate SVG rescan", () => {
   it("first scan ≥ 80 % quicker than one-at-a-time; an unchanged rescan reads no pair file", { timeout: 60_000 }, async () => {
-    const m: Meter = { ops: 0, inFlight: 0, peak: 0, pairReads: 0 };
-    const root = slow(tree(120), m);
+    const m: Meter = meter();
+    const root = slow(tree(120), m, [".svg.json"]);
     const first = await timed(() => discoverApprovedSources(root));
     const oneAtATime = m.ops * (await perOpMs());
     expect(first.value.sources).toHaveLength(120);
     expect(first.ms).toBeLessThan(oneAtATime * 0.2);
-    const reads = m.pairReads;
+    const reads = (m.reads[".svg.json"] ?? 0);
     const opsBefore = m.ops;
     const again = await timed(() => discoverApprovedSources(root));
     expect(again.value.sources).toHaveLength(120);
-    expect(m.pairReads).toBe(reads);
+    expect((m.reads[".svg.json"] ?? 0)).toBe(reads);
     expect(again.ms).toBeLessThan(oneAtATime * 0.2);
     expect(m.ops - opsBefore).toBeLessThan(opsBefore); // the rescan also skips the pair-file lookups
   });

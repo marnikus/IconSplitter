@@ -30,3 +30,17 @@ of 1092 operations, 0 pair-file reads); peak 24 in flight. The tests assert
 ≥ 80 % for the walk and for a first scan and a rescan, identical walk results,
 cache hits / misses on size or mtime change / app writes, and per-folder
 separation.
+
+## SVG to upload row assembly (2026-11-06)
+
+After discovery, SVG to upload read every pair's `export.json` and every
+source SVG and SHA-256-hashed it, **one row at a time**, each lookup resolved
+from the root — and again after every restart. Now (`src/upload/rowreads.ts`,
+`assembleRows` in `rowmodel.ts`): rows assemble 16 at a time with at most 24
+file operations in flight; a reader resolves each folder once per assembly; and
+source hashes are stored per (SVG path, size:mtime fingerprint) in
+`iconSplitter.upload.sourceHash.v1` (validated on read, newest 10 000 kept), so
+an unchanged SVG is never read or hashed again — a changed fingerprint is.
+Measured (`tests/upload_assemble_perf.test.ts`, 60 pairs, slow-drive fake):
+old **7.58 s** → nothing remembered **0.23 s** (−97 %) → after a restart
+**0.22 s** with no SVG read. Row previews stay behind Lazy previews.

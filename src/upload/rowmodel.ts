@@ -6,9 +6,10 @@
 // Pure except for the store write and the two file reads.
 
 import { metadataRights } from "../lib/upload/rights";
-import { readBytesAt, type DirHandleLike } from "../lib/fs";
-import { sha256HexText } from "../lib/upload/hash";
-import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload/export";
+import type { DirHandleLike } from "../lib/fs";
+import { mapLimited } from "../lib/limiter";
+import { createRowReader, flushSourceHashes, type RowReader } from "./rowreads";
+import type { ExportRecord } from "../lib/upload/export";
 import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
 import { settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { cleanMetadata, metadataFingerprint } from "../lib/upload/meta";
@@ -210,23 +211,25 @@ export async function assembleRows(
     interruptedJobs?: ReadonlySet<string>;
   },
 ): Promise<UploadRow[]> {
-  const rows: UploadRow[] = [];
-  for (const source of sources) {
-    rows.push(await assembleOne(root, source, opts));
-  }
+  // Parallel rows, shared folder lookups, hashes remembered across restarts (rowreads).
+  const reader = createRowReader(root);
+  const rows = await mapLimited(sources, ASSEMBLE_CONCURRENCY, (source) => assembleOne(reader, source, opts));
+  flushSourceHashes();
   return rows;
 }
 
+/** Rows read at once; the drive answers each read with latency. */
+const ASSEMBLE_CONCURRENCY = 16;
+
 async function assembleOne(
-  root: DirHandleLike, source: UploadRowSource,
+  reader: RowReader, source: UploadRowSource,
   opts: {
     defaults: UploadSettings; overrides: Record<string, SettingsOverrides>;
     applied?: AppliedMap;
     interrupted: ReadonlySet<string>; interruptedJobs?: ReadonlySet<string>;
   },
 ): Promise<UploadRow> {
-  const record = await readRecordAt(root, source.dirPath);
-  const sourceHash = await hashAt(root, source.svgPath);
+  const [record, sourceHash] = await Promise.all([reader.record(source.dirPath), reader.sourceHash(source)]);
   return toRow(source, {
     record,
     sourceHash,
@@ -248,23 +251,6 @@ function restoredRowMeta(record: ExportRecord | null, sourceHash: string | null,
   const committed = metaFromRecord(record, interrupted);
   if (interrupted || committed.state !== "empty") return committed;
   return restoredMeta(cachedMeta(sourceHash));
-}
-
-/** The pair's export.json → record; null when missing or corrupt (RULE 13). */
-async function readRecordAt(root: DirHandleLike, dirPath: string): Promise<ExportRecord | null> {
-  const bytes = await readBytesAt(root, `${exportDirOf(dirPath)}/export.json`);
-  if (bytes === null) return null;
-  try {
-    return parseExportRecord(JSON.parse(new TextDecoder().decode(bytes)));
-  } catch {
-    return null;
-  }
-}
-
-/** The source's content hash, `sha256:<hex>`; "" when it cannot be read. */
-async function hashAt(root: DirHandleLike, relPath: string): Promise<string | null> {
-  const bytes = await readBytesAt(root, relPath);
-  return bytes === null ? null : `sha256:${await sha256HexText(new TextDecoder().decode(bytes))}`;
 }
 
 // --- list filter / sort ---------------------------------------------------------
