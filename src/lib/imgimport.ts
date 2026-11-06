@@ -202,3 +202,15 @@ function nothingText(t: ImageTally): string {
   if (t.original !== undefined) return `${line} — the original ${t.original} is already its image`;
   return line;
 }
+
+/**
+ * Hidden AI sources (2026-11-06): a version recorded as failed whose file IS in
+ * the folder is checked again; a readable PNG becomes a usable version.
+ */
+export function planImageRepairs(files: readonly ScannedImage[], versions: readonly ImageVersion[]): FreshImage[] {
+  return versions.flatMap((v) => {
+    if (v.status !== "failed" || v.file === "") return [];
+    const file = files.find((f) => f.name.toLowerCase() === nameOf(v.file).toLowerCase());
+    return file === undefined ? [] : [{ ...file, version: v.version }];
+  });
+}

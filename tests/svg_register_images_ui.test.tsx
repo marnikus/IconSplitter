@@ -209,3 +209,27 @@ describe("the button in the tab", () => {
     await unmountPanel();
   });
 });
+
+describe("hidden AI source versions are repaired (2026-11-06 report)", () => {
+  const failed = (version: number, file: string) => ({
+    version, file, status: "failed", prompt: "", model: "m", requestId: null, error: "timeout", updatedAt: "2026-11-02T00:00:00.000Z",
+    usage: { input: null, output: null, total: null }, cost: { actual: null, estimated: null, currency: "USD", pricing: "", basis: "none" },
+  });
+
+  it("a recorded-but-failed image whose PNG is on disk becomes a usable version and the main image", async () => {
+    const root = rootWith({ "fog_AI_v2.png": pngFile("fog_AI_v2.png") }, [failed(2, "architecture/fog_AI_v2.png")] as never);
+    const { ctx } = ctxFor(root);
+    await runRegisterImagesFor(ctx as never, [FOG]);
+    const meta = pairFileOnDisk(root);
+    expect(meta.imageVersions.map((v) => [v.version, v.status, v.error])).toEqual([[2, "done", null]]);
+    expect(meta.imagePreferred).toBe(2);
+  });
+
+  it("a failed record whose file is not a readable PNG stays failed and is counted as skipped", async () => {
+    const root = rootWith({ "fog_AI_v2.png": new FakeFile("fog_AI_v2.png", 4, 3200, "nope") }, [failed(2, "architecture/fog_AI_v2.png")] as never);
+    const { ctx, said } = ctxFor(root);
+    await runRegisterImagesFor(ctx as never, [FOG]);
+    expect(pairFileOnDisk(root).imageVersions[0].status).toBe("failed");
+    expect(said.at(-1)?.msg).toContain("found but none could be registered");
+  });
+});

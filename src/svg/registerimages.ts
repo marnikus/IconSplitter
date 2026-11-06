@@ -15,7 +15,7 @@
 
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
-import { imageSummary, planImageImport, type FreshImage, type ImageTally } from "../lib/imgimport";
+import { imageSummary, planImageImport, planImageRepairs, type FreshImage, type ImageTally } from "../lib/imgimport";
 import type { PairMeta } from "../lib/pairmeta";
 import { NO_COST } from "../lib/svgmodel";
 import type { ImageVersion } from "../lib/svgimgreg";
@@ -100,12 +100,14 @@ async function registerOne(c: RegisterCtx, root: DirHandleLike, row: SvgRow): Pr
   const plan = planImageImport({
     self: namingOf(row), files, versions: base.imageVersions, siblings: siblingsOf(c, row), skip: skipOf(row),
   });
+  const repairs = planImageRepairs(files, base.imageVersions);
   const empty: FolderOutcome = { registered: 0, skipped: 0, others: plan.others, shown: null };
-  if (plan.fresh.length === 0) return empty;
-  const read = await recordsOf(root, plan.fresh);
+  if (plan.fresh.length === 0 && repairs.length === 0) return empty;
+  const read = await recordsOf(root, [...plan.fresh, ...repairs]);
   if (read.records.length === 0) return { ...empty, skipped: read.skipped };
-  const meta = applyRecords(base, read.records, plan.named);
-  return save(c, row, meta, { before: base.imageVersions.length, skipped: read.skipped, others: plan.others });
+  const repaired = read.records.filter((r) => repairs.some((x) => x.version === r.version)).map((r) => r.version);
+  const meta = applyRecords(base, read.records, plan.named, repaired);
+  return save(c, row, meta, { registered: read.records.length, skipped: read.skipped, others: plan.others });
 }
 
 /** Each candidate proved to be a readable PNG; unreadable ones are counted. */
@@ -137,14 +139,18 @@ function recordOf(file: FreshImage, foundAt: number | null): ImageVersion {
  * An unnumbered file never moves the pointer on its own: it is taken in so it is
  * visible, but the image the pair shows stays what the user chose.
  */
-function applyRecords(base: PairMeta, records: readonly ImageVersion[], named: number | null): PairMeta {
-  const versions = [...base.imageVersions, ...records].sort((a, b) => a.version - b.version);
-  const preferred = named === null ? base.imagePreferred : Math.max(base.imagePreferred ?? 0, named);
+function applyRecords(base: PairMeta, records: readonly ImageVersion[], named: number | null, repaired: readonly number[] = []): PairMeta {
+  // a repaired record replaces its failed one (same number)
+  const kept = base.imageVersions.filter((v) => !records.some((r) => r.version === v.version));
+  const versions = [...kept, ...records].sort((a, b) => a.version - b.version);
+  const newest = Math.max(named ?? 0, ...repaired);
+  const preferred = newest === 0 ? base.imagePreferred : Math.max(base.imagePreferred ?? 0, newest);
   return { ...base, imageVersions: versions, imagePreferred: preferred };
 }
 
 interface SaveDone {
-  before: number;
+  /** Records registered or repaired. */
+  registered: number;
   skipped: number;
   others: string[];
 }
@@ -166,7 +172,7 @@ async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone)
   c.refs.metas.set(row.source.id, meta);
   c.setRowsFn((rows) => rows.map((r) => (r.source.id === row.source.id ? toRow(r.source, meta, false) : r)));
   const changed = meta.imagePreferred !== null && meta.imagePreferred !== (row.meta?.imagePreferred ?? null);
-  return { registered: meta.imageVersions.length - done.before, skipped: done.skipped, others: done.others, shown: changed ? meta.imagePreferred : null };
+  return { registered: done.registered, skipped: done.skipped, others: done.others, shown: changed ? meta.imagePreferred : null };
 }
 
 /** The button's handler: reads the latest context, so one callback serves every render. */

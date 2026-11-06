@@ -291,3 +291,45 @@ describe("the button in the tab", () => {
     await unmountPanel();
   });
 });
+
+describe("hidden versions are repaired (2026-11-06 report: v1, v3 shown — v4 on disk)", () => {
+  const V4 = doc("#30a050");
+  const base = () => [
+    svgVersion("architecture/fog_AI.svg", { version: 1 }),
+    svgVersion("architecture/fog_AI_v3.svg", { version: 3 }),
+  ];
+
+  it("a recorded-but-failed version whose file is on disk and valid is re-registered and shown", async () => {
+    const versions = [...base(), svgVersion("architecture/fog_AI_v4.svg", { version: 4, status: "failed" })];
+    const root = rootWith({ "fog_AI.svg": V1, "fog_AI_v3.svg": V2, "fog_AI_v4.svg": V4 }, versions);
+    const { ctx, said } = ctxFor(root, versions);
+    await runRegisterFor(ctx as never, [FOG]);
+    const meta = pairFileOnDisk(root);
+    expect(meta.versions.map((v) => [v.version, v.status, v.validation.ok])).toEqual([[1, "generated", true], [3, "generated", true], [4, "generated", true]]);
+    expect(meta.preferred).toBe(4);
+    expect(said.at(-1)?.msg).toContain("v4 is now shown");
+  });
+
+  it("a version recorded as invalid but valid on disk is repaired too; one still invalid is skipped and said", async () => {
+    const versions = [...base(), svgVersion("architecture/fog_AI_v4.svg", { version: 4, valid: false })];
+    const root = rootWith({ "fog_AI.svg": V1, "fog_AI_v3.svg": V2, "fog_AI_v4.svg": V4 }, versions);
+    await runRegisterFor(ctxFor(root, versions).ctx as never, [FOG]);
+    expect(pairFileOnDisk(root).versions.find((v) => v.version === 4)?.validation.ok).toBe(true);
+    const broken = rootWith({ "fog_AI.svg": V1, "fog_AI_v3.svg": V2, "fog_AI_v4.svg": "not svg" }, versions);
+    const { ctx, said } = ctxFor(broken, versions);
+    await runRegisterFor(ctx as never, [FOG]);
+    expect(pairFileOnDisk(broken).versions.find((v) => v.version === 4)?.validation.ok).toBe(false);
+    expect(said.at(-1)?.msg).toContain("found but none could be registered");
+  });
+
+  it("a record whose number disagrees with its file name takes the name's number (rank by name)", async () => {
+    const versions = [...base(), svgVersion("architecture/fog_AI_v4.svg", { version: 2, status: "interrupted" })];
+    const root = rootWith({ "fog_AI.svg": V1, "fog_AI_v3.svg": V2, "fog_AI_v4.svg": V4 }, versions);
+    await runRegisterFor(ctxFor(root, versions).ctx as never, [FOG]);
+    const meta = pairFileOnDisk(root);
+    expect(meta.versions.map((v) => [v.version, v.svgPath])).toEqual([
+      [1, "architecture/fog_AI.svg"], [3, "architecture/fog_AI_v3.svg"], [4, "architecture/fog_AI_v4.svg"],
+    ]);
+    expect(meta.preferred).toBe(4);
+  });
+});

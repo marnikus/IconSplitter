@@ -140,3 +140,28 @@ function nothingText(t: ImportTally): string {
   const example = others[0] === undefined ? "" : ` (e.g. ${others[0]})`;
   return `No existing SVG for ${of} in ${where} — ${others.length} other SVG${others.length === 1 ? "" : "s"} there ${others.length === 1 ? "is" : "are"} not this pair's${example}`;
 }
+
+/** A recorded version to re-check: its file is in the folder, its record hides it. */
+export interface RepairFile { name: string; version: number; replaces: number }
+
+/**
+ * Hidden versions (2026-11-06 report: v1, v3 shown — v4 on disk): a record that
+ * is failed, interrupted or invalid while its file IS in the folder is checked
+ * again like a found file. It takes the number its NAME says when that number
+ * is free (rank by name), else keeps its own.
+ */
+export function planRepairs(self: Naming, files: readonly string[], versions: readonly SvgVersion[]): RepairFile[] {
+  const onDisk = new Set(files.map((f) => f.toLowerCase()));
+  const used = new Set(versions.map((v) => v.version));
+  const out: RepairFile[] = [];
+  for (const v of versions) {
+    if ((v.status === "generated" && v.validation.ok) || v.svgPath === "") continue;
+    const name = nameOf(v.svgPath);
+    if (!onDisk.has(name.toLowerCase())) continue;
+    const named = numberOf(name, self.stem);
+    const version = named !== null && (named === v.version || !used.has(named)) ? named : v.version;
+    used.add(version);
+    out.push({ name, version, replaces: v.version });
+  }
+  return out;
+}

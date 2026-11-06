@@ -4950,3 +4950,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: pathedit/AiSourcePanel beside the artboard (row's main AI image); SvgPathEditor aside slot + fitted box leaves room; shared svg/useimageurl (moved from SvgThumbs); SvgEditModal useEditedRow hook for the RULE 16 budget.
 - Measured: 4 new tests (pathedit_ai_source, seen failing first); editor + svg suites pass; verify:fast 4015 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Registration repairs hidden SVG / AI source versions
+
+- Scope: svgimport.planRepairs (failed/interrupted/invalid record + file on disk → recheck, renumber by name when free), imgimport.planImageRepairs (failed image record + file → recheck); registerexisting / registerimages read them with the fresh files, replace records, newest usable active, explicit registered counts.
+- Measured: 5 new tests (seen failing first); register suites 71 pass; verify:fast 4020 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not run on the user's folder.

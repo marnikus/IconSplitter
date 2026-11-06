@@ -21,7 +21,7 @@ import { withPreferred } from "../lib/pairpreferred";
 import { parseSvg, validateSvg } from "../lib/svgvalidate";
 import { countIcons } from "../lib/svgicons";
 import type { SvgVersion } from "../lib/svgmodel";
-import { importSummary, newestReadable, planImport, type ImportTally } from "../lib/svgimport";
+import { importSummary, newestReadable, planImport, planRepairs, type ImportTally, type RepairFile } from "../lib/svgimport";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { metaForSource } from "./sources";
@@ -100,15 +100,16 @@ async function registerOne(c: RegisterCtx, root: DirHandleLike, row: SvgRow): Pr
   const base = c.refs.metas.get(row.source.id) ?? row.meta ?? metaForSource(row.source, null);
   const names = await listSvgFiles(root, row.source);
   const plan = planImport(namingOf(row), names, base.versions, siblingsOf(c, row));
-  if (plan.fresh.length === 0) {
+  const repairs = planRepairs(namingOf(row), names, base.versions);
+  if (plan.fresh.length === 0 && repairs.length === 0) {
     return { meta: base, registered: 0, skipped: 0, shown: null, others: plan.others };
   }
-  const read = await readAll(root, row, base.review, plan.fresh);
+  const read = await readAll(root, row, base.review, [...plan.fresh, ...repairs]);
   if (read.records.length === 0) {
     return { meta: base, registered: 0, skipped: read.skipped, shown: null, others: plan.others };
   }
-  const meta = applyRecords(base, read.records);
-  return save(c, row, meta, { before: base.versions.length, skipped: read.skipped, others: plan.others });
+  const meta = applyRecords(withoutRenumbered(base, repairs, read.records), read.records);
+  return save(c, row, meta, { registered: read.records.length, skipped: read.skipped, others: plan.others });
 }
 
 /** The candidate files, each read and validated; unreadable ones are counted. */
@@ -152,6 +153,12 @@ function iconCountOf(code: string): number {
   return doc ? countIcons(doc).icons : 0;
 }
 
+/** A repaired record that took its name's number leaves its old number behind. */
+function withoutRenumbered(base: PairMeta, repairs: readonly RepairFile[], records: readonly SvgVersion[]): PairMeta {
+  const moved = new Set(repairs.filter((r) => r.version !== r.replaces && records.some((rec) => rec.version === r.version)).map((r) => r.replaces));
+  return moved.size === 0 ? base : { ...base, versions: base.versions.filter((v) => !moved.has(v.version)) };
+}
+
 /**
  * Every record into the pair, then the newest readable one becomes the shown
  * version. The item's own status is put back afterwards: registering a FILE is
@@ -166,7 +173,7 @@ function applyRecords(base: PairMeta, records: readonly SvgVersion[]): PairMeta 
 /** Writes the pair's own file; a refused write reports and changes no row. */
 async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone): Promise<FolderOutcome> {
   const root = c.refs.root.current as DirHandleLike | null;
-  const registered = meta.versions.length - done.before;
+  const registered = done.registered;
   const failed: FolderOutcome = { meta: row.meta, registered: 0, skipped: done.skipped, shown: null, others: done.others };
   if (root === null) {
     c.say(`Could not save the SVG versions of ${row.source.name}`, true);
@@ -183,9 +190,9 @@ async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone)
   return { meta, registered, skipped: done.skipped, shown: meta.preferred, others: done.others };
 }
 
-/** What the write needs to count: how many versions the pair had before. */
+/** What the write reports: how many records were registered or repaired. */
 interface SaveDone {
-  before: number;
+  registered: number;
   skipped: number;
   others: string[];
 }

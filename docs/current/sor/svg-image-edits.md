@@ -82,3 +82,7 @@ Regressions: `svg_register_images` (names, numbering, the original, ties, the
 summary line) and `svg_register_images_ui` (the pair's own image, a numbered
 regeneration, a copy, a non-PNG, a second click, a busy pair, the split folder
 from the report through a real click).
+
+## Registration repairs hidden versions (2026-11-06)
+
+"Register existing SVGs" and "Register AI sources" also re-check versions the pair file records but hides while the file IS in the folder: an SVG record that is failed, interrupted or invalid (`svgimport.planRepairs`) and an image record marked failed (`imgimport.planImageRepairs`). A file that passes the same check a found file passes (valid SVG / readable PNG) replaces its record; an SVG record takes the number its file name says when free (rank by name). The newest usable version becomes active (SVG `preferred`, image `imagePreferred`). A file that still fails is counted as skipped; nothing on disk is renamed or deleted. Tests: `svg_register_existing_ui.test.tsx`, `svg_register_images_ui.test.tsx`.
