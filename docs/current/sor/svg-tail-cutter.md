@@ -30,6 +30,7 @@ exactly at its crossing.
 | **✂ Cut tails** (bulk bar) | Checked rows only, never a row being generated. Auto-cut: cut at once; otherwise review: tails highlighted on the row preview, nothing written |
 | **✓ Approve cuts (n)** (bulk bar) | Cuts the checked rows that were reviewed and have tails |
 | **✂ Approve cut (n)** / *no tails* (row, beside ✎ Edit) | Cuts that row |
+| **🙈 Hide / 👁 Show highlights** (bulk bar) | Hides the highlight boxes on every row for this session; reviews and their Approve buttons stay |
 | **⚙ Cutter algo** | Tail tolerance (icon px, 0.5–500, default 10), highlight colour, highlight padding (screen px, 0–60, default 6), cut automatically (default off) — `iconSplitter.svg.tailCut.v1` |
 
 Each run / approve is **one undo step** across all its files (`svgEdit` entry
@@ -39,7 +40,7 @@ are drawn in the preview only, while the file is exactly what was reviewed, and
 are never written. Shapes are read in their own coordinates (transforms are
 not applied).
 
-Handles: `svg-cut-run`, `svg-cut-approve`, `svg-cut-settings`,
+Handles: `svg-cut-run`, `svg-cut-hide`, `svg-cut-approve`, `svg-cut-settings`,
 `svg-cut-settings-dialog`, `svg-cut-tolerance`, `svg-cut-color`,
 `svg-cut-padding`, `svg-cut-auto`, `svg-cut-approve-<id>`, `svg-cut-none-<id>`.
 Tests: `tailcut_core.test.ts`, `tailcut_speed.test.ts`, `tailcut_ui.test.tsx`.

@@ -195,9 +195,10 @@ describe("pointer and keys", () => {
     expect(keyDown(st, { key: "Enter", ctrl: false, shift: false }).finish).toBe(true);
   });
 
-  it("double-click on a segment inserts an anchor in Select", () => {
+  it("double-click on a segment selects the whole line in Select (2026-11-06: no longer inserts — Ctrl + click does)", () => {
     const st = doubleClick(start("M0 0 L100 0"), input(40, 0));
-    expect(st.session.model.subs[0].anchors).toHaveLength(3);
+    expect(st.session.model.subs[0].anchors).toHaveLength(2);
+    expect(st.session.selection).toEqual([{ sub: 0, i: 0 }, { sub: 0, i: 1 }]);
   });
 });
 

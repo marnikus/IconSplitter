@@ -4915,3 +4915,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: lib/tailcut (open-end walk within tolerance, spatial grid, first crossing, curve-preserving cut, one-pass write via svgdoc.withPathDs); svgedit multi-file undo (saveSvgEdits / applySvgEdit files); svg/tailcut (settings, review store, actions incl. row binding, marks in SvgPreview, TailCutBar + Cutter algo popup, row Approve cut); wired via actions/useTailCutActions, SvgBulkBar, SvgThumbs.
 - Measured: typical icon review+cut ≈ 0.6 ms; 400 shapes / 50 tails ≈ 12.5 ms (70 ms before grid + one-pass write); review+cut+save < 10 ms. 22 new tests (tailcut_core 10, tailcut_speed 3, tailcut_ui 7 + regression for a closing-tag escape bug found by lint); verify:fast 3979 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Edit line gestures + hide tail highlights
+
+- Scope: double-click a line selects all its anchors; Ctrl+click a line inserts; Delete keeps the line joined, Ctrl+Delete breaks it (ops.breakAtAnchors); legend updated; tail cutter Hide/Show highlights (session toggle, useRowTailMarks); selectDown split (pressOn) for the RULE 16 budget.
+- Measured: 6 new tests (pathedit_line_ops, written first, seen failing); old double-click test updated to the new rule; editor + cutter suites 101 pass; verify:fast 3986 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.

@@ -24,6 +24,13 @@ export function forgetTailReviews(ids: readonly string[]): void {
 }
 
 export function clearTailReviews(): void { reviews = new Map(); emit(); }
+
+// Hide / show the highlights (2026-11-06, this session): the reviews stay, only the boxes go.
+let marksHidden = false;
+export function getTailMarksHidden(): boolean { return marksHidden; }
+export function setTailMarksHidden(hidden: boolean): void { marksHidden = hidden; emit(); }
+const hiddenSnapshot = () => marksHidden;
+export function useTailMarksHidden(): boolean { return useSyncExternalStore(subscribe, hiddenSnapshot); }
 export function getTailReview(id: string): TailReview | null { return reviews.get(id) ?? null; }
 /** The reviewed rows among `ids` that still have tails to cut. */
 export function reviewedWithTails(ids: readonly string[]): string[] {
@@ -47,4 +54,12 @@ export function useRowTailReview(id: string, svgPath: string, svg: string | null
   const all = useTailReviews();
   const r = all.get(id) ?? null;
   return r !== null && r.svgPath === svgPath && r.source === svg ? r : null;
+}
+
+/** A row's review and, unless hidden, its highlight boxes in the chosen colour and padding. */
+export function useRowTailMarks(id: string, svgPath: string, svg: string | null, look: { color: string; paddingPx: number }) {
+  const review = useRowTailReview(id, svgPath, svg);
+  const hidden = useTailMarksHidden();
+  const marks = review === null || hidden ? undefined : { boxes: review.tails.map((t) => t.box), color: look.color, paddingPx: look.paddingPx };
+  return { review, marks };
 }

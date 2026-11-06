@@ -53,8 +53,8 @@ Two tools: **Select** (default) and **Draw**; switching keeps anchors and the se
   points; a Shift / Alt click on empty space keeps the selection
   (`gesture.ts` `SelectMode`).
 - Select: click selects / empty click deselects; drag moves an anchor, a handle
-  or a segment (its two anchors); empty drag = marquee; double-click a segment
-  inserts.
+  or a segment (its two anchors); empty drag = marquee; **double-click a line**
+  selects all its anchors; **Ctrl + click a line** inserts an anchor.
 - Draw: empty click adds a corner (mouse-down drag pulls a smooth pair), click
   a segment inserts, the first anchor of the open path closes it, an endpoint
   of another open path joins; Esc ends the open path.
@@ -68,9 +68,12 @@ Two tools: **Select** (default) and **Draw**; switching keeps anchors and the se
   point on a segment, against the drag-start path of **every** path (selected or
   not), never itself or its own two segments; other selected anchors move by
   the same delta.
-- **Delete** removes selected anchors (neighbours join, their handles stay;
+- **Delete** removes selected anchors and keeps the line joined (neighbours join, their handles stay;
   an open end shortens; a two-point open path goes; a closed path stays closed
-  with ≥ 3 points). Esc deselects; Enter = Finish.
+  with ≥ 3 points). **Ctrl + Delete** breaks the line at the selected points
+  (`ops.breakAtAnchors`: the point and its two segments go; a closed shape opens
+  there; the new ends lose the handles that pointed at removed segments). Esc
+  deselects; Enter = Finish.
 - Hits: anchors / handles 9 px, segments a 6 px band; a selected point's
   handle wins over an anchor.
 
@@ -110,6 +113,6 @@ thin / preset), `-editor`, `-toolbar`, `-tool-select`, `-tool-draw`, `-stroke`,
 
 ## Tests
 
-`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_live_shapes.test.tsx` (moved circle drawn live, no guide in preset), `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
+`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_live_shapes.test.tsx` (moved circle drawn live, no guide in preset), `pathedit_line_ops.test.ts` (double-click, Ctrl+click, Delete / Ctrl+Delete), `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
 (objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_bg.test.tsx` (artboard background), `pathedit_modal.test.tsx` (full-screen mode: layout, keys, rows, Save/Discard, 50-step history), `pathedit_ui.test.tsx`
 (session in the page, Finish + undo/redo, Edit settings, wiring).

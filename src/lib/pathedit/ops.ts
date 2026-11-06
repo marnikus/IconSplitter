@@ -159,3 +159,40 @@ export function joinSubpaths(m: PathModel, active: number, other: AnchorRef): { 
   const subs = m.subs.map((s, i) => (i === active ? joined : s)).filter((_, i) => i !== other.sub);
   return { model: cloneModel({ subs }), active: active > other.sub ? active - 1 : active };
 }
+
+/** One run of kept anchors as an open subpath: its ends lose the handles that pointed at removed segments. */
+function openRun(run: Anchor[], owner: number | undefined): SubPath | null {
+  if (run.length < 2) return null; // a lone point is no line
+  const anchors = run.map((a) => ({ ...a }));
+  const first = anchors[0], last = anchors[anchors.length - 1];
+  first.in = null;
+  last.out = null;
+  first.mode = modeOf(first);
+  last.mode = modeOf(last);
+  return { anchors, closed: false, ...(owner === undefined ? {} : { owner }) };
+}
+
+/** The anchors in walking order, starting right after the first removed one on a closed subpath. */
+function walkOrder(sub: SubPath, drop: Set<number>): number[] {
+  const n = sub.anchors.length;
+  const idx = Array.from({ length: n }, (_, i) => i);
+  if (!sub.closed) return idx;
+  const first = idx.find((i) => drop.has(i)) ?? 0;
+  return [...idx.slice(first + 1), ...idx.slice(0, first + 1)];
+}
+
+/** Ctrl + Delete (2026-11-06): the line breaks at each selected point; the point and its two segments go. */
+export function breakAtAnchors(m: PathModel, refs: readonly AnchorRef[]): PathModel {
+  const out = cloneModel(m);
+  const subs = out.subs.flatMap((sub, s) => {
+    const drop = new Set(refs.filter((r) => r.sub === s).map((r) => r.i));
+    if (drop.size === 0) return [sub];
+    const runs: Anchor[][] = [[]];
+    for (const i of walkOrder(sub, drop)) {
+      if (drop.has(i)) runs.push([]);
+      else runs[runs.length - 1].push(sub.anchors[i]);
+    }
+    return runs.map((r) => openRun(r, sub.owner)).filter((r): r is SubPath => r !== null);
+  });
+  return { subs };
+}

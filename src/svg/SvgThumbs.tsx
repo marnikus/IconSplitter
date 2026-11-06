@@ -29,7 +29,7 @@ import SvgPreviewBox from "./SvgPreview";
 import { PairBars, svgBarOf } from "./svgeditslot";
 import { SVG_STROKE_SHEET } from "./strokesheet";
 import type { SvgRow } from "./types";
-import { useRowTailReview } from "./tailcut/tailreview";
+import { useRowTailMarks } from "./tailcut/tailreview";
 import { useCutSettings } from "./tailcut/cutsettings";
 import type { TailMarks } from "./tailcut/tailmarks";
 
@@ -61,9 +61,7 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   // Both boxes come from the one rule: the raster from its own pixels, the
   // vector from the ratio of the document it is about to draw.
   const aiBox = zoomBox(thumb, aiNat);
-  const review = useRowTailReview(id, target?.svgPath ?? "", svg);
-  const cut = useCutSettings();
-  const marks = review === null ? undefined : { boxes: review.tails.map((t) => t.box), color: cut.color, paddingPx: cut.paddingPx };
+  const { review, marks } = useRowTailMarks(id, target?.svgPath ?? "", svg, useCutSettings());
   const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg), marks };
   const svgSide = svgSlot(slotArgs);
   const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;

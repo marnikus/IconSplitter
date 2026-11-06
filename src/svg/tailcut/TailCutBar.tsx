@@ -7,7 +7,7 @@
 import { useRef, useState } from "react";
 import { useDismiss } from "../../ui/usedismiss";
 import { PADDING_MAX, TOLERANCE_MAX, TOLERANCE_MIN, setCutSettings, useCutSettings } from "./cutsettings";
-import { reviewedWithTails, useTailReviews } from "./tailreview";
+import { reviewedWithTails, setTailMarksHidden, useTailMarksHidden, useTailReviews } from "./tailreview";
 
 export interface TailCutBarProps {
   checked: readonly string[];
@@ -28,8 +28,19 @@ export default function TailCutBar({ checked, onRun, onApprove }: TailCutBarProp
       </button>
       <button type="button" className="svg-btn success" data-testid="svg-cut-approve" disabled={approvable === 0} onClick={onApprove}
         title="Cut the highlighted tails on the checked, reviewed rows — one undo step">✓ Approve cuts ({approvable})</button>
+      <HideMarksButton />
       <CutterSettingsButton />
     </>
+  );
+}
+
+/** Hide / show the tail highlights on the rows (the reviews and their Approve buttons stay). */
+function HideMarksButton() {
+  const hidden = useTailMarksHidden();
+  return (
+    <button type="button" className={`svg-btn${hidden ? " primary" : ""}`} data-testid="svg-cut-hide" aria-pressed={hidden}
+      title={hidden ? "Show the tail highlights again" : "Hide the tail highlights (nothing is undone or cut)"}
+      onClick={() => setTailMarksHidden(!hidden)}>{hidden ? "👁 Show highlights" : "🙈 Hide highlights"}</button>
   );
 }
 

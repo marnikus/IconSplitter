@@ -12,7 +12,7 @@
 import { anchorsInRect, hitTest, objectAt, snapPoint, type Hit, type HitRadii, type Snap } from "./hit";
 import { nextIndex, type AnchorRef, type PathModel, type Pt } from "./model";
 import {
-  addAnchor, breakSmooth, closeSubpath, deleteAnchors, insertOnSegment, joinSubpaths,
+  addAnchor, breakAtAnchors, breakSmooth, closeSubpath, deleteAnchors, insertOnSegment, joinSubpaths,
   moveAnchors, moveHandle, pullHandles, toggleSmooth,
 } from "./ops";
 import { commit, editableSub, preview, redoSession, undoSession, type EditSession } from "./session";
@@ -82,18 +82,26 @@ function selectObject(s: EditSession, target: number, additive: boolean): EditSe
 }
 
 function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState {
+  if (hit.kind !== "none") return pressOn(st, input, hit);
   const s = st.session;
-  if (hit.kind === "anchor" && input.ctrl) return withSession(st, { ...commit(s, toggleSmooth(s.model, hit.ref)), selection: [hit.ref] });
-  if (hit.kind === "handle") {
-    const base = input.alt ? breakSmooth(s.model, hit.ref) : s.model;
-    return { ...st, session: preview(s, base), drag: { kind: "handle", before: s.model, base, ref: hit.ref, side: hit.side } };
-  }
-  if (hit.kind === "anchor" || hit.kind === "segment") return grab(st, input, hit);
   const mode = modeOf(input);
   const target = mode === "remove" ? null : pickedObject(s, input);
   if (target !== null) return withSession(st, selectObject(s, target, input.shift));
   const base = mode === "replace" ? [] : s.selection;
   return { ...st, session: { ...s, selection: base }, drag: { kind: "marquee", start: input.p, objects: s.objects, base, mode }, marquee: null };
+}
+
+/** A press on something: Ctrl toggles a point / inserts on a line, a handle starts a handle drag, else a move. */
+function pressOn(st: EditorState, input: PointerInput, hit: Exclude<Hit, { kind: "none" }>): EditorState {
+  const s = st.session;
+  if (hit.kind === "handle") {
+    const base = input.alt ? breakSmooth(s.model, hit.ref) : s.model;
+    return { ...st, session: preview(s, base), drag: { kind: "handle", before: s.model, base, ref: hit.ref, side: hit.side } };
+  }
+  if (input.ctrl) {
+    return hit.kind === "segment" ? insertAt(st, hit) : withSession(st, { ...commit(s, toggleSmooth(s.model, hit.ref)), selection: [hit.ref] });
+  }
+  return grab(st, input, hit);
 }
 
 /** The shape a single click picks: within the click tolerance (Edit settings, screen px) of its line, or inside it. */
@@ -204,18 +212,29 @@ export function pointerUp(st: EditorState): EditorState {
   return { ...cleared, session: commit(st.session, st.session.model, d.before) };
 }
 
-/** Double-click on a segment in Select inserts an anchor there (the shape is kept). */
-export function doubleClick(st: EditorState, input: PointerInput): EditorState {
-  const hit = hitOf(st.session, input, []);
-  if (st.session.tool !== "select" || hit.kind !== "segment") return st;
+/** Ctrl + click on a line (2026-11-06): an anchor is inserted there (the shape is kept). */
+function insertAt(st: EditorState, hit: Extract<Hit, { kind: "segment" }>): EditorState {
   const ins = insertOnSegment(st.session.model, hit.sub, hit.i, hit.t);
   return ins === null ? st : withSession(st, { ...commit(st.session, ins.model), selection: [ins.ref] });
+}
+
+/** Double-click on a line (or one of its anchors) in Select selects all of that line's anchors (2026-11-06). */
+export function doubleClick(st: EditorState, input: PointerInput): EditorState {
+  const hit = hitOf(st.session, input, []);
+  if (st.session.tool !== "select" || (hit.kind !== "segment" && hit.kind !== "anchor")) return st;
+  const sub = hit.kind === "segment" ? hit.sub : hit.ref.sub;
+  const selection = st.session.model.subs[sub].anchors.map((_, i) => ({ sub, i }));
+  return withSession(st, { ...st.session, selection });
 }
 
 export interface KeyInput { key: string; ctrl: boolean; shift: boolean }
 
 const removeSelected = (s: EditSession): EditSession =>
   (s.selection.length === 0 ? s : { ...commit(s, deleteAnchors(s.model, s.selection)), selection: [], active: null });
+
+/** Ctrl + Delete: the line breaks at the selected points. */
+const breakSelected = (s: EditSession): EditSession =>
+  (s.selection.length === 0 ? s : { ...commit(s, breakAtAnchors(s.model, s.selection)), selection: [], active: null });
 
 /** Esc ends a draw in progress, else clears the selected anchors, else the selected paths. */
 function escape(s: EditSession): EditSession {
@@ -227,6 +246,8 @@ function escape(s: EditSession): EditSession {
 const CTRL_KEYS: Record<string, (s: EditSession, shift: boolean) => EditSession> = {
   z: (s, shift) => (shift ? redoSession(s) : undoSession(s)),
   y: (s) => redoSession(s),
+  delete: (s) => breakSelected(s),
+  backspace: (s) => breakSelected(s),
 };
 const PLAIN_KEYS: Record<string, (s: EditSession) => EditSession> = { delete: removeSelected, backspace: removeSelected, escape };
 
