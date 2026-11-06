@@ -12,10 +12,10 @@
 import { anchorsInRect, hitTest, objectAt, snapPoint, type Hit, type HitRadii, type Snap } from "./hit";
 import { nextIndex, type AnchorRef, type PathModel, type Pt } from "./model";
 import {
-  addAnchor, breakAtAnchors, breakSmooth, closeSubpath, deleteAnchors, insertOnSegment, joinSubpaths,
+  addAnchor, breakSmooth, closeSubpath, insertOnSegment, joinSubpaths,
   moveAnchors, moveHandle, pullHandles, toggleSmooth,
 } from "./ops";
-import { commit, editableSub, preview, redoSession, undoSession, type EditSession } from "./session";
+import { commit, editableSub, preview, type EditSession } from "./session";
 import { boxHandles, handleAt, scaleAnchors, scaleFor, selectionBox, type Box, type BoxHandleId } from "./scale";
 
 export interface PointerInput {
@@ -173,6 +173,9 @@ function grab(st: EditorState, input: PointerInput, hit: Extract<Hit, { kind: "a
   }
   const j = nextIndex(s.model.subs[hit.sub], hit.i) ?? hit.i;
   const refs = [{ sub: hit.sub, i: hit.i }, { sub: hit.sub, i: j }];
+  // a line of the selection drags the whole selection, like one of its anchors (2026-11-06)
+  const held = refs.find((r) => hasRef(s.selection, r));
+  if (held !== undefined) return { ...st, drag: anchorDrag(s.model, s.selection, held, p) };
   return { ...st, session: { ...s, selection: refs }, drag: anchorDrag(s.model, refs, refs[0], p) };
 }
 
@@ -253,37 +256,4 @@ export function doubleClick(st: EditorState, input: PointerInput): EditorState {
   return withSession(st, { ...st.session, selection });
 }
 
-export interface KeyInput { key: string; ctrl: boolean; shift: boolean }
-
-const removeSelected = (s: EditSession): EditSession =>
-  (s.selection.length === 0 ? s : { ...commit(s, deleteAnchors(s.model, s.selection)), selection: [], active: null });
-
-/** Ctrl + Delete: the line breaks at the selected points. */
-const breakSelected = (s: EditSession): EditSession =>
-  (s.selection.length === 0 ? s : { ...commit(s, breakAtAnchors(s.model, s.selection)), selection: [], active: null });
-
-/** Esc ends a draw in progress, else clears the selected anchors, else the selected paths. */
-function escape(s: EditSession): EditSession {
-  if (s.active !== null) return { ...s, active: null };
-  return s.selection.length > 0 ? { ...s, selection: [] } : { ...s, objects: [] };
-}
-
-/** One entry per key (with Ctrl, without): adding a key never deepens a branch chain. */
-const CTRL_KEYS: Record<string, (s: EditSession, shift: boolean) => EditSession> = {
-  z: (s, shift) => (shift ? redoSession(s) : undoSession(s)),
-  y: (s) => redoSession(s),
-  delete: (s) => breakSelected(s),
-  backspace: (s) => breakSelected(s),
-};
-const PLAIN_KEYS: Record<string, (s: EditSession) => EditSession> = { delete: removeSelected, backspace: removeSelected, escape };
-
-/** Keys: what they did, whether the editor used them, and whether Enter asked to finish. */
-export function keyDown(st: EditorState, k: KeyInput): { state: EditorState; handled: boolean; finish: boolean } {
-  const key = k.key.toLowerCase();
-  if (!k.ctrl && key === "enter") return { state: st, handled: true, finish: true };
-  const ctrl = k.ctrl ? CTRL_KEYS[key] : undefined;
-  if (ctrl !== undefined) return { state: withSession(st, ctrl(st.session, k.shift)), handled: true, finish: false };
-  const plain = k.ctrl ? undefined : PLAIN_KEYS[key];
-  if (plain !== undefined) return { state: withSession(st, plain(st.session)), handled: true, finish: false };
-  return { state: st, handled: false, finish: false };
-}
+export { clearEditClipboard, keyDown, type KeyInput } from "./keys";

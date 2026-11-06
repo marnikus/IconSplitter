@@ -4955,3 +4955,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: svgimport.planRepairs (failed/interrupted/invalid record + file on disk → recheck, renumber by name when free), imgimport.planImageRepairs (failed image record + file → recheck); registerexisting / registerimages read them with the fresh files, replace records, newest usable active, explicit registered counts.
 - Measured: 5 new tests (seen failing first); register suites 71 pass; verify:fast 4020 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not run on the user's folder.
+
+## 2026-11-06 — Edit mode copy / paste; drag the selection by its lines
+
+- Scope: lib/pathedit/clipboard (copy runs, paste with offset), keys.ts split from gesture.ts (RULE 16 file size) with Ctrl+C/Ctrl+V and a session-surviving clipboard; grab(): a selected line drags the whole selection; legend.
+- Measured: 7 new tests (pathedit_copy_drag, seen failing first); editor suites 107 pass; verify:fast 4027 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
