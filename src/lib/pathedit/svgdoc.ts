@@ -112,6 +112,26 @@ export function withPathD(markup: string, index: number, d: string): string | nu
   return markup.slice(0, t.start) + asPathTag(t, old, d) + after;
 }
 
+/** Many shapes redrawn in ONE pass over the file (the tail cutter's batch write, 2026-11-06). */
+export function withPathDs(markup: string, ds: ReadonlyMap<number, string>): string {
+  let out = markup;
+  const tags = pathTags(markup);
+  for (const t of [...tags].reverse()) {
+    const d = ds.get(t.index);
+    if (d === undefined) continue;
+    const old = out.slice(t.start, t.end);
+    if (t.kind === "path") {
+      const next = D_ATTR.test(old) ? old.replace(D_ATTR, ` d="${d}"`) : old.replace(/^<path\b/i, `<path d="${d}"`);
+      out = out.slice(0, t.start) + next + out.slice(t.end);
+      continue;
+    }
+    let after = out.slice(t.end);
+    if (!t.selfClosing) after = after.replace(new RegExp(`</${t.kind}\\s*>`, "i"), "</path>");
+    out = out.slice(0, t.start) + asPathTag(t, old, d) + after;
+  }
+  return out;
+}
+
 /** The preview copy: each drawn shape tagged with its number, so a click names the shape it hit. */
 export function annotatePaths(markup: string): string {
   let out = markup;

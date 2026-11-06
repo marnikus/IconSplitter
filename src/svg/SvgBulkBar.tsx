@@ -18,6 +18,7 @@ import { SVG_STROKE_SHEET } from "./strokesheet";
 import WebModeToggle from "./WebModeToggle";
 import InvertButton from "../ui/InvertButton";
 import EditSettingsButton from "./EditSettingsButton";
+import TailCutBar from "./tailcut/TailCutBar";
 import type { RunProgress } from "./types";
 import PreviewBgPicker from "../ui/PreviewBgPicker";
 
@@ -62,6 +63,10 @@ export interface SvgBulkBarProps {
   onRegisterImages: () => void;
   /** Take the selected rows out of the list: their images become declined in Selection V2. */
   onRemove: () => void;
+  /** The checked rows' ids, for the tail cutter's approve count. */
+  checkedIds: readonly string[];
+  onCutTails: () => void;
+  onApproveCuts: () => void;
 }
 
 export default function SvgBulkBar(p: SvgBulkBarProps) {
@@ -136,6 +141,7 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
       <button type="button" className="svg-btn regen-geometry" data-testid="svg-regen-geometry-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("regen-geometry")}
         title="Mark the selected SVGs: regenerate — wrong geometry">△ Regen geometry</button>
+      <TailCutBar checked={p.checkedIds} onRun={p.onCutTails} onApprove={p.onApproveCuts} />
       <button type="button" className="svg-btn danger" data-testid="svg-remove-selected" disabled={p.checkedCount === 0}
         title="Remove the selected images from this list: they become declined in Selection V2 (Undo brings them back)"
         onClick={p.onRemove}>🗑 Remove selected</button>

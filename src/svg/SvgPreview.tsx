@@ -10,6 +10,7 @@ import type { StrokeSheet } from "./strokesheet";
 import { useAnchorOverlay, useCtrlHover } from "./anchoroverlay";
 import { usePreviewZoom } from "../ui/usePreviewZoom";
 import ZoomReset from "../ui/ZoomReset";
+import { useTailMarks, type TailMarks } from "./tailcut/tailmarks";
 
 export interface SvgPreviewProps {
   code: string | null;
@@ -21,9 +22,11 @@ export interface SvgPreviewProps {
   version: number;
   /** The tab's preview-stroke sheet row thumbnails follow; absent = the real widths (dialogs). */
   strokeSheet?: StrokeSheet;
+  /** Tail-cutter highlights (preview only, never written). */
+  marks?: TailMarks;
 }
 
-export default function SvgPreviewBox({ code, box, testid, label, version, strokeSheet }: SvgPreviewProps) {
+export default function SvgPreviewBox({ code, box, testid, label, version, strokeSheet, marks }: SvgPreviewProps) {
   const preview = useMemo(() => buildSvgPreview(code), [code]);
   if (code === null || code.trim() === "") {
     return <Chip className="svg-thumb missing" box={box} testid={testid}>No SVG</Chip>;
@@ -31,7 +34,7 @@ export default function SvgPreviewBox({ code, box, testid, label, version, strok
   if (!preview.ok) {
     return <Chip className="svg-thumb missing error" box={box} testid={testid} error={preview.error}>Preview failed</Chip>;
   }
-  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} stroke={strokeSheet} />;
+  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} stroke={strokeSheet} marks={marks} />;
 }
 
 interface ChipProps {
@@ -57,14 +60,16 @@ interface ShadowProps {
   label: string;
   version: number;
   stroke: StrokeSheet | undefined;
+  marks: TailMarks | undefined;
 }
 
-function ShadowSvg({ html, box, testid, label, version, stroke }: ShadowProps) {
+function ShadowSvg({ html, box, testid, label, version, stroke, marks }: ShadowProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const frame = useRef<HTMLDivElement | null>(null);
   useShadowArt(html, host, stroke);
   // Ctrl + hover: the drawing's anchor points (2026-11-05).
   useAnchorOverlay(host, html, useCtrlHover(host));
+  useTailMarks(host, html, marks);
   // Ctrl+Shift + scroll: zoom 10–400 % inside the same frame (2026-11-06).
   const zoom = usePreviewZoom(frame);
   return (

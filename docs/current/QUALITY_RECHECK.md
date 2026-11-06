@@ -4910,3 +4910,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: lib/zoomview panBy; ui/usePreviewZoom usePan (middle button, pointer capture, auto-scroll suppressed); row previews and the edit artboard; legend entry; reset restores position.
 - Measured: 4 new tests (preview_pan, written first, seen failing); zoom/pan/editor suites 84 pass; verify:fast 3960 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Tail cutter (detect + cut small overshooting tails)
+
+- Scope: lib/tailcut (open-end walk within tolerance, spatial grid, first crossing, curve-preserving cut, one-pass write via svgdoc.withPathDs); svgedit multi-file undo (saveSvgEdits / applySvgEdit files); svg/tailcut (settings, review store, actions incl. row binding, marks in SvgPreview, TailCutBar + Cutter algo popup, row Approve cut); wired via actions/useTailCutActions, SvgBulkBar, SvgThumbs.
+- Measured: typical icon review+cut ≈ 0.6 ms; 400 shapes / 50 tails ≈ 12.5 ms (70 ms before grid + one-pass write); review+cut+save < 10 ms. 22 new tests (tailcut_core 10, tailcut_speed 3, tailcut_ui 7 + regression for a closing-tag escape bug found by lint); verify:fast 3979 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.

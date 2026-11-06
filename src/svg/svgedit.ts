@@ -46,17 +46,46 @@ function isSide(value: unknown): value is SvgEditSide {
   return isRecord(value) && typeof value.svgPath === "string" && value.svgPath !== "" && typeof value.markup === "string";
 }
 
+/** One side of an entry: a single file (an edit session) or several (a tail-cutter run, 2026-11-06). */
+function sidesOf(value: unknown): SvgEditSide[] | null {
+  if (isSide(value)) return [value];
+  if (!isRecord(value) || !Array.isArray(value.files) || value.files.length === 0) return null;
+  return value.files.every(isSide) ? (value.files as SvgEditSide[]) : null;
+}
+
 /** Undo / redo: write that side's text back. False (cursor stays) when it cannot be written. */
 export async function applySvgEdit(value: unknown): Promise<boolean> {
-  if (!isSide(value)) return false;
+  const sides = sidesOf(value);
+  if (sides === null) return false;
   const root = live?.root() ?? (await loadHandles(SVG_HANDLE_KEY))?.source ?? null;
   if (root === null) return false;
   try {
-    await writeSvgMarkup(root, value.svgPath, value.markup);
+    for (const side of sides) await writeSvgMarkup(root, side.svgPath, side.markup);
     return true;
   } catch {
     return false;
   }
+}
+
+export interface SvgEditFile { id: string; svgPath: string; before: string; after: string }
+
+/** Several files rewritten as ONE undo step; returns how many were written (a failed one is left out). */
+export async function saveSvgEdits(files: readonly SvgEditFile[], label: string): Promise<number> {
+  const b = live;
+  const root = b?.root() ?? null;
+  if (b === null || root === null) return 0;
+  const done: SvgEditFile[] = [];
+  for (const f of files) {
+    if (f.before === f.after) continue;
+    try { await writeSvgMarkup(root, f.svgPath, f.after); done.push(f); } catch { /* left out of the entry */ }
+  }
+  if (done.length === 0) return 0;
+  b.push({
+    type: "svgEdit", label, origin: getAppState().tab, ids: done.map((f) => f.id),
+    before: { files: done.map((f) => ({ svgPath: f.svgPath, markup: f.before })) },
+    after: { files: done.map((f) => ({ svgPath: f.svgPath, markup: f.after })) },
+  });
+  return done.length;
 }
 
 export interface FinishArgs {

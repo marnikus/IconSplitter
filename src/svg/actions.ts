@@ -25,6 +25,7 @@ import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { useSvgEditBinding } from "./svgedit";
+import { useTailCutActions } from "./tailcut/usetailcut";
 import type { DirHandleLike } from "../lib/fs";
 import { loadWebChat } from "./webchatstore";
 import { guard, perRequestOf, planOf } from "./runplan";
@@ -82,15 +83,19 @@ export interface SvgActions extends SvgPromptActions {
   copyCode: (id: string, version: number) => void; openLocation: (id: string) => void;
   /** Take rows out of the list by declining their images in Selection V2 (2026-11-04). */
   removeRows: (ids: string[]) => void;
+  /** Tail cutter (2026-11-06): run on the checked rows; approve the checked reviewed rows. */
+  cutTails: () => void;
+  approveCuts: () => void;
 }
 export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 export function useSvgActions(ctx: SvgCtx): SvgActions {
   useReviewApplier(ctx);
+  const tailCut = useTailCutActions(ctx);
   useSvgEditBinding(ctx.refs.root as { current: DirHandleLike | null }, ctx.hist);
   return {
     ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx), ...useImgRegenActions(ctx),
     ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx),
-    ...useRegisterActions(ctx), ...useRegisterImageActions(ctx), ...useSvgPromptActions(ctx), ...useRemoveRows(ctx),
+    ...useRegisterActions(ctx), ...useRegisterImageActions(ctx), ...useSvgPromptActions(ctx), ...useRemoveRows(ctx), ...tailCut,
   };
 }
 /** Remove + the list following every written pair decision (a click, an undo, a redo). */

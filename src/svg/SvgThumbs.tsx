@@ -29,6 +29,9 @@ import SvgPreviewBox from "./SvgPreview";
 import { PairBars, svgBarOf } from "./svgeditslot";
 import { SVG_STROKE_SHEET } from "./strokesheet";
 import type { SvgRow } from "./types";
+import { useRowTailReview } from "./tailcut/tailreview";
+import { useCutSettings } from "./tailcut/cutsettings";
+import type { TailMarks } from "./tailcut/tailmarks";
 
 export interface SvgThumbsProps {
   rootRef: { current: DirHandleLike | null };
@@ -58,10 +61,13 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   // Both boxes come from the one rule: the raster from its own pixels, the
   // vector from the ratio of the document it is about to draw.
   const aiBox = zoomBox(thumb, aiNat);
-  const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg) };
+  const review = useRowTailReview(id, target?.svgPath ?? "", svg);
+  const cut = useCutSettings();
+  const marks = review === null ? undefined : { boxes: review.tails.map((t) => t.box), color: cut.color, paddingPx: cut.paddingPx };
+  const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg), marks };
   const svgSide = svgSlot(slotArgs);
   const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
-  const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />);
+  const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />, review);
   return (
     <div className="svg-pair-with-bar">
       <PairedThumbs slots={[
@@ -82,10 +88,12 @@ interface SvgSlotArgs {
   stem: string;
   version: number;
   frame: PreviewFrame;
+  /** Tail-cutter highlights while a review is open (preview only). */
+  marks?: TailMarks;
 }
 
 /** The SVG side: the framed document, in the box its own ratio asks for. */
-function svgSlot({ svg, thumb, id, stem, version, frame }: SvgSlotArgs): PreviewSlot {
+function svgSlot({ svg, thumb, id, stem, version, frame, marks }: SvgSlotArgs): PreviewSlot {
   const box = svgBox(svg, thumb);
   const className = `svg-preview-frame${frame.outline ? " contrast" : ""}`;
   return {
@@ -96,7 +104,7 @@ function svgSlot({ svg, thumb, id, stem, version, frame }: SvgSlotArgs): Preview
     className,
     background: frame.color,
     attrs: { "data-bg": frame.color },
-    children: <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`}
+    children: <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`} marks={marks}
       label={`${stem} SVG v${version}`} version={version} strokeSheet={SVG_STROKE_SHEET} />,
   };
 }

@@ -6,14 +6,29 @@
 import type { ReactNode } from "react";
 import { pathTags } from "../lib/pathedit/svgdoc";
 import { openSvgEditor } from "./pathedit/editmodalstore";
+import { approveRowCut } from "./tailcut/cutactions";
+import type { TailReview } from "./tailcut/tailreview";
 import type { SvgRow } from "./types";
 
-/** The SVG side's bar: Edit beside the version chips. */
-export function svgBarOf(row: SvgRow, svg: string | null, chips: ReactNode): ReactNode {
+/** The SVG side's bar: Edit (and, after a tail review, Approve cut) beside the version chips. */
+export function svgBarOf(row: SvgRow, svg: string | null, chips: ReactNode, review: TailReview | null = null): ReactNode {
   return <>
     <SvgEditButton id={row.source.id} why={editBlocked(row, svg)} />
+    {review !== null && <TailReviewBadge id={row.source.id} review={review} busy={row.running || row.queued} />}
     {chips}
   </>;
+}
+
+/** After a review: "✂ Approve cut (n)", or "no tails". */
+function TailReviewBadge({ id, review, busy }: { id: string; review: TailReview; busy: boolean }) {
+  const n = review.tails.length;
+  if (n === 0) return <small className="svg-cut-none" data-testid={`svg-cut-none-${id}`}>no tails</small>;
+  return (
+    <button type="button" className="svg-btn tiny success" data-testid={`svg-cut-approve-${id}`} disabled={busy}
+      title="Cut the highlighted tails of this SVG — one undo step" onClick={(e) => { e.stopPropagation(); approveRowCut(id); }}>
+      ✂ Approve cut ({n})
+    </button>
+  );
 }
 
 export function PairBars({ ai, aiWidth, svg, svgWidth }: { ai: ReactNode; aiWidth: number; svg: ReactNode; svgWidth: number }) {
