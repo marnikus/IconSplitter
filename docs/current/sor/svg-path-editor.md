@@ -115,10 +115,7 @@ and marks an export made before it as stale.
 
 ## Edit settings
 
-`svg/EditSettingsButton.tsx`, `svg/editsettings.ts` (`iconSplitter.svg.editSettings.v1`):
-anchor point size 4–24 px (default 10), used by the editor and the Ctrl-hover
-dots (`anchoroverlay.ts`); **click tolerance to select a shape** 2–40 px
-(default 14): how far from a (thin) shape's line a single click still picks it.
+See [path editor — handles and tests](svg-path-editor-handles.md#edit-settings).
 
 ## Handles and tests
 
