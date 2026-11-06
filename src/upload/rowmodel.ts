@@ -5,12 +5,17 @@
 // header checkbox state, the counts and dropping checked ids a rescan removed.
 // Pure except for the store write and the two file reads.
 
-import { readBytesAt, type DirHandleLike } from "../lib/fs";
-import { sha256HexText } from "../lib/upload/hash";
-import { exportDirOf, parseExportRecord, type ExportRecord } from "../lib/upload/export";
-import { effectiveSettings, settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
+import { metadataRights } from "../lib/upload/rights";
+import type { DirHandleLike } from "../lib/fs";
+import { mapLimited } from "../lib/limiter";
+import { createRowReader, flushSourceHashes, type RowReader } from "./rowreads";
+import type { ExportRecord } from "../lib/upload/export";
+import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
+import { settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { cleanMetadata, metadataFingerprint } from "../lib/upload/meta";
 import { getAppState, patchUpload } from "../state/appstore";
+import { rememberListTargets } from "../state/listtargets";
+import { pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import { cachedMeta, restoredMeta } from "./metacache";
 import type { UploadRowSource } from "./discovery";
 import {
@@ -123,7 +128,7 @@ function metadataMoved(record: ExportRecord, meta: UploadMetaState): boolean {
 export function metaFromRecord(record: ExportRecord | null, interrupted: boolean): UploadMetaState {
   if (interrupted) return { ...EMPTY_META, state: "interrupted", detail: "a metadata request was in flight when the app closed — its outcome is unknown; generate again to retry" };
   const block = record?.metadata ?? null;
-  const metadata = block === null ? null : cleanMetadata({ title: block.title, description: block.description, tags: [...block.tags] });
+  const metadata = block === null ? null : cleanMetadata({ title: block.title, description: block.description, tags: [...block.tags], ...metadataRights(block) });
   if (block === null || metadata === null || block.state !== "accepted" || metadata.title === "") return EMPTY_META;
   return {
     state: "accepted",
@@ -198,33 +203,39 @@ export async function assembleRows(
   root: DirHandleLike, sources: readonly UploadRowSource[],
   opts: {
     defaults: UploadSettings; overrides: Record<string, SettingsOverrides>;
+    /** Decorations a global control applied (they are not overrides). */
+    applied?: AppliedMap;
     /** Metadata requests a restart left outcome-unknown (the journal). */
     interrupted: ReadonlySet<string>;
     /** Runs a restart left unresolved (the job store, CP-2). */
     interruptedJobs?: ReadonlySet<string>;
   },
 ): Promise<UploadRow[]> {
-  const rows: UploadRow[] = [];
-  for (const source of sources) {
-    rows.push(await assembleOne(root, source, opts));
-  }
+  // Parallel rows, shared folder lookups, hashes remembered across restarts (rowreads).
+  const reader = createRowReader(root);
+  const rows = await mapLimited(sources, ASSEMBLE_CONCURRENCY, (source) => assembleOne(reader, source, opts));
+  flushSourceHashes();
   return rows;
 }
 
+/** Rows read at once; the drive answers each read with latency. */
+const ASSEMBLE_CONCURRENCY = 16;
+
 async function assembleOne(
-  root: DirHandleLike, source: UploadRowSource,
+  reader: RowReader, source: UploadRowSource,
   opts: {
     defaults: UploadSettings; overrides: Record<string, SettingsOverrides>;
+    applied?: AppliedMap;
     interrupted: ReadonlySet<string>; interruptedJobs?: ReadonlySet<string>;
   },
 ): Promise<UploadRow> {
-  const record = await readRecordAt(root, source.dirPath);
-  const sourceHash = await hashAt(root, source.svgPath);
+  const [record, sourceHash] = await Promise.all([reader.record(source.dirPath), reader.sourceHash(source)]);
   return toRow(source, {
     record,
     sourceHash,
-    meta: restoredRowMeta(record, sourceHash, opts.interrupted.has(source.id)),
-    effective: effectiveSettings(opts.defaults, opts.overrides[source.id] ?? {}),
+    // A sibling pair in the same folder must never confer its acceptance.
+    meta: restoredRowMeta(record?.pair.id === source.id ? record : null, sourceHash, opts.interrupted.has(source.id)),
+    effective: rowSettings(opts.defaults, source.id, opts.overrides, opts.applied ?? {}),
     interruptedJob: opts.interruptedJobs?.has(source.id) === true,
   });
 }
@@ -240,23 +251,6 @@ function restoredRowMeta(record: ExportRecord | null, sourceHash: string | null,
   const committed = metaFromRecord(record, interrupted);
   if (interrupted || committed.state !== "empty") return committed;
   return restoredMeta(cachedMeta(sourceHash));
-}
-
-/** The pair's export.json → record; null when missing or corrupt (RULE 13). */
-async function readRecordAt(root: DirHandleLike, dirPath: string): Promise<ExportRecord | null> {
-  const bytes = await readBytesAt(root, `${exportDirOf(dirPath)}/export.json`);
-  if (bytes === null) return null;
-  try {
-    return parseExportRecord(JSON.parse(new TextDecoder().decode(bytes)));
-  } catch {
-    return null;
-  }
-}
-
-/** The source's content hash, `sha256:<hex>`; "" when it cannot be read. */
-async function hashAt(root: DirHandleLike, relPath: string): Promise<string | null> {
-  const bytes = await readBytesAt(root, relPath);
-  return bytes === null ? null : `sha256:${await sha256HexText(new TextDecoder().decode(bytes))}`;
 }
 
 // --- list filter / sort ---------------------------------------------------------
@@ -279,7 +273,9 @@ export function countsOf(rows: readonly UploadRow[]): UploadCounts {
 /** A restored check must never point at a pair the rescan removed. */
 export function pruneChecked(rows: readonly UploadRow[]): void {
   const known = new Set(rows.map((r) => r.source.id));
-  const checked = getAppState().upload.checked;
-  const kept = checked.filter((id) => known.has(id));
-  if (kept.length !== checked.length) patchUpload({ checked: kept });
+  rememberListTargets("upload", [...known]);
+  const state = getAppState().upload;
+  const before = { checked: state.checked, active: state.activeId, anchor: state.anchorId };
+  const after = pruneRowSelection(before, known);
+  if (!sameRowSelection(before, after)) patchUpload({ checked: after.checked, activeId: after.active, anchorId: after.anchor });
 }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the metadata pipeline runs for real over a fake transport: the
 // exact default prompt goes out with the preview image, the answer is parsed
 // and validated deterministically, only provider-confirmed failures are

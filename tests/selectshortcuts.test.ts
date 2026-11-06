@@ -1,7 +1,11 @@
 // selectshortcuts.test.ts — Q/E active-row only reusable across tabs, focus and modifier aware
 
 import { describe, expect, it, vi } from "vitest";
-import { handleSelectShortcut } from "../src/lib/selectshortcuts";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { handleSelectShortcut, useSelectShortcuts } from "../src/lib/selectshortcuts";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 function makeEvent(key: string, target: EventTarget | null = null, ctrl = false, meta = false, alt = false): KeyboardEvent {
   return { key, target, ctrlKey: ctrl, metaKey: meta, altKey: alt } as unknown as KeyboardEvent;
@@ -100,4 +104,26 @@ describe("selectshortcuts reusable Q/E active-only", () => {
     const desel = vi.fn();
     expect(handleSelectShortcut(makeEvent("b"), { selectVisible: sel, deselectAll: desel })).toBe(false);
   });
+});
+
+it("prevents native Q/E behavior only while the enabled list handles the key", async () => {
+  const selectVisible = vi.fn();
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  function Probe({ enabled }: { enabled: boolean }) {
+    useSelectShortcuts({ selectVisible }, enabled);
+    return null;
+  }
+  await act(async () => root.render(createElement(Probe, { enabled: true })));
+  const handled = new KeyboardEvent("keydown", { key: "e", cancelable: true });
+  window.dispatchEvent(handled);
+  expect(selectVisible).toHaveBeenCalledTimes(1);
+  expect(handled.defaultPrevented).toBe(true);
+  await act(async () => root.render(createElement(Probe, { enabled: false })));
+  const ignored = new KeyboardEvent("keydown", { key: "e", cancelable: true });
+  window.dispatchEvent(ignored);
+  expect(ignored.defaultPrevented).toBe(false);
+  await act(async () => root.unmount());
+  host.remove();
 });

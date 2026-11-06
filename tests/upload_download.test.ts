@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_download.test.ts — "Download all" (2026-10-08): the pure planner that
 // turns the selection's export records into the files one destination folder
 // receives (names, collisions, what has no record), and the one honest line

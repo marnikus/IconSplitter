@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the metadata rules run for real: the exact default prompt states
 // every enforced constraint, the labeled-text parser is deterministic, and
 // validation applies the resolved rules. The policy is a MINIMUM policy (the

@@ -1,15 +1,23 @@
 // UploadBulkBar.tsx — the bulk bar of the "SVG to upload" tab (design §4.1/
 // §6): the header checkbox with an indeterminate state, the selection scope,
-// the two PREVIEW settings (thumbnail zoom and the frame background — one
-// control per decision, RULE 10) with the global Export settings button beside
+// the PREVIEW settings (thumbnail zoom, the frame background), the export
+// STROKE width (Generate SVG's PreviewStroke control, here the ONE strokePx of
+// the export defaults — 2026-10-19, RULE 10) with the global Export settings button beside
 // them (the reference puts the tools here, not in the provider card), the live
-// progress line, and the bulk controls: Apply settings, Generate metadata,
-// Regenerate metadata, Export selected, Download all (the selection's committed
-// packages into one folder the user picks, 2026-10-08), and Cancel while a run
-// is in flight. Every bulk action applies to the SELECTION only.
+// progress line, and the bulk controls: Reset to inherited (clears the
+// selection's own general pins — never a decoration, never a default, 2026-10-21),
+// Generate metadata, Regenerate metadata, Export selected, Download all (the
+// selection's committed packages into one folder the user picks, 2026-10-08),
+// and Cancel while a run is in flight. Every bulk action applies to the
+// SELECTION only.
 
-import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
+import type { PreviewBackground } from "../lib/svgbackground";
+import PreviewStroke from "../svg/PreviewStroke";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
+import type { RowBadgeState } from "../lib/upload/rowbadge";
+import UploadRowBadgeApply from "./UploadRowBadgeApply";
+import InvertButton from "../ui/InvertButton";
+import PreviewBgPicker from "../ui/PreviewBgPicker";
 
 export interface UploadBulkBarProps {
   header: "none" | "some" | "all";
@@ -17,28 +25,45 @@ export interface UploadBulkBarProps {
   visibleCount: number;
   thumb: number;
   bg: PreviewBackground;
+  /** The export stroke width (the defaults' strokePx); null = default, each file's own widths. */
+  stroke: number | null;
   progress: { done: number; total: number } | null;
   runningMeta: number;
   runningExport: number;
+  downloading?: boolean;
   /** How many checked icons still have no metadata (the Generate paid-call count). */
   metaNeeded: number;
   /** How many checked icons have metadata text available to replace. */
   metaRegenerateCount: number;
+  metaAcceptCount: number;
+  metaAcceptBusy: boolean;
   /** How many committed files the checked icons would download (2026-10-08). */
   downloadFiles: number;
+  /** How many checked icons pin at least one general setting in their own dialog. */
+  overriddenCount: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
+  onInvert: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onBg: (bg: PreviewBackground) => void;
+  onStroke: (px: number | null) => void;
   onSettings: () => void;
-  onApplySettings: () => void;
+  onResetSettings: () => void;
   onMetadata: () => void;
   onRegenerateMetadata: () => void;
+  onAcceptMetadata: () => void;
   onExport: () => void;
   onDownload: () => void;
+  /** Declines the checked items in Generate SVG — they leave this list. */
+  onRemove: () => void;
   onCancel: () => void;
+  rowBadges: RowBadgeState;
+  checkedIds: string[];
+  onApplyRowBadge: (ids: string[], badgeId: string) => void;
 }
+
+const STROKE_TITLE = "Export stroke width in px, written on every visible stroke of every icon (the live previews show it). default = each SVG keeps its own widths.";
 
 export default function UploadBulkBar(p: UploadBulkBarProps) {
   return (
@@ -60,6 +85,7 @@ function BulkLeft({ p }: { p: UploadBulkBarProps }) {
       <span className="svg-scope-copy" data-testid="upload-scope">across {p.visibleCount} approved SVGs</span>
       <span className="svg-divider" aria-hidden="true" />
       <button type="button" className="svg-btn" data-testid="upload-select-visible" onClick={p.onSelectVisible}>Select all visible</button>
+      <InvertButton prefix="upload" onClick={p.onInvert} />
       <button type="button" className="svg-btn" data-testid="upload-deselect" onClick={p.onDeselectAll}>Deselect all</button>
     </div>
   );
@@ -67,15 +93,18 @@ function BulkLeft({ p }: { p: UploadBulkBarProps }) {
 
 /** The action half: preview settings, progress, cancel and five bulk actions. */
 function BulkRight({ p }: { p: UploadBulkBarProps }) {
-  const running = p.runningMeta + p.runningExport;
+  const running = p.runningMeta + p.runningExport + Number(p.downloading === true);
   return (
     <div className="svg-bulk-right" data-testid="upload-bulk-right">
-      <PreviewBg bg={p.bg} onBg={p.onBg} />
+      <PreviewBgPicker prefix="upload" bg={p.bg} onBg={p.onBg} />
+      <span className="svg-divider" aria-hidden="true" />
+      <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} idPrefix="upload" title={STROKE_TITLE} />
       <span className="svg-divider" aria-hidden="true" />
       <Zoom thumb={p.thumb} onThumb={p.onThumb} />
       <button type="button" className="svg-btn" data-testid="upload-settings-open" onClick={p.onSettings}>
         ⚙ Export settings…
       </button>
+      <UploadRowBadgeApply state={p.rowBadges} ids={p.checkedIds} onApply={p.onApplyRowBadge} />
       <span className="svg-divider" aria-hidden="true" />
       <Progress p={p} running={running} />
       {running > 0 && (
@@ -90,8 +119,37 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
 function BulkActions({ p }: { p: UploadBulkBarProps }) {
   return (
     <>
-      <button type="button" className="svg-btn" data-testid="upload-apply-settings"
-        disabled={p.checkedCount === 0} onClick={p.onApplySettings}>Apply settings to selected</button>
+      <button type="button" className="svg-btn" data-testid="upload-reset-settings"
+        disabled={p.overriddenCount === 0} onClick={p.onResetSettings}
+        title={p.overriddenCount === 0
+          ? "No checked icon pins a local setting — they already follow the global defaults, and decorations are never reset here"
+          : `Drops the local settings the ${p.overriddenCount} checked icon${p.overriddenCount === 1 ? "" : "s"} pinned in their own dialogs so they follow the global defaults again — ONE undoable step; Shadow, corner badge, size guide and the global defaults are never touched`}>
+        ↺ Reset to inherited ({p.overriddenCount})</button>
+      <MetadataActions p={p} />
+      <button type="button" className="svg-btn success" data-testid="upload-meta-accept-selected"
+        disabled={p.metaAcceptCount === 0 || p.metaAcceptBusy} onClick={p.onAcceptMetadata}
+        title="Accept existing metadata for selected icons only; invalid drafts stay unaccepted. No AI requests.">
+        ✓ Accept metadata ({p.metaAcceptCount})</button>
+      <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
+        disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
+      <button type="button" className="svg-btn" data-testid="upload-download-selected"
+        disabled={p.checkedCount === 0} onClick={p.onDownload}
+        title={p.checkedCount === 0
+          ? "Select icons first"
+          : "Copies every committed SVG, JPG and EPS of the selection into one folder you choose — nothing is overwritten"}>
+        ⤓ Download all ({p.downloadFiles} file{p.downloadFiles === 1 ? "" : "s"})</button>
+      <button type="button" className="svg-btn danger" data-testid="upload-remove-selected"
+        disabled={p.checkedCount === 0} onClick={p.onRemove}
+        title="Remove the checked icons from this list: declines them in Generate SVG (Undo brings them back)">
+        🗑 Remove selected</button>
+    </>
+  );
+}
+
+/** Only these buttons can request paid metadata, behind the existing confirmation. */
+function MetadataActions({ p }: { p: UploadBulkBarProps }) {
+  return (
+    <>
       <button type="button" className="svg-btn" data-testid="upload-meta-selected"
         disabled={p.checkedCount === 0} onClick={p.onMetadata}
         title={p.checkedCount === 0
@@ -104,14 +162,6 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
           ? "Select icons with existing metadata first"
           : `${p.metaRegenerateCount} of ${p.checkedCount} selected already have metadata — one replacement request each`}>
         ↻ Regenerate metadata ({p.metaRegenerateCount})</button>
-      <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
-        disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
-      <button type="button" className="svg-btn" data-testid="upload-download-selected"
-        disabled={p.checkedCount === 0} onClick={p.onDownload}
-        title={p.checkedCount === 0
-          ? "Select icons first"
-          : "Copies every committed SVG, JPG and EPS of the selection into one folder you choose — nothing is overwritten"}>
-        ⤓ Download all ({p.downloadFiles} file{p.downloadFiles === 1 ? "" : "s"})</button>
     </>
   );
 }
@@ -144,7 +194,7 @@ function Progress({ p, running }: { p: UploadBulkBarProps; running: number }) {
       </div>
     );
   }
-  const kind = p.runningMeta > 0 ? "metadata" : "export";
+  const kind = p.downloading ? "download" : p.runningMeta > 0 ? "metadata" : "export";
   return (
     <div className="svg-estimate" data-testid="upload-estimate">
       <strong>{kind} {p.progress.done}/{p.progress.total}</strong>
@@ -153,21 +203,3 @@ function Progress({ p, running }: { p: UploadBulkBarProps; running: number }) {
   );
 }
 
-/** Presets + one custom colour = ONE decision: the preview frame background. */
-function PreviewBg({ bg, onBg }: { bg: PreviewBackground; onBg: (bg: PreviewBackground) => void }) {
-  return (
-    <div className="svg-bg" data-testid="upload-bg">
-      <label htmlFor="upload-bg-custom">PREVIEW BG</label>
-      {BG_PRESETS.map((preset) => (
-        <button key={preset.id} type="button" className={`svg-swatch${bg.preset === preset.id ? " on" : ""}`}
-          data-testid={`upload-bg-${preset.id}`} title={`Preview background: ${preset.label}`}
-          aria-label={`Preview background ${preset.label}`} aria-pressed={bg.preset === preset.id}
-          style={{ background: preset.color }} onClick={() => onBg(selectPreset(bg, preset.id))} />
-      ))}
-      <input id="upload-bg-custom" data-testid="upload-bg-custom" type="color" value={bg.custom}
-        aria-label="Custom preview background" onChange={(e) => onBg(selectCustom(bg, e.target.value))} />
-      <output className="svg-bg-value" data-testid="upload-bg-value" htmlFor="upload-bg-custom"
-        title="Preview only — saved SVG files are never changed">{backgroundLabel(bg)}</output>
-    </div>
-  );
-}

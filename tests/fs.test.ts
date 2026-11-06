@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 6 — fs adapter (spec §5/§6 plumbing): RULE 8 via structural fakes.
 // The fakes implement the same interfaces the browser File System Access API
 // satisfies, so the adapter logic really executes — no mocks of the code itself.

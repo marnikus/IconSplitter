@@ -1,0 +1,111 @@
+# Historical documentation index — opt in only
+
+This is a lookup for named historical questions, not routine agent context.
+Current behaviour lives in [current/README.md](current/README.md).
+Never edit existing archived designs to match later changes.
+
+## Dated designs and research
+
+| Folder | What it records |
+|---|---|
+| `archive/2026-10-30-getty-web-batch-chunking/README.md` | Plan (no code yet) for Getty Images web uploads above Getty's 100-upload batch limit, where one JPEG+EPS pair counts as one upload: a pure icon-count chunk planner, one created/completed batch per chunk inside a single signed-in session, per-batch `finish` refusals, failure bodies that keep the accepted names so nothing is re-uploaded twice, and a bounded one-attempt re-upload list folded into a later / final retry batch; 10 TDD steps from the helper's 100-icon cap to the panel's re-upload filter |
+| `archive/2026-10-27-stock-upload-tab-plan/README.md` | Architecture & TDD implementation plan (no code yet) for the 6th `"Upload"` tab: strict `export/` + `export.json` exported-only discovery, `JPEG/PNG` → `SVG` thumbnail zoom preview, shared row badges, local metadata re-embedding, Shutterstock Explicit FTPS (`ftps.shutterstock.com:21`) preset + extensible stock FTP presets, local-only non-expanded IndexedDB credentials, multi-site & multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`) upload over `tools/bridge/` |
+| `archive/2026-10-26-selection-response-v2/README.md` | Plan plus its implementation (2026-10-26, second pass): end-to-end selection response at 1,000+ rows — measured store fan-out, full-array history entries, synchronous timeline persistence and a quadratic SVG count; delta history, slice selectors, per-panel summaries, ordered steps with acceptance criteria. Shipped: D1/D2/D3/D5/D6/D7, D4 (deferred timeline writes), D8 via a content-keyed Batch view; the browser re-measure needs a Chromium runtime |
+| `archive/2026-10-26-selection-response/README.md` / `results.md` | Prior large-list pass: indexed checked-row projection, list-only Chromium measurements, and the workloads it did not cover |
+| `archive/2026-10-24-remove-selection-v1/README.md` | Remove the original Selection tab/exclusive UI; retain V2 and shared review/IO, migrate saved tab and remove sidebar state |
+| `archive/2026-10-23-harness-round2/README.md` / `results.md` | Further 50% research, rejected probes, unchanged application/execution architecture and explicit configurable comparison target; speed target unmet |
+| `archive/2026-10-22-test-harness-speed/README.md` / `research.md` / `design.md` | >=60% full-verification speed target, measured provider/worker probes and isolation-preserving redesign |
+| `archive/2026-10-22-custom-badge-template/README.md` | Plan for a validated user SVG badge template editor, shared geometry/output and persisted scope |
+| `archive/2026-10-22-bulk-metadata-accept/README.md` | Selected-only global metadata acceptance, shared validation gate and one sequential re-embed batch |
+| `archive/2026-10-22-metadata-carrier-contract/README.md` | Explicit JPEG/EPS XMP/IPTC contract and optional Creator/Copyright end-to-end support |
+| `archive/2026-10-21-adobe-upload-validation/README.md` | Adobe saved-page investigation and opt-in real upload acceptance; local readback is not Adobe ingestion |
+| `archive/2026-10-21-stock-file-metadata/README.md` | Plan/results for stock-readable embedded JPEG/EPS metadata and independent local upload test webpage |
+| `archive/2026-10-21-shared-process-progress/README.md` | Plan/results for shared batch progress UI and persistent Upload metadata/export progress |
+| `archive/2026-10-21-stroke-endpoints/README.md` | Plan and verification for source-faithful EPS cap/join inheritance and all-stroke endpoint controls |
+| `archive/2026-10-21-eps-no-routine-warning/README.md` | Remove misleading supported-shadow EPS warnings in bulk, rows and both settings scopes; actual export errors and no-raster gate unchanged; full verification passed |
+| `archive/2026-10-21-vector-only-eps/implementation.md` / `verification.md` | Native Level 3 vector gradient implementation and measured results: strict no-raster final-byte gates, 2396 passing coverage tests, independent interpreter checks; full perf lane remains blocked |
+| `archive/2026-10-21-vector-only-eps/research.md` | Research only: browser-native Level 3 vector gradients, rejected raster-producing PDF intermediary probe, strict no-raster audit and actual-file export test design; supplied SVG fixtures absent, no implementation claimed |
+| `archive/2026-10-01-batch-processing/design.md` | Batch folders: module map, browser constraints, negative tests |
+| `archive/2026-10-01-history-session/design.md` | Shared app-state store above the tabs, the single global undo timeline (RULE 12), session restore snapshot |
+| `archive/2026-10-01-selection-review/design.md` | Selection V1: pairing model, atomic decision protocol, hotkeys, a11y |
+| `archive/2026-10-01-selection-v2/design.md` | Selection V2: template-driven list review, zoom, selection vs decision state, bulk scope |
+| `archive/2026-10-01-generate-svg/design.md` | Generate SVG: approved-only discovery, contact-sheet batching, validation, pair-file versioning |
+| `archive/2026-10-01-svg-batches-limits-preview/design.md` | Generate SVG fixes: one request per batch + paginated confirmation, tier caps/timeouts (reversed 2026-10-05), per-request outcomes, one zoom value |
+| `archive/2026-10-01-svg-preview-cost/design.md` | Preview background (preview-only frame + contrast rule) and per-version cost (basis + pricing version) |
+| `archive/2026-10-01-svg-preview-rendering/design.md` | SVG preview: root cause of "copies but paints nothing", the sanitize/fit/inline pipeline, id scoping |
+| `archive/2026-10-05-per-pair-metadata/design.md` | One JSON per pair: approval + SVG history beside the images, read-only legacy fallback (I-41…I-43) |
+| `archive/2026-10-05-recursive-scan-determinism/design.md` | Scan determinism: canonical order, order-independent pairing, per-file problem statuses, read-only scans, one ticket one commit |
+| `archive/2026-10-05-folder-path-copy/design.md` | Copy a folder not a file; the picked root's real full path captured once and remembered (`iconSplitter.rootpaths.v1`) |
+| `archive/2026-10-05-global-log/design.md` | Global activity log: one docked panel for every tab, entry exclusions, and the dock layout fix (`--app-dock-h`) |
+| `archive/2026-10-05-folder-bar/design.md` | One folder control, one path row (I-44…I-46); removal of the `Use copied path` field and the 30 s Watcher |
+| `archive/2026-10-05-root-path-at-pick/design.md` | Why no web page can read the picked folder's real path, and the pick-time clipboard capture that fills the gap (I-35) |
+| `archive/2026-10-05-svg-source-list-audit/design.md` | Generate SVG list built from files not decisions: one row per normalized AI path, exclusions with reasons, the audit line |
+| `archive/2026-10-05-split-scope-and-path-guard/design.md` | The reviewable set is the batch's `_*split*output` tree; `isFolderPathText` guards the raw clipboard/button/field text |
+| `archive/2026-10-05-picked-output-root/design.md` | Picking the batch's own output: `ScopeRule { split, hideOutside }` (I-47), batch folder found from either side (I-48) |
+| `archive/2026-10-05-root-independent-pairs/design.md` | A file is read from where it sits (I-49), run stamps are evidence (I-50), paths derive only from named folders (I-51) |
+| `archive/2026-10-05-path-capture-recovery/design.md` | When the first path capture fails: Rescan retry, Ctrl+V adoption, honest reasons, no invented path (I-52) |
+| `archive/2026-10-05-queue-variants-zoom/design.md` | Generation queue, additive `preferred` version key, one shared 48–800 px zoom (I-53…I-55) |
+| `archive/2026-10-05-svg-long-requests/design.md` | Long generations: SSE streaming + keepalives, the stall window instead of total timeouts, journal + restart recovery |
+| `archive/2026-10-06-location-folder-of-file/design.md` | "Location" names the folder of the FILE (I-56); `targetPathOf(row)` as the single-file rule |
+| `archive/2026-10-06-svg-to-upload/design.md` | SVG to upload: the phase-0 research record — reuse map over `src/svg/*`, the package contract, what was built new |
+| `archive/2026-10-07-svg-to-upload/design.md` | SVG to upload (design of record): discovery through the pair sidecars, settings, the Gemini metadata prompt, SVG/JPEG/EPS pipelines, per-icon `export.json`, job model, no automatic uploading |
+| `archive/2026-10-07-svg-to-upload-merge/ADR.md` | The three-branch "SVG to upload" merge: P0 adjudications before any donor file moved, the phase plan and its exit gates |
+| `archive/2026-10-07-env-setup-performance/design.md` | Environment-setup performance: re-verified findings, the O1–O11 decisions (O4 deferred), TDD plan for `tools/verify.mjs` + shallow-safe `quality.mjs` |
+| `archive/2026-10-08-title-one-phrase/design.md` | One-phrase titles (parallel session, superseded the same day by `one-clean-phrase` below): the review's two-sentence/period finding, cutting a second sentence, the four gates a title enters (the committed record included) |
+| `archive/2026-10-08-stock-clean-svg/design.md` | Stock-clean export SVG: the review's findings measured against the code, decisions D1–D7 (namespaces once on the root, 10 % tidy stroke widths, no root px size, titles without trailing period, `transparent` background, stroke colour setting), size budget and the 14-step TDD plan |
+| `archive/2026-10-08-stroke-width-exact/design.md` | Exact stroke width: why `2` became `2.6224000000000003` (width finalised before SVGO baked the transforms; pt vs px), decisions D1–D8 (bake every transform into the geometry in prepare, then write the px setting verbatim; one outline model shared with the EPS writer; named refusals), size budget, 8-step TDD plan |
+| `archive/2026-10-08-one-clean-phrase/design.md` | Metadata title and description: ONE clean phrase each — first sentence only (REVISED the same day: every sentence is kept, only the final period goes — see the SOR), sentence case, no end punctuation — at parse, cache read and Accept; prompt and hints ask for it |
+| `archive/2026-10-09-eps-executable-artboard-megapixels/design.md` | Shipped 2026-10-09 in three commits (A/B/C): the built-in EPS as an executable program (`[…] concat`, fill-then-stroke, a subset stack checker in the gate), the artboard measured from the artwork AS IT SHIPS (strokes/expansion included, the artboard rect always present, a clone-bake-measure loop for verbatim strokes under a scale), and "Scale to N MP" (default 5, content mode) — decisions D1–D6, owner files, 14 TDD steps in three commits, I-60…I-62, open points Q1–Q3 |
+| `archive/2026-10-09-root-path-glued-folders/design.md` | Fix (I-59, two rounds): the `Full path` row that glued the previous root's export folder onto a new pick — round 2 (§5) removed the "parent + name" completion entirely (exact leaf or nothing), a stored `completed` guess reads as no path, derivation starts only from an exact capture, and a late capture (Rescan / Ctrl+V) names the known handle |
+| `archive/2026-10-09-root-path-identity/DESIGN.md` | Fix (I-63, third report after I-59 failed twice): a full path is bound to the picked folder's HANDLE, never its name — the name-keyed store was the root cause of the recurring glued path and the false "full path not captured"; handle-keyed IDB records, one-level-up/down adoption + derivation both ways from `resolve()`, v1 key never read |
+| `archive/2026-10-09-regenerate-from-svg/design.md` | Regenerate SVG: feature 1 (full main prompt + first image, locked by tests) and "Regenerate from current SVG" (saved SVG prompt + current SVG code + the same image, one icon per request — I-64), its window above the prompt window (moved from Export settings the same day), and the shared prompt window + preset bar (I-65) |
+| `archive/2026-10-09-eps-converters-inkscape-expand/design.md` | DESIGN (no code yet): EPS converter drop list (registry: built-in + Inkscape CLI), the local Inkscape helper (`tools/bridge/`, 127.0.0.1), and "Expand strokes to fills" (built-in cubic offsetting in `geom/expand/`) — decisions D1–D5, owner files, 16 TDD steps, open questions Q1–Q5 |
+| `archive/2026-10-09-export-metadata-readback/design.md` | Missing-metadata fix: matching fingerprints no longer bless metadata-free existing outputs; exact accepted metadata readback repairs SVG/requested EPS only and leaves JPEG untouched |
+| `archive/2026-10-09-upload-regenerate-metadata/design.md` | Bulk metadata regeneration: selection-only, non-null metadata filter, explicit replacement confirmation, and separate Generate action |
+| `archive/2026-10-09-svg-bulk-regenerate/design.md` | Generate SVG bulk Regenerate: selection-only, valid-existing-SVG filter, separate Generate action, shared confirmation and queue |
+| `archive/2026-10-08-eps-rounded-rect/design.md` | SVG to upload — EPS: a rounded `<rect>` is written as an exact outline (four lines, four KAPPA arcs) and the fix is reported on the row/log/toast, never asked; the rotated-rounded-rect bake refusal is gone |
+| `archive/2026-10-08-upload-download-all/design.md` | SVG to upload — "Download all": the selection's committed SVG/JPG/EPS copied into one user-picked folder (planner, never-overwrite, verified copy, one result line) |
+| `archive/2026-10-08-svg-queue-keepalive/design.md` | Design (implemented the same day — I-53 rewrite, I-57, I-58): Generate SVG — the panel kept mounted so a run and its queue survive a tab switch, a floating done/left popup on every tab, "Next attempt" grey row flag for queued sources, row Regenerate at the FRONT of the queue, the list order pinned and the run record moved below the list so a landing SVG never moves the page |
+| `archive/2026-10-08-one-stroke-definition/design.md` | One stroke definition: `stroke` and `stroke-width` once on the root when the shapes agree (unstroked shapes say `none`), explicit per shape when they do not, never on a container; default stroke colour `#000000` |
+| `archive/2026-10-09-regen-prompt-popup/design.md` | Regeneration prompt per batch in popup — first generation uses main prompt |
+| `archive/2026-10-11-regenerated-review-status/design.md` | New review status: regenerated — yellow warning |
+| `archive/2026-10-12-batch-active-row-select/README.md` | Fix Q/E to affect only active row, not all rows |
+| `archive/2026-10-12-batch-nonblocking/README.md` | Batch non-blocking — folder search not blocked by split progress |
+| `archive/2026-10-12-batch-v2-controls/README.md` | Batch folders — V2 controls: zoom, date filters, filtered multi-select |
+| `archive/2026-10-12-batch-v2-selection/README.md` | Batch V2 selection + A/E shortcuts |
+| `archive/2026-10-12-full-refactor-optimize/README.md` | Full refactor & optimize all new code — batch reuse, quality gates |
+| `archive/2026-10-12-svg-upload-scroll-fix/README.md` | SVG to upload / Generate SVG blank areas and clipped list fix |
+| `archive/2026-10-13-algo-efficiency/README.md` | Algo time process — 80% faster redesign (merged mask+downsample, fast count, rMax cap) |
+| `archive/2026-10-13-algo-efficiency-v2/README.md` | Algo v2 — UF labeling, ink-cell limited extract, sampled hist, buffer reuse, early exit |
+| `archive/2026-10-13-batch-flex-thumb-info/README.md` | Batch flex layout — file info under thumbnail, no fixed widths, full-width list |
+| `archive/2026-10-13-batch-freeze/README.md` | Batch processing freezes UI — research & fix plan |
+| `archive/2026-10-13-batch-freeze-v2/README.md` | Batch UI still freezes during progress — deep dive v2 |
+| `archive/2026-10-13-batch-merge-preview/README.md` | Batch merge slider + Preview splits inline |
+| `archive/2026-10-13-batch-preview-layout-fix/README.md` | Batch Preview layout fix — doc & plan |
+| `archive/2026-10-13-batch-progress-bar/README.md` | Batch Split Selected — persistent progress bar same as Generate SVG |
+| `archive/2026-10-13-batch-review/README.md` | Batch folders review — approve/decline/warning + 4-icon rule |
+| `archive/2026-10-13-batch-row-merge-override/README.md` | Batch per-row merge override — design doc |
+| `archive/2026-10-13-grid-split-failure/README.md` | Grid image fails to split — 2x2 lightbulb icons |
+| `archive/2026-10-15-preview-restore-scroll-top/design.md` | Preview splits stored + restored after a restart, Regenerate rewrites, back-to-top button on all tabs |
+| `archive/2026-10-15-preview-store-preset/research.md` | Research: previews lost on reload (boot permission gesture gap), per-item merge decisions not persisted — root causes RC1–RC4, rules I-66..I-68, fix plan |
+| `archive/2026-10-15-batch-perf-stability/README.md` | Batch perf stability — scroll freeze / CPU spike fix (ported) |
+| `archive/2026-10-15-row-location/README.md` | Row "Location" button — copy the split-output folder of a processed item |
+| `archive/2026-10-15-split-size/README.md` | Split export size — "preset size does nothing": research and fix |
+| `archive/2026-10-15-split-speed/README.md` | Split-approved pipeline speed — research and improvement plan (≥80 % target) |
+| `archive/2026-10-16-connections/README.md` | Connection profiles — quick-switch dropdown, a Requesty image connection (Sunburst), full image controls |
+| `archive/2026-10-16-day-run-folder/README.md` | Day-level run folders — same-day exports share one folder |
+| `archive/2026-10-16-pinned-bulkbar/README.md` | Pinned bulk bar — the split controls stay reachable while scrolling |
+| `archive/2026-10-16-image-regen/README.md` | AI source image regeneration — image connection, confirmed prompt (shared presets), versioned main in "AI source regeneration versions" (I-71) |
+| `archive/2026-10-19-image-regen-reference/README.md` | AI source regeneration sends the prompt AND the current main image as reference (`images/edits`); corrects the earlier "no edit endpoint" claim |
+| `archive/2026-10-19-image-regen-fix/README.md` | Fix: the row's 9th grid cell (RC1), the dialog rendered below the list (RC2), a silent run (RC3/RC4), discarded images for pairs without a file (RC5), SVG saves dropping the image history (RC6), the 120 s cut (RC7), and the SVG generation now reading the MAIN image (RC8) |
+| `archive/2026-10-19-image-regen-spend-log/design.md` | AI source regeneration logs tokens in/out/total + cost per landed request and per run (`svg/imglog.ts`); the outcome toast appends the summed spend |
+| `archive/2026-10-19-ai-source-composite-batch/design.md` | Design that preceded I-72: configurable multi-icon image-edit composites, normalized cell mapping back to per-pair versions, explicit review and privacy contracts; current behaviour is in `current/SYSTEM_OF_RECORD.md` |
+| `archive/2026-10-20-regen-size-from-connection/design.md` | Why the regeneration confirmation has no icons-per-request field: the connection's `Images / request` is the one count, clamped to 1..9 and frozen in the plan; the stored `regenBatch` key is gone |
+| `archive/2026-10-20-task-prompt-detected/design.md` | Why the prompt picker has no Single icon / Batch switch: the selection already decides the task (`taskOf`), so each situation merely suggests and remembers its own prompt; the tab handles are gone |
+| `archive/2026-10-20-regen-batch-and-task-prompts/design.md` | Batch SVG regeneration (1..9 icons per request, matched back by `<title>` then position), the saved-prompt picker in every paying popup, and six task-scoped prompt defaults named above one shared picker — data model and handles in `contract.md`, exact strings in `prompts.md`, slices in `steps.md` |
+| `archive/2026-10-20-item-review-status/design.md` | Review is ONE status per icon row (the pair file's `review`), never per SVG version: the badge, filter, tally and approved count read the item, undo names no version, and old files migrate from their newest decided version (I-78) |
+| `archive/2026-10-27-stock-upload-tab-plan/README.md` | Upload (`stockUpload`) tab — strict `export/` + `export.json` discovery, local-only credentials, Explicit FTPS (`:21`) & SFTP (`:22`) bridge |
+| `archive/2026-10-29-getty-images-upload/README.md` | Getty Images / iStock (`contributors.gettyimages.com` → `esp.gettyimages.com`) — research, paired `EPS + JPG` rules, ESP HTTPS API (`:443`) + ESP CSV export & unified badge |
+
+Archived docs are dated by the day they were written and never edited afterwards.
+

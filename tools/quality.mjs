@@ -12,12 +12,15 @@
 //   node tools/quality.mjs --write-baseline         # integrator only
 //   node tools/quality.mjs --json
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
-const ROOT = new URL("..", import.meta.url).pathname;
-const BASELINE_PATH = new URL("quality_baseline.json", import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: on Windows the latter is "/D:/My%20Dir/",
+// which no cwd or fs call accepts (spawnSync then failed with "cmd.exe ENOENT").
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const BASELINE_PATH = fileURLToPath(new URL("quality_baseline.json", import.meta.url));
 
 // §16.1 / §16.2 frozen fail lines
 const LIMITS = { funcLoc: 30, params: 4, cc: 10, nesting: 4, fileWarn: 300, fileFail: 500 };
@@ -47,8 +50,11 @@ if (baseArg && !REF_SHAPED.test(baseArg)) {
 const say = (...a) => !jsonOut && console.log(...a);
 
 function srcFiles() {
-  const out = execSync('find src -type f \\( -name "*.ts" -o -name "*.tsx" \\)', { cwd: ROOT }).toString();
-  return out.trim().split("\n").filter(Boolean).sort();
+  // fs, not `find`: on Windows execSync's shell is cmd.exe, whose FIND is a text search.
+  return readdirSync(ROOT + "src", { recursive: true })
+    .map((f) => "src/" + String(f).replace(/\\/g, "/"))
+    .filter((f) => /\.tsx?$/.test(f))
+    .sort();
 }
 
 /** The commit the working tree is compared against, and how it was chosen. */

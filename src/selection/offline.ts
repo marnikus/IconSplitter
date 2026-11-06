@@ -19,6 +19,8 @@ import { loadSourceIndex } from "../state/sourceindex";
 import type { DirHandleLike } from "../lib/fs";
 import { loadMetaAt, saveMetaAt } from "./pairstore";
 import { metaFromRecord, metaPathOf } from "./pairrecord";
+import { SVG_HANDLE_KEY } from "../state/handlekeys";
+import type { Decision } from "../lib/reviewfilter";
 
 export const SELECTION_HANDLE_KEY = "__selection__";
 
@@ -54,17 +56,54 @@ export async function applyDecisionPatch(touched: readonly string[], patch: Deci
   return applyToFiles(touched, patch);
 }
 
+/** One pair decision that reached its file. */
+export interface WrittenDecision {
+  id: string;
+  decision: Decision;
+}
+
+const writtenListeners = new Set<(written: WrittenDecision[]) => void>();
+
+/**
+ * Hears every decision written to files here — a Generate SVG Remove, or an
+ * undo/redo pressed while no Selection panel is mounted — so another tab's list
+ * can follow (a pair that is no longer approved leaves Generate SVG).
+ */
+export function onDecisionsWritten(listener: (written: WrittenDecision[]) => void): () => void {
+  writtenListeners.add(listener);
+  return () => { writtenListeners.delete(listener); };
+}
+
+/**
+ * The folders a pair file may live under: Selection's own, then Generate SVG's
+ * (a decline made from Generate SVG when Selection V2 was never opened there).
+ */
+async function decisionRoots(): Promise<DirHandleLike[]> {
+  const roots: DirHandleLike[] = [];
+  for (const key of [SELECTION_HANDLE_KEY, SVG_HANDLE_KEY]) {
+    const root = (await loadHandles(key))?.source ?? null;
+    if (root !== null && !roots.includes(root)) roots.push(root);
+  }
+  return roots;
+}
+
 async function applyToFiles(touched: readonly string[], patch: DecisionPatch): Promise<boolean> {
-  const root = (await loadHandles(SELECTION_HANDLE_KEY))?.source ?? null;
-  if (!root || touched.length === 0) return false;
+  const roots = await decisionRoots();
+  if (roots.length === 0 || touched.length === 0) return false;
   const named = new Map(patch.recs.map((r) => [r.pair_id, r]));
-  let changed = false;
+  const written: WrittenDecision[] = [];
   for (const id of touched) {
     const rec = named.get(id) ?? pendingRecord(id);
-    if (rec === null) continue;
-    changed = (await writeOne(root, rec)) || changed;
+    if (rec !== null && (await writeUnderAny(roots, rec))) written.push({ id, decision: rec.decision });
   }
-  return changed;
+  if (written.length > 0) for (const listener of writtenListeners) listener(written);
+  return written.length > 0;
+}
+
+/** The first folder that holds the pair takes the write. */
+async function writeUnderAny(roots: readonly DirHandleLike[], rec: ReviewRecord): Promise<boolean> {
+  for (const root of roots) if (await writeOne(root, rec)) return true;
+  return false;
 }
 
 /** A pair going back to pending: the index still knows the file it lives in. */

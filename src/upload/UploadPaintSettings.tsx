@@ -4,10 +4,12 @@
 // artwork's own, or one hex every visible stroke gets). ONE picker renders
 // both: the "none of ours" button, the shared swatches, a custom colour and
 // the value readout. Split out of UploadSettingsDialog so that file stays
-// under the RULE 16 line; it owns the shell, this owns paint.
+// under the RULE 16 line; it owns the shell, this owns paint. 2026-10-19: each
+// row starts with **Default** — leave the source's own (no artboard rect / the
+// strokes' own paint; archive/2026-10-19-upload-default-settings).
 
 import { BG_PRESETS, normalizeHex } from "../lib/svgbackground";
-import { STROKE_COLOR_ARTWORK, TRANSPARENT } from "../lib/upload/settings";
+import { BACKGROUND_SOURCE, STROKE_COLOR_ARTWORK, TRANSPARENT } from "../lib/upload/settings";
 import { Marker, change, type SettingsFieldProps } from "./settingsfield";
 
 /** One paint picker's vocabulary: the field, its "none" word, and the handles. */
@@ -16,20 +18,24 @@ interface PaintRow {
   label: string;
   /** The `upload-set-<testid>-…` prefix. */
   testid: string;
-  none: { value: string; label: string; swatchClass: string };
+  /** The words before the colours: "Default" first, then any other sentinel. */
+  nones: { value: string; label: string; swatchClass: string }[];
   hint: string;
 }
 
 const BACKGROUND_ROW: PaintRow = {
   field: "background", label: "Background", testid: "bg",
-  none: { value: TRANSPARENT, label: "Transparent", swatchClass: "transparent" },
-  hint: "transparent = no background in the SVG/EPS; the JPEG flattens onto white",
+  nones: [
+    { value: BACKGROUND_SOURCE, label: "Default", swatchClass: "default" },
+    { value: TRANSPARENT, label: "Transparent", swatchClass: "transparent" },
+  ],
+  hint: "default = the SVG's own (nothing added) · transparent = an invisible artboard object · the JPEG flattens onto white",
 };
 
 const STROKE_COLOR_ROW: PaintRow = {
   field: "strokeColor", label: "Stroke colour", testid: "stroke-color",
-  none: { value: STROKE_COLOR_ARTWORK, label: "Artwork's own", swatchClass: "artwork" },
-  hint: "defined once on the file's root — every visible stroke gets it; fills are never touched",
+  nones: [{ value: STROKE_COLOR_ARTWORK, label: "Default", swatchClass: "artwork" }],
+  hint: "default = every stroke keeps its own paint · a colour is defined once on the file's root; fills are never touched",
 };
 
 export function BackgroundSetting(p: SettingsFieldProps) {
@@ -49,8 +55,11 @@ function PaintPicker({ p, effective, row }: SettingsFieldProps & { row: PaintRow
     <div className="svg-field up-set-field">
       <span className="svg-label">{row.label}<Marker p={p} field={row.field} testid={row.testid} /></span>
       <div className="up-bg-row">
-        <Swatch id={`${row.testid}-${row.none.swatchClass}`} label={row.none.label} on={value === row.none.value}
-          className={row.none.swatchClass} onPick={() => pick(row.none.value)} />
+        {row.nones.map((none) => (
+          <button key={none.value} type="button" className={`svg-btn tiny up-default-btn${value === none.value ? " on" : ""}`}
+            data-testid={`upload-set-${row.testid}-${none.swatchClass}`} aria-pressed={value === none.value}
+            onClick={() => pick(none.value)}>{none.label}</button>
+        ))}
         {BG_PRESETS.map((preset) => (
           <Swatch key={preset.id} id={`${row.testid}-${preset.id}`} label={`${row.label} ${preset.label}`}
             on={value === preset.color} color={preset.color} onPick={() => pick(preset.color)} />

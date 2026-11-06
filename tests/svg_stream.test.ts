@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_stream.test.ts — the SSE frame parser a long generation depends on
 // (RULE 8): the provider streams deltas for minutes, sends keepalive comments
 // to defeat proxy idle limits, and ends with an optional usage/cost chunk plus

@@ -4,6 +4,7 @@
 // pipeline rebuilds it — a bad record never destroys valid output files.
 // One record per icon, in `<pair-folder>/export/`; no global multi-icon file.
 
+import { metadataRights } from "./rights";
 import { isRecord } from "../isrecord";
 import type { UploadSettings, SettingsOverrides } from "./settings";
 import type { Artboard } from "./artboard";
@@ -109,6 +110,8 @@ export interface ExportRecord {
     title: string;
     description: string;
     tags: string[];
+    creator?: string;
+    copyright?: string;
     prompt: string;
     provider: string;
     model: string;
@@ -206,6 +209,7 @@ export function metadataBlock(meta: IconMetadata, args: {
     title: meta.title,
     description: meta.description,
     tags: meta.tags,
+    ...metadataRights(meta),
     prompt: args.prompt,
     provider: args.provider,
     model: args.model,

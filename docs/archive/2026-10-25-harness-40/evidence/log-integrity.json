@@ -1,0 +1,122 @@
+[
+  {
+    "file": "baseline-cold.log.gz",
+    "uncompressedBytes": 111426,
+    "sha256Uncompressed": "dc903e3b77e2671c7e02b4709d3eeb3051701fbb28848701e7b498cc4ff65da5"
+  },
+  {
+    "file": "baseline-warm1.log.gz",
+    "uncompressedBytes": 111197,
+    "sha256Uncompressed": "f79c37eefaa18dbdc1644d67a90265b54bac503cbd1859117a522348f70ec3cd"
+  },
+  {
+    "file": "baseline-warm2.log.gz",
+    "uncompressedBytes": 111116,
+    "sha256Uncompressed": "bbb2dfa998ca4a3eea041b3ee273397aaf55e08b42ea8c9eadf8b1fe70924929"
+  },
+  {
+    "file": "candidate-overlap2.log.gz",
+    "uncompressedBytes": 116632,
+    "sha256Uncompressed": "094683aa7e8dd273392a17fd6a23437f08de3ddccc1782673862b78e3870c945"
+  },
+  {
+    "file": "candidate-serial.log.gz",
+    "uncompressedBytes": 111915,
+    "sha256Uncompressed": "b6040b29fa351c3b7aa61909d4c4bfbe64f2e30294c52ebdde63f3251e19b628"
+  },
+  {
+    "file": "candidate-warm1.log.gz",
+    "uncompressedBytes": 115422,
+    "sha256Uncompressed": "5d7342a594bd382d38f2f9db7a12b40d6818b322e2513f4651c30e5fe025ebfb"
+  },
+  {
+    "file": "kernel-unit.log.gz",
+    "uncompressedBytes": 647,
+    "sha256Uncompressed": "ec25cbf1215b1b1c4f1e6b8d08101de1b8354896c593772e901bf9b757f29389"
+  },
+  {
+    "file": "offset-green.log.gz",
+    "uncompressedBytes": 3333,
+    "sha256Uncompressed": "1d5e471dee9efeb0a24425a475ecea56fc9a9440707d3d5936933be5cb7773aa"
+  },
+  {
+    "file": "offset-red.log.gz",
+    "uncompressedBytes": 1703,
+    "sha256Uncompressed": "502542e5087e263f3ac98bd7091134541910f62f9daa3b1d456bb2a69c5a2568"
+  },
+  {
+    "file": "plan-mode-red.log.gz",
+    "uncompressedBytes": 3226,
+    "sha256Uncompressed": "a71f5df022af6a77d673f710aa6028ce13c25c88528f4323ae9d2d7d2f747ee6"
+  },
+  {
+    "file": "release-fast-first-failed.log.gz",
+    "uncompressedBytes": 108699,
+    "sha256Uncompressed": "433253966f7193f13658eb4f8c972a1b83f1ce4d53b08b58c55992d650649f1f"
+  },
+  {
+    "file": "release-focused-control.log.gz",
+    "uncompressedBytes": 616,
+    "sha256Uncompressed": "c48abea19059f941334fff8c482c06f88e5be16b8fc814731b39219211cc606c"
+  },
+  {
+    "file": "retained-focused-green.log.gz",
+    "uncompressedBytes": 1276,
+    "sha256Uncompressed": "15859dd1d0914d260d8913fb518457d901ba91df6f292ff78734c6f30b20f446"
+  },
+  {
+    "file": "runner-overlap-negative.log.gz",
+    "uncompressedBytes": 5226,
+    "sha256Uncompressed": "cd8088f12c73a9859c12e9db39b1fda7cb3f2fbc66f1801a1a818cda56e23950"
+  },
+  {
+    "file": "runner-red.log.gz",
+    "uncompressedBytes": 3326,
+    "sha256Uncompressed": "d826d3f79f8aa4ba4c654f5e30595eb3b5cad04ad1d09b39541e0770f2dbb160"
+  },
+  {
+    "file": "runner-tree-negative.log.gz",
+    "uncompressedBytes": 2721,
+    "sha256Uncompressed": "5008958d074d9e580da482643dbe23ec2a6a339c03563efc2d41b19c753afa37"
+  },
+  {
+    "file": "shipped-cold.log.gz",
+    "uncompressedBytes": 112274,
+    "sha256Uncompressed": "cfa8f6f884c00599be62283cbca167d5bebe9fee230be2d6a0f6ea4fe561c95e"
+  },
+  {
+    "file": "shipped-warm1.log.gz",
+    "uncompressedBytes": 113788,
+    "sha256Uncompressed": "a4df4965af8aa1599b6dd2c94bdcf236de1e213782c5709b77a7baf74f52b5a3"
+  },
+  {
+    "file": "shipped-warm2.log.gz",
+    "uncompressedBytes": 112621,
+    "sha256Uncompressed": "66392ded28645da26b362d23ff11e1a5e9c7d4a3b4d1cb5cf22cba3dbd644f92"
+  },
+  {
+    "file": "release-fast-repeat.log.gz",
+    "uncompressedBytes": 110718,
+    "sha256Uncompressed": "aeff6b5e992a200382f38d31a25f475b8ecde78f2c400e706e60d9890d767697"
+  },
+  {
+    "file": "release-full-console.log.gz",
+    "uncompressedBytes": 112965,
+    "sha256Uncompressed": "8ef48343d684923b7d32487f95dba447e01f873152c035ed8896203ea4145d8c"
+  },
+  {
+    "file": "release-types.log.gz",
+    "uncompressedBytes": 0,
+    "sha256Uncompressed": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "file": "release-lint.log.gz",
+    "uncompressedBytes": 3684,
+    "sha256Uncompressed": "9cb871dc31c48797abd3907a6b42f18399f6f739030edaea4d062c00a3eb8bb1"
+  },
+  {
+    "file": "release-quality.log.gz",
+    "uncompressedBytes": 3085,
+    "sha256Uncompressed": "5e76c93de57a3be6c844c95a7aa34c0e8eeed16499aa86cf0b1c663eb072ccc8"
+  }
+]

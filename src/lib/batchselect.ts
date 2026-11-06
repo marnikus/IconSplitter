@@ -34,7 +34,7 @@ export interface BatchCounters {
 }
 
 export function batchCounters(rows: { status: string }[]): BatchCounters {
-  let total = rows.length;
+  const total = rows.length;
   let unprocessed = 0;
   let processed = 0;
   let skipped = 0;

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_sources.test.ts — the Generate SVG list's selection rules (RULE 4/6/24).
 // The root below is the one in the report: a batch output tree whose decision
 // file remembers files that are no longer where the ids say they are, a record

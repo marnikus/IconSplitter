@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the settings domain rules run for real: defaults, clamps, the
 // global/local override merge, reset semantics and the fingerprint that
 // selective re-export keys on.
@@ -34,12 +35,17 @@ const changed = (patch: Partial<UploadSettings>): UploadSettings => ({ ...DEFAUL
 describe("defaults and clamps", () => {
   it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
-      paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "#000000",
-      jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeEps: false,
+      paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "#000000", strokeLinecap: "source",
+      jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeSvg: true, includeJpeg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
       epsConverter: "builtin", expandStrokes: false, // 2026-10-09
       scaleToMegapixels: false, artboardMegapixels: 5, // 2026-10-09 (I-62)
+      shadowEnabled: false, shadowWidthPct: 80, shadowGapPct: 5,
+      badgeEnabled: false, badgeTemplateSvg: "", badgeCorner: "bottom-right", badgeWidthPct: 40, badgeOffsetXPct: 3, badgeOffsetYPct: 3,
+      sizeGuideEnabled: false, sizeGuideCorner: "bottom-left", sizeGuideSmallPct: 6, sizeGuideLargePct: 12,
+      sizeGuideSmallStrokePx: 0, sizeGuideLargeStrokePx: 0, sizeGuideGapPct: 2,
+      sizeGuideOffsetXPct: 3, sizeGuideOffsetYPct: 3,
     });
   });
 
@@ -129,7 +135,7 @@ describe("defaults and clamps", () => {
     expect(clampPaddingPct(99)).toBe(50);
     expect(clampPaddingPct("nonsense")).toBe(8);
     expect(clampStrokePx(2.2)).toBeCloseTo(2.2);
-    expect(clampStrokePx(99)).toBe(32);
+    expect(clampStrokePx(99)).toBe(50); // the bar's range since 2026-10-19 (one stroke param)
     expect(clampMegapixels(0)).toBe(1);
     expect(clampMegapixels(15.1)).toBeCloseTo(15.1);
     expect(clampMegapixels(1000)).toBe(64);
@@ -186,20 +192,22 @@ describe("global defaults + per-icon overrides", () => {
     expect(parseOverrides({ paddingPct: "x" })).toEqual({});
   });
 
-  it("reset to defaults is an empty override — the global base stays", () => {
+  it("inheriting is an empty override — the global base stays", () => {
     const eff = effectiveSettings(changed({ paddingPct: 20 }), {});
     expect(eff.paddingPct).toBe(20);
     expect(overrideKeys({})).toEqual([]);
     expect(overrideKeys({ strokePx: 1 })).toEqual(["strokePx"]);
   });
 
-  it("strokePx is px in the file's own units, 0–32; a stored strokePt (pre-2026-10-08) carries its NUMBER over (the user meant px)", () => {
-    expect(STROKE_MAX).toBe(32);
+  it("strokePx is px in the file's own units, 0–50; a stored strokePt (pre-2026-10-08) carries its NUMBER over (the user meant px)", () => {
+    expect(STROKE_MAX).toBe(50);
     expect(normalizeSettings({ strokePt: 2 }).strokePx).toBe(2);
     expect(normalizeSettings({ strokePx: 3, strokePt: 2 }).strokePx).toBe(3); // the new key wins
-    expect(normalizeSettings({ strokePx: 40 }).strokePx).toBe(32);
+    expect(normalizeSettings({ strokePx: 60 }).strokePx).toBe(50);
+    // an icon may pin its own width (2026-10-19 follow-up), under either name, clamped
     expect(parseOverrides({ strokePt: 2.5 })).toEqual({ strokePx: 2.5 });
     expect(parseOverrides({ strokePx: 1, strokePt: 2.5 })).toEqual({ strokePx: 1 });
+    expect(parseOverrides({ strokePx: 99 })).toEqual({ strokePx: 50 });
     expect(Object.keys(normalizeSettings({ strokePt: 2 }))).not.toContain("strokePt"); // read as an alias, never written
     // the same number under the new name is the same fingerprint: no export flips to stale by the rename
     expect(settingsFingerprint({ ...DEFAULT_UPLOAD_SETTINGS, strokePx: 2 })).toBe(settingsFingerprint(normalizeSettings({ strokePt: 2 })));

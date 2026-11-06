@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 4/8 — an EPS is an executable PostScript program: if one instruction is
 // invalid the interpreter stops before it reaches the artwork (the 2026-10-09
 // report: `-0.75 0 0 -0.75 0 750 concat` raised /typecheck in Illustrator —

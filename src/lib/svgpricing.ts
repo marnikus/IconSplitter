@@ -10,13 +10,19 @@
 //   * openai/gpt-6.1-sol: $2.00 / 1M input, $10.00 / 1M output (provider rates)
 //   * Requesty adds a flat 5% pay-as-you-go markup (0% with BYOK)
 //   * prompt caching is NOT modelled, so an estimate can only be too high
+// Image model added 2026-10-19 (user report: an image regeneration showed
+// tokens but "no cost reported" — the image endpoint reports no cost), verified
+// against https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst:
+//   * openai/gpt-image-2.5-sunburst: text input $5, image input $8, image output
+//     $30 / 1M. The usage gives one input count, so all of it is priced at the
+//     image-input rate: like caching, the estimate can only be too high.
 // Bump PRICING_VERSION whenever RATE_CARD or PROVIDER_MARKUP changes.
 
 import type { CostInfo } from "./svgfile";
 import type { Usage } from "./svgrequest";
 
 /** The pricing table version stored beside every cost. */
-export const PRICING_VERSION = "requesty-2026-10-01";
+export const PRICING_VERSION = "requesty-2026-10-19";
 
 /** Requesty's pay-as-you-go markup on provider rates (1 with BYOK). */
 export const PROVIDER_MARKUP = 1.05;
@@ -29,6 +35,7 @@ export interface Rate {
 
 export const RATE_CARD: Readonly<Record<string, Rate>> = {
   "openai/gpt-6.1-sol": { input: 2, output: 10 },
+  "openai/gpt-image-2.5-sunburst": { input: 8, output: 30 },
 };
 
 export function rateFor(model: string): Rate | null {

@@ -6,6 +6,7 @@ import { compositeSheetKey } from "../lib/svgcomposite";
 import { inIdOrder } from "../lib/selectionorder";
 import type { BatchPlan } from "../lib/svgbatch";
 import type { DirHandleLike } from "../lib/fs";
+import { mainImageOf } from "../lib/svgimgreg";
 import { buildComposite, type BuiltComposite } from "./composite";
 import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
@@ -21,9 +22,8 @@ interface PagerProps {
 }
 
 export function BatchPager({ plan, page, pages, picked, rootRef, cache, onPage }: PagerProps) {
-  const sources = useMemo(() => inIdOrder(picked, plan.items.map((i) => i.sourceId), (r) => r.source.id)
-    .map((r) => r.source), [plan, picked]);
-  const composite = usePageComposite(rootRef, plan.id, sources, cache);
+  const sheet = useMemo(() => sheetOf(plan, picked), [plan, picked]);
+  const composite = usePageComposite(rootRef, sheet, cache);
   return (
     <div className="svg-batch-pager" data-testid="svg-composite">
       <PagerHead plan={plan} page={page} pages={pages} onPage={onPage} />
@@ -60,13 +60,23 @@ interface CompositeState {
   error: string | null;
 }
 
-function usePageComposite(
-  rootRef: { current: DirHandleLike | null },
-  planId: string,
-  sources: readonly SvgSource[],
-  cache: Map<string, BuiltComposite>,
-): CompositeState {
-  const key = compositeSheetKey(planId, sources.map((s) => ({ id: s.id, fingerprint: s.fingerprint })));
+/** One request's sources, each read from its MAIN AI image (2026-10-19 RC8). */
+interface Sheet {
+  planId: string;
+  sources: SvgSource[];
+  imageOf: (s: SvgSource) => string;
+}
+
+function sheetOf(plan: BatchPlan, picked: SvgRow[]): Sheet {
+  const rows = inIdOrder(picked, plan.items.map((i) => i.sourceId), (r) => r.source.id);
+  const metas = new Map(rows.map((r) => [r.source.id, r.meta]));
+  return { planId: plan.id, sources: rows.map((r) => r.source), imageOf: (s) => mainImageOf(metas.get(s.id) ?? null, s.relPath) };
+}
+
+function usePageComposite(rootRef: { current: DirHandleLike | null }, sheet: Sheet, cache: Map<string, BuiltComposite>): CompositeState {
+  const { planId, sources, imageOf } = sheet;
+  // the main image is part of the key: choosing another version is another sheet
+  const key = compositeSheetKey(planId, sources.map((s) => ({ id: s.id, fingerprint: `${s.fingerprint}|${imageOf(s)}` })));
   const [state, setState] = useState<CompositeState>(() => ({ built: cache.get(key) ?? null, error: null }));
   useEffect(() => {
     const hit = cache.get(key);
@@ -75,12 +85,12 @@ function usePageComposite(
     if (root === null) return setState({ built: null, error: "Pick the source folder first" });
     let live = true;
     setState({ built: null, error: null });
-    void buildComposite(root, sources).then(
+    void buildComposite(root, sources, imageOf).then(
       (built) => { if (live) { cache.set(key, built); setState({ built, error: null }); } },
       (error: unknown) => { if (live) setState({ built: null, error: reason(error) }); },
     );
     return () => { live = false; };
-  }, [rootRef, key, sources, cache]);
+  }, [rootRef, key, sources, imageOf, cache]);
   return state;
 }
 

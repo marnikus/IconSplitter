@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { parseBatchPrefs, DEFAULT_BATCH_PREFS } from "../src/lib/batchprefs";
 import { ZOOM_DEFAULT } from "../src/lib/zoom";

@@ -1,16 +1,19 @@
-// rootsource.ts — where the Selection tabs' root comes from, and the one scan
+// rootsource.ts — where Selection V2's root comes from, and the one scan
 // that may commit a snapshot. Moved out of useSelection so that file stays
 // inside the RULE 18 size budget (it grew with the pick-time path capture).
 // Owns: the remembered handle at boot, the picker every tab goes through
 // (I-35: the picked folder's real path is captured from the clipboard), and the
 // ticket-guarded rescan (a stale scan never commits).
 
+import { startCompletionSound } from "../ui/completionSound";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { pairEntries, type ReviewPair } from "../lib/pairing";
+import { isReviewExcludedFolder, REVIEW_EXCLUDED_FOLDERS } from "../lib/reviewfolders";
+import { withoutRecordedVariants } from "../lib/imageartifact";
 import type { FileEntry } from "../lib/scan";
 import { walkTree } from "../lib/scan";
 import { pairIdOfMetaPath } from "../lib/pairmeta";
-import { directoryNames, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
+import { directoryNames, inSplitFolder, isSplitPiece, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
 import { log } from "../log/logstore";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import type { ViewPair } from "../lib/reviewfilter";
@@ -19,8 +22,7 @@ import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
 import { restoreKnownRoot } from "../lib/knownroots";
 import { getAppState, patchV2, patchView } from "../state/appstore";
-import type { HistoryApi } from "../state/HistoryProvider";
-import { pruneIds } from "../lib/session";
+import type { HistoryActions } from "../state/HistoryProvider";
 import { loadPairDecisions, type PairLoad } from "./pairstore";
 import { SELECTION_HANDLE_KEY } from "./offline";
 import { applyScan, type SelState } from "./state";
@@ -32,7 +34,7 @@ export type Setter = React.Dispatch<React.SetStateAction<SelState>>;
 export interface Ctx {
   root: { current: DirHandleLike | null };
   state: { current: SelState };
-  hist: HistoryApi;
+  hist: HistoryActions;
   /** Which rescan may commit (see lib/scanseq) — two rescans can overlap one. */
   seq: { current: ScanSeq };
 }
@@ -49,14 +51,14 @@ export async function boot(ctx: Ctx, setS: Setter): Promise<void> {
   await rescan(ctx, setS, () => undefined);
 }
 
-/** The picker both Selection tabs use: pick, capture the path, scan (I-35). */
+/** The picker Selection V2 uses: pick, capture the path, scan (I-35). */
 export async function chooseRoot(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
   const picked = await pickFolderFor((h: DirHandleLike) => {
     setRoot(ctx, setS, h);
     void saveHandles(SELECTION_HANDLE_KEY, { source: h });
   });
   if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
-  await rescan(ctx, setS, say);
+  await rescan(ctx, setS, say, true);
   if (picked.message !== null) say(picked.message);
 }
 
@@ -66,9 +68,10 @@ export function setRoot(ctx: Ctx, setS: Setter, h: DirHandleLike): void {
 }
 
 /** Walks the root and commits one snapshot — only if it is still the newest. */
-export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
+export async function rescan(ctx: Ctx, setS: Setter, say: Say, audible = false): Promise<void> {
   const root = ctx.root.current;
   if (!root) return;
+  const finish = audible ? startCompletionSound() : () => undefined;
   const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
   if (captured !== null) say(captured);
   const ticket = beginScan(ctx.seq.current);
@@ -86,6 +89,7 @@ export async function rescan(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
     if (isCurrent(ctx.seq.current, ticket.id)) say("Rescan failed — the folder may be unreadable", true);
   } finally {
     if (isCurrent(ctx.seq.current, ticket.id)) setS((p) => ({ ...p, busy: null }));
+    finish(!isCurrent(ctx.seq.current, ticket.id));
   }
 }
 
@@ -97,8 +101,50 @@ interface Walked {
 }
 
 async function walkAndLoad(root: DirHandleLike): Promise<Walked> {
-  const { pairs, scope, entries } = await scanRoot(root);
-  return { pairs, scope, load: await loadPairDecisions(root, entries) };
+  if (isReviewExcludedFolder(root.name)) return emptyWalk();
+  const tree = await readDirTree(root, REVIEW_EXCLUDED_FOLDERS);
+  const entries = walkTree(tree, REVIEW_EXCLUDED_FOLDERS);
+  const load = await loadPairDecisions(root, entries);
+  const rule = scopeOf(directoryNames(tree), root.name);
+  const discoverable = batchPieces(reviewablePairs(entries, load), root.name);
+  const { pairs, outside } = splitPairs(discoverable, rule);
+  return { pairs, scope: { split: rule.split, outside: outside.length }, load };
+}
+
+/**
+ * Selection V2 reviews what the Batch wrote (2026-11-02): inside a split folder
+ * the only result is the piece that folder was made for, beside the reference
+ * copy the Batch put there. Registered variants, `_v2` PNGs and stray images in
+ * that folder are that pair's history, so they never become rows — while a
+ * folder that never saw a Batch keeps every pair it has.
+ */
+function batchPieces(pairs: readonly ReviewPair[], rootName: string): ReviewPair[] {
+  return pairs.filter((p) => keepsBatchPiece(p, rootName));
+}
+
+function keepsBatchPiece(pair: ReviewPair, rootName: string): boolean {
+  const ai = pair.ai?.relPath ?? null;
+  const source = pair.source?.relPath ?? null;
+  const inBatch = [ai, source].some((p) => p !== null && inSplitFolder(p, rootName));
+  if (!inBatch) return true;
+  return ai !== null && isSplitPiece(ai, rootName);
+}
+
+/** What a walk of an excluded folder (the app's own output) finds: nothing. */
+function emptyWalk(): Walked {
+  return {
+    pairs: [], scope: { split: false, outside: 0 },
+    load: { metas: new Map(), records: [], corruptFiles: [], legacy: false, legacyCorrupt: false },
+  };
+}
+
+/**
+ * The pairs the list may show. An image the registration pass took in as a pair's
+ * own AI-source version is that pair's history, not a new pair: without this a
+ * folder whose sources were just registered grew phantom rows to review (2026-11-02).
+ */
+function reviewablePairs(entries: FileEntry[], load: PairLoad): ReviewPair[] {
+  return withoutRecordedVariants(pairEntries(entries), load.metas.values());
 }
 
 /** The single commit: state, then the cache the undo paths read, then the report. */
@@ -119,20 +165,6 @@ function commit(
   pruneChecked(next.pairs); // a restored check must not point at a removed pair
   announce(prevScope, w.scope, say);
   reportReads(w.load, say);
-}
-
-/**
- * Walks the root once and decides the reviewable set (I-38): when the tree holds
- * a split-output folder, that folder's pairs are the set and the main folder's
- * unsplit sheets are counted as outside; otherwise every pair is reviewable, so a
- * folder that never saw a batch behaves exactly as before.
- */
-async function scanRoot(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; scope: ScanScope; entries: FileEntry[] }> {
-  const tree = await readDirTree(root, []);
-  const rule = scopeOf(directoryNames(tree), root.name);
-  const entries = walkTree(tree, []);
-  const { pairs, outside } = splitPairs(pairEntries(entries), rule);
-  return { pairs, scope: { split: rule.split, outside: outside.length }, entries };
 }
 
 /** The id -> AI path cache every cross-tab undo reads (state/sourceindex). */
@@ -169,7 +201,10 @@ function announce(before: ScanScope, scope: ScanScope, say: Say): void {
 }
 
 function pruneChecked(pairs: ViewPair[]): void {
-  const checked = getAppState().v2.checked;
-  const kept = pruneIds(checked, new Set(pairs.map((p) => p.pairId)));
-  if (kept.length !== checked.length) patchV2({ checked: kept });
+  const { checked, anchorId } = getAppState().v2;
+  const known = new Set(pairs.map((p) => p.pairId));
+  // A completed empty scan is authoritative, unlike a not-yet-restored session.
+  const kept = checked.filter((id) => known.has(id));
+  const anchor = anchorId !== null && known.has(anchorId) ? anchorId : null;
+  if (kept.length !== checked.length || anchor !== anchorId) patchV2({ checked: kept, anchorId: anchor });
 }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // keyvault.test.ts — the rules that decide whether a saved API key is really
 // there (RULE 20): an empty save never wipes, a failed read is never reported
 // as "no key", a refused write keeps the session copy and says so, and the key

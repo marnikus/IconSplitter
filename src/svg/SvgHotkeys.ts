@@ -1,10 +1,12 @@
 // SvgHotkeys.ts — the Generate SVG tab's keyboard layer (prompt §2, a11y §14).
 // Reuses the Selection rules (RULE 10): arrows walk the active row, Space
-// toggles its checkbox, G/A/D/V act on the active row only, and Escape closes
+// toggles its checkbox, G/A/D/W/V act on the active row only, and Escape closes
 // an open dialog without sending anything. Text fields keep their keystrokes.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { isTextField } from "../selection/hotkeys";
+import { nextVisibleId } from "../lib/reviewselect";
+import { isNativeListKeyTarget } from "../ui/rowgesture";
 import type { ReviewStatus } from "../lib/svgfile";
 import { shownVersion } from "./rowmodel";
 import type { SvgRow } from "./types";
@@ -21,9 +23,15 @@ export interface SvgHotActions {
   dismissDialog: () => void;
 }
 
-export function useSvgHotkeys(a: SvgHotActions): void {
+export function useSvgHotkeys(actions: SvgHotActions, enabled = true): void {
+  // The panel builds this bag per render; reading it through a ref keeps ONE
+  // window listener for the tab's lifetime (the callbacks it holds are stable).
+  const held = useRef(actions);
+  held.current = actions;
   useEffect(() => {
+    if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
+      const a = held.current;
       if (e.key === "Escape" && a.dialogOpen) return a.dismissDialog();
       // A dialog is modal: Escape closes it and nothing else reaches the list
       // behind it. Otherwise a keystroke could re-plan the confirmation (the
@@ -32,16 +40,18 @@ export function useSvgHotkeys(a: SvgHotActions): void {
       if (swallowed(e)) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") return walk(e, a, e.key === "ArrowDown" ? 1 : -1);
       const row = a.visible.find((r) => r.source.id === a.activeId);
-      if (row !== undefined) runRowKey(e.key, row, a);
+      if (row !== undefined) runRowKey(e, row, a);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [a]);
+  }, [enabled]);
 }
 
 /** Shortcuts belong to the list, never to a chord or to text being composed. */
 function swallowed(e: KeyboardEvent): boolean {
-  return e.ctrlKey || e.metaKey || e.altKey || isTextField(e.target);
+  if (e.ctrlKey || e.metaKey || e.altKey || isTextField(e.target)) return true;
+  const nativeKey = e.key === " " || e.key === "ArrowDown" || e.key === "ArrowUp";
+  return nativeKey && isNativeListKeyTarget(e.target);
 }
 
 /** One entry per key, so adding a shortcut never deepens a branch chain. */
@@ -50,17 +60,20 @@ const ROW_KEYS: Record<string, (row: SvgRow, a: SvgHotActions) => void> = {
   g: (row, a) => a.generate([row.source.id]),
   a: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "approved"); },
   d: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "declined"); },
+  w: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "needs-review"); },
   v: (row, a) => { const v = shownVersion(row); if (v !== null) a.showCode(row.source.id, v.version); },
 };
 
-function runRowKey(key: string, row: SvgRow, a: SvgHotActions): void {
-  ROW_KEYS[key.toLowerCase()]?.(row, a);
+function runRowKey(e: KeyboardEvent, row: SvgRow, a: SvgHotActions): void {
+  const action = ROW_KEYS[e.key.toLowerCase()];
+  if (!action) return;
+  e.preventDefault();
+  action(row, a);
 }
 
 /** Moves the active row and keeps it in view, exactly like the V2 list. */
-function walk(e: KeyboardEvent, a: SvgHotActions, step: number): void {
+function walk(e: KeyboardEvent, a: SvgHotActions, step: 1 | -1): void {
   e.preventDefault();
-  const at = a.visible.findIndex((r) => r.source.id === a.activeId);
-  const next = a.visible[at + step];
-  if (next) a.setActive(next.source.id);
+  const next = nextVisibleId(a.visible.map((r) => r.source.id), a.activeId, step);
+  if (next) a.setActive(next);
 }

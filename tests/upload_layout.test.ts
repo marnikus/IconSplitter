@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_layout.test.ts — the layout contract behind "no clipped or overlapping
 // controls" (RULE 14). A DOM test cannot measure pixels here (happy-dom has no
 // layout engine), so this reads the stylesheet the way a reviewer would and

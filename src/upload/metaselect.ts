@@ -1,3 +1,5 @@
+import { hasOutputFormats, NO_OUTPUT_FORMATS } from "../lib/upload/formats";
+import { rowSettings } from "../lib/upload/decorations";
 // metaselect.ts — the SELECTION-level metadata entry points: generation,
 // regeneration and export-selected share one exact-request confirmation; this
 // module owns which checked rows each promise is allowed to send.
@@ -41,7 +43,7 @@ export function useMetaSelectionActions(latest: Latest): SelectionSlice {
     const c = latest.current;
     const why = exportGuardForSelection(c, ids);
     if (why !== null) return c.say(why, true);
-    const needed = idsNeedingMetadata(c.rows, ids);
+    const needed = idsNeedingMetadata(c.rows, idsWithOutputFormats(c, ids));
     if (needed.length > 0) return openMetaDialog(latest, needed, ids);
     // Nothing needs a paid call: export now — and never let a draft slip out
     // silently, so the line names the icons that go without their metadata.
@@ -100,7 +102,9 @@ function exportGuardForSelection(c: UploadCtx, ids: string[]): string | null {
   if (c.m.runningMeta > 0) return "A metadata request is already in flight — cancel it or wait";
   // The button PROMISES metadata, so an icon that needs it and no key that could
   // produce it is named up front instead of exporting a package with none.
-  const needed = idsNeedingMetadata(c.rows, ids);
+  const eligible = idsWithOutputFormats(c, ids);
+  if (eligible.length === 0) return NO_OUTPUT_FORMATS;
+  const needed = idsNeedingMetadata(c.rows, eligible);
   if (needed.length > 0 && (c.refs.key.current === null || c.refs.key.current.trim() === "")) {
     const icons = `icon${ids.length === 1 ? "" : "s"}`;
     return `${needed.length} of the ${ids.length} selected ${icons} still need metadata — add a Gemini API key, or use ⇪ Export on a row to export without it`;
@@ -135,4 +139,10 @@ async function fillPreviews(latest: Latest, ids: string[]): Promise<void> {
   const dialog = latest.current.m.dialog;
   if (dialog === null || dialog.kind !== "meta" || dialog.ids.join("\u0000") !== ids.join("\u0000")) return;
   latest.current.dispatch({ type: "previews", previews, preparing: false });
+}
+
+/** Paid export metadata excludes no-output rows; their per-item preflight still settles in mixed batches. */
+function idsWithOutputFormats(c: UploadCtx, ids: string[]): string[] {
+  const { defaults, overrides, applied } = c.m;
+  return ids.filter((id) => hasOutputFormats(rowSettings(defaults, id, overrides, applied)));
 }

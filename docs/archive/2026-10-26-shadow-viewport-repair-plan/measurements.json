@@ -1,0 +1,145 @@
+{
+  "baseline": "b32d1a3",
+  "fixtureCommit": "8324120",
+  "method": "Original production modules loaded via Vite SSR / Happy DOM; independent derivative-extrema diagnostic over existing normalized outlines; no production/test code changes or repair prototype. Represented-curve bounds, not browser raster results.",
+  "sha256": {
+    "icon-waving-flag_AI_3_01.svg": "078e104b46057df33912ab4fbf65c8698fb8d2bc77fe075b20407326c8bb8785",
+    "icon-waving-flag_AI_5_04.svg": "fdf3f958c67da4875f53e9305230a072fbfa45329a9ee4b6bf7941ef5ffec4e9"
+  },
+  "productionProbe": [
+    {
+      "file": "icon-waving-flag_AI_3_01.svg",
+      "frame": {
+        "minX": 0,
+        "minY": 0,
+        "width": 224,
+        "height": 224
+      },
+      "geometryHull": {
+        "minX": 33,
+        "minY": -18,
+        "width": 156,
+        "height": 233
+      },
+      "analyticPaint": {
+        "minX": 32.5,
+        "minY": -18.5,
+        "width": 157,
+        "height": 234
+      },
+      "shippedPaint": {
+        "minX": 32.5,
+        "minY": -2.121,
+        "width": 157.036,
+        "height": 217.67600000000002
+      },
+      "repairedFrame": {
+        "minX": 0,
+        "minY": 0,
+        "width": 224,
+        "height": 224
+      },
+      "overflow": true,
+      "shadowSourceDefaults": {
+        "ok": false,
+        "code": "unsupported",
+        "detail": "source paint extends outside its viewBox/viewport; a shadow cannot preserve the original clipping"
+      },
+      "shadowFactoryDefaults": {
+        "ok": false,
+        "code": "unsupported",
+        "detail": "source paint extends outside its viewBox/viewport; a shadow cannot preserve the original clipping"
+      },
+      "asIsUnchanged": true
+    },
+    {
+      "file": "icon-waving-flag_AI_5_04.svg",
+      "frame": {
+        "minX": 0,
+        "minY": 0,
+        "width": 240,
+        "height": 240
+      },
+      "geometryHull": {
+        "minX": 31,
+        "minY": -15,
+        "width": 156,
+        "height": 238
+      },
+      "analyticPaint": {
+        "minX": 29.99622829832433,
+        "minY": -16.00377170167567,
+        "width": 158.00754340335135,
+        "height": 240.00754340335135
+      },
+      "shippedPaint": {
+        "minX": 30.5,
+        "minY": -0.58,
+        "width": 157,
+        "height": 218.89800000000002
+      },
+      "repairedFrame": {
+        "minX": 0,
+        "minY": 0,
+        "width": 240,
+        "height": 240
+      },
+      "overflow": true,
+      "shadowSourceDefaults": {
+        "ok": false,
+        "code": "unsupported",
+        "detail": "source paint extends outside its viewBox/viewport; a shadow cannot preserve the original clipping"
+      },
+      "shadowFactoryDefaults": {
+        "ok": false,
+        "code": "unsupported",
+        "detail": "source paint extends outside its viewBox/viewport; a shadow cannot preserve the original clipping"
+      },
+      "asIsUnchanged": true
+    }
+  ],
+  "independentTightBoundsProbe": [
+    {
+      "file": "icon-waving-flag_AI_3_01.svg",
+      "tightGeometry": {
+        "minX": 33,
+        "minY": 8.060528958273611,
+        "maxX": 189,
+        "maxY": 215
+      },
+      "bakedUnsupported": [],
+      "expanded": {
+        "shapes": 2,
+        "refused": null
+      },
+      "tightRepresentedPaint": {
+        "minX": 32.5,
+        "minY": 7.56071148618598,
+        "maxX": 189.50032221370986,
+        "maxY": 215.49989385218026
+      },
+      "sourceDomUnchanged": true
+    },
+    {
+      "file": "icon-waving-flag_AI_5_04.svg",
+      "tightGeometry": {
+        "minX": 31,
+        "minY": 8.688295845375741,
+        "maxX": 187,
+        "maxY": 217.53148102499452
+      },
+      "bakedUnsupported": [],
+      "expanded": {
+        "shapes": 2,
+        "refused": null
+      },
+      "tightRepresentedPaint": {
+        "minX": 30.5,
+        "minY": 8.191972212448407,
+        "maxX": 187.5,
+        "maxY": 218.02713534460472
+      },
+      "sourceDomUnchanged": true
+    }
+  ]
+}

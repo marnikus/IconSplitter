@@ -191,7 +191,7 @@ describe("filters, sort, header, counts", () => {
   });
 
   it("filters by package status, metadata state and search text", () => {
-    const list = rows.map(toListRow);
+    const list = rows.map((r) => toListRow(r));
     expect(applyUploadFilters(list, { ...ALL_UPLOAD_FILTER, status: "not-exported" }).map((r) => r.id)).toEqual(["pair_none"]);
     expect(applyUploadFilters(list, { ...ALL_UPLOAD_FILTER, status: "stale" }).map((r) => r.id)).toEqual(["pair_stale"]);
     expect(applyUploadFilters(list, { ...ALL_UPLOAD_FILTER, status: "processed" }).map((r) => r.id)).toEqual(["pair_ok"]);
@@ -200,8 +200,17 @@ describe("filters, sort, header, counts", () => {
     expect(applyUploadFilters(list, { ...ALL_UPLOAD_FILTER, search: "nope" })).toHaveLength(0);
   });
 
+  it("filters by assigned row badges", () => {
+    const tagged = toListRow(rows[0], { [rows[0].source.id]: ["rb1"] });
+    const bare = toListRow(rows[1]);
+    const list = [tagged, bare];
+    expect(applyUploadFilters(list, { ...ALL_UPLOAD_FILTER, badge: "none" }).map((r) => r.id)).toEqual([bare.id]);
+    expect(applyUploadFilters(list, { ...ALL_UPLOAD_FILTER, badge: "any" }).map((r) => r.id)).toEqual([tagged.id]);
+    expect(applyUploadFilters(list, { ...ALL_UPLOAD_FILTER, badge: "rb1" }).map((r) => r.id)).toEqual([tagged.id]);
+  });
+
   it("sorts by name, status and metadata without reordering the input", () => {
-    const list = rows.map(toListRow);
+    const list = rows.map((r) => toListRow(r));
     const input = [...list];
     expect(sortUploadRows(list, "name").map((r) => r.id)).toEqual(["pair_none", "pair_ok", "pair_stale"]);
     expect(sortUploadRows(list, "status").map((r) => r.status)).toEqual(["stale", "not-exported", "processed"]);
@@ -240,10 +249,10 @@ describe("filters, sort, header, counts", () => {
     expect(counts.failed).toBe(0);
   });
 
-  it("pruneChecked drops checked ids a rescan removed", () => {
-    patchUpload({ checked: ["pair_ok", "pair_gone"] });
+  it("pruneChecked drops checked, active and anchor ids a rescan removed", () => {
+    patchUpload({ checked: ["pair_ok", "pair_gone"], activeId: "pair_gone", anchorId: "pair_gone" });
     pruneChecked(rows);
-    expect(getAppState().upload.checked).toEqual(["pair_ok"]);
+    expect(getAppState().upload).toEqual({ checked: ["pair_ok"], activeId: null, anchorId: null });
   });
 });
 

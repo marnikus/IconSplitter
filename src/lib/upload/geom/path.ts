@@ -41,7 +41,7 @@ export function tokenizePath(d: string): PathCmd[] {
   const tokens = d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?)(?:e[-+]?\d+)?/gi) ?? [];
   const out: Tokenizer = { steps: [], cmd: "", nums: [] };
   for (const t of tokens) {
-    if (/[a-zA-Z]/.test(t)) takeLetter(t, out);
+    if (/^[a-zA-Z]$/.test(t)) takeLetter(t, out);
     else takeNumber(t, out);
   }
   flush(out);

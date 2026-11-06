@@ -18,6 +18,7 @@ import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { PACKAGE_SVG as SVG } from "./helpers/uploadpackage";
 import { minimalJpeg } from "./helpers/minijpeg";
+import { settle as quietSettle, waitUntil } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -38,16 +39,10 @@ let host: HTMLDivElement;
 let ui: Root;
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const text = (sel: string) => q(sel)?.textContent ?? "";
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 const storedDefaults = () => JSON.parse(localStorage.getItem("iconSplitter.upload.settings.v1") ?? "{}").defaults ?? {};
 
-async function waitFor(fn: () => boolean, label: string, ms = 8000): Promise<void> {
-  const start = Date.now();
-  while (!fn()) {
-    if (Date.now() - start > ms) throw new Error(`timed out waiting for ${label}`);
-    await act(async () => { await new Promise((r) => setTimeout(r, 25)); });
-  }
-}
+const waitFor = (fn: () => boolean, label: string, ms = 8000) => waitUntil(fn, label, ms);
 async function click(sel: string): Promise<void> {
   await waitFor(() => q(sel) !== null, sel);
   await act(async () => { q(sel)!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -133,7 +128,7 @@ describe("the EPS converter drop list", () => {
     await click("[data-testid=upload-settings-open]");
     const select = q("[data-testid=upload-set-eps-converter]") as HTMLSelectElement;
     expect([...select.options].map((o) => [o.value, o.textContent])).toEqual([
-      ["builtin", "Built-in (PostScript subset)"], ["inkscape", "Inkscape CLI (local helper)"],
+      ["builtin", "Built-in (vector gradients, Level 3)"], ["inkscape", "Inkscape CLI (local helper)"],
     ]);
     expect(select.value).toBe("builtin");
     expect(q("[data-testid=upload-eps-helper]")).toBeNull(); // the helper row belongs to the Inkscape choice only

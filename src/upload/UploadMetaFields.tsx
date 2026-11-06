@@ -5,6 +5,7 @@
 // errors and warnings show under the fields. Nothing here writes files: the
 // accepted text persists in the pair's export.json at the next export commit.
 
+import UploadMetaRights from "./UploadMetaRights";
 import { countWords, dedupeTags, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
 import type { UploadMetaState } from "./types";
 
@@ -38,6 +39,7 @@ export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, o
   return (
     <div className="up-meta" data-testid={`upload-meta-fields-${id}`}>
       <MetaFieldsGrid id={id} m={m} onEdit={onEdit} onCopy={onCopy} />
+      <UploadMetaRights id={id} metadata={m} onEdit={onEdit} />
       <ValidationLine id={id} validation={meta.validation} />
       <MetaActions id={id} meta={meta} onAccept={onAccept} onRegenerate={onRegenerate} />
     </div>

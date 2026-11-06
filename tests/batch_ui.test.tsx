@@ -8,6 +8,7 @@ import { dropDb } from "./helpers/idb";
 import { clearKnownRoots } from "../src/lib/knownroots";
 import BatchPanel from "../src/batch/BatchPanel";
 import { BATCH_PREFS_KEY } from "../src/lib/batchprefs";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -48,11 +49,7 @@ function qAll(sel: string): NodeListOf<Element> {
   return host.querySelectorAll(sel);
 }
 
-async function settle(ms = 80) {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, ms));
-  });
-}
+const settle = (ms = 80) => quietSettle(ms);
 
 async function click(el: Element) {
   await act(async () => {
@@ -71,11 +68,26 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
-  // @ts-ignore
   delete (window as any).showDirectoryPicker;
 });
 
 describe("Batch folders V2 controls", () => {
+  it.each(["approve", "decline"])("%s advances to the nearest pending row below and stops at the end", async (action) => {
+    await mount(makeBatchRoot());
+    await click(q("[data-testid=batch-open-folder]")!);
+    await settle(500);
+    const displayed = [...qAll(".batch-row[data-testid]")].map((r) => r.getAttribute("data-testid")!.slice("batch-row-".length));
+    expect(displayed).toHaveLength(3);
+    const [, current, next] = displayed;
+    await click(q(`[data-testid='batch-row-${current}']`)!);
+    const checked = [...qAll(".batch-row input:checked")];
+    await click(q(`[data-testid='batch-${action}-${current}']`)!);
+    expect(q(`[data-testid='batch-row-${next}']`)?.getAttribute("aria-current")).toBe("true");
+    expect([...qAll(".batch-row input:checked")]).toEqual(checked);
+    await click(q(`[data-testid='batch-${action}-${next}']`)!);
+    expect(q(`[data-testid='batch-row-${next}']`)?.getAttribute("aria-current")).toBe("true");
+  });
+
   it("shows filter grid and bulk bar with zoom 48-800 after picking root", async () => {
     const dir = makeBatchRoot();
     await mount(dir);

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // handles.test.ts — RULE 8: rel-path -> handle resolution + path text.
 import { describe, expect, it } from "vitest";
 import { FakeDir, FakeFile } from "./helpers/fakefs";

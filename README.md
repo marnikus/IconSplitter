@@ -11,33 +11,54 @@ It has six modes (tabs across the top):
 * **Batch folders** — point the app at a folder tree of `*_AI` sheets and let
   it scan, review, split and write everything in one pass, preserving your
   folder hierarchy (see below). Batch mode requires **Chrome or Edge**.
-* **Selection** — review every original next to its `_AI` result, approve or
-  decline each pair, and keep every decision in the pair's **own** JSON file,
-  beside its images (`<name>.svg.json` — the file also records the SVGs
-  generated from that pair; filters by month/date range, sorting, search,
-  hotkeys A/D). Also Chrome/Edge only.
-* **Selection V2** — the same review data in a denser, table-like layout:
+* **Selection V2** — review original/AI pairs and save decisions in per-pair JSON sidecars:
   a full-width list where every row shows the original and the AI result side
-  by side, a thumbnail zoom slider (48–240 px, remembered between sessions),
-  checkboxes with select-all, and **Approve selected** / **Approve visible
-  list** for bulk decisions. A second layout switches to the large
+  by side, a thumbnail zoom slider (48–800 px, remembered between sessions),
+  checkboxes with select-all, and **Approve selected**, **Decline selected** and **Reset selected** with
+  confirmation, limited to checked, visible, complete pairs. A second layout switches to the large
   side-by-side comparison. Also Chrome/Edge only.
-* **Generate SVG** — for the pairs Selection approved, sends the AI image
+* **Generate SVG** — for the pairs Selection V2 approved, sends the AI image
   (alone, or as one square contact sheet of up to 9) to Requesty's
   OpenAI-compatible chat endpoint with your own API key, and writes one
   validated, versioned `<name>.svg` beside each AI image and records each
   version — prompt, model, token usage, cost, validation and review state — in
   that pair's own `<name>.svg.json` next to it (the same file that holds the
-  pair's approval: no separate global metadata file exists). Nothing is
-  uploaded anywhere else and the key never leaves the browser. Also Chrome/Edge
-  only.
+  pair's approval: no separate global metadata file exists). **Regenerate image**
+  can send several current AI sources as one previewed square image-edit request;
+  choose how many icons per request, review the returned cells, then apply each
+  as a separate, non-overwriting main-image version. Only confirmed requests
+  send the disclosed images/prompt to the configured provider; the key is used
+  for those requests but never logged or exported. Also Chrome/Edge only.
 * **SVG to upload** — takes the chosen, approved SVG version of each icon and
   builds its upload-ready package beside the sources: an artboard fitted to
   the artwork as it ships (or pinned to a size, or scaled to N megapixels)
   with the chosen background and stroke width, conceptual metadata from the model,
   SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS and a per-icon
-  `export.json`. Nothing is uploaded to any website by the app. Also
-  Chrome/Edge only.
+  `export.json`. Also Chrome/Edge only.
+* **Upload** — scans strictly `export/` folders with a committed `export.json`
+  and lists already-exported stock packages, with zoomed previews, one unified
+  general row-badge catalog (including hardcoded `Shutterstock`, `Adobe Stock`,
+  and `Getty Images` badges auto-assigned as soon as a file is uploaded), local
+  metadata editing + in-place XMP/IPTC/RDF re-embedding, built-in stock presets
+  (**Shutterstock** Explicit FTPS on `ftps.shutterstock.com:21`, **Adobe Stock**
+  SFTP on `sftp.contributor.adobestock.com:22`, and **Getty Images / iStock**
+  ESP API automatic paired JPEG/EPS ingestion over HTTPS, and **Getty Images
+  (web upload)** browser automation). Getty ESP requires an API key provisioned
+  by Getty; upload creates a contribution, not a submission for review. The web
+  upload preset needs only the contributor ID (or e-mail) and password: the local helper starts headless Chrome/Edge, signs in to
+  `esp.gettyimages.com/contribute`, creates one batch, hands the JPEG (+
+  optional EPS) to that page's own uploader, fills the accepted metadata and
+  completes the batch — sign in once with `run_ftp_bridge.bat --getty-headed`
+  and keep the sign-in between runs by adding
+  `--getty-profile "%LOCALAPPDATA%\IconSplitter\getty-profile"` (the helper
+  keeps that browser signed in; a throwaway profile asks again every run) — see
+  [the Getty web upload page](docs/current/sor/stock-upload-getty-web.md). The API protocol is tested with a local mock, not a live account.
+  It uses OAuth2 PKCE and keeps credentials local. Includes local-only
+  non-expanded credentials, and multi-format (`JPEG/PNG`, `SVG`, `EPS`, `ZIP`)
+  uploads through the local loopback helper (`run_ftp_bridge.bat` /
+  `run_app_ftp.bat`). An optional **Title + description** checkbox combines
+  accepted title and description for outgoing file copies only; original files
+  and `export.json` remain unchanged. Stock sites may limit title length.
 
 The app is built with **React + Vite + TypeScript + Tailwind CSS** and compiles
 into a **single self-contained HTML file** (`dist/index.html`) that runs in any
@@ -71,8 +92,10 @@ Double-click these files in the project folder, in order:
 | `install_dependencies.bat` | Checks that Node.js is present and runs `npm ci` (clean install from `package-lock.json`) |
 | `run_app.bat` | Builds the app and **opens it in your default browser** as a standalone browser app (no server needed) |
 | `run_dev_server.bat` | Starts the live-reload dev server at http://localhost:5173/ and opens the browser (use this while editing code; press `Ctrl+C` in the window to stop) |
-| `run_inkscape_bridge.bat` | Starts the **Inkscape EPS helper** on http://127.0.0.1:47391 (optional — see below); keep its window open while exporting |
+| `run_inkscape_bridge.bat` | Starts the **Inkscape EPS & FTPS/SFTP helper** on http://127.0.0.1:47391 (optional — see below); keep its window open while exporting or uploading |
+| `run_ftp_bridge.bat` | Builds the latest UI and starts the **local FTPS/SFTP helper** on http://127.0.0.1:47391 for the **Upload** tab |
 | `run_app_inkscape.bat` | Builds the app, starts the helper and opens the app **through it** (`http://127.0.0.1:47391/`) — the no-fuss way to use the Inkscape converter |
+| `run_app_ftp.bat` | Builds the app, starts the local FTPS/SFTP helper and opens `http://127.0.0.1:47391/` ready for Shutterstock FTPS & Adobe Stock SFTP uploads |
 
 Typical first run:
 
@@ -164,7 +187,7 @@ npm run dev
 Switch to the **Batch folders** tab to process a whole directory tree of
 sheets in one go.
 
-1. **Choose source folder** — the app walks the folder recursively, keeps your
+1. **Open folder** — the app walks the folder recursively, keeps your
    relative paths, and collects every `*_AI` image with a numeric tail
    (`*_AI_7`, `*_AI_9_01`, …). Each source
    gets a status file `<base>.json` next to its reference image, tracking
@@ -212,19 +235,20 @@ start. A folder or file that has since disappeared is reported, never hidden.
 
 ## Selection V2 (Chrome / Edge only)
 
-The **Selection V2** tab reviews the same pairs as **Selection**, but as a
-fast bulk-review table. Both tabs share one root folder and the same decisions:
+The **Selection V2** tab is the only review tab, with list and comparison layouts;
 each approval is written to the pair's own `<name>.svg.json` beside its images,
 so a folder keeps its approvals when it is renamed, moved or opened on its own.
+Sessions saved on the removed original Selection tab now open Selection V2,
+without deleting review state, root handles or decisions.
 An older `review-decisions.json` at the root is still **read** as a fallback for
 pairs that have no file of their own, and is never written again.
 
-1. **Choose source folder** (or **↻ Rescan**) — the folder is walked
+1. **Open folder** (or **↻ Rescan**) — the folder is walked
    recursively; every `name.ext` is paired with its `name_AI.ext`. Files
    without a partner stay visible as **AI result missing** / **Original
    missing** instead of disappearing.
 2. **Zoom** — drag the `ZOOM` slider to set the maximum thumbnail height in
-   pixels (48–240, default 84). Row height and both thumbnails resize while
+   pixels (48–800, default 84). Row height and both thumbnails resize while
    you drag, the aspect ratio is preserved, and the value is remembered the
    next time you open the app.
 3. **Select** — tick individual rows, use the header checkbox (it shows a
@@ -232,8 +256,8 @@ pairs that have no file of their own, and is never written again.
    **Deselect all**. Selection is independent of the review status and
    survives filtering and sorting; rows hidden by a filter are counted and
    never changed behind your back.
-4. **Approve in bulk** — **✓ Approve selected (n)** or **✓ Approve visible
-   list (n)**. The count is part of the button, the button asks you to confirm
+4. **Approve in bulk** — **Approve selected (n)**, **Decline selected (n)** or
+   **Reset selected (n)**, limited to checked, visible, complete pairs. The count is part of the button, the button asks you to confirm
    before writing, and the whole batch produces a single message such as
    `12 pairs approved · 2 skipped (incomplete or gone)`.
 5. **Decide one by one** — click a row to make it the *active* row (highlighted
@@ -255,10 +279,11 @@ is writable again — no other file is touched.
 
 ## Project rules (code quality)
 
-Every change to this codebase must follow the code-quality rules in
-[`docs/current/AGENT_RULES.md`](docs/current/AGENT_RULES.md) (24 rules — size,
-complexity, testing, docs and behaviour gates, adopted from the sister project
-`Process-Images-in-Areana`). Before every push run the verification lanes:
+For development, start with the short [`AGENTS.md`](AGENTS.md) bootstrap and
+choose the relevant tab in the [current-doc router](docs/current/README.md).
+The [`AGENT_RULES.md`](docs/current/AGENT_RULES.md) index links to the 24
+numbered quality, testing, documentation and behaviour rules. Before every
+push run the verification lanes:
 
 ```bash
 npm run verify:fast   # every commit: types + lint + gate + one suite run + build
@@ -268,11 +293,10 @@ npm run hooks:install # optional: enforce the full gate automatically via a pre-
 
 Both run through `tools/verify.mjs` (node — no bash needed on Windows).
 
-Current behaviour and invariants are documented in
-[`docs/current/SYSTEM_OF_RECORD.md`](docs/current/SYSTEM_OF_RECORD.md); the
-verification workflow lives in
-[`docs/current/CODE_VERIFICATION.md`](docs/current/CODE_VERIFICATION.md); the
-doc map is [`docs/README.md`](docs/README.md).
+Current behaviour, invariant IDs and UI handles have one owner per tab in
+[`docs/current/README.md`](docs/current/README.md). The
+[verification workflow](docs/current/CODE_VERIFICATION.md) and
+[historical index](docs/HISTORY_INDEX.md) are opt-in references.
 
 ## Project structure
 
@@ -284,9 +308,9 @@ IconSplitter/
 ├── src/
 │   ├── main.tsx             # React bootstrap
 │   ├── App.tsx              # Single-sheets UI
-│   ├── ui/Workbench.tsx     # Mode shell — sheets / batch / selection / V2 tabs
+│   ├── ui/Workbench.tsx     # Mode shell — sheets / batch / V2 / SVG / upload tabs
 │   ├── batch/               # Batch mode (store, process, presets, UI)
-│   ├── selection/           # Selection review (state, decision IO, V1 UI)
+│   ├── selection/           # Shared V2 review engine, comparison, pair IO
 │   ├── selectionv2/         # Selection V2 (list review, bulk bar, zoom)
 │   ├── lib/                 # Pure logic: detect, render, naming, scan, fs,
 │   │                        # statefile, presets, output plan, batchsplit

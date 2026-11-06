@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 4 — presets: every configurable value lives in a preset (spec §3).
 import { describe, expect, it } from "vitest";
 import {

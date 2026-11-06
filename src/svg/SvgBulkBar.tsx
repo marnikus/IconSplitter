@@ -1,18 +1,26 @@
 // SvgBulkBar.tsx — the bulk bar of the Generate SVG tab (prompt §2/§15/§16/§17).
 // Header checkbox with an indeterminate state, the selected/visible scope,
 // select-visible and deselect-all, the two PREVIEW settings (thumbnail zoom and
-// the frame background — one control per decision, RULE 10), the estimate line,
+// the frame background — one control per decision, RULE 10), the preview stroke
+// width (PreviewStroke), the estimate line,
 // and the four bulk actions: Generate, Regenerate, Approve, Decline. There is
 // no "approve visible" action — every bulk operation applies to the SELECTION
 // only. Approve/Decline stay disabled until a selected row has a valid SVG.
 // While a run is in flight the bar shows the live batch progress and a Cancel that
 // keeps everything already saved.
 
-import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
+import type { PreviewBackground } from "../lib/svgbackground";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import { costText, fmtTokens } from "../lib/svgusage";
 import Elapsed from "./Elapsed";
+import PreviewStroke from "./PreviewStroke";
+import { SVG_STROKE_SHEET } from "./strokesheet";
+import WebModeToggle from "./WebModeToggle";
+import InvertButton from "../ui/InvertButton";
+import EditSettingsButton from "./EditSettingsButton";
+import TailCutBar from "./tailcut/TailCutBar";
 import type { RunProgress } from "./types";
+import PreviewBgPicker from "../ui/PreviewBgPicker";
 
 export interface SvgBulkBarProps {
   header: "none" | "some" | "all";
@@ -25,19 +33,40 @@ export interface SvgBulkBarProps {
   decidableCount: number;
   thumb: number;
   bg: PreviewBackground;
+  /** Preview-only stroke width for every row thumbnail; null = each file's own. */
+  stroke: number | null;
   model: string;
   totals: { tokens: number | null; cost: number | null; estimated: number | null };
   progress: RunProgress | null;
   running: boolean;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
+  onInvert: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onBg: (bg: PreviewBackground) => void;
+  onStroke: (px: number | null) => void;
   onGenerate: () => void;
   onRegenerate: () => void;
-  onDecide: (decision: "approved" | "declined" | "needs-review") => void;
+  /** AI source regeneration through the image connection (2026-10-16). */
+  onImageRegen: () => void;
+  /** AI sources sent or awaiting review; the action waits, Stop appears. */
+  imageRunning: number;
+  /** A run can also be preparing/skipping groups with no request on the wire yet. */
+  imageActive?: boolean;
+  onImageStop: () => void;
+  onDecide: (decision: "approved" | "declined" | "needs-review" | "regen-overlaps" | "regen-geometry") => void;
   onCancel: () => void;
+  /** Take SVGs already sitting in the selected folders into their pairs (2026-11-01). */
+  onRegisterExisting: () => void;
+  /** Take AI source images already sitting in the selected folders into their pairs (2026-11-02). */
+  onRegisterImages: () => void;
+  /** Take the selected rows out of the list: their images become declined in Selection V2. */
+  onRemove: () => void;
+  /** The checked rows' ids, for the tail cutter's approve count. */
+  checkedIds: readonly string[];
+  onCutTails: () => void;
+  onApproveCuts: () => void;
 }
 
 export default function SvgBulkBar(p: SvgBulkBarProps) {
@@ -59,6 +88,7 @@ function BulkLeft({ p }: { p: SvgBulkBarProps }) {
         <span className="svg-scope-copy" data-testid="svg-scope">across {p.visibleCount} approved sources</span>
         <span className="svg-divider" aria-hidden="true" />
         <button type="button" className="svg-btn" data-testid="svg-select-visible" onClick={p.onSelectVisible}>Select all visible</button>
+        <InvertButton prefix="svg" onClick={p.onInvert} />
         <button type="button" className="svg-btn" data-testid="svg-deselect" onClick={p.onDeselectAll}>Deselect all</button>
       </div>
   );
@@ -67,7 +97,10 @@ function BulkLeft({ p }: { p: SvgBulkBarProps }) {
 function BulkRight({ p }: { p: SvgBulkBarProps }) {
   return (
     <div className="svg-bulk-right">
-      <PreviewBg bg={p.bg} onBg={p.onBg} />
+      <PreviewBgPicker prefix="svg" bg={p.bg} onBg={p.onBg} />
+      <span className="svg-divider" aria-hidden="true" />
+      <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} sheet={SVG_STROKE_SHEET} idPrefix="svg" />
+      <EditSettingsButton />
       <span className="svg-divider" aria-hidden="true" />
       <div className="svg-zoom">
         <label htmlFor="svg-thumb">ZOOM</label>
@@ -89,15 +122,29 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
   return (
     <>
       {p.running && <button type="button" className="svg-btn" data-testid="svg-cancel-run" onClick={p.onCancel}>Cancel run</button>}
+      <WebModeToggle />
       <button type="button" className="svg-btn primary" data-testid="svg-generate-selected"
         disabled={p.checkedCount === 0} onClick={p.onGenerate}>✦ Generate selected</button>
       <RegenerateButton p={p} />
+      <RegisterButton p={p} />
+      <RegisterImagesButton p={p} />
+      <ImageRegenButtons p={p} />
       <button type="button" className="svg-btn warning" data-testid="svg-needs-review-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("needs-review")}>⚠ Needs review selected</button>
       <button type="button" className="svg-btn success" data-testid="svg-approve-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("approved")}>✓ Approve selected</button>
       <button type="button" className="svg-btn danger" data-testid="svg-decline-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("declined")}>✕ Decline selected</button>
+      <button type="button" className="svg-btn regen-overlaps" data-testid="svg-regen-overlaps-selected"
+        disabled={p.decidableCount === 0} onClick={() => p.onDecide("regen-overlaps")}
+        title="Mark the selected SVGs: regenerate — shapes overlap">⧉ Regen overlaps</button>
+      <button type="button" className="svg-btn regen-geometry" data-testid="svg-regen-geometry-selected"
+        disabled={p.decidableCount === 0} onClick={() => p.onDecide("regen-geometry")}
+        title="Mark the selected SVGs: regenerate — wrong geometry">△ Regen geometry</button>
+      <TailCutBar checked={p.checkedIds} onRun={p.onCutTails} onApprove={p.onApproveCuts} />
+      <button type="button" className="svg-btn danger" data-testid="svg-remove-selected" disabled={p.checkedCount === 0}
+        title="Remove the selected images from this list: they become declined in Selection V2 (Undo brings them back)"
+        onClick={p.onRemove}>🗑 Remove selected</button>
     </>
   );
 }
@@ -110,6 +157,52 @@ function RegenerateButton({ p }: { p: SvgBulkBarProps }) {
     <button type="button" className="svg-btn" data-testid="svg-regenerate-selected"
       disabled={p.regenerableCount === 0} onClick={p.onRegenerate} title={title}>
       ↻ Regenerate selected ({p.regenerableCount})</button>
+  );
+}
+
+/**
+ * SVGs that are already in the folder but not in the pair's history — an earlier
+ * build's output, another tool's file, a hand edit. One click reads every selected
+ * folder, records what it finds as versions and shows the newest one.
+ */
+function RegisterButton({ p }: { p: SvgBulkBarProps }) {
+  const title = p.checkedCount === 0
+    ? "Select the items whose folders should be checked"
+    : `Look in ${p.checkedCount} selected folder(s) for SVGs the app has not recorded yet; the newest becomes the shown version`;
+  return (
+    <button type="button" className="svg-btn" data-testid="svg-register-existing"
+      disabled={p.checkedCount === 0} onClick={p.onRegisterExisting} title={title}>
+      ⤓ Register existing SVGs ({p.checkedCount})</button>
+  );
+}
+
+/**
+ * AI source images that are already in the folder but not in the pair's image
+ * history — an older build's output, the original before a split, a copy. One
+ * click reads every selected folder and makes the newest NUMBERED file main.
+ */
+function RegisterImagesButton({ p }: { p: SvgBulkBarProps }) {
+  const title = p.checkedCount === 0
+    ? "Select the items whose folders should be checked"
+    : `Look in ${p.checkedCount} selected folder(s) for AI source images the app has not recorded yet; the newest numbered one becomes the main image`;
+  return (
+    <button type="button" className="svg-btn" data-testid="svg-register-images"
+      disabled={p.checkedCount === 0} onClick={p.onRegisterImages} title={title}>
+      ⤓ Register AI sources ({p.checkedCount})</button>
+  );
+}
+
+/** One image batch at a time: while it runs the action waits and Stop sends nothing new (RULE 7). */
+function ImageRegenButtons({ p }: { p: SvgBulkBarProps }) {
+  const running = p.imageActive === true || p.imageRunning > 0;
+  return (
+    <>
+      {running && <button type="button" className="svg-btn" data-testid="svg-img-stop" onClick={p.onImageStop}
+        title="Send no further image requests; sent composites can still finish and need review">■ Stop images{p.imageRunning > 0 ? ` (${p.imageRunning} left)` : ""}</button>}
+      <button type="button" className="svg-btn" data-testid="svg-bulk-image-regen" disabled={p.checkedCount === 0 || running}
+        title={running ? "AI sources are being regenerated — wait for them or stop them" : "Regenerate the AI source image via the image connection"}
+        onClick={p.onImageRegen}>◍ Regenerate image ({p.checkedCount})</button>
+    </>
   );
 }
 
@@ -126,21 +219,3 @@ function Estimate({ p }: { p: SvgBulkBarProps }) {
   );
 }
 
-/** Presets + one custom colour = ONE decision: the preview frame background. */
-function PreviewBg({ bg, onBg }: { bg: PreviewBackground; onBg: (bg: PreviewBackground) => void }) {
-  return (
-    <div className="svg-bg" data-testid="svg-bg">
-      <label htmlFor="svg-bg-custom">PREVIEW BG</label>
-      {BG_PRESETS.map((preset) => (
-        <button key={preset.id} type="button" className={`svg-swatch${bg.preset === preset.id ? " on" : ""}`}
-          data-testid={`svg-bg-${preset.id}`} title={`Preview background: ${preset.label}`}
-          aria-label={`Preview background ${preset.label}`} aria-pressed={bg.preset === preset.id}
-          style={{ background: preset.color }} onClick={() => onBg(selectPreset(bg, preset.id))} />
-      ))}
-      <input id="svg-bg-custom" data-testid="svg-bg-custom" type="color" value={bg.custom}
-        aria-label="Custom preview background" onChange={(e) => onBg(selectCustom(bg, e.target.value))} />
-      <output className="svg-bg-value" data-testid="svg-bg-value" htmlFor="svg-bg-custom"
-        title="Preview only — saved SVG files and their code are never changed">{backgroundLabel(bg)}</output>
-    </div>
-  );
-}

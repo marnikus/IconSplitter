@@ -1,0 +1,7 @@
+# Upload-only combined title design
+
+- Add an opt-in, locally persisted Upload checkbox, default off. Freeze its value in the upload confirmation plan; disclose it there.
+- For each selected exported item, use the accepted `export.json` metadata (not unsaved drafts), combining trimmed title and description with a single period and space. The join helper handles empty fields without an extra separator, but upload requires valid accepted title, description and tags for metadata readback. Preserve description, tags and identity; do not shorten the resulting XMP title.
+- Re-embed only into in-memory copies immediately before upload; never write the original image, EPS, SVG, ZIP or `export.json`. Use the same transformation for FTPS/SFTP, Getty JPEG/EPS pairs and representations inside generated or recorded ZIPs. Embed PNG as standard XMP iTXt when encountered. If accepted metadata, a readable supported carrier, or a safe embedding is unavailable, fail explicitly rather than silently upload the original.
+- Retain discovery's exported-file boundary. Unknown non-image archive members are left intact; a ZIP with no recognized carriers is rejected in this mode. Stock sites may truncate or reject long titles, so preflight should disclose the option and length caveat.
+- Tests first: exercise full metadata readback of outgoing JPEG/SVG/EPS/PNG/ZIP, off/on and missing/error behavior, Getty pairs, UI and confirmation, plus unchanged source and record bytes.

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 3 — statefile: per-reference JSON model (spec §2, §6).
 // merge semantics, statuses, corrupt-payload rejection (RULE 13).
 import { describe, expect, it } from "vitest";

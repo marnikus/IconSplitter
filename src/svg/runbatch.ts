@@ -13,7 +13,9 @@
 // charge. Only a failure the provider itself confirmed may be retried.
 
 import { batchManifest, batchOutcome, type BatchPlan } from "../lib/svgbatch";
-import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
+import { extractSvgBlocks } from "../lib/svgextract";
+import { expandUses } from "../lib/svguse";
+import { modelOf, providerOf, replyMatcherOf } from "./answerer";
 import type { Failure, Usage } from "../lib/svgrequest";
 import { endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
@@ -21,17 +23,19 @@ import { type PairMeta } from "../lib/pairmeta";
 import { sendBatch } from "./runsend";
 import { saveMetaAt } from "../selection/pairstore";
 import { buildComposite, type BuiltComposite } from "./composite";
+import { compositeLayout } from "../lib/svgcomposite";
+import { mainImageOf, withImagesOf } from "../lib/svgimgreg";
 import { metaAfterFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import type { SvgSource } from "./sources";
 import type { RunState } from "./runtypes";
 
-export async function runBatch(state: RunState, plan: BatchPlan, index: number): Promise<void> {
+export async function runBatch(state: RunState, plan: BatchPlan, index: number, signal: AbortSignal = state.args.signal): Promise<void> {
   const items = plan.items.map((i) => state.args.sources.find((s) => s.id === i.sourceId)).filter(isSource);
   if (items.length === 0) return;
   const ctx = newBatchCtx({
-    state, plan, index, items, startedAt: Date.now(),
+    state, plan, index, items, signal, startedAt: Date.now(),
     hash: "", usage: null, share: null, error: null, requestId: null, unsettled: false,
-    recorded: state.args.prompt,
+    recorded: state.args.prompt, records: new Map(),
   });
   const composite = await tryComposite(ctx);
   if (composite === null) return finishBatch(ctx); // nothing was sent: every item is already failed
@@ -39,6 +43,12 @@ export async function runBatch(state: RunState, plan: BatchPlan, index: number):
   ctx.hash = composite.hash;
   const sent = await sendBatch(ctx, composite);
   if (!sent.ok) failBatch(ctx, sent.error, sent.failure, sent.retryAfterMs);
+  else if (signal.aborted) {
+    ctx.usage = sent.usage;
+    state.usages.push(sent.usage); // A discarded late answer may already have been charged.
+    failBatch(ctx, state.args.signal.aborted ? "Run cancelled — late result not saved"
+      : "Current request skipped — remaining requests continue", "aborted", null);
+  }
   else await saveMatches(ctx, sent.text, sent.usage);
   finishBatch(ctx);
 }
@@ -55,6 +65,7 @@ function announceStart(ctx: BatchCtx, built: BuiltComposite): void {
 /** Everything the per-request writers need, so no writer takes seven params. */
 export interface BatchCtx {
   state: RunState;
+  signal: AbortSignal;
   plan: BatchPlan;
   /** 1-based request index within the run. */
   index: number;
@@ -75,6 +86,8 @@ export interface BatchCtx {
   unsettled: boolean;
   /** The prompt text this request's versions record (never an SVG code). */
   recorded: string;
+  /** One record per source, when a batch member must name its own position (I-76). */
+  records: ReadonlyMap<string, string>;
 }
 
 interface Tally {
@@ -87,10 +100,17 @@ function newBatchCtx(ctx: Omit<BatchCtx, "tally">): BatchCtx {
   return { ...ctx, tally: { saved: 0, failed: 0, missing: 0 } };
 }
 
+/** A text-only request sends no picture: nothing is read or drawn, the hash says so. */
+function textOnlyComposite(count: number): BuiltComposite {
+  return { dataUrl: "", hash: "text-only", layout: compositeLayout(count), bytes: 0 };
+}
+
 /** A composite that cannot be built must produce no request at all. */
 async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
+  if (ctx.state.args.attachImage === false) return textOnlyComposite(ctx.items.length);
   try {
-    return await buildComposite(ctx.state.args.root, ctx.items);
+    const metas = ctx.state.args.metas; // the main AI image is the source (RC8)
+    return await buildComposite(ctx.state.args.root, ctx.items, (s) => mainImageOf(metas.get(s.id) ?? null, s.relPath));
   } catch (error) {
     failBatch(ctx, `composite failed: ${message(error)}`, "payload", null);
     return null;
@@ -101,7 +121,7 @@ async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
 function finishBatch(ctx: BatchCtx): void {
   const { state, plan, index, tally } = ctx;
   const report = batchOutcome({
-    plan, index, model: state.args.config.model,
+    plan, index, model: modelOf(state.args),
     saved: tally.saved, failed: tally.failed, missing: tally.missing,
     usage: ctx.usage ?? zeroUsage(), error: ctx.error,
     unknown: ctx.unsettled, elapsedMs: Date.now() - ctx.startedAt, requestId: ctx.requestId,
@@ -109,14 +129,14 @@ function finishBatch(ctx: BatchCtx): void {
   // Saved, failed or cancelled: this request has a confirmed outcome, so its
   // journal note is done with. A STALL keeps its note on purpose — nobody has
   // confirmed anything about it, and the next boot must say so.
-  if (!ctx.unsettled) endRequest(plan.id);
+  if (!ctx.unsettled) endRequest(plan.id, state.runId);
   state.outcomes.push(report);
   const done = state.outcomes.reduce((n, o) => n + o.count, 0);
   state.args.onEvent({ kind: "batch-done", report, done, images: state.images });
 }
 
 async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<void> {
-  const matched = matchBlocks(extractSvgBlocks(text), batchManifest(ctx.plan.items));
+  const matched = replyMatcherOf(ctx.state.args)(extractSvgBlocks(text), batchManifest(ctx.plan.items));
   ctx.state.usages.push(usage);
   ctx.usage = usage;
   ctx.share = allocateUsage(usage, ctx.items.length);
@@ -124,7 +144,7 @@ async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<v
     const position = ctx.plan.items.find((i) => i.sourceId === item.id)?.position ?? 0;
     const code = matched.byPosition.get(position);
     if (code === undefined) await missOne(ctx, item, position);
-    else await saveOne(ctx, item, position, code);
+    else await saveOne(ctx, item, position, expandUses(code));
   }
 }
 
@@ -144,8 +164,8 @@ async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: s
   const usage = ctx.share ?? zeroUsage();
   const isRegen = state.args.regen.kind === "current-svg";
   const args: SaveArgs = {
-    root: state.args.root, source: item, code, prompt: ctx.recorded,
-    provider: "Requesty", model: state.args.config.model, requestedAt: new Date().toISOString(),
+    root: state.args.root, source: item, code, prompt: ctx.records.get(item.id) ?? ctx.recorded,
+    provider: providerOf(state.args), model: modelOf(state.args), requestedAt: new Date().toISOString(),
     usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, meta,
     review: isRegen ? "needs-review" : "pending",
   };
@@ -175,7 +195,7 @@ async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error
   // A charged attempt keeps its share of the usage, and a pair without a file
   // gets one so no task can vanish without its cost (I-41).
   const next = metaAfterFailure({
-    source: item, prompt: ctx.recorded, provider: "Requesty", model: state.args.config.model,
+    source: item, prompt: ctx.recorded, provider: providerOf(state.args), model: modelOf(state.args),
     requestedAt: new Date().toISOString(), error, meta, usage: ctx.share ?? zeroUsage(),
   });
   await persist(state, item, next);
@@ -183,8 +203,10 @@ async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error
 }
 
 /** Writes the pair's own file and keeps the in-memory copy in step (RULE 24). */
-async function persist(state: RunState, item: SvgSource, meta: PairMeta | null): Promise<PairMeta | null> {
-  if (!meta) return null;
+async function persist(state: RunState, item: SvgSource, next: PairMeta | null): Promise<PairMeta | null> {
+  if (!next) return null;
+  // the image fields are the image writer's: taken from the latest copy (RC6)
+  const meta = withImagesOf(next, state.args.metas.get(item.id) ?? null);
   state.args.metas.set(item.id, meta);
   try {
     await saveMetaAt(state.args.root, item.metaPath, meta);

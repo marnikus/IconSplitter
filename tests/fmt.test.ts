@@ -1,3 +1,4 @@
+// @vitest-environment node
 // fmt.test.ts — RULE 8: formatter edge behaviour.
 import { describe, expect, it } from "vitest";
 import { fmtBytes, fmtDate, fmtFormat, fmtTime } from "../src/selection/fmt";
