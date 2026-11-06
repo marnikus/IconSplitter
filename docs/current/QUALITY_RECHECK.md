@@ -4845,3 +4845,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `lib/multifilter` (Multi value = all | one | list; anyOf/toggle/parse/drop/text), `ui/MultiSelect` checkbox menu; Batch status+review, Selection V2 status+pairing, Generate SVG generation+review, SVG to upload package+metadata+badge, Upload format+badge; shared `rowMatchesBadges`/`badgeFilterOptions`; stored/history filters parse lists; UI tests drive filters through `helpers/multiselect` `pickOnly`.
 - Measured: 19 new tests (`multi_filter`); 7 UI suites updated to the new control (185 tests pass); tsc clean; lint PASS; quality:changed PASSED (`dropBadgeFromFilter` extracted); verify:fast tests 3870 pass / 16 fail = the pre-existing set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — In-preview SVG path editor + Edit settings
+
+- Scope: lib/pathedit (model, ops, hit/snap, session, gesture state machine, svgdoc one-d rewrite); svg/pathedit (SvgPathEditor, editoroverlay, useEditorInput); svg/svgedit (Finish = one write + one `svgEdit` history entry with both texts, undo/redo write back, panel-lent folder + push); svg/svgeditslot (Edit button, larger frame); usesvgtext revision bump; Edit settings (anchor px) for editor and Ctrl-hover dots; shared ui/usedismiss.
+- Measured: 34 new tests (pathedit_core 25, pathedit_ui 9 incl. Finish/undo); apply.test pinned type list updated; selection_response guard caught per-row history subscription (fixed via binding); tsc PASS; lint PASS; quality:changed PASSED; verify:fast tests 3903 pass / 16 fail = the pre-existing set; build PASS. Not exercised in a real browser (happy-dom has no layout; screen matrix stubbed). Aggregate gate NOT passed (environment).

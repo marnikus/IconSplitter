@@ -4,7 +4,8 @@
 // Handles: `<testid>` (button), `<testid>-menu`, `<testid>-opt-<value>`. The
 // rules live in lib/multifilter; this only draws them.
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useRef, useState } from "react";
+import { useDismiss } from "./usedismiss";
 import { multiText, pickedOf, toggleMulti, type Multi } from "../lib/multifilter";
 
 export interface MultiSelectProps {
@@ -15,18 +16,6 @@ export interface MultiSelectProps {
   options: readonly (readonly [string, string])[];
   onChange: (next: Multi<string>) => void;
   look?: "svg" | "v2";
-}
-
-/** Closes the menu on Escape or a press outside it. */
-function useDismiss(box: RefObject<HTMLElement | null>, open: boolean, close: () => void): void {
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
-    const onDown = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) close(); };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onDown);
-    return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
-  }, [box, open, close]);
 }
 
 export default function MultiSelect(p: MultiSelectProps) {

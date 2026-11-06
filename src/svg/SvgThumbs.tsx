@@ -26,6 +26,7 @@ import { lastImageFailure, mainImageOf } from "../lib/svgimgreg";
 import { useSvgText } from "./usesvgtext";
 import { previewTargetOf, shownVersion } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
+import { EDIT_FRAME_PX, editSlot, PairBars, svgBarOf, useEditSession } from "./svgeditslot";
 import { SVG_STROKE_SHEET } from "./strokesheet";
 import type { SvgRow } from "./types";
 
@@ -57,9 +58,14 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   // Both boxes come from the one rule: the raster from its own pixels, the
   // vector from the ratio of the document it is about to draw.
   const aiBox = zoomBox(thumb, aiNat);
-  const svgSide = svgSlot({ svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg) });
+  const edit = useEditSession({ row, svg, svgPath: target?.svgPath ?? "", version: target?.version ?? 0 });
+  const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg) };
+  const big = Math.max(thumb, EDIT_FRAME_PX);
+  const svgSide = edit.editing && svg !== null
+    ? editSlot({ base: svgSlot({ ...slotArgs, thumb: big }), box: svgBox(svg, big), svg, id, stem: row.source.stem, version: slotArgs.version }, edit)
+    : svgSlot(slotArgs);
   const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
-  const svgBar = onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />;
+  const svgBar = svgBarOf(row, edit, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />);
   return (
     <div className="svg-pair-with-bar">
       <PairedThumbs slots={[
@@ -67,12 +73,7 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
         children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> },
       svgSide,
     ]} />
-      {(aiBar !== null || svgBar !== null) && (
-        <div className="svg-pair-bars">
-          <div className="svg-pair-bar" style={{ width: `${aiBox.width}px` }}>{aiBar}</div>
-          <div className="svg-pair-bar" style={{ width: `${svgSide.width}px` }}>{svgBar}</div>
-        </div>
-      )}
+      <PairBars ai={aiBar} aiWidth={aiBox.width} svg={svgBar} svgWidth={svgSide.width} />
     </div>
   );
 }

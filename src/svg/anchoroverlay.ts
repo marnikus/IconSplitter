@@ -6,6 +6,8 @@
 
 import { useEffect, useState } from "react";
 import { anchorPointsOf, type Anchors } from "../lib/svganchors";
+import { getEditSettings } from "./editsettings";
+import { toPathSpace } from "./pathedit/useEditorInput";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 /** Inline !important: beats the preview stroke sheet's `svg * { … !important }`. */
@@ -44,7 +46,9 @@ function drawAnchors(svg: SVGSVGElement, anchors: Anchors): Element {
   const g = svg.ownerDocument.createElementNS(SVG_NS, "g");
   g.setAttribute("data-anchor-overlay", "");
   g.setAttribute("pointer-events", "none");
-  const r = round((anchors.size ?? 100) * 0.012);
+  // Edit settings' anchor size in SCREEN px (2026-11-06); the old relative size without a screen matrix
+  const u = toPathSpace(svg, 0, 0)?.unitsPerPx ?? null;
+  const r = round(u === null ? (anchors.size ?? 100) * 0.012 : (getEditSettings().anchorPx / 2) * u);
   for (const p of anchors.points) {
     const dot = svg.ownerDocument.createElementNS(SVG_NS, "circle");
     dot.setAttribute("cx", round(p.x));

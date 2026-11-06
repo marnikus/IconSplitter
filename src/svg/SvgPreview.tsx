@@ -69,7 +69,7 @@ function ShadowSvg({ html, box, testid, label, version, stroke }: ShadowProps) {
 }
 
 /** Paints the sanitized document inside its own shadow root (RULE 20). */
-function useShadowArt(html: string, host: { current: HTMLDivElement | null }, stroke: StrokeSheet | undefined): void {
+export function useShadowArt(html: string, host: { current: HTMLDivElement | null }, stroke: StrokeSheet | undefined): void {
   useEffect(() => {
     const node = host.current;
     if (node === null) return;

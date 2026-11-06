@@ -17,6 +17,7 @@ import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { isReview } from "../lib/svgmodel";
+import { applySvgEdit } from "../svg/svgedit";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
 import { getAppState, patchBatch, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
@@ -25,7 +26,7 @@ import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
 export const ENTRY_TYPES = [
   "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
-  "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges",
+  "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit",
 ] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
@@ -42,6 +43,7 @@ function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promis
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
     case "svgReview": return applySvgReviewPatch(toReviewPatch(value));
+    case "svgEdit": return applySvgEdit(value);
     case "uploadSettings": return applyUploadSettings(value);
     case "uploadRowBadges": return applyRowBadgeState(value);
     default: return false; // an entry from a future schema: refuse, do not guess

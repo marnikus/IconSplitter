@@ -2130,3 +2130,23 @@
 .multi-select-option:hover { background: #1d1944; }
 .multi-select-option.all { border-bottom: 1px solid var(--v2-line); border-radius: 6px 6px 0 0; margin-bottom: 2px; }
 .multi-select-option input { accent-color: var(--v2-purple); }
+
+/* In-preview SVG path editor (svg/pathedit, 2026-11-06). */
+.svg-path-editor { position: relative; }
+.svg-preview.editing { cursor: crosshair; touch-action: none; user-select: none; }
+.svg-edit-toolbar {
+  position: absolute; z-index: 5; top: 6px; left: 6px; right: 6px; display: flex; align-items: center; gap: 6px;
+  padding: 4px 6px; border-radius: 8px; background: rgb(12 18 34 / 88%); border: 1px solid var(--v2-line);
+}
+.svg-edit-spacer { flex: 1; }
+.svg-edit-cancel { background: none; border: 0; color: var(--v2-text); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 2px 4px; }
+.svg-edit-hint {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); margin: 0; padding: 4px 10px; border-radius: 6px;
+  background: rgb(12 18 34 / 88%); color: var(--v2-text); font-size: 12px; pointer-events: none; white-space: nowrap;
+}
+.svg-edit-settings { position: relative; }
+.svg-edit-settings-pop {
+  position: absolute; z-index: 60; top: 100%; right: 0; margin-top: 6px; width: 240px; display: grid; gap: 8px; padding: 10px;
+  background: var(--v2-surface); border: 1px solid var(--v2-line); border-radius: 8px; box-shadow: 0 10px 24px rgb(0 0 0 / 45%);
+}
+.svg-edit-settings-pop small { color: var(--v2-muted); }

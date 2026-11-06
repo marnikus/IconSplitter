@@ -17,6 +17,7 @@ import PreviewStroke from "./PreviewStroke";
 import { SVG_STROKE_SHEET } from "./strokesheet";
 import WebModeToggle from "./WebModeToggle";
 import InvertButton from "../ui/InvertButton";
+import EditSettingsButton from "./EditSettingsButton";
 import type { RunProgress } from "./types";
 
 export interface SvgBulkBarProps {
@@ -93,6 +94,7 @@ function BulkRight({ p }: { p: SvgBulkBarProps }) {
       <PreviewBg bg={p.bg} onBg={p.onBg} />
       <span className="svg-divider" aria-hidden="true" />
       <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} sheet={SVG_STROKE_SHEET} idPrefix="svg" />
+      <EditSettingsButton />
       <span className="svg-divider" aria-hidden="true" />
       <div className="svg-zoom">
         <label htmlFor="svg-thumb">ZOOM</label>

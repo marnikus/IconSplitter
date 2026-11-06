@@ -24,6 +24,8 @@ import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
+import { useSvgEditBinding } from "./svgedit";
+import type { DirHandleLike } from "../lib/fs";
 import { loadWebChat } from "./webchatstore";
 import { guard, perRequestOf, planOf } from "./runplan";
 import { confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
@@ -84,6 +86,7 @@ export interface SvgActions extends SvgPromptActions {
 export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 export function useSvgActions(ctx: SvgCtx): SvgActions {
   useReviewApplier(ctx);
+  useSvgEditBinding(ctx.refs.root as { current: DirHandleLike | null }, ctx.hist);
   return {
     ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx), ...useImgRegenActions(ctx),
     ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx),
