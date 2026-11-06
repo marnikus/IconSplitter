@@ -4935,3 +4935,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: lib/pathedit/scale (box, 8 padded handles, free/uniform/edge scale about the opposite side, ScaleSpec); gesture scale drag (one undo step); overlay box + handles; legend.
 - Measured: 8 new tests (pathedit_scale, written first, seen failing); editor suites 90+ pass; verify:fast 4001 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Ctrl+Shift+S = save, approve & next
+
+- Scope: useEditMode save-approve mode (approves even with no changes); EditNav.onGo approve flag; svgedit.approveEditedSvg (review path + its own svgReview entry; already approved records nothing); SvgEditModal saves, approves, then moves; legend text.
+- Measured: 6 new tests (pathedit_save_approve, written first, seen failing); editor suites 96 pass; verify:fast 4007 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.

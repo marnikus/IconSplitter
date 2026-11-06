@@ -24,7 +24,8 @@ session. **⚙ Edit settings** (bulk bar) sets anchor size and click tolerance.
 - **← / →** (or the side arrows) open the previous / next editable row in the
   list's order (`editnav.neighborRow`, no wrap) at once, ready to edit. With
   unsaved changes a question asks **Save and go** (Enter) / **Discard and go** /
-  **Stay** (Esc). **Ctrl+Shift+S** saves and goes next; **Ctrl+Shift+X**
+  **Stay** (Esc). **Ctrl+Shift+S** saves, **approves** (Generate SVG review, its own
+  undo step, even when nothing changed — `svgedit.approveEditedSvg`) and goes next; **Ctrl+Shift+X**
   discards and goes next. A failed save keeps the artboard.
 - **I** switches thin hairlines / the tab's preset stroke sheet; **V** / **P**
   pick Select / Draw.

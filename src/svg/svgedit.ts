@@ -16,6 +16,8 @@ import { getAppState } from "../state/appstore";
 import type { HistoryActions } from "../state/HistoryProvider";
 import { SVG_HANDLE_KEY } from "../state/handlekeys";
 import { bumpSvgFile } from "./usesvgtext";
+import { applySvgReviewPatch } from "./reviewundo";
+import type { ReviewStatus } from "../lib/svgmodel";
 
 /** One side of an edit entry: which file, and its whole text. */
 export interface SvgEditSide { svgPath: string; markup: string }
@@ -105,6 +107,22 @@ export async function finishSvgEdit(a: FinishArgs): Promise<boolean> {
   b.push({
     type: "svgEdit", label: `Edit ${a.label}`, origin: getAppState().tab, ids: [a.id],
     before: { svgPath: a.svgPath, markup: a.before }, after: { svgPath: a.svgPath, markup: a.after },
+  });
+  return true;
+}
+
+/**
+ * Ctrl+Shift+S in the edit mode (2026-11-06): the SVG is marked approved in
+ * Generate SVG through its own review path, as its OWN undo step (the review's
+ * svgReview entry). An item that is already approved records nothing.
+ */
+export async function approveEditedSvg(id: string, before: ReviewStatus, label: string): Promise<boolean> {
+  if (before === "approved") return true;
+  const ok = await applySvgReviewPatch({ recs: [{ id, review: "approved" }] });
+  if (!ok) return false;
+  live?.push({
+    type: "svgReview", label: `Approve ${label}`, origin: getAppState().tab, ids: [id],
+    before: { recs: [{ id, review: before }] }, after: { recs: [{ id, review: "approved" }] },
   });
   return true;
 }

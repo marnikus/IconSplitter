@@ -26,7 +26,8 @@ export interface EditNav {
   canNext: boolean;
   /** "3 / 120 · name SVG v2" */
   position: string;
-  onGo: (dir: 1 | -1, markup: string | null) => void;
+  /** `approve`: Ctrl+Shift+S — also mark the SVG approved before going on. */
+  onGo: (dir: 1 | -1, markup: string | null, approve?: boolean) => void;
 }
 
 export type StrokeView = "preset" | "thin";
@@ -123,7 +124,7 @@ export interface EditMode {
   /** A move asked while something changed: Save / Discard / Stay. */
   leave: 1 | -1 | null;
   resolveLeave: (choice: "save" | "discard" | "stay") => void;
-  go: (dir: 1 | -1, mode: "ask" | "save" | "discard") => void;
+  go: (dir: 1 | -1, mode: "ask" | "save" | "discard" | "save-approve") => void;
   finish: () => void;
   dirty: boolean;
   zoom: PreviewZoom;
@@ -139,10 +140,11 @@ export function useEditMode(a: EditModeArgs): EditMode {
   // a zoom changes the units per screen pixel: the overlay is redrawn at screen size
   usePaintSession(a.host, { source: a.source, st, matrices: matrices.current, anchorPx, painted: painted + zoom.view.scale, view });
   const markup = useCallback(() => (st === null ? null : writeObjects(a.source, st.session, matrices.current)), [st, a.source, matrices]);
-  const go = useCallback((dir: 1 | -1, mode: "ask" | "save" | "discard") => {
+  const go = useCallback((dir: 1 | -1, mode: "ask" | "save" | "discard" | "save-approve") => {
     const nav = a.nav;
     if (nav === undefined || !(dir === 1 ? nav.canNext : nav.canPrev)) return;
     const out = markup();
+    if (mode === "save-approve") { nav.onGo(dir, out, true); return; } // approves even with nothing to save
     if (out === null || mode === "discard") nav.onGo(dir, null);
     else if (mode === "save") nav.onGo(dir, out);
     else setLeave(dir);
@@ -185,7 +187,7 @@ function useModeKeys(k: KeyParts): (e: KeyboardEvent) => boolean {
 
 function runAction(action: ModalAction, k: KeyParts): void {
   if (action === "prev" || action === "next") k.go(action === "next" ? 1 : -1, "ask");
-  else if (action === "save-next") k.go(1, "save");
+  else if (action === "save-next") k.go(1, "save-approve");
   else if (action === "discard-next") k.go(1, "discard");
   else if (action === "toggle-stroke") k.toggleView();
   else if (k.st !== null) k.setSt({ ...k.st, session: setTool(k.st.session, action === "tool-draw" ? "draw" : "select") });
