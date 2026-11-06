@@ -17,6 +17,7 @@ import HistoryBar from "../src/ui/HistoryBar";
 import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { settle, waitUntil } from "./helpers/quiet";
+import { isMultiSelect, pickOnly } from "./helpers/multiselect";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -51,6 +52,7 @@ function setInput(el: HTMLInputElement | HTMLTextAreaElement, value: string): Pr
 }
 
 function setSelect(el: HTMLSelectElement, value: string): Promise<void> {
+  if (isMultiSelect(el)) return pickOnly(document, (el as HTMLElement).dataset.testid ?? "", value);
   return act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
     setter?.call(el, value);

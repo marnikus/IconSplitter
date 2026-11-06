@@ -22,6 +22,7 @@ import { PREFS_KEY } from "../src/selectionv2/prefsstore";
 import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
 import { settle as quietSettle } from "./helpers/quiet";
+import { isMultiSelect, pickOnly } from "./helpers/multiselect";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -809,6 +810,7 @@ async function slide(input: HTMLInputElement, value: string): Promise<void> {
 
 async function choose(select: HTMLElement, sel: string, value: string): Promise<void> {
   const el = q(select, sel) as HTMLSelectElement;
+  if (isMultiSelect(el)) { await pickOnly(select, (el as HTMLElement).dataset.testid ?? "", value); await settle(); return; }
   await act(async () => {
     nativeValue(el, value);
     el.dispatchEvent(new Event("change", { bubbles: true }));

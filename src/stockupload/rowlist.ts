@@ -4,15 +4,17 @@ import { compareNames } from "../lib/scan";
 import type { ExportedItem, UploadFormatKey } from "../lib/stockupload/types";
 import type { IconMetadata, MetadataValidation } from "../lib/upload/meta";
 import { metadataRights } from "../lib/upload/rights";
-import { badgesOf, rowMatchesBadge, type RowBadgeState } from "../lib/upload/rowbadge";
+import { badgesOf, rowMatchesBadges, type RowBadgeState } from "../lib/upload/rowbadge";
+import { anyOf, type Multi } from "../lib/multifilter";
 import { matchesSearch } from "../lib/textsearch";
 
 export type StockUploadSort = "name" | "path" | "selected";
 
 export interface StockListFilter {
   search: string;
-  badge: string;
-  format: "all" | UploadFormatKey;
+  /** One badge filter or several (lib/multifilter). */
+  badge: Multi<string>;
+  format: Multi<"all" | UploadFormatKey>;
 }
 
 export const ALL_STOCK_FILTER: StockListFilter = {
@@ -75,8 +77,8 @@ export function filterAndSortItems(args: {
   const checkedSet = new Set(args.checked);
   const filtered = args.items.filter((item) =>
     inSearch(item, args.filter.search)
-    && rowMatchesBadge(badgesOf(args.rowBadges, item.id), args.filter.badge)
-    && (args.filter.format === "all" || hasFormat(item, args.filter.format)),
+    && rowMatchesBadges(badgesOf(args.rowBadges, item.id), args.filter.badge)
+    && anyOf(args.filter.format, "all", (w) => hasFormat(item, w as UploadFormatKey)),
   );
   return filtered.sort((a, b) => {
     if (args.sort === "selected") {

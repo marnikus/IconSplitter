@@ -11,6 +11,7 @@ import FromField from "./filter/FromField";
 import ToField from "./filter/ToField";
 import type { Range } from "./filter/useRange";
 import SearchField from "../ui/SearchField";
+import MultiSelect from "../ui/MultiSelect";
 
 export interface BatchFilterGridProps {
   filter: BatchFilter;
@@ -60,8 +61,10 @@ function Filters({ p, range, setRange }: { p: BatchFilterGridProps; range: Range
       </Field>
       <FromField p={p} range={range} setRange={setRange} />
       <ToField p={p} range={range} setRange={setRange} />
-      <SelectField label="Status" testid="batch-status" value={p.filter.status} onChange={(v) => p.setFilter({ ...p.filter, status: v as any })} options={STATUS_OPTS} />
-      <SelectField label="Review" testid="batch-review-filter" value={p.filter.review ?? "all"} onChange={(v) => p.setFilter({ ...p.filter, review: v as any })} options={REVIEW_OPTS} />
+      <MultiSelect look="v2" label="Status" testid="batch-status" value={p.filter.status} options={STATUS_OPTS}
+        onChange={(v) => p.setFilter({ ...p.filter, status: v as BatchFilter["status"] })} />
+      <MultiSelect look="v2" label="Review" testid="batch-review-filter" value={p.filter.review ?? "all"} options={REVIEW_OPTS}
+        onChange={(v) => p.setFilter({ ...p.filter, review: v as BatchFilter["review"] })} />
       <SelectField label="Sort by" testid="batch-sort" value={p.sort.by} onChange={(v) => p.setSort({ ...p.sort, by: v as any })} options={SORT_OPTS} />
       <SelectField label="Order" testid="batch-dir" value={p.sort.dir} onChange={(v) => p.setSort({ ...p.sort, dir: v as any })} options={stateOrderOptions(p.sort.by)} />
     </>

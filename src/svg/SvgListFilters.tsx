@@ -11,6 +11,7 @@ import { REVIEW_LABEL, REVIEW_STATUSES } from "../lib/svgmodel";
 /** Every review status, in the model's order, under its one label. */
 const REVIEW_OPTIONS: [string, string][] = [["all", "All reviews"], ...REVIEW_STATUSES.map((s): [string, string] => [s, REVIEW_LABEL[s]])];
 import SearchField from "../ui/SearchField";
+import MultiSelect from "../ui/MultiSelect";
 
 /** Every order the list offers: files, time, cost, status and the two groups. */
 const SORT_OPTIONS: [SvgSort, string][] = [
@@ -49,10 +50,10 @@ export default function SvgListFilters({ filter, sort, sortDir, shown, total, on
   const dir = sortDirOf(sort, sortDir);
   return (
     <div className="svg-filters">
-      <Select label="Generation" testid="svg-filter-generation" value={filter.generation}
+      <MultiSelect label="Generation" testid="svg-filter-generation" value={filter.generation}
         options={[["all", "All states"], ["not-generated", "Not generated"], ["generating", "Generating"], ["generated", "Generated"], ["failed", "Failed"]]}
         onChange={(v) => onFilter({ generation: v as SvgListFilter["generation"] })} />
-      <Select label="Review" testid="svg-filter-review" value={filter.review}
+      <MultiSelect label="Review" testid="svg-filter-review" value={filter.review}
         options={REVIEW_OPTIONS}
         onChange={(v) => onFilter({ review: v as SvgListFilter["review"] })} />
       <Select label="Sort by" testid="svg-sort" value={sort}

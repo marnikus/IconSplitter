@@ -8,6 +8,7 @@ import { stateOrderOptions } from "../lib/statesort";
 import { DEFAULT_SORT, type SortState } from "../lib/reviewsort";
 import SegButton from "./SegButton";
 import SearchField from "../ui/SearchField";
+import MultiSelect from "../ui/MultiSelect";
 
 export interface FilterGridProps {
   filter: ListFilter;
@@ -49,10 +50,10 @@ export default function FilterGrid(p: FilterGridProps) {
 function Selects({ p }: { p: FilterGridProps }) {
   return (
     <>
-      <SelectField label="Status" testid="v2-status" value={p.filter.status}
+      <MultiSelect look="v2" label="Status" testid="v2-status" value={p.filter.status}
         onChange={(v) => p.setFilter({ ...p.filter, status: v as ListFilter["status"] })}
         options={[["all", "All statuses"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"]]} />
-      <SelectField label="Pairing" testid="v2-pairing" value={p.filter.pairing}
+      <MultiSelect look="v2" label="Pairing" testid="v2-pairing" value={p.filter.pairing}
         onChange={(v) => p.setFilter({ ...p.filter, pairing: v as ListFilter["pairing"] })}
         options={[["all", "All pairs"], ["complete", "Complete pairs"], ["incomplete", "Missing pair"]]} />
       <SelectField label="Sort by" testid="v2-sort" value={p.sort.by}

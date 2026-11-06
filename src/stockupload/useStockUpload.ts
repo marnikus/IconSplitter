@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useSyncExternalSto
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
 import { pruneRowSelection } from "../lib/reviewselect";
+import { dropFromMulti } from "../lib/multifilter";
 import type { StockDiscovery } from "../lib/stockupload/discovery";
 import type { ExportedItem, StockPresetState } from "../lib/stockupload/types";
 import { ensureHardcodedBadges, ensureNamedBadge, type RowBadgeState } from "../lib/upload/rowbadge";
@@ -127,6 +128,12 @@ function useDerivedList(
   return { items, visible, header };
 }
 
+/** A deleted badge leaves the badge filter; the rest of the picks stay. */
+function dropBadgeFromFilter(model: StockUploadModel, dispatch: (a: StockModelAction) => void, id: string): void {
+  const badge = dropFromMulti(model.filter.badge, id, "all");
+  if (badge !== model.filter.badge) dispatch({ type: "filter", patch: { badge } });
+}
+
 export function useStockUpload(): StockUploadApi {
   const [model, dispatch] = useReducer(reduceStockModel, undefined, initialStockModel);
   const refs = useRef<StockRefs | null>(null);
@@ -141,9 +148,7 @@ export function useStockUpload(): StockUploadApi {
   useBootEffects(r, presetState.presets, dispatch, runScan);
   const { items, visible, header } = useDerivedList(model, selSlice.checked, rowBadges);
   const selection = useStockSelectionActions(visible, hist);
-  const badges = useStockRowBadgeActions(hist, say, (id) => {
-    if (model.filter.badge === id) dispatch({ type: "filter", patch: { badge: "all" } });
-  });
+  const badges = useStockRowBadgeActions(hist, say, (id) => dropBadgeFromFilter(model, dispatch, id));
   const ftp = useStockFtpActions({
     presetState, bridgeUrl: model.prefs.bridgeUrl, rootRef: r.root, say,
     setCredSaved: (id, saved) => dispatch({ type: "cred", id, saved }),

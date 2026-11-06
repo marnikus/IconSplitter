@@ -11,6 +11,7 @@ import {
   installSvgPanelHooks, SIDECAR, SAVED_SVG, COURT, FOG, fakeKey, host, input, makeRoot, mount, mountPick, q,
   renderPanel, selectEffort, settle, stubClipboard, text, type, unmountPanel, useDeviceStorage,
 } from "./helpers/svgpanel";
+import { pickOnly } from "./helpers/multiselect";
 
 installSvgPanelHooks();
 
@@ -231,8 +232,7 @@ describe("Generate SVG panel", () => {
 
   it("filters the list and clears back to every approved source", async () => {
     await mount(await makeRoot());
-    const gen = q("[data-testid=svg-filter-generation]") as HTMLSelectElement;
-    await act(async () => { gen.value = "generated"; gen.dispatchEvent(new Event("change", { bubbles: true })); });
+    await pickOnly(document, "svg-filter-generation", "generated");
     await settle();
     expect(host.querySelectorAll(".svg-row")).toHaveLength(1);
     expect(q("[data-testid=svg-footer-summary]")?.textContent).toContain("Showing 1 of 2");

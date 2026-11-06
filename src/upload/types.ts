@@ -8,6 +8,7 @@ import type { IconMetadata, MetadataValidation } from "../lib/upload/meta";
 import type { SentPreview } from "../lib/upload/sentpreview";
 import type { GeminiUsage } from "../lib/upload/gemini";
 import type { BadgeFilter } from "../lib/upload/rowbadge";
+import type { Multi } from "../lib/multifilter";
 import type { ScanSeq } from "../lib/scanseq";
 import type { MetadataJournal } from "./journal";
 import type { UploadRowSource } from "./discovery";
@@ -86,11 +87,12 @@ export type UploadMetaFilter = "all" | "empty" | "pending" | "generated" | "inva
 export type UploadSort = StateSort | "name" | "status" | "metadata";
 
 export interface UploadListFilter {
-  status: UploadStatusFilter;
-  metadata: UploadMetaFilter;
+  /** One value, several, or all — lib/multifilter. */
+  status: Multi<UploadStatusFilter>;
+  metadata: Multi<UploadMetaFilter>;
   search: string;
-  /** Catalog id, or all / none / any (I-79). */
-  badge: BadgeFilter;
+  /** Catalog ids, or all / none / any (I-79) — one or several. */
+  badge: Multi<BadgeFilter>;
 }
 
 export const ALL_UPLOAD_FILTER: UploadListFilter = { status: "all", metadata: "all", search: "", badge: "all" };

@@ -28,6 +28,7 @@ import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 import SearchField from "../ui/SearchField";
+import MultiSelect from "../ui/MultiSelect";
 
 export interface UploadControlsProps {
   rootName: string;
@@ -224,10 +225,10 @@ function keyNote(source: KeySource): string {
 function FilterLine({ p }: { p: UploadControlsProps }) {
   return (
     <div className="svg-filters">
-      <Select label="Package" testid="upload-filter-status" value={p.filter.status}
+      <MultiSelect label="Package" testid="upload-filter-status" value={p.filter.status}
         options={[["all", "All packages"], ["processed", "Processed"], ["partial", "Partial"], ["failed", "Failed"], ["cancelled", "Cancelled"], ["stale", "Stale"], ["not-exported", "Not exported"]]}
         onChange={(v) => p.onFilter({ status: v as UploadListFilter["status"] })} />
-      <Select label="Metadata" testid="upload-filter-metadata" value={p.filter.metadata}
+      <MultiSelect label="Metadata" testid="upload-filter-metadata" value={p.filter.metadata}
         options={[["all", "All metadata"], ["empty", "Empty"], ["pending", "Generating"], ["generated", "Generated"], ["invalid", "Invalid"], ["accepted", "Accepted"], ["interrupted", "Interrupted"]]}
         onChange={(v) => p.onFilter({ metadata: v as UploadListFilter["metadata"] })} />
       <Select label="Sort by" testid="upload-sort" value={p.sort}

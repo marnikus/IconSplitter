@@ -3,6 +3,7 @@
 // Independent of the corner-badge decoration. RULE 13 on every parse.
 
 import { isRecord } from "../isrecord";
+import { anyOf, type Multi } from "../multifilter";
 
 export const ROW_BADGE_VERSION = 1;
 export const ROW_BADGE_MAX = 40;
@@ -178,6 +179,11 @@ export function rowMatchesBadge(ids: readonly string[], want: BadgeFilter): bool
   if (want === "none") return ids.length === 0;
   if (want === "any") return ids.length > 0;
   return ids.includes(want);
+}
+
+/** Several picked badge filters: a row passes when it matches ANY of them (2026-11-06). */
+export function rowMatchesBadges(ids: readonly string[], want: Multi<BadgeFilter>): boolean {
+  return anyOf(want, "all", (w) => rowMatchesBadge(ids, w));
 }
 
 export function applyState(value: unknown): RowBadgeState | null {

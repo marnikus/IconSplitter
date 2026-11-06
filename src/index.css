@@ -2116,3 +2116,17 @@
 
 /* A row preview waiting to come near (ui/LazyPreview): same size, deliberately quiet. */
 .lazy-preview { display: inline-block; flex: none; border-radius: 6px; background: rgba(127, 127, 127, 0.08); }
+
+/* Multi-choice filter dropdown (ui/MultiSelect, 2026-11-06). */
+.multi-select { position: relative; }
+.multi-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; text-align: left; cursor: pointer; }
+.multi-select-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multi-select-menu {
+  position: absolute; z-index: 60; top: 100%; left: 0; min-width: 100%; margin-top: 4px; padding: 4px;
+  max-height: 320px; overflow: auto; background: var(--v2-surface); border: 1px solid var(--v2-line);
+  border-radius: 8px; box-shadow: 0 10px 24px rgb(0 0 0 / 45%);
+}
+.multi-select-option { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; white-space: nowrap; color: var(--v2-text); font-size: 13px; cursor: pointer; }
+.multi-select-option:hover { background: #1d1944; }
+.multi-select-option.all { border-bottom: 1px solid var(--v2-line); border-radius: 6px 6px 0 0; margin-bottom: 2px; }
+.multi-select-option input { accent-color: var(--v2-purple); }

@@ -10,6 +10,8 @@ import type {
   UploadListFilter, UploadListRow, UploadRow, UploadSort,
 } from "./types";
 import { matchesSearch } from "../lib/textsearch";
+import { anyOf } from "../lib/multifilter";
+import { rowMatchesBadges } from "../lib/upload/rowbadge";
 
 export function toListRow(row: UploadRow, assigned: Record<string, string[]> = {}): UploadListRow {
   return {
@@ -28,11 +30,11 @@ export function applyUploadFilters(rows: readonly UploadListRow[], f: UploadList
 }
 
 function inStatus(row: UploadListRow, want: UploadListFilter["status"]): boolean {
-  return want === "all" || row.status === want;
+  return anyOf(want, "all", (w) => row.status === w);
 }
 
 function inMeta(row: UploadListRow, want: UploadListFilter["metadata"]): boolean {
-  return want === "all" || row.metadata === want;
+  return anyOf(want, "all", (w) => row.metadata === w);
 }
 
 /** File name, folder, approved version, package status and metadata state (lib/textsearch). */
@@ -41,10 +43,7 @@ function inSearch(row: UploadListRow, query: string): boolean {
 }
 
 function inBadge(row: UploadListRow, want: UploadListFilter["badge"]): boolean {
-  if (!want || want === "all") return true;
-  if (want === "none") return row.badges.length === 0;
-  if (want === "any") return row.badges.length > 0;
-  return row.badges.includes(want);
+  return rowMatchesBadges(row.badges, want ?? "all");
 }
 
 /** Sorts a copy — the caller's array is never reordered. */

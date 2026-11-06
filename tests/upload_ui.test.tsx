@@ -34,6 +34,7 @@ import { clearGeminiKey } from "../src/upload/keystore";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { settle as quietSettle, waitUntil } from "./helpers/quiet";
+import { isMultiSelect, pickOnly } from "./helpers/multiselect";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -128,6 +129,7 @@ async function typeArea(sel: string, value: string): Promise<void> {
 
 async function pick(sel: string, value: string): Promise<void> {
   await waitForEl(sel);
+  if (isMultiSelect(q(sel))) { await pickOnly(document, (q(sel) as HTMLElement).dataset.testid ?? "", value); await settle(); return; }
   await act(async () => {
     const el = q(sel) as HTMLSelectElement;
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(el, value);

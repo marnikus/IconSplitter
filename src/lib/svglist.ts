@@ -5,6 +5,7 @@
 
 import { isSelectionSort, isStateSort, sortByFlag, type StateSort } from "./statesort";
 import { matchesSearch } from "./textsearch";
+import { anyOf, type Multi } from "./multifilter";
 import { REVIEW_LABEL, type ReviewStatus } from "./svgmodel";
 
 /** The status as people read it ("Regenerate SVG — overlaps"); "all" has none. */
@@ -30,8 +31,9 @@ export type SvgSort =
 export type SvgDir = "asc" | "desc";
 
 export interface SvgListFilter {
-  generation: GenFilter;
-  review: ReviewFilter;
+  /** One state, several (Generating + Generated), or all — lib/multifilter. */
+  generation: Multi<GenFilter>;
+  review: Multi<ReviewFilter>;
   search: string;
 }
 
@@ -63,12 +65,12 @@ export function applySvgFilters(rows: readonly SvgListRow[], f: SvgListFilter): 
   return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, f.search));
 }
 
-function inGeneration(row: SvgListRow, want: GenFilter): boolean {
-  return want === "all" || row.generation === want;
+function inGeneration(row: SvgListRow, want: Multi<GenFilter>): boolean {
+  return anyOf(want, "all", (w) => row.generation === w);
 }
 
-function inReview(row: SvgListRow, want: ReviewFilter): boolean {
-  return want === "all" || row.review === want;
+function inReview(row: SvgListRow, want: Multi<ReviewFilter>): boolean {
+  return anyOf(want, "all", (w) => row.review === w);
 }
 
 /** File name, folder, shown version and both status words (lib/textsearch). */

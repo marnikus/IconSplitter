@@ -4840,3 +4840,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `invertChecked` (lib/reviewselect), `InvertButton` (ui), `invertVisible` in Batch, Selection V2, Generate SVG, SVG to upload, Upload — one undoable selection entry each; useSelectionV2 visible gestures extracted (`makeVisibleChecks`) to stay in the RULE 16 budget.
 - Measured: 14 new tests (`invert_selection`); tab suites 230 files / 2491 tests pass; tsc clean; eslint 0 errors; quality:changed PASSED.
+
+## 2026-11-06 — Multi-choice filter dropdowns in every list tab
+
+- Scope: `lib/multifilter` (Multi value = all | one | list; anyOf/toggle/parse/drop/text), `ui/MultiSelect` checkbox menu; Batch status+review, Selection V2 status+pairing, Generate SVG generation+review, SVG to upload package+metadata+badge, Upload format+badge; shared `rowMatchesBadges`/`badgeFilterOptions`; stored/history filters parse lists; UI tests drive filters through `helpers/multiselect` `pickOnly`.
+- Measured: 19 new tests (`multi_filter`); 7 UI suites updated to the new control (185 tests pass); tsc clean; lint PASS; quality:changed PASSED (`dropBadgeFromFilter` extracted); verify:fast tests 3870 pass / 16 fail = the pre-existing set; build PASS. Aggregate gate NOT passed (environment).

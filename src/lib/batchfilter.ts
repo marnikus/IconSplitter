@@ -6,6 +6,7 @@ import { monthKey as reviewMonthKey } from "./reviewfilter";
 import type { SourceStatus, BatchReviewStatus } from "./statefile";
 import { isRecord } from "./isrecord";
 import { matchesSearch } from "./textsearch";
+import { anyOf, isAllPicked, multiText, parseMulti, type Multi } from "./multifilter";
 
 export type DateFilter =
   | { mode: "all" }
@@ -17,8 +18,9 @@ export type BatchReviewFilter = "all" | BatchReviewStatus;
 
 export interface BatchFilter {
   date: DateFilter;
-  status: BatchStatusFilter;
-  review?: BatchReviewFilter;
+  /** One state, several, or all — lib/multifilter. */
+  status: Multi<BatchStatusFilter>;
+  review?: Multi<BatchReviewFilter>;
   search: string;
 }
 
@@ -38,7 +40,7 @@ export interface BatchRowLike {
   dirPath: string;
 }
 
-export function applyBatchFilters<T extends BatchRowLike>(rows: T[], f: BatchFilter & { review?: BatchReviewFilter }): T[] {
+export function applyBatchFilters<T extends BatchRowLike>(rows: T[], f: BatchFilter): T[] {
   return rows.filter((r) => inDate(r, f.date) && inStatus(r, f.status) && inReview(r, (f as any).review) && inSearch(r, f.search));
 }
 
@@ -48,13 +50,12 @@ function inDate(r: BatchRowLike, d: DateFilter): boolean {
   return r.mtime >= d.from && r.mtime <= d.to;
 }
 
-function inStatus(r: BatchRowLike, s: BatchStatusFilter): boolean {
-  return s === "all" || r.status === s;
+function inStatus(r: BatchRowLike, s: Multi<BatchStatusFilter>): boolean {
+  return anyOf(s, "all", (w) => r.status === w);
 }
 
-function inReview(r: BatchRowLike, review: BatchReviewFilter | undefined): boolean {
-  if (!review || review === "all") return true;
-  return (r.review ?? "pending") === review;
+function inReview(r: BatchRowLike, review: Multi<BatchReviewFilter> | undefined): boolean {
+  return anyOf(review, "all", (w) => (r.review ?? "pending") === w);
 }
 
 /** File name, folder, processing status and review (lib/textsearch). */
@@ -73,8 +74,8 @@ export function parseBatchFilter(raw: unknown): BatchFilter {
   if (!isRecord(raw)) return ALL_BATCH_FILTER;
   return {
     date: parseDate(raw.date),
-    status: pick(STATUSES, raw.status, "all"),
-    review: pick(REVIEWS, (raw as any).review, "all"),
+    status: parseMulti(raw.status, STATUSES, "all"),
+    review: parseMulti(raw.review, REVIEWS, "all"),
     search: typeof raw.search === "string" ? raw.search : "",
   };
 }
@@ -90,14 +91,10 @@ function isRange(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
-function pick<T extends string>(allowed: T[], raw: unknown, fallback: T): T {
-  return allowed.includes(raw as T) ? (raw as T) : fallback;
-}
-
 export function batchFilterLabel(f: BatchFilter): string {
   const bits: string[] = [];
-  if (f.status !== "all") bits.push(`status ${f.status}`);
-  if (f.review !== "all") bits.push(`review ${f.review}`);
+  if (!isAllPicked(f.status, "all")) bits.push(`status ${multiText(f.status, "all")}`);
+  if (!isAllPicked(f.review, "all")) bits.push(`review ${multiText(f.review, "all")}`);
   if (f.search !== "") bits.push(`“${f.search}”`);
   if (f.date.mode === "month") bits.push(f.date.month);
   if (f.date.mode === "custom") bits.push("custom range");
