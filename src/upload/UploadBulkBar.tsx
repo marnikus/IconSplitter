@@ -52,6 +52,8 @@ export interface UploadBulkBarProps {
   onAcceptMetadata: () => void;
   onExport: () => void;
   onDownload: () => void;
+  /** Declines the checked items in Generate SVG — they leave this list. */
+  onRemove: () => void;
   onCancel: () => void;
   rowBadges: RowBadgeState;
   checkedIds: string[];
@@ -132,6 +134,10 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
           ? "Select icons first"
           : "Copies every committed SVG, JPG and EPS of the selection into one folder you choose — nothing is overwritten"}>
         ⤓ Download all ({p.downloadFiles} file{p.downloadFiles === 1 ? "" : "s"})</button>
+      <button type="button" className="svg-btn danger" data-testid="upload-remove-selected"
+        disabled={p.checkedCount === 0} onClick={p.onRemove}
+        title="Remove the checked icons from this list: declines them in Generate SVG (Undo brings them back)">
+        🗑 Remove selected</button>
     </>
   );
 }

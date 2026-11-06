@@ -4825,3 +4825,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `LazyPreview` scroll root = the ancestor that really scrolls (overflow-y auto|scroll AND scrollHeight > clientHeight), else `.app-main` — `.svg-panel .pair-table` (overflow-x only) had made every row visible in Batch, Generate SVG, SVG to upload and Upload; Batch `syncAndCollect` writes a state file only when more than the scan stamp changed, groups in parallel.
 - Measured: Batch unchanged rescan (60 groups, slow-drive fake) ≈ 4.7 s → 0.18 s, 0 writes; 5 new/changed tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3819 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — Remove in SVG to upload and Upload (decline one step earlier)
+
+- Scope: row Remove + bulk Remove selected in SVG to upload and Upload; both decline the item in Generate SVG through `applySvgReviewPatch` (records carry `at` = handle key + pair path), one `svgReview` entry (undo/redo), announced via `onSvgReviewsWritten` (also Generate SVG's own ✓/✕); both lists follow; Upload discovery hides exports whose source pair is found and not approved (`sourcePairsOf`, injected; `audit.declinedSources`).
+- Measured: 13 new tests (`upload_remove_row`); related suites 29 files / 325 tests pass; tsc clean; eslint on changed files 0 problems; quality:changed PASSED (split `collectBucket` CC 11→ok); verify:fast tests 3831 pass / 17 fail = the pre-existing environmental set + `docs_navigation` budget (fails on HEAD too) + flaky `process_completion_sound` (passes alone); build PASS. Aggregate gate NOT passed (environment).

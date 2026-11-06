@@ -6,6 +6,7 @@ import { restoreKnownRoot } from "../lib/knownroots";
 import { fnv1a32 } from "../lib/pairing";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import { discoverExportedItems, type StockDiscovery } from "../lib/stockupload/discovery";
+import { sourcePairsOf } from "./sourcepairs";
 import { startCompletionSound } from "../ui/completionSound";
 
 export const STOCK_UPLOAD_HANDLE_KEY = "__stock_upload__";
@@ -68,7 +69,7 @@ export async function scanStockUpload(
   refs.seq = ticket.seq;
   setters.setBusy("Scanning export/ folders…");
   try {
-    const found = await discoverExportedItems(root);
+    const found = await discoverExportedItems(root, { sourcePairs: sourcePairsOf });
     if (!isCurrent(refs.seq, ticket.id)) return;
     const key = scanFingerprint(root.name, found);
     if (key === refs.scanKey.current) return;

@@ -86,7 +86,8 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   `export`) that contain a valid committed `export.json`, and includes only
   output files both recorded in `export.json` and physically present (`size >
   0`) inside that `export` folder. Unrecorded stray files in `export/` and
-  upstream files outside `export/` are never listed. Pinned by
+  upstream files outside `export/` are never listed. An export whose source
+  pair file is found and not approved is hidden ([remove](../svg-remove-row.md#upload)). Pinned by
   `stockupload_discovery` and `stockupload_ui`.
 
 <a id="i-81"></a>

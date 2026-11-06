@@ -31,6 +31,8 @@ export interface StockRowPresentation {
   editMeta: (item: ExportedItem, patch: Partial<IconMetadata>) => void;
   acceptMeta: (item: ExportedItem) => void;
   copyMeta: (item: ExportedItem, field: "title" | "description" | "tags") => void;
+  uploading: boolean;
+  removeItems: (ids: string[]) => void;
 }
 
 function handleRowKey(e: React.KeyboardEvent, itemId: string, a: StockRowPresentation): void {
@@ -79,6 +81,12 @@ function ExpandedRowMeta({ item, a }: { item: ExportedItem; a: StockRowPresentat
 }
 
 export default memo(StockUploadRowView);
+
+function removeTitle(item: ExportedItem, uploading: boolean): string {
+  if (uploading) return "An upload is running — wait, or cancel it first";
+  if (!item.source) return "No pair file for this export under the opened folder — open the folder that holds the sources";
+  return "Remove from this list: declines the source item in Generate SVG, so it also leaves SVG to upload (Undo brings it back)";
+}
 
 function primaryPathOf(item: ExportedItem): string {
   return item.files.raster?.relPath ?? item.files.svg?.relPath ?? item.files.eps?.relPath ?? item.recordPath;
@@ -133,6 +141,11 @@ function RowActionsCell({ item, a }: { item: ExportedItem; a: StockRowPresentati
         title="Copy export folder path"
         onClick={(e) => { e.stopPropagation(); a.openLocation(item.id); }}>
         Location
+      </button>
+      <button type="button" className="svg-btn tiny danger" data-testid={`stock-remove-${item.id}`}
+        disabled={a.uploading || !item.source} title={removeTitle(item, a.uploading)}
+        onClick={(e) => { e.stopPropagation(); a.removeItems([item.id]); }}>
+        Remove
       </button>
     </div>
   );

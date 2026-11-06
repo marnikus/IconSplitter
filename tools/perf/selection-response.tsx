@@ -105,7 +105,7 @@ export function Fixture({ tab, count, settings = DEFAULT_UPLOAD_SETTINGS }: { ta
     requestImageRegen: noop, setImageVersion: noop, imgRunning: emptyIds, preferVersion: noopAsync } satisfies SvgRowActions;
   const u = { activeId, checked, thumb: 64, bg, rootToken: 1, rootRef, defaults: settings,
     overrides: emptySettings, applied: emptySettings, toggleCheck: toggle, selectRow: (id: string) => click(id), openSettings: noop, openLocation: noop,
-    requestMetadata: noop, acceptMetadata: noop, editMetadata: noop, copyMeta: noop, exportRow: noop,
+    requestMetadata: noop, acceptMetadata: noop, editMetadata: noop, copyMeta: noop, exportRow: noop, removeRows: noop,
     rowBadges: EMPTY_ROW_BADGES, toggleRowBadge: noop, removeRowBadgeSelected: noop } satisfies UploadRowActions;
   const first = ids[0] ?? "";
   const last = ids[ids.length - 1] ?? "";

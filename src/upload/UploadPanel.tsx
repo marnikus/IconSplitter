@@ -74,7 +74,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
     defaults: g.defaults, overrides: g.overrides, applied: g.applied,
     toggleCheck: g.toggleCheck, selectRow: g.selectRow, openSettings: g.openSettings,
     requestMetadata: g.requestMetadata, acceptMetadata: g.acceptMetadata,
-    editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow,
+    editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow, removeRows: g.removeRows,
     openLocation: g.openLocation, rowBadges: g.rowBadges, toggleRowBadge: g.toggleRowBadge,
     removeRowBadgeSelected: g.removeRowBadgeSelected,
   };
@@ -114,7 +114,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         onMetadata={() => g.generateMetadataSelected(g.checked)}
         onRegenerateMetadata={() => g.regenerateMetadataSelected(g.checked)}
         onAcceptMetadata={() => g.acceptMetadataSelected(g.checked)}
-        onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)}
+        onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)} onRemove={() => g.removeRows(g.checked)}
         onCancel={() => g.processes.download?.status === "running" ? g.cancelDownload() : g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport()}
         rowBadges={g.rowBadges} checkedIds={g.checked} onApplyRowBadge={g.applyRowBadgeSelected} />
     </div>

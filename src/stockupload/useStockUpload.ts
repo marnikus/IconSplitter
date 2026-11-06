@@ -22,6 +22,7 @@ import { useStockPanelOps, type StockPanelOps } from "./panelops";
 import { getStockPresetState, subscribeStockPresets } from "./presetstore";
 import { filterAndSortItems, stockHeaderState } from "./rowlist";
 import { bootStockRoot, scanStockUpload } from "./scan";
+import { useStockRemoveAction, useStockReviewFollower } from "./removerows";
 import {
   useStockRowBadgeActions, useStockSelectionActions,
   type StockBadgeApi, type StockSelectionApi,
@@ -38,6 +39,8 @@ export interface StockUploadApi extends StockSelectionApi, StockBadgeApi, StockF
   checked: string[];
   activeId: string | null;
   header: "none" | "some" | "all";
+  /** Remove from this list = decline the source item in Generate SVG (Undo brings it back). */
+  removeItems: (ids: string[]) => void;
 }
 
 function applyDiscoveredItems(found: StockDiscovery, dispatch: (a: StockModelAction) => void): void {
@@ -147,9 +150,32 @@ export function useStockUpload(): StockUploadApi {
     setTestStatus: (testStatus) => dispatch({ type: "patch", patch: { testStatus } }),
   });
   const ops = useStockPanelOps({ model, items, checked: selSlice.checked, presetState, r, dispatch, say, runScan });
+  const removeItems = useRemoveItems({ model, items, r, dispatch, runScan, say, hist });
   return {
     supported: fsSupported(), model, rootRef: r.root, presetState, rowBadges,
     items, visible, checked: selSlice.checked, activeId: selSlice.activeId, header,
-    ...selection, ...badges, ...ftp, ...ops,
+    ...selection, ...badges, ...ftp, ...ops, removeItems,
   };
+}
+
+interface RemoveParts {
+  model: StockUploadModel;
+  items: ExportedItem[];
+  r: StockRefs;
+  dispatch: (a: StockModelAction) => void;
+  runScan: (audible?: boolean) => void;
+  say: (m: string, err?: boolean) => void;
+  hist: ReturnType<typeof useHistoryActions>;
+}
+
+/** Remove + the list following every written item decision (a click, an undo, a redo). */
+function useRemoveItems(p: RemoveParts): (ids: string[]) => void {
+  const setItems = (next: ExportedItem[]) => {
+    if (p.model.discovery === null) return;
+    p.r.scan.scanKey.current = null; // the list no longer matches the last scan: the next one must apply
+    p.dispatch({ type: "patch", patch: { discovery: { ...p.model.discovery, items: next } } });
+  };
+  const rescanIfOpen = () => { if (getAppState().tab === "stockUpload" && !p.model.uploading) p.runScan(false); };
+  useStockReviewFollower({ items: p.items, setItems, rescanIfOpen });
+  return useStockRemoveAction({ items: p.items, uploading: p.model.uploading, say: p.say, hist: p.hist });
 }

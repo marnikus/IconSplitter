@@ -38,6 +38,8 @@ import { useRowBadgeActions } from "./rowbadgeactions";
 import { useSizeGuideActions } from "./sizeguideactions";
 import { useSelectedSettingsActions } from "./settingsreset";
 import { useOverrideActions, useOverrideResetActions } from "./overrideactions";
+import { useUploadRemoveAction, useUploadReviewFollower } from "./removerows";
+import { getAppState } from "../state/appstore";
 import type { UploadAction, UploadModel } from "./statemodel";
 import {
   ALL_UPLOAD_FILTER,
@@ -131,6 +133,8 @@ export interface UploadActions extends PromptActions {
   exportRow: (id: string) => void;
   cancelExport: () => void;
   openLocation: (id: string) => void;
+  /** Remove from this list = decline the item in Generate SVG (Undo brings it back). */
+  removeRows: (ids: string[]) => void;
 }
 
 /** One hook's share of the action surface, so the composition stays typed. */
@@ -158,12 +162,27 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
   const exp = useExportActions(ctx);
   const download = useDownloadActions(ctx);
   const prompt = usePromptActions(ctx);
+  const remove = useRemoveRows(ctx);
   return useMemo(() => ({
     ...source, ...view, ...defaults, ...overrides, ...resets, ...selected,
     ...shadow, ...badge, ...rowBadge, ...sizeGuide, ...gemini, ...modelCheck,
-    ...key, ...ui, ...meta, ...exp, ...download, ...prompt,
+    ...key, ...ui, ...meta, ...exp, ...download, ...prompt, ...remove,
   }), [source, view, defaults, overrides, resets, selected, shadow, badge, rowBadge,
-    sizeGuide, gemini, modelCheck, key, ui, meta, exp, download, prompt]);
+    sizeGuide, gemini, modelCheck, key, ui, meta, exp, download, prompt, remove]);
+}
+
+/** Remove + the list following every written item decision (a click, an undo, a redo). */
+function useRemoveRows(ctx: UploadCtx): Slice<"removeRows"> {
+  const rescanIfOpen = () => {
+    if (getAppState().tab === "upload" && ctx.rows.every((r) => r.running === null)) ctx.loadAll();
+  };
+  const setRowsFn = (fn: (rows: UploadRow[]) => UploadRow[]) => {
+    ctx.refs.scanKey.current = null; // the list no longer matches the last scan: the next one must apply
+    ctx.dispatch({ type: "rows-fn", fn });
+  };
+  useUploadReviewFollower({ rows: ctx.rows, setRowsFn, rescanIfOpen });
+  const removeRows = useUploadRemoveAction(ctx);
+  return useMemo(() => ({ removeRows }), [removeRows]);
 }
 
 function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {

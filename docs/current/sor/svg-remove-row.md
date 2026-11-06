@@ -1,4 +1,4 @@
-# Remove a row from Generate SVG (2026-11-04)
+# Remove a row — Generate SVG, SVG to upload, Upload (2026-11-04/06)
 
 [Generate SVG owner](svg-generation.md) · [Selection V2 decisions](selection.md)
 
@@ -31,3 +31,26 @@ changes the image's Selection decision. The activity bar shows the write.
 `svg_remove_row.test.ts`: folder fallback + announcement, decline + history
 entry, undo/redo through `applyEntry`, refusal of busy rows and failed writes,
 the list's reaction, and the wiring.
+
+<a id="upload"></a>
+
+## SVG to upload and Upload (2026-11-06)
+
+Same idea one step later: a row leaves a list by being **declined one step
+earlier**. SVG to upload lists items approved in Generate SVG, so its Remove
+declines the item **in Generate SVG**. Upload lists the exports of those
+items, so its Remove declines the export's **source item** in Generate SVG too:
+it leaves SVG to upload as well (the user chose "decline the whole chain").
+
+| Rule | Where |
+|---|---|
+| Row `Remove` + bulk `🗑 Remove selected` in both tabs | `UploadRow.tsx`, `UploadBulkBar.tsx`, `StockUploadRow.tsx`, `StockUploadBulkBar.tsx` |
+| Writes Generate SVG's item decision `declined` through its own path `applySvgReviewPatch`, ONE `"svgReview"` entry (before approved): Undo approves again, Redo declines | `svg/declineitems.ts`, `svg/reviewundo.ts` |
+| Each record names its pair file (`at` = the tab's handle key + path), so the write lands even if Generate SVG never listed the item; a listed one goes through the mounted panel (its busy lock refuses) | `reviewundo.ts` `placeOf`, `reviewact.ts` |
+| Every applied item decision is announced (`onSvgReviewsWritten`, also Generate SVG's own ✓/✕); both lists drop declined rows and their checks, and rescan for a re-approved row only while the tab is open (a visit rescans anyway) | `upload/removerows.ts`, `stockupload/removerows.ts` |
+| Upload's scan reads the walk's pair files (`sourcePairsOf`, cached) and hides an export whose source pair is found and not approved (`audit.declinedSources`); no pair file under the folder (an `export/` picked alone) = still listed, Remove refused | `lib/stockupload/discovery.ts`, `stockupload/sourcepairs.ts` |
+| Refused, writing nothing: SVG to upload rows exporting / getting metadata; Upload while uploading or for an export without a pair file; a failed write records nothing | both `removerows.ts` |
+
+Export files on disk are never deleted. Handles: `upload-remove-<id>`,
+`upload-remove-selected`, `stock-remove-<id>`, `stock-remove-selected`.
+Tests: `upload_remove_row.test.ts`.
