@@ -2144,6 +2144,8 @@
 .svg-edit-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 14px; }
 .svg-edit-board { position: relative; background: #fff; border-radius: 4px; box-shadow: 0 10px 30px rgb(0 0 0 / 50%); }
 .svg-edit-board.contrast { outline: 1px solid #8aa0c8; } /* a dark background keeps black artwork findable */
+/* the board paints the chosen PREVIEW BG: the preview's own transparency checkerboard must not cover it */
+.svg-edit-board .svg-preview { background: none; }
 .svg-preview.editing { cursor: crosshair; touch-action: none; user-select: none; }
 .svg-edit-arrow {
   width: 44px; height: 88px; border-radius: 10px; border: 1px solid var(--v2-line); background: var(--v2-surface);

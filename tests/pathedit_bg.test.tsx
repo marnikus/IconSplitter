@@ -49,6 +49,12 @@ describe("the artboard background", () => {
   });
 });
 
+describe("the background really shows", () => {
+  it("the preview's transparency checkerboard is switched off inside the artboard (2026-11-06 report)", () => {
+    expect(readFileSync("src/index.css", "utf8")).toMatch(/\.svg-edit-board \.svg-preview \{ background: none; \}/);
+  });
+});
+
 describe("one picker, reused", () => {
   it("Generate SVG, SVG to upload and the edit mode share PreviewBgPicker", () => {
     for (const f of ["src/svg/SvgBulkBar.tsx", "src/upload/UploadBulkBar.tsx", "src/svg/pathedit/SvgPathEditor.tsx"]) {

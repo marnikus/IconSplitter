@@ -4880,3 +4880,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: shared ui/PreviewBgPicker (replaces the duplicated pickers in Generate SVG and SVG to upload bulk bars, same handles); edit mode top bar picks the artboard background, white by default, remembered in Edit settings (bg, validated); dark backgrounds get the contrast outline.
 - Measured: 4 new tests (pathedit_bg, written first, seen failing); svg/upload/editor suites 185 files / 2116 tests pass; verify:fast 3940 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit artboard background fix
+
+- Scope: .svg-edit-board .svg-preview { background: none } — the preview's checkerboard covered the chosen PREVIEW BG (reported: white selected, transparent shown).
+- Measured: pathedit_bg 5 tests pass (new CSS guard).
