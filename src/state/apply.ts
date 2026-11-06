@@ -16,6 +16,7 @@ import { applySelectionOp, readSelectionPayload } from "../lib/selectiondelta";
 import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
+import { isReview } from "../lib/svgmodel";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
 import { getAppState, patchBatch, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
@@ -77,8 +78,7 @@ function toReviewPatch(value: unknown): SvgReviewPatch {
  */
 function isReviewRec(value: unknown): value is SvgReviewPatch["recs"][number] {
   if (!isRecord(value)) return false;
-  return typeof value.id === "string"
-    && (value.review === "pending" || value.review === "approved" || value.review === "declined" || value.review === "needs-review");
+  return typeof value.id === "string" && isReview(value.review);
 }
 
 async function applyDecisions(ids: readonly string[], value: unknown): Promise<boolean> {

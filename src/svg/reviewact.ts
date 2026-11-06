@@ -10,7 +10,7 @@ import { reserveSources, SOURCE_BUSY } from "./jobstate";
 
 import { useEffect, useRef } from "react";
 import { withReview, type PairMeta } from "../lib/pairmeta";
-import type { ReviewStatus } from "../lib/svgmodel";
+import { REVIEW_LABEL, type ReviewStatus } from "../lib/svgmodel";
 import { nextPendingBelow } from "../lib/reviewselect";
 import { getAppState, patchSvg } from "../state/appstore";
 import { saveMetaAt } from "../selection/pairstore";
@@ -112,10 +112,18 @@ function pushEntry(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus, recs: S
   s.say(`${n} SVG${n === 1 ? "" : "s"} marked ${decision}`);
   s.hist.push({
     type: "svgReview",
-    label: `${decision === "approved" ? "Approve" : decision === "declined" ? "Decline" : "Needs review"} ${n} SVG${n === 1 ? "" : "s"}`,
+    label: `${decisionVerb(decision)} ${n} SVG${n === 1 ? "" : "s"}`,
     origin: getAppState().tab, ids: recs.map((r) => r.id),
     before: { recs: before }, after: { recs },
   });
+}
+
+/** The history label's verb; the two regenerate marks use their own names. */
+function decisionVerb(decision: ReviewStatus): string {
+  if (decision === "approved") return "Approve";
+  if (decision === "declined") return "Decline";
+  if (decision === "needs-review") return "Needs review";
+  return `Mark ${REVIEW_LABEL[decision]} on`;
 }
 
 function rowOf(s: ReviewCtx, id: string): SvgRow | undefined {
@@ -151,7 +159,8 @@ export type { SvgSource };
 
 /** Use the displayed order captured before writing; never navigate for bulk/reset. */
 function advanceSvgReview(s: ReviewCtx, ids: string[], decision: ReviewStatus): void {
-  if (ids.length !== 1 || !s.visible || (decision !== "approved" && decision !== "declined")) return;
+  // a real decision moves on to the next pending row; pending / needs-review stay
+  if (ids.length !== 1 || !s.visible || decision === "pending" || decision === "needs-review") return;
   const next = nextPendingBelow(s.visible, ids[0], (r) => r.source.id, (r) => (s.refs.metas.get(r.source.id)?.review ?? r.review) === "pending" && shownVersion(r) !== null);
   if (next) patchSvg({ activeId: next });
 }

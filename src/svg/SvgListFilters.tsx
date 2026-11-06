@@ -6,6 +6,10 @@
 import { Select } from "../ui/fields";
 import { STATE_SORT_OPTIONS } from "../lib/statesort";
 import { sortDirOf, type SvgDir, type SvgListFilter, type SvgSort } from "../lib/svglist";
+import { REVIEW_LABEL, REVIEW_STATUSES } from "../lib/svgmodel";
+
+/** Every review status, in the model's order, under its one label. */
+const REVIEW_OPTIONS: [string, string][] = [["all", "All reviews"], ...REVIEW_STATUSES.map((s): [string, string] => [s, REVIEW_LABEL[s]])];
 import SearchField from "../ui/SearchField";
 
 /** Every order the list offers: files, time, cost, status and the two groups. */
@@ -49,7 +53,7 @@ export default function SvgListFilters({ filter, sort, sortDir, shown, total, on
         options={[["all", "All states"], ["not-generated", "Not generated"], ["generating", "Generating"], ["generated", "Generated"], ["failed", "Failed"]]}
         onChange={(v) => onFilter({ generation: v as SvgListFilter["generation"] })} />
       <Select label="Review" testid="svg-filter-review" value={filter.review}
-        options={[["all", "All reviews"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"], ["needs-review", "Regenerated — new review"]]}
+        options={REVIEW_OPTIONS}
         onChange={(v) => onFilter({ review: v as SvgListFilter["review"] })} />
       <Select label="Sort by" testid="svg-sort" value={sort}
         options={SORT_OPTIONS}

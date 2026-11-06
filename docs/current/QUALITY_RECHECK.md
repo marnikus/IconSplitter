@@ -4830,3 +4830,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: row Remove + bulk Remove selected in SVG to upload and Upload; both decline the item in Generate SVG through `applySvgReviewPatch` (records carry `at` = handle key + pair path), one `svgReview` entry (undo/redo), announced via `onSvgReviewsWritten` (also Generate SVG's own ✓/✕); both lists follow; Upload discovery hides exports whose source pair is found and not approved (`sourcePairsOf`, injected; `audit.declinedSources`).
 - Measured: 13 new tests (`upload_remove_row`); related suites 29 files / 325 tests pass; tsc clean; eslint on changed files 0 problems; quality:changed PASSED (split `collectBucket` CC 11→ok); verify:fast tests 3831 pass / 17 fail = the pre-existing environmental set + `docs_navigation` budget (fails on HEAD too) + flaky `process_completion_sound` (passes alone); build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — Generate SVG regenerate marks (overlaps / geometry)
+
+- Scope: item statuses `regen-overlaps` / `regen-geometry` in one catalog (`REVIEW_STATUSES`, `REVIEW_LABEL`, `isReview`); row ⧉/△ + bulk buttons, filter from the catalog, label search, tally, history validation via `isReview`, auto-advance like approve/decline, CSS orange/cyan.
+- Measured: 5 new tests (`svg_regen_statuses`), 1 pinned tally updated (`svg_extract`); svg/state/history suites 81 files / 816 tests pass; tsc clean; eslint 0 problems on changed files; quality:changed PASSED; verify:fast tests 3837 pass / 16 fail = the pre-existing set; build PASS. Aggregate gate NOT passed (environment).

@@ -1391,6 +1391,12 @@
 
 .svg-row.declined::after { background: var(--v2-red); }
 .svg-row.needs-review::after { background: var(--v2-yellow); }
+/* Regenerate marks (2026-11-06): orange = shapes overlap, cyan = wrong geometry. */
+.svg-row.regen-overlaps::after, .svg-row.regen-geometry::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 2px; }
+.svg-row.regen-overlaps::after { background: #ff9f43; }
+.svg-row.regen-geometry::after { background: #39c5e6; }
+.svg-badge.regen-overlaps, .svg-btn.regen-overlaps { color: #ff9f43; background: #3d2814; border-color: #6e4721; }
+.svg-badge.regen-geometry, .svg-btn.regen-geometry { color: #39c5e6; background: #12313a; border-color: #215967; }
 .svg-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
 .svg-web-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 

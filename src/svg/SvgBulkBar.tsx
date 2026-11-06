@@ -50,7 +50,7 @@ export interface SvgBulkBarProps {
   /** A run can also be preparing/skipping groups with no request on the wire yet. */
   imageActive?: boolean;
   onImageStop: () => void;
-  onDecide: (decision: "approved" | "declined" | "needs-review") => void;
+  onDecide: (decision: "approved" | "declined" | "needs-review" | "regen-overlaps" | "regen-geometry") => void;
   onCancel: () => void;
   /** Take SVGs already sitting in the selected folders into their pairs (2026-11-01). */
   onRegisterExisting: () => void;
@@ -124,6 +124,12 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("approved")}>✓ Approve selected</button>
       <button type="button" className="svg-btn danger" data-testid="svg-decline-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("declined")}>✕ Decline selected</button>
+      <button type="button" className="svg-btn regen-overlaps" data-testid="svg-regen-overlaps-selected"
+        disabled={p.decidableCount === 0} onClick={() => p.onDecide("regen-overlaps")}
+        title="Mark the selected SVGs: regenerate — shapes overlap">⧉ Regen overlaps</button>
+      <button type="button" className="svg-btn regen-geometry" data-testid="svg-regen-geometry-selected"
+        disabled={p.decidableCount === 0} onClick={() => p.onDecide("regen-geometry")}
+        title="Mark the selected SVGs: regenerate — wrong geometry">△ Regen geometry</button>
       <button type="button" className="svg-btn danger" data-testid="svg-remove-selected" disabled={p.checkedCount === 0}
         title="Remove the selected images from this list: they become declined in Selection V2 (Undo brings them back)"
         onClick={p.onRemove}>🗑 Remove selected</button>

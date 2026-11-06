@@ -7,7 +7,7 @@ After a **one-row Approve or Decline**, the active row advances to the **closest
 - Capture the visible, filtered, sorted order **before** the decision. Approval can remove the current row from a pending-only filter or move it under a status sort; neither may change the reference position used by auto-next. Generate SVG uses its displayed **pinned** order, not a fresh sort or source scan.
 - Starting immediately below the reviewed row, skip rows whose review status is not `pending`. Never consult raw filesystem/scan order, select a hidden row or wrap to a pending row above.
 - If no pending row exists below, leave the active ID unchanged. The decided row may be hidden by a status filter; this does not justify jumping upward. An absent/hidden reference, empty list or completed list likewise does not advance.
-- Generate SVG only advances to pending items with a generated SVG, matching its existing review eligibility. `needs-review` is its own status, not `pending`. A candidate reviewed while the asynchronous save was pending is skipped using live metadata. A save finishing after the user changes active row must not steal the new active row.
+- Generate SVG only advances to pending items with a generated SVG, matching its existing review eligibility. `needs-review` is its own status, not `pending`. The two [regenerate marks](svg-regen-statuses.md) advance like approve/decline. A candidate reviewed while the asynchronous save was pending is skipped using live metadata. A save finishing after the user changes active row must not steal the new active row.
 
 ## Controls and unaffected actions
 

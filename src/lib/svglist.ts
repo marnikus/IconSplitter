@@ -5,9 +5,15 @@
 
 import { isSelectionSort, isStateSort, sortByFlag, type StateSort } from "./statesort";
 import { matchesSearch } from "./textsearch";
+import { REVIEW_LABEL, type ReviewStatus } from "./svgmodel";
+
+/** The status as people read it ("Regenerate SVG — overlaps"); "all" has none. */
+function reviewLabel(review: ReviewFilter): string {
+  return review === "all" ? "" : REVIEW_LABEL[review];
+}
 
 export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed" | "unknown";
-export type ReviewFilter = "all" | "pending" | "approved" | "declined" | "needs-review";
+export type ReviewFilter = "all" | ReviewStatus;
 export type SvgSort =
   | StateSort
   | "date"
@@ -67,7 +73,7 @@ function inReview(row: SvgListRow, want: ReviewFilter): boolean {
 
 /** File name, folder, shown version and both status words (lib/textsearch). */
 function inSearch(row: SvgListRow, query: string): boolean {
-  return matchesSearch(query, [row.name, row.relPath, `v${row.version}`, row.generation, row.review]);
+  return matchesSearch(query, [row.name, row.relPath, `v${row.version}`, row.generation, row.review, reviewLabel(row.review)]);
 }
 
 /**
@@ -184,7 +190,7 @@ function unknownTime(a: SvgListRow, b: SvgListRow, sort: SvgSort): number {
   return Number(x === null) - Number(y === null);
 }
 
-const REVIEW_RANK: Record<ReviewFilter, number> = { all: 0, pending: 1, approved: 2, declined: 3, "needs-review": 4 };
+const REVIEW_RANK: Record<ReviewFilter, number> = { all: 0, pending: 1, approved: 2, declined: 3, "needs-review": 4, "regen-overlaps": 5, "regen-geometry": 6 };
 const GEN_RANK: Record<GenFilter, number> = { all: 0, "not-generated": 1, generating: 2, generated: 3, failed: 4, unknown: 5 };
 
 function rank(value: string): number {

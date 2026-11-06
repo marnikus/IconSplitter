@@ -14,7 +14,7 @@ import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
 import type { ReviewStatus } from "../lib/svgfile";
-import { NO_COST } from "../lib/svgmodel";
+import { isReview, NO_COST, REVIEW_LABEL } from "../lib/svgmodel";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
@@ -114,7 +114,7 @@ function FileActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
   );
 }
 
-/** The row's own generate/regenerate and its approve/decline/needs-review. */
+/** The row's own generate/regenerate and its approve/decline/needs-review/regenerate marks. */
 function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
   const id = row.source.id;
   const shown = shownVersion(row);
@@ -129,9 +129,23 @@ function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
         onClick={click(() => a.decide([id], "approved"))}>✓</button>
       <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`} disabled={shown === null}
         onClick={click(() => a.decide([id], "declined"))}>✕</button>
+      <RegenStatusButtons id={id} disabled={shown === null} decide={a.decide} />
       <span className="svg-decision-sep" aria-hidden="true" />
       <ImageRegenButton id={id} running={a.imgRunning.includes(id)} onClick={click(() => a.requestImageRegen([id]))} />
     </div>
+  );
+}
+
+/** The two "must be regenerated" marks (2026-11-06): overlapping shapes, wrong geometry. */
+function RegenStatusButtons({ id, disabled, decide }: { id: string; disabled: boolean; decide: SvgRowPresentation["decide"] }) {
+  const mark = (status: "regen-overlaps" | "regen-geometry") => (e: React.MouseEvent) => { e.stopPropagation(); decide([id], status); };
+  return (
+    <>
+      <button type="button" className="svg-btn tiny regen-overlaps" data-testid={`svg-regen-overlaps-${id}`} disabled={disabled}
+        title={`Mark: ${REVIEW_LABEL["regen-overlaps"]} (shapes overlap)`} onClick={mark("regen-overlaps")}>⧉</button>
+      <button type="button" className="svg-btn tiny regen-geometry" data-testid={`svg-regen-geometry-${id}`} disabled={disabled}
+        title={`Mark: ${REVIEW_LABEL["regen-geometry"]} (wrong shapes or proportions)`} onClick={mark("regen-geometry")}>△</button>
+    </>
   );
 }
 
@@ -240,6 +254,6 @@ function ImageSpend({ row }: { row: SvgRow }) {
 }
 
 function label(value: string): string {
-  if (value === "needs-review") return "Regenerated — new review";
+  if (isReview(value) && value !== "pending") return REVIEW_LABEL[value];
   return value.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 }

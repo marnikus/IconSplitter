@@ -9,7 +9,23 @@ export const SIDECAR_VERSION = 1;
 export const SVG_EXT = ".svg";
 
 export type GenStatus = "generated" | "failed" | "interrupted";
-export type ReviewStatus = "pending" | "approved" | "declined" | "needs-review";
+/**
+ * The item's review in Generate SVG. `regen-overlaps` / `regen-geometry`
+ * (2026-11-06) mark an SVG that must be regenerated because shapes overlap or
+ * the geometry is wrong — decisions like the others, never "approved".
+ */
+export const REVIEW_STATUSES = ["pending", "approved", "declined", "needs-review", "regen-overlaps", "regen-geometry"] as const;
+export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
+
+/** What the list, the filter and the badges call each status. */
+export const REVIEW_LABEL: Record<ReviewStatus, string> = {
+  pending: "Pending",
+  approved: "Approved",
+  declined: "Declined",
+  "needs-review": "Regenerated — new review",
+  "regen-overlaps": "Regenerate SVG — overlaps",
+  "regen-geometry": "Regenerate SVG — geometry",
+};
 
 export interface TokenUsage {
   input: number | null;
@@ -77,7 +93,7 @@ export function isGen(value: unknown): value is GenStatus {
 }
 
 export function isReview(value: unknown): value is ReviewStatus {
-  return value === "pending" || value === "approved" || value === "declined" || value === "needs-review";
+  return (REVIEW_STATUSES as readonly unknown[]).includes(value);
 }
 
 /**

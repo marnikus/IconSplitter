@@ -3,7 +3,7 @@
 Object shape: [shared conventions](shared.md#i-selector-object-structure--for-every-element). Part of [Generate SVG selectors](svg-generation.md).
 
 Filters: `svg-filter-generation` (all / not generated / generating / generated
-/ failed), `svg-filter-review` (all / pending / approved / declined / needs-review),
+/ failed), `svg-filter-review` (all / pending / approved / declined / needs-review / [regen marks](../sor/svg-regen-statuses.md)),
 `svg-sort` (date / svg-created / ai-created / name / generation / review / cost /
 selected / unselected / unapproved / approved), `svg-sort-dir` (one direction
 arrow, `data-dir`, reverses any order), `svg-search` (name too), `svg-shown`
