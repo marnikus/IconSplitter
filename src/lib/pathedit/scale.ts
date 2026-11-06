@@ -113,3 +113,23 @@ export function rotateAnchors(m: PathModel, refs: readonly AnchorRef[], c: Pt, a
   }
   return out;
 }
+
+/** How big the corner rotate zones are (all in path units). */
+export interface ZoneSize { pad: number; handle: number; reach: number }
+export type CornerId = "nw" | "ne" | "se" | "sw";
+
+/**
+ * Just outside a corner of the (padded) box, past its scale handle and within
+ * `reach` of it, a drag rotates (2026-11-06) — the design-tool corner gesture.
+ */
+export function rotateZoneAt(box: Box, p: Pt, z: ZoneSize): CornerId | null {
+  const x0 = box.x0 - z.pad, y0 = box.y0 - z.pad, x1 = box.x1 + z.pad, y1 = box.y1 + z.pad;
+  const outside = p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1;
+  if (!outside) return null;
+  const corners: [CornerId, Pt][] = [["nw", { x: x0, y: y0 }], ["ne", { x: x1, y: y0 }], ["se", { x: x1, y: y1 }], ["sw", { x: x0, y: y1 }]];
+  for (const [id, c] of corners) {
+    const d = Math.hypot(p.x - c.x, p.y - c.y);
+    if (d > z.handle && d <= z.reach) return id;
+  }
+  return null;
+}

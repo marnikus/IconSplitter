@@ -7,7 +7,19 @@
 // Ctrl+Shift+Z / Ctrl+Y); no other app shortcut runs. Text fields keep theirs.
 
 import { useEffect, useRef, type RefObject } from "react";
-import { doubleClick, keyDown, pointerDown, pointerMove, pointerUp, type EditorState, type PointerInput } from "../../lib/pathedit/gesture";
+import { cursorAt, doubleClick, keyDown, pointerDown, pointerMove, pointerUp, type EditorState, type PointerInput } from "../../lib/pathedit/gesture";
+
+/** A curved-arrow rotate cursor (inline SVG), with a plain fallback. */
+const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 2.05 4.95" fill="none" stroke="#fff" stroke-width="4"/><path d="M5 12a7 7 0 1 1 2.05 4.95" fill="none" stroke="#1a8cff" stroke-width="2"/><path d="M2 9l3 4 3-4z" fill="#1a8cff"/></svg>')}") 12 12, alias`;
+
+/** Shows the box's rotate / resize cursor while hovering (nothing held). */
+function hoverCursor(node: HTMLElement, c: { current: EditorInputCtx }, e: PointerEvent): void {
+  const { state, pathEl } = c.current;
+  const path = pathEl();
+  const input = path === null || state === null || state.drag !== null ? null : inputOf(path, e, c.current.pickPx);
+  const kind = input === null || state === null ? null : cursorAt(state, input);
+  node.style.cursor = kind === null ? "" : kind === "rotate" ? ROTATE_CURSOR : kind;
+}
 import { isTextField } from "../../selection/hotkeys";
 
 interface Matrix { a: number; b: number; c: number; d: number; e: number; f: number }
@@ -77,7 +89,7 @@ function pointerHandlers(c: { current: EditorInputCtx }, node: HTMLElement): Rec
       node.setPointerCapture?.(e.pointerId);
       applyPointer(c, e, pointerDown);
     },
-    pointermove: (e) => { if (c.current.state?.drag) applyPointer(c, e as PointerEvent, pointerMove); },
+    pointermove: (e) => { if (c.current.state?.drag) applyPointer(c, e as PointerEvent, pointerMove); else hoverCursor(node, c, e as PointerEvent); },
     pointerup: up,
     pointercancel: up,
     dblclick: (e) => { e.stopPropagation(); applyPointer(c, e as MouseEvent, doubleClick); },

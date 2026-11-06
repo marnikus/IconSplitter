@@ -4970,3 +4970,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: scale.ts rotateHandleOf / rotateAngle (Shift 15°) / rotateAnchors; gesture rotate drag (one undo step); overlay stem + circle; legend; docs on the sibling page.
 - Measured: 6 new tests (pathedit_rotate, seen failing first); editor suites 118 pass; verify:fast 4038 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit mode: rotate from the box corners, box cursors
+
+- Scope: scale.rotateZoneAt; new boxtarget.ts (box part under the pointer + cursor) and hitpx.ts (shared sizes) so gesture.ts stays < 300 lines; useEditorInput hover cursor (inline SVG rotate cursor, CSS resize cursors); legend.
+- Measured: 5 new tests (pathedit_rotate_zones, seen failing first); editor suites 123 pass; verify:fast 4043 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Cursor look not checked in a real browser.

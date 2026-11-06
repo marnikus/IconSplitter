@@ -32,5 +32,8 @@ dots (`anchoroverlay.ts`); **click tolerance to select a shape** 2–40 px
 With 2+ points selected the scale box has a rotate handle: a circle on a 24 px
 stem above the top edge. Dragging it turns the selected points and their curve
 handles around the box's centre (`scale.rotateAnchors`, `rotateAngle`); Shift
-snaps to 15° steps; one drag = one undo step. Handles: `[data-rotate-handle]`,
-`[data-rotate-stem]` in the overlay. Tests: `pathedit_rotate.test.ts`.
+snaps to 15° steps; one drag = one undo step. **Corner zones**: just outside a
+corner, past its scale handle (≤ 20 px), the cursor turns into a rotate cursor
+and a drag rotates the same way; scale handles show resize cursors
+(`boxtarget.boxTargetAt` / `boxCursorAt`, shared by press and hover). Handles: `[data-rotate-handle]`,
+`[data-rotate-stem]` in the overlay. Tests: `pathedit_rotate.test.ts`, `pathedit_rotate_zones.test.tsx`.

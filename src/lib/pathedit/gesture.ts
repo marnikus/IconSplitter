@@ -16,7 +16,9 @@ import {
   moveAnchors, moveHandle, pullHandles, toggleSmooth,
 } from "./ops";
 import { commit, editableSub, preview, type EditSession } from "./session";
-import { boxHandles, handleAt, rotateAnchors, rotateAngle, rotateHandleOf, scaleAnchors, scaleFor, selectionBox, type Box, type BoxHandleId } from "./scale";
+import { rotateAnchors, rotateAngle, scaleAnchors, scaleFor, type Box, type BoxHandleId } from "./scale";
+import { boxCursorAt, boxTargetAt } from "./boxtarget";
+import { HIT_PX } from "./hitpx";
 
 export interface PointerInput {
   p: Pt;
@@ -54,26 +56,22 @@ export interface EditorState {
 }
 
 /** Hit radii in screen pixels: generous anchors and handles, a 6 px band around a segment. */
-export const HIT_PX = { anchor: 9, handle: 9, segment: 6, snap: 8, pull: 3, pick: 14, scalePad: 8, scaleHandle: 6, rotateStem: 24 };
+export { HIT_PX } from "./hitpx";
+export { scaleBoxOf } from "./boxtarget";
 
-/** The selection's scale box, when two or more anchors are selected in Select (2026-11-06). */
-export function scaleBoxOf(s: EditSession): Box | null {
-  return s.tool === "select" && s.selection.length >= 2 ? selectionBox(s.model, s.selection) : null;
+/** The cursor a hover should show over the selection box (rotate / resize), or null. */
+export function cursorAt(st: EditorState, input: PointerInput): string | null {
+  return st.drag === null ? boxCursorAt(st.session, input.p, input.unitsPerPx) : null;
 }
 
-/** A press on one of the box's eight handles starts a scale drag. */
+/** A press on the box: the knob or a corner zone starts a rotation, a handle a scale drag. */
 function scaleDown(st: EditorState, input: PointerInput): EditorState | null {
-  const box = scaleBoxOf(st.session);
-  if (box === null) return null;
-  const u = input.unitsPerPx;
-  const knob = rotateHandleOf(box, HIT_PX.scalePad * u, HIT_PX.rotateStem * u);
-  if (Math.hypot(knob.x - input.p.x, knob.y - input.p.y) <= HIT_PX.scaleHandle * u) {
-    const center = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 };
-    return { ...st, drag: { kind: "rotate", before: st.session.model, refs: st.session.selection, center, start: input.p } };
-  }
-  const handle = handleAt(boxHandles(box, HIT_PX.scalePad * u), input.p, HIT_PX.scaleHandle * u);
-  if (handle === null) return null;
-  return { ...st, drag: { kind: "scale", before: st.session.model, refs: st.session.selection, handle, box, start: input.p } };
+  const t = boxTargetAt(st.session, input.p, input.unitsPerPx);
+  if (t === null) return null;
+  const { box } = t;
+  const base = { before: st.session.model, refs: st.session.selection, start: input.p };
+  if (t.kind === "rotate") return { ...st, drag: { kind: "rotate", ...base, center: { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 } } };
+  return { ...st, drag: { kind: "scale", ...base, handle: t.handle, box } };
 }
 
 /** Corner: free; edge: one direction; Shift keeps the proportions. */
