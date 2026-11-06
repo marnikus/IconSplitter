@@ -9,7 +9,7 @@
 // While a run is in flight the bar shows the live batch progress and a Cancel that
 // keeps everything already saved.
 
-import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
+import type { PreviewBackground } from "../lib/svgbackground";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import { costText, fmtTokens } from "../lib/svgusage";
 import Elapsed from "./Elapsed";
@@ -19,6 +19,7 @@ import WebModeToggle from "./WebModeToggle";
 import InvertButton from "../ui/InvertButton";
 import EditSettingsButton from "./EditSettingsButton";
 import type { RunProgress } from "./types";
+import PreviewBgPicker from "../ui/PreviewBgPicker";
 
 export interface SvgBulkBarProps {
   header: "none" | "some" | "all";
@@ -91,7 +92,7 @@ function BulkLeft({ p }: { p: SvgBulkBarProps }) {
 function BulkRight({ p }: { p: SvgBulkBarProps }) {
   return (
     <div className="svg-bulk-right">
-      <PreviewBg bg={p.bg} onBg={p.onBg} />
+      <PreviewBgPicker prefix="svg" bg={p.bg} onBg={p.onBg} />
       <span className="svg-divider" aria-hidden="true" />
       <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} sheet={SVG_STROKE_SHEET} idPrefix="svg" />
       <EditSettingsButton />
@@ -212,21 +213,3 @@ function Estimate({ p }: { p: SvgBulkBarProps }) {
   );
 }
 
-/** Presets + one custom colour = ONE decision: the preview frame background. */
-function PreviewBg({ bg, onBg }: { bg: PreviewBackground; onBg: (bg: PreviewBackground) => void }) {
-  return (
-    <div className="svg-bg" data-testid="svg-bg">
-      <label htmlFor="svg-bg-custom">PREVIEW BG</label>
-      {BG_PRESETS.map((preset) => (
-        <button key={preset.id} type="button" className={`svg-swatch${bg.preset === preset.id ? " on" : ""}`}
-          data-testid={`svg-bg-${preset.id}`} title={`Preview background: ${preset.label}`}
-          aria-label={`Preview background ${preset.label}`} aria-pressed={bg.preset === preset.id}
-          style={{ background: preset.color }} onClick={() => onBg(selectPreset(bg, preset.id))} />
-      ))}
-      <input id="svg-bg-custom" data-testid="svg-bg-custom" type="color" value={bg.custom}
-        aria-label="Custom preview background" onChange={(e) => onBg(selectCustom(bg, e.target.value))} />
-      <output className="svg-bg-value" data-testid="svg-bg-value" htmlFor="svg-bg-custom"
-        title="Preview only — saved SVG files and their code are never changed">{backgroundLabel(bg)}</output>
-    </div>
-  );
-}

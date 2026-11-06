@@ -11,6 +11,9 @@ import { setTool, type Tool } from "../../lib/pathedit/session";
 import { annotatePaths } from "../../lib/pathedit/svgdoc";
 import { buildSvgPreview } from "../../lib/svgpreview";
 import { EDIT_HOTKEYS } from "./hotkeys";
+import PreviewBgPicker from "../../ui/PreviewBgPicker";
+import { previewFrame } from "../../lib/svgbackground";
+import { setEditSettings, useEditSettings } from "../editsettings";
 import { useEditMode, type EditMode, type EditNav } from "./useEditMode";
 
 export type { EditNav } from "./useEditMode";
@@ -66,8 +69,9 @@ export default function SvgPathEditor(p: SvgPathEditorProps) {
 /** The artboard: the icon in its shadow root, and the hint while no shape is picked. */
 function Board({ host, box, testid, label, mode }: { host: React.RefObject<HTMLDivElement | null>; box: { width: number; height: number }; testid: string; label: string; mode: EditMode }) {
   const picking = mode.st !== null && mode.st.session.objects.length === 0;
+  const frame = previewFrame(useEditSettings().bg);
   return (
-    <div className="svg-edit-board" style={{ width: box.width, height: box.height }}>
+    <div className={`svg-edit-board${frame.outline ? " contrast" : ""}`} style={{ width: box.width, height: box.height, background: frame.color }}>
       <div ref={host} className="svg-preview editing" style={{ width: box.width, height: box.height }}
         role="img" aria-label={`${label} — editing`} data-testid={testid} data-stroke={mode.view} />
       {picking && <p className="svg-edit-hint" data-testid={`${testid}-pick`}>Click a shape to edit · Shift+click adds · drag a box over anchors</p>}
@@ -88,6 +92,7 @@ function TopBar({ testid, mode, position, onCancel }: { testid: string; mode: Ed
         data-testid={`${testid}-stroke`} title="Thin lines / the preset stroke (I)" onClick={mode.toggleView}>
         {mode.view === "thin" ? "◫ Thin lines" : "◼ Preset stroke"}
       </button>
+      <BoardBg />
       <span className="svg-edit-position" data-testid={`${testid}-position`}>{position}</span>
       <span className="svg-edit-spacer" />
       <button type="button" className="svg-btn tiny primary" data-testid={`${testid}-finish`} disabled={!mode.dirty}
@@ -95,6 +100,12 @@ function TopBar({ testid, mode, position, onCancel }: { testid: string; mode: Ed
       <button type="button" className="svg-edit-cancel" data-testid={`${testid}-cancel`} onClick={onCancel}>Cancel</button>
     </div>
   );
+}
+
+/** The artboard's background: the PREVIEW BG presets or a custom colour, remembered (Edit settings). */
+function BoardBg() {
+  const { bg } = useEditSettings();
+  return <PreviewBgPicker prefix="svg-edit" bg={bg} onBg={(next) => setEditSettings({ bg: next })} />;
 }
 
 function ToolButtons({ testid, st, onTool }: { testid: string; st: EditorState | null; onTool: (t: Tool) => void }) {

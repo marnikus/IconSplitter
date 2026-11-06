@@ -5,8 +5,9 @@
 **✎ Edit** beside a row's SVG version opens the tab's **full-screen edit
 mode** on that row (`pathedit/SvgEditModal.tsx`, one modal for the tab; the
 open row lives in `editmodalstore.ts`). Every control is OUTSIDE the artboard:
-the top bar (Select / Draw, **thin lines ↔ preset stroke** switch, "row n / N ·
-name", Finish edit, Cancel), **‹ ›** arrows on the artboard's sides, and the
+the top bar (Select / Draw, **thin lines ↔ preset stroke** switch, **PREVIEW BG**
+(the shared `ui/PreviewBgPicker`: presets or a custom colour, white by default,
+remembered in Edit settings `bg`), "row n / N · name", Finish edit, Cancel), **‹ ›** arrows on the artboard's sides, and the
 **hotkey legend** at the bottom (`hotkeys.ts` `EDIT_HOTKEYS`: icon + keys +
 short text). The artboard fits the window at the icon's ratio. Finish is the
 only moment the SVG file is rewritten; **Cancel closes** the mode and drops the
@@ -100,10 +101,10 @@ dots (`anchoroverlay.ts`); **click tolerance to select a shape** 2–40 px
 thin / preset), `-editor`, `-toolbar`, `-tool-select`, `-tool-draw`, `-stroke`,
 `-position`, `-prev`, `-next`, `-legend`, `-finish`, `-cancel`, `-pick`,
 `-leave`, `-leave-save`, `-leave-discard`, `-leave-stay`; `svg-edit-settings`,
-`svg-edit-settings-dialog`, `svg-edit-anchor-px`, `svg-edit-pick-px`.
+`svg-edit-settings-dialog`, `svg-edit-anchor-px`, `svg-edit-pick-px`; `svg-edit-bg-<preset>`, `svg-edit-bg-custom`.
 
 ## Tests
 
 `pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
-(objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_modal.test.tsx` (full-screen mode: layout, keys, rows, Save/Discard, 50-step history), `pathedit_ui.test.tsx`
+(objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_bg.test.tsx` (artboard background), `pathedit_modal.test.tsx` (full-screen mode: layout, keys, rows, Save/Discard, 50-step history), `pathedit_ui.test.tsx`
 (session in the page, Finish + undo/redo, Edit settings, wiring).

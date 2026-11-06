@@ -4875,3 +4875,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: one modal per tab (SvgEditModal + editmodalstore) opened by a row's Edit; controls outside the artboard (top bar, side arrows, hotkey legend); edit mode owns all keys; session history capped at 50, Ctrl+Shift+Z redo; ←/→ row navigation with Save/Discard/Stay, Ctrl+Shift+S / Ctrl+Shift+X; I thin/preset stroke, V/P tools; useEditMode hook; rows no longer edit in place.
 - Measured: 11 new tests (pathedit_modal, written first, seen failing); editor suites 61 pass; verify:fast 3937 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Edit mode artboard background
+
+- Scope: shared ui/PreviewBgPicker (replaces the duplicated pickers in Generate SVG and SVG to upload bulk bars, same handles); edit mode top bar picks the artboard background, white by default, remembered in Edit settings (bg, validated); dark backgrounds get the contrast outline.
+- Measured: 4 new tests (pathedit_bg, written first, seen failing); svg/upload/editor suites 185 files / 2116 tests pass; verify:fast 3940 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); tsc, lint, quality:changed, build PASS.

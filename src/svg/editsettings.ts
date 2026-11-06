@@ -5,6 +5,7 @@
 
 import { useSyncExternalStore } from "react";
 import { HIT_PX } from "../lib/pathedit/gesture";
+import { DEFAULT_PREVIEW_BACKGROUND, parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 
 export const EDIT_SETTINGS_KEY = "iconSplitter.svg.editSettings.v1";
 export const ANCHOR_PX_MIN = 4;
@@ -19,6 +20,8 @@ export interface EditSettings {
   anchorPx: number;
   /** How far (screen px) from a shape's line a single click still selects that shape. */
   pickPx: number;
+  /** The edit mode's artboard background (the PREVIEW BG presets or a custom colour); white by default. */
+  bg: PreviewBackground;
 }
 
 function clamp(n: unknown, min: number, max: number, fallback: number): number {
@@ -29,12 +32,18 @@ function clamp(n: unknown, min: number, max: number, fallback: number): number {
 export const clampAnchorPx = (n: unknown): number => clamp(n, ANCHOR_PX_MIN, ANCHOR_PX_MAX, ANCHOR_PX_DEFAULT);
 export const clampPickPx = (n: unknown): number => clamp(n, PICK_PX_MIN, PICK_PX_MAX, PICK_PX_DEFAULT);
 
-const DEFAULTS: EditSettings = { anchorPx: ANCHOR_PX_DEFAULT, pickPx: PICK_PX_DEFAULT };
+const DEFAULTS: EditSettings = { anchorPx: ANCHOR_PX_DEFAULT, pickPx: PICK_PX_DEFAULT, bg: DEFAULT_PREVIEW_BACKGROUND };
+
+/** The artboard background: a stored one validated, else white. */
+function readBg(raw: unknown): PreviewBackground {
+  const bg = parsePreviewBackground(raw);
+  return raw === undefined ? DEFAULT_PREVIEW_BACKGROUND : bg;
+}
 
 function read(): EditSettings {
   try {
-    const raw = JSON.parse(localStorage.getItem(EDIT_SETTINGS_KEY) ?? "{}") as { anchorPx?: unknown; pickPx?: unknown };
-    return { anchorPx: clampAnchorPx(raw.anchorPx), pickPx: clampPickPx(raw.pickPx) };
+    const raw = JSON.parse(localStorage.getItem(EDIT_SETTINGS_KEY) ?? "{}") as { anchorPx?: unknown; pickPx?: unknown; bg?: unknown };
+    return { anchorPx: clampAnchorPx(raw.anchorPx), pickPx: clampPickPx(raw.pickPx), bg: readBg(raw.bg) };
   } catch {
     return DEFAULTS;
   }
@@ -50,7 +59,11 @@ export function getEditSettings(): EditSettings {
 
 export function setEditSettings(patch: Partial<EditSettings>): void {
   const now = getEditSettings();
-  current = { anchorPx: clampAnchorPx(patch.anchorPx ?? now.anchorPx), pickPx: clampPickPx(patch.pickPx ?? now.pickPx) };
+  current = {
+    anchorPx: clampAnchorPx(patch.anchorPx ?? now.anchorPx),
+    pickPx: clampPickPx(patch.pickPx ?? now.pickPx),
+    bg: parsePreviewBackground(patch.bg ?? now.bg),
+  };
   try { localStorage.setItem(EDIT_SETTINGS_KEY, JSON.stringify(current)); } catch { /* kept for this session */ }
   for (const fn of [...listeners]) fn();
 }

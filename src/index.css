@@ -2143,6 +2143,7 @@
 .svg-edit-cancel { background: none; border: 0; color: var(--v2-text); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 2px 4px; }
 .svg-edit-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 14px; }
 .svg-edit-board { position: relative; background: #fff; border-radius: 4px; box-shadow: 0 10px 30px rgb(0 0 0 / 50%); }
+.svg-edit-board.contrast { outline: 1px solid #8aa0c8; } /* a dark background keeps black artwork findable */
 .svg-preview.editing { cursor: crosshair; touch-action: none; user-select: none; }
 .svg-edit-arrow {
   width: 44px; height: 88px; border-radius: 10px; border: 1px solid var(--v2-line); background: var(--v2-surface);

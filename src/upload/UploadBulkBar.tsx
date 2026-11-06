@@ -11,12 +11,13 @@
 // and Cancel while a run is in flight. Every bulk action applies to the
 // SELECTION only.
 
-import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
+import type { PreviewBackground } from "../lib/svgbackground";
 import PreviewStroke from "../svg/PreviewStroke";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import UploadRowBadgeApply from "./UploadRowBadgeApply";
 import InvertButton from "../ui/InvertButton";
+import PreviewBgPicker from "../ui/PreviewBgPicker";
 
 export interface UploadBulkBarProps {
   header: "none" | "some" | "all";
@@ -95,7 +96,7 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
   const running = p.runningMeta + p.runningExport + Number(p.downloading === true);
   return (
     <div className="svg-bulk-right" data-testid="upload-bulk-right">
-      <PreviewBg bg={p.bg} onBg={p.onBg} />
+      <PreviewBgPicker prefix="upload" bg={p.bg} onBg={p.onBg} />
       <span className="svg-divider" aria-hidden="true" />
       <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} idPrefix="upload" title={STROKE_TITLE} />
       <span className="svg-divider" aria-hidden="true" />
@@ -202,21 +203,3 @@ function Progress({ p, running }: { p: UploadBulkBarProps; running: number }) {
   );
 }
 
-/** Presets + one custom colour = ONE decision: the preview frame background. */
-function PreviewBg({ bg, onBg }: { bg: PreviewBackground; onBg: (bg: PreviewBackground) => void }) {
-  return (
-    <div className="svg-bg" data-testid="upload-bg">
-      <label htmlFor="upload-bg-custom">PREVIEW BG</label>
-      {BG_PRESETS.map((preset) => (
-        <button key={preset.id} type="button" className={`svg-swatch${bg.preset === preset.id ? " on" : ""}`}
-          data-testid={`upload-bg-${preset.id}`} title={`Preview background: ${preset.label}`}
-          aria-label={`Preview background ${preset.label}`} aria-pressed={bg.preset === preset.id}
-          style={{ background: preset.color }} onClick={() => onBg(selectPreset(bg, preset.id))} />
-      ))}
-      <input id="upload-bg-custom" data-testid="upload-bg-custom" type="color" value={bg.custom}
-        aria-label="Custom preview background" onChange={(e) => onBg(selectCustom(bg, e.target.value))} />
-      <output className="svg-bg-value" data-testid="upload-bg-value" htmlFor="upload-bg-custom"
-        title="Preview only — saved SVG files are never changed">{backgroundLabel(bg)}</output>
-    </div>
-  );
-}
