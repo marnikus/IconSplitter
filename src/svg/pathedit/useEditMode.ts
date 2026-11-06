@@ -18,6 +18,7 @@ import { SVG_STROKE_SHEET } from "../strokesheet";
 import { clearEditOverlay, drawEditOverlay } from "./editoroverlay";
 import { modalKeyAction, type ModalAction } from "./hotkeys";
 import { toPathSpace, useEditorInput } from "./useEditorInput";
+import { usePreviewZoom, type PreviewZoom } from "../../ui/usePreviewZoom";
 
 /** The way to the neighbouring rows; `onGo` gets the rewritten file when it must be saved first. */
 export interface EditNav {
@@ -106,6 +107,8 @@ function liveShape(root: ShadowRoot, t: PathTag, d: string): void {
 
 export interface EditModeArgs {
   host: RefObject<HTMLDivElement | null>;
+  /** The artboard frame: Ctrl+Shift + scroll over it zooms the icon inside it. */
+  board: RefObject<HTMLDivElement | null>;
   source: string;
   html: string;
   onFinish: (markup: string) => void;
@@ -123,6 +126,7 @@ export interface EditMode {
   go: (dir: 1 | -1, mode: "ask" | "save" | "discard") => void;
   finish: () => void;
   dirty: boolean;
+  zoom: PreviewZoom;
 }
 
 export function useEditMode(a: EditModeArgs): EditMode {
@@ -130,8 +134,10 @@ export function useEditMode(a: EditModeArgs): EditMode {
   const [view, setView] = useState<StrokeView>("preset");
   const [leave, setLeave] = useState<1 | -1 | null>(null);
   const painted = useArtboard(a.host, a.html, view);
+  const zoom = usePreviewZoom(a.board);
   const { st, setSt, matrices } = useStartSession(a.host, a.source, a.html);
-  usePaintSession(a.host, { source: a.source, st, matrices: matrices.current, anchorPx, painted, view });
+  // a zoom changes the units per screen pixel: the overlay is redrawn at screen size
+  usePaintSession(a.host, { source: a.source, st, matrices: matrices.current, anchorPx, painted: painted + zoom.view.scale, view });
   const markup = useCallback(() => (st === null ? null : writeObjects(a.source, st.session, matrices.current)), [st, a.source, matrices]);
   const go = useCallback((dir: 1 | -1, mode: "ask" | "save" | "discard") => {
     const nav = a.nav;
@@ -150,7 +156,7 @@ export function useEditMode(a: EditModeArgs): EditMode {
   }, [leave, go]);
   const onKey = useModeKeys({ leave, resolveLeave, go, toggleView, st, setSt });
   useEditorInput({ host: a.host, pathEl: () => a.host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish, pickPx, onKey });
-  return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty: markup() !== null };
+  return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty: markup() !== null, zoom };
 }
 
 interface KeyParts {

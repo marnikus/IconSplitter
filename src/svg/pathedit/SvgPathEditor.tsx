@@ -11,6 +11,7 @@ import { setTool, type Tool } from "../../lib/pathedit/session";
 import { annotatePaths } from "../../lib/pathedit/svgdoc";
 import { buildSvgPreview } from "../../lib/svgpreview";
 import { EDIT_HOTKEYS } from "./hotkeys";
+import ZoomReset from "../../ui/ZoomReset";
 import PreviewBgPicker from "../../ui/PreviewBgPicker";
 import { previewFrame } from "../../lib/svgbackground";
 import { setEditSettings, useEditSettings } from "../editsettings";
@@ -50,14 +51,15 @@ function useFittedBox(ratio: number, given?: { width: number; height: number }):
 export default function SvgPathEditor(p: SvgPathEditorProps) {
   const art = useMemo(() => buildSvgPreview(annotatePaths(p.source)), [p.source]);
   const host = useRef<HTMLDivElement | null>(null);
+  const board = useRef<HTMLDivElement | null>(null);
   const box = useFittedBox(art.ok ? art.ratio : 1, p.box);
-  const mode = useEditMode({ host, source: p.source, html: art.html, onFinish: p.onFinish, nav: p.nav });
+  const mode = useEditMode({ host, board, source: p.source, html: art.html, onFinish: p.onFinish, nav: p.nav });
   return (
     <div className="svg-edit-surface" data-testid={`${p.testid}-editor`} onClick={(e) => e.stopPropagation()}>
       <TopBar testid={p.testid} mode={mode} position={p.nav?.position ?? p.label} onCancel={p.onCancel} />
       <div className="svg-edit-stage">
         <SideArrow testid={`${p.testid}-prev`} glyph="‹" title="Previous SVG (←)" disabled={!(p.nav?.canPrev ?? false)} onClick={() => mode.go(-1, "ask")} />
-        <Board host={host} box={box} testid={p.testid} label={p.label} mode={mode} />
+        <Board host={host} board={board} box={box} testid={p.testid} label={p.label} mode={mode} />
         <SideArrow testid={`${p.testid}-next`} glyph="›" title="Next SVG (→)" disabled={!(p.nav?.canNext ?? false)} onClick={() => mode.go(1, "ask")} />
       </div>
       <Legend testid={p.testid} />
@@ -67,13 +69,23 @@ export default function SvgPathEditor(p: SvgPathEditorProps) {
 }
 
 /** The artboard: the icon in its shadow root, and the hint while no shape is picked. */
-function Board({ host, box, testid, label, mode }: { host: React.RefObject<HTMLDivElement | null>; box: { width: number; height: number }; testid: string; label: string; mode: EditMode }) {
+interface BoardProps {
+  host: React.RefObject<HTMLDivElement | null>;
+  board: React.RefObject<HTMLDivElement | null>;
+  box: { width: number; height: number };
+  testid: string;
+  label: string;
+  mode: EditMode;
+}
+
+function Board({ host, board, box, testid, label, mode }: BoardProps) {
   const picking = mode.st !== null && mode.st.session.objects.length === 0;
   const frame = previewFrame(useEditSettings().bg);
   return (
-    <div className={`svg-edit-board${frame.outline ? " contrast" : ""}`} style={{ width: box.width, height: box.height, background: frame.color }}>
-      <div ref={host} className="svg-preview editing" style={{ width: box.width, height: box.height }}
+    <div ref={board} className={`svg-edit-board${frame.outline ? " contrast" : ""}`} style={{ width: box.width, height: box.height, background: frame.color }}>
+      <div ref={host} className="svg-preview editing" style={{ width: box.width, height: box.height, transform: mode.zoom.transform, transformOrigin: "0 0" }}
         role="img" aria-label={`${label} — editing`} data-testid={testid} data-stroke={mode.view} />
+      <ZoomReset testid={testid} zoom={mode.zoom} />
       {picking && <p className="svg-edit-hint" data-testid={`${testid}-pick`}>Click a shape to edit · Shift+click adds · drag a box over anchors</p>}
     </div>
   );

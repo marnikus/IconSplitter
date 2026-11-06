@@ -8,6 +8,8 @@ import { useEffect, useMemo, useRef } from "react";
 import { buildSvgPreview, PREVIEW_CSS } from "../lib/svgpreview";
 import type { StrokeSheet } from "./strokesheet";
 import { useAnchorOverlay, useCtrlHover } from "./anchoroverlay";
+import { usePreviewZoom } from "../ui/usePreviewZoom";
+import ZoomReset from "../ui/ZoomReset";
 
 export interface SvgPreviewProps {
   code: string | null;
@@ -59,12 +61,18 @@ interface ShadowProps {
 
 function ShadowSvg({ html, box, testid, label, version, stroke }: ShadowProps) {
   const host = useRef<HTMLDivElement | null>(null);
+  const frame = useRef<HTMLDivElement | null>(null);
   useShadowArt(html, host, stroke);
   // Ctrl + hover: the drawing's anchor points (2026-11-05).
   useAnchorOverlay(host, html, useCtrlHover(host));
+  // Ctrl+Shift + scroll: zoom 10–400 % inside the same frame (2026-11-06).
+  const zoom = usePreviewZoom(frame);
   return (
-    <div ref={host} className="svg-preview" style={{ width: box.width, height: box.height }}
-      role="img" aria-label={label} data-testid={testid} data-version={version} />
+    <div ref={frame} className="svg-zoom-box" style={{ width: box.width, height: box.height }}>
+      <div ref={host} className="svg-preview" style={{ width: box.width, height: box.height, transform: zoom.transform, transformOrigin: "0 0" }}
+        role="img" aria-label={label} data-testid={testid} data-version={version} />
+      <ZoomReset testid={testid} zoom={zoom} />
+    </div>
   );
 }
 

@@ -4900,3 +4900,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: the Single sheets import test waited a fixed 110 ms after mounting the whole App; it now waits (≤ 2 s) for the attempt's cue, then 150 ms more, and asserts exactly one cue. It had started failing intermittently even alone (1 of 3) as the App grew.
 - Measured: 6 consecutive runs, 12/12 each.
+
+## 2026-11-06 — Ctrl+Shift + scroll preview zoom
+
+- Scope: lib/zoomview (10–400 %, pointer-anchored), ui/usePreviewZoom + ui/ZoomReset; SvgPreview (Generate SVG + SVG to upload rows) and the edit mode artboard (overlay redraws on zoom); legend entry.
+- Measured: 6 new tests (preview_zoom, written first, seen failing; happy-dom WheelEvent drops modifiers — set on the event in the test); verify:fast 3957 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.

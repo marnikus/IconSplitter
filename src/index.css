@@ -2177,3 +2177,11 @@
   background: var(--v2-surface); border: 1px solid var(--v2-line); border-radius: 8px; box-shadow: 0 10px 24px rgb(0 0 0 / 45%);
 }
 .svg-edit-settings-pop small { color: var(--v2-muted); }
+
+/* Ctrl+Shift + scroll zoom inside a preview frame (ui/usePreviewZoom, 2026-11-06). */
+.svg-zoom-box { position: relative; overflow: hidden; }
+.svg-edit-board { overflow: hidden; }
+.zoom-reset {
+  position: absolute; top: 4px; right: 4px; z-index: 3; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--v2-line);
+  background: rgb(12 18 34 / 88%); color: var(--v2-text); font-size: 11px; cursor: pointer; white-space: nowrap;
+}
