@@ -52,6 +52,11 @@ Two tools: **Select** (default) and **Draw**; switching keeps anchors and the se
   **Alt + click** removes a point (no move), **Alt + box** removes the boxed
   points; a Shift / Alt click on empty space keeps the selection
   (`gesture.ts` `SelectMode`).
+- **Scale**: with 2+ anchors selected a dashed box with 8 handles appears (8 px
+  outside the anchors). A corner scales width and height freely, **Shift**
+  keeps proportions; an edge scales one direction (Shift: both, pivot the
+  opposite edge's middle). Pivot = the opposite side; curve handles scale with
+  their anchors; one drag = one undo step (`lib/pathedit/scale.ts`).
 - Select: click selects / empty click deselects; drag moves an anchor, a handle
   or a segment (its two anchors); empty drag = marquee; **double-click a line**
   selects all its anchors; **Ctrl + click a line** inserts an anchor.
@@ -113,6 +118,6 @@ thin / preset), `-editor`, `-toolbar`, `-tool-select`, `-tool-draw`, `-stroke`,
 
 ## Tests
 
-`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_live_shapes.test.tsx` (moved circle drawn live, no guide in preset), `pathedit_line_ops.test.ts` (double-click, Ctrl+click, Delete / Ctrl+Delete), `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
+`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_live_shapes.test.tsx` (moved circle drawn live, no guide in preset), `pathedit_scale.test.ts` (box, free / proportional / edge scale), `pathedit_line_ops.test.ts` (double-click, Ctrl+click, Delete / Ctrl+Delete), `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
 (objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_bg.test.tsx` (artboard background), `pathedit_modal.test.tsx` (full-screen mode: layout, keys, rows, Save/Discard, 50-step history), `pathedit_ui.test.tsx`
 (session in the page, Finish + undo/redo, Edit settings, wiring).

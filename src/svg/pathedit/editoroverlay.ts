@@ -9,6 +9,8 @@
 
 import type { EditorState } from "../../lib/pathedit/gesture";
 import { editableSub } from "../../lib/pathedit/session";
+import { HIT_PX, scaleBoxOf } from "../../lib/pathedit/gesture";
+import { boxHandles } from "../../lib/pathedit/scale";
 import { nextIndex, segmentCubic, toPathData, type Anchor, type Pt } from "../../lib/pathedit/model";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -78,6 +80,23 @@ function marqueeBox(doc: Document, st: EditorState): Element[] {
     `fill:rgba(26,140,255,0.08);stroke:${BLUE};stroke-width:1px;stroke-dasharray:4 3`)];
 }
 
+/** The scale box around two or more selected anchors and its eight square handles (screen-sized). */
+function scaleBoxMarks(doc: Document, st: EditorState, look: OverlayLook): Element[] {
+  const box = scaleBoxOf(st.session);
+  if (box === null) return [];
+  const pad = HIT_PX.scalePad * look.u;
+  const rect = el(doc, "rect", { x: n(box.x0 - pad), y: n(box.y0 - pad), width: n(box.x1 - box.x0 + 2 * pad), height: n(box.y1 - box.y0 + 2 * pad) },
+    `fill:none;stroke:${BLUE};stroke-width:1px;stroke-dasharray:5 3`);
+  rect.setAttribute("data-scale-box", "");
+  const s = 3.5 * look.u;
+  const handles = boxHandles(box, pad).map((h) => {
+    const sq = el(doc, "rect", { x: n(h.p.x - s), y: n(h.p.y - s), width: n(2 * s), height: n(2 * s) }, `fill:#fff;stroke:${BLUE};stroke-width:1.2px`);
+    sq.setAttribute("data-scale-handle", h.id);
+    return sq;
+  });
+  return [rect, ...handles];
+}
+
 /** Removes the previous overlay of this preview, if any. */
 export function clearEditOverlay(root: ParentNode): void {
   root.querySelectorAll(`[${OVERLAY_ATTR}]`).forEach((g) => g.remove());
@@ -97,7 +116,7 @@ export function drawEditOverlay(svg: Element, st: EditorState, look: OverlayLook
   // anchors first; a selected point's handles above them
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => parts.push(anchorDot(doc, a, selected.has(`${sub}:${i}`), look))));
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => { if (selected.has(`${sub}:${i}`)) parts.push(...handlesOf(doc, a, look)); }));
-  parts.push(...marqueeBox(doc, st));
+  parts.push(...marqueeBox(doc, st), ...scaleBoxMarks(doc, st, look));
   for (const p of parts) g.appendChild(p);
   svg.appendChild(g);
 }

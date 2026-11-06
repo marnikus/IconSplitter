@@ -4930,3 +4930,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: ui/scrollmemory (per-tab scroll save/restore with retry, user input cancels, no saving while restoring); checkedrows reveals the restored active row on first appearance; SvgEditModal marks the edited row active; Workbench wiring.
 - Measured: 4 new tests (scroll_memory, written first, seen failing); verify:fast 3993 pass / 16 fail = the pre-existing set (one test-file lint fix after); tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Edit mode: scale selected anchors
+
+- Scope: lib/pathedit/scale (box, 8 padded handles, free/uniform/edge scale about the opposite side, ScaleSpec); gesture scale drag (one undo step); overlay box + handles; legend.
+- Measured: 8 new tests (pathedit_scale, written first, seen failing); editor suites 90+ pass; verify:fast 4001 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.

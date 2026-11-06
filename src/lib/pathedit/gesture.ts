@@ -16,6 +16,7 @@ import {
   moveAnchors, moveHandle, pullHandles, toggleSmooth,
 } from "./ops";
 import { commit, editableSub, preview, redoSession, undoSession, type EditSession } from "./session";
+import { boxHandles, handleAt, scaleAnchors, scaleFor, selectionBox, type Box, type BoxHandleId } from "./scale";
 
 export interface PointerInput {
   p: Pt;
@@ -34,7 +35,8 @@ type Drag =
   | { kind: "anchors"; before: PathModel; refs: AnchorRef[]; grab: AnchorRef; start: Pt; grabStart: Pt }
   | { kind: "handle"; before: PathModel; base: PathModel; ref: AnchorRef; side: "in" | "out" }
   | { kind: "marquee"; start: Pt; objects: number[]; base: AnchorRef[]; mode: SelectMode }
-  | { kind: "draw"; before: PathModel; base: PathModel; ref: AnchorRef };
+  | { kind: "draw"; before: PathModel; base: PathModel; ref: AnchorRef }
+  | { kind: "scale"; before: PathModel; refs: AnchorRef[]; handle: BoxHandleId; box: Box; start: Pt };
 
 /** How a click or box changes the anchor selection: plain replaces, Shift adds, Alt removes. */
 export type SelectMode = "replace" | "add" | "remove";
@@ -49,7 +51,28 @@ export interface EditorState {
 }
 
 /** Hit radii in screen pixels: generous anchors and handles, a 6 px band around a segment. */
-export const HIT_PX = { anchor: 9, handle: 9, segment: 6, snap: 8, pull: 3, pick: 14 };
+export const HIT_PX = { anchor: 9, handle: 9, segment: 6, snap: 8, pull: 3, pick: 14, scalePad: 8, scaleHandle: 6 };
+
+/** The selection's scale box, when two or more anchors are selected in Select (2026-11-06). */
+export function scaleBoxOf(s: EditSession): Box | null {
+  return s.tool === "select" && s.selection.length >= 2 ? selectionBox(s.model, s.selection) : null;
+}
+
+/** A press on one of the box's eight handles starts a scale drag. */
+function scaleDown(st: EditorState, input: PointerInput): EditorState | null {
+  const box = scaleBoxOf(st.session);
+  if (box === null) return null;
+  const u = input.unitsPerPx;
+  const handle = handleAt(boxHandles(box, HIT_PX.scalePad * u), input.p, HIT_PX.scaleHandle * u);
+  if (handle === null) return null;
+  return { ...st, drag: { kind: "scale", before: st.session.model, refs: st.session.selection, handle, box, start: input.p } };
+}
+
+/** Corner: free; edge: one direction; Shift keeps the proportions. */
+function scaleMove(st: EditorState, d: Extract<Drag, { kind: "scale" }>, input: PointerInput): EditorState {
+  const f = scaleFor(d.handle, d.box, { dx: input.p.x - d.start.x, dy: input.p.y - d.start.y }, input.shift);
+  return withSession(st, preview(st.session, scaleAnchors(d.before, d.refs, f)));
+}
 
 export function editorState(session: EditSession): EditorState {
   return { session, drag: null, snap: null, marquee: null };
@@ -69,6 +92,8 @@ function hitOf(s: EditSession, input: PointerInput, selection: readonly AnchorRe
 }
 
 export function pointerDown(st: EditorState, input: PointerInput): EditorState {
+  const scaling = scaleDown(st, input);
+  if (scaling !== null) return scaling;
   const hit = hitOf(st.session, input);
   return st.session.tool === "draw" ? drawDown(st, input, hit) : selectDown(st, input, hit);
 }
@@ -197,6 +222,7 @@ export function pointerMove(st: EditorState, input: PointerInput): EditorState {
   const d = st.drag;
   if (d === null) return st;
   if (d.kind === "anchors") return anchorMove(st, d, input);
+  if (d.kind === "scale") return scaleMove(st, d, input);
   if (d.kind === "handle") return withSession(st, preview(st.session, moveHandle(d.base, d.ref, d.side, input.p)));
   if (d.kind === "marquee") return marqueeMove(st, d, input.p);
   const a = at(d.base, d.ref);
