@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { getAppState, patchBatch } from "../state/appstore";
 import { useAppSlice } from "../state/useAppState";
 import { useOptionalHistory } from "../state/HistoryProvider";
-import { applyRowGesture, checkState, checkedInView, nextVisibleId, sameRowSelection, setChecked, toggleChecked, type CheckState, type RowSelection, type SelectIntent } from "../lib/reviewselect";
+import { applyRowGesture, checkState, checkedInView, invertChecked, nextVisibleId, sameRowSelection, setChecked, toggleChecked, type CheckState, type RowSelection, type SelectIntent } from "../lib/reviewselect";
 import { selectionPayloads } from "../lib/selectiondelta";
 import { selectableIds, toLowerSet, selectionLabel } from "../lib/batchselect";
 
@@ -25,6 +25,7 @@ export interface BatchSelection {
   selectRow: (id: string, intent: SelectIntent) => void;
   toggleCheck: (id: string) => void;
   checkVisible: () => void;
+  invertVisible: () => void;
   uncheckAll: () => void;
   toggleAllVisible: (on: boolean) => void;
   moveActive: (step: 1 | -1) => void;
@@ -127,6 +128,18 @@ function useCheckVisible(visible: BatchRow[], push: PushFn) {
   }, [visible, push]);
 }
 
+function useInvertVisible(visible: BatchRow[], push: PushFn) {
+  return useCallback(() => {
+    const b = getAppState().batch;
+    const ids = selectableIds(visible);
+    if (ids.length === 0) return;
+    const next = invertChecked(b.checked, ids);
+    push("Invert selection", { checked: b.checked, active: b.activeId, anchor: b.anchorId },
+      { checked: next, active: b.activeId, anchor: b.anchorId });
+    patchBatch({ checked: next });
+  }, [visible, push]);
+}
+
 function useUncheckAll(push: PushFn) {
   return useCallback(() => {
     const b = getAppState().batch;
@@ -200,15 +213,16 @@ function useSelectionActions(visible: BatchRow[], push: PushFn, pushGesture: Pus
   const selectActive = useCallback((id: string) => selectRow(id, "replace"), [selectRow]);
   const toggleCheck = useToggleCheck(push);
   const checkVisible = useCheckVisible(visible, push);
+  const invertVisible = useInvertVisible(visible, push);
   const uncheckAll = useUncheckAll(push);
   const toggleAllVisible = useToggleAllVisible(visible, push);
   const moveActive = useMoveActive(visible, pushGesture);
   const checkActive = useCheckActive(push);
   const uncheckActive = useUncheckActive(push);
   return useMemo(() => ({
-    selectRow, selectActive, toggleCheck, checkVisible, uncheckAll,
+    selectRow, selectActive, toggleCheck, checkVisible, invertVisible, uncheckAll,
     toggleAllVisible, moveActive, checkActive, uncheckActive,
-  }), [selectRow, selectActive, toggleCheck, checkVisible, uncheckAll, toggleAllVisible, moveActive, checkActive, uncheckActive]);
+  }), [selectRow, selectActive, toggleCheck, checkVisible, invertVisible, uncheckAll, toggleAllVisible, moveActive, checkActive, uncheckActive]);
 }
 
 export function useBatchSelection(core: BatchCore, visible: BatchRow[]): BatchSelection {

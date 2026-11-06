@@ -14,7 +14,7 @@ import { clampStroke } from "../lib/previewstroke";
 import type { SvgDir, SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
-import { applyRowGesture, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
+import { applyRowGesture, invertChecked, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
 import type { HistoryActions } from "../state/HistoryProvider";
 import { selectionPayloads } from "../lib/selectiondelta";
 import { useKeyActions } from "./keyactions";
@@ -61,7 +61,7 @@ export interface SvgActions extends SvgPromptActions {
   setConnectionMeta: (patch: { name?: string; kind?: ConnectionKind }) => void;
   setImage: (patch: Partial<Connection["image"]>) => void;
   setProviderOpen: (open: boolean) => void; setParams: (patch: Partial<SamplingParams>) => void; refreshModels: () => void;
-  saveKey: (key: string) => void; forgetKey: () => void; toggleCheck: (id: string) => void; selectVisible: () => void;
+  saveKey: (key: string) => void; forgetKey: () => void; toggleCheck: (id: string) => void; selectVisible: () => void; invertVisible: () => void;
   uncheckVisible: () => void; deselectAll: () => void; checkActive: () => void; uncheckActive: () => void;
   selectRow: (id: string, intent: SelectIntent) => void; setActive: (id: string) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
@@ -154,7 +154,7 @@ async function refreshModelsNow(latest: { current: SvgCtx }): Promise<void> {
     c.say(`Model list refreshed — ${models.length} models`);
   } catch (error) { c.say(message(error), true); }
 }
-function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "decide"> {
+function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "invertVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "decide"> {
   const latest = useRef(ctx); latest.current = ctx;
   return { ...useSvgChecks(latest), ...useSvgRowActions(latest), decide: useDecide(latest) };
 }
@@ -178,7 +178,12 @@ function useSvgChecks(latest: { current: SvgCtx }) {
     const before = svgSelection();
     editChecked(latest.current, { ...before, checked: [] }, "Deselect all");
   }, [latest]);
-  return { toggleCheck, selectVisible, uncheckVisible, deselectAll,
+  const invertVisible = useCallback(() => {
+    const before = svgSelection();
+    const ids = latest.current.visible.map((r) => r.source.id);
+    editChecked(latest.current, { ...before, checked: invertChecked(before.checked, ids) }, "Invert selection");
+  }, [latest]);
+  return { toggleCheck, selectVisible, uncheckVisible, deselectAll, invertVisible,
     checkActive: useCheckActive(latest), uncheckActive: useUncheckActive(latest) };
 }
 

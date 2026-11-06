@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import type { CheckState } from "../lib/reviewselect";
 import type { Decision } from "../lib/reviewfilter";
 import ZoomSlider from "./ZoomSlider";
+import InvertButton from "../ui/InvertButton";
 
 export type BulkAction = "approve" | "decline" | "reset";
 
@@ -25,6 +26,7 @@ export interface BulkBarProps {
   thumb: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
+  onInvert: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onDecide: (decision: Decision) => void;
@@ -96,6 +98,7 @@ function BulkLeft({ p }: { p: BulkBarProps }) {
       )}
       <span className="v2-divider" aria-hidden="true" />
       <button type="button" className="v2-btn" data-testid="v2-select-visible" onClick={p.onSelectVisible}>Select visible</button>
+      <InvertButton prefix="v2" look="v2" onClick={p.onInvert} />
       <button type="button" className="v2-btn" data-testid="v2-deselect" onClick={p.onDeselectAll}>Deselect all</button>
     </div>
   );

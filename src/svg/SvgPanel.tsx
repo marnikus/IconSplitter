@@ -114,7 +114,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
           requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidable}
           thumb={g.thumb} bg={g.bg} stroke={g.stroke} onStroke={g.setPreviewStroke} model={modelLabel(g.config.model)} totals={g.totals}
           progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
-          onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
+          onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible} onInvert={g.invertVisible}
           onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
           onRegenerate={() => g.regenerateSelected(g.checked)}
           onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}

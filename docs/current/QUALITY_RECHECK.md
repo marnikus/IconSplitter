@@ -4835,3 +4835,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: item statuses `regen-overlaps` / `regen-geometry` in one catalog (`REVIEW_STATUSES`, `REVIEW_LABEL`, `isReview`); row ⧉/△ + bulk buttons, filter from the catalog, label search, tally, history validation via `isReview`, auto-advance like approve/decline, CSS orange/cyan.
 - Measured: 5 new tests (`svg_regen_statuses`), 1 pinned tally updated (`svg_extract`); svg/state/history suites 81 files / 816 tests pass; tsc clean; eslint 0 problems on changed files; quality:changed PASSED; verify:fast tests 3837 pass / 16 fail = the pre-existing set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — Invert selection in every list tab
+
+- Scope: `invertChecked` (lib/reviewselect), `InvertButton` (ui), `invertVisible` in Batch, Selection V2, Generate SVG, SVG to upload, Upload — one undoable selection entry each; useSelectionV2 visible gestures extracted (`makeVisibleChecks`) to stay in the RULE 16 budget.
+- Measured: 14 new tests (`invert_selection`); tab suites 230 files / 2491 tests pass; tsc clean; eslint 0 errors; quality:changed PASSED.

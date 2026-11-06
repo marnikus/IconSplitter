@@ -96,6 +96,7 @@ export interface UploadActions extends PromptActions {
   forgetKey: () => void;
   toggleCheck: (id: string) => void;
   selectVisible: () => void;
+  invertVisible: () => void;
   uncheckVisible: () => void;
   deselectAll: () => void;
   checkActive: () => void;

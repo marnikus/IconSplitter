@@ -107,7 +107,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         metaAcceptBusy={g.busy !== null || g.runningMeta + g.runningExport > 0}
         downloadFiles={bulk.download}
         overriddenCount={bulk.overridden}
-        onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
+        onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible} onInvert={g.invertVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
         onResetSettings={() => g.resetOverridesSelected(g.checked)}

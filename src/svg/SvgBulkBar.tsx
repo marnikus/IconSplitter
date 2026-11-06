@@ -16,6 +16,7 @@ import Elapsed from "./Elapsed";
 import PreviewStroke from "./PreviewStroke";
 import { SVG_STROKE_SHEET } from "./strokesheet";
 import WebModeToggle from "./WebModeToggle";
+import InvertButton from "../ui/InvertButton";
 import type { RunProgress } from "./types";
 
 export interface SvgBulkBarProps {
@@ -37,6 +38,7 @@ export interface SvgBulkBarProps {
   running: boolean;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
+  onInvert: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onBg: (bg: PreviewBackground) => void;
@@ -79,6 +81,7 @@ function BulkLeft({ p }: { p: SvgBulkBarProps }) {
         <span className="svg-scope-copy" data-testid="svg-scope">across {p.visibleCount} approved sources</span>
         <span className="svg-divider" aria-hidden="true" />
         <button type="button" className="svg-btn" data-testid="svg-select-visible" onClick={p.onSelectVisible}>Select all visible</button>
+        <InvertButton prefix="svg" onClick={p.onInvert} />
         <button type="button" className="svg-btn" data-testid="svg-deselect" onClick={p.onDeselectAll}>Deselect all</button>
       </div>
   );

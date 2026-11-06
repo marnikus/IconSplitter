@@ -20,6 +20,17 @@ export function setChecked(checked: readonly string[], ids: readonly string[], o
   return [...new Set([...checked, ...ids])];
 }
 
+/**
+ * "Invert selection" (2026-11-06): every VISIBLE id flips; checks hidden by
+ * filters stay (the header checkbox's scope rule). Newly checked ids keep the
+ * visible order.
+ */
+export function invertChecked(checked: readonly string[], visibleIds: readonly string[]): string[] {
+  const visible = new Set(visibleIds);
+  const was = new Set(checked);
+  return [...checked.filter((id) => !visible.has(id)), ...visibleIds.filter((id) => !was.has(id))];
+}
+
 /** Header checkbox state for the currently visible ids (indeterminate = some). */
 export function checkState(visibleIds: readonly string[], checked: readonly string[]): CheckState {
   const on = checkedInView(visibleIds, checked).length;

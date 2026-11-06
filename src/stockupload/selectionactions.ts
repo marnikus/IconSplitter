@@ -2,7 +2,7 @@
 
 import { useMemo, useRef } from "react";
 import {
-  applyRowGesture, sameRowSelection, setChecked, toggleChecked,
+  applyRowGesture, invertChecked, sameRowSelection, setChecked, toggleChecked,
   type RowSelection, type SelectIntent,
 } from "../lib/reviewselect";
 import { selectionPayloads } from "../lib/selectiondelta";
@@ -18,6 +18,7 @@ import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 export interface StockSelectionApi {
   toggleCheck: (id: string) => void;
   selectVisible: () => void;
+  invertVisible: () => void;
   uncheckVisible: () => void;
   deselectAll: () => void;
   checkActive: () => void;
@@ -61,6 +62,7 @@ function buildSelectionApi(ref: { current: { visible: readonly ExportedItem[]; h
     selectVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: setChecked(currentSelection().checked, ids(), true) }, "Select visible"),
     uncheckVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: setChecked(currentSelection().checked, ids(), false) }, "Deselect visible"),
     deselectAll: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: [] }, "Deselect all"),
+    invertVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: invertChecked(currentSelection().checked, ids()) }, "Invert selection"),
     checkActive: () => {
       const b = currentSelection();
       if (b.active) commitSelection(ref.current.hist, { ...b, checked: setChecked(b.checked, [b.active], true) }, "Select active row");

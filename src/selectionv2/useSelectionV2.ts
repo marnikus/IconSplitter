@@ -10,7 +10,7 @@ import { type ReviewPrefs, type ViewMode } from "../lib/reviewprefs";
 import { clampZoom } from "../lib/zoom";
 import { bulkScope } from "../lib/reviewbulk";
 import {
-  applyRowGesture, checkState, sameRowSelection, setChecked, toggleChecked,
+  applyRowGesture, checkState, invertChecked, sameRowSelection, setChecked, toggleChecked,
   type CheckState, type SelectIntent,
 } from "../lib/reviewselect";
 import { selectionPayloads } from "../lib/selectiondelta";
@@ -36,6 +36,7 @@ export interface SelectionV2Api {
   toggleCheck: (id: string) => void;
   checkVisible: () => void;
   uncheckVisible: () => void;
+  invertVisible: () => void;
   uncheckAll: () => void;
   checkActive: () => void;
   uncheckActive: () => void;
@@ -59,6 +60,16 @@ function makeUncheckActive(hist: HistoryActions) {
   };
 }
 
+/** The three gestures scoped to the visible rows: check, uncheck, invert. */
+function makeVisibleChecks(hist: HistoryActions, visibleIds: readonly string[]) {
+  const edit = (next: (checked: readonly string[]) => string[]) => () => editSelection(hist, next(getAppState().v2.checked), getAppState().v2.anchorId);
+  return {
+    checkVisible: edit((c) => setChecked(c, visibleIds, true)),
+    uncheckVisible: edit((c) => setChecked(c, visibleIds, false)),
+    invertVisible: edit((c) => invertChecked(c, visibleIds)),
+  };
+}
+
 export function useSelectionV2(): SelectionV2Api {
   const core = useSelection();
   const hist = useHistoryActions();
@@ -75,8 +86,7 @@ export function useSelectionV2(): SelectionV2Api {
   const onScroll = useCallback((y: number) => patchV2({ scrollY: y }), []);
   const onSelectRow = useCallback((id: string, intent: SelectIntent) => applySelect({ hist, visibleIds, id, intent }), [hist, visibleIds]);
   const onToggleCheck = useCallback((id: string) => editSelection(hist, toggleChecked(getAppState().v2.checked, id), getAppState().v2.anchorId), [hist]);
-  const onCheckVisible = useCallback(() => editSelection(hist, setChecked(getAppState().v2.checked, visibleIds, true), getAppState().v2.anchorId), [hist, visibleIds]);
-  const onUncheckVisible = useCallback(() => editSelection(hist, setChecked(getAppState().v2.checked, visibleIds, false), getAppState().v2.anchorId), [hist, visibleIds]);
+  const vis = useMemo(() => makeVisibleChecks(hist, visibleIds), [hist, visibleIds]);
   const onUncheckAll = useCallback(() => editSelection(hist, [], getAppState().v2.anchorId), [hist]);
   const onCheckActive = useMemo(() => makeCheckActive(hist), [hist]);
   const onUncheckActive = useMemo(() => makeUncheckActive(hist), [hist]);
@@ -84,10 +94,10 @@ export function useSelectionV2(): SelectionV2Api {
     core, prefs, checked, scrollY,
     affected: scope.affected, blockedCount: scope.blocked, hiddenCount: scope.hidden, header,
     setMode: onMode, setThumb: onThumb, setScroll: onScroll, selectRow: onSelectRow,
-    toggleCheck: onToggleCheck, checkVisible: onCheckVisible, uncheckVisible: onUncheckVisible,
+    toggleCheck: onToggleCheck, ...vis,
     uncheckAll: onUncheckAll, checkActive: onCheckActive, uncheckActive: onUncheckActive,
   }), [core, prefs, checked, scrollY, scope, header, onMode, onThumb, onScroll, onSelectRow,
-    onToggleCheck, onCheckVisible, onUncheckVisible, onUncheckAll, onCheckActive, onUncheckActive]);
+    onToggleCheck, vis, onUncheckAll, onCheckActive, onUncheckActive]);
 }
 
 interface SelectArgs {

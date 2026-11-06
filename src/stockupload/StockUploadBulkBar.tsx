@@ -7,6 +7,7 @@ import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom
 import UploadRowBadgeApply from "../upload/UploadRowBadgeApply";
 import type { StockUploadApi } from "./useStockUpload";
 import { parseUploadLimit } from "../lib/stockupload/uploadlimit";
+import InvertButton from "../ui/InvertButton";
 
 const FORMAT_LABELS: { key: UploadFormatKey; label: string }[] = [
   { key: "raster", label: "JPEG/PNG" },
@@ -38,6 +39,7 @@ function SelectionCluster({ g }: { g: StockUploadApi }) {
       <button type="button" className="svg-btn" data-testid="stock-select-visible" onClick={g.selectVisible}>
         Select all visible
       </button>
+      <InvertButton prefix="stock" onClick={g.invertVisible} />
       <button type="button" className="svg-btn" data-testid="stock-deselect" onClick={g.deselectAll}>
         Deselect all
       </button>

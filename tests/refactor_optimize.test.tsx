@@ -133,6 +133,7 @@ describe("refactor_optimize: BatchBulkBar still renders same features", () => {
     await mountReact(
       <BatchBulkBar
         header="some"
+        onInvert={vi.fn()}
         checkedCount={2}
         visibleCount={3}
         totalCount={5}

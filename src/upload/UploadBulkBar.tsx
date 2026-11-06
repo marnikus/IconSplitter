@@ -16,6 +16,7 @@ import PreviewStroke from "../svg/PreviewStroke";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import UploadRowBadgeApply from "./UploadRowBadgeApply";
+import InvertButton from "../ui/InvertButton";
 
 export interface UploadBulkBarProps {
   header: "none" | "some" | "all";
@@ -41,6 +42,7 @@ export interface UploadBulkBarProps {
   overriddenCount: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
+  onInvert: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onBg: (bg: PreviewBackground) => void;
@@ -82,6 +84,7 @@ function BulkLeft({ p }: { p: UploadBulkBarProps }) {
       <span className="svg-scope-copy" data-testid="upload-scope">across {p.visibleCount} approved SVGs</span>
       <span className="svg-divider" aria-hidden="true" />
       <button type="button" className="svg-btn" data-testid="upload-select-visible" onClick={p.onSelectVisible}>Select all visible</button>
+      <InvertButton prefix="upload" onClick={p.onInvert} />
       <button type="button" className="svg-btn" data-testid="upload-deselect" onClick={p.onDeselectAll}>Deselect all</button>
     </div>
   );

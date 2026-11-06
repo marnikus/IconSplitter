@@ -4,6 +4,7 @@
 import type { CheckState } from "../lib/reviewselect";
 import ZoomSliderBase from "../ui/ZoomSliderBase";
 import type { BatchReviewStatus } from "../lib/statefile";
+import InvertButton from "../ui/InvertButton";
 
 export interface BatchBulkBarProps {
   header: CheckState;
@@ -19,6 +20,7 @@ export interface BatchBulkBarProps {
   approvedSelectedCount?: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
+  onInvert: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
   onSplit: () => void;
@@ -118,6 +120,7 @@ export default function BatchBulkBar(p: BatchBulkBarProps) {
         <Left {...p} />
         <span className="svg-divider" aria-hidden="true" />
         <button type="button" className="svg-btn" data-testid="batch-select-visible" onClick={p.onSelectVisible}>Select visible</button>
+        <InvertButton prefix="batch" onClick={p.onInvert} />
         <button type="button" className="svg-btn" data-testid="batch-deselect" onClick={p.onDeselectAll}>Deselect all</button>
       </div>
       <div className="svg-bulk-right"><Right {...p} /></div>

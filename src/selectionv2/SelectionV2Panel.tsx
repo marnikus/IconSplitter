@@ -71,7 +71,7 @@ function Body({ v, thumbFor, onBulkArmed }: { v: SelectionV2Api; thumbFor: SideT
       <BulkBar header={v.header} checkedCount={v.checked.length} affectedCount={v.affected.length}
         blockedCount={v.blockedCount} hiddenCount={v.hiddenCount} visibleCount={v.core.visible.length}
         thumb={v.prefs.thumbHeight}
-        onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckVisible())} onSelectVisible={v.checkVisible}
+        onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckVisible())} onSelectVisible={v.checkVisible} onInvert={v.invertVisible}
         onDeselectAll={v.uncheckAll} onThumb={v.setThumb}
         onDecide={(d) => v.core.decideBulk(v.affected, d)} onReset={() => v.core.resetBulk(v.affected)}
         onArmedChange={onBulkArmed} />
