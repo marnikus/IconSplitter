@@ -4920,3 +4920,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: double-click a line selects all its anchors; Ctrl+click a line inserts; Delete keeps the line joined, Ctrl+Delete breaks it (ops.breakAtAnchors); legend updated; tail cutter Hide/Show highlights (session toggle, useRowTailMarks); selectDown split (pressOn) for the RULE 16 budget.
 - Measured: 6 new tests (pathedit_line_ops, written first, seen failing); old double-click test updated to the new rule; editor + cutter suites 101 pass; verify:fast 3986 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Ctrl+Z no longer jumps the page
+
+- Scope: historyKeyOf ignores auto-repeat; holdRowScroll around undo/redo applies (checkedrows scroll effects skip while held); useSvgText keeps the old text when only the revision moved.
+- Measured: 3 new tests (undo_no_jump, seen failing first; one test-setup loop fixed — unstable ref); verify:fast 3989 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not reproduced in a real browser.

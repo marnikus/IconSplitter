@@ -27,19 +27,23 @@ function subscribe(fn: () => void): () => void {
 
 /** Text of the saved SVG at `relPath`; null while nothing is read yet. */
 export function useSvgText(rootRef: { current: DirHandleLike | null }, rootToken: number, relPath: string): string | null {
-  const [shown, setShown] = useState<{ key: string; text: string | null } | null>(null);
+  const [shown, setShown] = useState<{ key: string; file: string; text: string | null } | null>(null);
   // The file to read is (folder generation, path): a rescan has to re-read it.
   const revision = useSyncExternalStore(subscribe, () => revisions.get(relPath) ?? 0);
   const wanted = useMemo(() => ({ token: rootToken, path: relPath }), [rootToken, relPath]);
-  const key = `${wanted.token}\u0000${wanted.path}\u0000${revision}`;
+  const file = `${wanted.token}\u0000${wanted.path}`;
+  const key = `${file}\u0000${revision}`;
   useEffect(() => {
     let live = true;
     const root = rootRef.current;
     if (root !== null && wanted.path !== "") {
       void readSvgText(root, wanted.path)
-        .then((t) => live && setShown({ key, text: t }), () => live && setShown({ key, text: null }));
+        .then((t) => live && setShown({ key, file, text: t }), () => live && setShown({ key, file, text: null }));
     }
     return () => { live = false; };
-  }, [key, wanted, rootRef]);
-  return shown !== null && shown.key === key ? shown.text : null;
+  }, [key, file, wanted, rootRef]);
+  if (shown === null) return null;
+  // Only the revision moved (the app rewrote this very file): keep the old text
+  // until the new one is read — no blank frame that resizes the row (2026-11-06).
+  return shown.key === key || shown.file === file ? shown.text : null;
 }

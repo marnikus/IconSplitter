@@ -142,3 +142,10 @@ The original Selection UI is removed. Old saved `tab: "selection"` opens V2
 and preserves its valid view/checked state; `collapsed` is no longer a view
 field. A historical collapse-only apply is refused without mutating state;
 valid mixed history still applies its supported V2 fields.
+
+## Undo never moves the page (2026-11-06)
+
+- One press = one step: a held Ctrl+Z / Ctrl+Y auto-repeats and the repeats are ignored (`HistoryProvider.historyKeyOf`), like the Undo button.
+- An undo / redo restores the active row without scrolling to it (`ui/checkedrows.holdRowScroll`, held briefly around each apply).
+- An SVG rewritten by an undo keeps showing until its new text is read (`svg/usesvgtext`): no blank frame that resizes the row.
+- Tests: `undo_no_jump.test.tsx`.

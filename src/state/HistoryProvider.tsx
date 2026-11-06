@@ -18,6 +18,7 @@ import {
 import { log } from "../log/logstore";
 import { isTextField } from "../selection/hotkeys";
 import { applyEntry } from "./apply";
+import { holdRowScroll } from "../ui/checkedrows";
 import { flushHistory, loadHistory, scheduleSaveHistory } from "./historystore";
 
 /** An action as the caller knows it; id/timestamp/version are added here. */
@@ -161,6 +162,7 @@ function useApply(ref: { current: Timeline }, commit: (next: Timeline) => void, 
     const step = dir === "undo" ? stepBack(ref.current) : stepForward(ref.current);
     if (!step.entry) return;
     busy.current = true;
+    holdRowScroll(); // an undo / redo never moves the page to the row it puts back
     log({ feature: "history", action: dir, ids: targetIds(step.entry.ids), detail: step.entry.label, data: { type: step.entry.type } });
     const ok = await applyEntry(step.entry, dir === "undo" ? step.entry.before : step.entry.after);
     busy.current = false;
@@ -180,16 +182,28 @@ function useApply(ref: { current: Timeline }, commit: (next: Timeline) => void, 
   };
 }
 
+/**
+ * What a key asks of the timeline. A held Ctrl+Z AUTO-REPEATS: those repeats
+ * are ignored (2026-11-06) — one press is one step, like the Undo button;
+ * otherwise a slightly long press also undid the earlier selection steps and
+ * the list jumped to the rows they put back.
+ */
+export function historyKeyOf(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "repeat">): "undo" | "redo" | "ignore" | null {
+  if (!(e.ctrlKey || e.metaKey)) return null;
+  const key = e.key.toLowerCase();
+  const dir = key === "z" ? (e.shiftKey ? "redo" : "undo") : key === "y" ? "redo" : null;
+  if (dir === null) return null;
+  return e.repeat ? "ignore" : dir;
+}
+
 function useHotkeys(run: (dir: "undo" | "redo") => Promise<void>): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || isTextField(e.target)) return;
-      const key = e.key.toLowerCase();
-      const wantsUndo = key === "z" && !e.shiftKey;
-      const wantsRedo = (key === "z" && e.shiftKey) || key === "y";
-      if (!wantsUndo && !wantsRedo) return;
+      if (isTextField(e.target)) return;
+      const what = historyKeyOf(e);
+      if (what === null) return;
       e.preventDefault(); // never let the browser undo a text field we do not own
-      void run(wantsUndo ? "undo" : "redo");
+      if (what !== "ignore") void run(what);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
