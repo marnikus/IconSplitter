@@ -4855,3 +4855,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: every <path> loaded as an owned object in root space (objects.ts, affine helpers); click selects one path, Shift+click toggles, marquee selects anchors across paths and their paths, Esc clears anchors then paths, joint moves, snap against all paths, Finish writes only changed objects through their inverse matrices; hitTest takes a query object; overlay in root svg.
 - Measured: 9 new tests (pathedit_objects) + 1 UI test; pathedit suites 42 + UI pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast 3911 pass / 17 fail = the pre-existing 16 + flaky process_completion_sound (passes alone); build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Path editor: basic shapes and geometric picking
+
+- Scope: svgdoc reads circle/ellipse/rect/line/polyline/polygon as objects (skips non-drawn containers), writes a changed shape as <path> keeping other attributes; hit.objectAt picks by geometry (9 px band of any shape, else inside an unselected closed shape, topmost first) — fixes the reported icon (stroke-width 1 in 1024 viewBox, five circles not editable).
+- Measured: 6 new tests (pathedit_shapes, written first, seen failing); editor suites 48 pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast 3917 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); build PASS. Not exercised in a real browser.

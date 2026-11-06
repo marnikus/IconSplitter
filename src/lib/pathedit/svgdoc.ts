@@ -1,46 +1,122 @@
-// svgdoc.ts — the icon file around the edited path (2026-11-06). The editor
-// changes ONE `<path>`'s `d` and nothing else: viewBox, fill, stroke,
-// stroke-width, every other element and every other character of the file
-// stay as they were. Paths are found by their tags in the source text
-// (comments and CDATA skipped), numbered in document order; the preview copy
-// carries that number as `data-edit-path` so a click picks the right one. Pure.
+// svgdoc.ts — the icon file around the edited shapes (2026-11-06). Every DRAWN
+// shape is an object of the editor: <path>, <circle>, <ellipse>, <rect>,
+// <line>, <polyline> and <polygon> (inside <defs>, <clipPath>, <mask>,
+// <symbol>, <marker> or <pattern> nothing is drawn where it stands, so those
+// are skipped). Each is found by its tag in the source text (comments and CDATA
+// skipped), numbered in document order and read as path data. Writing changes
+// ONE shape and nothing else: a path gets a new `d`; a basic shape becomes a
+// <path> with that `d`, keeping every other attribute (its geometry attributes
+// go). The preview copy carries the number as `data-edit-path`. Pure.
 
-export interface PathTag { index: number; start: number; end: number; d: string | null }
+export type ShapeKind = "path" | "circle" | "ellipse" | "rect" | "line" | "polyline" | "polygon";
 
-const D_ATTR = /\sd\s*=\s*("([^"]*)"|'([^']*)')/;
-
-/** Comments and CDATA blanked (same length) so a commented-out path is never counted. */
-function blanked(markup: string): string {
-  return markup.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, (m) => " ".repeat(m.length));
+export interface PathTag {
+  index: number;
+  kind: ShapeKind;
+  start: number;
+  end: number;
+  /** The shape as path data (a path's own `d`). */
+  d: string | null;
+  selfClosing: boolean;
 }
 
-/** Every `<path>` start tag in document order, with its `d`. */
+const D_ATTR = /\sd\s*=\s*("([^"]*)"|'([^']*)')/;
+const SHAPE_TAG = /<(path|circle|ellipse|rect|line|polyline|polygon)\b[^>]*>/gi;
+const NOT_DRAWN = /<(defs|clipPath|mask|symbol|marker|pattern)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+const GEOMETRY: Record<ShapeKind, string[]> = {
+  path: ["d"], circle: ["cx", "cy", "r"], ellipse: ["cx", "cy", "rx", "ry"], rect: ["x", "y", "width", "height", "rx", "ry"],
+  line: ["x1", "y1", "x2", "y2"], polyline: ["points"], polygon: ["points"],
+};
+
+/** Comments, CDATA and never-drawn containers blanked (same length) so their shapes are not counted. */
+function blanked(markup: string): string {
+  const blank = (m: string) => " ".repeat(m.length);
+  return markup.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, blank).replace(NOT_DRAWN, blank);
+}
+
+function attr(tag: string, name: string): string | null {
+  const m = new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)')`).exec(tag);
+  return m === null ? null : (m[2] ?? m[3]);
+}
+
+const num = (tag: string, name: string): number => Number.parseFloat(attr(tag, name) ?? "0") || 0;
+const f = (n: number): string => String(Math.round(n * 10000) / 10000);
+const K = 0.5522847498;
+
+/** An ellipse as four cubic quarter arcs, starting at its right-most point. */
+function ellipseD(cx: number, cy: number, rx: number, ry: number): string | null {
+  if (rx <= 0 || ry <= 0) return null;
+  const kx = rx * K, ky = ry * K;
+  return `M${f(cx + rx)} ${f(cy)}C${f(cx + rx)} ${f(cy + ky)} ${f(cx + kx)} ${f(cy + ry)} ${f(cx)} ${f(cy + ry)}`
+    + `C${f(cx - kx)} ${f(cy + ry)} ${f(cx - rx)} ${f(cy + ky)} ${f(cx - rx)} ${f(cy)}`
+    + `C${f(cx - rx)} ${f(cy - ky)} ${f(cx - kx)} ${f(cy - ry)} ${f(cx)} ${f(cy - ry)}`
+    + `C${f(cx + kx)} ${f(cy - ry)} ${f(cx + rx)} ${f(cy - ky)} ${f(cx + rx)} ${f(cy)}Z`;
+}
+
+function rectD(tag: string): string | null {
+  const [x, y, w, h] = [num(tag, "x"), num(tag, "y"), num(tag, "width"), num(tag, "height")];
+  if (w <= 0 || h <= 0) return null;
+  return `M${f(x)} ${f(y)}L${f(x + w)} ${f(y)}L${f(x + w)} ${f(y + h)}L${f(x)} ${f(y + h)}Z`;
+}
+
+function pointsD(tag: string, closed: boolean): string | null {
+  const nums = (attr(tag, "points") ?? "").trim().split(/[\s,]+/).map(Number).filter((v) => Number.isFinite(v));
+  if (nums.length < 4) return null;
+  const pairs: string[] = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) pairs.push(`${i === 0 ? "M" : "L"}${f(nums[i])} ${f(nums[i + 1])}`);
+  return pairs.join("") + (closed ? "Z" : "");
+}
+
+/** The shape as path data. */
+function shapeD(kind: ShapeKind, tag: string): string | null {
+  if (kind === "path") { const m = D_ATTR.exec(tag); return m === null ? null : (m[2] ?? m[3]); }
+  if (kind === "circle") return ellipseD(num(tag, "cx"), num(tag, "cy"), num(tag, "r"), num(tag, "r"));
+  if (kind === "ellipse") return ellipseD(num(tag, "cx"), num(tag, "cy"), num(tag, "rx"), num(tag, "ry"));
+  if (kind === "rect") return rectD(tag);
+  if (kind === "line") return `M${f(num(tag, "x1"))} ${f(num(tag, "y1"))}L${f(num(tag, "x2"))} ${f(num(tag, "y2"))}`;
+  return pointsD(tag, kind === "polygon");
+}
+
+/** Every drawn shape's start tag in document order, with its path data. */
 export function pathTags(markup: string): PathTag[] {
   const out: PathTag[] = [];
-  const re = /<path\b[^>]*>/gi;
   const text = blanked(markup);
-  for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+  SHAPE_TAG.lastIndex = 0;
+  for (let m = SHAPE_TAG.exec(text); m !== null; m = SHAPE_TAG.exec(text)) {
     const tag = markup.slice(m.index, m.index + m[0].length);
-    const d = D_ATTR.exec(tag);
-    out.push({ index: out.length, start: m.index, end: m.index + m[0].length, d: d === null ? null : (d[2] ?? d[3]) });
+    const kind = m[1].toLowerCase() as ShapeKind;
+    out.push({ index: out.length, kind, start: m.index, end: m.index + m[0].length, d: shapeD(kind, tag), selfClosing: /\/\s*>$/.test(tag) });
   }
   return out;
 }
 
-/** The file with path `index`'s `d` replaced (added when it had none); null when there is no such path. */
-export function withPathD(markup: string, index: number, d: string): string | null {
-  const tag = pathTags(markup)[index];
-  if (tag === undefined) return null;
-  const old = markup.slice(tag.start, tag.end);
-  const next = D_ATTR.test(old) ? old.replace(D_ATTR, ` d="${d}"`) : old.replace(/^<path\b/i, `<path d="${d}"`);
-  return markup.slice(0, tag.start) + next + markup.slice(tag.end);
+/** A basic shape's start tag as a <path> with `d`, its geometry attributes removed. */
+function asPathTag(t: PathTag, tag: string, d: string): string {
+  let rest = tag.replace(new RegExp(`^<${t.kind}\\b`, "i"), "");
+  for (const name of GEOMETRY[t.kind]) rest = rest.replace(new RegExp(`\\s${name}\\s*=\\s*("[^"]*"|'[^']*')`), "");
+  return `<path d="${d}"${rest}`;
 }
 
-/** The preview copy: each path tagged with its number, so a click names the path it hit. */
+/** The file with shape `index` drawn by `d` (a basic shape becomes a <path>); null when there is no such shape. */
+export function withPathD(markup: string, index: number, d: string): string | null {
+  const t = pathTags(markup)[index];
+  if (t === undefined) return null;
+  const old = markup.slice(t.start, t.end);
+  if (t.kind === "path") {
+    const next = D_ATTR.test(old) ? old.replace(D_ATTR, ` d="${d}"`) : old.replace(/^<path\b/i, `<path d="${d}"`);
+    return markup.slice(0, t.start) + next + markup.slice(t.end);
+  }
+  let after = markup.slice(t.end);
+  if (!t.selfClosing) after = after.replace(new RegExp(`</${t.kind}\\s*>`, "i"), "</path>");
+  return markup.slice(0, t.start) + asPathTag(t, old, d) + after;
+}
+
+/** The preview copy: each drawn shape tagged with its number, so a click names the shape it hit. */
 export function annotatePaths(markup: string): string {
   let out = markup;
-  for (const tag of pathTags(markup).reverse()) {
-    out = `${out.slice(0, tag.start)}<path data-edit-path="${tag.index}"${out.slice(tag.start + "<path".length)}`;
+  for (const t of pathTags(markup).reverse()) {
+    const name = `<${markup.slice(t.start + 1, t.start + 1 + t.kind.length)}`;
+    out = `${out.slice(0, t.start)}${name} data-edit-path="${t.index}"${out.slice(t.start + name.length)}`;
   }
   return out;
 }

@@ -9,7 +9,7 @@
 // a smooth pair), segment click inserts, first anchor closes, another open
 // end joins. Keys: Delete, Esc, Enter (= Finish), Ctrl+Z / Ctrl+Y.
 
-import { anchorsInRect, hitTest, snapPoint, type Hit, type HitRadii, type Snap } from "./hit";
+import { anchorsInRect, hitTest, objectAt, snapPoint, type Hit, type HitRadii, type Snap } from "./hit";
 import { nextIndex, type AnchorRef, type PathModel, type Pt } from "./model";
 import {
   addAnchor, breakSmooth, closeSubpath, deleteAnchors, insertOnSegment, joinSubpaths,
@@ -83,7 +83,8 @@ function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState
     return { ...st, session: preview(s, base), drag: { kind: "handle", before: s.model, base, ref: hit.ref, side: hit.side } };
   }
   if (hit.kind === "anchor" || hit.kind === "segment") return grab(st, input.p, hit);
-  if (input.target !== undefined && input.target !== null) return withSession(st, selectObject(s, input.target, input.shift));
+  const target = objectAt(s.model, input.p, radii(input.unitsPerPx), (o) => s.objects.includes(o)) ?? input.target ?? null;
+  if (target !== null) return withSession(st, selectObject(s, target, input.shift));
   return { ...st, session: { ...s, selection: [] }, drag: { kind: "marquee", start: input.p, objects: s.objects }, marquee: null };
 }
 

@@ -56,7 +56,7 @@ export function useEditSession(a: { row: SvgRow; svg: string | null; svgPath: st
 function editBlocked(row: SvgRow, svg: string | null): string | null {
   if (svg === null) return "No SVG to edit yet";
   if (row.running || row.queued) return "Generating or queued — wait until it finishes";
-  return pathTags(svg).length === 0 ? "This SVG has no <path> to edit" : null;
+  return pathTags(svg).length === 0 ? "This SVG has no shape to edit" : null;
 }
 
 /** What the editing slot shows: the base frame (already at the editing size), the box, the file. */
