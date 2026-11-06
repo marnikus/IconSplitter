@@ -16,7 +16,7 @@ import {
   moveAnchors, moveHandle, pullHandles, toggleSmooth,
 } from "./ops";
 import { commit, editableSub, preview, type EditSession } from "./session";
-import { boxHandles, handleAt, scaleAnchors, scaleFor, selectionBox, type Box, type BoxHandleId } from "./scale";
+import { boxHandles, handleAt, rotateAnchors, rotateAngle, rotateHandleOf, scaleAnchors, scaleFor, selectionBox, type Box, type BoxHandleId } from "./scale";
 
 export interface PointerInput {
   p: Pt;
@@ -36,7 +36,8 @@ type Drag =
   | { kind: "handle"; before: PathModel; base: PathModel; ref: AnchorRef; side: "in" | "out" }
   | { kind: "marquee"; start: Pt; objects: number[]; base: AnchorRef[]; mode: SelectMode }
   | { kind: "draw"; before: PathModel; base: PathModel; ref: AnchorRef }
-  | { kind: "scale"; before: PathModel; refs: AnchorRef[]; handle: BoxHandleId; box: Box; start: Pt };
+  | { kind: "scale"; before: PathModel; refs: AnchorRef[]; handle: BoxHandleId; box: Box; start: Pt }
+  | { kind: "rotate"; before: PathModel; refs: AnchorRef[]; center: Pt; start: Pt };
 
 /** How a click or box changes the anchor selection: plain replaces, Shift adds, Alt removes. */
 export type SelectMode = "replace" | "add" | "remove";
@@ -53,7 +54,7 @@ export interface EditorState {
 }
 
 /** Hit radii in screen pixels: generous anchors and handles, a 6 px band around a segment. */
-export const HIT_PX = { anchor: 9, handle: 9, segment: 6, snap: 8, pull: 3, pick: 14, scalePad: 8, scaleHandle: 6 };
+export const HIT_PX = { anchor: 9, handle: 9, segment: 6, snap: 8, pull: 3, pick: 14, scalePad: 8, scaleHandle: 6, rotateStem: 24 };
 
 /** The selection's scale box, when two or more anchors are selected in Select (2026-11-06). */
 export function scaleBoxOf(s: EditSession): Box | null {
@@ -65,6 +66,11 @@ function scaleDown(st: EditorState, input: PointerInput): EditorState | null {
   const box = scaleBoxOf(st.session);
   if (box === null) return null;
   const u = input.unitsPerPx;
+  const knob = rotateHandleOf(box, HIT_PX.scalePad * u, HIT_PX.rotateStem * u);
+  if (Math.hypot(knob.x - input.p.x, knob.y - input.p.y) <= HIT_PX.scaleHandle * u) {
+    const center = { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 };
+    return { ...st, drag: { kind: "rotate", before: st.session.model, refs: st.session.selection, center, start: input.p } };
+  }
   const handle = handleAt(boxHandles(box, HIT_PX.scalePad * u), input.p, HIT_PX.scaleHandle * u);
   if (handle === null) return null;
   return { ...st, drag: { kind: "scale", before: st.session.model, refs: st.session.selection, handle, box, start: input.p } };
@@ -228,6 +234,7 @@ export function pointerMove(st: EditorState, input: PointerInput): EditorState {
   if (d === null) return st;
   if (d.kind === "anchors") return anchorMove(st, d, input);
   if (d.kind === "scale") return scaleMove(st, d, input);
+  if (d.kind === "rotate") return withSession(st, preview(st.session, rotateAnchors(d.before, d.refs, d.center, rotateAngle(d.center, d.start, input.p, input.shift))));
   if (d.kind === "handle") return withSession(st, preview(st.session, moveHandle(d.base, d.ref, d.side, input.p)));
   if (d.kind === "marquee") return marqueeMove(st, d, input.p);
   const a = at(d.base, d.ref);

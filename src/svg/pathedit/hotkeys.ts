@@ -21,6 +21,7 @@ export const EDIT_HOTKEYS: readonly HotkeyHelp[] = [
   { keys: "Shift+Drag", icon: "⌖", text: "Snap to ends and lines" },
   { keys: "Drag box handle", icon: "⤡", text: "Scale the selected points (2+)" },
   { keys: "Shift+Box handle", icon: "⊡", text: "Scale keeping proportions" },
+  { keys: "Drag ○ above box", icon: "⟳", text: "Rotate the selected points (Shift: 15° steps)" },
   { keys: "Delete", icon: "⌫", text: "Delete points, keep the line joined" },
   { keys: "Ctrl+Delete", icon: "✂", text: "Break the line at the points" },
   { keys: "Esc", icon: "⎋", text: "End path · deselect" },

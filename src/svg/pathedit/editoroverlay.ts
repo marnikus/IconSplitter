@@ -10,7 +10,7 @@
 import type { EditorState } from "../../lib/pathedit/gesture";
 import { editableSub } from "../../lib/pathedit/session";
 import { HIT_PX, scaleBoxOf } from "../../lib/pathedit/gesture";
-import { boxHandles } from "../../lib/pathedit/scale";
+import { boxHandles, rotateHandleOf } from "../../lib/pathedit/scale";
 import { nextIndex, segmentCubic, toPathData, type Anchor, type Pt } from "../../lib/pathedit/model";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -94,7 +94,17 @@ function scaleBoxMarks(doc: Document, st: EditorState, look: OverlayLook): Eleme
     sq.setAttribute("data-scale-handle", h.id);
     return sq;
   });
-  return [rect, ...handles];
+  return [rect, ...handles, ...rotateMarks(doc, box, pad, look)];
+}
+
+/** The rotate handle: a short stem up from the top edge to a circle (2026-11-06). */
+function rotateMarks(doc: Document, box: { x0: number; y0: number; x1: number; y1: number }, pad: number, look: OverlayLook): Element[] {
+  const knob = rotateHandleOf(box, pad, HIT_PX.rotateStem * look.u);
+  const stem = el(doc, "line", { x1: n(knob.x), y1: n(box.y0 - pad), x2: n(knob.x), y2: n(knob.y) }, `fill:none;stroke:${BLUE};stroke-width:1px`);
+  stem.setAttribute("data-rotate-stem", "");
+  const circle = el(doc, "circle", { cx: n(knob.x), cy: n(knob.y), r: n(4.5 * look.u) }, `fill:#fff;stroke:${BLUE};stroke-width:1.4px`);
+  circle.setAttribute("data-rotate-handle", "");
+  return [stem, circle];
 }
 
 /** Removes the previous overlay of this preview, if any. */

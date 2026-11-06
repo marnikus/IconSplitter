@@ -24,3 +24,13 @@ thin / preset), `-editor`, `-toolbar`, `-tool-select`, `-tool-draw`, `-stroke`,
 anchor point size 4–24 px (default 10), used by the editor and the Ctrl-hover
 dots (`anchoroverlay.ts`); **click tolerance to select a shape** 2–40 px
 (default 14): how far from a (thin) shape's line a single click still picks it.
+
+<a id="rotate"></a>
+
+## Rotate (2026-11-06)
+
+With 2+ points selected the scale box has a rotate handle: a circle on a 24 px
+stem above the top edge. Dragging it turns the selected points and their curve
+handles around the box's centre (`scale.rotateAnchors`, `rotateAngle`); Shift
+snaps to 15° steps; one drag = one undo step. Handles: `[data-rotate-handle]`,
+`[data-rotate-stem]` in the overlay. Tests: `pathedit_rotate.test.ts`.

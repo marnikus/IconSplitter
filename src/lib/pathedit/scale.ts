@@ -86,3 +86,30 @@ export function scaleAnchors(m: PathModel, refs: readonly AnchorRef[], s: ScaleS
   }
   return out;
 }
+
+// --- rotation (2026-11-06) ---------------------------------------------------
+
+/** The rotate handle: above the top-middle handle (`pad` outside the box, then a `stem`). */
+export function rotateHandleOf(box: Box, pad: number, stem: number): Pt {
+  return { x: (box.x0 + box.x1) / 2, y: box.y0 - pad - stem };
+}
+
+/** The angle (radians, clockwise on screen) from `start` to `p` around `c`; Shift snaps to 15°. */
+export function rotateAngle(c: Pt, start: Pt, p: Pt, snap: boolean): number {
+  const a = Math.atan2(p.y - c.y, p.x - c.x) - Math.atan2(start.y - c.y, start.x - c.x);
+  const step = Math.PI / 12;
+  return snap ? Math.round(a / step) * step : a;
+}
+
+/** The selected anchors (and their handles) turned by `angle` around `c`. */
+export function rotateAnchors(m: PathModel, refs: readonly AnchorRef[], c: Pt, angle: number): PathModel {
+  const out = cloneModel(m);
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const turn = (p: Pt): Pt => ({ x: c.x + (p.x - c.x) * cos - (p.y - c.y) * sin, y: c.y + (p.x - c.x) * sin + (p.y - c.y) * cos });
+  for (const r of refs) {
+    const a = out.subs[r.sub]?.anchors[r.i];
+    if (a === undefined) continue;
+    out.subs[r.sub].anchors[r.i] = { ...a, ...turn(a), in: a.in && turn(a.in), out: a.out && turn(a.out) };
+  }
+  return out;
+}

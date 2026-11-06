@@ -4965,3 +4965,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: keys.ts arrow nudge (1 unit, Shift 10, burst = one undo step via EditorState.nudgeAt); useEditMode leaves ←/→ to the session while points are selected; legend; two older tests press Esc before → (a dragged point stays selected); tailcut_speed takes the best of three batches (it failed at 30.18 ms vs 30 under a loaded parallel run).
 - Measured: 5 new tests (pathedit_nudge, seen failing first); editor suites 112 pass; verify:fast 4031 pass / 17 fail = the pre-existing 16 + bridge_esp (passes alone, 2/2); tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit mode: rotate the selection
+
+- Scope: scale.ts rotateHandleOf / rotateAngle (Shift 15°) / rotateAnchors; gesture rotate drag (one undo step); overlay stem + circle; legend; docs on the sibling page.
+- Measured: 6 new tests (pathedit_rotate, seen failing first); editor suites 118 pass; verify:fast 4038 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.

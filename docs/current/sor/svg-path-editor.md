@@ -63,7 +63,8 @@ Two tools: **Select** (default) and **Draw**; switching keeps anchors and the se
   outside the anchors). A corner scales width and height freely, **Shift**
   keeps proportions; an edge scales one direction (Shift: both, pivot the
   opposite edge's middle). Pivot = the opposite side; curve handles scale with
-  their anchors; one drag = one undo step (`lib/pathedit/scale.ts`).
+  their anchors; one drag = one undo step (`lib/pathedit/scale.ts`). **Rotate**: the
+  ○ above the box ([details](svg-path-editor-handles.md#rotate)).
 - **Ctrl+C / Ctrl+V** copy and paste the selected anchors (each run of selected
   points along a line = one piece; a fully selected closed shape stays closed;
   pasted into the first selected object, nudged 5 %, selected, one undo step;
