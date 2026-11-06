@@ -4895,3 +4895,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: useEditMode liveShape swaps a changed basic shape for the <path> Finish writes (circles ignored d); overlay guide only in the thin view.
 - Measured: 3 new tests (pathedit_live_shapes, reproduced first); editor suites 75 pass; verify:fast 3950 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — process_completion_sound: no fixed sleep
+
+- Scope: the Single sheets import test waited a fixed 110 ms after mounting the whole App; it now waits (≤ 2 s) for the attempt's cue, then 150 ms more, and asserts exactly one cue. It had started failing intermittently even alone (1 of 3) as the App grew.
+- Measured: 6 consecutive runs, 12/12 each.
