@@ -12,7 +12,7 @@ import { approveEditedSvg, finishSvgEdit } from "../svgedit";
 import type { SvgRow } from "../types";
 import { useSvgText } from "../usesvgtext";
 import { closeSvgEditor, openSvgEditor, useSvgEditorId } from "./editmodalstore";
-import { neighborRow } from "./editnav";
+import { editableRow as editable, neighborRow } from "./editnav";
 import SvgPathEditor from "./SvgPathEditor";
 
 export interface SvgEditModalProps {
@@ -21,8 +21,6 @@ export interface SvgEditModalProps {
   rootToken: number;
 }
 
-/** A row the edit mode can open: a drawn SVG and no run writing it. */
-const editable = (r: SvgRow): boolean => previewTargetOf(r) !== null && !r.running && !r.queued;
 
 export default function SvgEditModal(p: SvgEditModalProps) {
   const id = useSvgEditorId();

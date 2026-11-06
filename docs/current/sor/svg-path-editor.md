@@ -2,8 +2,10 @@
 
 [Generate SVG owner](svg-generation.md) · [regen marks](svg-regen-statuses.md) · [state history](topics/state-history.md)
 
-**✎ Edit** beside a row's SVG version opens the tab's **full-screen edit
-mode** on that row (`pathedit/SvgEditModal.tsx`, one modal for the tab; the
+**✎ Edit** beside a row's SVG version — or **Enter** on the active row, or a
+**double-click on the SVG thumbnail** (`editnav.editableRow`: a drawn SVG, no
+run on the row; Enter on a focused button stays the button's) — opens the tab's
+**full-screen edit mode** on that row (`pathedit/SvgEditModal.tsx`, one modal for the tab; the
 open row lives in `editmodalstore.ts`). Every control is OUTSIDE the artboard:
 the top bar (Select / Draw, **thin lines ↔ preset stroke** switch, **PREVIEW BG**
 (the shared `ui/PreviewBgPicker`: presets or a custom colour, white by default,

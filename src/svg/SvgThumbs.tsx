@@ -26,7 +26,8 @@ import { lastImageFailure, mainImageOf } from "../lib/svgimgreg";
 import { useSvgText } from "./usesvgtext";
 import { previewTargetOf, shownVersion } from "./rowmodel";
 import SvgPreviewBox from "./SvgPreview";
-import { PairBars, svgBarOf } from "./svgeditslot";
+import { editBlocked, PairBars, svgBarOf } from "./svgeditslot";
+import { openSvgEditor } from "./pathedit/editmodalstore";
 import { SVG_STROKE_SHEET } from "./strokesheet";
 import type { SvgRow } from "./types";
 import { useRowTailMarks } from "./tailcut/tailreview";
@@ -62,7 +63,9 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   // vector from the ratio of the document it is about to draw.
   const aiBox = zoomBox(thumb, aiNat);
   const { review, marks } = useRowTailMarks(id, target?.svgPath ?? "", svg, useCutSettings());
-  const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg), marks };
+  // double-click on the SVG opens it in the edit mode (2026-11-06)
+  const onOpen = editBlocked(row, svg) === null ? () => openSvgEditor(id) : undefined;
+  const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg), marks, onOpen };
   const svgSide = svgSlot(slotArgs);
   const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
   const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />, review);
@@ -88,10 +91,12 @@ interface SvgSlotArgs {
   frame: PreviewFrame;
   /** Tail-cutter highlights while a review is open (preview only). */
   marks?: TailMarks;
+  /** Double-click opens the SVG edit mode; absent when this row cannot be edited now. */
+  onOpen?: () => void;
 }
 
 /** The SVG side: the framed document, in the box its own ratio asks for. */
-function svgSlot({ svg, thumb, id, stem, version, frame, marks }: SvgSlotArgs): PreviewSlot {
+function svgSlot({ svg, thumb, id, stem, version, frame, marks, onOpen }: SvgSlotArgs): PreviewSlot {
   const box = svgBox(svg, thumb);
   const className = `svg-preview-frame${frame.outline ? " contrast" : ""}`;
   return {
@@ -102,8 +107,13 @@ function svgSlot({ svg, thumb, id, stem, version, frame, marks }: SvgSlotArgs): 
     className,
     background: frame.color,
     attrs: { "data-bg": frame.color },
-    children: <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`} marks={marks}
-      label={`${stem} SVG v${version}`} version={version} strokeSheet={SVG_STROKE_SHEET} />,
+    children: (
+      <div className="svg-open-edit" style={{ display: "contents" }} title={onOpen ? "Double-click to edit" : undefined}
+        onDoubleClick={(e) => { if (onOpen) { e.stopPropagation(); onOpen(); } }}>
+        <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`} marks={marks}
+      label={`${stem} SVG v${version}`} version={version} strokeSheet={SVG_STROKE_SHEET} />
+      </div>
+    ),
   };
 }
 

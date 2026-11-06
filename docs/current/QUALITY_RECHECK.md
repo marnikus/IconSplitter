@@ -4940,3 +4940,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: useEditMode save-approve mode (approves even with no changes); EditNav.onGo approve flag; svgedit.approveEditedSvg (review path + its own svgReview entry; already approved records nothing); SvgEditModal saves, approves, then moves; legend text.
 - Measured: 6 new tests (pathedit_save_approve, written first, seen failing); editor suites 96 pass; verify:fast 4007 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Open the SVG edit mode with Enter / thumbnail double-click
+
+- Scope: SvgHotkeys Enter on the active row (Enter on a focused control stays native); SvgThumbs double-click on the SVG thumbnail; one rule editnav.editableRow shared with the modal.
+- Measured: 4 new tests (svg_open_editor, seen failing first); svg/editor suites 88 files pass; verify:fast 4011 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
