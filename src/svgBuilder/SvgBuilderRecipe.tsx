@@ -1,7 +1,7 @@
 // SvgBuilderRecipe.tsx — the reference "Selection recipe" card: Similar /
 // Random / Filtered, the mode's own controls, "Reshuffle N icons" and its caption.
 import { RANGES } from "../lib/svgBuilder/ranges";
-import { profileOf, recipeCaption } from "../lib/svgBuilder/selection";
+import { recipeCaption } from "../lib/svgBuilder/selection";
 import type { SelectionMode } from "../lib/svgBuilder/types";
 import { Field, Segmented, Slider, type SegOption } from "./SvgBuilderFields";
 import type { BuilderApi } from "./useSvgBuilder";
@@ -21,23 +21,29 @@ export default function SvgBuilderRecipe({ b }: { b: BuilderApi }) {
       A seeded draw from all {b.assets.length} glyphs. Same seed, same sheet.</p>}
     <button type="button" className="svg-btn primary bld-wide" data-testid="builder-reshuffle-recipe" disabled={b.assets.length === 0}
       onClick={b.actions.reshuffle}>↻ Reshuffle {b.layout.capacity} icons</button>
-    <p className="bld-caption" data-testid="builder-recipe-caption">{recipeCaption(b.recipe, b.profiles)}</p>
+    <p className="bld-caption" data-testid="builder-recipe-caption">{recipeCaption(b.recipe)}</p>
   </section>;
 }
 
 function SimilarPane({ b }: { b: BuilderApi }) {
-  const profile = profileOf(b.profiles, b.recipe);
+  const pending = b.indexStats.pending;
   return <>
-    <Field label="Metadata profile">
-      <select className="svg-input" data-testid="builder-recipe-profile" aria-label="Metadata profile" value={profile?.id ?? ""}
-        onChange={(e) => b.actions.setRecipe({ profileId: e.target.value })}>
-        {b.profiles.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-      </select>
-    </Field>
-    <Slider label="Match threshold" value={b.recipe.threshold} range={RANGES.threshold} testid="builder-threshold"
+    <Field label="Reference"><p className="bld-reference" data-testid="builder-reference">{referenceText(b)}</p></Field>
+    <Slider label="Similarity" value={b.recipe.threshold} range={RANGES.threshold} testid="builder-threshold"
       display={`≥ ${b.recipe.threshold}%`} onChange={(threshold) => b.actions.setRecipe({ threshold })} />
-    <p className="bld-tags" data-testid="builder-profile-tags">{(profile?.tags ?? []).map((t) => `#${t}`).join("  ")}</p>
+    <p className="bld-hint">Balanced index: 50% look alike (image) + 50% mean alike (title, description, tags).</p>
+    {pending > 0 && <p className="bld-hint bld-warn" data-testid="builder-similar-unindexed">
+      {pending} icon{pending === 1 ? " is" : "s are"} not indexed and cannot be matched — run Icons indexing.</p>}
   </>;
+}
+
+/** Who the sheet is compared against: locked icons, else the first placed icon. */
+function referenceText(b: BuilderApi): string {
+  if (b.referenceIds.length === 0) return "None — place or lock an icon to compare against";
+  if (b.reference.count === 0) return "The reference icon is not indexed yet — run Icons indexing";
+  const locked = b.referenceIds.filter((id) => b.lockedIds.includes(id)).length;
+  if (locked > 0) return `${locked} locked icon${locked === 1 ? "" : "s"}${b.reference.count < locked ? ` (${b.reference.count} indexed)` : ""}`;
+  return `First placed icon: ${b.assets.find((a) => a.id === b.referenceIds[0])?.label ?? b.referenceIds[0]} (lock icons to choose)`;
 }
 
 function FilteredPane({ b }: { b: BuilderApi }) {

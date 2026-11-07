@@ -133,6 +133,16 @@ describe("selection recipes", () => {
     expect(r.ids.filter((id) => id !== "apple").every((id) => ui.some((u) => u.id === id))).toBe(true);
   });
 
+  it("with vector scores, Similar takes icons ≥ threshold and tops up with the NEXT most similar", () => {
+    const sim: Record<string, number> = { apple: 0.95, bread: 0.9, cake: 0.85, home: 0.5, gear: 0.4, bell: 0.3 };
+    const score = (a: BuilderIconAsset) => sim[a.id] ?? null;
+    const r = reshuffleSheet({ assets: library, profiles, recipe: recipe({ mode: "similar", threshold: 80 }), seed: 3, capacity: 5,
+      current: [], lockedIds: [], score });
+    expect(r.ids.slice(0, 3).sort()).toEqual(["apple", "bread", "cake"]);
+    expect(r.ids.slice(3)).toEqual(["home", "gear"]);
+    expect(r.shortfall).toEqual({ pool: 3, cells: 5 });
+  });
+
   it("growing appends new picks, shrinking truncates", () => {
     const grown = resizeSheet({ assets: library, profiles, recipe: recipe(), seed: 5, capacity: 6, current: ["apple", "home"], lockedIds: [] });
     expect(grown.slice(0, 2)).toEqual(["apple", "home"]);
@@ -142,10 +152,10 @@ describe("selection recipes", () => {
   });
 
   it("captions the recipe like the reference", () => {
-    expect(recipeCaption(recipe({ mode: "similar" }), profiles)).toBe("70% tag match · Food icons");
-    expect(recipeCaption(recipe({ mode: "random" }), profiles)).toBe("Random from the full library");
-    expect(recipeCaption(recipe({ mode: "filtered", category: "All" }), profiles)).toBe("Random from every category");
-    expect(recipeCaption(recipe({ mode: "filtered", category: "Interface" }), profiles)).toBe("Random from interface");
+    expect(recipeCaption(recipe({ mode: "similar" }))).toBe("≥ 70% similar · 50% look alike + 50% mean alike");
+    expect(recipeCaption(recipe({ mode: "random" }))).toBe("Random from the full library");
+    expect(recipeCaption(recipe({ mode: "filtered", category: "All" }))).toBe("Random from every category");
+    expect(recipeCaption(recipe({ mode: "filtered", category: "Interface" }))).toBe("Random from interface");
   });
 
   it("frequent metadata tags become Similar profiles (generic stock tags excluded)", () => {

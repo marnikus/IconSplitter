@@ -8,7 +8,7 @@
 |---|---|---|
 | `tab-svg-builder` | top-menu button | visible text `SVG builder` |
 | `builder-shell` / `builder-panel` | wrapper / panel root | own `bld-*` classes only; `builder-unsupported` note without the folder picker |
-| `builder-folder-widget` | folder bar | `builder-open-folder`, `builder-rescan`, `builder-scope-copy`, `builder-approved-count`, `builder-audit`, `builder-folder-path` |
+| `builder-folder-widget` | folder bar | `builder-open-folder`, `builder-rescan`, `builder-scope-copy`, `builder-approved-count`, `builder-index-start` (◈ Icons indexing), `builder-index-count`, while running `builder-index-progress` + `builder-index-cancel`, `builder-audit`, `builder-folder-path` |
 | `builder-meta-widget` | metadata prompt + Gemini widget (after the folder bar) | `data-open`; `builder-meta-toggle` (Minimize/Restore), `builder-meta-body` (drag-resizable), `builder-meta-restore-height`, `builder-metadata-state`, `builder-generate-metadata`, `builder-prompt-panel` (`builder-prompt`…, `builder-prompt-note`), `builder-provider-card` (`builder-provider-toggle`, `builder-limits`, `builder-model`, `builder-endpoint`, `builder-timeout`, `builder-retries`, `builder-concurrency`, `builder-model-check`, `builder-model-state`, `builder-key-state`…, `builder-provider-note`) |
 | `builder-header` | header row | `builder-sheet-title` ("Untitled icon sheet" when empty) |
 | `builder-undo` / `builder-redo` | global timeline | disabled when the stack is empty; title names the action |
@@ -25,13 +25,13 @@
 |---|---|---|
 | `builder-library` | column | `builder-library-count`; footer `builder-library-footer` |
 | `builder-recipe` | Selection recipe card | `builder-recipe-mode` (segmented; `-similar`, `-random`, `-filtered`) |
-| `builder-recipe-profile` / `builder-threshold` / `builder-profile-tags` | Similar pane | threshold slider `≥ N%` (`builder-threshold-value`) |
+| `builder-reference` / `builder-threshold` / `builder-similar-unindexed` | Similar pane | reference line; Similarity slider `≥ N%` 0–100 (`builder-threshold-value`); not-indexed warning |
 | `builder-recipe-category-{c}` | Filtered pane chips | shared category with the library chips |
 | `builder-random-note` | Random pane | "A seeded draw from all N glyphs…" |
 | `builder-reshuffle-recipe` / `builder-recipe-caption` | `Reshuffle N icons` + caption | |
 | `builder-search` / `builder-search-clear` | "Search name or #tag" | leading `#` stripped |
 | `builder-category-{c}` | category chips | All + categories |
-| `builder-icon-grid` / `builder-asset-{id}` | 6-column tiles | `data-asset-id`, `data-selected`, `aria-pressed`; `builder-match-{id}` Similar dot; `builder-prev-{id}` stroke-only preview |
+| `builder-icon-grid` / `builder-asset-{id}` | 6-column tiles | `data-asset-id`, `data-selected`, `aria-pressed`; `builder-match-{id}` Similar dot; `builder-unindexed-{id}` ⚠ + `data-unindexed`; `data-nometa` dashed amber tile; `builder-prev-{id}` stroke-only preview |
 | `builder-library-empty` / `builder-library-nomatch` / `builder-library-more` | empty states | |
 | `builder-cells` / `builder-locked-count` / `builder-clear` | footer | "N of C cells", "N locked", CLEAR |
 

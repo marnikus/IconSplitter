@@ -7,9 +7,10 @@ import { composeSheet } from "../lib/svgBuilder/compose";
 import type { BuilderIconAsset, BuilderProfile, SheetDocument, SheetLayout } from "../lib/svgBuilder/types";
 import { builderAuditLine } from "./discovery";
 import { createAssetRepository, type AssetRepository } from "./repository";
+import { useIconIndex, type IconIndexView } from "./useIconIndex";
 import type { BuilderModel } from "./model";
 
-export interface BuilderComputed {
+export interface BuilderComputed extends IconIndexView {
   assets: readonly BuilderIconAsset[];
   visibleAssets: readonly BuilderIconAsset[];
   categories: readonly string[];
@@ -40,7 +41,8 @@ export function useBuilderComputed(
   }), [repository, ready, model.config, layout, assets, placedIds, model.svgTexts, model.metadata]);
   const auditLine = useMemo(() => model.discovery === null ? "No approved assets scanned yet"
     : builderAuditLine(model.discovery), [model.discovery]);
-  return { assets, visibleAssets, categories, profiles, layout, repository, document, auditLine };
+  const indexView = useIconIndex(assets, model.discovery?.index, { placed: placedIds, locked: model.lockedIds });
+  return { assets, visibleAssets, categories, profiles, layout, repository, document, auditLine, ...indexView };
 }
 
 /** The banner's chosen hero icon is read like a placed icon. */

@@ -21,6 +21,8 @@ export interface SheetPick {
   capacity: number;
   current: readonly string[];
   lockedIds: readonly string[];
+  /** Vector similarity to the reference (0–1); null = not indexed. When given, Similar uses it instead of tag profiles. */
+  score?: (asset: BuilderIconAsset) => number | null;
 }
 
 export function parseSelectionRecipe(raw: unknown): SelectionRecipe {
@@ -40,9 +42,11 @@ export function profileOf(profiles: readonly BuilderProfile[], recipe: Selection
 }
 
 /** The pool a mode draws from; an empty pool means the whole library. */
-export function poolOf(assets: readonly BuilderIconAsset[], profiles: readonly BuilderProfile[], recipe: SelectionRecipe): BuilderIconAsset[] {
+export function poolOf(assets: readonly BuilderIconAsset[], profiles: readonly BuilderProfile[], recipe: SelectionRecipe,
+  score?: SheetPick["score"]): BuilderIconAsset[] {
   if (recipe.mode === "random") return [...assets];
   if (recipe.mode === "filtered") return isAll(recipe.category) ? [...assets] : assets.filter((a) => a.category === recipe.category);
+  if (score !== undefined) return assets.filter((a) => (score(a) ?? -1) * 100 >= recipe.threshold);
   const profile = profileOf(profiles, recipe);
   return assets.filter((a) => scoreOf(a, profile) * 100 >= recipe.threshold);
 }
@@ -52,7 +56,7 @@ export function reshuffleSheet(p: SheetPick): SelectionResult {
   const locked = new Set(p.lockedIds);
   const slots: (string | null)[] = Array.from({ length: p.capacity }, (_, i) => (locked.has(p.current[i] ?? "") ? p.current[i] : null));
   const kept = new Set(slots.filter((id): id is string => id !== null));
-  const pool = poolOf(p.assets, p.profiles, p.recipe).filter((a) => !kept.has(a.id));
+  const pool = poolOf(p.assets, p.profiles, p.recipe, p.score).filter((a) => !kept.has(a.id));
   const open = slots.filter((id) => id === null).length;
   const draw = drawIds(p, pool, kept, open);
   let k = 0;
@@ -64,21 +68,21 @@ export function reshuffleSheet(p: SheetPick): SelectionResult {
 export function resizeSheet(p: SheetPick): string[] {
   if (p.current.length >= p.capacity) return p.current.slice(0, p.capacity);
   const have = new Set(p.current);
-  const pool = poolOf(p.assets, p.profiles, p.recipe).filter((a) => !have.has(a.id));
+  const pool = poolOf(p.assets, p.profiles, p.recipe, p.score).filter((a) => !have.has(a.id));
   const extra = drawIds({ ...p, seed: p.seed + p.capacity }, pool, have, p.capacity - p.current.length);
   return [...p.current, ...extra];
 }
 
 /** The line under "Reshuffle N icons". */
-export function recipeCaption(recipe: SelectionRecipe, profiles: readonly BuilderProfile[]): string {
+export function recipeCaption(recipe: SelectionRecipe): string {
   if (recipe.mode === "random") return "Random from the full library";
   if (recipe.mode === "filtered") return isAll(recipe.category) ? "Random from every category" : `Random from ${recipe.category.toLowerCase()}`;
-  return `${recipe.threshold}% tag match · ${profileOf(profiles, recipe)?.label ?? "no profile"}`;
+  return `≥ ${recipe.threshold}% similar · 50% look alike + 50% mean alike`;
 }
 
 /** The honest shortfall toast (reference wording). */
 export function shortfallMessage(recipe: SelectionRecipe, s: { pool: number; cells: number }): string {
-  if (recipe.mode === "similar") return `Only ${s.pool} icons meet ≥${recipe.threshold}% metadata match. Closest matches fill the remaining cells.`;
+  if (recipe.mode === "similar") return `Only ${s.pool} icons are ≥${recipe.threshold}% similar. The next most similar fill the remaining cells.`;
   return `That filter has ${s.pool} icons for ${s.cells} cells. The closest library pick fills the rest.`;
 }
 
@@ -101,13 +105,20 @@ export function shuffled<T>(items: readonly T[], random: () => number): T[] {
   return out;
 }
 
-/** Seeded draw from the pool, topped up from the rest of the library with seed + 99. */
+/** Seeded draw from the pool, topped up from the rest of the library (next most similar with vectors, else seed + 99). */
 function drawIds(p: SheetPick, pool: readonly BuilderIconAsset[], taken: ReadonlySet<string>, count: number): string[] {
   const first = shuffled(pool, mulberry32(p.seed)).map((a) => a.id).slice(0, count);
   if (first.length >= count) return first;
   const used = new Set([...taken, ...first]);
-  const rest = shuffled(p.assets.filter((a) => !used.has(a.id)), mulberry32(p.seed + 99)).map((a) => a.id);
+  const rest = restOrder(p, p.assets.filter((a) => !used.has(a.id))).map((a) => a.id);
   return [...first, ...rest.slice(0, count - first.length)];
+}
+
+function restOrder(p: SheetPick, rest: BuilderIconAsset[]): BuilderIconAsset[] {
+  const random = shuffled(rest, mulberry32(p.seed + 99));
+  const score = p.score;
+  if (p.recipe.mode !== "similar" || score === undefined) return random;
+  return random.map((a) => ({ a, s: score(a) ?? -1 })).sort((x, y) => y.s - x.s).map((x) => x.a);
 }
 
 function isAll(category: string): boolean {

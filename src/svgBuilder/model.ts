@@ -27,6 +27,15 @@ export interface BuilderKeyInfo {
   keySet: boolean;
 }
 
+/** A running (or just finished) Icons indexing pass. */
+export interface IndexingState {
+  phase: "models" | "icons";
+  done: number;
+  total: number;
+  failed: number;
+  model: { file: string; loaded: number; total: number } | null;
+}
+
 export interface BuilderModelCheck { state: "idle" | "checking" | "found" | "missing" | "failed"; detail: string }
 
 export interface BuilderModel {
@@ -53,6 +62,7 @@ export interface BuilderModel {
   preview: string | null;
   dialog: BuilderDialog;
   svgTexts: Readonly<Record<string, string>>;
+  indexing: IndexingState | null;
 }
 
 export interface BuilderAction { type: "patch"; patch: Partial<BuilderModel> }
@@ -66,7 +76,7 @@ export function initialBuilderModel(): BuilderModel {
     prompt: loadBuilderPrompt(), presets: builderPresets.load(), presetPick: "",
     gemini: loadGeminiConfig(), key: emptyKeyInfo(),
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null,
-    preview: null, dialog: "none", svgTexts: {},
+    preview: null, dialog: "none", svgTexts: {}, indexing: null,
   };
 }
 

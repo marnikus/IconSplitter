@@ -13,7 +13,7 @@ export const RANGES = {
   columns: r(1, 16), rows: r(1, 12), gapX: r(0, 60), gapY: r(0, 60), captionSize: r(5, 13),
   box: r(18, 120), strokeWidth: r(0.5, 5, 0.1),
   bannerSide: r(120, 420), bannerEdge: r(50, 180), bannerAny: r(50, 420),
-  titleSize: r(10, 48), subtitleSize: r(5, 26), threshold: r(30, 100, 5),
+  titleSize: r(10, 48), subtitleSize: r(5, 26), threshold: r(0, 100),
 } as const satisfies Record<string, NumRange>;
 
 /** Rounds to the range's step, then clamps; a non-number yields `fallback`. */

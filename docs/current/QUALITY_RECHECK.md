@@ -5021,3 +5021,10 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 
 - Widget = shared PromptWindow (edit/reset/saved presets) + Gemini card rebuilt on the Upload tab classes over the shared config/key (gemini-3.1-flash-lite default); folds (Minimize/Restore), drag-resizable body with remembered height and Restore height; dialog variant removed.
 - Builder suites 65/65 (new fold/height + placement tests); test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate (--base b8cb74c4) PASS.
+
+## 2026-11-08 — SVG builder: local icon vector index (Icons indexing) + vector Similar
+
+- Vendored transformers.js 3.8.1 browser build (npm registry here cannot resolve sharp/bare-events); CLIP image + MiniLM text in an inline Web Worker; model files cached in IndexedDB; per-icon `<svg>.index.json` beside the approved SVG (PNG render in memory only, after scanner audit showed a stray PNG would be imported by Generate SVG).
+- Similar = 50% image + 50% text cosine to the locked reference, one 0–100% slider; tiles mark unindexed (⚠) and no-metadata (dashed amber).
+- Tests: icon_index 9, icon_indexing_run 6, workspace +2, parity +1; builder+index suites 82/82; test:builder:fast 14/14; secret_hygiene 7/7; tsc PASS; lint 0 errors (22 pre-existing warnings); quality gate (--base 61e14b90) PASS; build PASS (dist 2.1 → 3.1 MB). Full vitest 4142 passed / 16 failed (same 8 pre-existing env files).
+- Not verified: real model download/inference in a browser (no browser in this session).

@@ -80,6 +80,10 @@
 .bld-thumb { display: block; width: 100%; height: 100%; }
 .bld-tile-check { position: absolute; top: -4px; right: -4px; width: 13px; height: 13px; display: grid; place-items: center; border-radius: 50%; background: var(--v2-green); color: #04140d; font-size: 8px; font-weight: 900; }
 .bld-tile-dot { position: absolute; top: 3px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--v2-green); }
+.bld-tile-warn { position: absolute; left: 2px; bottom: 1px; color: var(--v2-yellow); font-size: 9px; line-height: 1; text-shadow: 0 0 2px #000; }
+.bld-tile.is-nometa { border-style: dashed; border-color: #b8860b; background: color-mix(in srgb, #b8860b 14%, var(--v2-surface-2)); }
+.bld-tile.is-nometa.is-on { border-style: solid; }
+.bld-reference { font-size: 10px; color: var(--v2-text); }
 .bld-empty-note { padding: 10px; border: 1px dashed var(--v2-line); border-radius: var(--v2-radius); color: var(--v2-muted); font-size: 10px; }
 
 /* stage ────────────────────────────────────────────────────────────────── */

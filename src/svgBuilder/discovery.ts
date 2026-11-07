@@ -6,6 +6,8 @@ import { isRecord } from "../lib/isrecord";
 import { assetsFromRows } from "../lib/svgBuilder/assets";
 import type { BuilderIconAsset, ExportMeta } from "../lib/svgBuilder/types";
 import { exportDirOf, parseExportRecord } from "../lib/upload/export";
+import type { IconIndexRecord } from "../lib/iconIndex/record";
+import { readIconIndex } from "./indexer/indexstore";
 import {
   discoverUploadSources, type UploadDiscovery, type UploadExclusion, type UploadRowSource,
 } from "../upload/discovery";
@@ -21,6 +23,8 @@ export interface BuilderDiscovery {
   unreadable: UploadDiscovery["unreadable"];
   /** Icons named from their `export/export.json` metadata. */
   withMetadata: number;
+  /** The vector index read from each icon's `<svg>.index.json` (fresh or stale; freshness is derived). */
+  index: ReadonlyMap<string, IconIndexRecord>;
 }
 
 const READ_BATCH = 24;
@@ -28,8 +32,9 @@ const READ_BATCH = 24;
 export async function discoverBuilderAssets(root: DirHandleLike): Promise<BuilderDiscovery> {
   const found = await discoverUploadSources(root, { hideOutside: false, ignoreDirs: BUILDER_IGNORE });
   const meta = await readExportMeta(root, found.rows);
+  const assets = assetsFromRows(found.rows, meta);
   return {
-    assets: assetsFromRows(found.rows, meta), rows: found.rows, excluded: found.excluded,
+    assets, rows: found.rows, excluded: found.excluded, index: await readIconIndex(root, assets),
     audit: found.audit, corruptFiles: found.corruptFiles, unreadable: found.unreadable, withMetadata: meta.size,
   };
 }

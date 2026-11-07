@@ -26,8 +26,10 @@ export function selectionActions(get: () => BuilderActionContext): SelectionActi
 
 function pickOf(ctx: BuilderActionContext, recipe: SelectionRecipe, seed: number): SheetPick {
   return { assets: ctx.assets, profiles: ctx.profiles, recipe, seed, capacity: ctx.layout.capacity,
-    current: ctx.placedIds, lockedIds: ctx.model.lockedIds };
+    current: ctx.placedIds, lockedIds: ctx.model.lockedIds, score: ctx.reference.image === null ? undefined : ctx.scoreOf };
 }
+
+export const NO_REFERENCE = "Similar needs an indexed reference: run Icons indexing, then lock (or place) an icon to compare against.";
 
 function place(ctx: BuilderActionContext, ids: readonly string[], label: string): void {
   ctx.setChecked({ checked: [...ids], anchor: null, active: ids[0] ?? null }, label);
@@ -42,12 +44,13 @@ function setRecipe(ctx: BuilderActionContext, patch: Partial<SelectionRecipe>): 
 
 function reshuffle(ctx: BuilderActionContext, recipe: SelectionRecipe, opts: { toast: boolean }): void {
   if (ctx.assets.length === 0) return ctx.say("Open a folder with approved SVGs first", true);
+  if (recipe.mode === "similar" && ctx.reference.image === null) return ctx.say(NO_REFERENCE, true);
   const seed = ctx.model.seed + 1;
   const result = reshuffleSheet(pickOf(ctx, recipe, seed));
   ctx.dispatch({ seed });
   place(ctx, result.ids, `Reshuffle ${result.ids.length} icons`);
   if (result.shortfall !== null && opts.toast) ctx.say(shortfallMessage(recipe, result.shortfall), true);
-  else ctx.say(`${result.ids.length} icons · ${recipeCaption(recipe, ctx.profiles)} · seed ${seed}`);
+  else ctx.say(`${result.ids.length} icons · ${recipeCaption(recipe)} · seed ${seed}`);
 }
 
 /** Library click: in the sheet → remove (and unlock), later cells shift up; else append to the first free cell. */
@@ -81,7 +84,8 @@ function autoPlace(ctx: BuilderActionContext): void {
   const kept = ctx.placedIds.filter((id) => known.has(id));
   if (kept.length !== ctx.placedIds.length) return ctx.setCheckedQuiet(kept.length > 0 ? kept : reshuffleSheet(pickOf(ctx, ctx.model.recipe, ctx.model.seed)).ids);
   if (ctx.placedIds.length > 0) return;
-  const result = reshuffleSheet(pickOf(ctx, ctx.model.recipe, ctx.model.seed));
+  const recipe = ctx.model.recipe.mode === "similar" ? { ...ctx.model.recipe, mode: "random" as const } : ctx.model.recipe;
+  const result = reshuffleSheet(pickOf(ctx, recipe, ctx.model.seed));
   ctx.setCheckedQuiet(result.ids);
 }
 

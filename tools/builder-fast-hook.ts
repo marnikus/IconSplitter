@@ -29,7 +29,8 @@ export function useSvgBuilder() {
     assets: [asset], visibleAssets: [asset], categories: ["All", "UI"],
     profiles: [{ id: "all", label: "All icons", tags: [] }],
     layout: computeLayout(DEFAULT_CONFIG),
-    repository: null, document: null, auditLine: "1 approved · 0 excluded",
+    repository: null, document: null, indexing: null, index: new Map(), indexStates: new Map(),
+    indexStats: { indexed: 0, pending: 1, noMeta: 1 }, referenceIds: [], reference: { image: null, text: null, count: 0 }, scoreOf: () => null, auditLine: "1 approved · 0 excluded",
     checked: [], activeId: null, anchorId: null, placedIds: [],
     actions: {
       openFolder: noop, rescan: noop, setConfig: noop, applyLayoutPreset: noop, resetConfig: noop, setRecipe: noop,
@@ -38,7 +39,7 @@ export function useSvgBuilder() {
       setPrompt: noop, resetPrompt: noop, presets, setGemini: noop, checkModel: noop, saveKey: noop,
       forgetKey: noop, generateMetadata: noop, confirmMetadata: noop, cancelMetadata: noop,
       acceptMetadataDraft: noop, exportSvg: noop, exportPng: noop, copySvg: noop, savePreset: noop,
-      loadPreset: noop, openBrief: noop, openMetadata: noop, say: noop, closeDialog: noop, presetOfModel: () => ({}),
+      loadPreset: noop, openBrief: noop, startIndexing: noop, cancelIndexing: noop, openMetadata: noop, say: noop, closeDialog: noop, presetOfModel: () => ({}),
     },
   };
 }

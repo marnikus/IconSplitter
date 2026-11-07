@@ -12,6 +12,18 @@ import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { settle, waitUntil } from "./helpers/quiet";
+import { setIndexRuntime, type IndexRuntime } from "../src/svgBuilder/indexer/runtime";
+
+/** Model seam: food icons share one image direction, interface icons another (no metadata → no text). */
+function fakeIndexRuntime(): IndexRuntime {
+  return {
+    render: async (svg) => ({ rgba: Uint8ClampedArray.from([svg.includes("<circle") ? 255 : 0, 0, 0, 0]), width: 1, height: 1 }),
+    createEmbedder: async () => ({
+      load: async () => undefined, dispose: () => undefined,
+      embed: async (input) => ({ image: input.pixels?.rgba[0] === 255 ? Float32Array.from([1, 0]) : Float32Array.from([0, 1]), text: null }),
+    }),
+  };
+}
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,10 +36,11 @@ vi.mock("../src/batch/store", async (importOriginal) => {
 });
 
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg>';
+const FOOD_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>';
 const FOOD = ["apple", "bread", "cake", "donut", "egg"];
 const UI = ["home", "gear", "bell", "user", "mail", "lock", "star"];
 
-function addPair(root: FakeDir, dir: string, stem: string): void {
+function addPair(root: FakeDir, dir: string, stem: string, svg = SVG): void {
   let node = root;
   for (const part of dir.split("/")) {
     const next = node.children.get(part);
@@ -36,13 +49,13 @@ function addPair(root: FakeDir, dir: string, stem: string): void {
   }
   const meta = serializePairMeta(pairFile(dir, `${stem}_AI.png`, { versions: [svgVersion(`${dir}/${stem}_AI.svg`, { version: 1, review: "approved" })] }));
   node.children.set(`${stem}_AI.png`, new FakeFile(`${stem}_AI.png`, 20, 3100, "ai"));
-  node.children.set(`${stem}_AI.svg`, new FakeFile(`${stem}_AI.svg`, SVG.length, 3400, SVG));
+  node.children.set(`${stem}_AI.svg`, new FakeFile(`${stem}_AI.svg`, svg.length, 3400, svg));
   node.children.set(`${stem}_AI.svg.json`, new FakeFile(`${stem}_AI.svg.json`, meta.length, 3500, meta));
 }
 
 function library(): FakeDir {
   const root = new FakeDir("icons");
-  FOOD.forEach((s) => addPair(root, "food icons", s));
+  FOOD.forEach((s) => addPair(root, "food icons", s, FOOD_SVG));
   UI.forEach((s) => addPair(root, "interface", s));
   return root;
 }
@@ -81,6 +94,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setIndexRuntime(null);
   act(() => ui.unmount());
   host.remove();
   delete (window as unknown as { showDirectoryPicker?: unknown }).showDirectoryPicker;
@@ -120,6 +134,7 @@ describe("SVG builder workspace", () => {
 
   it("a locked icon keeps its cell through Reshuffle; the seed re-rolls", async () => {
     await openLibrary();
+    await click("builder-recipe-mode-random");
     const seed = text("builder-seed");
     const before = q("builder-cell-lock-2")!;
     await act(async () => { before.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -130,13 +145,38 @@ describe("SVG builder workspace", () => {
     expect((await idsInOrder())[2]).toBe(lockedId);
   });
 
-  it("Similar mode with a multi-word category profile fills from that category first", async () => {
+  it("marks unindexed and metadata-less icons; Similar refuses without an index", async () => {
     await openLibrary();
-    const select = q("builder-recipe-profile") as HTMLSelectElement;
-    await act(async () => { select.value = "food icons"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    const tiles = all('[data-testid^="builder-asset-"]');
+    expect(tiles.every((t) => t.dataset.unindexed === "true" && t.dataset.nometa === "true")).toBe(true);
+    expect(all('[data-testid^="builder-unindexed-"]')).toHaveLength(12);
+    expect(text("builder-index-count")).toContain("0/12 indexed");
+    await click("builder-reshuffle-recipe");
+    expect(text("builder-toast")).toContain("Similar needs an indexed reference");
+  });
+
+  it("Icons indexing vectorises every icon, then Similar fills from the locked reference first", async () => {
+    setIndexRuntime(fakeIndexRuntime());
+    await openLibrary();
+    await click("builder-index-start");
+    await waitUntil(() => text("builder-index-count").includes("12/12 indexed"), "all icons indexed");
+    expect(all('[data-testid^="builder-unindexed-"]')).toHaveLength(0);
+    const food = new Set(all('[data-testid^="builder-asset-"]').filter((t) => /^(Apple|Bread|Cake|Donut|Egg)/.test(t.title)).map((t) => t.dataset.assetId));
+    expect(food.size).toBe(5);
+    const order = await idsInOrder();
+    const foodCell = order.findIndex((id) => food.has(id));
+    await act(async () => { q(`builder-cell-lock-${foodCell}`)!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(text("builder-reference")).toContain("1 locked icon");
+    const slider = q("builder-threshold") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(slider, "90");
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await settle(0);
-    expect(text("builder-recipe-caption")).toBe("70% tag match · food icons");
-    expect(text("builder-toast")).toContain("Only 5 icons meet ≥70% metadata match");
+    const after = await idsInOrder();
+    expect(after.filter((id) => food.has(id))).toHaveLength(5);
+    expect(after.slice(0, 5).filter((id) => food.has(id)).length).toBeGreaterThanOrEqual(4);
+    expect(text("builder-toast")).toContain("≥ 90% similar"); // threshold changes re-pick without a shortfall toast
   });
 
   it("presets, CUSTOM pill, RESET and the global undo", async () => {

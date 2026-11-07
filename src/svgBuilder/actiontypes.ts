@@ -5,6 +5,8 @@ import type { RowSelection } from "../lib/reviewselect";
 import type { GeminiConfig } from "../lib/upload/gemini";
 import type { BuilderIconAsset, BuilderProfile, SelectionRecipe, SheetConfig, SheetLayout, SheetPreset } from "../lib/svgBuilder/types";
 import type { LayoutPresetId } from "../lib/svgBuilder/config";
+import type { SimilarityReference } from "../lib/iconIndex/similarity";
+import type { IconIndexRecord } from "../lib/iconIndex/record";
 import type { SheetDocument } from "../lib/svgBuilder/types";
 import type { PresetActions } from "../ui/presetops";
 import type { BuilderDiscovery } from "./discovery";
@@ -22,6 +24,9 @@ export interface BuilderActionContext {
   document: SheetDocument | null;
   layout: SheetLayout;
   profiles: readonly BuilderProfile[];
+  reference: SimilarityReference;
+  scoreOf: (asset: BuilderIconAsset) => number | null;
+  index: ReadonlyMap<string, IconIndexRecord>;
   checked: RowSelection;
   discovery: BuilderDiscovery | null;
   scanRefs: BuilderScanRefs;
@@ -79,6 +84,9 @@ export interface BuilderActions {
   savePreset: () => void;
   loadPreset: (text: string) => void;
   openBrief: () => void;
+  /** "Icons indexing": vectorise every approved icon whose index is missing or stale. */
+  startIndexing: () => void;
+  cancelIndexing: () => void;
   openMetadata: () => void;
   /** One honest toast line (status). */
   say: (message: string, error?: boolean) => void;

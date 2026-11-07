@@ -11,6 +11,7 @@ Back to the [owner map](../OWNERS.md) and [behaviour contract](../svg-builder.md
 | repository / scanning | `src/svgBuilder/repository.ts`, `src/svgBuilder/scan.ts` | read-only SVG text/preview cache, remembered root, one scan ticket |
 | provider bridge | `src/svgBuilder/preview.ts`, `src/svgBuilder/runSheetMetadata.ts` | bounded JPEG, one explicit Gemini request |
 | state integration | `src/svgBuilder/model.ts`, `useBuilder*.ts`, `undoBinding.ts`, `actions/*` | reducer, persistence, computed projection, stable action slices |
+| vector index | `src/lib/iconIndex/{record,similarity}.ts`, `src/svgBuilder/indexer/*`, `src/svgBuilder/useIconIndex.ts`, `src/svgBuilder/actions/indexing.ts`, `src/vendor/transformers/*` | index file, freshness, balanced similarity, worker models, IndexedDB model cache, run/cancel |
 | presentation | `src/svgBuilder/SvgBuilder*.tsx`, `briefText.ts`, `svgBuilder.css` | header, folder bar, library + recipe, stage + artboard overlays, Customize sections, export menu, toast, dialogs — app-theme styles only |
 | shared provider / key | `src/lib/upload/gemini.ts`, `src/upload/configstore.ts`, `src/upload/keystore.ts`, `src/ui/PromptWindow.tsx`, `src/ui/KeySlot.tsx` | unchanged Gemini config, prompt presets and key vault |
 | tests | `tests/svg_builder_*.test.ts*`, edited `tests/workbench_ui.test.tsx`, `tests/session.test.ts`, `tests/log_ui.test.tsx`, `tests/scroll_top.test.tsx` | TDD contracts and shell regressions |
