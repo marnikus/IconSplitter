@@ -55,11 +55,21 @@ function IconTile({ b, asset }: { b: BuilderApi; asset: BuilderIconAsset }) {
   const match = !placed && b.recipe.mode === "similar" && score >= b.recipe.threshold;
   return <button type="button" data-testid={`builder-asset-${asset.id}`} data-asset-id={asset.id} data-selected={placed}
     className={`bld-tile${placed ? " is-on" : ""}`} aria-pressed={placed}
-    title={`${asset.label} · ${score}% tag match${placed ? " · in sheet" : ""}`} onClick={() => b.actions.toggleAsset(asset.id)}>
+    title={tileTitle(asset, score, placed)} onClick={() => b.actions.toggleAsset(asset.id)}>
     <SvgBuilderAssetThumb asset={asset} repository={b.repository} />
     {placed && <span className="bld-tile-check" aria-hidden="true">✓</span>}
     {match && <span className="bld-tile-dot" data-testid={`builder-match-${asset.id}`} aria-hidden="true" />}
   </button>;
+}
+
+/** Tooltip: name · match · in sheet, then the export description and tags when the icon has metadata. */
+function tileTitle(asset: BuilderIconAsset, score: number, placed: boolean): string {
+  const head = `${asset.label} · ${score}% tag match${placed ? " · in sheet" : ""}`;
+  const desc = asset.description ? `
+${asset.description}` : "";
+  const tags = asset.keywords && asset.keywords.length > 0 ? `
+#${asset.keywords.join(" #")}` : "";
+  return head + desc + tags;
 }
 
 function LibraryFooter({ b }: { b: BuilderApi }) {

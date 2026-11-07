@@ -5011,3 +5011,8 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 - New suites: svg_builder_parity (20) and svg_builder_workspace (9, real scanned fake library); builder + apply suites 46/46; test:builder:fast 14/14 (added `?raw` text loader).
 - tsc PASS; lint 0 errors; quality gate (--base 0d860d14) PASS; build PASS. Full vitest 4121 passed / 16 failed — same 8 pre-existing Windows-environment files as before this change (bridge/getty helpers, verify_execution, fs_case_collisions, docs read budget 15 pages, none builder).
 - Not verified: visual check in a real browser (no browser automation in this session).
+
+## 2026-11-07 — SVG builder: names, search and Similar tags from export/export.json
+
+- Discovery reads `<pair-folder>/export/export.json` (pair id must match): title = icon name; title/description/tags searchable and scorable; frequent tags (≥2, generic stock tags excluded) become `#tag` Similar profiles; audit counts icons with export metadata.
+- Tests: svg_builder_discovery +2, svg_builder_parity +1 (witnessed failing first); builder suites 64/64; test:builder:fast 14/14; tsc PASS; lint 0 errors (22 pre-existing warnings); quality gate (--base 338fe2f6) PASS.

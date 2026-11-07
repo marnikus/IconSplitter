@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { discoverUploadSources } from "../src/upload/discovery";
 import { discoverBuilderAssets, BUILDER_IGNORE } from "../src/svgBuilder/discovery";
-import { assetsFromRows } from "../src/lib/svgBuilder/assets";
+import { assetsFromRows, filterAssets } from "../src/lib/svgBuilder/assets";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
@@ -76,6 +76,38 @@ describe("approved-SVG discovery options", () => {
     expect(assetsFromRows(found.rows)).toHaveLength(2);
   });
 
+  it("uses export/export.json metadata: title is the name; title, description and tags are searchable tags", async () => {
+    const r = root();
+    const first = await discoverBuilderAssets(r);
+    const star = first.assets.find((a) => a.base === "star")!;
+    const exportDir = new FakeDir("export");
+    const record = exportRecord(star.id, { title: "Shining favourite rating star", description: "A bright star marks a favourite item", tags: ["favourite", "rating", "icon"] });
+    exportDir.children.set("export.json", new FakeFile("export.json", record.length, 3600, record));
+    ((r.children.get("icons") as FakeDir).children.get("ui") as FakeDir).children.set("export", exportDir);
+    const found = await discoverBuilderAssets(r);
+    const named = found.assets.find((a) => a.id === star.id)!;
+    expect(named.label).toBe("Shining favourite rating star");
+    expect(named.description).toBe("A bright star marks a favourite item");
+    expect(named.keywords).toEqual(["favourite", "rating", "icon"]);
+    expect(named.tags).toEqual(expect.arrayContaining(["favourite", "rating", "shining", "bright"]));
+    expect(found.withMetadata).toBe(1);
+    expect(filterAssets(found.assets, "bright", "All").map((a) => a.id)).toEqual([star.id]);
+    expect(filterAssets(found.assets, "#rating", "All").map((a) => a.id)).toEqual([star.id]);
+    const fog = found.assets.find((a) => a.base === "fog")!;
+    expect(fog.label).toMatch(/fog/i); // no export.json → file-name fallback
+  });
+
+  it("ignores an export.json written for a different pair", async () => {
+    const r = root();
+    const exportDir = new FakeDir("export");
+    const record = exportRecord("someone-else", { title: "Wrong icon title here now", description: "", tags: ["wrong"] });
+    exportDir.children.set("export.json", new FakeFile("export.json", record.length, 3600, record));
+    ((r.children.get("icons") as FakeDir).children.get("ui") as FakeDir).children.set("export", exportDir);
+    const found = await discoverBuilderAssets(r);
+    expect(found.assets.find((a) => a.base === "star")!.label).toMatch(/star/i);
+    expect(found.withMetadata).toBe(0);
+  });
+
   it("reports an honest empty result instead of inventing Lucide icons", async () => {
     const empty = new FakeDir("empty");
     const found = await discoverBuilderAssets(empty);
@@ -84,3 +116,12 @@ describe("approved-SVG discovery options", () => {
     expect(found.audit.files).toBe(0);
   });
 });
+
+/** The minimum export.json `parseExportRecord` accepts, with a metadata block. */
+function exportRecord(pairId: string, meta: { title: string; description: string; tags: string[] }): string {
+  return JSON.stringify({
+    v: 1, pair: { id: pairId, base: "star", suffix: "", dir: OUTSIDE }, source: { svgPath: "", version: 1, approval: "approved", fingerprint: "f" },
+    settings: { fingerprint: "s" }, tools: { svgo: {}, eps: {} }, outputs: { svg: null, jpg: null, eps: null }, timestamps: { preparedAt: "" },
+    metadata: { state: "accepted", ...meta },
+  });
+}

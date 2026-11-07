@@ -148,6 +148,16 @@ describe("selection recipes", () => {
     expect(recipeCaption(recipe({ mode: "filtered", category: "Interface" }), profiles)).toBe("Random from interface");
   });
 
+  it("frequent metadata tags become Similar profiles (generic stock tags excluded)", () => {
+    const tagged = library.map((a, i) => ({ ...a, keywords: i < 3 ? ["fruit", "icon"] : ["icon"], tags: [...a.tags, ...(i < 3 ? ["fruit"] : []), "icon"] }));
+    const ps = profilesOf(tagged);
+    const fruit = ps.find((p) => p.id === "#fruit")!;
+    expect(fruit.label).toBe("#fruit (3)");
+    expect(ps.some((p) => p.id === "#icon")).toBe(false);
+    expect(scoreOf(tagged[0], fruit)).toBe(1);
+    expect(scoreOf(tagged[5], fruit)).toBeLessThan(0.7);
+  });
+
   it("search strips a leading # and matches tags", () => {
     expect(filterAssets(library, "#interface", "All").map((a) => a.id)).toEqual(ui.map((a) => a.id));
   });

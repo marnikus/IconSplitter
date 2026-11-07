@@ -24,7 +24,15 @@ export interface BuilderIconAsset {
   fingerprint: string;
   metaPath: string;
   approved: true;
+  /** From `<pair-folder>/export/export.json` when present: the label is then this title. */
+  title?: string;
+  description?: string;
+  /** The export metadata tags, as written. Also folded into `tags` for search and scoring. */
+  keywords?: readonly string[];
 }
+
+/** The searchable metadata block of an icon's export record. */
+export interface ExportMeta { title: string; description: string; tags: readonly string[] }
 
 /** The approved-row fields the builder needs; structurally supplied by discovery. */
 export interface BuilderRowLike {
