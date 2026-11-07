@@ -7,13 +7,13 @@ Feature tests: [test index](sor/TESTS.md).
 ## 1. Current evidence (2026-10-30)
 
 **Both 40% attempts failed; the second measures 7.5%.** `verify:fast` medians
-117.44s -> 108.61s on 2 vCPU/Node22.22.3: the Getty bridge shed ~30s of real
-sleep, but the suite is CPU-bound -- 167s CPU for a 93s run (85-90% packing),
-132.6s of it real test bodies rendering the actual panel (react-dom dev 23%,
-DOM 16%, GC 13%). `isolate:false`, other pools, group merges and bundling were
-slower. 40% needs fewer rendering tests or 4 vCPU
-([plan](../archive/2026-10-30-harness-speed/README.md); a 50% probe also failed —
-16.5% scheduling ceiling, [evidence](../archive/2026-11-07-harness-50/README.md)).
+117.44s -> 108.61s (clean runs 109.80/107.42) on 2 vCPU/Node22.22.3: the Getty bridge shed ~30s of real
+production sleep (22.65s->0.25s, 7.98s->0.63s), but the suite is CPU-bound --
+167s CPU for a 93s run (85-90% packing), 132.6s of it real test bodies that
+render the actual panel (react-dom dev 23%, DOM 16%, GC 13% of samples).
+`isolate:false` (106s), other pools, group merges and optimizer bundling were
+slower. 40% needs fewer/scaled-down rendering tests or 4 vCPU:
+[plan and rejected experiments](../archive/2026-10-30-harness-speed/README.md).
 
 2026-10-25 attempt: warm 94.00s -> 91.23s (2.95%), cold 129.92 -> 117.85; target
 was <=56.40s ([plan](../archive/2026-10-25-harness-40/README.md),
