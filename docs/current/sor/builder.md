@@ -9,7 +9,7 @@ Handles: [selectors/builder](../selectors/builder.md). Storage keys:
 
 ## Status
 
-**Shell through export (P0–P5, 2026-11-07).** The tab is registered, persists
+**Complete: shell through sheet metadata (P0–P6, 2026-11-07).** The tab is registered, persists
 its session slice, reads the picked folder into an approved-icon rail, and draws the
 sheet from that library. The artboard, controls,
 recipes, export and sheet metadata land in the phases below; until each lands, its
@@ -22,6 +22,7 @@ absence is said out loud, never shown as a dead control.
 | ~~P3~~ done | controls, undo, persistence (presets land with P4) |
 | P4 | selection recipes, locks, user presets |
 | ~~P5~~ done | serializer, PNG, ZIP, `builder/` commit |
+| ~~P6~~ done | sheet metadata (text-only request, shared prompt/validator/key) |
 | P6 | sheet metadata (text-only request) |
 
 ## What exists now
@@ -79,23 +80,32 @@ absence is said out loud, never shown as a dead control.
   refused payload never moves the cursor. A control click and an undo therefore take
   the same path.
 
-* **Export (P5)** — `lib/builder/serialize` writes ONE editable SVG: the artboard's
-  own pixels, every icon a nested `<svg>` inside a `<g data-cell="n">` with its paths
-  verbatim, the stroke declared **once** on the owning group, captions as real
-  `<text>`, byte-identical for identical input, and nothing with a script or a remote
-  reference. A sheet is validated by `validateSheet`, **not** `lib/svgvalidate`: that
-  gate allows exactly one `<svg>` because it judges a provider's answer, and a sheet
-  nests one per icon by design — loosening it would weaken the AI gate
-  (`tests/svg_extract.test.ts` pins it).
-* **The commit** goes into `builder/` only, is **create-only** (a second export gets
-  `-1`, `-2`, … — an existing file is never overwritten), and the name is sanitised so
-  nothing can escape the folder. The library walk already ignores `builder/`, so a
-  committed sheet is never read back as an icon.
-* **A partial export is reported as partial.** The SVG is the deliverable; the PNG and
-  the ZIP are conveniences. A browser that cannot render a canvas still gets the SVG
-  written, and the status line says exactly which files landed and why the rest did not.
-  The PNG's real pixel size is read back and compared with the artboard — a raster that
-  came out the wrong size is a silent failure the user would only find on their site.
+* **Export (P5)** — `lib/builder/serialize` writes ONE editable SVG: artboard pixels,
+ every icon a nested `<svg>` in a `<g data-cell="n">` with its paths verbatim, the stroke
+  declared **once**, captions as real `<text>`, byte-identical output, nothing scripted
+  or remote. A sheet is validated by `validateSheet`, **not** `lib/svgvalidate`: that
+  gate allows one `<svg>` because it judges a provider's answer, and a sheet nests one
+  per icon by design (`tests/svg_extract.test.ts` pins the gate).
+* **The commit** goes into `builder/` only and is **create-only** (`-1`, `-2`, …): an
+  existing file is never overwritten, and the name cannot escape the folder. The walk
+  already ignores `builder/`, so a sheet is never read back as an icon.
+* **A partial export is reported as partial.** The SVG is the deliverable, the PNG and
+  ZIP are conveniences; a canvas-less browser still gets the SVG, and the status line
+  names what landed and why the rest did not. The PNG's real size is read back and
+  compared with the artboard.
+
+* **Metadata (P6)** — **no image** is sent (Q1): two text parts, the prompt and the
+  sheet's SVG source. Prompt, parser, validator and tag rules are `lib/upload/meta`'s,
+  imported (Q2); provider config and API key are the *same* stored ones upload uses.
+* **Nothing is cut in half.** Over 60 000 characters the source is replaced by a
+  structural digest, and the dialog states which mode is sent.
+* **A record binds to a sheet's content**, not to its formatting: `sheetMetaFingerprint`
+  hashes the grid, the banner words and the ordered icons, so re-serializing the same
+  sheet never marks a record stale. A record that no longer matches is shown as stale,
+  never as current, and is never silently re-sent.
+* **The retry policy is one policy** (`lib/upload/retrypolicy`): only a
+  provider-confirmed failure repeats; a timeout, a disconnect or a cancel is
+  outcome-unknown, never auto-retried, and reported as such.
 
 ## Contracts this tab will keep (from the design)
 

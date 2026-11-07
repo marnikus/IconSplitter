@@ -17,7 +17,10 @@ shared ones.
 | Serializer (P5) | `tests/builder_serialize.test.ts` | artboard px, nested per-icon `<svg>`, one stroke declaration, real `<text>`, byte-identical output, passes `validateSvg` |
 | Serializer (P5) | `tests/builder_serialize.test.ts` | the six guarantees: artboard px, one nested `<svg>` per icon with paths verbatim, the stroke declared once, real escaped `<text>`, byte-identical output, well-formed and safe; nesting is why the sheet has its own validator |
 | Commit (P5) | `tests/builder_commit.test.ts` | `builder/` created when missing, create-only (a collision gets `-1`), exact bytes, a failure is a reason, a file where the folder goes is refused |
-| Metadata (P6) | `tests/builder_metarequest.test.ts`, `tests/builder_meta.test.ts` | text-only body (no `inlineData`), source equals the exported SVG, cap → announced digest; upload's prompt/parser/validator reused unchanged |
+| Metadata request (P6) | `tests/builder_meta.test.ts` | text-only body (no image, no data URL), the honest header, the 60k cap switching to a digest (never a half document), the fingerprint over content not formatting, upload's own validator, and a record that stores nothing secret |
+| Metadata run (P6) | `tests/builder_metarun.test.ts` | the disclosed body is what is POSTed; malformed/invalid/truncated are distinct outcomes; 429 retried, timeout never resent and journalled, blocked terminal, key redacted from the detail |
+| Metadata UI (P6) | `tests/builder_ui.test.tsx` | the disclosure is shown before the button is pressed, the record starts empty, the prompt is upload's default, the provider card is the shared one, and generating without a key explains itself and sends nothing |
+| ~~Metadata (P6)~~ | `tests/builder_metarequest.test.ts`, `tests/builder_meta.test.ts` | text-only body (no `inlineData`), source equals the exported SVG, cap → announced digest; upload's prompt/parser/validator reused unchanged |
 
 ## Conventions
 

@@ -18,3 +18,19 @@ one tab is the key in the other (design §10, Q2).
 The builder writes no pair sidecar and no artwork until it commits an export into its
 own `builder/` folder (P5); that folder is excluded from the library walk
 (`builder/scan`), so a placed sheet is never read back as an icon.
+
+## P5–P6 writes
+
+| Key | Shape | Notes |
+|---|---|---|
+| `iconSplitter.builder.prompt.v1` | `{ v: 1, prompt }` | the sheet-metadata prompt; a blank or corrupt value falls back to upload's default |
+| `iconSplitter.builder.prompts.v1` | `{ v: 1, list }` | presets, parsed by `lib/promptpresets` (same shape as upload's) |
+| `iconSplitter.builder.meta.v1` | `{ v: 1, record }` | the metadata record; **never** the request body, never the sheet source, never a key |
+
+The provider config (`iconSplitter.upload.gemini.v1`) and the Gemini key (IndexedDB
+`secrets["gemini-api-key"]`) are **shared** with "SVG to upload" — the builder reads
+and writes the same entries rather than keeping a second copy.
+
+Nothing else is added: the export writes no browser storage at all, and the files it
+creates live in `<root>/builder/` on the user's disk, where a collision gets a suffix
+instead of overwriting.

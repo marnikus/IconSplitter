@@ -97,6 +97,6 @@ Export (P5):
 | `builder-export-note` | text | where files go, or why they cannot yet |
 | `builder-export-last` | `role="status"` | what landed — and why the rest did not |
 
-Later phases add `builder-meta-*`, `builder-recipe-*`, `builder-stage`,
-`builder-artboard`, `builder-cell-{n}`, `builder-<section>-*` controls, `builder-export-*`
-each is added here in the same change that introduces it (RULE 17).
+The stage's own handles (`builder-artboard`, `builder-cell-{n}`, the `builder-<section>-*`
+controls) are listed above, and every one of them was added here in the same change
+that introduced it (RULE 17).
