@@ -1,21 +1,20 @@
-// SvgBuilderStatusBar.tsx — one honest status line: approval source, layout,
-// short-pool warnings, broken-source warnings and the current action result.
+// SvgBuilderStatusBar.tsx — the one action-result line, shown as a bottom-centre
+// toast for 4.2 s after each change (reference), plus the busy state. Errors
+// stay until the next message so a refusal is never missed (RULE 2/4).
+import { useEffect, useState } from "react";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderStatusBar({ b }: { b: BuilderApi }) {
-  const warnings = [
-    ...b.notices,
-    ...(b.layout.overflow ? ["The requested recipe exceeds this artboard's capacity"] : []),
-    ...(b.document !== null && b.document.brokenIds.length > 0
-      ? [`${b.document.brokenIds.length} approved SVG(s) could not be embedded`] : []),
-  ];
-  return <div className={`builder-statusbar${b.error ? " is-error" : ""}`} data-testid="builder-statusbar" aria-live="polite">
-    <span className="builder-status-text" data-testid="builder-status-text">{b.status}</span>
-    <span className="builder-status-count" data-testid="builder-status-count">
-      {b.assets.length} approved · {b.checked.length}/{b.layout.capacity} placed · {b.config.artboard.width}×{b.config.artboard.height}
-    </span>
-    {b.busy !== null && <span className="builder-busy" data-testid="builder-busy">{b.busy}</span>}
-    {warnings.length > 0 && <span className="builder-warning" data-testid="builder-warning">{warnings.join(" · ")}</span>}
-    <span className={`builder-toast${b.error ? " is-error" : ""}`} data-testid="builder-toast">{b.status}</span>
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    setShown(true);
+    if (b.error) return;
+    const t = setTimeout(() => setShown(false), 4200);
+    return () => clearTimeout(t);
+  }, [b.status, b.error]);
+  return <div className="bld-toast-zone" aria-live="polite">
+    {b.busy !== null && <span className="bld-toast is-busy" data-testid="builder-busy">{b.busy}</span>}
+    <span className={`bld-toast${b.error ? " is-error" : ""}`} data-testid="builder-toast" data-shown={shown} hidden={!shown}>{b.status}</span>
+    <span className="bld-sr" data-testid="builder-status-text">{b.status}</span>
   </div>;
 }

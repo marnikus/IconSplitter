@@ -1,37 +1,42 @@
 # SVG builder (`svgBuilder`) — approved icon sheets
 
-The seventh Workbench mode turns already-created, `.svg.json`-approved icons into one editable SVG sheet. It is local by default, uses the app's global top menu and undo bar, and never invents or downloads an asset. The [selector contract](../selectors/svg-builder.md), [source owners](owners/svg-builder.md), [storage](storage/svg-builder.md) and [tests](tests/svg-builder.md) are separated.
+The seventh Workbench mode turns already-created, `.svg.json`-approved icons into one editable SVG sheet. **Controls, behaviour and positions follow the reference "Glyph — Icon Sheet Constructor"; every style comes from the app theme** (user decision 2026-11-07; fix list in [archive FIXES](../../archive/2026-11-07-svg-builder-integration/FIXES.md)). It never invents or downloads an asset. See the [selectors](../selectors/svg-builder.md), [owners](owners/svg-builder.md), [storage](storage/svg-builder.md) and [tests](tests/svg-builder.md).
+
+## Layout
+
+Folder bar (Open folder, Rescan, scope, approved count, audit, path) → header (`COLLECTION / 01 · LIVE`, sheet title, Undo/Redo on the global timeline, `SEED ####` re-roll, Prompt brief, Sheet metadata, Export ▾) → three columns: **Icon library** | **stage** | **Customize · live**. The panel uses only its own `bld-*` layout classes — never another tab's layout class (the borrowed `.svg-panel` grid caused the stray-text bug).
 
 ## Behaviour
 
-- `tab-svg-builder` opens the panel. The header always offers the same global menu, history bar, full-width `＋ Open folder` widget, metadata prompt and shared Gemini provider card as the other modes.
-- `discoverBuilderAssets(root)` reuses `discoverUploadSources` with `hideOutside: false` and extra ignored directories. It reads **all folders** under the selected root but registers only rows whose pair sidecar holds a valid approved SVG version. Missing preferred versions, corrupt sidecars and unreadable files are reported, never substituted.
-- The repository is read-only and fingerprint-aware. SVG previews and embedded cells are sanitized and recolored from approved files; no unapproved path can enter `composeSheet`.
-- `computeLayout`, `selectAssets`, `composeSheet` and `preset.ts` are pure. The same composition drives the live artboard, the exact-request preview and the export, so a displayed cell cannot drift from the delivered file.
-- A short pool is reported. Filling unused cells from the full approved library is an explicit checkbox, never a silent fallback. Locks and seeds are reproducible.
-- Accepted sheet metadata alone is embedded in exports. SVG, 2× PNG, clipboard and validated JSON preset downloads are atomic; a broken source or unapproved id refuses the download.
-- Loading a preset prunes ids that are no longer approved and reports the skipped count.
+- **Discovery**: `discoverBuilderAssets(root)` reads all folders and registers only valid approved SVG versions; problems are reported, never substituted. Thumbnails are drawn stroke-only with the same sanitiser/recolour as the artboard.
+- **Auto placement**: the first scan with an empty sheet draws the current recipe once (no undo entry); ids that vanished from a rescan are pruned.
+- **Cells** = columns × rows, always. Empty cells show dashed `+` placeholders (preview only). Shrinking the grid truncates the selection; growing appends seeded picks (seed + capacity), seed unchanged.
+- **Selection recipe**: Similar (score = shared tags ÷ profile tags ≥ threshold 30–100 %, default 70), Random (whole library), Filtered (category chips, shared with the library filter). Profiles = categories (tokenised like asset tags, + `approved`) and "All approved". A seeded Fisher–Yates draw; a short pool is topped up from the library with seed + 99 and **reported** as a toast. Mode/profile/threshold/category (Filtered) changes, both Reshuffle buttons and `SEED` re-pick with seed + 1. Locked icons (per-cell lock on the artboard) keep their cell.
+- **Library click**: in the sheet → remove (and unlock), later cells shift up; else append; a full sheet toasts "Every cell is filled…". CLEAR empties placements and locks. Search strips a leading `#`.
+- **Layout presets**: Side banner / Top split / Plain grid reset their groups to the reference values but keep the user's banner copy and hero; any manual edit shows **CUSTOM**. RESET restores defaults + Side banner (one undo entry; placements untouched).
+- **Geometry** (`layout.ts`): content = artboard − banner − padding; caption row `max(captionSize × 1.65, 10) + 7`; the grid only shrinks (fit ≤ 1) and is centred; overflow says "Grid auto-fitted to N%". The glyph is drawn at `box − 2.2 × stroke` inside its box (stroke-aware bounds); stroke is constant px.
+- **Banner** (`banner.ts`): Left/Top/Bottom/Right/None, Solid or Split; side width 120–420, edge height 50–180; title never upper-cased, subtitle upper-cased and letter-spaced; greedy wrap ≤ 3 lines; Split ink is auto-contrast; hero glyph = chosen library icon or the first placed icon.
+- **Ranges**: one table (`ranges.ts`) drives the parser and the controls; typed values **clamp**, never revert. Number boxes commit on Enter/blur; sliders coalesce into one undo gesture.
+- **Zoom**: fit = `min((W−54)/w, (H−68)/h, 1.15)`, ≥ 0.16, recomputed on resize; −/+ step 0.1 (0.1–2); % or ⤢ → fit; 1:1. The wrapper takes the scaled size so every edge scrolls.
+- **Export ▾**: Editable SVG (`{slug}.svg`), PNG 2× (`{slug}@2x.png`), Copy SVG markup, Save preset (`{slug}-preset.json`, also readable from the reference `{version, selection, seed}` shape), Load preset (undoable; stale ids pruned and reported). Delivery is refused unless ids are approved, fingerprints match the current scan and the composed SVG validates. Placeholders and locks are never exported.
+- **Prompt / Corrected brief**: Brief | Raw prompt, Copy prompt (Raw + toast on clipboard failure), Escape/backdrop close. Static text (`briefText.ts`).
 
 ## Provider and privacy
 
-The Gemini connection is the shared `src/lib/upload/gemini.ts` path: one model id, endpoint, timeout, retry/concurrency config and one IndexedDB key vault. A metadata request starts only after the user previews the exact 512px JPEG and prompt in `builder-meta-dialog` and presses **Send this exact request**. There is no automatic retry, no resend on reload and no live provider call in dev/test. The key is masked, redacted from status text and excluded from exports and logs. A provider draft must be accepted before it enters an export. This follows [RULE 20](../rules/BEHAVIOR.md) and the [exact-request precedent](../selectors/upload-dialogs.md).
+**Sheet metadata** opens a dialog with the prompt (shared `PromptWindow` + presets) and the shared Gemini card; *Generate* opens the exact-request confirmation (one 768 px JPEG of this sheet + the prompt). Nothing is sent before **Send this exact request**; no retry, no resend on reload, key masked and never exported or logged ([RULE 20](../rules/BEHAVIOR.md)). The Gemini config is read from the shared key on boot. Only an accepted draft enters the export.
 
 ## State and undo
 
-`src/lib/session.ts` owns the `svgBuilder` tab, `DEFAULT_BUILDER` and `parseBuilderSlice`; `src/state/appstore.ts` owns the `builder` slice. Placement uses the shared `builderChecked` delta payload; layout/recipe/seed/lock changes use the absolute `builderConfig` payload. Both join the one global timeline, with checked-id lists registered for `svgBuilder` so an undo after a rescan is refused rather than guessed. Display-only prefs and the library view are not history entries.
+`src/lib/session.ts` owns the tab and `builder` slice. Placements use the shared `builderChecked` delta; layout config uses the absolute `builderConfig` payload; both are on the one global timeline. The recipe, seed and locks are working state (as in the reference) and add no entries of their own; automatic placement and grid resize add none. Display prefs (zoom/fit, layout choice) and the library view are not history.
 
 ## Source split
 
 | Layer | Owner |
 |---|---|
-| pure domain | `src/lib/svgBuilder/{types,config,layout,assets,selection,metadata,svgAsset,compose,preset,undo}.ts` |
+| pure domain | `src/lib/svgBuilder/{types,ranges,config,layout,banner,markup,assets,selection,metadata,svgAsset,compose,preset,undo}.ts` |
 | discovery / FS | `src/svgBuilder/{discovery,repository,scan}.ts` |
 | provider bridge | `src/svgBuilder/{preview,runSheetMetadata}.ts` |
-| state / hooks / actions | `src/svgBuilder/{model,useSvgBuilder,useBuilderBoot,useBuilderPersistence,useBuilderComputed,useBuilderActions,undoBinding,actions/*}.ts` |
-| presentation | `src/svgBuilder/SvgBuilder*.tsx`, `src/svgBuilder/svgBuilder.css` |
+| state / actions | `src/svgBuilder/{model,useSvgBuilder,useBuilder*,undoBinding,actions/*}.ts` |
+| presentation | `src/svgBuilder/SvgBuilder*.tsx`, `briefText.ts`, `svgBuilder.css` |
 
-Interfaces stay narrow: `BuilderActionContext` is the only object actions see, and `BuilderApi` is the only object the panel passes to its split components.
-
-## Verification
-
-Focused TDD contracts cover the domain, all-folder discovery, session/undo, dark UI shell and the one bounded provider request. Changed tab-array tests keep the top menu, log dock, scroll-to-top and session restore honest. The full gate also runs `tsc`, lint, changed-file quality, `verify:fast` and `verify` before the branch is pushed. `npm run test:builder:fast` is an additional measured Node smoke lane: one esbuild bundle of the real pure modules, injected provider seams and the static dark panel shell, with no Vitest workers or VM contexts. Median wall-clock is **0.222 s** versus **2.556 s** for the six-file Vitest builder suite — a **91.3% reduction**. It does not replace the full TDD suite. See [the router](../README.md) and [Code Verification](../CODE_VERIFICATION.md).
+`npm run test:builder:fast` is an extra Node smoke lane (esbuild bundle; `?raw` imports load as text); it does not replace the Vitest suites. See [Code Verification](../CODE_VERIFICATION.md).

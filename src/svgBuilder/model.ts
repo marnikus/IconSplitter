@@ -1,9 +1,10 @@
 // model.ts — the builder workspace's one React state shape. Pure reducer and
 // validated initial state; storage, provider calls and disk IO stay in siblings.
-import { DEFAULT_GEMINI_CONFIG, type GeminiConfig } from "../lib/upload/gemini";
+import type { GeminiConfig } from "../lib/upload/gemini";
+import { loadGeminiConfig } from "../upload/configstore";
 import type { KeyRead, KeySource } from "../lib/keyvault";
 import { maskKey } from "../lib/svgsecret";
-import { DEFAULT_SELECTION_RECIPE } from "../lib/svgBuilder/selection";
+import { DEFAULT_SEED, DEFAULT_SELECTION_RECIPE } from "../lib/svgBuilder/selection";
 import type {
   BuilderListView, BuilderUndoPatch, SelectionRecipe, SheetConfig, SheetMetadata,
 } from "../lib/svgBuilder/types";
@@ -15,7 +16,7 @@ import { loadBuilderListView } from "./listview";
 import { loadBuilderPrefs, type BuilderPrefs } from "./prefsstore";
 import { builderPresets, loadBuilderPrompt } from "./promptstore";
 
-export type BuilderDialog = "none" | "metadata" | "brief" | "preset" | "registration";
+export type BuilderDialog = "none" | "metadata" | "metaSetup" | "brief";
 
 export interface BuilderKeyInfo {
   value: string | null;
@@ -60,10 +61,10 @@ export function initialBuilderModel(): BuilderModel {
   return {
     supported: hasFolderPicker(), root: null, discovery: null, busy: null,
     status: "Open a folder to build from approved SVGs", error: false,
-    config: loadSheetConfig(), recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SELECTION_RECIPE.seed,
+    config: loadSheetConfig(), recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SEED,
     lockedIds: [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
     prompt: loadBuilderPrompt(), presets: builderPresets.load(), presetPick: "",
-    gemini: DEFAULT_GEMINI_CONFIG, key: emptyKeyInfo(),
+    gemini: loadGeminiConfig(), key: emptyKeyInfo(),
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null,
     preview: null, dialog: "none", svgTexts: {},
   };

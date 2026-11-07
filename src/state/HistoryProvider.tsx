@@ -87,6 +87,11 @@ export function useOptionalHistory(): HistoryActions | null {
   return useContext(ActionsCtx);
 }
 
+/** The view for a tab-local Undo/Redo pair; null outside the provider (static harnesses). */
+export function useOptionalHistoryView(): HistoryView | null {
+  return useContext(ViewCtx);
+}
+
 export function HistoryProvider({ children }: { children: ReactNode }) {
   const store = useTimeline();
   const { undo, redo } = useApply(store.ref, store.commit, store.setError);

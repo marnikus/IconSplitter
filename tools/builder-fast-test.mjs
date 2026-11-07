@@ -20,6 +20,17 @@ const stubBuilderHook = {
   },
 };
 
+/** Vite's `?raw` imports (bundled SVG templates) load as plain text here too. */
+const rawText = {
+  name: "raw-text",
+  setup(builder) {
+    builder.onResolve({ filter: /\?raw$/ }, (args) => ({ path: path.resolve(args.resolveDir, args.path.replace(/\?raw$/, "")), namespace: "raw" }));
+    builder.onLoad({ filter: /.*/, namespace: "raw" }, async (args) => ({
+      contents: await (await import("node:fs/promises")).readFile(args.path, "utf8"), loader: "text",
+    }));
+  },
+};
+
 const started = performance.now();
 await build({
   absWorkingDir: root,
@@ -33,7 +44,7 @@ await build({
   jsx: "automatic",
   loader: { ".css": "empty" },
   packages: "external",
-  plugins: [stubBuilderHook],
+  plugins: [stubBuilderHook, rawText],
   logLevel: "silent",
 }).then(async (result) => {
   await mkdir(path.dirname(out), { recursive: true });

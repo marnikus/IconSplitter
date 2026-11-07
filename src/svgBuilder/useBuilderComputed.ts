@@ -3,7 +3,6 @@
 import { useEffect, useMemo } from "react";
 import { categoriesOf, filterAssets, profilesOf } from "../lib/svgBuilder/assets";
 import { computeLayout } from "../lib/svgBuilder/layout";
-import { selectAssets } from "../lib/svgBuilder/selection";
 import { composeSheet } from "../lib/svgBuilder/compose";
 import type { BuilderIconAsset, BuilderProfile, SheetDocument, SheetLayout } from "../lib/svgBuilder/types";
 import { builderAuditLine } from "./discovery";
@@ -17,7 +16,6 @@ export interface BuilderComputed {
   profiles: readonly BuilderProfile[];
   layout: SheetLayout;
   repository: AssetRepository | null;
-  notices: readonly string[];
   document: SheetDocument | null;
   auditLine: string;
 }
@@ -30,12 +28,11 @@ export function useBuilderComputed(
   const profiles = useMemo(() => profilesOf(assets), [assets]);
   const visibleAssets = useMemo(() => filterAssets(assets, model.listView.query, model.listView.category),
     [assets, model.listView.query, model.listView.category]);
-  const layout = useMemo(() => computeLayout(model.config, model.recipe.count), [model.config, model.recipe.count]);
+  const layout = useMemo(() => computeLayout(model.config), [model.config]);
   const repository = useMemo(() => model.root === null ? null : createAssetRepository(model.root, assets),
     [model.root, assets]);
-  const notices = useMemo(() => selectAssets(assets, { ...model.recipe, lockedIds: model.lockedIds }).notices,
-    [assets, model.recipe, model.lockedIds]);
-  useLoadSvgTexts(repository, placedIds, model.svgTexts, patch);
+  const needed = useMemo(() => withHero(placedIds, model.config.banner.heroIconId), [placedIds, model.config.banner.heroIconId]);
+  useLoadSvgTexts(repository, needed, model.svgTexts, patch);
   const ready = useMemo(() => placedIds.every((id) => model.svgTexts[id] !== undefined),
     [placedIds, model.svgTexts]);
   const document = useMemo(() => repository === null || !ready ? null : composeSheet({
@@ -43,7 +40,12 @@ export function useBuilderComputed(
   }), [repository, ready, model.config, layout, assets, placedIds, model.svgTexts, model.metadata]);
   const auditLine = useMemo(() => model.discovery === null ? "No approved assets scanned yet"
     : builderAuditLine(model.discovery), [model.discovery]);
-  return { assets, visibleAssets, categories, profiles, layout, repository, notices, document, auditLine };
+  return { assets, visibleAssets, categories, profiles, layout, repository, document, auditLine };
+}
+
+/** The banner's chosen hero icon is read like a placed icon. */
+function withHero(placedIds: readonly string[], heroId: string | null): readonly string[] {
+  return heroId === null || placedIds.includes(heroId) ? placedIds : [...placedIds, heroId];
 }
 
 function useLoadSvgTexts(

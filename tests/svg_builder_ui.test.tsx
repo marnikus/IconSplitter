@@ -68,8 +68,10 @@ describe("SVG builder tab", () => {
     expect(q('[data-testid="builder-unsupported"]')).not.toBeNull();
   });
 
-  it("renders the full metadata/Gemini controls without a second key store", async () => {
+  it("renders the full metadata/Gemini controls (in the Sheet metadata dialog) without a second key store", async () => {
     await click('[data-testid="tab-svg-builder"]');
+    expect(q('[data-testid="builder-prompt-panel"]')).toBeNull();
+    await click('[data-testid="builder-open-metadata"]');
     expect(q('[data-testid="builder-prompt-panel"]')).not.toBeNull();
     expect(q('[data-testid="builder-prompt"]')).not.toBeNull();
     expect(q('[data-testid="builder-provider-card"]')).not.toBeNull();

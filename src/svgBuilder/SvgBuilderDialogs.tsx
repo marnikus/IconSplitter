@@ -1,17 +1,19 @@
 // SvgBuilderDialogs.tsx — exact-request confirmation and prompt brief. The key
 // is masked; no provider call starts until the confirm button is used.
 import SvgBuilderBrief from "./SvgBuilderBrief";
+import SvgBuilderMetaSetup from "./SvgBuilderMetaSetup";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderDialogs({ b }: { b: BuilderApi }) {
-  if (b.dialog === "brief") return <SvgBuilderBrief onClose={b.actions.closeDialog} />;
+  if (b.dialog === "brief") return <SvgBuilderBrief onClose={b.actions.closeDialog} onCopied={b.actions.say} />;
+  if (b.dialog === "metaSetup") return <SvgBuilderMetaSetup b={b} />;
   if (b.dialog !== "metadata") return null;
   return <MetadataDialog b={b} />;
 }
 
 function MetadataDialog({ b }: { b: BuilderApi }) {
-  return <div className="builder-modal-backdrop" role="presentation">
-    <section className="builder-modal builder-metadata" data-testid="builder-meta-dialog" role="dialog"
+  return <div className="bld-backdrop" role="presentation">
+    <section className="bld-modal" data-testid="builder-meta-dialog" role="dialog"
       aria-modal="true" aria-label="Confirm sheet metadata request">
       <MetadataHead onClose={b.actions.cancelMetadata} />
       <div className="builder-meta-grid">
@@ -25,16 +27,16 @@ function MetadataDialog({ b }: { b: BuilderApi }) {
 }
 
 function MetadataHead({ onClose }: { onClose: () => void }) {
-  return <div className="builder-card-head"><div><span className="builder-eyebrow">EXACT REQUEST</span><h3>Confirm before sending</h3></div>
-    <button type="button" className="builder-btn subtle" data-testid="builder-meta-close" onClick={onClose}>✕</button></div>;
+  return <div className="bld-modal-head"><div><span className="bld-eyebrow">EXACT REQUEST</span><h3>Confirm before sending</h3></div>
+    <button type="button" className="svg-btn ghost tiny" data-testid="builder-meta-close" onClick={onClose}>✕</button></div>;
 }
 
 function MetadataPreview({ src }: { src: string | null }) {
   return <figure className="builder-meta-preview-wrap">
     {src !== null
-      ? <img className="builder-meta-preview" data-testid="builder-meta-preview" src={src} alt="Exact 512px sheet JPEG to be sent" />
+      ? <img className="builder-meta-preview" data-testid="builder-meta-preview" src={src} alt="Exact 768 px sheet JPEG to be sent" />
       : <div className="builder-meta-preview is-empty" data-testid="builder-meta-preview">No preview</div>}
-    <figcaption>ONE 512px JPEG of this exact sheet · no other files or folder contents are sent</figcaption>
+    <figcaption>ONE 768 px JPEG of this exact sheet · no other files or folder contents are sent</figcaption>
   </figure>;
 }
 
@@ -60,7 +62,7 @@ function MetadataDraft({ b }: { b: BuilderApi }) {
   const draft = b.draft;
   if (draft === null) return null;
   return <div className="builder-meta-draft" data-testid="builder-meta-draft">
-    <span className="builder-eyebrow">PROVIDER DRAFT · REVIEW BEFORE ACCEPTING</span>
+    <span className="bld-eyebrow">PROVIDER DRAFT · REVIEW BEFORE ACCEPTING</span>
     <h4 data-testid="builder-meta-title">{draft.title}</h4>
     <p data-testid="builder-meta-subtitle">{draft.subtitle}</p>
     <p data-testid="builder-meta-keywords">{draft.keywords.join(" · ")}</p>
@@ -69,11 +71,11 @@ function MetadataDraft({ b }: { b: BuilderApi }) {
 }
 
 function MetadataActions({ b }: { b: BuilderApi }) {
-  return <div className="builder-modal-actions">
-    <button type="button" className="builder-btn accent" data-testid="builder-meta-confirm"
+  return <div className="bld-modal-actions">
+    <button type="button" className="svg-btn primary" data-testid="builder-meta-confirm"
       disabled={b.busy !== null} onClick={b.actions.confirmMetadata}>{b.busy !== null ? "Sending…" : "Send this exact request"}</button>
-    <button type="button" className="builder-btn" data-testid="builder-meta-accept" disabled={b.draft === null}
+    <button type="button" className="svg-btn" data-testid="builder-meta-accept" disabled={b.draft === null}
       onClick={b.actions.acceptMetadataDraft}>Accept draft</button>
-    <button type="button" className="builder-btn subtle" data-testid="builder-meta-cancel" onClick={b.actions.cancelMetadata}>Cancel</button>
+    <button type="button" className="svg-btn ghost tiny" data-testid="builder-meta-cancel" onClick={b.actions.cancelMetadata}>Cancel</button>
   </div>;
 }

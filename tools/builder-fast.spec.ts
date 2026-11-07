@@ -31,10 +31,10 @@ const runMetaMod = await import("../src/svgBuilder/runSheetMetadata");
 const exporterMod = await import("../src/svgBuilder/exporter");
 const panelMod = await import("../src/svgBuilder/SvgBuilderPanel");
 
-const { DEFAULT_CONFIG, PRESETS, parseSheetConfig, configFingerprint } = configMod;
+const { DEFAULT_CONFIG, LAYOUT_PRESETS, parseSheetConfig, configFingerprint } = configMod;
 const { computeLayout } = layoutMod;
 const { categoriesOf, filterAssets, profilesOf, assetsFromRows } = assetsMod;
-const { selectAssets, DEFAULT_SELECTION_RECIPE } = selectionMod;
+const { reshuffleSheet, DEFAULT_SELECTION_RECIPE } = selectionMod;
 const { DEFAULT_SHEET_PROMPT, parseSheetMetadata, validateSheetMetadata } = metadataMod;
 const { parseSheetPreset, serializeSheetPreset } = presetMod;
 const { parseBuilderUndoPatch } = undoMod;
@@ -66,25 +66,27 @@ const assets: BuilderIconAsset[] = [
 ];
 
 function recipe(over: Record<string, unknown> = {}): typeof DEFAULT_SELECTION_RECIPE {
-  return { ...DEFAULT_SELECTION_RECIPE, ...over, count: 3 } as typeof DEFAULT_SELECTION_RECIPE;
+  return { ...DEFAULT_SELECTION_RECIPE, mode: "random", ...over } as typeof DEFAULT_SELECTION_RECIPE;
 }
 
 test("config defaults, presets and validated parsing", () => {
   assert.ok(DEFAULT_CONFIG.artboard.width > 600);
-  assert.equal(PRESETS.length, 3);
-  const parsed = parseSheetConfig({ ...DEFAULT_CONFIG, artboard: { ...DEFAULT_CONFIG.artboard, width: -9 }, junk: true });
-  assert.ok(parsed.artboard.width > 0);
+  assert.equal(LAYOUT_PRESETS.length, 3);
+  assert.equal(parseSheetConfig({ ...DEFAULT_CONFIG, artboard: { ...DEFAULT_CONFIG.artboard, width: -9 } }).artboard.width, 320);
+  const parsed = parseSheetConfig({ ...DEFAULT_CONFIG, artboard: { ...DEFAULT_CONFIG.artboard, width: "x" }, junk: true });
+  assert.equal(parsed.artboard.width, DEFAULT_CONFIG.artboard.width);
   assert.equal(configFingerprint(parsed), configFingerprint(parseSheetConfig(DEFAULT_CONFIG)));
 });
 
 test("geometry reports capacity, cells and overflow", () => {
   const config = { ...DEFAULT_CONFIG, grid: { ...DEFAULT_CONFIG.grid, columns: 3, rows: 2 },
     banner: { ...DEFAULT_CONFIG.banner, position: "none" as const } };
-  const layout = computeLayout(config, 4);
+  const layout = computeLayout(config);
   assert.equal(layout.capacity, 6);
-  assert.equal(layout.cells.length, 4);
+  assert.equal(layout.cells.length, 6);
   assert.equal(layout.banner, null);
-  assert.equal(computeLayout(DEFAULT_CONFIG, 999).overflow, true);
+  const big = { ...DEFAULT_CONFIG, grid: { ...DEFAULT_CONFIG.grid, columns: 16, rows: 12 }, icons: { ...DEFAULT_CONFIG.icons, box: 120 } };
+  assert.equal(computeLayout(big).overflow, true);
 });
 
 test("catalog filters are case-insensitive and derive categories", () => {
@@ -94,17 +96,15 @@ test("catalog filters are case-insensitive and derive categories", () => {
   assert.deepEqual(filterAssets(assets, "", "Nature").map((a) => a.id), ["b", "c"]);
 });
 
-test("selection is seeded, locked, honest and explicit about fallback", () => {
-  const one = selectAssets(assets, recipe({ lockedIds: ["c"] }));
-  const two = selectAssets(assets, recipe({ lockedIds: ["c"] }));
-  assert.deepEqual(one.ids, two.ids);
+test("selection is seeded, locked and honest about the top-up", () => {
+  const pick = (over: Record<string, unknown>, current: string[] = [], lockedIds: string[] = []) =>
+    reshuffleSheet({ assets, profiles: profilesOf(assets), recipe: recipe(over), seed: 2841, capacity: 3, current, lockedIds });
+  const one = pick({}, ["c", "a", "b"], ["c"]);
+  assert.deepEqual(one.ids, pick({}, ["c", "a", "b"], ["c"]).ids);
   assert.equal(one.ids[0], "c");
-  const short = selectAssets(assets, recipe({ category: "UI", fillFromFullLibrary: false }));
-  assert.deepEqual(short.ids, ["a"]);
-  assert.equal(short.usedFallback, false);
-  const filled = selectAssets(assets, recipe({ category: "UI", fillFromFullLibrary: true }));
-  assert.equal(filled.ids.length, 3);
-  assert.equal(filled.usedFallback, true);
+  const short = pick({ mode: "filtered", category: "UI" });
+  assert.equal(short.ids[0], "a");
+  assert.deepEqual(short.shortfall, { pool: 1, cells: 3 });
 });
 
 test("metadata prompt, fenced answer and validation", () => {
@@ -209,12 +209,11 @@ test("export verification refuses broken or unapproved documents", () => {
   assert.equal(verifySheetDocument({ ...doc, brokenIds: ["a"] }, assets).ok, false);
 });
 
-test("dark panel shell renders the folder, prompt, provider and stage handles", () => {
+test("dark panel shell renders the folder, header, library, stage and customize handles", () => {
   const markup = renderToStaticMarkup(React.createElement(SvgBuilderPanel, { active: true }));
   for (const id of ["builder-panel", "builder-unsupported", "builder-open-folder", "builder-folder-widget",
-    "builder-prompt-panel", "builder-prompt", "builder-provider-card", "builder-key-state",
-    "builder-model", "builder-endpoint", "builder-library", "builder-stage", "builder-inspector",
-    "builder-statusbar"]) assert.match(markup, new RegExp(`data-testid="${id}"`));
+    "builder-header", "builder-library", "builder-recipe", "builder-stage", "builder-inspector",
+    "builder-section-grid", "builder-export"]) assert.match(markup, new RegExp(`data-testid="${id}"`));
 });
 
 export async function runFastBuilderTests(): Promise<{ passed: number; failed: number; failures: string[] }> {

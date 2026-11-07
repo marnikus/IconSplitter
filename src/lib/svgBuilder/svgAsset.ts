@@ -43,7 +43,7 @@ function groupOf(args: CellSvgArgs, root: Element, box: readonly number[], trans
     `data-cell-index="${args.frame.index}"`, `transform="${transform}"`,
     'fill="none"', 'stroke="currentColor"', `color="${attr(style.color)}"`,
     `stroke-width="${style.strokeWidth}"`, `stroke-linecap="${style.linecap}"`,
-    'stroke-linejoin="round"', `data-view-box="${attr(box.join(" "))}"`,
+    `stroke-linejoin="${style.linecap === "square" ? "miter" : "round"}"`, `data-view-box="${attr(box.join(" "))}"`,
   ];
   return `<g ${attrs.join(" ")}>${childrenOf(root)}</g>`;
 }
@@ -88,12 +88,22 @@ function rewriteRefs(el: Element, ids: ReadonlyMap<string, string>): void {
   }
 }
 
+/** Stroke-aware bounds: the artwork fits `frame.glyph`, centred inside the `frame.size` box. */
 function transformOf(frame: CellFrame, box: readonly number[]): string {
   const [, , width, height] = box;
-  const scale = Math.min(frame.size / width, frame.size / height);
+  const glyph = frame.glyph > 0 ? Math.min(frame.glyph, frame.size) : frame.size;
+  const scale = Math.min(glyph / width, glyph / height);
   const dx = frame.x + (frame.size - width * scale) / 2 - box[0] * scale;
   const dy = frame.y + (frame.size - height * scale) / 2 - box[1] * scale;
   return `translate(${round(dx)} ${round(dy)}) scale(${round(scale)})`;
+}
+
+/** A stroke-only 24×24 preview: the library tile shows exactly what the artboard will draw. */
+export function iconPreviewSvg(code: string, asset: BuilderIconAsset, style: SheetConfig["icons"]): string | null {
+  const frame: CellFrame = { index: 0, x: 0, y: 0, size: 24, glyph: 20, captionY: 0, captionSize: 0 };
+  const cell = cellGroupOf({ code, asset, frame, style });
+  if (!cell.ok) return null;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="100%" height="100%">${cell.html}</svg>`;
 }
 
 function viewBoxOf(text: string): [number, number, number, number] | null {

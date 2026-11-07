@@ -1,56 +1,73 @@
 # Selectors — SVG builder (`svgBuilder`)
 
-The seventh tab mounts `SvgBuilderPanel` inside `builder-shell`. Start with the [behaviour contract](../sor/svg-builder.md) and the [shared tab table](shared.md). Prefer role / label / visible text over a testid.
+`SvgBuilderPanel` mounts inside `builder-shell`. Start with the [behaviour contract](../sor/svg-builder.md) and the [shared tab table](shared.md). Prefer role / label / visible text over a testid.
 
-## Workbench and shell
-
-| Testid | Element | Notes |
-|---|---|---|
-| `tab-svg-builder` | top-menu button | visible text is exactly `SVG builder`; drives `AppState.tab = svgBuilder` |
-| `builder-shell` | hidden workspace wrapper | Workbench keeps it mounted after the first visit |
-| `builder-panel` | panel root | dark chrome; `builder-unsupported` is shown when the File System Access picker is absent |
-| `builder-controls` | header stack | full-width folder widget + prompt/provider grid |
-| `builder-statusbar` | status line | `builder-status-text`, `builder-status-count`, `builder-busy`, `builder-warning`, `builder-toast` |
-| `history-bar` | global undo bar | shared with every tab; builder gestures use `builderChecked` / `builderConfig` |
-
-## Folder widget and library
+## Shell, folder bar, header
 
 | Testid | Element | Notes |
 |---|---|---|
-| `builder-folder-widget` | full-width folder card | approved-only, recursive, read-only scan |
-| `builder-open-folder` | green `Open folder` button | one picker; the `＋` prefix is decorative |
-| `builder-rescan` | rescan button | explicit all-folder approved discovery |
-| `builder-folder-path` | full-width read-only path row | `FolderPathRow`; absent until a root is open |
-| `builder-scope-copy` | scope note | states that only approved SVGs are read |
-| `builder-approved-count` | count | approved asset total |
-| `builder-audit` | audit line | honest excluded/corrupt/unreadable counts |
-| `builder-library` | approved library | `builder-library-count`, `builder-library-empty`, `builder-library-more` |
-| `builder-search` / `builder-category` | filters | library view only; never change the approved set |
-| `builder-recipe-mode` / `builder-recipe-profile` / `builder-threshold` / `builder-seed` | recipe controls | deterministic selection |
-| `builder-fill-library` | explicit fill checkbox | no silent fallback from the full library |
-| `builder-apply-recipe` / `builder-shuffle` / `builder-clear` | selection actions | one global selection history entry |
-| `builder-asset-{id}` | asset card | `data-asset-id`, `data-selected`, `data-locked`, `aria-pressed` |
-| `builder-prev-{id}` | shadow-root preview | sanitized approved SVG only |
-| `builder-lock-{id}` | lock control | one global config history entry |
+| `tab-svg-builder` | top-menu button | visible text `SVG builder` |
+| `builder-shell` / `builder-panel` | wrapper / panel root | own `bld-*` classes only; `builder-unsupported` note without the folder picker |
+| `builder-folder-widget` | folder bar | `builder-open-folder`, `builder-rescan`, `builder-scope-copy`, `builder-approved-count`, `builder-audit`, `builder-folder-path` |
+| `builder-header` | header row | `builder-sheet-title` ("Untitled icon sheet" when empty) |
+| `builder-undo` / `builder-redo` | global timeline | disabled when the stack is empty; title names the action |
+| `builder-seed` | `↻ SEED ####` | re-roll (seed + 1) |
+| `builder-brief` / `builder-corrected-brief` | open `builder-brief-dialog` | header / stage bottom-right |
+| `builder-open-metadata` | Sheet metadata | `builder-metadata-state`; opens `builder-meta-setup` |
+| `builder-export-toggle` | `Export ▾` | menu `builder-export-menu`: `builder-export-svg`, `-png`, `-copy`, `-preset`, `-load` (`role=menuitem`); `builder-preset-file` hidden input |
+| `builder-toast` / `builder-busy` / `builder-status-text` | toast zone | 4.2 s toast; errors stay |
+| `history-bar` | global undo bar | shared with every tab |
 
-## Stage, inspector and metadata
+## Icon library (left)
 
 | Testid | Element | Notes |
 |---|---|---|
-| `builder-stage` | artboard stage | `builder-stage-empty` until the composition is ready |
-| `builder-artboard` | shadow-root SVG host | light paper artboard inside dark chrome |
-| `builder-layout-{id}` | layout preset button | `classic`, `dark`, `contact` |
-| `builder-zoom-out` / `builder-zoom` / `builder-zoom-in` / `builder-fit` | zoom controls | display-only preference |
-| `builder-export` | export menu | `builder-export-svg`, `builder-export-png`, `builder-export-copy`, `builder-export-preset`, `builder-export-load` |
-| `builder-document-facts` | composition facts | config fingerprint, placed/broken counts, accepted metadata state |
-| `builder-inspector` | layout inspector | grouped artboard/grid/icon/banner fields; `builder-inspector-toggle` |
-| `builder-prompt-panel` | metadata prompt card | shared `PromptWindow` with `builder-prompt`, `builder-prompt-window`, `builder-prompt-reset` |
-| `builder-generate-metadata` | generate button | opens the exact-request dialog; no provider call on render |
-| `builder-brief` | brief button | opens `builder-brief-dialog` |
-| `builder-provider-card` | shared Gemini card | `builder-provider-toggle`, `builder-provider-grid` |
-| `builder-model` / `builder-endpoint` / `builder-timeout` / `builder-retries` / `builder-concurrency` | provider fields | shared `GeminiConfig` |
-| `builder-model-check` / `builder-model-state` / `builder-provider-note` | model check | explicit GET; configured model never substituted |
-| `builder-key-state` | shared key slot | IndexedDB key vault; `builder-key-input`, `builder-key-save`, `builder-key-cancel`, `builder-key-forget` |
-| `builder-meta-dialog` | exact-request modal | `builder-meta-preview`, `builder-meta-prompt`, `builder-exact-request`, `builder-meta-key`, `builder-meta-model`, `builder-meta-status` |
-| `builder-meta-confirm` / `builder-meta-cancel` / `builder-meta-accept` / `builder-meta-close` | modal actions | one confirmed request, no auto-retry; accept before export |
-| `builder-meta-draft` | provider draft | `builder-meta-title`, `builder-meta-subtitle`, `builder-meta-keywords` |
+| `builder-library` | column | `builder-library-count`; footer `builder-library-footer` |
+| `builder-recipe` | Selection recipe card | `builder-recipe-mode` (segmented; `-similar`, `-random`, `-filtered`) |
+| `builder-recipe-profile` / `builder-threshold` / `builder-profile-tags` | Similar pane | threshold slider `≥ N%` (`builder-threshold-value`) |
+| `builder-recipe-category-{c}` | Filtered pane chips | shared category with the library chips |
+| `builder-random-note` | Random pane | "A seeded draw from all N glyphs…" |
+| `builder-reshuffle-recipe` / `builder-recipe-caption` | `Reshuffle N icons` + caption | |
+| `builder-search` / `builder-search-clear` | "Search name or #tag" | leading `#` stripped |
+| `builder-category-{c}` | category chips | All + categories |
+| `builder-icon-grid` / `builder-asset-{id}` | 6-column tiles | `data-asset-id`, `data-selected`, `aria-pressed`; `builder-match-{id}` Similar dot; `builder-prev-{id}` stroke-only preview |
+| `builder-library-empty` / `builder-library-nomatch` / `builder-library-more` | empty states | |
+| `builder-cells` / `builder-locked-count` / `builder-clear` | footer | "N of C cells", "N locked", CLEAR |
+
+## Stage (centre)
+
+| Testid | Element | Notes |
+|---|---|---|
+| `builder-stage` / `builder-canvas` | column / scroll area | `builder-stage-empty` before a composition |
+| `builder-layout-{editorial,masthead,plain}` | Side banner / Top split / Plain grid | `aria-pressed`; `builder-custom-pill` after an edit |
+| `builder-zoom-out` / `builder-zoom` / `builder-zoom-in` / `builder-fit` / `builder-zoom-1` | zoom | `builder-zoom` text = %, click → fit |
+| `builder-artboard` | scaled artboard | `data-zoom`; composed SVG in a shadow root |
+| `builder-empty-cell-{i}` | dashed `+` placeholder | `data-placeholder`, preview only |
+| `builder-cell-lock-{i}` | per-cell lock | `aria-pressed`; visible on hover / when locked |
+| `builder-reshuffle-stage` | floating Reshuffle | top-right |
+| `builder-stage-status` | status line | overflow / empty cells / "N glyphs placed…" + "LIVE VECTOR PREVIEW · W × H px" |
+
+## Customize (right)
+
+| Testid | Element | Notes |
+|---|---|---|
+| `builder-inspector` | column | `builder-reset` (RESET) |
+| `builder-section-{artboard,grid,icons,banner}` | collapsible sections | badge `W×H`, `C × R`, `fit to box`, position/`hidden`; Artboard starts collapsed |
+| `builder-width` / `builder-height` / `builder-padding` / `builder-radius` | px number boxes | commit on Enter/blur, clamp |
+| `builder-canvas`… swatches: `builder-canvas-picker`, `builder-canvas-{hex}` | Canvas colour | 8 swatches |
+| `builder-columns` / `builder-rows` | steppers | `-dec`, `-inc`, `-value` |
+| `builder-gap-x` / `builder-gap-y` / `builder-caption-size` | sliders | `{id}-value` pill |
+| `builder-captions` | switch | `role=switch`; `builder-caption-controls`, `builder-caption-ink`, `builder-caption-case` |
+| `builder-icon-box` / `builder-stroke-width` / `builder-stroke-color` / `builder-linecap` | Icon style | |
+| `builder-banner-position` / `builder-banner-style` / `builder-banner-size` | Banner | `builder-banner-hidden` when None |
+| `builder-banner-bg` / `builder-accent` / `builder-title-ink` / `builder-subtitle-ink` | colour chips | |
+| `builder-title` / `builder-subtitle` / `builder-title-size` / `builder-subtitle-size` / `builder-title-face` | banner copy | |
+| `builder-hero` / `builder-hero-icon` / `builder-divider` | Hero glyph, Glyph select, Accent rule | |
+
+## Dialogs
+
+| Testid | Element | Notes |
+|---|---|---|
+| `builder-brief-dialog` | brief | `builder-brief-tab-brief`, `-tab-raw`, `builder-brief-copy`, `builder-brief-close`, `builder-brief-text`, `builder-brief-raw`, `builder-brief-count` |
+| `builder-meta-setup` | Sheet metadata | `builder-prompt-panel` (`builder-prompt`…), `builder-provider-card` (`builder-model`, `builder-endpoint`, `builder-key-state`…), `builder-generate-metadata`, `builder-meta-setup-close` |
+| `builder-meta-dialog` | exact request | `builder-meta-preview` (768 px JPEG), `builder-meta-prompt`, `builder-exact-request`, `builder-meta-confirm`, `-accept`, `-cancel`, `-close`, `builder-meta-draft` |

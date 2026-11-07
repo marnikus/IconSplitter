@@ -25,18 +25,34 @@ export function categoriesOf(assets: readonly BuilderIconAsset[]): string[] {
   return ["All", ...names];
 }
 
+/**
+ * Metadata profiles = one per category plus "All approved". A profile's tags are
+ * the category's own tokens + "approved" (every asset carries it, like the
+ * reference's "outline"), tokenised exactly like asset tags so a multi-word
+ * category still matches (FIXES B3).
+ */
 export function profilesOf(assets: readonly BuilderIconAsset[]): BuilderProfile[] {
-  const all: BuilderProfile = { id: "all", label: "All approved assets", tags: [] };
   const byCategory = categoriesOf(assets).slice(1).map((category) => ({
-    id: category, label: `${category} profile`, tags: [category.toLowerCase()],
+    id: category, label: category, tags: [...new Set([...tokens(category), "approved"])],
   }));
-  return [all, ...byCategory];
+  return [...byCategory, { id: "all", label: "All approved assets", tags: ["approved"] }];
+}
+
+/** Score = shared tags ÷ profile tags (not Jaccard), 0–1. */
+export function scoreOf(asset: BuilderIconAsset, profile: BuilderProfile | undefined): number {
+  if (profile === undefined || profile.tags.length === 0) return 0;
+  const have = new Set(asset.tags.map((t) => t.toLowerCase()));
+  return profile.tags.filter((t) => have.has(t)).length / profile.tags.length;
+}
+
+function tokens(text: string): string[] {
+  return text.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 1);
 }
 
 export function filterAssets(
   assets: readonly BuilderIconAsset[], query: string, category: string,
 ): BuilderIconAsset[] {
-  const needle = query.trim().toLowerCase();
+  const needle = query.trim().replace(/^#+/, "").toLowerCase();
   return assets.filter((asset) => categoryMatches(asset, category) && queryMatches(asset, needle));
 }
 

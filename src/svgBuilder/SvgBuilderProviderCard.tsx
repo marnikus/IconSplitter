@@ -15,9 +15,9 @@ export default function SvgBuilderProviderCard({ b }: { b: BuilderApi }) {
 }
 
 function ProviderHead({ b }: { b: BuilderApi }) {
-  return <div className="builder-card-head">
-    <div><span className="builder-eyebrow">PROVIDER</span><h3>{PROVIDER_NAME} sheet metadata</h3></div>
-    <button type="button" className="builder-btn subtle" data-testid="builder-provider-toggle"
+  return <div className="bld-modal-head">
+    <div><span className="bld-eyebrow">PROVIDER</span><h3>{PROVIDER_NAME} sheet metadata</h3></div>
+    <button type="button" className="svg-btn ghost tiny" data-testid="builder-provider-toggle"
       aria-expanded={b.prefs.providerOpen}
       onClick={() => b.actions.toggleProvider(!b.prefs.providerOpen)}>{b.prefs.providerOpen ? "−" : "+"}</button>
   </div>;
@@ -37,8 +37,8 @@ function ProviderFields({ b }: { b: BuilderApi }) {
     <label>CONCURRENCY <input type="number" min="1" max="8" data-testid="builder-concurrency"
       value={b.gemini.concurrency} onChange={(e) => b.actions.setGemini({ concurrency: Number(e.target.value) })} /></label>
     <div className="builder-provider-actions">
-      <button type="button" className="builder-btn" data-testid="builder-model-check" onClick={b.actions.checkModel}>Check model id</button>
-      <span className="builder-provider-fact" data-testid="builder-provider-note">One sheet · one 512px JPEG · no auto-retry</span>
+      <button type="button" className="svg-btn" data-testid="builder-model-check" onClick={b.actions.checkModel}>Check model id</button>
+      <span className="builder-provider-fact" data-testid="builder-provider-note">One sheet · one 768 px JPEG · no auto-retry</span>
     </div>
   </div>;
 }

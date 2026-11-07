@@ -33,25 +33,31 @@ export function useBuilderActions(args: Args): BuilderActions {
     say: boot.say,
   }), [patch, boot.say]);
   const presetActions = usePresetActions(presetModel, presetIo);
-  const setChecked = useCallback((next: RowSelection, label: string) => {
-    const before: RowSelection = {
-      checked: getAppState().builder.checked, anchor: getAppState().builder.anchorId, active: getAppState().builder.activeId,
-    };
-    const payloads = selectionPayloads(before, next);
-    hist?.push({ type: "builderChecked", label, origin: "svgBuilder", ids: payloads.ids,
-      before: payloads.before, after: payloads.after });
-    patchBuilder({ checked: next.checked, anchorId: next.anchor, activeId: next.active });
-  }, [hist]);
+  const { setChecked, setCheckedQuiet } = useCheckedWriters(hist);
   const checked: RowSelection = { checked: slice.checked, anchor: slice.anchorId, active: slice.activeId };
   const ctx: BuilderActionContext = {
     model, ...computed, placedIds: slice.checked, checked, discovery: model.discovery, scanRefs: boot.scanRefs.current,
-    hist, presetActions, dispatch: patch, setChecked, setRoot: boot.setRoot,
+    hist, presetActions, dispatch: patch, setChecked, setCheckedQuiet, setRoot: boot.setRoot,
     setDiscovery: boot.setDiscovery, setBusy: boot.setBusy, say: boot.say,
   };
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
   const actions = useMemo(() => createBuilderActions(() => ctxRef.current), []);
   return useMemo(() => ({ ...actions, presets: presetActions }), [actions, presetActions]);
+}
+
+/** The two ways placements are written: one global selection entry, or quietly (automatic placement). */
+function useCheckedWriters(hist: HistoryActions | null) {
+  const setChecked = useCallback((next: RowSelection, label: string) => {
+    const b = getAppState().builder;
+    const payloads = selectionPayloads({ checked: b.checked, anchor: b.anchorId, active: b.activeId }, next);
+    hist?.push({ type: "builderChecked", label, origin: "svgBuilder", ids: payloads.ids, before: payloads.before, after: payloads.after });
+    patchBuilder({ checked: next.checked, anchorId: next.anchor, activeId: next.active });
+  }, [hist]);
+  const setCheckedQuiet = useCallback((ids: readonly string[]) => {
+    patchBuilder({ checked: [...ids], anchorId: null, activeId: ids[0] ?? null });
+  }, []);
+  return { setChecked, setCheckedQuiet };
 }
 
 function presetPatch(event: PresetEvent, patch: (value: Partial<BuilderModel>) => void): void {

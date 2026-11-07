@@ -1,12 +1,12 @@
-// compose.ts — pure composition of the standalone, editable sheet SVG. No DOM
-// scraping: the same approved asset ids and layout that paint the preview are
-// the ones the exported document names (RULE 15/22).
+// compose.ts — pure composition of the standalone, editable sheet SVG. The same
+// approved asset ids and layout that paint the preview are the ones the export
+// names (RULE 15/22). Empty-cell placeholders and lock buttons are preview-only
+// overlays and are never part of this document.
 import { configFingerprint } from "./config";
-import { wrapTitle } from "./layout";
+import { bannerMarkup, type HeroPainter } from "./banner";
+import { attr, escapeText, round, textEl } from "./markup";
 import { cellGroupOf } from "./svgAsset";
-import type {
-  BuilderIconAsset, CellFrame, SheetConfig, SheetDocument, SheetLayout, SheetMetadata,
-} from "./types";
+import type { BuilderIconAsset, CellFrame, SheetConfig, SheetDocument, SheetLayout, SheetMetadata } from "./types";
 
 export interface ComposeSheetArgs {
   config: SheetConfig;
@@ -17,44 +17,43 @@ export interface ComposeSheetArgs {
   metadata?: SheetMetadata | null;
 }
 
-interface TextArgs {
-  x: number; y: number; value: string; size: number; colour: string;
-  face: "sans" | "serif" | "mono"; weight: string; anchor?: string;
-}
-
-interface CellArgs {
-  sheet: ComposeSheetArgs; asset: BuilderIconAsset; frame: CellFrame; id: string; brokenIds: string[];
-}
+interface Placed { id: string; asset: BuilderIconAsset | undefined; frame: CellFrame }
 
 export function composeSheet(args: ComposeSheetArgs): SheetDocument {
   const byId = new Map(args.assets.map((asset) => [asset.id, asset]));
-  const placed = [...new Set(args.placedIds)];
+  const placed: Placed[] = [...new Set(args.placedIds)].slice(0, args.layout.cells.length)
+    .map((id, index) => ({ id, asset: byId.get(id), frame: args.layout.cells[index] }));
   const brokenIds: string[] = [];
-  const cells = placed.flatMap((id, index) => {
-    const frame = args.layout.cells[index];
-    const asset = byId.get(id);
-    if (frame === undefined || asset === undefined) { brokenIds.push(id); return []; }
-    return [cellMarkup({ sheet: args, asset, frame, id, brokenIds })];
-  });
+  const cells = placed.map((p) => cellMarkup(args, p, brokenIds));
   const fingerprint = configFingerprint(args.config);
   const metadata = args.metadata ?? null;
-  const sources = placed.map((id) => byId.get(id)).filter(isAsset).map((a) => ({ id: a.id, fingerprint: a.fingerprint }));
+  const ids = placed.map((p) => p.id);
+  const sources = placed.flatMap((p) => (p.asset === undefined ? [] : [{ id: p.id, fingerprint: p.asset.fingerprint }]));
+  const copy = sheetCopy(metadata, args.config.banner);
   const svg = [
-    rootOpen(args.config, fingerprint), backgroundOf(args.config), bannerOf(args.config, args.layout, metadata),
-    ...cells, ...captionsOf(args, placed, byId), metadataOf(metadata, placed, sources, fingerprint), "</svg>",
+    rootOpen(args.config, fingerprint), headOf(copy.title, metadata, { ids, sources, fingerprint }),
+    backgroundOf(args.config), bannerOf(args, copy, ids), `<g data-export="icons">${cells.join("")}</g>`,
+    captionsOf(args, placed), "</svg>",
   ].join("");
-  return { svg, placedIds: placed, brokenIds: [...new Set(brokenIds)], sourceFingerprints: sources,
-    configFingerprint: fingerprint, metadata };
+  return { svg, placedIds: ids, brokenIds: [...new Set(brokenIds)], sourceFingerprints: sources, configFingerprint: fingerprint, metadata };
 }
 
-function cellMarkup({ sheet, asset, frame, id, brokenIds }: CellArgs): string {
-  const code = sheet.svgTexts[id];
-  const cell = typeof code === "string" ? cellGroupOf({ code, asset, frame, style: sheet.config.icons }) : null;
-  if (cell === null || !cell.ok) {
-    brokenIds.push(id);
-    return brokenMarkup(frame, id, cell?.ok === false ? cell.error : "approved SVG is unavailable");
-  }
-  return cell.html;
+/** Accepted provider metadata overrides the typed banner copy. */
+export function sheetCopy(metadata: SheetMetadata | null, banner: SheetConfig["banner"]): { title: string; subtitle: string } {
+  const accepted = metadata?.state === "accepted";
+  return {
+    title: accepted && metadata.title !== "" ? metadata.title : banner.title,
+    subtitle: accepted && metadata.subtitle !== "" ? metadata.subtitle : banner.subtitle,
+  };
+}
+
+function cellMarkup(args: ComposeSheetArgs, p: Placed, brokenIds: string[]): string {
+  const code = args.svgTexts[p.id];
+  const cell = p.asset !== undefined && typeof code === "string" && code !== ""
+    ? cellGroupOf({ code, asset: p.asset, frame: p.frame, style: args.config.icons }) : null;
+  if (cell !== null && cell.ok) return cell.html;
+  brokenIds.push(p.id);
+  return brokenMarkup(p.frame, p.id, cell?.ok === false ? cell.error : "approved SVG is unavailable");
 }
 
 function rootOpen(config: SheetConfig, fingerprint: string): string {
@@ -63,99 +62,57 @@ function rootOpen(config: SheetConfig, fingerprint: string): string {
     + `data-config-fingerprint="${attr(fingerprint)}" data-approved-only="true" role="img">`;
 }
 
+function headOf(title: string, metadata: SheetMetadata | null, trace: { ids: string[]; sources: { id: string; fingerprint: string }[]; fingerprint: string }): string {
+  const accepted = metadata?.state === "accepted" ? metadata : null;
+  const desc = accepted === null ? "Generated with the SVG builder. Editable stroke-only icon sheet."
+    : `${accepted.subtitle} Keywords: ${accepted.keywords.join(", ")}`;
+  const payload = JSON.stringify({ v: 1, approvedOnly: true, title, placedIds: trace.ids, sources: trace.sources, configFingerprint: trace.fingerprint });
+  return `<title>${escapeText(`${title.trim() || "Icon sheet"} — icon sheet`)}</title><desc>${escapeText(desc)}</desc><metadata>${escapeText(payload)}</metadata>`;
+}
+
 function backgroundOf(config: SheetConfig): string {
   const { width, height, background, radius } = config.artboard;
   return `<rect x="0" y="0" width="${width}" height="${height}" rx="${radius}" fill="${attr(background)}" data-artboard="true"/>`;
 }
 
-function bannerOf(config: SheetConfig, layout: SheetLayout, metadata: SheetMetadata | null): string {
-  const box = layout.banner;
-  const banner = config.banner;
-  if (box === null || banner.size <= 0) return "";
-  const copy = bannerCopy(metadata, banner);
-  const lines = wrapTitle(copy.title, titleWrapChars(banner.position));
-  const ty = box.y + Math.max(52, box.height * 0.38);
-  const texts = lines.map((line, i) => text({ x: box.x + 32, y: ty + i * (banner.titleSize + 4), value: line,
-    size: banner.titleSize, colour: banner.textColor, face: banner.titleFace, weight: "600" })).join("");
-  const sub = text({ x: box.x + 32, y: ty + lines.length * (banner.titleSize + 4) + 18, value: copy.subtitle,
-    size: banner.subtitleSize, colour: banner.subtitleColor, face: "sans", weight: "400" });
-  return `<g data-banner="true"><rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="${attr(banner.background)}"/>`
-    + `${heroMark(box, banner)}${texts}${sub}${dividerMark(box, banner)}</g>`;
+function bannerOf(args: ComposeSheetArgs, copy: { title: string; subtitle: string }, ids: readonly string[]): string {
+  const box = args.layout.banner;
+  if (box === null) return "";
+  return bannerMarkup({ banner: args.config.banner, box, artboardWidth: args.config.artboard.width,
+    title: copy.title, subtitle: copy.subtitle, hero: heroPainter(args, ids) });
 }
 
-function bannerCopy(metadata: SheetMetadata | null, banner: SheetConfig["banner"]): { title: string; subtitle: string } {
-  const accepted = metadata?.state === "accepted";
-  return {
-    title: accepted && metadata.title !== "" ? metadata.title : banner.title,
-    subtitle: accepted && metadata.subtitle !== "" ? metadata.subtitle : banner.subtitle,
+/** The hero glyph: the chosen library icon, else the first placed icon; stroke 1.1 in the given ink. */
+function heroPainter(args: ComposeSheetArgs, ids: readonly string[]): HeroPainter {
+  const id = args.config.banner.heroIconId ?? ids[0];
+  const asset = args.assets.find((a) => a.id === id);
+  const code = id === undefined ? undefined : args.svgTexts[id];
+  return (x, y, size, ink) => {
+    if (asset === undefined || typeof code !== "string" || code === "") return "";
+    const frame: CellFrame = { index: -1, x, y, size, glyph: size, captionY: 0, captionSize: 0 };
+    const cell = cellGroupOf({ code, asset, frame, style: { ...args.config.icons, color: ink, strokeWidth: 1.1 } });
+    return cell.ok ? cell.html : "";
   };
 }
 
-function titleWrapChars(position: SheetConfig["banner"]["position"]): number {
-  return position === "top" || position === "bottom" ? 50 : 14;
-}
-
-function heroMark(box: { x: number; y: number }, banner: SheetConfig["banner"]): string {
-  return banner.hero ? `<circle cx="${box.x + 44}" cy="${box.y + 44}" r="15" fill="${attr(banner.accent)}" data-banner-hero="true"/>` : "";
-}
-
-function dividerMark(box: { x: number; y: number; width: number; height: number }, banner: SheetConfig["banner"]): string {
-  return banner.divider ? `<rect x="${box.x + 32}" y="${box.y + box.height - 44}" width="${Math.max(0, box.width - 64)}" height="1" fill="${attr(banner.accent)}" opacity="0.55"/>` : "";
-}
-
-function captionsOf(args: ComposeSheetArgs, placed: readonly string[], byId: ReadonlyMap<string, BuilderIconAsset>): string[] {
-  if (!args.config.grid.captions) return [];
-  return placed.flatMap((id, index) => {
-    const frame = args.layout.cells[index];
-    const asset = byId.get(id);
-    if (frame === undefined || asset === undefined) return [];
-    const label = args.config.grid.captionCase === "upper" ? asset.label.toUpperCase() : asset.label;
-    return [text({ x: frame.x + frame.size / 2, y: frame.captionY, value: label,
-      size: args.config.grid.captionSize, colour: args.config.grid.captionColor, face: "sans", weight: "500", anchor: "middle" })];
+/** Captions: centred, auto-shrunk to the box width, letter-spaced .075em. */
+function captionsOf(args: ComposeSheetArgs, placed: readonly Placed[]): string {
+  const grid = args.config.grid;
+  if (!grid.captions) return "";
+  const texts = placed.flatMap(({ asset, frame }) => {
+    if (asset === undefined) return [];
+    const label = grid.captionCase === "upper" ? asset.label.toUpperCase() : asset.label;
+    const base = frame.captionSize;
+    const size = Math.max(3.2, base * Math.min(1, (frame.size * 0.96) / Math.max(1, label.length * base * 0.67)));
+    return [textEl({ x: frame.x + frame.size / 2, y: frame.captionY, value: label, size, colour: grid.captionColor,
+      face: "sans", weight: 500, anchor: "middle", spacing: "0.075em" })];
   });
-}
-
-function metadataOf(
-  metadata: SheetMetadata | null, placed: readonly string[],
-  sources: readonly { id: string; fingerprint: string }[], fingerprint: string,
-): string {
-  const accepted = metadata?.state === "accepted" ? metadata : null;
-  const title = accepted?.title ?? "";
-  const desc = accepted === null ? "" : `${accepted.subtitle} Keywords: ${accepted.keywords.join(", ")}`;
-  const payload = JSON.stringify({ v: 1, approvedOnly: true, title, placedIds: placed, sources, configFingerprint: fingerprint });
-  return `<title>${escapeText(title)}</title><desc>${escapeText(desc)}</desc><metadata>${escapeText(payload)}</metadata>`;
+  return `<g data-export="captions">${texts.join("")}</g>`;
 }
 
 function brokenMarkup(frame: CellFrame, id: string, reason: string): string {
   return `<g data-broken-asset="${attr(id)}" data-reason="${attr(reason)}">`
-    + `<rect x="${frame.x}" y="${frame.y}" width="${frame.size}" height="${frame.size}" rx="6" fill="none" stroke="#C85A5A" stroke-dasharray="4 4"/>`
-    + `${text({ x: frame.x + frame.size / 2, y: frame.y + frame.size / 2, value: "Unavailable", size: 10,
-      colour: "#C85A5A", face: "sans", weight: "500", anchor: "middle" })}</g>`;
-}
-
-function text(a: TextArgs): string {
-  const anchor = a.anchor ?? "start";
-  return `<text x="${round(a.x)}" y="${round(a.y)}" fill="${attr(a.colour)}" font-size="${a.size}" font-weight="${a.weight}" `
-    + `font-family="${fontFamily(a.face)}" text-anchor="${anchor}" letter-spacing="0.04em">${escapeText(a.value)}</text>`;
-}
-
-function fontFamily(face: "sans" | "serif" | "mono"): string {
-  return face === "serif" ? "ui-serif, Georgia, serif" : face === "mono" ? "ui-monospace, monospace" : "ui-sans-serif, system-ui, sans-serif";
-}
-
-function isAsset(asset: BuilderIconAsset | undefined): asset is BuilderIconAsset {
-  return asset !== undefined;
-}
-
-function round(value: number): string {
-  return Number(value.toFixed(2)).toString();
-}
-
-function attr(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-}
-
-function escapeText(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    + `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(frame.size)}" height="${round(frame.size)}" rx="6" fill="none" stroke="#C85A5A" stroke-dasharray="4 4"/>`
+    + `${textEl({ x: frame.x + frame.size / 2, y: frame.y + frame.size / 2, value: "Unavailable", size: 10,
+      colour: "#C85A5A", face: "sans", weight: 500, anchor: "middle" })}</g>`;
 }

@@ -3,7 +3,8 @@
 import type { HistoryActions } from "../state/HistoryProvider";
 import type { RowSelection } from "../lib/reviewselect";
 import type { GeminiConfig } from "../lib/upload/gemini";
-import type { BuilderIconAsset, SelectionRecipe, SheetConfig, SheetLayout, SheetPreset } from "../lib/svgBuilder/types";
+import type { BuilderIconAsset, BuilderProfile, SelectionRecipe, SheetConfig, SheetLayout, SheetPreset } from "../lib/svgBuilder/types";
+import type { LayoutPresetId } from "../lib/svgBuilder/config";
 import type { SheetDocument } from "../lib/svgBuilder/types";
 import type { PresetActions } from "../ui/presetops";
 import type { BuilderDiscovery } from "./discovery";
@@ -20,7 +21,7 @@ export interface BuilderActionContext {
   repository: AssetRepository | null;
   document: SheetDocument | null;
   layout: SheetLayout;
-  notices: readonly string[];
+  profiles: readonly BuilderProfile[];
   checked: RowSelection;
   discovery: BuilderDiscovery | null;
   scanRefs: BuilderScanRefs;
@@ -28,6 +29,8 @@ export interface BuilderActionContext {
   presetActions: PresetActions;
   dispatch: (patch: Partial<BuilderModel>) => void;
   setChecked: (next: RowSelection, label: string) => void;
+  /** Automatic placement (first scan, grid resize): no history entry. */
+  setCheckedQuiet: (ids: readonly string[]) => void;
   setRoot: (root: DirHandleLike | null) => void;
   setDiscovery: (found: BuilderDiscovery | null) => void;
   setBusy: (busy: string | null) => void;
@@ -37,19 +40,24 @@ export interface BuilderActionContext {
 export interface BuilderActions {
   openFolder: () => void;
   rescan: () => void;
-  setConfig: (config: SheetConfig) => void;
-  applyLayoutPreset: (id: string) => void;
-  setRecipe: (recipe: SelectionRecipe) => void;
-  setSeed: (seed: number) => void;
-  shuffle: () => void;
+  /** `gesture` coalesces a slider drag into one undo entry. */
+  setConfig: (config: SheetConfig, label?: string, gesture?: boolean) => void;
+  applyLayoutPreset: (id: LayoutPresetId) => void;
+  resetConfig: () => void;
+  setRecipe: (patch: Partial<SelectionRecipe>) => void;
+  reshuffle: () => void;
   toggleAsset: (id: string) => void;
   toggleLock: (id: string) => void;
   clearSelection: () => void;
   setSearch: (query: string) => void;
   setCategory: (category: string) => void;
+  autoPlace: () => void;
+  fitSelection: () => void;
   setZoom: (zoom: number) => void;
+  fitZoom: () => void;
+  undo: () => void;
+  redo: () => void;
   toggleProvider: (open: boolean) => void;
-  toggleInspector: (open: boolean) => void;
   setPrompt: (text: string) => void;
   resetPrompt: () => void;
   presets: PresetActions;
@@ -67,6 +75,9 @@ export interface BuilderActions {
   savePreset: () => void;
   loadPreset: (text: string) => void;
   openBrief: () => void;
+  openMetadata: () => void;
+  /** One honest toast line (status). */
+  say: (message: string, error?: boolean) => void;
   closeDialog: () => void;
   presetOfModel: () => SheetPreset;
 }

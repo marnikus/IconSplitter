@@ -1,45 +1,85 @@
-// selection.ts — deterministic, honest selection of approved assets. A short
-// pool is reported; filling from the whole library is an explicit decision,
-// never a silent substitute (RULE 4/9).
+// selection.ts — the reference "Selection recipe": Similar / Random / Filtered
+// pools, a seeded draw, locked icons that keep their cell, a seeded top-up from
+// the whole library that is always REPORTED (shortfall), and grid grow/shrink.
 import { isRecord } from "../isrecord";
-import { compareNames } from "../scan";
-import { profilesOf } from "./assets";
+import { scoreOf } from "./assets";
 import { isSelectionMode } from "./config";
-import type { BuilderIconAsset, SelectionRecipe, SelectionResult } from "./types";
+import { RANGES, clampTo } from "./ranges";
+import type { BuilderIconAsset, BuilderProfile, SelectionRecipe, SelectionResult } from "./types";
+
+export const DEFAULT_SEED = 2841;
 
 export const DEFAULT_SELECTION_RECIPE: SelectionRecipe = {
-  mode: "random", profileId: "all", threshold: 50, category: "All", count: 28,
-  seed: 2841, lockedIds: [], fillFromFullLibrary: false, query: "",
+  mode: "similar", profileId: "", threshold: 70, category: "All",
 };
+
+export interface SheetPick {
+  assets: readonly BuilderIconAsset[];
+  profiles: readonly BuilderProfile[];
+  recipe: SelectionRecipe;
+  seed: number;
+  capacity: number;
+  current: readonly string[];
+  lockedIds: readonly string[];
+}
 
 export function parseSelectionRecipe(raw: unknown): SelectionRecipe {
   if (!isRecord(raw)) return { ...DEFAULT_SELECTION_RECIPE };
+  const d = DEFAULT_SELECTION_RECIPE;
   return {
-    mode: isSelectionMode(raw.mode) ? raw.mode : DEFAULT_SELECTION_RECIPE.mode,
-    profileId: text(raw.profileId, DEFAULT_SELECTION_RECIPE.profileId, 80),
-    threshold: num(raw.threshold, DEFAULT_SELECTION_RECIPE.threshold, 0, 100),
-    category: text(raw.category, DEFAULT_SELECTION_RECIPE.category, 80),
-    count: num(raw.count, DEFAULT_SELECTION_RECIPE.count, 1, 400),
-    seed: Math.floor(num(raw.seed, DEFAULT_SELECTION_RECIPE.seed, 0, 4_294_967_295)),
-    lockedIds: ids(raw.lockedIds),
-    fillFromFullLibrary: typeof raw.fillFromFullLibrary === "boolean" ? raw.fillFromFullLibrary : false,
-    query: text(raw.query, "", 120),
+    mode: isSelectionMode(raw.mode) ? raw.mode : d.mode,
+    profileId: typeof raw.profileId === "string" ? raw.profileId.slice(0, 80) : d.profileId,
+    threshold: clampTo(RANGES.threshold, raw.threshold, d.threshold),
+    category: typeof raw.category === "string" && raw.category !== "" ? raw.category.slice(0, 80) : d.category,
   };
 }
 
-export function selectAssets(assets: readonly BuilderIconAsset[], raw: SelectionRecipe): SelectionResult {
-  const recipe = parseSelectionRecipe(raw);
-  const byId = new Map(assets.map((asset) => [asset.id, asset]));
-  const locked = unique(recipe.lockedIds).map((id) => byId.get(id)).filter(isAsset);
-  const lockedIds = new Set(locked.map((asset) => asset.id));
-  const pool = assets.filter((asset) => !lockedIds.has(asset.id) && inPool(asset, recipe));
-  const notices: string[] = [];
-  const ranked = rankPool(assets, pool, recipe, notices);
-  const needed = Math.max(0, recipe.count - locked.length);
-  const chosen = [...locked.map((a) => a.id), ...ranked.slice(0, needed).map((a) => a.id)];
-  const filled = fillIfNeeded(assets, chosen, recipe, notices);
-  return { ids: unique(filled).slice(0, recipe.count), notices, poolSize: pool.length,
-    usedFallback: filled.length > chosen.length };
+/** The profile a recipe means: its id, else the first profile (a category, when any exist). */
+export function profileOf(profiles: readonly BuilderProfile[], recipe: SelectionRecipe): BuilderProfile | undefined {
+  return profiles.find((p) => p.id === recipe.profileId) ?? profiles[0];
+}
+
+/** The pool a mode draws from; an empty pool means the whole library. */
+export function poolOf(assets: readonly BuilderIconAsset[], profiles: readonly BuilderProfile[], recipe: SelectionRecipe): BuilderIconAsset[] {
+  if (recipe.mode === "random") return [...assets];
+  if (recipe.mode === "filtered") return isAll(recipe.category) ? [...assets] : assets.filter((a) => a.category === recipe.category);
+  const profile = profileOf(profiles, recipe);
+  return assets.filter((a) => scoreOf(a, profile) * 100 >= recipe.threshold);
+}
+
+/** Re-draw every unlocked cell; locked icons keep their cell index. */
+export function reshuffleSheet(p: SheetPick): SelectionResult {
+  const locked = new Set(p.lockedIds);
+  const slots: (string | null)[] = Array.from({ length: p.capacity }, (_, i) => (locked.has(p.current[i] ?? "") ? p.current[i] : null));
+  const kept = new Set(slots.filter((id): id is string => id !== null));
+  const pool = poolOf(p.assets, p.profiles, p.recipe).filter((a) => !kept.has(a.id));
+  const open = slots.filter((id) => id === null).length;
+  const draw = drawIds(p, pool, kept, open);
+  let k = 0;
+  const ids = slots.map((id) => id ?? draw[k++] ?? null).filter((id): id is string => id !== null);
+  return { ids, shortfall: pool.length < open ? { pool: pool.length + kept.size, cells: p.capacity } : null };
+}
+
+/** Grid size change: shrinking truncates; growing appends seeded picks (seed + capacity) not already placed. */
+export function resizeSheet(p: SheetPick): string[] {
+  if (p.current.length >= p.capacity) return p.current.slice(0, p.capacity);
+  const have = new Set(p.current);
+  const pool = poolOf(p.assets, p.profiles, p.recipe).filter((a) => !have.has(a.id));
+  const extra = drawIds({ ...p, seed: p.seed + p.capacity }, pool, have, p.capacity - p.current.length);
+  return [...p.current, ...extra];
+}
+
+/** The line under "Reshuffle N icons". */
+export function recipeCaption(recipe: SelectionRecipe, profiles: readonly BuilderProfile[]): string {
+  if (recipe.mode === "random") return "Random from the full library";
+  if (recipe.mode === "filtered") return isAll(recipe.category) ? "Random from every category" : `Random from ${recipe.category.toLowerCase()}`;
+  return `${recipe.threshold}% tag match · ${profileOf(profiles, recipe)?.label ?? "no profile"}`;
+}
+
+/** The honest shortfall toast (reference wording). */
+export function shortfallMessage(recipe: SelectionRecipe, s: { pool: number; cells: number }): string {
+  if (recipe.mode === "similar") return `Only ${s.pool} icons meet ≥${recipe.threshold}% metadata match. Closest matches fill the remaining cells.`;
+  return `That filter has ${s.pool} icons for ${s.cells} cells. The closest library pick fills the rest.`;
 }
 
 export function mulberry32(seed: number): () => number {
@@ -61,86 +101,15 @@ export function shuffled<T>(items: readonly T[], random: () => number): T[] {
   return out;
 }
 
-function rankPool(
-  assets: readonly BuilderIconAsset[], pool: readonly BuilderIconAsset[],
-  recipe: SelectionRecipe, notices: string[],
-): BuilderIconAsset[] {
-  if (recipe.mode === "filtered") return [...pool].sort((a, b) => compareNames(a.label, b.label) || compareNames(a.id, b.id));
-  const random = mulberry32(recipe.seed);
-  if (recipe.mode === "similar") return rankSimilar({ assets, pool, recipe, notices, random });
-  return shuffled(pool, random);
+/** Seeded draw from the pool, topped up from the rest of the library with seed + 99. */
+function drawIds(p: SheetPick, pool: readonly BuilderIconAsset[], taken: ReadonlySet<string>, count: number): string[] {
+  const first = shuffled(pool, mulberry32(p.seed)).map((a) => a.id).slice(0, count);
+  if (first.length >= count) return first;
+  const used = new Set([...taken, ...first]);
+  const rest = shuffled(p.assets.filter((a) => !used.has(a.id)), mulberry32(p.seed + 99)).map((a) => a.id);
+  return [...first, ...rest.slice(0, count - first.length)];
 }
 
-interface SimilarArgs {
-  assets: readonly BuilderIconAsset[]; pool: readonly BuilderIconAsset[];
-  recipe: SelectionRecipe; notices: string[]; random: () => number;
-}
-
-function rankSimilar({ assets, pool, recipe, notices, random }: SimilarArgs): BuilderIconAsset[] {
-  const refs = profilesOf(assets).find((p) => p.id === recipe.profileId)?.tags ?? [];
-  if (refs.length === 0) {
-    notices.push("This profile has no reference tags — using the seeded order instead");
-    return shuffled(pool, random);
-  }
-  const scored = pool.map((asset) => ({ asset, score: similarity(asset, refs) }));
-  const matched = scored.filter((entry) => entry.score * 100 >= recipe.threshold)
-    .sort((a, b) => b.score - a.score || compareNames(a.asset.label, b.asset.label));
-  if (matched.length === 0) notices.push("No asset reached the similarity threshold");
-  return shuffled(matched.map((entry) => entry.asset), random);
-}
-
-function similarity(asset: BuilderIconAsset, refs: readonly string[]): number {
-  const tags = new Set(asset.tags.map((tag) => tag.toLowerCase()));
-  const hits = refs.filter((tag) => tags.has(tag.toLowerCase())).length;
-  return refs.length === 0 ? 0 : hits / refs.length;
-}
-
-function fillIfNeeded(
-  assets: readonly BuilderIconAsset[], chosen: readonly string[],
-  recipe: SelectionRecipe, notices: string[],
-): string[] {
-  if (chosen.length >= recipe.count) return [...chosen];
-  if (recipe.fillFromFullLibrary) return fillFromLibrary(assets, chosen, recipe, notices);
-  notices.push(`Only ${chosen.length} asset${chosen.length === 1 ? "" : "s"} matched this recipe`);
-  return [...chosen];
-}
-
-function fillFromLibrary(
-  assets: readonly BuilderIconAsset[], chosen: readonly string[],
-  recipe: SelectionRecipe, notices: string[],
-): string[] {
-  const have = new Set(chosen);
-  const extra = shuffled(assets.filter((a) => !have.has(a.id)), mulberry32(recipe.seed + 1))
-    .slice(0, recipe.count - chosen.length).map((a) => a.id);
-  notices.push(`Filled ${extra.length} cell${extra.length === 1 ? "" : "s"} from the full approved library`);
-  return [...chosen, ...extra];
-}
-
-function inPool(asset: BuilderIconAsset, recipe: SelectionRecipe): boolean {
-  const category = recipe.category.trim().toLowerCase();
-  const categoryOk = category === "" || category === "all" || asset.category.toLowerCase() === category;
-  const haystack = [asset.label, asset.base, asset.category, ...asset.tags].join(" ").toLowerCase();
-  const words = (recipe.query ?? "").trim().toLowerCase().split(/\s+/);
-  return categoryOk && words.every((word) => word === "" || haystack.includes(word));
-}
-
-function isAsset(asset: BuilderIconAsset | undefined): asset is BuilderIconAsset {
-  return asset !== undefined;
-}
-
-function unique(ids: readonly string[]): string[] {
-  return [...new Set(ids)];
-}
-
-function ids(raw: unknown): string[] {
-  return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
-}
-
-function text(value: unknown, fallback: string, max: number): string {
-  return typeof value === "string" && value.length <= max ? value : fallback;
-}
-
-function num(value: unknown, fallback: number, min: number, max: number): number {
-  const n = typeof value === "number" ? value : Number.NaN;
-  return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
+function isAll(category: string): boolean {
+  return category.trim() === "" || category.trim().toLowerCase() === "all";
 }

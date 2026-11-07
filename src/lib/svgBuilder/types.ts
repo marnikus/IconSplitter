@@ -8,7 +8,8 @@ export type TitleFace = "sans" | "serif" | "mono";
 export type MetadataState = "empty" | "draft" | "invalid" | "accepted" | "edited";
 
 export interface Rect { x: number; y: number; width: number; height: number }
-export interface CellFrame { index: number; x: number; y: number; size: number; captionY: number }
+/** One grid cell: `size` is the fitted icon box, `glyph` the stroke-aware drawing size inside it. */
+export interface CellFrame { index: number; x: number; y: number; size: number; glyph: number; captionY: number; captionSize: number }
 
 export interface BuilderIconAsset {
   id: string;
@@ -33,23 +34,20 @@ export interface BuilderRowLike {
 
 export interface BuilderProfile { id: string; label: string; tags: readonly string[] }
 
+/** The reference "Selection recipe": mode, metadata profile, threshold (%) and the Filtered category. */
 export interface SelectionRecipe {
   mode: SelectionMode;
   profileId: string;
   threshold: number;
   category: string;
-  count: number;
-  seed: number;
-  lockedIds: readonly string[];
-  fillFromFullLibrary: boolean;
-  query?: string;
 }
+
+/** A pick that had to top up from the whole library reports how short its pool was. */
+export interface SelectionShortfall { pool: number; cells: number }
 
 export interface SelectionResult {
   ids: string[];
-  notices: string[];
-  poolSize: number;
-  usedFallback: boolean;
+  shortfall: SelectionShortfall | null;
 }
 
 export interface SheetConfig {
@@ -108,6 +106,10 @@ export interface SheetDocument {
 
 export interface SheetPreset {
   v: 1;
+  version?: 1;
+  generator?: string;
+  created?: string;
+  selection?: readonly string[];
   config: SheetConfig;
   placedIds: readonly string[];
   lockedIds: readonly string[];

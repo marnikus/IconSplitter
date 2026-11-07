@@ -1,148 +1,124 @@
-// config.ts — the sheet's validated configuration and three reproducible
-// presets. Every persisted value is rebuilt field by field (RULE 13); a corrupt
-// field costs its default, never a broken artboard.
+// config.ts — the sheet's validated configuration and the reference's three
+// layout presets. Every persisted value is rebuilt field by field (RULE 13):
+// numbers are CLAMPED to the one range table, never reverted to a default.
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
-import type { BannerPosition, CaptionCase, SheetConfig, TitleFace } from "./types";
+import { RANGES, clampTo, type NumRange } from "./ranges";
+import type { BannerPosition, CaptionCase, SelectionMode, SheetConfig, TitleFace } from "./types";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const MODES: readonly SelectionMode[] = ["similar", "random", "filtered"];
 
+/** Reference "Glyph" defaults (FIXES §D); the banner copy is neutral, not "FOOD ICONS". */
 export const DEFAULT_CONFIG: SheetConfig = {
-  artboard: { width: 1080, height: 660, background: "#F4F0E7", padding: 56, radius: 28 },
-  grid: { columns: 7, rows: 4, gapX: 30, gapY: 34, captions: true,
-    captionColor: "#6B6458", captionSize: 11, captionCase: "upper" },
-  icons: { box: 72, strokeWidth: 1.8, color: "#24362A", linecap: "round" },
-  banner: { position: "left", size: 280, background: "#17271F", accent: "#D9F36C",
-    textColor: "#F4F0E7", subtitleColor: "#C9D2C4", style: "split",
-    title: "GLYPH / ICON SHEET", subtitle: "Approved SVG assets",
-    titleSize: 34, subtitleSize: 13, titleFace: "sans", hero: true,
-    heroIconId: null, divider: true },
+  artboard: { width: 1080, height: 660, background: "#F4F0E7", padding: 34, radius: 0 },
+  grid: { columns: 8, rows: 4, gapX: 22, gapY: 18, captions: true,
+    captionColor: "#787A6C", captionSize: 9, captionCase: "upper" },
+  icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round" },
+  banner: { position: "left", size: 242, background: "#17271F", accent: "#D9F36C",
+    textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid",
+    title: "ICON SHEET", subtitle: "Editable stroke width",
+    titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true },
 };
 
-export interface SheetPresetOption { id: string; label: string; config: SheetConfig }
+/** The 8 swatches shown under Canvas and Stroke colour. */
+export const SWATCHES: readonly string[] = ["#17271F", "#202A24", "#3D5A44", "#D9F36C", "#F4F0E7", "#FBFAF6", "#E7B37C", "#C96B4B"];
 
-export const PRESETS: readonly SheetPresetOption[] = [
-  { id: "classic", label: "Classic grid", config: DEFAULT_CONFIG },
-  { id: "dark", label: "Dark artboard", config: {
-    ...DEFAULT_CONFIG,
-    artboard: { ...DEFAULT_CONFIG.artboard, background: "#111A24" },
-    grid: { ...DEFAULT_CONFIG.grid, captionColor: "#A9B4C0" },
-    icons: { ...DEFAULT_CONFIG.icons, color: "#E7EEF5" },
-    banner: { ...DEFAULT_CONFIG.banner, background: "#0A1119", textColor: "#F0F5FA" },
-  } },
-  { id: "contact", label: "Contact sheet", config: {
-    ...DEFAULT_CONFIG,
-    artboard: { ...DEFAULT_CONFIG.artboard, width: 1280, height: 820, padding: 40 },
-    grid: { ...DEFAULT_CONFIG.grid, columns: 9, rows: 5, gapX: 18, gapY: 22, captions: false },
-    icons: { ...DEFAULT_CONFIG.icons, box: 58 },
-    banner: { ...DEFAULT_CONFIG.banner, position: "top", size: 108, titleSize: 26 },
-  } },
+export type LayoutPresetId = "editorial" | "masthead" | "plain";
+export interface LayoutPreset { id: LayoutPresetId; label: string; hint: string; patch: (d: SheetConfig) => SheetConfig }
+
+export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
+  { id: "editorial", label: "Side banner", hint: "Editorial collection", patch: (d) => d },
+  { id: "masthead", label: "Top split", hint: "Dense catalogue", patch: (d) => ({
+    artboard: { ...d.artboard, height: 640, padding: 30 },
+    grid: { ...d.grid, columns: 10, rows: 5, gapX: 16, gapY: 12, captions: false, captionSize: 7 },
+    icons: { ...d.icons, box: 42, strokeWidth: 1.5 },
+    banner: { ...d.banner, position: "top", style: "split", size: 76, hero: false, titleSize: 27, subtitleSize: 22 },
+  }) },
+  { id: "plain", label: "Plain grid", hint: "Clean contact sheet", patch: (d) => ({
+    artboard: { ...d.artboard, height: 560, background: "#FBFAF6", padding: 46 },
+    grid: { ...d.grid, columns: 8, rows: 3, gapX: 30, gapY: 26, captions: false },
+    icons: { ...d.icons, box: 58, strokeWidth: 1.8 },
+    banner: { ...d.banner, position: "none" },
+  }) },
 ];
 
-type SelectionMode = "similar" | "random" | "filtered";
+/** A preset resets every value of its groups to the defaults + its patch, keeping the user's banner copy and hero. */
+export function applyPresetConfig(current: SheetConfig, id: LayoutPresetId): SheetConfig {
+  const preset = LAYOUT_PRESETS.find((p) => p.id === id) ?? LAYOUT_PRESETS[0];
+  const next = preset.patch(copyConfig(DEFAULT_CONFIG));
+  const { title, subtitle, heroIconId } = current.banner;
+  return parseSheetConfig({ ...next, banner: { ...next.banner, title, subtitle, heroIconId } });
+}
 
 export function parseSheetConfig(raw: unknown): SheetConfig {
   if (!isRecord(raw)) return copyConfig(DEFAULT_CONFIG);
-  return {
-    artboard: parseArtboard(raw.artboard),
-    grid: parseGrid(raw.grid),
-    icons: parseIcons(raw.icons),
-    banner: parseBanner(raw.banner),
-  };
+  return { artboard: parseArtboard(raw.artboard), grid: parseGrid(raw.grid), icons: parseIcons(raw.icons), banner: parseBanner(raw.banner) };
 }
 
 export function copyConfig(c: SheetConfig): SheetConfig {
-  return {
-    artboard: { ...c.artboard }, grid: { ...c.grid }, icons: { ...c.icons }, banner: { ...c.banner },
-  };
+  return { artboard: { ...c.artboard }, grid: { ...c.grid }, icons: { ...c.icons }, banner: { ...c.banner } };
 }
 
 export function configFingerprint(config: SheetConfig): string {
   return fnv1a32(JSON.stringify(config)).toString(16);
 }
 
+/** Reference split-masthead contrast: dark ink on a light accent, white on a dark one. */
 export function readableInk(background: string): string {
   const hex = HEX.test(background) ? background.slice(1) : "000000";
-  const rgb = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  const lum = rgb.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
-  const brightness = 0.2126 * lum[0] + 0.7152 * lum[1] + 0.0722 * lum[2];
-  return brightness > 0.45 ? "#1D2621" : "#F0F5F2";
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.46 ? "#1B211D" : "#FFFFFF";
 }
 
 function parseArtboard(raw: unknown): SheetConfig["artboard"] {
   const d = DEFAULT_CONFIG.artboard;
   if (!isRecord(raw)) return { ...d };
-  return {
-    width: num(raw.width, d.width, 320, 4096), height: num(raw.height, d.height, 240, 4096),
-    background: hex(raw.background, d.background), padding: num(raw.padding, d.padding, 0, 160),
-    radius: num(raw.radius, d.radius, 0, 80),
-  };
+  return { width: num(RANGES.width, raw.width, d.width), height: num(RANGES.height, raw.height, d.height),
+    background: hex(raw.background, d.background), padding: num(RANGES.padding, raw.padding, d.padding),
+    radius: num(RANGES.radius, raw.radius, d.radius) };
 }
 
 function parseGrid(raw: unknown): SheetConfig["grid"] {
   const d = DEFAULT_CONFIG.grid;
   if (!isRecord(raw)) return { ...d };
-  return {
-    columns: num(raw.columns, d.columns, 1, 20), rows: num(raw.rows, d.rows, 1, 20),
-    gapX: num(raw.gapX, d.gapX, 0, 120), gapY: num(raw.gapY, d.gapY, 0, 120),
+  return { columns: num(RANGES.columns, raw.columns, d.columns), rows: num(RANGES.rows, raw.rows, d.rows),
+    gapX: num(RANGES.gapX, raw.gapX, d.gapX), gapY: num(RANGES.gapY, raw.gapY, d.gapY),
     captions: bool(raw.captions, d.captions), captionColor: hex(raw.captionColor, d.captionColor),
-    captionSize: num(raw.captionSize, d.captionSize, 6, 32),
-    captionCase: oneOf(raw.captionCase, ["upper", "normal"], d.captionCase) as CaptionCase,
-  };
+    captionSize: num(RANGES.captionSize, raw.captionSize, d.captionSize),
+    captionCase: oneOf(raw.captionCase, ["upper", "normal"], d.captionCase) as CaptionCase };
 }
 
 function parseIcons(raw: unknown): SheetConfig["icons"] {
   const d = DEFAULT_CONFIG.icons;
   if (!isRecord(raw)) return { ...d };
-  return {
-    box: num(raw.box, d.box, 16, 240), strokeWidth: num(raw.strokeWidth, d.strokeWidth, 0.25, 12),
-    color: hex(raw.color, d.color),
-    linecap: oneOf(raw.linecap, ["round", "square"], d.linecap) as "round" | "square",
-  };
-}
-
-interface BannerParts {
-  numbers: Pick<SheetConfig["banner"], "size" | "titleSize" | "subtitleSize">;
-  colours: Pick<SheetConfig["banner"], "background" | "accent" | "textColor" | "subtitleColor">;
-  words: Pick<SheetConfig["banner"], "title" | "subtitle">;
+  return { box: num(RANGES.box, raw.box, d.box), strokeWidth: num(RANGES.strokeWidth, raw.strokeWidth, d.strokeWidth),
+    color: hex(raw.color, d.color), linecap: oneOf(raw.linecap, ["round", "square"], d.linecap) as "round" | "square" };
 }
 
 function parseBanner(raw: unknown): SheetConfig["banner"] {
   const d = DEFAULT_CONFIG.banner;
   if (!isRecord(raw)) return { ...d };
-  const parts: BannerParts = { numbers: bannerNumbers(raw, d), colours: bannerColours(raw, d), words: bannerWords(raw, d) };
   return {
-    ...parts.numbers, ...parts.colours, ...parts.words,
     position: oneOf(raw.position, ["left", "right", "top", "bottom", "none"], d.position) as BannerPosition,
-    style: oneOf(raw.style, ["solid", "split"], d.style) as "solid" | "split",
+    size: num(RANGES.bannerAny, raw.size, d.size), style: oneOf(raw.style, ["solid", "split"], d.style) as "solid" | "split",
+    background: hex(raw.background, d.background), accent: hex(raw.accent, d.accent),
+    textColor: hex(raw.textColor, d.textColor), subtitleColor: hex(raw.subtitleColor, d.subtitleColor),
+    title: text(raw.title, d.title, 90), subtitle: text(raw.subtitle, d.subtitle, 140),
+    titleSize: num(RANGES.titleSize, raw.titleSize, d.titleSize), subtitleSize: num(RANGES.subtitleSize, raw.subtitleSize, d.subtitleSize),
     titleFace: oneOf(raw.titleFace, ["sans", "serif", "mono"], d.titleFace) as TitleFace,
     hero: bool(raw.hero, d.hero), divider: bool(raw.divider, d.divider),
-    heroIconId: typeof raw.heroIconId === "string" ? raw.heroIconId : null,
+    heroIconId: typeof raw.heroIconId === "string" && raw.heroIconId !== "" ? raw.heroIconId : null,
   };
 }
 
-function bannerNumbers(raw: Record<string, unknown>, d: SheetConfig["banner"]): BannerParts["numbers"] {
-  return { size: num(raw.size, d.size, 0, 500), titleSize: num(raw.titleSize, d.titleSize, 10, 96),
-    subtitleSize: num(raw.subtitleSize, d.subtitleSize, 8, 48) };
+function num(range: NumRange, value: unknown, fallback: number): number {
+  return clampTo(range, value, fallback);
 }
 
-function bannerColours(raw: Record<string, unknown>, d: SheetConfig["banner"]): BannerParts["colours"] {
-  return { background: hex(raw.background, d.background), accent: hex(raw.accent, d.accent),
-    textColor: hex(raw.textColor, d.textColor), subtitleColor: hex(raw.subtitleColor, d.subtitleColor) };
-}
-
-function bannerWords(raw: Record<string, unknown>, d: SheetConfig["banner"]): BannerParts["words"] {
-  return { title: text(raw.title, d.title, 90), subtitle: text(raw.subtitle, d.subtitle, 140) };
-}
-
-function num(value: unknown, fallback: number, min: number, max: number): number {
-  const n = typeof value === "number" ? value : Number.NaN;
-  return Number.isFinite(n) && n >= min && n <= max ? n : fallback;
-}
-
+/** Empty text is a real value (an untitled banner); only a non-string falls back. */
 function text(value: unknown, fallback: string, max: number): string {
-  return typeof value === "string" && value.trim() !== "" && value.length <= max ? value : fallback;
+  return typeof value === "string" ? value.slice(0, max) : fallback;
 }
 
 function hex(value: unknown, fallback: string): string {
@@ -157,7 +133,6 @@ function oneOf(value: unknown, allowed: readonly string[], fallback: string): st
   return typeof value === "string" && allowed.includes(value) ? value : fallback;
 }
 
-/** Kept here so config and selection share the exact allowed mode names. */
 export function isSelectionMode(value: unknown): value is SelectionMode {
   return typeof value === "string" && MODES.includes(value as SelectionMode);
 }

@@ -5,11 +5,11 @@
 import { describe, expect, it } from "vitest";
 import { validateSvg } from "../src/lib/svgvalidate";
 import {
-  DEFAULT_CONFIG, PRESETS, parseSheetConfig, configFingerprint,
+  DEFAULT_CONFIG, LAYOUT_PRESETS, parseSheetConfig, configFingerprint,
 } from "../src/lib/svgBuilder/config";
 import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { categoriesOf, filterAssets, profilesOf } from "../src/lib/svgBuilder/assets";
-import { selectAssets } from "../src/lib/svgBuilder/selection";
+import { reshuffleSheet } from "../src/lib/svgBuilder/selection";
 import {
   DEFAULT_SHEET_PROMPT, cleanSheetMetadata, parseSheetMetadata, validateSheetMetadata,
 } from "../src/lib/svgBuilder/metadata";
@@ -33,9 +33,10 @@ const assets: BuilderIconAsset[] = [
 ];
 
 function recipe(over: Partial<SelectionRecipe> = {}): SelectionRecipe {
-  return { mode: "random", profileId: "all", threshold: 50, category: "all", count: 3,
-    seed: 2841, lockedIds: [], fillFromFullLibrary: false, ...over };
+  return { mode: "random", profileId: "all", threshold: 70, category: "All", ...over };
 }
+
+const FRAME = { index: 0, x: 10, y: 20, size: 48, glyph: 44, captionY: 76, captionSize: 9 };
 
 function acceptedMetadata(): SheetMetadata {
   return { title: "Quiet line icons", subtitle: "Approved vector set", keywords: ["icon", "vector", "line"],
@@ -46,13 +47,13 @@ describe("sheet config and layout", () => {
   it("has dark-app-friendly defaults and three presets", () => {
     expect(DEFAULT_CONFIG.artboard.width).toBeGreaterThan(600);
     expect(DEFAULT_CONFIG.icons.color).not.toBe("#000000");
-    expect(PRESETS).toHaveLength(3);
-    expect(new Set(PRESETS.map((p) => p.id)).size).toBe(3);
+    expect(LAYOUT_PRESETS).toHaveLength(3);
+    expect(new Set(LAYOUT_PRESETS.map((p) => p.id)).size).toBe(3);
   });
 
   it("validates a stored config, dropping foreign fields", () => {
-    const parsed = parseSheetConfig({ ...DEFAULT_CONFIG, artboard: { ...DEFAULT_CONFIG.artboard, width: -9 }, junk: true });
-    expect(parsed.artboard.width).toBeGreaterThan(0);
+    const parsed = parseSheetConfig({ ...DEFAULT_CONFIG, artboard: { ...DEFAULT_CONFIG.artboard, width: "x" }, junk: true });
+    expect(parsed.artboard.width).toBe(DEFAULT_CONFIG.artboard.width);
     expect(parsed).not.toHaveProperty("junk");
     expect(configFingerprint(parsed)).toBe(configFingerprint(parseSheetConfig(DEFAULT_CONFIG)));
   });
@@ -60,18 +61,17 @@ describe("sheet config and layout", () => {
   it("computes capacity, cells and a none-banner content box", () => {
     const config: SheetConfig = { ...DEFAULT_CONFIG, grid: { ...DEFAULT_CONFIG.grid, columns: 3, rows: 2 },
       banner: { ...DEFAULT_CONFIG.banner, position: "none" } };
-    const layout = computeLayout(config, 4);
+    const layout = computeLayout(config);
     expect(layout.capacity).toBe(6);
-    expect(layout.cells).toHaveLength(4);
+    expect(layout.cells).toHaveLength(6);
     expect(layout.overflow).toBe(false);
     expect(layout.banner).toBeNull();
     expect(layout.content.x).toBe(config.artboard.padding);
     expect(layout.cells[1].x).toBeGreaterThan(layout.cells[0].x);
   });
 
-  it("reports overflow without creating more cells than capacity", () => {
-    const layout = computeLayout(DEFAULT_CONFIG, 999);
-    expect(layout.overflow).toBe(true);
+  it("creates exactly capacity cells, whatever is placed", () => {
+    const layout = computeLayout(DEFAULT_CONFIG);
     expect(layout.cells).toHaveLength(layout.capacity);
   });
 });
@@ -90,26 +90,21 @@ describe("asset library rules", () => {
 });
 
 describe("deterministic asset selection", () => {
-  it("keeps locked ids, never duplicates, and is stable for one seed", () => {
-    const first = selectAssets(assets, recipe({ lockedIds: ["c"], count: 3 }));
-    const second = selectAssets(assets, recipe({ lockedIds: ["c"], count: 3 }));
-    expect(first.ids).toEqual(second.ids);
+  const pick = (over: Partial<SelectionRecipe>, current: string[] = [], lockedIds: string[] = []) =>
+    reshuffleSheet({ assets, profiles: profilesOf(assets), recipe: recipe(over), seed: 2841, capacity: 3, current, lockedIds });
+
+  it("keeps locked ids in their cell, never duplicates, and is stable for one seed", () => {
+    const first = pick({}, ["c", "a", "b"], ["c"]);
+    expect(first.ids).toEqual(pick({}, ["c", "a", "b"], ["c"]).ids);
     expect(first.ids[0]).toBe("c");
     expect(new Set(first.ids).size).toBe(first.ids.length);
-    expect(first.ids.every((id) => assets.some((a) => a.id === id))).toBe(true);
   });
 
-  it("does not silently fill a short category from the whole library", () => {
-    const out = selectAssets(assets, recipe({ category: "UI", count: 3, fillFromFullLibrary: false }));
-    expect(out.ids).toEqual(["a"]);
-    expect(out.notices.join(" ")).toMatch(/only 1/i);
-    expect(out.usedFallback).toBe(false);
-  });
-
-  it("fills from the full library only when explicitly allowed", () => {
-    const out = selectAssets(assets, recipe({ category: "UI", count: 3, fillFromFullLibrary: true }));
+  it("reports a short category instead of hiding the top-up", () => {
+    const out = pick({ mode: "filtered", category: "UI" });
+    expect(out.ids[0]).toBe("a");
     expect(out.ids).toHaveLength(3);
-    expect(out.usedFallback).toBe(true);
+    expect(out.shortfall).toEqual({ pool: 1, cells: 3 });
   });
 });
 
@@ -138,7 +133,7 @@ describe("sheet metadata", () => {
 
 describe("approved SVG embedding and composition", () => {
   it("sanitises one approved SVG into a cell group without scripts or remote code", () => {
-    const frame = { index: 0, x: 10, y: 20, size: 48, captionY: 76 };
+    const frame = FRAME;
     const safe = cellGroupOf({ code: SVG, asset: assets[0], frame, style: DEFAULT_CONFIG.icons });
     expect(safe.ok).toBe(true);
     if (!safe.ok) return;
@@ -153,14 +148,14 @@ describe("approved SVG embedding and composition", () => {
 
   it("composes one valid standalone SVG with traceability and accepted metadata", () => {
     const config = { ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, position: "none" as const } };
-    const layout = computeLayout(config, 2);
+    const layout = computeLayout(config);
     const doc = composeSheet({
       config, layout, assets, placedIds: ["a", "b"],
       svgTexts: { a: SVG, b: SVG }, metadata: acceptedMetadata(),
     });
     expect(doc.placedIds).toEqual(["a", "b"]);
     expect(doc.brokenIds).toEqual([]);
-    expect(doc.svg).toContain("<title>Quiet line icons</title>");
+    expect(doc.svg).toContain("<title>Quiet line icons — icon sheet</title>");
     expect(doc.svg).toContain('data-asset-id="a"');
     expect(doc.svg).toContain('data-config-fingerprint="' + doc.configFingerprint + '"');
     expect(doc.svg).toContain("\"id\":\"a\"");
@@ -168,7 +163,7 @@ describe("approved SVG embedding and composition", () => {
   });
 
   it("reports a broken approved asset instead of pretending it rendered", () => {
-    const layout = computeLayout(DEFAULT_CONFIG, 1);
+    const layout = computeLayout(DEFAULT_CONFIG);
     const doc = composeSheet({ config: DEFAULT_CONFIG, layout, assets, placedIds: ["a"], svgTexts: { a: UNSAFE } });
     expect(doc.brokenIds).toEqual(["a"]);
     expect(doc.svg).toContain("data-broken-asset=\"a\"");

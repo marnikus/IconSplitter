@@ -1,37 +1,72 @@
-// SvgBuilderBrief.tsx — the copy-ready build brief. It documents the exact
-// contract without putting a key, prompt bytes or image bytes into any log.
-import { useState } from "react";
+// SvgBuilderBrief.tsx — "Prompt brief" / "Corrected brief" dialog (reference
+// layout): Brief | Raw prompt switch, Copy prompt, a section nav, and a
+// copy-ready markdown prompt with its character count. Escape / backdrop close.
+import { useEffect, useState } from "react";
+import { BRIEF_SECTIONS, briefMarkdown } from "./briefText";
 
-const BRIEF = `SVG BUILDER — IMPLEMENTATION BRIEF
-1. Scope: a seventh Workbench tab named SVG builder; no second app or server.
-2. Assets: only .svg.json-approved icons from Generate SVG; recursive all-folder discovery; read-only.
-3. Chrome: global top menu, undo bar, full-width folder widget, metadata prompt, shared Gemini card.
-4. Theme: dark app chrome, light paper artboard; all controls use local design tokens.
-5. Layout: validated pure config, three presets, geometry shared by preview and export.
-6. Selection: deterministic seeded recipe, locks, explicit fill, one global selection timeline.
-7. Composition: sanitised approved SVG groups, traceability ids, accepted metadata only.
-8. Metadata: one explicit, previewed 512px JPEG request; no auto-retry; user accepts the draft.
-9. Export: editable SVG, 2x PNG, clipboard and validated JSON preset; no partial downloads.
-10. Persistence: config/prefs/prompt/list-view in localStorage; key in the shared IndexedDB vault.
-11. Verification: focused TDD contracts, typecheck, lint, changed-file gate, fast/full verify.`;
+type View = "brief" | "raw";
 
-export default function SvgBuilderBrief({ onClose }: { onClose: () => void }) {
+export default function SvgBuilderBrief({ onClose, onCopied }: { onClose: () => void; onCopied: (msg: string, error?: boolean) => void }) {
+  const [view, setView] = useState<View>("brief");
   const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const copy = async () => {
-    try { await navigator.clipboard.writeText(BRIEF); setCopied(true); }
-    catch { setCopied(false); }
+    try {
+      await navigator.clipboard.writeText(briefMarkdown());
+      setCopied(true); onCopied("Generation prompt copied to clipboard");
+      setTimeout(() => setCopied(false), 2200);
+    } catch {
+      setView("raw"); onCopied("Clipboard access was blocked — select the raw prompt to copy it.", true);
+    }
   };
-  return <div className="builder-modal-backdrop" role="presentation">
-    <section className="builder-modal builder-brief" data-testid="builder-brief-dialog" role="dialog" aria-modal="true"
-      aria-label="SVG builder prompt brief">
-      <div className="builder-card-head"><div><span className="builder-eyebrow">BRIEF</span><h3>Copy-ready specification</h3></div>
-        <button type="button" className="builder-btn subtle" data-testid="builder-brief-close" onClick={onClose}>✕</button></div>
-      <pre className="builder-brief-text" data-testid="builder-brief-text">{BRIEF}</pre>
-      <div className="builder-modal-actions">
-        <button type="button" className="builder-btn accent" data-testid="builder-brief-copy" onClick={() => { void copy(); }}>
-          {copied ? "Copied" : "Copy brief"}</button>
-        <span className="builder-note" data-testid="builder-brief-copy-status">{copied ? "Copied to clipboard" : "Local clipboard only"}</span>
-      </div>
+  return <div className="bld-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <section className="bld-modal bld-brief" data-testid="builder-brief-dialog" role="dialog" aria-modal="true" aria-label="Generation brief">
+      <BriefHead view={view} setView={setView} copied={copied} onCopy={() => { void copy(); }} onClose={onClose} />
+      {view === "brief" ? <BriefBody /> : <RawBody />}
     </section>
+  </div>;
+}
+
+function BriefHead({ view, setView, copied, onCopy, onClose }: {
+  view: View; setView: (v: View) => void; copied: boolean; onCopy: () => void; onClose: () => void;
+}) {
+  return <div className="bld-modal-head">
+    <div><span className="bld-eyebrow">GENERATION BRIEF v1.0</span><h3>Corrected, scoped and ready for a build model</h3></div>
+    <div className="bld-header-actions">
+      <div className="v2-date-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={view === "brief"} className={view === "brief" ? "active" : ""} data-testid="builder-brief-tab-brief" onClick={() => setView("brief")}>Brief</button>
+        <button type="button" role="tab" aria-selected={view === "raw"} className={view === "raw" ? "active" : ""} data-testid="builder-brief-tab-raw" onClick={() => setView("raw")}>Raw prompt</button>
+      </div>
+      <button type="button" className="svg-btn primary" data-testid="builder-brief-copy" onClick={onCopy}>{copied ? "Copied" : "Copy prompt"}</button>
+      <button type="button" className="svg-btn ghost tiny" data-testid="builder-brief-close" aria-label="Close" onClick={onClose}>✕</button>
+    </div>
+  </div>;
+}
+
+function BriefBody() {
+  return <div className="bld-brief-grid">
+    <nav className="bld-brief-nav" aria-label="In this brief">
+      <div className="svg-field-label"><span>In this brief</span></div>
+      {BRIEF_SECTIONS.map((s, i) => <a key={s.id} href={`#bld-brief-${s.id}`} onClick={(e) => { e.preventDefault(); document.getElementById(`bld-brief-${s.id}`)?.scrollIntoView({ behavior: "smooth" }); }}>
+        {String(i + 1).padStart(2, "0")} {s.title}</a>)}
+    </nav>
+    <div className="bld-brief-main" data-testid="builder-brief-text">
+      {BRIEF_SECTIONS.map((s, i) => <section key={s.id} id={`bld-brief-${s.id}`} className="bld-card">
+        <span className="bld-eyebrow">{String(i + 1).padStart(2, "0")}</span><h4>{s.title}</h4>
+        <ul>{s.points.map((p) => <li key={p}>{p}</li>)}</ul>
+      </section>)}
+    </div>
+  </div>;
+}
+
+function RawBody() {
+  const text = briefMarkdown();
+  return <div className="bld-raw">
+    <div className="svg-field-label"><span>copy-ready / markdown</span><span data-testid="builder-brief-count">{text.length} chars</span></div>
+    <pre className="bld-raw-text" data-testid="builder-brief-raw">{text}</pre>
   </div>;
 }

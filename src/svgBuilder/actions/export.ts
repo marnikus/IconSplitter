@@ -1,18 +1,18 @@
-// actions/export.ts — verified, atomic SVG/PNG/preset delivery. A bad document
-// never opens a download, and loading a preset prunes stale approved ids.
+// actions/export.ts — the "Export sheet" menu: verified, atomic SVG / PNG 2× /
+// clipboard / preset delivery, and Load preset (undoable, prunes stale ids).
+import { sheetCopy } from "../../lib/svgBuilder/compose";
 import { parseSheetPreset, serializeSheetPreset } from "../../lib/svgBuilder/preset";
 import type { SheetPreset } from "../../lib/svgBuilder/types";
-import {
-  copySheetSvg, downloadSheetPng, downloadSheetPreset, downloadSheetSvg, verifySheetDocument,
-} from "../exporter";
+import { copySheetSvg, downloadSheetPng, downloadSheetPreset, downloadSheetSvg, verifySheetDocument } from "../exporter";
+import { commitConfig, prefs } from "./config";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
-type ExportActions = Pick<BuilderActions,
-  "exportSvg" | "exportPng" | "copySvg" | "savePreset" | "loadPreset" | "presetOfModel">;
+type ExportActions = Pick<BuilderActions, "exportSvg" | "exportPng" | "copySvg" | "savePreset" | "loadPreset" | "presetOfModel">;
+type Kind = "svg" | "png" | "copy";
 
 export function exportActions(get: () => BuilderActionContext): ExportActions {
   return {
-    exportSvg: () => deliver(get(), "svg"),
+    exportSvg: () => { void deliver(get(), "svg"); },
     exportPng: () => { void deliver(get(), "png"); },
     copySvg: () => { void deliver(get(), "copy"); },
     savePreset: () => savePreset(get()),
@@ -21,59 +21,53 @@ export function exportActions(get: () => BuilderActionContext): ExportActions {
   };
 }
 
-function deliver(ctx: BuilderActionContext, kind: "svg" | "png" | "copy"): void | Promise<void> {
+function titleOf(ctx: BuilderActionContext): string {
+  return sheetCopy(ctx.model.metadata, ctx.model.config.banner).title;
+}
+
+async function deliver(ctx: BuilderActionContext, kind: Kind): Promise<void> {
   const doc = ctx.document;
   if (doc === null) return ctx.say("No composed sheet to export yet", true);
   const verified = verifySheetDocument(doc, ctx.assets);
-  if (!verified.ok) return ctx.say(`Export refused — ${verified.errors.join("; ")}`, true);
-  if (kind === "svg") { downloadSheetSvg(doc); return ctx.say("Editable SVG downloaded"); }
-  if (kind === "copy") return copyDeliver(ctx);
-  return pngDeliver(ctx);
-}
-
-async function copyDeliver(ctx: BuilderActionContext): Promise<void> {
+  if (!verified.ok) return ctx.say(`Export could not be completed — ${verified.errors.join("; ")}`, true);
+  ctx.setBusy("Preparing…");
   try {
-    await copySheetSvg(ctx.document!);
-    ctx.say("Editable SVG copied to the clipboard");
+    if (kind === "svg") downloadSheetSvg(doc, titleOf(ctx));
+    else if (kind === "png") await downloadSheetPng(doc, titleOf(ctx));
+    else await copySheetSvg(doc);
+    ctx.say(DONE[kind]);
   } catch {
-    ctx.say("Clipboard refused the SVG — use Download SVG instead", true);
-  }
-}
-
-async function pngDeliver(ctx: BuilderActionContext): Promise<void> {
-  ctx.setBusy("Rendering PNG…");
-  try {
-    await downloadSheetPng(ctx.document!);
-    ctx.say("PNG downloaded at 2×");
-  } catch (error) {
-    ctx.say(`PNG export failed — ${error instanceof Error ? error.message : "unknown error"}`, true);
+    ctx.say(kind === "copy" ? "Clipboard refused the SVG — use Editable SVG instead" : "Export could not be completed. Try again.", true);
   } finally {
     ctx.setBusy(null);
   }
 }
 
+const DONE: Record<Kind, string> = {
+  svg: "Editable SVG exported — strokes and text preserved.",
+  png: "PNG exported at 2× resolution.",
+  copy: "SVG markup copied to clipboard.",
+};
+
 function presetOfModel(ctx: BuilderActionContext): SheetPreset {
   const m = ctx.model;
   return serializeSheetPreset({
-    v: 1, config: m.config, placedIds: ctx.placedIds, lockedIds: m.lockedIds,
-    seed: m.seed, recipe: m.recipe, metadata: m.metadata,
-    sources: ctx.assets.filter((a) => ctx.placedIds.includes(a.id))
-      .map((a) => ({ id: a.id, fingerprint: a.fingerprint })),
+    v: 1, config: m.config, placedIds: ctx.placedIds, lockedIds: m.lockedIds, seed: m.seed, recipe: m.recipe, metadata: m.metadata,
+    sources: ctx.assets.filter((a) => ctx.placedIds.includes(a.id)).map((a) => ({ id: a.id, fingerprint: a.fingerprint })),
   });
 }
 
 function savePreset(ctx: BuilderActionContext): void {
-  downloadSheetPreset(presetOfModel(ctx));
-  ctx.say("Builder preset downloaded");
+  downloadSheetPreset(presetOfModel(ctx), titleOf(ctx));
+  ctx.say("Preset saved with layout settings and seed.");
 }
 
 function loadPreset(ctx: BuilderActionContext, text: string): void {
-  const known = new Set(ctx.assets.map((a) => a.id));
-  const { preset, droppedIds } = parseSheetPreset(text, known);
-  ctx.dispatch({ config: preset.config, recipe: preset.recipe, seed: preset.seed,
-    lockedIds: preset.lockedIds, metadata: preset.metadata });
-  ctx.setChecked({ checked: [...preset.placedIds], anchor: null, active: preset.placedIds[0] ?? null }, "Load builder preset");
-  ctx.say(droppedIds.length > 0
-    ? `Preset loaded — ${droppedIds.length} id(s) are no longer approved and were skipped`
-    : "Builder preset loaded");
+  const { preset, droppedIds } = parseSheetPreset(text, new Set(ctx.assets.map((a) => a.id)));
+  commitConfig(ctx, { config: preset.config, label: "Load builder preset" });
+  prefs(ctx, { layout: "custom", fit: true });
+  ctx.dispatch({ recipe: preset.recipe, seed: preset.seed, lockedIds: preset.lockedIds, metadata: preset.metadata });
+  ctx.setChecked({ checked: [...preset.placedIds].slice(0, preset.config.grid.columns * preset.config.grid.rows), anchor: null,
+    active: preset.placedIds[0] ?? null }, "Load builder preset");
+  ctx.say(droppedIds.length > 0 ? `Preset loaded — ${droppedIds.length} icon(s) are no longer approved and were skipped` : "Builder preset loaded");
 }

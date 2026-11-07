@@ -1,86 +1,69 @@
-// layout.ts — pure artboard geometry. The same layout drives the live preview
-// and the exported SVG, so a cell can never drift between what is shown and
-// what is delivered (RULE 15).
-import type { BannerPosition, CellFrame, Rect, SheetConfig, SheetLayout } from "./types";
+// layout.ts — pure artboard geometry (reference "Glyph" containment chain:
+// artboard → free area → grid → icon box → glyph + stroke). The same layout
+// drives the live preview, its overlays and the exported SVG (RULE 15).
+import type { CellFrame, Rect, SheetConfig, SheetLayout } from "./types";
 
-const MAX_CELLS = 400;
+interface GridBox { box: number; gapX: number; gapY: number; caption: number; scale: number }
 
-export function computeLayout(config: SheetConfig, count: number): SheetLayout {
-  const capacity = Math.min(MAX_CELLS, config.grid.columns * config.grid.rows);
-  const placed = Math.max(0, Math.min(count, capacity));
+export function computeLayout(config: SheetConfig): SheetLayout {
   const banner = bannerRect(config);
   const content = contentRect(config, banner);
-  const size = cellSize(config, content);
-  const grid = gridRect(config, content, size);
-  return {
-    content, banner, grid, cells: cellsOf(config, grid, size, placed),
-    fitScale: 1, overflow: count > capacity, capacity,
-  };
+  const fit = fitGrid(config, content);
+  const { columns, rows } = config.grid;
+  const width = columns * fit.box + (columns - 1) * fit.gapX;
+  const height = rows * (fit.box + fit.caption) + (rows - 1) * fit.gapY;
+  const grid: Rect = { x: content.x + (content.width - width) / 2, y: content.y + (content.height - height) / 2, width, height };
+  return { content, banner, grid, cells: cellsOf(config, grid, fit), fitScale: fit.scale,
+    overflow: fit.scale < 0.999, capacity: columns * rows };
 }
 
-export function wrapTitle(title: string, maxChars: number): string[] {
-  const words = title.trim().split(/\s+/).filter((w) => w !== "");
-  if (words.length === 0) return [];
-  return words.reduce<string[]>((lines, word) => {
-    const at = lines.length - 1;
-    const next = lines[at] === "" ? word : `${lines[at]} ${word}`;
-    if (next.length <= maxChars || lines[at] === "") lines[at] = next;
-    else lines.push(word);
-    return lines;
-  }, [""]);
+/** Caption row height at scale 1: `max(captionSize × 1.65, 10) + 7` when captions are on. */
+export function captionRow(config: SheetConfig): number {
+  return config.grid.captions ? Math.max(config.grid.captionSize * 1.65, 10) + 7 : 0;
 }
 
 function bannerRect(config: SheetConfig): Rect | null {
   const { width, height } = config.artboard;
-  const size = config.banner.size;
-  const by: Record<Exclude<BannerPosition, "none">, Rect> = {
-    left: { x: 0, y: 0, width: size, height },
-    right: { x: width - size, y: 0, width: size, height },
-    top: { x: 0, y: 0, width, height: size },
-    bottom: { x: 0, y: height - size, width, height: size },
-  };
-  return config.banner.position === "none" ? null : by[config.banner.position];
+  const { size, position } = config.banner;
+  if (position === "none") return null;
+  if (position === "left") return { x: 0, y: 0, width: size, height };
+  if (position === "right") return { x: width - size, y: 0, width: size, height };
+  if (position === "top") return { x: 0, y: 0, width, height: size };
+  return { x: 0, y: height - size, width, height: size };
 }
 
+/** Artboard minus the banner, then inset by the padding on every side. */
 function contentRect(config: SheetConfig, banner: Rect | null): Rect {
   const { width, height, padding } = config.artboard;
-  const full: Rect = { x: padding, y: padding, width: width - padding * 2, height: height - padding * 2 };
-  if (banner === null) return full;
-  return shrink(full, config.banner.position, banner, padding);
+  const free: Rect = { x: 0, y: 0, width, height };
+  const pos = config.banner.position;
+  if (banner !== null && pos === "left") Object.assign(free, { x: banner.width, width: width - banner.width });
+  if (banner !== null && pos === "right") free.width = width - banner.width;
+  if (banner !== null && pos === "top") Object.assign(free, { y: banner.height, height: height - banner.height });
+  if (banner !== null && pos === "bottom") free.height = height - banner.height;
+  return { x: free.x + padding, y: free.y + padding,
+    width: Math.max(1, free.width - padding * 2), height: Math.max(1, free.height - padding * 2) };
 }
 
-function shrink(full: Rect, position: BannerPosition, banner: Rect, padding: number): Rect {
-  if (position === "left") return { ...full, x: banner.width + padding, width: full.x + full.width - banner.width - padding };
-  if (position === "right") return { ...full, width: banner.x - padding - full.x };
-  if (position === "top") return { ...full, y: banner.height + padding, height: full.y + full.height - banner.height - padding };
-  if (position === "bottom") return { ...full, height: banner.y - padding - full.y };
-  return full;
+/** The grid only shrinks to fit (scale ≤ 1), never grows; box, gaps and caption row scale together. */
+function fitGrid(config: SheetConfig, content: Rect): GridBox {
+  const { columns, rows, gapX, gapY } = config.grid;
+  const box = config.icons.box;
+  const caption = captionRow(config);
+  const naturalW = columns * box + (columns - 1) * gapX;
+  const naturalH = rows * (box + caption) + (rows - 1) * gapY;
+  const scale = Math.min(1, content.width / naturalW, content.height / naturalH);
+  return { box: box * scale, gapX: gapX * scale, gapY: gapY * scale, caption: caption * scale, scale };
 }
 
-function cellSize(config: SheetConfig, content: Rect): number {
-  const { columns, rows, gapX, gapY, captions, captionSize } = config.grid;
-  const captionGap = captions ? captionSize + 10 : 0;
-  const byWidth = (content.width - (columns - 1) * gapX) / columns;
-  const byHeight = (content.height - (rows - 1) * (gapY + captionGap)) / rows - captionGap;
-  return Math.max(16, Math.min(config.icons.box, byWidth, byHeight));
-}
-
-function gridRect(config: SheetConfig, content: Rect, size: number): Rect | null {
-  const { columns, rows, gapX, gapY, captions, captionSize } = config.grid;
-  const captionGap = captions ? captionSize + 10 : 0;
-  const width = columns * size + (columns - 1) * gapX;
-  const height = rows * size + (rows - 1) * (gapY + captionGap);
-  return { x: content.x + Math.max(0, (content.width - width) / 2),
-    y: content.y + Math.max(0, (content.height - height) / 2), width, height };
-}
-
-function cellsOf(config: SheetConfig, grid: Rect | null, size: number, count: number): CellFrame[] {
-  if (grid === null) return [];
-  const { columns, gapX, gapY, captionSize, captions } = config.grid;
-  const captionGap = captions ? captionSize + 10 : 0;
-  return Array.from({ length: count }, (_, index) => {
-    const x = grid.x + (index % columns) * (size + gapX);
-    const y = grid.y + Math.floor(index / columns) * (size + gapY + captionGap);
-    return { index, x, y, size, captionY: y + size + captionSize + 4 };
+function cellsOf(config: SheetConfig, grid: Rect, fit: GridBox): CellFrame[] {
+  const { columns, rows, captionSize } = config.grid;
+  const glyph = Math.max(4, fit.box - config.icons.strokeWidth * 2.2);
+  const fontSize = Math.max(3.4, captionSize * fit.scale);
+  const captionTop = Math.max(3, captionSize * 0.86 * fit.scale);
+  return Array.from({ length: columns * rows }, (_, index) => {
+    const x = grid.x + (index % columns) * (fit.box + fit.gapX);
+    const y = grid.y + Math.floor(index / columns) * (fit.box + fit.caption + fit.gapY);
+    return { index, x, y, size: fit.box, glyph, captionSize: fontSize, captionY: y + fit.box + captionTop + fontSize * 0.83 };
   });
 }

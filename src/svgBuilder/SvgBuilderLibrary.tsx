@@ -1,87 +1,77 @@
-// SvgBuilderLibrary.tsx — approved assets only. Search, category, recipe,
-// locks and click-to-place cards; no unapproved file can enter the sheet.
-import type { BuilderIconAsset, SelectionRecipe } from "../lib/svgBuilder/types";
+// SvgBuilderLibrary.tsx — left column "Icon library N · STROKE ONLY": the
+// selection recipe, search, category chips, a 6-column icon grid (click to add
+// / remove, selected check, Similar-match dot) and the "N of C cells" footer.
+import { scoreOf } from "../lib/svgBuilder/assets";
+import { profileOf } from "../lib/svgBuilder/selection";
+import type { BuilderIconAsset } from "../lib/svgBuilder/types";
 import SvgBuilderAssetThumb from "./SvgBuilderAssetThumb";
+import SvgBuilderRecipe, { CategoryChips } from "./SvgBuilderRecipe";
 import type { BuilderApi } from "./useSvgBuilder";
 
-const MODES: readonly SelectionRecipe["mode"][] = ["random", "similar", "filtered"];
-const MAX_CARDS = 240;
+const MAX_TILES = 480;
 
 export default function SvgBuilderLibrary({ b }: { b: BuilderApi }) {
-  return <aside className="builder-library" data-testid="builder-library" aria-label="Approved SVG library">
-    <LibraryHeader b={b} />
-    <LibraryControls b={b} />
-    <LibraryActions b={b} />
-    <LibraryNotes b={b} />
-    <LibraryCards b={b} />
+  return <aside className="bld-col bld-library" data-testid="builder-library" aria-label="Icon library">
+    <div className="bld-col-head">
+      <h3>Icon library <span className="bld-count" data-testid="builder-library-count">{b.assets.length}</span></h3>
+      <span className="bld-eyebrow">STROKE ONLY</span>
+    </div>
+    <div className="bld-col-scroll">
+      <SvgBuilderRecipe b={b} />
+      <SearchBox b={b} />
+      <CategoryChips b={b} testid="builder-category" />
+      <IconGrid b={b} />
+    </div>
+    <LibraryFooter b={b} />
   </aside>;
 }
 
-function LibraryHeader({ b }: { b: BuilderApi }) {
-  return <div className="builder-card-head"><div><span className="builder-eyebrow">LIBRARY</span><h3>Approved icons</h3></div>
-    <span className="builder-counter" data-testid="builder-library-count">{b.visibleAssets.length}/{b.assets.length}</span></div>;
-}
-
-function LibraryControls({ b }: { b: BuilderApi }) {
-  return <div className="builder-library-controls">
-    <label className="builder-field">SEARCH <input data-testid="builder-search" value={b.listView.query}
-      placeholder="name / path / category" onChange={(e) => b.actions.setSearch(e.target.value)} /></label>
-    <label className="builder-field">CATEGORY <select data-testid="builder-category" value={b.listView.category}
-      onChange={(e) => b.actions.setCategory(e.target.value)}>
-      {b.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-    <label className="builder-field">RECIPE <select data-testid="builder-recipe-mode" value={b.recipe.mode}
-      onChange={(e) => b.actions.setRecipe({ ...b.recipe, mode: e.target.value as SelectionRecipe["mode"] })}>
-      {MODES.map((m) => <option key={m} value={m}>{m.replace(/-/g, " ")}</option>)}</select></label>
-    <label className="builder-field">PROFILE <select data-testid="builder-recipe-profile" value={b.recipe.profileId}
-      onChange={(e) => b.actions.setRecipe({ ...b.recipe, profileId: e.target.value })}>
-      {b.profiles.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
-    <label className="builder-field">SIMILARITY (0–100) <input type="number" min="0" max="100" data-testid="builder-threshold"
-      value={b.recipe.threshold}
-      onChange={(e) => b.actions.setRecipe({ ...b.recipe, threshold: Number(e.target.value) })} /></label>
-    <label className="builder-field">SEED <input type="number" min="0" data-testid="builder-seed" value={b.seed}
-      onChange={(e) => b.actions.setSeed(Number(e.target.value))} /></label>
-    <label className="builder-check"><input type="checkbox" data-testid="builder-fill-library" checked={b.recipe.fillFromFullLibrary}
-      onChange={(e) => b.actions.setRecipe({ ...b.recipe, fillFromFullLibrary: e.target.checked })} /> Fill unused cells from the full approved library</label>
+function SearchBox({ b }: { b: BuilderApi }) {
+  const q = b.listView.query;
+  return <div className="bld-search">
+    <span aria-hidden="true">⌕</span>
+    <input className="svg-input" data-testid="builder-search" aria-label="Search icons" placeholder="Search name or #tag" value={q}
+      onChange={(e) => b.actions.setSearch(e.target.value)} />
+    {q !== "" && <button type="button" className="svg-btn ghost tiny" data-testid="builder-search-clear" aria-label="Clear search"
+      onClick={() => b.actions.setSearch("")}>×</button>}
   </div>;
 }
 
-function LibraryActions({ b }: { b: BuilderApi }) {
-  return <div className="builder-library-actions">
-    <button type="button" className="builder-btn accent" data-testid="builder-apply-recipe"
-      onClick={() => b.actions.setRecipe({ ...b.recipe, count: b.layout.capacity })}>Apply recipe</button>
-    <button type="button" className="builder-btn" data-testid="builder-shuffle" onClick={b.actions.shuffle}>⤨ Shuffle</button>
-    <button type="button" className="builder-btn" data-testid="builder-clear" onClick={b.actions.clearSelection}>Clear</button>
-  </div>;
-}
-
-function LibraryNotes({ b }: { b: BuilderApi }) {
-  const hidden = Math.max(0, b.visibleAssets.length - MAX_CARDS);
+function IconGrid({ b }: { b: BuilderApi }) {
+  if (b.assets.length === 0) return <p className="bld-empty-note" data-testid="builder-library-empty">Open a folder with `.svg.json`-approved pairs. Nothing is generated here.</p>;
+  if (b.visibleAssets.length === 0) return <p className="bld-empty-note" data-testid="builder-library-nomatch">No icons match that search.</p>;
+  const hidden = b.visibleAssets.length - MAX_TILES;
   return <>
-    {b.assets.length === 0 && <p className="builder-empty" data-testid="builder-library-empty">Open a folder with `.svg.json` approved pairs. Nothing is generated here.</p>}
-    {hidden > 0 && <p className="builder-note" data-testid="builder-library-more">Showing the first {MAX_CARDS}; narrow the search for {hidden} more.</p>}
+    <div className="bld-icon-grid" data-testid="builder-icon-grid">
+      {b.visibleAssets.slice(0, MAX_TILES).map((asset) => <IconTile key={asset.id} b={b} asset={asset} />)}
+    </div>
+    {hidden > 0 && <p className="bld-hint" data-testid="builder-library-more">Showing {MAX_TILES}; narrow the search for {hidden} more.</p>}
   </>;
 }
 
-function LibraryCards({ b }: { b: BuilderApi }) {
-  return <div className="builder-asset-grid">
-    {b.visibleAssets.slice(0, MAX_CARDS).map((asset) => <AssetCard key={asset.id} b={b} asset={asset} />)}
-  </div>;
+function IconTile({ b, asset }: { b: BuilderApi; asset: BuilderIconAsset }) {
+  const placed = b.checked.includes(asset.id);
+  const score = Math.round(scoreOf(asset, profileOf(b.profiles, b.recipe)) * 100);
+  const match = !placed && b.recipe.mode === "similar" && score >= b.recipe.threshold;
+  return <button type="button" data-testid={`builder-asset-${asset.id}`} data-asset-id={asset.id} data-selected={placed}
+    className={`bld-tile${placed ? " is-on" : ""}`} aria-pressed={placed}
+    title={`${asset.label} · ${score}% tag match${placed ? " · in sheet" : ""}`} onClick={() => b.actions.toggleAsset(asset.id)}>
+    <SvgBuilderAssetThumb asset={asset} repository={b.repository} />
+    {placed && <span className="bld-tile-check" aria-hidden="true">✓</span>}
+    {match && <span className="bld-tile-dot" data-testid={`builder-match-${asset.id}`} aria-hidden="true" />}
+  </button>;
 }
 
-function AssetCard({ b, asset }: { b: BuilderApi; asset: BuilderIconAsset }) {
-  const placed = b.checked.includes(asset.id);
-  const locked = b.lockedIds.includes(asset.id);
-  return <button type="button" data-testid={`builder-asset-${asset.id}`}
-    data-asset-id={asset.id} data-selected={placed} data-locked={locked}
-    className={`builder-asset-card${placed ? " is-placed" : ""}${locked ? " is-locked" : ""}`}
-    aria-pressed={placed} title={`${asset.label} · ${asset.svgPath} · ${asset.version}`}
-    onClick={() => b.actions.toggleAsset(asset.id)}>
-    <SvgBuilderAssetThumb asset={asset} repository={b.repository} />
-    <span className="builder-asset-label">{asset.label}</span>
-    <span className="builder-asset-meta">{asset.category} · {asset.version}</span>
-    <span className="builder-lock" role="button" tabIndex={0} data-testid={`builder-lock-${asset.id}`}
-      aria-label={locked ? "Unlock asset" : "Lock asset"}
-      onClick={(e) => { e.stopPropagation(); b.actions.toggleLock(asset.id); }}
-      onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); b.actions.toggleLock(asset.id); } }}>{locked ? "🔒" : "☆"}</span>
-  </button>;
+function LibraryFooter({ b }: { b: BuilderApi }) {
+  const used = Math.min(b.checked.length, b.layout.capacity);
+  const locked = b.lockedIds.length;
+  return <div className="bld-col-foot" data-testid="builder-library-footer">
+    <div className="bld-foot-row">
+      <span data-testid="builder-cells"><b>{used}</b> of {b.layout.capacity} cells</span>
+      {locked > 0 && <span className="bld-pill" data-testid="builder-locked-count">{locked} locked</span>}
+      <button type="button" className="svg-btn ghost tiny" data-testid="builder-clear" disabled={b.checked.length === 0}
+        onClick={b.actions.clearSelection}>CLEAR</button>
+    </div>
+    <div className="bld-progress"><span style={{ width: `${b.layout.capacity === 0 ? 0 : (used / b.layout.capacity) * 100}%` }} /></div>
+  </div>;
 }

@@ -5002,3 +5002,12 @@ User asked to improve new-code test performance by at least 80%. Measured six-fi
 Verified: `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 pre-existing warnings); `npm run quality:changed -- --files src/svgBuilder/preview.ts` PASS; focused Vitest builder/apply/docs_navigation 7 files / 57 tests PASS; `npm run test:builder:fast` 14/14 PASS; `npm run verify:fast -- --base HEAD` PASS; `npm run verify -- --base HEAD` PASS (Types 5.1s, Lint 1.6s, changed quality gate 0.5s, native perf 5 files / 30 tests 3.4s, Tests+coverage 399 files / 4094 tests 145.2s, Build 10.3s, `ALL LANES PASSED`). No waivers; no live Gemini/provider calls.
 
 Attribution: Arena.ai Agent Mode — authored from the user's request and local repository research.
+
+## 2026-11-07 — SVG builder merged onto the sheets branch; reference-parity fixes (FIXES.md)
+
+- Merged arena/82342cab into arena/a6acc057 (merge 0d860d14; only QUALITY_RECHECK conflicted, both sides kept).
+- Root cause of the broken UI: builder panel borrowed `.svg-panel` (42px/auto/40px grid) and `.up-columns`; replaced with own `bld-*` layout on app tokens.
+- Domain rewritten to reference rules (ranges/clamp, presets, fitted grid, stroke-aware glyph, banner solid/split, seeded recipes with locks/top-up/grow-shrink, slug, reference preset shape); UI rebuilt (header, recipe card, library, stage + overlays, Customize, Export menu, briefs, metadata dialog).
+- New suites: svg_builder_parity (20) and svg_builder_workspace (9, real scanned fake library); builder + apply suites 46/46; test:builder:fast 14/14 (added `?raw` text loader).
+- tsc PASS; lint 0 errors; quality gate (--base 0d860d14) PASS; build PASS. Full vitest 4121 passed / 16 failed — same 8 pre-existing Windows-environment files as before this change (bridge/getty helpers, verify_execution, fs_case_collisions, docs read budget 15 pages, none builder).
+- Not verified: visual check in a real browser (no browser automation in this session).

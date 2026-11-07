@@ -1,67 +1,67 @@
-// actions/config.ts — layout, recipe, view prefs and prompt edits. Config
-// changes join ONE global undo timeline; display-only prefs do not.
-import { parseSheetConfig, PRESETS } from "../../lib/svgBuilder/config";
-import { DEFAULT_SELECTION_RECIPE, parseSelectionRecipe, selectAssets } from "../../lib/svgBuilder/selection";
+// actions/config.ts — layout config, presets, reset and view prefs. Config
+// edits join ONE global undo timeline (sliders coalesce into one gesture);
+// any manual edit marks the layout "custom". Display-only prefs are not undone.
+import { applyPresetConfig, DEFAULT_CONFIG, LAYOUT_PRESETS, parseSheetConfig, type LayoutPresetId } from "../../lib/svgBuilder/config";
 import { DEFAULT_SHEET_PROMPT } from "../../lib/svgBuilder/metadata";
-import type { SelectionRecipe, SheetConfig } from "../../lib/svgBuilder/types";
-import { configUndoPatchOf } from "../model";
+import type { SheetConfig } from "../../lib/svgBuilder/types";
 import { builderUndoPatchOf } from "../../lib/svgBuilder/undo";
+import { configUndoPatchOf } from "../model";
 import { saveSheetConfig } from "../configstore";
-import { saveBuilderPrefs } from "../prefsstore";
+import { saveBuilderPrefs, type BuilderPrefs } from "../prefsstore";
 import { saveBuilderListView } from "../listview";
 import { isBuilderDefaultPrompt, saveBuilderPrompt } from "../promptstore";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
 type ConfigActions = Pick<BuilderActions,
-  "setConfig" | "applyLayoutPreset" | "setRecipe" | "setSeed" | "shuffle" | "setZoom"
-  | "toggleProvider" | "toggleInspector" | "setPrompt" | "resetPrompt" | "setSearch" | "setCategory">;
-
-interface ConfigPatch {
-  config?: SheetConfig; recipe?: SelectionRecipe; seed?: number; lockedIds?: readonly string[];
-}
+  "setConfig" | "applyLayoutPreset" | "resetConfig" | "setZoom" | "fitZoom" | "toggleProvider"
+  | "setPrompt" | "resetPrompt" | "setSearch" | "undo" | "redo">;
 
 export function configActions(get: () => BuilderActionContext): ConfigActions {
   return {
-    setConfig: (config) => patchConfig(get(), { config }, "Change sheet layout"),
+    setConfig: (config, label, gesture) => { commitConfig(get(), { config, label: label ?? "Change sheet layout", gesture }); prefs(get(), { layout: "custom" }); },
     applyLayoutPreset: (id) => applyLayoutPreset(get(), id),
-    setRecipe: (recipe) => applyRecipe(get(), recipe),
-    setSeed: (seed) => applyRecipe(get(), { ...get().model.recipe, seed }),
-    shuffle: () => applyRecipe(get(), { ...get().model.recipe, seed: get().model.seed + 1 }),
-    setZoom: (zoom) => prefs(get(), { zoom }),
+    resetConfig: () => resetConfig(get()),
+    setZoom: (zoom) => prefs(get(), { zoom: Math.min(2, Math.max(0.1, Math.round(zoom * 100) / 100)), fit: false }),
+    fitZoom: () => prefs(get(), { fit: true }),
     toggleProvider: (providerOpen) => prefs(get(), { providerOpen }),
-    toggleInspector: (inspectorOpen) => prefs(get(), { inspectorOpen }),
     setPrompt: (text) => prompt(get(), text),
     resetPrompt: () => prompt(get(), DEFAULT_SHEET_PROMPT),
     setSearch: (query) => listView(get(), { query }),
-    setCategory: (category) => listView(get(), { category }),
+    undo: () => get().hist?.undo(),
+    redo: () => get().hist?.redo(),
   };
 }
 
-function patchConfig(ctx: BuilderActionContext, patch: ConfigPatch, label: string): void {
+interface Commit { config: SheetConfig; label: string; gesture?: boolean }
+
+/** One history entry (or one coalesced gesture) carrying the absolute before/after config. */
+export function commitConfig(ctx: BuilderActionContext, c: Commit): void {
   const before = configUndoPatchOf(ctx.model);
-  const after = builderUndoPatchOf({ ...before, ...patch, config: parseSheetConfig(patch.config ?? ctx.model.config) });
-  ctx.hist?.push({ type: "builderConfig", label, origin: "svgBuilder", ids: ["config"], before, after });
-  ctx.dispatch({ config: after.config, recipe: after.recipe, seed: after.seed, lockedIds: after.lockedIds });
+  const after = builderUndoPatchOf({ ...before, config: parseSheetConfig(c.config) });
+  if (JSON.stringify(before.config) === JSON.stringify(after.config)) return;
+  const entry = { type: "builderConfig", label: c.label, origin: "svgBuilder", ids: ["config"], before, after };
+  if (c.gesture) ctx.hist?.pushGesture(entry);
+  else ctx.hist?.push(entry);
+  ctx.dispatch({ config: after.config });
   saveSheetConfig(after.config);
 }
 
-function applyLayoutPreset(ctx: BuilderActionContext, id: string): void {
-  const preset = PRESETS.find((p) => p.id === id);
-  if (preset === undefined) return ctx.say("Unknown sheet preset", true);
-  patchConfig(ctx, { config: preset.config }, `Apply ${preset.label} layout`);
+function applyLayoutPreset(ctx: BuilderActionContext, id: LayoutPresetId): void {
+  const preset = LAYOUT_PRESETS.find((p) => p.id === id);
+  if (preset === undefined) return ctx.say("Unknown layout preset", true);
+  commitConfig(ctx, { config: applyPresetConfig(ctx.model.config, id), label: `${preset.label} layout` });
+  prefs(ctx, { layout: id, fit: true });
   ctx.say(`${preset.label} layout applied`);
 }
 
-function applyRecipe(ctx: BuilderActionContext, raw: SelectionRecipe): void {
-  const recipe = parseSelectionRecipe({ ...DEFAULT_SELECTION_RECIPE, ...raw, count: Math.min(raw.count, ctx.layout.capacity) });
-  patchConfig(ctx, { recipe, seed: recipe.seed }, "Change selection recipe");
-  const chosen = selectAssets(ctx.assets, { ...recipe, lockedIds: [...ctx.model.lockedIds] });
-  ctx.setChecked({ checked: chosen.ids, anchor: null, active: chosen.ids[0] ?? null }, "Apply selection recipe");
-  for (const notice of chosen.notices) ctx.say(notice, chosen.notices.length > 0);
-  if (chosen.notices.length === 0) ctx.say(`${chosen.ids.length} approved asset(s) placed`);
+/** RESET: defaults + Side banner, one undo entry; the placed icons are untouched. */
+function resetConfig(ctx: BuilderActionContext): void {
+  commitConfig(ctx, { config: applyPresetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner } }, "editorial"), label: "Reset sheet settings" });
+  prefs(ctx, { layout: "editorial", fit: true });
+  ctx.say("Sheet settings reset");
 }
 
-function prefs(ctx: BuilderActionContext, patch: Partial<BuilderActionContext["model"]["prefs"]>): void {
+export function prefs(ctx: BuilderActionContext, patch: Partial<BuilderPrefs>): void {
   const next = { ...ctx.model.prefs, ...patch };
   ctx.dispatch({ prefs: next });
   saveBuilderPrefs(next);
