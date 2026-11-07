@@ -10,6 +10,7 @@ import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
 import StockUploadPanel from "../stockupload/StockUploadPanel";
 import UploadPanel from "../upload/UploadPanel";
+import SvgBuilderPanel from "../svgBuilder/SvgBuilderPanel";
 import { setAppState, type AppState } from "../state/appstore";
 import { HistoryProvider } from "../state/HistoryProvider";
 import { useAppSlice } from "../state/useAppState";
@@ -29,6 +30,7 @@ const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
   { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
   { id: "upload", label: "SVG to upload", testid: "tab-upload" },
+  { id: "svgBuilder", label: "SVG builder", testid: "tab-svg-builder" },
   { id: "stockUpload", label: "Upload", testid: "tab-stock-upload" },
 ];
 
@@ -112,6 +114,7 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
         <SvgPanel active={tab === "generateSvg"} />
       </div>
       <UploadWorkspace active={tab === "upload"} />
+      <SvgBuilderWorkspace active={tab === "svgBuilder"} />
       <StockUploadWorkspace active={tab === "stockUpload"} />
     </>
   );
@@ -123,6 +126,14 @@ function UploadWorkspace({ active }: { active: boolean }) {
   useEffect(() => { if (active) setVisited(true); }, [active]);
   if (!active && !visited) return null;
   return <div className="up-shell px-4 py-3" data-testid="upload-shell" hidden={!active}><UploadPanel active={active} /></div>;
+}
+
+/** Lazy on first visit; a hidden builder keeps its composition and scan state. */
+function SvgBuilderWorkspace({ active }: { active: boolean }) {
+  const [visited, setVisited] = useState(active);
+  useEffect(() => { if (active) setVisited(true); }, [active]);
+  if (!active && !visited) return null;
+  return <div className="builder-shell px-4 py-3" data-testid="builder-shell" hidden={!active}><SvgBuilderPanel active={active} /></div>;
 }
 
 function StockUploadWorkspace({ active }: { active: boolean }) {

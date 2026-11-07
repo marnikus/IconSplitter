@@ -116,7 +116,8 @@ describe("the shell", () => {
     mountWorkbench();
     const tabs = [...host.querySelectorAll("[data-testid^='tab-']")].map((el) => el.getAttribute("data-testid"));
     expect(tabs).toEqual([
-      "tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload", "tab-stock-upload",
+      "tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload",
+      "tab-svg-builder", "tab-stock-upload",
     ]);
     await click("[data-testid='tab-upload']");
     await settle();

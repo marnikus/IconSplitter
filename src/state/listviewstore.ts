@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 export const LIST_VIEW_KEYS = {
   svg: "iconSplitter.svg.listView.v1",
   upload: "iconSplitter.upload.listView.v1",
+  builder: "iconSplitter.svgBuilder.listView.v1",
   stock: "iconSplitter.stockUpload.listView.v1",
 } as const;
 

@@ -113,7 +113,8 @@ Modifiers follow [RULE 25](../../rules/BEHAVIOR.md#rule-25): Shift replaces the
 visible range, Ctrl/Alt/Cmd toggles one row, and checkbox/header gestures
 leave active alone. `lib/reviewselect` owns intent/range semantics; persisted
 anchors let Shift work after a tab switch. V2 keeps `checked`, Batch keeps
-`batchChecked`, and SVG/Upload use `svgChecked`/`uploadChecked`; an older SVG-origin
+`batchChecked`, SVG/Upload use `svgChecked`/`uploadChecked`, and the builder uses
+`builderChecked` selection deltas plus absolute `builderConfig` entries; an older SVG-origin
 `checked` entry restores SVG checks, not V2. Older bare-array timelines still
 read safely. Upload selection joins the global timeline, not a panel-local stack.
 

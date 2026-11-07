@@ -129,8 +129,8 @@ describe("pruneIds — stale ids never survive a rescan", () => {
 });
 
 describe("original Selection removal compatibility", () => {
-  it("keeps only the six supported tabs", () => {
-    expect(TAB_IDS).toEqual(["sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload"]);
+  it("keeps exactly the seven supported tabs", () => {
+    expect(TAB_IDS).toEqual(["sheets", "batch", "selectionV2", "generateSvg", "upload", "svgBuilder", "stockUpload"]);
   });
   it("round-trips the stockUpload tab and checked slice", () => {
     const raw = serializeSession({

@@ -89,7 +89,7 @@ Shared: `upload-toast` (`role="status"`), `upload-busy`. Settings/selection undo
 ([§O](shared.md#o-global-history-bar-reset-actions-verified-2026-10-01));
 metadata requests and exported files are not reversed.
 
-Download progress uses `upload-download-progress-{header,title,file,track,completed,remaining,percent,cancel,review,dismiss}` with file counts, shared theme and retained terminal state. Both header Cancel and `upload-cancel-run` stop the next copy, retaining verified files. [Progress contract](../sor/process-progress.md#upload-lifecycle).
+Download progress uses `upload-download-progress-*`. Header Cancel and `upload-cancel-run` stop the next copy, retaining verified files. [Progress contract](../sor/process-progress.md#upload-lifecycle).
 
 [State sorts](../sor/list-state-sorting.md): approval = accepted metadata.
 `upload-remove-<id>`, `upload-remove-selected`: [Remove](../sor/svg-remove-row.md#upload).

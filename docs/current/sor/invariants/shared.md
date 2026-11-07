@@ -39,10 +39,11 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
 * **I-44 (one folder control, RULE 10/12):** every tab that scans a folder
   offers exactly one way to open the picker — the green `Open folder` button
   (`ui/FolderBar.OpenFolderButton`, testids `sel-open-folder` / `v2-open-folder` /
-  `svg-open-folder`), labelled with the action and never with the folder's name,
+  `svg-open-folder` / `builder-open-folder`), labelled with the action and never with the folder's name,
   present in every state, with real hover, active and keyboard-focus states. The
   loaded folder's complete path is shown in its own full-width **read-only row**
-  below the controls (`sel-folder-path` / `v2-folder-path` / `svg-folder-path`):
+  below the controls (`sel-folder-path` / `v2-folder-path` / `svg-folder-path` /
+  `builder-folder-path`):
   text, never an input, never a button.
 
 <a id="i-45"></a>

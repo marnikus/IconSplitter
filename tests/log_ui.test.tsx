@@ -15,7 +15,7 @@ import { settle as quietSettle } from "./helpers/quiet";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const KEY = ["rq", "live", "QwErTy7UiOpAsDfGh4JkLzXcVbNm2"].join("_");
-const TABS = ["tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload"];
+const TABS = ["tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload", "tab-svg-builder", "tab-stock-upload"];
 
 let host: HTMLDivElement;
 let ui: Root;
@@ -93,6 +93,7 @@ describe("the log dock", () => {
     const switches = getLogState().entries.filter((e) => e.action === "open-tab");
     expect(switches.map((e) => e.detail)).toEqual([
       "tab=sheets", "tab=batch", "tab=selectionV2", "tab=generateSvg", "tab=upload",
+      "tab=svgBuilder", "tab=stockUpload",
     ]);
   });
 

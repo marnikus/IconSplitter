@@ -8,7 +8,7 @@ Every list tab's bulk bar has **⇄ Invert** beside "Select (all) visible":
 each **visible** row flips (checked ↔ unchecked); checks hidden by filters
 stay, the header checkbox's scope rule. One undoable step, recorded through
 the tab's own selection entry (`batchChecked`, `checked`, `svgChecked`,
-`uploadChecked`, `stockUploadChecked`).
+`uploadChecked`, `stockUploadChecked`, `builderChecked`).
 
 | Part | Where |
 |---|---|
@@ -41,9 +41,9 @@ Every list tab keeps the view it was left with: Batch (`lib/batchprefs`) and
 Selection V2 (`lib/session`) already did; Generate SVG, SVG to upload and
 Upload now store their filters (one value or several), the search text, the
 sort and Generate SVG's direction in `state/listviewstore.ts`
-(`iconSplitter.{svg,upload,stockUpload}.listView.v1`), each read back through
+(`iconSplitter.{svg,upload,stockUpload,svgBuilder}.listView.v1`), each read back through
 the tab's own parser (`svg/listview.ts`, `upload/listview.ts`,
-`stockupload/listview.ts`; unknown values → the default, RULE 13). Clear
+`stockupload/listview.ts`, `svgBuilder/listview.ts`; unknown values → the default, RULE 13). Clear
 filters resets and that is saved too. Tests: `list_view_persist.test.tsx`.
 
 Test helper `tests/helpers/multiselect.ts` `pickOnly` sets one value the way

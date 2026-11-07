@@ -4981,3 +4981,24 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 - quality:changed PASS; App.tsx legacy 246 → 107 lines; new files all OK (largest: exportActions.ts 91 lines, useSheetsModel.ts 72).
 - tsc PASS, lint 0 errors. New tests: sheetsel (5), sheets_multi_export (7), sheets_list_gestures (4) — all green; sheets_completion_sound green.
 - Full vitest: 4057 passed / 17 failed. All 17 also fail on the clean tree or are Windows-environment (bridge/getty helpers, verify_execution `C:\Program` path, fs_case_collisions, docs read-budget pages not touched here).
+## 2026-11-07 — SVG builder integration plan (docs only)
+
+- Scope: `docs/archive/2026-11-07-svg-builder-integration/PLAN.md` — reference/app research, screenshot checklist, architecture, interfaces, ordered steps, selector/persistence/test plan, and open decisions. No production code changed.
+- Measured: `npm run setup` PASS; `npm run verify` — Types PASS 20.1s, Lint PASS (0 errors / 23 warnings), quality:changed PASS (no changed `src/`), Build PASS 9.1s; native perf lane FAIL (`algo_efficiency` 239.2ms > 200ms); tests+coverage 4057 pass / 2 fail (`bridge_ftps` header, `docs_navigation` four current docs 9016–9088 bytes > 9000). Both failures are unrelated to the docs-only diff. No live provider call and no browser probe.
+## 2026-11-07 — SVG builder full TDD implementation
+
+Implemented the seventh `SVG builder` tab as a complete, interface-split feature: approved-only recursive discovery, pure domain modules, read-only SVG repository, session/global-undo/state integration, dark Workbench UI with full-width folder widget and top menu, shared Gemini prompt/key/model path, one previewed exact-request metadata flow, and verified SVG/PNG/clipboard/preset exports. Selectors, SOR, owners, storage, tests, README, AGENTS and the current-doc router were updated. No provider call is made in dev/test; keys, prompts and image bytes stay out of logs and localStorage.
+
+Resolved the earlier baseline gate failures instead of waiving them: bridge JSON responses now carry `cache-control: no-store`; the four oversized current docs and the router are back inside their read budgets; `detect.ts` reuses label buffers so the native synthetic 1000px budget passes; `tests/apply.test.ts` asserts the two new builder undo kinds.
+
+Verified: focused builder + shell suites 81 passed; `tests/apply.test.ts` 20 passed; `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 pre-existing warnings); `npm run quality:changed -- --files <explicit changed source list>` PASS; `npm run verify:fast -- --base HEAD` PASS all lanes; `npm run verify -- --base HEAD` PASS all lanes (399 files / 4094 tests with coverage, 30 native perf tests, production build PASS). No waivers remain.
+
+Attribution: Arena.ai Agent Mode — authored from the user's request and local repository research.
+
+## 2026-11-07 — SVG builder focused-test performance
+
+User asked to improve new-code test performance by at least 80%. Measured six-file focused Vitest builder/apply suite wall-clock median: **2.556 s** (3 runs); 80% reduction target: **≤ 0.511 s**. Added `npm run test:builder:fast`, a single Node/esbuild bundle of the real pure builder modules, injected provider seams, recursive discovery, session/undo payloads, export verification and static dark panel shell. Measured fast lane: **0.222 s** median (5 runs; **91.3% faster**), or **0.332 s** through the npm wrapper (5 runs; **87.0% faster**). Full Vitest TDD suite remains the contract; no tests were removed. `SheetPreviewDeps.rasterize` is a production injection seam so the provider test can run in Node without browser canvas/DOMParser; the UI test pins happy-dom explicitly.
+
+Verified: `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 pre-existing warnings); `npm run quality:changed -- --files src/svgBuilder/preview.ts` PASS; focused Vitest builder/apply/docs_navigation 7 files / 57 tests PASS; `npm run test:builder:fast` 14/14 PASS; `npm run verify:fast -- --base HEAD` PASS; `npm run verify -- --base HEAD` PASS (Types 5.1s, Lint 1.6s, changed quality gate 0.5s, native perf 5 files / 30 tests 3.4s, Tests+coverage 399 files / 4094 tests 145.2s, Build 10.3s, `ALL LANES PASSED`). No waivers; no live Gemini/provider calls.
+
+Attribution: Arena.ai Agent Mode — authored from the user's request and local repository research.
