@@ -4,7 +4,7 @@ The seventh Workbench mode turns already-created, `.svg.json`-approved icons int
 
 ## Layout
 
-Folder bar (Open folder, Rescan, scope, approved count, audit, path) → header (`COLLECTION / 01 · LIVE`, sheet title, Undo/Redo on the global timeline, `SEED ####` re-roll, Prompt brief, Sheet metadata, Export ▾) → three columns: **Icon library** | **stage** | **Customize · live**. The panel uses only its own `bld-*` layout classes — never another tab's layout class (the borrowed `.svg-panel` grid caused the stray-text bug).
+Folder bar (Open folder, Rescan, scope, approved count, audit, path) → **metadata widget** (prompt + Gemini, below) → header (`COLLECTION / 01 · LIVE`, sheet title, Undo/Redo on the global timeline, `SEED ####` re-roll, Prompt brief, Sheet metadata, Export ▾) → three columns: **Icon library** | **stage** | **Customize · live**. The panel uses only its own `bld-*` layout classes — never another tab's layout class (the borrowed `.svg-panel` grid caused the stray-text bug).
 
 ## Behaviour
 
@@ -24,7 +24,7 @@ Folder bar (Open folder, Rescan, scope, approved count, audit, path) → header 
 
 ## Provider and privacy
 
-**Sheet metadata** opens a dialog with the prompt (shared `PromptWindow` + presets) and the shared Gemini card; *Generate* opens the exact-request confirmation (one 768 px JPEG of this sheet + the prompt). Nothing is sent before **Send this exact request**; no retry, no resend on reload, key masked and never exported or logged ([RULE 20](../rules/BEHAVIOR.md)). The Gemini config is read from the shared key on boot. Only an accepted draft enters the export.
+The **metadata widget** sits right after the folder bar: the shared `PromptWindow` (edit, reset, saved presets) beside the Gemini card, built like the SVG to upload tab's over the **shared** config and key (default model `gemini-3.1-flash-lite`). It folds to one bar (Minimize/Restore), its body drags taller or shorter (height remembered; *Restore height* returns to natural), and the header's **Sheet metadata** button unfolds it. *Generate sheet metadata…* opens the exact-request confirmation (one 768 px JPEG of this sheet + the prompt). Nothing is sent before **Send this exact request**; no retry, no resend on reload, key masked and never exported or logged ([RULE 20](../rules/BEHAVIOR.md)). The Gemini config is read from the shared key on boot. Only an accepted draft enters the export.
 
 ## State and undo
 

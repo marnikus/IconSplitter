@@ -5016,3 +5016,8 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 
 - Discovery reads `<pair-folder>/export/export.json` (pair id must match): title = icon name; title/description/tags searchable and scorable; frequent tags (≥2, generic stock tags excluded) become `#tag` Similar profiles; audit counts icons with export metadata.
 - Tests: svg_builder_discovery +2, svg_builder_parity +1 (witnessed failing first); builder suites 64/64; test:builder:fast 14/14; tsc PASS; lint 0 errors (22 pre-existing warnings); quality gate (--base 338fe2f6) PASS.
+
+## 2026-11-07 — SVG builder: metadata prompt + Gemini widget after the folder bar
+
+- Widget = shared PromptWindow (edit/reset/saved presets) + Gemini card rebuilt on the Upload tab classes over the shared config/key (gemini-3.1-flash-lite default); folds (Minimize/Restore), drag-resizable body with remembered height and Restore height; dialog variant removed.
+- Builder suites 65/65 (new fold/height + placement tests); test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate (--base b8cb74c4) PASS.

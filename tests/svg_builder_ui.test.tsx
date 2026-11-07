@@ -68,15 +68,32 @@ describe("SVG builder tab", () => {
     expect(q('[data-testid="builder-unsupported"]')).not.toBeNull();
   });
 
-  it("renders the full metadata/Gemini controls (in the Sheet metadata dialog) without a second key store", async () => {
+  it("renders the metadata prompt + Gemini widget right after the folder widget, on the shared config", async () => {
     await click('[data-testid="tab-svg-builder"]');
-    expect(q('[data-testid="builder-prompt-panel"]')).toBeNull();
-    await click('[data-testid="builder-open-metadata"]');
+    expect(q('[data-testid="builder-folder-widget"]')!.nextElementSibling).toBe(q('[data-testid="builder-meta-widget"]'));
+    expect((q('[data-testid="builder-model"]') as HTMLInputElement).value).toBe("gemini-3.1-flash-lite");
     expect(q('[data-testid="builder-prompt-panel"]')).not.toBeNull();
     expect(q('[data-testid="builder-prompt"]')).not.toBeNull();
     expect(q('[data-testid="builder-provider-card"]')).not.toBeNull();
     expect(q('[data-testid="builder-key-state"]')).not.toBeNull();
     expect(q('[data-testid="builder-model"]')).not.toBeNull();
     expect(q('[data-testid="builder-endpoint"]')).not.toBeNull();
+  });
+
+  it("the metadata widget folds and restores, and Restore height drops a dragged height", async () => {
+    await click('[data-testid="tab-svg-builder"]');
+    await click('[data-testid="builder-meta-toggle"]');
+    expect(q('[data-testid="builder-prompt-panel"]')).toBeNull();
+    expect(q('[data-testid="builder-meta-toggle"]')!.textContent).toBe("Restore");
+    await click('[data-testid="builder-meta-toggle"]');
+    expect(q('[data-testid="builder-prompt-panel"]')).not.toBeNull();
+    const body = q('[data-testid="builder-meta-body"]')!;
+    body.style.height = "420px"; // what the native resize grip writes
+    await act(async () => { body.dispatchEvent(new Event("pointerup", { bubbles: true })); });
+    expect(q('[data-testid="builder-meta-body"]')!.style.height).toBe("420px");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.prefs.v1")!).metaHeight).toBe(420);
+    await click('[data-testid="builder-meta-restore-height"]');
+    expect(q('[data-testid="builder-meta-body"]')!.style.height).toBe("");
+    expect(q('[data-testid="builder-meta-restore-height"]')).toBeNull();
   });
 });

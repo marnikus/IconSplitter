@@ -14,9 +14,13 @@ export interface BuilderPrefs {
   providerOpen: boolean;
   /** Which layout preset the config came from; any manual edit makes it "custom". */
   layout: BuilderLayoutChoice;
+  /** The metadata prompt + Gemini widget: folded or open, and a user-dragged height (null = natural). */
+  metaOpen: boolean;
+  metaHeight: number | null;
 }
 
-export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial" };
+export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null };
+export const META_HEIGHT = { min: 160, max: 1200 } as const;
 const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "custom"];
 
 export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
@@ -26,6 +30,8 @@ export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
     fit: raw.fit !== false,
     providerOpen: raw.providerOpen !== false,
     layout: LAYOUTS.includes(raw.layout as BuilderLayoutChoice) ? raw.layout as BuilderLayoutChoice : "custom",
+    metaOpen: raw.metaOpen !== false,
+    metaHeight: typeof raw.metaHeight === "number" ? num(raw.metaHeight, 0, META_HEIGHT.min, META_HEIGHT.max) || null : null,
   };
 }
 

@@ -18,6 +18,13 @@
 .bld-folder-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .bld-audit { margin-left: auto; color: var(--v2-muted); font-size: 10px; }
 
+/* metadata prompt + Gemini widget (Upload tab's panel pair; folds, drags taller) */
+.bld-meta-widget { display: grid; gap: 8px; padding: 8px 12px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }
+.bld-meta-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bld-meta-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.bld-meta-body { align-items: stretch; min-height: 160px; max-height: 1200px; overflow: auto; resize: vertical; }
+.bld-meta-body .up-prompt-panel, .bld-meta-body .svg-provider { min-height: 0; }
+
 /* header ───────────────────────────────────────────────────────────────── */
 .bld-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }
 .bld-title-block { display: grid; gap: 2px; min-width: 0; }

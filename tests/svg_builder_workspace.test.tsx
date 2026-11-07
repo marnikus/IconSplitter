@@ -93,7 +93,7 @@ describe("SVG builder workspace", () => {
     const panel = q("builder-panel")!;
     expect(panel.classList.contains("svg-panel")).toBe(false);
     expect(panel.querySelector(".svg-panel, .up-columns")).toBeNull();
-    expect(q("builder-prompt-panel")).toBeNull(); // the prompt lives in the metadata dialog now
+    expect(q("builder-meta-widget")!.querySelector(".svg-panel, .up-columns")).toBeNull();
   });
 
   it("places the recipe automatically after the first scan and shows empty cells", async () => {
@@ -177,12 +177,13 @@ describe("SVG builder workspace", () => {
       .toEqual(["builder-export-svg", "builder-export-png", "builder-export-copy", "builder-export-preset", "builder-export-load"]);
   });
 
-  it("Sheet metadata opens the prompt and Gemini card; the brief has Brief and Raw views", async () => {
+  it("Sheet metadata unfolds the prompt + Gemini widget; the brief has Brief and Raw views", async () => {
     await openLibrary();
+    await click("builder-meta-toggle");
+    expect(q("builder-prompt-panel")).toBeNull();
     await click("builder-open-metadata");
     expect(q("builder-prompt-panel")).not.toBeNull();
     expect(q("builder-provider-card")).not.toBeNull();
-    await click("builder-meta-setup-close");
     await click("builder-brief");
     await click("builder-brief-tab-raw");
     expect(text("builder-brief-raw")).toContain("# Product brief");

@@ -16,7 +16,7 @@ import { loadBuilderListView } from "./listview";
 import { loadBuilderPrefs, type BuilderPrefs } from "./prefsstore";
 import { builderPresets, loadBuilderPrompt } from "./promptstore";
 
-export type BuilderDialog = "none" | "metadata" | "metaSetup" | "brief";
+export type BuilderDialog = "none" | "metadata" | "brief";
 
 export interface BuilderKeyInfo {
   value: string | null;

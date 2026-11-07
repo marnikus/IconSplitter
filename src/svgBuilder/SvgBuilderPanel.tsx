@@ -8,6 +8,7 @@ import SvgBuilderCustomize from "./SvgBuilderCustomize";
 import SvgBuilderDialogs from "./SvgBuilderDialogs";
 import SvgBuilderHeader from "./SvgBuilderHeader";
 import SvgBuilderLibrary from "./SvgBuilderLibrary";
+import SvgBuilderMetaWidget from "./SvgBuilderMetaWidget";
 import SvgBuilderStage from "./SvgBuilderStage";
 import SvgBuilderStatusBar from "./SvgBuilderStatusBar";
 import { useSvgBuilder } from "./useSvgBuilder";
@@ -19,6 +20,7 @@ export default function SvgBuilderPanel({ active }: { active: boolean }) {
       This browser does not expose the File System Access folder picker. A Chromium-based browser is required to open and scan a folder.
     </div>}
     <SvgBuilderControls b={b} />
+    <SvgBuilderMetaWidget b={b} />
     <SvgBuilderHeader b={b} />
     <div className="bld-workspace" data-testid="builder-workspace">
       <SvgBuilderLibrary b={b} />

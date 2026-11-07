@@ -58,6 +58,10 @@ export interface BuilderActions {
   undo: () => void;
   redo: () => void;
   toggleProvider: (open: boolean) => void;
+  /** Fold / unfold the metadata prompt + Gemini widget. */
+  toggleMeta: (open: boolean) => void;
+  /** A dragged widget height in px; null restores the natural height. */
+  setMetaHeight: (height: number | null) => void;
   setPrompt: (text: string) => void;
   resetPrompt: () => void;
   presets: PresetActions;

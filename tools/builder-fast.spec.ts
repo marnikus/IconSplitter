@@ -212,7 +212,7 @@ test("export verification refuses broken or unapproved documents", () => {
 test("dark panel shell renders the folder, header, library, stage and customize handles", () => {
   const markup = renderToStaticMarkup(React.createElement(SvgBuilderPanel, { active: true }));
   for (const id of ["builder-panel", "builder-unsupported", "builder-open-folder", "builder-folder-widget",
-    "builder-header", "builder-library", "builder-recipe", "builder-stage", "builder-inspector",
+    "builder-meta-widget", "builder-prompt-panel", "builder-provider-card", "builder-model", "builder-header", "builder-library", "builder-recipe", "builder-stage", "builder-inspector",
     "builder-section-grid", "builder-export"]) assert.match(markup, new RegExp(`data-testid="${id}"`));
 });
 

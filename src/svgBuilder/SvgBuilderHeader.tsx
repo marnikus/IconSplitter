@@ -19,8 +19,7 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
         onClick={b.actions.reshuffle}>↻ SEED <b>{b.seed}</b></button>
       <button type="button" className="svg-btn" data-testid="builder-brief" onClick={b.actions.openBrief}>▤ Prompt brief</button>
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
-        title="Generate the sheet title, subtitle and keywords with Gemini">✦ Sheet metadata
-        <span className="bld-meta-state" data-testid="builder-metadata-state" data-state={b.metadata?.state ?? "empty"}>{b.metadata?.state ?? "empty"}</span></button>
+        title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>
       <SvgBuilderExportMenu b={b} />
     </div>
   </header>;

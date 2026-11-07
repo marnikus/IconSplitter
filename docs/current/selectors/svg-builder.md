@@ -9,11 +9,12 @@
 | `tab-svg-builder` | top-menu button | visible text `SVG builder` |
 | `builder-shell` / `builder-panel` | wrapper / panel root | own `bld-*` classes only; `builder-unsupported` note without the folder picker |
 | `builder-folder-widget` | folder bar | `builder-open-folder`, `builder-rescan`, `builder-scope-copy`, `builder-approved-count`, `builder-audit`, `builder-folder-path` |
+| `builder-meta-widget` | metadata prompt + Gemini widget (after the folder bar) | `data-open`; `builder-meta-toggle` (Minimize/Restore), `builder-meta-body` (drag-resizable), `builder-meta-restore-height`, `builder-metadata-state`, `builder-generate-metadata`, `builder-prompt-panel` (`builder-prompt`…, `builder-prompt-note`), `builder-provider-card` (`builder-provider-toggle`, `builder-limits`, `builder-model`, `builder-endpoint`, `builder-timeout`, `builder-retries`, `builder-concurrency`, `builder-model-check`, `builder-model-state`, `builder-key-state`…, `builder-provider-note`) |
 | `builder-header` | header row | `builder-sheet-title` ("Untitled icon sheet" when empty) |
 | `builder-undo` / `builder-redo` | global timeline | disabled when the stack is empty; title names the action |
 | `builder-seed` | `↻ SEED ####` | re-roll (seed + 1) |
 | `builder-brief` / `builder-corrected-brief` | open `builder-brief-dialog` | header / stage bottom-right |
-| `builder-open-metadata` | Sheet metadata | `builder-metadata-state`; opens `builder-meta-setup` |
+| `builder-open-metadata` | Sheet metadata | unfolds `builder-meta-widget` |
 | `builder-export-toggle` | `Export ▾` | menu `builder-export-menu`: `builder-export-svg`, `-png`, `-copy`, `-preset`, `-load` (`role=menuitem`); `builder-preset-file` hidden input |
 | `builder-toast` / `builder-busy` / `builder-status-text` | toast zone | 4.2 s toast; errors stay |
 | `history-bar` | global undo bar | shared with every tab |
@@ -69,5 +70,4 @@
 | Testid | Element | Notes |
 |---|---|---|
 | `builder-brief-dialog` | brief | `builder-brief-tab-brief`, `-tab-raw`, `builder-brief-copy`, `builder-brief-close`, `builder-brief-text`, `builder-brief-raw`, `builder-brief-count` |
-| `builder-meta-setup` | Sheet metadata | `builder-prompt-panel` (`builder-prompt`…), `builder-provider-card` (`builder-model`, `builder-endpoint`, `builder-key-state`…), `builder-generate-metadata`, `builder-meta-setup-close` |
 | `builder-meta-dialog` | exact request | `builder-meta-preview` (768 px JPEG), `builder-meta-prompt`, `builder-exact-request`, `builder-meta-confirm`, `-accept`, `-cancel`, `-close`, `builder-meta-draft` |

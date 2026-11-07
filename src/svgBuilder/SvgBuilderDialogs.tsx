@@ -1,12 +1,10 @@
 // SvgBuilderDialogs.tsx — exact-request confirmation and prompt brief. The key
 // is masked; no provider call starts until the confirm button is used.
 import SvgBuilderBrief from "./SvgBuilderBrief";
-import SvgBuilderMetaSetup from "./SvgBuilderMetaSetup";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderDialogs({ b }: { b: BuilderApi }) {
   if (b.dialog === "brief") return <SvgBuilderBrief onClose={b.actions.closeDialog} onCopied={b.actions.say} />;
-  if (b.dialog === "metaSetup") return <SvgBuilderMetaSetup b={b} />;
   if (b.dialog !== "metadata") return null;
   return <MetadataDialog b={b} />;
 }
