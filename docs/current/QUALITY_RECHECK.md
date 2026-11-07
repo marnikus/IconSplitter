@@ -4975,3 +4975,8 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: scale.rotateZoneAt; new boxtarget.ts (box part under the pointer + cursor) and hitpx.ts (shared sizes) so gesture.ts stays < 300 lines; useEditorInput hover cursor (inline SVG rotate cursor, CSS resize cursors); legend.
 - Measured: 5 new tests (pathedit_rotate_zones, seen failing first); editor suites 123 pass; verify:fast 4043 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Cursor look not checked in a real browser.
+
+## 2026-11-07 — SVG builder integration plan (docs only)
+
+- Scope: `docs/archive/2026-11-07-svg-builder-integration/PLAN.md` — reference/app research, screenshot checklist, architecture, interfaces, ordered steps, selector/persistence/test plan, and open decisions. No production code changed.
+- Measured: `npm run setup` PASS; `npm run verify` — Types PASS 20.1s, Lint PASS (0 errors / 23 warnings), quality:changed PASS (no changed `src/`), Build PASS 9.1s; native perf lane FAIL (`algo_efficiency` 239.2ms > 200ms); tests+coverage 4057 pass / 2 fail (`bridge_ftps` header, `docs_navigation` four current docs 9016–9088 bytes > 9000). Both failures are unrelated to the docs-only diff. No live provider call and no browser probe.
