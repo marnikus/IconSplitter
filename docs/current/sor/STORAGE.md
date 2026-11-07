@@ -2,7 +2,7 @@
 
 Jump to a domain; validate everything read from storage (RULE 13). Image-edit keys carry metadata only, never image bytes or prompts.
 
-**Detail pages:** [Generate SVG and image edits](storage/svg.md) · [SVG to upload](storage/upload.md).
+**Detail pages:** [Generate SVG and image edits](storage/svg.md) · [SVG to upload](storage/upload.md) · [SVG builder](storage/builder.md).
 
 ## Batch and sheets
 

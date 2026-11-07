@@ -10,6 +10,7 @@
 import { useBusyActivity } from "../ui/useBusyActivity";
 import { useRunning } from "../ui/rebuildwatch";
 import BuilderSourceBar from "./BuilderSourceBar";
+import BuilderLibrary from "./BuilderLibrary";
 import { BuilderPickRoot, BuilderUnsupported } from "./BuilderEmpty";
 import { useBuilderShell } from "./useBuilderShell";
 
@@ -23,9 +24,11 @@ export default function BuilderPanel({ active = true }: { active?: boolean }) {
   }
   return (
     <div className="svg bld" data-testid="builder-panel" data-active={active ? "true" : "false"}>
-      <BuilderSourceBar rootName={g.rootName} root={null} scope={g.scope} busy={g.busy}
+      <BuilderSourceBar rootName={g.rootName} root={g.root} scope={g.scope} busy={g.busy}
         onChooseRoot={g.chooseRoot} onRescan={g.rescan} />
-      <BuilderPickRoot onPick={g.chooseRoot} />
+      {g.root === null
+        ? <BuilderPickRoot onPick={g.chooseRoot} />
+        : <BuilderLibrary shell={g} />}
       {g.toast !== null && (
         <p className="bld-note" data-testid="builder-toast" role="status">{g.toast}</p>
       )}

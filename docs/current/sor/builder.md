@@ -9,14 +9,14 @@ Handles: [selectors/builder](../selectors/builder.md). Storage keys:
 
 ## Status
 
-**Shell only (P0, 2026-11-07).** The tab exists, is registered, persists its session
-slice and states honestly that scanning is not wired yet. The library, artboard,
-controls, recipes, export and sheet metadata land in the phases listed in the design doc;
-until each lands, its absence is said out loud, never shown as a dead control.
+**Shell + library (P0/P1, 2026-11-07).** The tab is registered, persists its session
+slice, and reads the picked folder into an approved-icon rail. The artboard, controls,
+recipes, export and sheet metadata land in the phases below; until each lands, its
+absence is said out loud, never shown as a dead control.
 
 | Lands in | Surface |
 |---|---|
-| P1 | folder scan (approved icons), library rail, exclusions + audit |
+| ~~P1~~ done | folder scan (approved icons), library rail, exclusions + audit |
 | P2 | layout math and the live artboard |
 | P3 | controls, presets, undo, persistence |
 | P4 | selection recipes, locks, user presets |
@@ -33,6 +33,19 @@ until each lands, its absence is said out loud, never shown as a dead control.
   picked folder's complete path as read-only text (I-46).
 * Two honest empty states: no File System Access API (`builder-unsupported`), and
   supported-but-nothing-picked (`builder-root-empty`).
+* **The library rail (P1)** — `builder/scan.ts` walks the whole selected root
+  recursively through SVG to upload's own approved discovery (`upload/discovery`,
+  given `ignore = ["export", "builder"]`), so this tab can never disagree about what
+  "approved" means. One rail row per pair: the pair's own name, its folder, its
+  version and the tags it can be searched by; `tagSource` records whether those tags
+  came from generated metadata, the file name, or nowhere (Q6: a guess is never shown
+  as metadata). Filters are folder chips plus one free-text box over name, folder and
+  tags (`lib/builder/rows`, pure). A pair that is not listed is reported with the
+  discovery's own reason, and the audit line says how many — a scan that read nothing
+  usable never looks like a clean one.
+* **Scan ordering** — one ticket per scan (`seq`): a slower earlier walk can never
+  overwrite a newer one's icons. `__builder__` is this tab's own root slot, so it
+  boots the folder it was pointed at, not another tab's.
 * Session slice `builder` (`{ slots, locked, seed, recipe }`), validated field by field:
   a junk slot becomes a hole **in place** (cell position is the sheet's meaning), locks
   keep only ids that are placed, the seed is a positive integer, the recipe falls back

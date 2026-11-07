@@ -26,6 +26,19 @@ Shell and source bar:
 | `builder-audit` | text | one line: files · SVG files · approved · not listed · corrupt pair files · unreadable |
 | `builder-toast` | `role="status"` line | one transient sentence; absent when there is nothing to say |
 
-Later phases add `builder-library-*`, `builder-recipe-*`, `builder-stage`,
+The library rail (P1):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `builder-library` | rail section, `aria-label="Approved icons"` | absent while no folder is picked |
+| `builder-library-empty` | note | picked, but nothing approved: says how many pairs were not approved |
+| `builder-search` | `type="search"` input | name, folder or tag |
+| `builder-search-clear` | text button | resets search + folder chip together |
+| `builder-facet-folder` | chip per folder, `aria-pressed` | toggles that folder; label `<folder> <count>` |
+| `builder-icon` | row (one per icon) | `data-icon-id`; `title` carries path, version and tag source |
+| `builder-icon-name` | row text | the pair's own name, separators opened up |
+| `builder-no-match` | note | a filter matched nothing (never an empty rail pretending to be the library) |
+
+Later phases add `builder-recipe-*`, `builder-recipe-*`, `builder-stage`,
 `builder-artboard`, `builder-cell-{n}`, `builder-<section>-*` controls, `builder-export-*`
 and `builder-meta-*`; each is added here in the same change that introduces it (RULE 17).

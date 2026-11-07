@@ -69,9 +69,13 @@ export interface UploadDiscovery {
 }
 
 /** Scans the root: every approved item with a valid SVG, in deterministic order. */
-export async function discoverUploadSources(root: DirHandleLike): Promise<UploadDiscovery> {
-  const tree = await readDirTree(root, EXPORT_IGNORE);
-  const entries = walkTree(tree, EXPORT_IGNORE);
+export async function discoverUploadSources(
+  root: DirHandleLike,
+  /** Folders never walked; `export/` is the default, callers may add their own output. */
+  ignore: string[] = EXPORT_IGNORE,
+): Promise<UploadDiscovery> {
+  const tree = await readDirTree(root, ignore);
+  const entries = walkTree(tree, ignore);
   const rule = scopeOf(directoryNames(tree), root.name);
   const loaded = await loadSidecars(root, entries);
   const svgs = svgFilesOf(entries);
