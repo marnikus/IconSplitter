@@ -4,6 +4,10 @@ Status: **plan only, nothing implemented.** This is the pre-implementation contr
 (RULE 17: dated archive doc). After implementation the owning `docs/current/` pages
 become the truth and this file is never edited to catch up.
 
+Decisions settled by the owner on 2026-11-07 (see §10): the sheet-metadata request is
+**text-only — the effective prompt plus the composed sheet's SVG source, never an image**,
+and its prompt/parser/validator/failure policy are **SVG to upload's rules unchanged**.
+
 Inputs this plan is derived from:
 
 * Reference UI: `design temp/ref SVG constructor tab/` (3 611 lines TS/TSX — a standalone
@@ -118,9 +122,9 @@ request (RULE 20).
 | Gemini model list check | `src/lib/upload/geminimodels.ts` | import |
 | Gemini config persistence | `src/upload/configstore.ts` (`iconSplitter.upload.gemini.v1`) | **share the same key** (one provider setup for the app) |
 | Gemini key | `src/upload/keystore.ts` (`gemini-api-key` in IndexedDB) | **share the same key slot** |
-| Metadata prompt + presets | `src/ui/PromptWindow.tsx`, `src/state/presetstore.ts` | own key list (`promptpresets` shape) |
-| Metadata schema + validator | `src/lib/upload/meta.ts` (`IconMetadata`, `parseMetadata`, `validateMetadata`, `cleanMetadata`) | import |
-| Sheet-metadata answer parsing | same module | **do not reuse `DEFAULT_METADATA_PROMPT` verbatim** — see §5.6 |
+| Metadata prompt + presets | `src/ui/PromptWindow.tsx`, `src/state/presetstore.ts` | own key list, shared `PromptPreset` shape |
+| Metadata prompt text, schema, parser, validator, tag rules, warnings | `src/lib/upload/meta.ts` (`DEFAULT_METADATA_PROMPT`, `IconMetadata`, `parseMetadata`, `validateMetadata`, `cleanMetadata`, `dedupeTags`, `MANDATORY_TAGS`) | **import verbatim** (Q2) — the builder never re-derives the policy |
+| Provider wire body | `src/lib/upload/gemini.ts` (`sendGemini`, `buildGeminiRequest`) | `sendGemini` reused; `buildGeminiRequest` **not** used — a text-only body is built in `lib/builder/metarequest.ts` |
 | Download helper | `src/lib/dom.ts` (`download`) | import |
 | ZIP | `jszip` (already a dependency) | import |
 | Undo | `src/state/HistoryProvider.tsx` + `src/state/apply.ts` | new entry type |
@@ -174,8 +178,8 @@ Rules:
 | `serialize.ts` | **Model-driven SVG emitter**: `BuilderConfig` + placements + icon markup → one editable SVG string (paths preserved, strokes hoisted, text as `<text>`) | `serializeSheet`, `SerializeInput` |
 | `exportname.ts` | Deterministic file names + `builder/` folder naming, byte-safe slugs | `sheetFileBase`, `builderDirName` |
 | `preset.ts` | Preset JSON record (settings + selection ids + seed + version) parse/serialize | `BuilderPresetRecord`, `parsePreset`, `serializePreset` |
-| `meta.ts` | **Sheet metadata** domain: its own default prompt, labels (`Title`/`Description`/`Tags`), parser, validator (reusing `lib/upload/meta` primitives + its own minima for a *collection*), fingerprint | `DEFAULT_SHEET_PROMPT`, `parseSheetMetadata`, `validateSheetMetadata`, `sheetMetaFingerprint` |
-| `metatarget.ts` | Which icons the metadata request describes (the composed sheet's captions + categories) — the disclosed input preview | `metadataBrief`, `disclosureLines` |
+| `metarequest.ts` | The **text-only provider body**: prompt part + sheet-SVG part, the character cap, the whitespace compaction, the `digest` fallback, and the disclosure lines the dialog shows | `buildSheetMetaRequest`, `compactSheetSource`, `digestOf`, `SVG_DISCLOSURE_MAX_CHARS`, `Disclosure` |
+| `metafingerprint.ts` | Which inputs bind a metadata record to a sheet (config content fields + ordered slot ids + captions) — deliberately **not** the same function as upload's per-icon `metadataFingerprint` | `sheetMetaFingerprint` |
 
 #### Feature — `src/builder/`
 
@@ -193,8 +197,8 @@ Rules:
 | `useiconsvg.ts` | React hook: lazily read + sanitise a document for the given icon | bounded concurrency (`lib/limiter`) |
 | `actions.ts` | Config/selection/seed actions + undo entries (`builderConfig`, `builderSelection`, `builderSeed`) | every mutation goes through `apply` |
 | `recipe.ts` | Recipe → selection run (reroll, mode change, profile change, clear, toggle lock) | wraps `lib/builder/select` |
-| `metarun.ts` | The confirmed metadata request: disclosure → confirm → send → parse → validate → store | no auto-retry on unknown outcome |
-| `metaactions.ts` | Prompt/preset/key/config handlers | thin |
+| `metarun.ts` | The confirmed metadata request: build body → disclose → confirm → `sendGemini` → `parseMetadata` → `validateMetadata` → store; journal for outcome-unknown | no auto-retry on unknown outcome; SVG/digest switch is announced, never silent |
+| `metaactions.ts` | Prompt/preset/key/config handlers (prompt key `iconSplitter.builder.prompt.v1`, presets `.prompts.v1`, provider config/key **shared** with upload) | thin |
 | `exportrun.ts` | Export orchestration: build SVG → download / raster PNG / ZIP / commit to disk | gates + progress |
 | `exportcommit.ts` | Write into `<root>/builder/` (or chosen subfolder) atomically (`writeFileNew`), never overwrite silently | reuse `lib/fs` |
 | `raster.ts` | Sheet SVG → PNG bytes at N× (canvas), decoded back and dimension-checked | mirrors `lib/upload/raster.ts` |
@@ -231,6 +235,7 @@ Rules:
 | `src/state/apply.ts` | `ENTRY_TYPES` += `"builderConfig" \| "builderSelection" \| "builderSeed" \| "builderMeta"`; apply branches | `tests/apply.test.ts:165` pins `ENTRY_TYPES` exactly → update deliberately |
 | `src/ui/Workbench.tsx` | `TABS` entry `{ id: "builder", label: "SVG builder", testid: "tab-builder" }`; `BuilderWorkspace` mount with the same "lazy on first visit, then parked hidden" pattern as Upload/StockUpload; activity mount `builder-progress-mount` | `tests/workbench_ui.test.tsx:117` pins tab order → update deliberately |
 | `src/ui/ActivityBars.tsx` | `SOURCES.builder = "SVG builder"` | |
+| `src/lib/upload/gemini.ts` | **additive**: `GeminiTextRequest` + `GeminiBody` union, `GeminiSendArgs.request` widened. `GeminiRequest`/`buildGeminiRequest` unchanged | the image wire shape is pinned by `tests/gemini_client.test.ts` — do not touch it |
 | `src/index.css` | New `/* ══ SVG builder ══ */` section, `--bld-*` tokens derived from `--v2-*`, all classes prefixed `.bld-` | file already 2 198 lines; append a section, do not restyle others |
 | `docs/current/*` | New `sor/svg-builder.md`, `selectors/svg-builder.md`, `sor/OWNERS` row, `sor/STORAGE` rows, `sor/TESTS` row, router rows in `docs/current/README.md`, `OVERVIEW.md` mode list, `UI_SELECTORS.md` tab row, `sor/shared.md` "shell has five tabs" → six/seven | RULE 17 same-change requirement |
 | `tests/session.test.ts`, `tests/apply.test.ts`, `tests/workbench_ui.test.tsx` | assertion updates above | |
@@ -324,7 +329,9 @@ export interface BuilderSheetMetadata {
   model: string;          // the configured id
   usage: { input: number | null; output: number | null; total: number | null };
   validation: { ok: boolean; errors: string[]; warnings: string[] };
-  /** Binds the metadata to the exact sheet it describes. */
+  /** What was disclosed: the sheet SVG source, or its structural digest (over the cap). */
+  disclosure: { mode: "svg" | "digest"; chars: number; icons: number };
+  /** Binds the metadata to the exact sheet it describes (lib/builder/metafingerprint). */
   fingerprint: string;
 }
 ```
@@ -342,7 +349,8 @@ ids + captions). A metadata record whose fingerprint no longer matches is shown 
 | `iconSplitter.builder.presets.v1` | `{ v: 1, list: BuilderPresetRecord[] }` | user presets, cap 20, oldest dropped |
 | `iconSplitter.builder.prompt.v1` | `{ v: 1, prompt }` | sheet-metadata prompt text |
 | `iconSplitter.builder.prompts.v1` | `{ v: 1, list: PromptPreset[] }` | reuses `lib/promptpresets` |
-| `iconSplitter.builder.meta.v1` | `{ v: 1, record: BuilderSheetMetadata \| null }` | sheet metadata (no image bytes, no key) |
+| `iconSplitter.builder.meta.v1` | `{ v: 1, record: BuilderSheetMetadata \| null }` | sheet metadata; never the request body, never the sheet source |
+| `iconSplitter.builder.meta.journal.v1` | `{ v: 1, inflight: { id, startedAt, mode } \| null }` | a request whose outcome is unknown → reported `interrupted` once, never re-sent |
 | `iconSplitter.builder.iconmeta.v1` | `{ v: 1, byKey: Record<string, string[]> }` | tag cache, cap 2 000 |
 | `iconSplitter.builder.prefs.v1` | `{ v: 1, providerOpen, captionColourMode, previewBg }` | display-only |
 | IndexedDB `iconSplitter/handles["__builder__"]` | root handle | **own slot**, like `__upload__` |
@@ -479,38 +487,87 @@ Rules: every mutation goes through `state/apply.ts` (one path); slider drags coa
 apply leaves the cursor unchanged; undo of a selection whose ids a rescan removed is
 refused by `selectionTargetsKnown("builder", …)`.
 
-### 5.6 Provider interface (Gemini — shared config, its own prompt)
+### 5.6 Provider interface (Gemini — shared config, **text-only request**: SVG source + prompt)
+
+**Decided 2026-11-07 (user):** the builder sends **no image**. The disclosed input is the
+composed sheet's **SVG source code plus the effective prompt**, as two text parts. The
+metadata domain (prompt default, parser, validator, tag rules, fingerprint) is **the same
+code SVG to upload uses** — not a parallel copy.
 
 ```ts
-// src/builder/metarun.ts
+// src/lib/builder/metarequest.ts  (pure)
+export const SVG_DISCLOSURE_MAX_CHARS = 60_000;
+
+export type Disclosure =
+  | { kind: "svg"; text: string; chars: number; icons: number; note: "" }
+  | { kind: "digest"; text: string; chars: number; icons: number; note: string }; // over the cap
+
 export interface SheetMetaRequest {
-  /** Exactly what will be disclosed: the sheet render summary + the prompts. */
-  disclosure: { lines: string[]; iconCount: number; captionSample: string[] };
-  prompt: string;                    // effective (edited or default)
-  config: GeminiConfig;              // shared with SVG to upload
-  model: string;
+  /** The exact body that will be POSTed — built here, shown in the dialog, then sent unmodified. */
+  body: GeminiTextRequest;
+  /** What the confirmation dialog lists: mode, characters, icons, prompt, model. */
+  disclosure: { mode: "svg" | "digest"; chars: number; icons: number; lines: string[] };
 }
+
+export function buildSheetMetaRequest(args: {
+  prompt: string;            // effective prompt (edited or DEFAULT_METADATA_PROMPT)
+  sheetSvg: string;          // serializeSheet() output, verbatim
+  iconCount: number;
+  captions: readonly string[];
+}): SheetMetaRequest;
 ```
 
-Two decision points to settle before coding (see §10, Q1/Q2):
+**The wire body (text only — no `inlineData`, no data URL, no bytes):**
 
-* **Image vs text request.** SVG to upload sends the icon *image* (`inlineData`) and
-  never sends a data URL into logs. The builder's subject is a *collection*. Cheapest,
-  most honest option: `buildGeminiRequest` with the **sheet PNG as the image** plus a
-  text instruction naming the collection — reuses the existing builder-free code path
-  and keeps the same wire shape that is already tested. Alternative: text-only request
-  reusing `sendGemini` with a two-part body (needs a small, tested variant of
-  `buildGeminiRequest` because its `contents.parts` type is a fixed tuple).
-* **Validator.** `validateMetadata` from `lib/upload/meta` enforces per-icon minima
-  (title ≥5 words naming an abstract idea, 7 mandatory tags). For a *collection* title
-  ("Kitchen & cooking pictograms") that is wrong-ish but harmless; the plan is: **reuse
-  the mandatory-tag rule, relax the title to ≥3 words, keep description ≥7 words**, in
-  `lib/builder/meta.ts`, delegating tag hygiene to `dedupeTags`/`MANDATORY_TAGS`. The
-  alternative (reuse verbatim) costs odd copy and none of the policy.
+```json
+{ "contents": [ { "role": "user", "parts": [
+  { "text": "<effective prompt>" },
+  { "text": "Sheet SVG source (the artwork to describe):\n<svg …>…</svg>" }
+] } ] }
+```
 
-Failure policy (same as upload): a timeout/disconnect is **outcome-unknown**, never
-auto-retried; a refusal (`blocked`) is terminal; a malformed answer is terminal with
-the raw text kept out of the log; retries only on classified-retryable HTTP.
+* `parts[1].text` is a **header line + the sheet source**. The header names the input
+  honestly ("Sheet SVG source, N icons, composed by the user"), so the model is never
+  asked to look at a picture that is not there.
+* The source is **not truncated mid-document**: a cut-off `<svg>` would be malformed XML
+  and a misleading input. Over the cap the builder switches to `digest` mode — a
+  deterministic structural summary (sheet size, banner title/subtitle, grid, per-cell
+  `id · name · viewBox · path count · tags`) — and the dialog says, in one line, that the
+  source was too long and the digest is what will be sent. Never a silent swap.
+* A whitespace-collapse pass (`compactSheetSource`: drop the `<?xml …?>` prolog, collapse
+  inter-tag whitespace) runs before the cap is measured, so the number in the dialog is
+  the number of characters actually sent.
+* The sheet is serialized by the export serializer (§5.4), so what the provider sees and
+  what the user exports are the **same document** — no second rendering path.
+
+**Wire type change (additive, upload's frozen shape untouched):**
+
+```ts
+// src/lib/upload/gemini.ts — ADDITIVE only
+export interface GeminiTextRequest { contents: [{ role: "user"; parts: { text: string }[] }]; }
+export type GeminiBody = GeminiRequest | GeminiTextRequest;   // GeminiSendArgs.request: GeminiBody
+```
+
+`buildGeminiRequest`, its `GeminiRequest` shape and `tests/gemini_client.test.ts` stay
+exactly as they are (that test pins the image wire shape); the builder never calls it.
+
+**Validation, parsing, prompt and fingerprint — identical to SVG to upload (decided
+2026-11-07).** `lib/builder/meta.ts` is therefore **not needed**: the builder imports
+`src/lib/upload/meta.ts` directly — `DEFAULT_METADATA_PROMPT`, `parseMetadata`,
+`validateMetadata` (title ≥5 words, description ≥7, ≥10 unique tags incl. the 7
+mandatory), `cleanMetadata`, `dedupeTags`, `metadataFingerprint`, `restrictedWarnings`.
+One prompt, one policy, one validator in the app (RULE 10). The prompt therefore says
+"Study the icon image"; the panel shows one honest line next to it: *"The prompt speaks of
+an icon image; the builder discloses the sheet's SVG source instead — the rules and the
+validation are identical."* Changing that wording later is a one-constant change, not a
+second policy.
+
+**Failure policy — same as upload.** A timeout/disconnect is **outcome-unknown**, never
+auto-retried, and journalled (`iconSplitter.builder.meta.journal.v1`) so a restart reports
+`interrupted` instead of guessing; a refusal (`blocked`) is terminal; a truncated answer
+(`finishReason MAX_TOKENS`) is reported as truncated, never parsed as valid; a malformed
+answer is terminal with the raw text kept out of the log; retries only on
+classified-retryable HTTP (`sendGemini` semantics, unchanged).
 
 ### 5.7 Export-to-disk interface
 
@@ -633,8 +690,10 @@ presets for parity.
    metadata and scroll position all return after reload; in-flight metadata request is
    reported as `interrupted` and never re-sent.
 8. **Privacy.** Local by default; the only network calls are the confirmed sheet-metadata
-   request and the model check (both disclose their inputs); keys never leave IndexedDB;
-   prompts/captions never enter logs; no image bytes in the log or the session.
+   request and the model check. The metadata request discloses **text only** — the
+   effective prompt and the sheet's own SVG source (or an announced digest) — and never
+   an image, a raster, a data URL or any other file. Keys never leave IndexedDB; prompts,
+   captions and sheet source never enter logs; no image bytes in the log or the session.
 9. **Atomic deliverable.** Exports are produced by a verified serializer (parse +
    validate gate) before any download or disk write; disk writes are create-only.
 10. **Accessibility.** `data-testid` on every interactive element with the `builder-`
@@ -739,22 +798,34 @@ Exit gate: re-roll is reproducible; preset JSON round-trips.
 Exit gate: exported SVG opens in Illustrator/Inkscape with editable paths and text;
 sizes match the artboard; repeated export identical.
 
-### P6 — Sheet metadata + provider parity (~400 lines src, ~250 lines tests)
+### P6 — Sheet metadata (text-only request) + provider parity (~380 lines src, ~250 lines tests)
 
-1. `tests/builder_meta.test.ts`: default prompt states every rule the validator
-   enforces; `parseSheetMetadata` rejects a missing label; validator enforces ≥10 unique
-   tags incl. the 7 mandatory; a title with 3 words passes, 2 fails; fingerprint changes
-   when the slot order changes and does not when only the zoom changes.
-2. `src/lib/builder/meta.ts`, `metatarget.ts`.
-3. `BuilderMetaPanel` (+ `PromptWindow` reuse, `KeySlot` reuse), provider card bound to
-   the **shared** `configstore`/`keystore`.
-4. `src/builder/metarun.ts` + confirmation dialog (disclosure lines: sheet size, icon
-   count, captions sample, prompt, model) → `sendGemini` → parse → validate → store;
-   interrupted-state journal (`iconSplitter.builder.meta.journal.v1`).
-5. Model check via `listGeminiModels`.
+1. `tests/builder_metarequest.test.ts` (pure, no network):
+   * two text parts, **zero `inlineData`** — a body containing `inlineData` fails the test;
+   * `parts[0]` is the effective prompt byte-for-byte, `parts[1]` is header + the exact
+     `serializeSheet` output;
+   * compaction removes the XML prolog and inter-tag whitespace but changes no geometry
+     (`parseSvg` of the compacted text still parses, same element count);
+   * over `SVG_DISCLOSURE_MAX_CHARS` → `digest` mode, `note` non-empty, digest is stable
+     for the same sheet and changes when a caption changes;
+   * a 998-icon sheet's digest is small enough to send (assert the size).
+2. `tests/builder_meta.test.ts`: the builder's parser/validator **are** upload's —
+   `parseMetadata` rejects a missing label; `validateMetadata` requires ≥5 title words,
+   ≥7 description words, ≥10 unique tags incl. the 7 mandatory; a 3-word title fails
+   (proving Q2 = upload's rules, not a relaxed variant); `sheetMetaFingerprint` changes
+   with slot order and captions, ignores zoom and preview prefs.
+3. `src/lib/builder/metarequest.ts` + `metafingerprint.ts`.
+4. `BuilderMetaPanel` (prompt via `PromptWindow` `testId="builder"`, `KeySlot` reuse,
+   provider card bound to the **shared** `configstore`/`keystore`), the honest note that
+   the prompt speaks of an image while the builder discloses SVG source, and
+   `BuilderMetaDialog` showing mode/characters/icons/prompt/model + the text preview.
+5. `src/builder/metarun.ts`: journal → send → `parseMetadata`/`validateMetadata` →
+   store; `interrupted` on restart; truncation reported, never parsed.
+6. Model check via `listGeminiModels` (unchanged).
 
-Exit gate: request only after confirmation; refusal/timeout paths honest; metadata
-survives reload and marks stale when the sheet changes.
+Exit gate: a shippable body is shown before it is sent and is the body that is sent; no
+image part exists anywhere in the builder's provider path; refusal/timeout/truncation
+paths are honest; metadata survives reload and goes stale when the sheet changes.
 
 ### P7 — Polish: theme, a11y, hotkeys, docs (~300 lines src, ~150 lines tests)
 
@@ -796,9 +867,10 @@ call, no coupling beyond the shared store.
 | Serializer | `builder_serialize.test.ts` | six guarantees; `validateSvg` passes |
 | Raster | `builder_raster.test.ts` | decode-back dimensions per scale |
 | Commit | `builder_commit.test.ts` | create-only, collision suffix, refusal report |
-| Metadata | `builder_meta.test.ts` | prompt/validator/parse/fingerprint |
-| Request | `builder_metarun.test.ts` | disclosure built, no auto-retry on unknown, refusal terminal |
-| Privacy | extend `tests/secret_hygiene.test.ts` | no key/prompt/bytes in builder log specs |
+| Metadata | `builder_meta.test.ts` | the builder reuses upload's prompt/parser/validator verbatim; sheet fingerprint |
+| Request body | `builder_metarequest.test.ts` | text-only parts (no `inlineData`), source == exported SVG, cap → announced digest |
+| Request run | `builder_metarun.test.ts` | sent body is the shown body, no auto-retry on unknown, refusal/truncation terminal |
+| Privacy | extend `tests/secret_hygiene.test.ts` | no key, prompt, sheet source or `<svg` payload in builder log specs |
 | Storage | `builder_persist.test.ts` | every key validated on read; corrupt → defaults |
 
 Test harness notes: `happy-dom` environment; fake FS via `tests/helpers/fakefs.ts`;
@@ -807,17 +879,38 @@ pair files via `tests/helpers/pairfile.ts`; transport stubs via
 
 ---
 
-## 10. Decisions needed before implementation
+## 10. Decisions — settled 2026-11-07
 
-| # | Question | Options | Plan's recommendation |
-|---|---|---|---|
-| Q1 | **Metadata request shape** | (a) sheet PNG + text instruction (reuses `buildGeminiRequest` unchanged) · (b) text-only body (needs a tested variant) | (a) — zero new wire code, and the sheet render is the honest disclosed input |
-| Q2 | **Validator for a collection** | (a) reuse `validateMetadata` verbatim · (b) builder variant: title ≥3 words, description ≥7, ≥10 tags incl. 7 mandatory | (b) — a collection title is not an "abstract idea of one icon" |
-| Q3 | **Sheet metadata scope** | (a) one record per sheet · (b) per caption/icon too | (a) for P6; captions stay editable text the user types |
-| Q4 | **Where exports go** | (a) browser download only · (b) also commit to `<root>/builder/` | both, with (b) opt-in and create-only |
-| Q5 | **Icons unplaceable in the builder** (embedded `<text>`/`<image>`) | (a) refuse the cell with a reason · (b) rasterise the glyph | (a) — never silently degrade an editable export |
-| Q6 | **Tag source when metadata is missing** | (a) filename tokens with an honest label · (b) hide the icon from "similar" | (a) with `tagSource: "filename"` shown in the tooltip |
-| Q7 | **Tab label** | `SVG builder` (as requested) | confirmed — testid `tab-builder` |
+| # | Question | Decision |
+|---|---|---|
+| Q1 | **Metadata request shape** | **No image.** The request is **text-only**: `parts[0]` = the effective prompt, `parts[1]` = the composed sheet's **SVG source**. Over the character cap the builder sends a structural **digest** instead and says so in the confirmation. `GeminiRequest`/`buildGeminiRequest` stay untouched; a `GeminiTextRequest` union member is added additively. (§5.6) |
+| Q2 | **Metadata rules** | **Exactly SVG to upload's rules.** Same `DEFAULT_METADATA_PROMPT`, same `parseMetadata`, same `validateMetadata` (title ≥5 words, description ≥7, ≥10 unique tags incl. the 7 mandatory), same restricted-content warnings, same failure policy. `lib/builder/meta.ts` is not written — the builder imports `src/lib/upload/meta.ts`. (§5.6) |
+| Q3 | **Sheet metadata scope** | One record per sheet (per-caption metadata is not generated). |
+| Q4 | **Where exports go** | Browser download **and** an opt-in, create-only commit into `<root>/builder/`. |
+| Q5 | **Unplaceable icons** (`<text>`/`<image>` inside the SVG) | Refuse that cell with a reason; never rasterise into an editable export. |
+| Q6 | **Tag source when metadata is missing** | Filename tokens, labelled `tagSource: "filename"` in the tooltip. |
+| Q7 | **Tab label** | `SVG builder`, testid `tab-builder`. |
+
+### 10.1 Consequences of Q1 (text-only) that the implementation must honour
+
+1. **No raster is needed for metadata.** `raster.ts` is export-only; the metadata path
+   never builds a PNG, so nothing is silently "disclosed" that the dialog did not list.
+2. **The dialog lists the real body**: mode (`svg`/`digest`), characters, icon count, the
+   prompt, the model, the endpoint. It shows the first ~400 characters of the disclosed
+   text with a "show all" toggle (the sheet source is the user's own artwork — showing it
+   is safe; it is not a secret, only the provider send is gated).
+3. **The send is the shown body.** The request object built by `buildSheetMetaRequest` is
+   the object handed to `sendGemini`; no rebuild between confirmation and send (the same
+   rule upload's dialog follows).
+4. **Nothing in a log.** The sheet source, the prompt and the answer never enter
+   `log()` — specs carry counts, modes and model ids only (`builderlog.ts`), and
+   `tests/secret_hygiene.test.ts` is extended to assert the builder never logs a
+   `<svg` payload.
+5. **A long sheet is a first-class case**, not an error: `digest` mode is deterministic
+   (same sheet → same digest) and is labelled in the record so a later reader knows the
+   model answered from a summary.
+6. **Streaming stays off** (`sendGemini` is a bounded single attempt). A 60 000-character
+   disclosure is well inside a normal request; a bigger sheet is why the cap exists.
 
 ---
 
@@ -832,6 +925,7 @@ pair files via `tests/helpers/pairfile.ts`; transport stubs via
 | Fonts: the reference uses Google fonts | App builds to one self-contained `dist/index.html`; a font CDN import would break offline and RULE 20 | Use the app's current stack; banner faces become `sans`/`serif`/`mono` **system** stacks. If custom faces are wanted later, they must be embedded (own decision, own phase) |
 | DOM-measurement temptation (reference exporter) | Non-deterministic, zoom-dependent output | Serializer-only export; the DOM exporter is explicitly rejected in §2.2 |
 | Scan of a different root while a sheet is composed | Cells point at files that no longer exist | `rootToken` invalidates caches; missing documents render as "missing" per cell, never a blank; selection ids pruned on rescan |
+| Text disclosure size vs answer budget | A long source crowds the model's context | Cap at 60 000 chars + digest fallback, announced in the dialog; the answer is 3 labeled lines, so no `maxOutputTokens` tuning is needed |
 | Global undo + big configs | Timeline bloat (100 entries × config) | Coalescing by gesture key; config is ~1 KB so 100 entries ≈ 100 KB — acceptable, and capped by `MAX_HISTORY` |
 
 ---
@@ -845,8 +939,9 @@ pair files via `tests/helpers/pairfile.ts`; transport stubs via
 * A sheet can be composed, styled, captioned, zoomed, seeded, locked, undone, redone,
   saved as a preset and exported as (a) editable SVG that passes `validateSvg`,
   (b) PNG at 1×/2×/3×, (c) preset JSON, (d) committed into `<root>/builder/`.
-* Sheet metadata can be generated only after an explicit confirmation that lists the
-  disclosed inputs; the result is validated, persisted, and marked stale when the sheet
-  changes.
+* Sheet metadata is requested **text-only** (effective prompt + the sheet's SVG source, or
+  an announced digest when the source is over the cap) and only after a confirmation that
+  lists exactly what will be sent; the answer passes **SVG to upload's validator**, is
+  persisted, and is marked stale when the sheet changes.
 * `docs/current/` owns the behaviour, selectors, storage keys, owners and tests for the
   new mode; this archive page is never edited afterwards.
