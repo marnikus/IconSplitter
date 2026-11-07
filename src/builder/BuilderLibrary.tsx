@@ -3,8 +3,9 @@
 // show. The rows come from lib/builder/rows (pure filtering) — this file only
 // renders them, so the rail can never disagree with the rail's rule.
 //
-// Nothing here places an icon yet: P2 adds the sheet, and the sheet reads the
-// library through this same list (design §8).
+// The lock is the rail's one action: it pins an icon to its cell across re-rolls
+// and recipe changes. It says plainly which icons are pinned, because a sheet that
+// stops responding to "New sheet" without an explanation reads like a bug.
 
 import type { BuilderIcon } from "../lib/builder/rows";
 import type { BuilderShell } from "./useBuilderShell";
@@ -24,17 +25,11 @@ export default function BuilderLibrary({ shell }: BuilderLibraryProps) {
         <button type="button" className="bld-link" data-testid="builder-search-clear"
           onClick={() => shell.setFilter({ search: "", folder: "", tag: "" })}>Clear</button>
       </div>
-      <div className="bld-facets">
-        {shell.facets.folders.map(([folder, count]) => (
-          <button key={folder} type="button" className="bld-chip" data-testid="builder-facet-folder"
-            aria-pressed={shell.filter.folder === folder}
-            onClick={() => shell.setFilter({ folder: shell.filter.folder === folder ? "" : folder })}>
-            {folder} <span className="bld-chip-n">{count}</span>
-          </button>
-        ))}
-      </div>
+      <FolderFacets shell={shell} />
       <ul className="bld-list">
-        {shell.visible.map((icon) => <IconRow key={icon.id} icon={icon} />)}
+        {shell.visible.map((icon) => (
+          <IconRow key={icon.id} icon={icon} locked={lockedOf(shell, icon)} onLock={() => shell.toggleLock(icon.id)} />
+        ))}
       </ul>
       {shell.visible.length === 0 && (
         <p className="bld-note" data-testid="builder-no-match">
@@ -45,13 +40,38 @@ export default function BuilderLibrary({ shell }: BuilderLibraryProps) {
   );
 }
 
-/** One icon: its name, its folder, and where its tags came from. */
-function IconRow({ icon }: { icon: BuilderIcon }) {
+/** The folder chips: the rail's own facet, toggled one at a time. */
+function FolderFacets({ shell }: { shell: BuilderShell }) {
   return (
-    <li className="bld-row" data-testid="builder-icon" data-icon-id={icon.id} title={tooltip(icon)}>
+    <div className="bld-facets">
+      {shell.facets.folders.map(([folder, count]) => (
+        <button key={folder} type="button" className="bld-chip" data-testid="builder-facet-folder"
+          aria-pressed={shell.filter.folder === folder}
+          onClick={() => shell.setFilter({ folder: shell.filter.folder === folder ? "" : folder })}>
+          {folder} <span className="bld-chip-n">{count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Whether this icon is pinned to the sheet right now. */
+function lockedOf(shell: BuilderShell, icon: BuilderIcon): boolean {
+  return shell.lockedIds.includes(icon.id);
+}
+
+/** One icon: its name, its folder, where its tags came from, and its lock. */
+function IconRow({ icon, locked, onLock }: { icon: BuilderIcon; locked: boolean; onLock: () => void }) {
+  return (
+    <li className="bld-row" data-testid="builder-icon" data-icon-id={icon.id} data-locked={locked ? "true" : "false"}
+      title={tooltip(icon)}>
       <span className="bld-row-name" data-testid="builder-icon-name">{icon.name}</span>
       <span className="bld-row-folder">{icon.folder === "" ? "root" : icon.folder}</span>
       {icon.tagSource !== "metadata" && <span className="bld-row-tags">filename tags</span>}
+      <button type="button" className="bld-lock" data-testid="builder-icon-lock" aria-pressed={locked}
+        aria-label={locked ? `Unlock ${icon.name}` : `Lock ${icon.name} to the sheet`}
+        title={locked ? "Pinned to the sheet — unlock to let the recipe move it" : "Pin to the sheet"}
+        onClick={onLock}>{locked ? "🔒" : "🔓"}</button>
     </li>
   );
 }

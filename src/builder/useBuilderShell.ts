@@ -26,6 +26,7 @@ import { DEFAULT_BUILDER_CONFIG } from "../lib/builder/defaults";
 import { selectSlots, freshSeed, type SelectionResult } from "../lib/builder/select";
 import { applyBuilderSelection, applyBuilderSeed } from "../state/apply";
 import { useAppState } from "../state/useAppState";
+import { getAppState } from "../state/appstore";
 import { applyBuilderConfig } from "../state/apply";
 import type { SheetMetaArgs } from "../lib/builder/metarequest";
 import type { BuilderArt } from "./useBuilderArt";
@@ -64,6 +65,10 @@ export interface BuilderShell {
   reroll: () => void;
   /** Empties every cell, keeping the design and the locks' claim. */
   clear: () => void;
+  /** Pins an icon to its cell across re-rolls, or releases it again. */
+  toggleLock: (iconId: string) => void;
+  /** The ids the sheet is keeping whatever the recipe says. */
+  lockedIds: readonly string[];
   chooseRoot: () => void;
   rescan: () => void;
   say: (message: string) => void;
@@ -164,6 +169,8 @@ function sheetHalf(s: SheetSelection) {
     setSeed: s.setSeed,
     reroll: s.reroll,
     clear: s.clear,
+    toggleLock: s.toggleLock,
+    lockedIds: s.locked,
   };
 }
 
@@ -193,10 +200,13 @@ interface SheetSelection {
   seed: number;
   result: SelectionResult | null;
   slots: (string | null)[];
+  /** The ids the sheet keeps whatever the recipe says. */
+  locked: readonly string[];
   setRecipe: (patch: Partial<SessionBuilderRecipe>) => void;
   setSeed: (seed: number) => void;
   reroll: () => void;
   clear: () => void;
+  toggleLock: (iconId: string) => void;
 }
 
 /**
@@ -222,7 +232,15 @@ function useSheetSelection(icons: readonly BuilderIcon[], config: BuilderConfig,
   const setSeed = useCallback((seed: number) => { setCleared(false); applyBuilderSeed({ seed }); }, []);
   const reroll = useCallback(() => { setCleared(false); applyBuilderSeed({ seed: freshSeed(Date.now()) }); }, []);
   const clear = useCallback(() => { setCleared(true); applyBuilderSelection({ slots: [], locked: [] }); }, []);
-  return { recipe: session.recipe, seed: session.seed, result, slots: result.slots, setRecipe, setSeed, reroll, clear };
+  // A lock is the user's own claim on a cell: it survives a re-roll and a recipe
+  // change, and it is honoured in every placement path (select.ts). Dropping a lock
+  // on an icon that is no longer in the library is allowed — it is simply gone.
+  const toggleLock = useCallback((iconId: string) => {
+    const current = getAppState().builder.locked;
+    const next = current.includes(iconId) ? current.filter((id) => id !== iconId) : [...current, iconId];
+    applyBuilderSelection({ locked: next });
+  }, []);
+  return { recipe: session.recipe, seed: session.seed, result, slots: result.slots, locked: session.locked, setRecipe, setSeed, reroll, clear, toggleLock };
 }
 
 /** The session slice + the pool → the engine's request. */

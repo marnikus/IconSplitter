@@ -2390,3 +2390,10 @@
 [data-testid="builder-meta-state"][data-state="invalid"] { color: #d08a7a; }
 [data-testid="builder-meta-outcome"][data-outcome="failed"] { color: #d08a7a; }
 [data-testid="builder-meta-tags"] { font-style: italic; opacity: 0.85; }
+
+/* ── the rail's lock and the saved-sheet list (P4 closure) ────────────────── */
+
+.bld-lock { background: none; border: 0; cursor: pointer; padding: 0 2px; font-size: 11px; opacity: 0.55; }
+.bld-lock:hover, .bld-lock[aria-pressed="true"] { opacity: 1; }
+.bld-row[data-locked="true"] { background: rgba(255, 255, 255, 0.06); }
+[data-testid="builder-preset"][data-current="true"] .bld-row-name { color: #7fc08a; }

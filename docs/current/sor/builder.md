@@ -99,6 +99,10 @@ absence is said out loud, never shown as a dead control.
   imported (Q2); provider config and API key are the *same* stored ones upload uses.
 * **Nothing is cut in half.** Over 60 000 characters the source is replaced by a
   structural digest, and the dialog states which mode is sent.
+* **A lock is the user's claim on a cell** and is honoured in every placement path;
+  a lock on an icon that left the library is dropped, never silently re-pointed at a
+  different icon. A preset carries the design, the locks and the seed, so applying it
+  brings back the same sheet; a slot whose icon is gone becomes a hole in place.
 * **A record binds to a sheet's content**, not to its formatting: `sheetMetaFingerprint`
   hashes the grid, the banner words and the ordered icons, so re-serializing the same
   sheet never marks a record stale. A record that no longer matches is shown as stale,

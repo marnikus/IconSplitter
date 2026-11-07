@@ -409,3 +409,61 @@ describe("SVG builder — sheet metadata (P6)", () => {
     expect(q("builder-meta-empty")).not.toBeNull();
   });
 });
+
+describe("SVG builder — locks and saved sheets (DoD closure)", () => {
+  it("an icon can be pinned, and the rail says which ones are", async () => {
+    const root = libraryRoot();
+    await mount(root);
+    await pick();
+    const locks = qa("builder-icon-lock");
+    expect(locks.length).toBeGreaterThan(0);
+    expect(locks[0].getAttribute("aria-pressed")).toBe("false");
+    await click(locks[0]);
+    const id = locks[0].closest("[data-icon-id]")?.getAttribute("data-icon-id") ?? "";
+    const after = qa("builder-icon").find((row) => row.getAttribute("data-icon-id") === id);
+    expect(after?.getAttribute("data-locked")).toBe("true");
+    expect(q("builder-icon-lock")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("unlocking releases the icon again", async () => {
+    await mount(libraryRoot());
+    await pick();
+    await click(qa("builder-icon-lock")[0]);
+    await click(qa("builder-icon-lock").find((b) => b.getAttribute("aria-pressed") === "true") as HTMLElement);
+    expect(qa("builder-icon-lock").every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
+  });
+
+  it("lists the shipped sheets and saves one of the user's own", async () => {
+    await mount(libraryRoot());
+    await pick();
+    expect(qa("builder-preset").length).toBeGreaterThanOrEqual(3);
+    expect(q("builder-preset-note")?.textContent).toContain("the same sheet");
+    await setValue("builder-preset-name", "My kitchen sheet");
+    await click(q("builder-preset-save-button"));
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const names = qa("builder-preset-label").map((n) => n.textContent);
+    expect(names).toContain("My kitchen sheet");
+  });
+
+  it("a shipped sheet cannot be deleted, the user's own can", async () => {
+    await mount(libraryRoot());
+    await pick();
+    await setValue("builder-preset-name", "Mine");
+    await click(q("builder-preset-save-button"));
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const mine = qa("builder-preset").find((row) => row.getAttribute("data-preset") === "Mine");
+    expect(mine?.querySelector('[data-testid="builder-preset-delete"]')).not.toBeNull();
+    const shipped = qa("builder-preset").find((row) => row.getAttribute("data-preset") === "Reference sheet");
+    expect(shipped?.querySelector('[data-testid="builder-preset-delete"]')).toBeNull();
+  });
+
+  it("applying a shipped sheet applies its design to the controls", async () => {
+    await mount(libraryRoot());
+    await pick();
+    const dense = qa("builder-preset").find((row) => row.getAttribute("data-preset") === "Dense wall 8 × 6");
+    await click(dense?.querySelector('[data-testid="builder-preset-apply"]') as HTMLElement);
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect((q("builder-columns") as HTMLInputElement).value).toBe("8");
+    expect((q("builder-rows") as HTMLInputElement).value).toBe("6");
+  });
+});

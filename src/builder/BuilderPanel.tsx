@@ -19,6 +19,8 @@ import BuilderExport from "./BuilderExport";
 import { useBuilderExport } from "./useBuilderExport";
 import { useBuilderMeta } from "./useBuilderMeta";
 import BuilderMetaPanel from "./BuilderMetaPanel";
+import BuilderPresets from "./BuilderPresets";
+import { useBuilderPresets } from "./useBuilderPresets";
 import { sheetArgsOf } from "./useBuilderShell";
 import type { SheetMetaResult } from "./metarun";
 import { serializeSheet } from "../lib/builder/serialize";
@@ -28,6 +30,7 @@ import type { BuilderShell } from "./useBuilderShell";
 import type { BuilderExportState } from "./useBuilderExport";
 import type { BuilderMeta } from "./useBuilderMeta";
 import type { SheetMetaArgs } from "../lib/builder/metarequest";
+import type { BuilderPresets as BuilderPresetsState } from "./useBuilderPresets";
 import type { Placement } from "../lib/builder/serialize";
 import type { SheetLayout } from "../lib/builder/layout";
 import { BuilderPickRoot, BuilderUnsupported } from "./BuilderEmpty";
@@ -40,6 +43,7 @@ export default function BuilderPanel({ active = true }: { active?: boolean }) {
   const placements = placementsOf(art, layout);
   const sheetArgs = liveSheetArgs(g, art, layout, placements);
   const { meta, metaLast, setMetaLast, exp } = useSheetWork(g, sheetArgs, { layout, placements });
+  const presets = useBuilderPresets();
   useBusyActivity("builder", g.busy);
   // A reload must not land inside a sheet-metadata request.
   useRunning("builder", false);
@@ -51,7 +55,7 @@ export default function BuilderPanel({ active = true }: { active?: boolean }) {
       <BuilderSourceBar rootName={g.rootName} root={g.root} scope={g.scope} busy={g.busy}
         onChooseRoot={g.chooseRoot} onRescan={g.rescan} />
       {g.root === null ? <BuilderPickRoot onPick={g.chooseRoot} /> : (
-        <WorkArea shell={g} art={art} exp={exp} meta={meta} metaLast={metaLast}
+        <WorkArea shell={g} art={art} exp={exp} meta={meta} metaLast={metaLast} presets={presets}
           sheetArgs={sheetArgs} onMetaGenerate={() => { void meta.generate(sheetArgs).then(setMetaLast); }} />
       )}
       {g.toast !== null && <p className="bld-note" data-testid="builder-toast" role="status">{g.toast}</p>}
@@ -60,10 +64,8 @@ export default function BuilderPanel({ active = true }: { active?: boolean }) {
 }
 
 /** The working screen once a folder is picked: controls and rail left, sheet right. */
-function WorkArea({ shell, art, exp, meta, metaLast, sheetArgs, onMetaGenerate }: {
-  shell: BuilderShell; art: BuilderArt; exp: BuilderExportState; meta: BuilderMeta;
-  metaLast: SheetMetaResult | null; sheetArgs: SheetMetaArgs; onMetaGenerate: () => void;
-}) {
+function WorkArea(p: WorkAreaProps) {
+  const { shell, art, exp, meta, metaLast, sheetArgs, onMetaGenerate } = p;
   return (
     <div className="bld-work">
       <div className="bld-side">
@@ -74,6 +76,14 @@ function WorkArea({ shell, art, exp, meta, metaLast, sheetArgs, onMetaGenerate }
         <BuilderExport config={shell.config} busy={exp.busy} last={exp.last} canCommit={shell.root !== null}
           scale={exp.scale} onScale={exp.setScale} onDownloadSvg={exp.downloadSvg}
           onDownloadPng={exp.downloadPng} onDownloadZip={() => void exp.downloadZip()} onCommit={() => void exp.commit()} />
+        <BuilderPresets builtin={p.presets.builtin} user={p.presets.user} name={p.presets.name}
+          onName={p.presets.setName} current={p.presets.current} config={shell.config}
+          onSave={() => p.presets.save({
+            config: shell.config,
+            selection: { slots: [...(shell.selection?.slots ?? [])], locked: [...shell.lockedIds], seed: shell.seed },
+          })}
+          onApply={(preset) => p.presets.apply(preset, shell.icons.map((icon) => icon.id))}
+          onDelete={p.presets.remove} />
         <BuilderMetaPanel meta={meta} sheetArgs={sheetArgs} iconCount={art.slots.filter((s) => s !== null).length}
           last={metaLast} onGenerate={onMetaGenerate} />
         <BuilderLibrary shell={shell} />
@@ -112,6 +122,13 @@ function useSheetWork(g: BuilderShell, sheetArgs: SheetMetaArgs, sheet: { layout
     seed: g.seed, slots: g.selection?.slots ?? [], locked: [],
   });
   return { meta, metaLast, setMetaLast, exp };
+}
+
+/** Everything the work area renders: the shell, the artwork, and the two exits. */
+interface WorkAreaProps {
+  shell: BuilderShell; art: BuilderArt; exp: BuilderExportState; meta: BuilderMeta;
+  metaLast: SheetMetaResult | null; sheetArgs: SheetMetaArgs;
+  presets: BuilderPresetsState; onMetaGenerate: () => void;
 }
 
 /** The sheet as the provider request sees it: the SAME serializer the export uses,
