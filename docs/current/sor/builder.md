@@ -9,15 +9,16 @@ Handles: [selectors/builder](../selectors/builder.md). Storage keys:
 
 ## Status
 
-**Shell + library (P0/P1, 2026-11-07).** The tab is registered, persists its session
-slice, and reads the picked folder into an approved-icon rail. The artboard, controls,
+**Shell + library + artboard (P0–P2, 2026-11-07).** The tab is registered, persists
+its session slice, reads the picked folder into an approved-icon rail, and draws the
+sheet from that library. The artboard, controls,
 recipes, export and sheet metadata land in the phases below; until each lands, its
 absence is said out loud, never shown as a dead control.
 
 | Lands in | Surface |
 |---|---|
 | ~~P1~~ done | folder scan (approved icons), library rail, exclusions + audit |
-| P2 | layout math and the live artboard |
+| ~~P2~~ done | layout math and the live artboard |
 | P3 | controls, presets, undo, persistence |
 | P4 | selection recipes, locks, user presets |
 | P5 | serializer, PNG, ZIP, `builder/` commit |
@@ -50,6 +51,21 @@ absence is said out loud, never shown as a dead control.
   a junk slot becomes a hole **in place** (cell position is the sheet's meaning), locks
   keep only ids that are placed, the seed is a positive integer, the recipe falls back
   per field (`lib/session`).
+
+* **The artboard (P2)** — `lib/builder/layout.computeLayout` is pure arithmetic: the
+  banner owns one side and the content rect is exactly the rest, the grid is fitted
+  into the padded content and **centred**, the fit is 1 exactly when it fits, and a grid
+  that cannot fit shrinks and says `overflow: true` with the percentage it had to use.
+  Cell index is a position in the sheet, never a slot in a list. The screen scales the
+  canvas for the viewport only — its own pixel size is the exported size, so what is
+  drawn is what will be written.
+* **What a cell may draw** — `lib/builder/place`: one root `<svg>`, no prolog, and the
+  app's blocklist applied (scripts, event handlers and remote references are removed;
+  `foreignObject` and a nested `<svg>` are refused with a reason). A refused icon shows
+  the reason in its cell instead of an empty square that looks deliberate.
+* **Placement in P2** is honest scaffolding: the first `capacity` icons fill the cells in
+  scan order, artwork is read at most 4 at a time and sanitised once per icon, and a
+  still-unread cell says so. P4 replaces only the slot source with the recipe engine.
 
 ## Contracts this tab will keep (from the design)
 

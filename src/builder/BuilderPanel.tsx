@@ -11,11 +11,14 @@ import { useBusyActivity } from "../ui/useBusyActivity";
 import { useRunning } from "../ui/rebuildwatch";
 import BuilderSourceBar from "./BuilderSourceBar";
 import BuilderLibrary from "./BuilderLibrary";
+import BuilderArtboard from "./BuilderArtboard";
+import { useBuilderArt } from "./useBuilderArt";
 import { BuilderPickRoot, BuilderUnsupported } from "./BuilderEmpty";
 import { useBuilderShell } from "./useBuilderShell";
 
 export default function BuilderPanel({ active = true }: { active?: boolean }) {
   const g = useBuilderShell();
+  const art = useBuilderArt(g.root, g.icons, g.config);
   useBusyActivity("builder", g.busy);
   // A reload must not land inside a sheet-metadata request.
   useRunning("builder", false);
@@ -28,7 +31,10 @@ export default function BuilderPanel({ active = true }: { active?: boolean }) {
         onChooseRoot={g.chooseRoot} onRescan={g.rescan} />
       {g.root === null
         ? <BuilderPickRoot onPick={g.chooseRoot} />
-        : <BuilderLibrary shell={g} />}
+        : <div className="bld-work">
+          <BuilderLibrary shell={g} />
+          <BuilderArtboard config={g.config} slots={art.slots} placed={art.placed} zoom={art.zoom} />
+        </div>}
       {g.toast !== null && (
         <p className="bld-note" data-testid="builder-toast" role="status">{g.toast}</p>
       )}

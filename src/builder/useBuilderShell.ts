@@ -19,6 +19,7 @@ import {
 import { pickFolderFor } from "../ui/pickroot";
 import { bootRoot, rememberRoot, BUILDER_HANDLE_KEY } from "./store";
 import { discoverBuilderIcons, type BuilderLibrary, type BuilderScope } from "./scan";
+import { DEFAULT_BUILDER_CONFIG, DENSE_BUILDER_CONFIG, withGrid, type BuilderConfig } from "../lib/builder/defaults";
 
 export type { BuilderScope };
 
@@ -40,6 +41,10 @@ export interface BuilderShell {
   /** Non-null while a scan runs (its own words are the button's label). */
   busy: string | null;
   toast: string | null;
+  /** The sheet design the artboard draws (P3 makes every field editable). */
+  config: BuilderConfig;
+  /** P3 replaces this with the approved config writer; the artboard only reads. */
+  setConfig: (next: BuilderConfig) => void;
   chooseRoot: () => void;
   rescan: () => void;
   say: (message: string) => void;
@@ -56,6 +61,7 @@ export function useBuilderShell(): BuilderShell {
   const [filter, setFilter] = useFilterState();
   const icons = library.lib?.icons ?? [];
   const derived = useDerived(icons, filter);
+  const [config, setConfig] = useSheetConfig();
   return {
     supported: fsSupported(),
     rootName: source.root?.name ?? "",
@@ -68,6 +74,8 @@ export function useBuilderShell(): BuilderShell {
     setFilter,
     busy: library.busy,
     toast,
+    config,
+    setConfig,
     chooseRoot: source.chooseRoot,
     rescan: source.rescan,
     say,
@@ -131,6 +139,14 @@ function useRootBinding(
   }, [seq, take, scan]);
   return { root, chooseRoot, rescan };
 }
+
+/** The sheet design: the default until P3 lets it be edited and persisted. */
+function useSheetConfig(): [BuilderConfig, (next: BuilderConfig) => void] {
+  const [config, setConfig] = useState<BuilderConfig>(DEFAULT_BUILDER_CONFIG);
+  return [config, setConfig];
+}
+
+export { DENSE_BUILDER_CONFIG, withGrid };
 
 /** The rail's filter: one object, patched field by field. */
 function useFilterState(): [BuilderFilter, (patch: Partial<BuilderFilter>) => void] {

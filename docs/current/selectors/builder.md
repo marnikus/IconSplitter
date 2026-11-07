@@ -39,6 +39,24 @@ The library rail (P1):
 | `builder-icon-name` | row text | the pair's own name, separators opened up |
 | `builder-no-match` | note | a filter matched nothing (never an empty rail pretending to be the library) |
 
+The artboard (P2):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `builder-artboard` | `<section aria-label="Sheet preview">` | the sheet's own `<svg>` canvas, scaled for the screen only |
+| `builder-artboard-size` | text | `1000 × 800` — the artboard's real pixel size |
+| `builder-zoom` | text | the on-screen scale, e.g. `76%` |
+| `builder-capacity` | text | `n / capacity used` |
+| `builder-canvas` | `<svg>` | one viewBox at the artboard size; the export writes the same geometry |
+| `builder-paper` | `<rect>` | the sheet background (transparent export differs here) |
+| `builder-banner` | `<g>` | present only when a banner position is set |
+| `builder-cell` | `<g>`, one per grid position | `data-cell` = index, `data-icon-id` = placed icon or `""` for a hole |
+| `builder-cell-icon` | `<g>` | the sanitised artwork, positioned by the layout |
+| `builder-cell-caption` | `<text>` | the icon's own name, honouring `captions`/`captionCase` |
+| `builder-cell-refused` | `<g>` + `data-refusal` | the icon exists but cannot be drawn; the kind says why |
+| `builder-cell-loading` | `<text>` | the artwork is still being read (`…`) |
+| `builder-overflow` | `role="status"` note | the grid had to shrink; it states the percentage |
+
 Later phases add `builder-recipe-*`, `builder-recipe-*`, `builder-stage`,
 `builder-artboard`, `builder-cell-{n}`, `builder-<section>-*` controls, `builder-export-*`
 and `builder-meta-*`; each is added here in the same change that introduces it (RULE 17).

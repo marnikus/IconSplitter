@@ -7,7 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { serializePairMeta } from "../src/lib/pairmeta";
+import type { ReactElement } from "react";
 import BuilderPanel from "../src/builder/BuilderPanel";
+import BuilderArtboard from "../src/builder/BuilderArtboard";
+import { DENSE_BUILDER_CONFIG } from "../src/lib/builder/defaults";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion, type VerOpts } from "./helpers/svgpair";
@@ -17,6 +20,9 @@ import { svgVersion, type VerOpts } from "./helpers/svgpair";
 type PickerWindow = { showDirectoryPicker?: () => Promise<unknown> };
 
 const approved = (o: VerOpts = {}) => ({ review: "approved" as const, ...o });
+
+/** Real approved artwork: one path with its own box, so a cell can draw it. */
+const ART = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>`;
 
 /** One pair folder with its sidecar and the named SVG files. */
 function pairDir(root: FakeDir, dir: string, aiName: string, files: Record<string, string>, sidecar: string): void {
@@ -44,13 +50,13 @@ function seedSidecar(dir: string, aiName: string, versions: Parameters<typeof sv
 /** Three approved icons in two folders, one pending pair. */
 function libraryRoot(): FakeDir {
   const root = new FakeDir("icon_library");
-  pairDir(root, "weather", "fog_AI.png", { "fog_AI.svg": "<svg/>" },
+  pairDir(root, "weather", "fog_AI.png", { "fog_AI.svg": ART },
     seedSidecar("weather", "fog_AI.png", [approved({ version: 1 })]));
-  pairDir(root, "weather", "rain_AI.png", { "rain_AI.svg": "<svg/>" },
+  pairDir(root, "weather", "rain_AI.png", { "rain_AI.svg": ART },
     seedSidecar("weather", "rain_AI.png", [approved({ version: 1 })]));
-  pairDir(root, "kitchen", "pot_AI.png", { "pot_AI.svg": "<svg/>" },
+  pairDir(root, "kitchen", "pot_AI.png", { "pot_AI.svg": ART },
     seedSidecar("kitchen", "pot_AI.png", [approved({ version: 1 })]));
-  pairDir(root, "drafts", "swirl_AI.png", { "swirl_AI.svg": "<svg/>" },
+  pairDir(root, "drafts", "swirl_AI.png", { "swirl_AI.svg": ART },
     seedSidecar("drafts", "swirl_AI.png", [{ review: "pending", version: 1 }]));
   return root;
 }
@@ -60,10 +66,15 @@ let root: Root;
 
 async function mount(dir?: FakeDir): Promise<HTMLDivElement> {
   if (dir) (window as unknown as PickerWindow).showDirectoryPicker = async () => dir as unknown;
+  return mountNode(<BuilderPanel />);
+}
+
+/** Renders any node (a component's own contract, not the whole panel). */
+async function mountNode(node: ReactElement): Promise<HTMLDivElement> {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  await act(async () => { root.render(<BuilderPanel />); });
+  await act(async () => { root.render(node); });
   return host;
 }
 
@@ -144,7 +155,7 @@ describe("SVG builder — the library rail", () => {
 
   it("an empty approved library says so, with the reason, instead of an empty rail", async () => {
     const bare = new FakeDir("icon_library");
-    pairDir(bare, "drafts", "swirl_AI.png", { "swirl_AI.svg": "<svg/>" },
+    pairDir(bare, "drafts", "swirl_AI.png", { "swirl_AI.svg": ART },
       seedSidecar("drafts", "swirl_AI.png", [{ review: "pending", version: 1 }]));
     await mount(bare);
     await pick();
@@ -156,5 +167,46 @@ describe("SVG builder — the library rail", () => {
     await mount();
     expect(q("builder-panel")).toBeNull();
     expect(q("builder-unsupported")).not.toBeNull();
+  });
+});
+
+describe("SVG builder — the artboard (P2)", () => {
+  it("draws one cell per grid position, with the caption under each icon", async () => {
+    await mount(libraryRoot());
+    await pick();
+    // P2 default sheet: 4 × 3 cells, captions on, the first approved icons placed.
+    expect(qa("builder-cell")).toHaveLength(12);
+    expect(q("builder-artboard")).not.toBeNull();
+    const caption = qa("builder-cell-caption")[0]?.textContent ?? "";
+    expect(caption).not.toBe("");
+  });
+
+  it("shows the artwork it was given, not a placeholder", async () => {
+    await mount(libraryRoot());
+    await pick();
+    const drawn = qa("builder-cell-icon");
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn[0].innerHTML).toContain("path");
+    expect(q("builder-cell-refused")).toBeNull(); // the fixture artwork is drawable
+  });
+
+  it("empty cells are holes that say so, never a silent blank", async () => {
+    await mount(libraryRoot()); // 3 approved icons, 12 cells
+    await pick();
+    expect(qa("builder-cell").length - qa("builder-cell-icon").length).toBe(9);
+    expect(q("builder-overflow")).toBeNull(); // it fits: no warning
+  });
+
+  it("says out loud when the grid has to shrink to fit", async () => {
+    // 16 × 16 of 120px boxes cannot fit a 1000 × 800 sheet: the artboard must say so.
+    await mountNode(<BuilderArtboard config={DENSE_BUILDER_CONFIG} slots={[]} placed={new Map()} zoom={0.5} />);
+    expect(q("builder-overflow")?.textContent ?? "").toMatch(/shrink|fit/i);
+    expect(q("builder-canvas")).not.toBeNull();
+  });
+
+  it("reports the artboard's size in the open", async () => {
+    await mount(libraryRoot());
+    await pick();
+    expect(q("builder-artboard-size")?.textContent).toContain("1000 × 800");
   });
 });
