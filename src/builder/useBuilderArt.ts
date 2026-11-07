@@ -17,9 +17,19 @@ import { computeLayout, type LayoutConfig } from "../lib/builder/layout";
 /** Four reads at a time: the rail can hold hundreds of icons, disks do not like bursts. */
 const READS = 4;
 
-/** The first `capacity` icons, in the scan's order; the rest are holes. */
+/**
+ * Placeholder slots used before the first selection runs (and by tests): the first
+ * `capacity` icons in scan order. The recipe engine in the shell is what really
+ * decides a sheet — this is only what an unselected sheet shows.
+ */
 export function slotsOf(icons: readonly BuilderIcon[], capacity: number): (BuilderIcon | null)[] {
   return Array.from({ length: capacity }, (_, index) => icons[index] ?? null);
+}
+
+/** Cell-order ids → the icons they name (an unknown id is an honest hole). */
+export function resolveSlots(chosen: readonly (string | null)[], icons: readonly BuilderIcon[]): (BuilderIcon | null)[] {
+  const byId = new Map(icons.map((icon) => [icon.id, icon]));
+  return chosen.map((id) => (id === null ? null : byId.get(id) ?? null));
 }
 
 /** How big the sheet may be on screen before it is scaled down to fit. */
@@ -33,10 +43,20 @@ export interface BuilderArt {
   zoom: number;
 }
 
-/** The sheet's cells and the sanitised artwork for them. */
-export function useBuilderArt(root: DirHandleLike | null, icons: readonly BuilderIcon[], config: LayoutConfig): BuilderArt {
+/**
+ * The sheet's cells and the sanitised artwork for them. `chosen` is the selection
+ * engine's answer (icon ids per cell, null = hole); when it is empty the sheet
+ * shows the first icons in scan order so an unselected sheet is still real.
+ */
+export function useBuilderArt(
+  root: DirHandleLike | null, icons: readonly BuilderIcon[], config: LayoutConfig,
+  chosen?: readonly (string | null)[],
+): BuilderArt {
   const capacity = useMemo(() => computeLayout(config).capacity, [config]);
-  const slots = useMemo(() => slotsOf(icons, capacity), [icons, capacity]);
+  const slots = useMemo(
+    () => (chosen === undefined || chosen.length === 0 ? slotsOf(icons, capacity) : resolveSlots(chosen, icons)),
+    [chosen, icons, capacity],
+  );
   const [placed, setPlaced] = useState<Map<string, PlaceResult>>(new Map());
   // The key is the SET of ids still to read, not the map: a commit that only repeats
   // what is already placed would otherwise re-run the effect forever.

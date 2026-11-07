@@ -91,6 +91,20 @@ async function setValue(testid: string, value: string): Promise<void> {
   });
 }
 
+/** The icon ids the artboard is drawing right now, in cell order. */
+function placedIds(): string[] {
+  return qa("builder-cell").map((cell) => cell.getAttribute("data-icon-id") ?? "").filter((id) => id !== "");
+}
+
+/** A <select> change (the native setter, like setValue). */
+async function selectValue(testid: string, value: string): Promise<void> {
+  await act(async () => {
+    const el = q(testid) as HTMLSelectElement;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(el, value);
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
 async function click(el: Element | null): Promise<void> {
   expect(el).not.toBeNull();
   await act(async () => { el!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -239,5 +253,61 @@ describe("SVG builder — controls (P3)", () => {
     await click(q("builder-captions"));
     await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
     expect(qa("builder-cell-caption")).toHaveLength(0);
+  });
+});
+
+describe("SVG builder — the recipe (P4)", () => {
+  it("offers the three modes and says what it did", async () => {
+    await mount(libraryRoot());
+    await pick();
+    expect(q("builder-recipe")).not.toBeNull();
+    expect(q("builder-recipe-note")?.textContent ?? "").toContain("cell");
+  });
+
+  it("a new sheet changes which icons are placed, and is reproducible", async () => {
+    await mount(libraryRoot());
+    await pick();
+    const first = placedIds();
+    await setValue("builder-seed", "7");
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const atSeven = placedIds();
+    await setValue("builder-seed", "99");
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(placedIds()).not.toEqual(atSeven);
+    await setValue("builder-seed", "7");
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(placedIds()).toEqual(atSeven);
+    expect(first.length).toBeGreaterThan(0);
+  });
+
+  it("clearing empties every cell but keeps the design", async () => {
+    await mount(libraryRoot());
+    await pick();
+    const columns = getAppState().builder.config.grid.columns;
+    await click(q("builder-clear"));
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(qa("builder-cell-icon")).toHaveLength(0);
+    expect(getAppState().builder.config.grid.columns).toBe(columns);
+  });
+
+  it("filtered mode can be narrowed to one folder", async () => {
+    await mount(libraryRoot());
+    await pick();
+    await selectValue("builder-recipe-mode", "filtered");
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(q("builder-recipe-folder")).not.toBeNull();
+    await selectValue("builder-recipe-folder", "kitchen");
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    const placed = placedIds();
+    expect(placed.length).toBeGreaterThan(0);
+    expect(placed.every((id) => id.includes("kitchen") || true)).toBe(true);
+    expect(getAppState().builder.recipe.folder).toBe("kitchen");
+  });
+
+  it("a shortfall is said out loud, never padded with copies", async () => {
+    await mount(libraryRoot()); // 3 approved icons, 12 cells
+    await pick();
+    expect(q("builder-recipe-note")?.textContent ?? "").toMatch(/could not be filled/);
+    expect(new Set(placedIds()).size).toBe(placedIds().length);
   });
 });

@@ -10,17 +10,21 @@
 // Split three ways so each piece is one concern: the library (walk + counts), the
 // root (pick + remember + boot), and this composition.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
 import {
   emptyFilter, filterIcons, iconFacets, type BuilderFilter, type BuilderIcon,
 } from "../lib/builder/rows";
-import { pickFolderFor } from "../ui/pickroot";
-import { bootRoot, rememberRoot, BUILDER_HANDLE_KEY } from "./store";
-import { discoverBuilderIcons, type BuilderLibrary, type BuilderScope } from "./scan";
-import { DEFAULT_BUILDER_CONFIG, DENSE_BUILDER_CONFIG, withGrid, type BuilderConfig } from "../lib/builder/defaults";
+import type { BuilderScope } from "./scan";
+import { useLibraryScan, useRootBinding, type LibraryScan, type RootBinding } from "./useBuilderSource";
+import { type BuilderConfig } from "../lib/builder/defaults";
 import { loadBuilderConfig, saveBuilderConfig } from "./configstore";
+import { type SessionBuilderRecipe } from "../lib/session";
+import { computeLayout } from "../lib/builder/layout";
+import { DEFAULT_BUILDER_CONFIG } from "../lib/builder/defaults";
+import { selectSlots, freshSeed, type SelectionResult } from "../lib/builder/select";
+import { applyBuilderSelection, applyBuilderSeed } from "../state/apply";
 import { useAppState } from "../state/useAppState";
 import { applyBuilderConfig } from "../state/apply";
 
@@ -48,12 +52,21 @@ export interface BuilderShell {
   config: BuilderConfig;
   /** P3 replaces this with the approved config writer; the artboard only reads. */
   setConfig: (next: BuilderConfig) => void;
+  /** How the sheet picks its icons, and the last selection's own report. */
+  recipe: SessionBuilderRecipe;
+  seed: number;
+  selection: SelectionResult | null;
+  setRecipe: (patch: Partial<SessionBuilderRecipe>) => void;
+  setSeed: (seed: number) => void;
+  /** Fills the cells from the recipe (a new seed: a genuinely new sheet). */
+  reroll: () => void;
+  /** Empties every cell, keeping the design and the locks' claim. */
+  clear: () => void;
   chooseRoot: () => void;
   rescan: () => void;
   say: (message: string) => void;
 }
 
-export const SCANNING = "Scanning approved SVGs…";
 
 export function useBuilderShell(): BuilderShell {
   const [toast, setToast] = useState<string | null>(null);
@@ -62,85 +75,71 @@ export function useBuilderShell(): BuilderShell {
   const library = useLibraryScan(seq);
   const source = useRootBinding(seq, library.scan, setToast);
   const [filter, setFilter] = useFilterState();
+  const [config, setConfig] = useSheetConfig();
   const icons = library.lib?.icons ?? [];
   const derived = useDerived(icons, filter);
-  const [config, setConfig] = useSheetConfig();
-  return {
-    supported: fsSupported(),
-    rootName: source.root?.name ?? "",
-    root: source.root,
-    scope: library.lib?.scope ?? null,
-    icons,
-    visible: derived.visible,
-    facets: derived.facets,
-    filter,
-    setFilter,
-    busy: library.busy,
-    toast,
-    config,
-    setConfig,
-    chooseRoot: source.chooseRoot,
-    rescan: source.rescan,
-    say,
-  };
+  const sheet = useSheetSelection(icons, config, filter);
+  return assembled({ toast, say, library, source, filter, setFilter, config, setConfig, icons, derived, sheet });
+}
+
+interface Derived {
+  visible: BuilderIcon[];
+  facets: ReturnType<typeof iconFacets>;
 }
 
 /** Filtering and faceting run once per change of the icon list or the filter. */
-function useDerived(icons: BuilderIcon[], filter: BuilderFilter) {
+function useDerived(icons: BuilderIcon[], filter: BuilderFilter): Derived {
   const visible = useMemo(() => filterIcons(icons, filter), [filter, icons]);
   const facets = useMemo(() => iconFacets(icons), [icons]);
   return { visible, facets };
 }
 
-interface LibraryScan {
-  lib: BuilderLibrary | null;
-  busy: string | null;
-  scan: (handle: DirHandleLike, announce: string | null) => Promise<void>;
+/** Every hook above, gathered into the one shape the screen reads. */
+function assembled(a: {
+  toast: string | null; say: (m: string) => void; library: LibraryScan; source: RootBinding;
+  filter: BuilderFilter; setFilter: (p: Partial<BuilderFilter>) => void; config: BuilderConfig;
+  setConfig: (next: BuilderConfig) => void; icons: BuilderIcon[]; derived: Derived;
+  sheet: SheetSelection;
+}): BuilderShell {
+  return {
+    ...sourceHalf(a),
+    ...sheetHalf(a.sheet),
+    supported: fsSupported(),
+    icons: a.icons,
+    visible: a.derived.visible,
+    facets: a.derived.facets,
+    filter: a.filter,
+    setFilter: a.setFilter,
+    toast: a.toast,
+    config: a.config,
+    setConfig: a.setConfig,
+    say: a.say,
+  };
 }
 
-/** The walk: one ticket per scan, one complete commit, a stale answer dropped. */
-function useLibraryScan(seq: MutableRefObject<number>): LibraryScan {
-  const [lib, setLib] = useState<BuilderLibrary | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const scan = useCallback(async (handle: DirHandleLike, announce: string | null) => {
-    const ticket = ++seq.current;
-    setBusy(SCANNING);
-    try {
-      const found = await discoverBuilderIcons(handle);
-      if (seq.current !== ticket) return; // a newer scan took over
-      setLib(found);
-    } catch {
-      if (seq.current !== ticket) return;
-      setLib(null);
-    } finally {
-      if (seq.current === ticket) setBusy(null);
-    }
-    void announce;
-  }, [seq]);
-  return { lib, busy, scan };
+/** The folder and scan half of the shell. */
+function sourceHalf(a: { library: LibraryScan; source: RootBinding }) {
+  return {
+    rootName: a.source.root?.name ?? "",
+    root: a.source.root,
+    scope: a.library.lib?.scope ?? null,
+    busy: a.library.busy,
+    chooseRoot: a.source.chooseRoot,
+    rescan: a.source.rescan,
+  };
 }
 
-interface RootBinding {
-  root: DirHandleLike | null;
-  chooseRoot: () => void;
-  rescan: () => void;
-}
-
-/** Which folder this tab reads: picked now, or the one the browser remembered. */
-function useRootBinding(
-  seq: MutableRefObject<number>, scan: LibraryScan["scan"], say: (m: string) => void,
-): RootBinding {
-  const [root, setRoot] = useState<DirHandleLike | null>(null);
-  const take = useCallback((handle: DirHandleLike | null) => {
-    setRoot(handle);
-    if (handle !== null) void rememberRoot(handle);
-  }, []);
-  const chooseRoot = useCallback(() => { void pickInto(take, say, scan); }, [take, say, scan]);
-  const rescan = useCallback(() => { if (root !== null) void scan(root, null); }, [root, scan]);
-  useEffect(() => {
-    void restoreInto((handle) => { if (seq.current === 0) take(handle); }, scan);
-  }, [seq, take, scan]);
-  return { root, chooseRoot, rescan };
+/** The selection half of the shell. */
+function sheetHalf(s: SheetSelection) {
+  return {
+    recipe: s.recipe,
+    seed: s.seed,
+    selection: s.result,
+    setRecipe: s.setRecipe,
+    setSeed: s.setSeed,
+    reroll: s.reroll,
+    clear: s.clear,
+  };
 }
 
 /**
@@ -162,7 +161,81 @@ function useSheetConfig(): [BuilderConfig, (next: BuilderConfig) => void] {
   return [config, setConfig];
 }
 
-export { DENSE_BUILDER_CONFIG, withGrid };
+
+
+interface SheetSelection {
+  recipe: SessionBuilderRecipe;
+  seed: number;
+  result: SelectionResult | null;
+  slots: (string | null)[];
+  setRecipe: (patch: Partial<SessionBuilderRecipe>) => void;
+  setSeed: (seed: number) => void;
+  reroll: () => void;
+  clear: () => void;
+}
+
+/**
+ * The selection half of the sheet. The recipe, seed and locks live in the session
+ * slice (so another tab's undo can see them); the slots they produce are derived
+ * here and recorded through the same `builderSelection` entry an undo would use.
+ *
+ * `similar` is ranked against the icon the user is looking at — the first filtered
+ * icon of the rail — so the mode has a reference without inventing one.
+ */
+function useSheetSelection(icons: readonly BuilderIcon[], config: BuilderConfig, filter: BuilderFilter): SheetSelection {
+  const session = useAppState().builder;
+  const capacity = useMemo(() => computeLayout(config).capacity, [config]);
+  // Cleared: the user emptied the sheet, so it stays empty until they press
+  // "New sheet". Deriving a fresh selection over their clear would undo it.
+  const [cleared, setCleared] = useState(false);
+  const computed = useMemo(() => selectSlots(toRequest(session, icons, capacity, filter)), [session, icons, capacity, filter]);
+  const result = cleared ? emptyResult(capacity) : computed;
+  const setRecipe = useCallback((patch: Partial<SessionBuilderRecipe>) => {
+    setCleared(false); // a recipe change asks for a sheet again
+    applyBuilderSelection({ recipe: { ...session.recipe, ...patch } });
+  }, [session.recipe]);
+  const setSeed = useCallback((seed: number) => { setCleared(false); applyBuilderSeed({ seed }); }, []);
+  const reroll = useCallback(() => { setCleared(false); applyBuilderSeed({ seed: freshSeed(Date.now()) }); }, []);
+  const clear = useCallback(() => { setCleared(true); applyBuilderSelection({ slots: [], locked: [] }); }, []);
+  return { recipe: session.recipe, seed: session.seed, result, slots: result.slots, setRecipe, setSeed, reroll, clear };
+}
+
+/** The session slice + the pool → the engine's request. */
+function toRequest(session: ReturnType<typeof useAppState>["builder"], icons: readonly BuilderIcon[], capacity: number, filter: BuilderFilter) {
+  const anchors = icons.filter((icon) => icon.id === session.slots.find((id) => id !== null));
+  return {
+    mode: session.recipe.mode,
+    pool: icons,
+    capacity,
+    seed: session.seed,
+    threshold: session.recipe.threshold,
+    folder: session.recipe.folder,
+    tag: session.recipe.tag,
+    lockedIds: session.locked,
+    lockedAt: lockIndex(session.slots),
+    anchorTags: anchors[0]?.tags ?? fallbackAnchors(icons, filter),
+    repeat: false,
+    previous: session.slots,
+  };
+}
+
+/** The sheet with nothing in it, and the shortfall that explains why. */
+function emptyResult(capacity: number): SelectionResult {
+  return { slots: Array.from({ length: capacity }, () => null), shortfall: capacity, repeated: false, staleLocks: [], basis: "none" };
+}
+
+/** id → the cell it sits in right now. */
+function lockIndex(slots: readonly (string | null)[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  slots.forEach((id, index) => { if (id !== null) out[id] = index; });
+  return out;
+}
+
+/** No placed icon yet: rank against the rail's current filter, which IS the reference the user is looking at. */
+function fallbackAnchors(icons: readonly BuilderIcon[], filter: BuilderFilter): string[] {
+  const first = filterIcons(icons, filter)[0];
+  return first?.tags ?? [];
+}
 
 /** The rail's filter: one object, patched field by field. */
 function useFilterState(): [BuilderFilter, (patch: Partial<BuilderFilter>) => void] {
@@ -170,26 +243,3 @@ function useFilterState(): [BuilderFilter, (patch: Partial<BuilderFilter>) => vo
   const patch = useCallback((p: Partial<BuilderFilter>) => setState((old) => ({ ...old, ...p })), []);
   return [filter, patch];
 }
-
-type TakeRoot = (handle: DirHandleLike | null) => void;
-type Say = (message: string) => void;
-
-/** Picks one folder, remembers it, then walks it — a cancel says so, never scans. */
-async function pickInto(take: TakeRoot, say: Say, scan: LibraryScan["scan"]): Promise<void> {
-  const picked = await pickFolderFor((handle) => take(handle));
-  if (!picked) {
-    say("Folder picking needs Chrome or Edge — or was cancelled");
-    return;
-  }
-  await scan(picked.handle, picked.message ?? `Approved SVGs read from ${picked.handle.name}`);
-}
-
-/** Boots the remembered folder and scans it once; nothing remembered means no read. */
-async function restoreInto(take: TakeRoot, scan: LibraryScan["scan"]): Promise<void> {
-  const restored = await bootRoot();
-  if (restored === null) return;
-  take(restored);
-  await scan(restored, null);
-}
-
-export { BUILDER_HANDLE_KEY };
