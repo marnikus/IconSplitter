@@ -4975,3 +4975,9 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: scale.rotateZoneAt; new boxtarget.ts (box part under the pointer + cursor) and hitpx.ts (shared sizes) so gesture.ts stays < 300 lines; useEditorInput hover cursor (inline SVG rotate cursor, CSS resize cursors); legend.
 - Measured: 5 new tests (pathedit_rotate_zones, seen failing first); editor suites 123 pass; verify:fast 4043 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Cursor look not checked in a real browser.
+
+## 2026-11-07 — Single sheets: checked sheets, typed merge %, result-grid exclusion, multi-sheet export
+
+- quality:changed PASS; App.tsx legacy 246 → 107 lines; new files all OK (largest: exportActions.ts 91 lines, useSheetsModel.ts 72).
+- tsc PASS, lint 0 errors. New tests: sheetsel (5), sheets_multi_export (7), sheets_list_gestures (4) — all green; sheets_completion_sound green.
+- Full vitest: 4057 passed / 17 failed. All 17 also fail on the clean tree or are Windows-environment (bridge/getty helpers, verify_execution `C:\Program` path, fs_case_collisions, docs read-budget pages not touched here).
