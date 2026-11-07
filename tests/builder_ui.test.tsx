@@ -363,3 +363,49 @@ describe("SVG builder — export (P5)", () => {
     expect(said).toContain(".svg");
   });
 });
+
+describe("SVG builder — sheet metadata (P6)", () => {
+  it("states what will be sent BEFORE anything is sent", async () => {
+    await mount(libraryRoot());
+    await pick();
+    const disclosure = q("builder-meta-disclosure");
+    expect(disclosure).not.toBeNull();
+    expect(disclosure?.getAttribute("data-mode")).toBe("svg");
+    const said = disclosure?.textContent ?? "";
+    expect(said).toContain("SVG source");
+    expect(said).toContain("No image is sent");
+    expect(q("builder-meta-count")?.textContent).toContain("icon");
+  });
+
+  it("says nothing has been sent yet, instead of showing an empty record", async () => {
+    await mount(libraryRoot());
+    await pick();
+    expect(q("builder-meta-empty")?.textContent).toContain("nothing has been sent");
+    expect(q("builder-meta-state")).toBeNull();
+  });
+
+  it("the prompt is upload's default, and says so without pretending it is a picture", async () => {
+    await mount(libraryRoot());
+    await pick();
+    const prompt = (q("builder-prompt") as HTMLTextAreaElement | null)?.value ?? "";
+    expect(prompt).toContain("Study the icon image");
+    expect(q("builder-prompt-honesty")?.textContent).toContain("discloses the sheet's SVG source");
+  });
+
+  it("the provider card is the shared one: same model field, same shared key note", async () => {
+    await mount(libraryRoot());
+    await pick();
+    expect(q("builder-model")).not.toBeNull();
+    expect(q("builder-endpoint")).not.toBeNull();
+    expect(q("builder-provider")?.textContent).toContain("shared with SVG to upload");
+  });
+
+  it("generating without a key explains itself and sends nothing", async () => {
+    await mount(libraryRoot());
+    await pick();
+    await click(q("builder-meta-generate"));
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(q("builder-meta-outcome")?.textContent).toContain("No Gemini API key");
+    expect(q("builder-meta-empty")).not.toBeNull();
+  });
+});

@@ -8,7 +8,7 @@
 // journalled; a restart reports them `interrupted`, never auto-resent.
 
 import {
-  DEFAULT_GEMINI_CONFIG, buildGeminiRequest, isTruncatedFinish, sendGemini,
+  DEFAULT_GEMINI_CONFIG, buildGeminiRequest, isTruncatedFinish,
   type FetchLike, type GeminiConfig, type GeminiFailure, type GeminiUsage,
 } from "../lib/upload/gemini";
 import {
@@ -20,6 +20,9 @@ import { FLATTEN_DEFAULT } from "../lib/upload/settings";
 import { PREVIEW_PX, type PreviewRender } from "../lib/upload/sentpreview";
 import { redact } from "../lib/svgsecret";
 import { createMemoryJournal, type MetadataJournal } from "./journal";
+import { emptyUsage, sendWithPolicy } from "../lib/upload/retrypolicy";
+
+export { emptyUsage, sendWithPolicy };
 
 export { DEFAULT_METADATA_PROMPT };
 
@@ -86,7 +89,10 @@ async function requestMetadata(args: MetadataArgs, apiKey: string, deps: Metadat
   try {
     const image = args.image ?? await (deps.render ?? renderPreviewDataUrl)(args.svgText, PREVIEW_SIZE);
     const request = buildGeminiRequest(args.prompt ?? DEFAULT_METADATA_PROMPT, image);
-    const sent = await sendWithPolicy({ config: args.config ?? DEFAULT_GEMINI_CONFIG, apiKey, request, signal: args.signal, deps });
+    const sent = await sendWithPolicy({
+      config: args.config ?? DEFAULT_GEMINI_CONFIG, apiKey, request, signal: args.signal,
+      fetch: deps.fetch, sleep: deps.sleep,
+    });
     if (sent.outcome === "cancelled") return cancelled(args.rowId);
     if (sent.failure !== null) {
       return failed(args.rowId, redact(sent.failure.message, apiKey), sent.failure, sent.attempts);
@@ -146,50 +152,6 @@ function truncated(rowId: string, finish: string, usage: GeminiUsage, attempts: 
     fingerprint: "", usage, requestId: null, failure: null, attempts,
     detail: `the provider stopped the answer (${finish}) — it is incomplete; ask again`,
   };
-}
-
-interface Sent {
-  outcome: "ok" | "failed" | "cancelled";
-  text: string;
-  usage: GeminiUsage;
-  failure: GeminiFailure | null;
-  attempts: number;
-  finish: string | null;
-}
-
-/**
- * The single attempt plus the retry policy: auto-retry ONLY provider-confirmed
- * failures (rate_limit/provider), honouring Retry-After; everything else
- * (auth, payload, timeout, network, cancel) stops immediately.
- */
-async function sendWithPolicy(args: {
-  config: GeminiConfig; apiKey: string; request: ReturnType<typeof buildGeminiRequest>;
-  signal?: AbortSignal; deps: MetadataDeps;
-}): Promise<Sent> {
-  const sleep = args.deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
-  let attempts = 0;
-  for (let i = 0; i <= args.config.retries; i++) {
-    if (args.signal?.aborted) return { outcome: "cancelled", text: "", usage: emptyUsage(), failure: null, attempts, finish: null };
-    attempts++;
-    const out = await sendGemini({
-      config: args.config, apiKey: args.apiKey, request: args.request,
-      fetch: args.deps.fetch, signal: args.signal,
-    });
-    if (out.ok) return { outcome: "ok", text: out.text, usage: out.usage, failure: null, attempts, finish: out.finish };
-    if (!out.failure.retryable || i === args.config.retries) {
-      return { outcome: "failed", text: "", usage: emptyUsage(), failure: out.failure, attempts, finish: null };
-    }
-    await sleep(out.failure.retryAfterMs ?? backoffMs(i));
-  }
-  return { outcome: "failed", text: "", usage: emptyUsage(), failure: null, attempts, finish: null };
-}
-
-function backoffMs(attempt: number): number {
-  return Math.min(30_000, 500 * 2 ** attempt);
-}
-
-function emptyUsage(): GeminiUsage {
-  return { input: null, output: null, total: null };
 }
 
 function cancelled(rowId: string): MetadataResult {

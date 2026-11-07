@@ -103,6 +103,19 @@ export interface GeminiRequest {
   contents: [{ role: "user"; parts: [{ text: string }, { inlineData: { mimeType: string; data: string } }] }];
 }
 
+/**
+ * The TEXT-ONLY body: the prompt plus a text part. Added for the SVG builder
+ * (2026-11-07, Q1: it discloses the sheet's SVG source, never an image). Additive
+ * on purpose — `GeminiRequest`, `buildGeminiRequest` and the wire shape upload
+ * sends are untouched, and tests/gemini_client.test.ts still pins that shape.
+ */
+export interface GeminiTextRequest {
+  contents: [{ role: "user"; parts: { text: string }[] }];
+}
+
+/** Everything `sendGemini` may be handed: an image request or a text-only one. */
+export type GeminiBody = GeminiRequest | GeminiTextRequest;
+
 /** The multimodal body: prompt text + the icon as a base64 inline image. */
 export function buildGeminiRequest(prompt: string, imageDataUrl: string): GeminiRequest {
   const comma = imageDataUrl.indexOf(",");
@@ -189,7 +202,7 @@ export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 export interface GeminiSendArgs {
   config: GeminiConfig;
   apiKey: string;
-  request: GeminiRequest;
+  request: GeminiBody;
   fetch?: FetchLike;
   signal?: AbortSignal;
 }

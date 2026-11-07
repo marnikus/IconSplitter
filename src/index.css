@@ -2380,3 +2380,13 @@
 .bld-export-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .bld-export-actions .svg-btn { flex: 1 1 auto; font-size: 10.5px; }
 .bld-field-wide { grid-column: 1 / -1; }
+
+/* ── sheet metadata (P6): the prompt, the disclosure, the record ──────────── */
+
+#builder-meta .prompt-window textarea { min-height: 96px; }
+[data-testid="builder-meta-disclosure"] { border-left: 2px solid var(--bld-line); padding-left: 8px; }
+[data-testid="builder-meta-disclosure"][data-mode="digest"] { border-left-color: #c8a24a; }
+[data-testid="builder-meta-state"][data-state="accepted"] { color: #7fc08a; }
+[data-testid="builder-meta-state"][data-state="invalid"] { color: #d08a7a; }
+[data-testid="builder-meta-outcome"][data-outcome="failed"] { color: #d08a7a; }
+[data-testid="builder-meta-tags"] { font-style: italic; opacity: 0.85; }

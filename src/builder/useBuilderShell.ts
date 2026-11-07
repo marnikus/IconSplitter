@@ -27,6 +27,8 @@ import { selectSlots, freshSeed, type SelectionResult } from "../lib/builder/sel
 import { applyBuilderSelection, applyBuilderSeed } from "../state/apply";
 import { useAppState } from "../state/useAppState";
 import { applyBuilderConfig } from "../state/apply";
+import type { SheetMetaArgs } from "../lib/builder/metarequest";
+import type { BuilderArt } from "./useBuilderArt";
 
 export type { BuilderScope };
 
@@ -67,6 +69,29 @@ export interface BuilderShell {
   say: (message: string) => void;
 }
 
+
+/** The sheet as the metadata request sees it (P6) — one shape, built in one place. */
+export function sheetArgsOf(shell: BuilderShell, art: BuilderArt): SheetMetaArgs {
+  const icons = art.slots.flatMap((icon) => {
+    if (icon === null) return [];
+    const placed = art.placed.get(icon.id);
+    // A refused icon is described as "no artwork" rather than left out: the digest
+    // must not claim a cell that carries nothing.
+    const box = placed !== undefined && placed.ok ? placed.box : "";
+    const paths = placed !== undefined && placed.ok ? pathsIn(placed.markup) : 0;
+    return [{ id: icon.id, name: icon.name, viewBox: box, paths, tags: icon.tags ?? [] }];
+  });
+  return {
+    prompt: "", sheetSvg: "",
+    icons, title: shell.config.banner.title, subtitle: shell.config.banner.subtitle,
+    config: { width: shell.config.artboard.width, height: shell.config.artboard.height, columns: shell.config.grid.columns, rows: shell.config.grid.rows },
+  };
+}
+
+/** How many <path> elements the artwork carries (the digest states it). */
+function pathsIn(markup: string): number {
+  return (markup.match(/<path/gi) ?? []).length;
+}
 
 export function useBuilderShell(): BuilderShell {
   const [toast, setToast] = useState<string | null>(null);
