@@ -12,6 +12,7 @@
 // their stock site, so it is checked here instead.
 
 import type { DirHandleLike } from "../lib/fs";
+import { checkRasterSize, type RasterTarget } from "../lib/rastertarget";
 import { commitSheet } from "./commit";
 import { serializeSheet, sheetFileName, type Placement, type SerializeInput } from "../lib/builder/serialize";
 import type { BuilderPreset } from "../lib/builder/preset";
@@ -115,11 +116,10 @@ async function renderPng(
 ): Promise<{ ok: true; name: string; blob: Blob } | { ok: false; reason: string }> {
   const a = request.input.config.artboard;
   const blob = await sheetPngOf(svg, a.width, a.height, request.scale);
-  const size = await pngSizeOf(blob);
-  const want = { width: Math.round(a.width * request.scale), height: Math.round(a.height * request.scale) };
-  if (size.width !== want.width || size.height !== want.height) {
-    return { ok: false, reason: `the PNG came out ${size.width}×${size.height}, expected ${want.width}×${want.height}` };
-  }
+  const target: RasterTarget = { width: Math.round(a.width * request.scale), height: Math.round(a.height * request.scale), background: a.background };
+  // The SAME check upload uses for its JPEGs: decoded size must be the target size.
+  const check = checkRasterSize(await pngSizeOf(blob), target);
+  if (!check.ok) return { ok: false, reason: `the PNG ${check.reason}` };
   const name = `${sheetFileName(request.input.config).replace(/\.svg$/, "")}@${request.scale}x.png`;
   const done = await commitBlob(request.root, name, blob);
   return done.ok ? { ok: true, name: done.name, blob } : { ok: false, reason: done.reason };

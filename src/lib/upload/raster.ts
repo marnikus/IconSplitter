@@ -12,6 +12,7 @@
 import { readJpegDimensions } from "./jpeg";
 import { sha256Hex } from "./hash";
 import { normalizeHex } from "../svgbackground";
+import { checkRasterSize } from "../rastertarget";
 
 export interface RasterTarget {
   width: number;
@@ -53,11 +54,8 @@ export async function rasterizeJpeg(svgText: string, target: RasterTarget, deps:
   } catch (error) {
     return { ok: false, reason: `render failed: ${error instanceof Error ? error.message : "unknown error"}` };
   }
-  const dims = readJpegDimensions(jpeg);
-  if (dims === null || dims.width !== target.width || dims.height !== target.height) {
-    const got = dims === null ? "undecodable" : `${dims.width}x${dims.height}`;
-    return { ok: false, reason: `decoded dimensions ${got} do not match the target ${target.width}x${target.height}` };
-  }
+  const check = checkRasterSize(readJpegDimensions(jpeg), target);
+  if (!check.ok) return { ok: false, reason: check.reason };
   return { ok: true, jpeg, record: await recordOf(jpeg, target) };
 }
 
