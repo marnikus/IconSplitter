@@ -4,7 +4,7 @@ A browser app that detects individual icons in a sprite sheet / icon sheet,
 lets you review, resize and exclude them, and exports the result as PNG files
 (download as ZIP, save to a folder in Chrome/Edge, or copy to clipboard).
 
-It has six modes (tabs across the top):
+It has seven modes (tabs across the top):
 
 * **Single sheets** — the original workflow: upload sheets, review detection,
   export icons.
@@ -35,6 +35,12 @@ It has six modes (tabs across the top):
   with the chosen background and stroke width, conceptual metadata from the model,
   SVGO-optimised SVG, a 15.1 MP JPEG, an optional EPS and a per-icon
   `export.json`. Also Chrome/Edge only.
+* **SVG builder** — composes the already-created, `.svg.json`-approved icons
+  from every folder under the selected root into one editable icon sheet. It has
+  the same top menu and global undo bar, a full-width folder widget, a metadata
+  prompt and the shared Gemini provider card. Only approved assets are used;
+  metadata is generated from one explicit, previewed sheet request. Dark app
+  chrome, light paper artboard, SVG/PNG/clipboard/preset exports. Also Chrome/Edge only.
 * **Upload** — scans strictly `export/` folders with a committed `export.json`
   and lists already-exported stock packages, with zoomed previews, one unified
   general row-badge catalog (including hardcoded `Shutterstock`, `Adobe Stock`,
@@ -308,14 +314,16 @@ IconSplitter/
 ├── src/
 │   ├── main.tsx             # React bootstrap
 │   ├── App.tsx              # Single-sheets UI
-│   ├── ui/Workbench.tsx     # Mode shell — sheets / batch / V2 / SVG / upload tabs
+│   ├── ui/Workbench.tsx     # Seven-mode shell — sheets / batch / V2 / SVG / upload / builder / stock
 │   ├── batch/               # Batch mode (store, process, presets, UI)
 │   ├── selection/           # Shared V2 review engine, comparison, pair IO
 │   ├── selectionv2/         # Selection V2 (list review, bulk bar, zoom)
 │   ├── lib/                 # Pure logic: detect, render, naming, scan, fs,
 │   │                        # statefile, presets, output plan, batchsplit
 │   ├── lib/render.ts        # Cropping / resizing / export logic
-│   └── lib/upload/          # SVG to upload: prepare, bake, stroke expand, EPS converters (epsconv/), export record
+│   ├── lib/upload/          # SVG to upload: prepare, bake, stroke expand, EPS converters (epsconv/), export record
+│   ├── lib/svgBuilder/      # Pure SVG builder domain: config, layout, selection, metadata, composition
+│   └── svgBuilder/          # SVG builder discovery, state, provider bridge and dark UI
 ├── tests/                   # Vitest — real detect/render/batch logic (RULE 8)
 ├── tools/                   # RULE 16 quality gate + verify runner + bridge/ (the Inkscape helper)
 ├── docs/                    # Rules + verification docs (see docs/README.md)

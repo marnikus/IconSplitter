@@ -4980,3 +4980,12 @@ Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
 
 - Scope: `docs/archive/2026-11-07-svg-builder-integration/PLAN.md` — reference/app research, screenshot checklist, architecture, interfaces, ordered steps, selector/persistence/test plan, and open decisions. No production code changed.
 - Measured: `npm run setup` PASS; `npm run verify` — Types PASS 20.1s, Lint PASS (0 errors / 23 warnings), quality:changed PASS (no changed `src/`), Build PASS 9.1s; native perf lane FAIL (`algo_efficiency` 239.2ms > 200ms); tests+coverage 4057 pass / 2 fail (`bridge_ftps` header, `docs_navigation` four current docs 9016–9088 bytes > 9000). Both failures are unrelated to the docs-only diff. No live provider call and no browser probe.
+## 2026-11-07 — SVG builder full TDD implementation
+
+Implemented the seventh `SVG builder` tab as a complete, interface-split feature: approved-only recursive discovery, pure domain modules, read-only SVG repository, session/global-undo/state integration, dark Workbench UI with full-width folder widget and top menu, shared Gemini prompt/key/model path, one previewed exact-request metadata flow, and verified SVG/PNG/clipboard/preset exports. Selectors, SOR, owners, storage, tests, README, AGENTS and the current-doc router were updated. No provider call is made in dev/test; keys, prompts and image bytes stay out of logs and localStorage.
+
+Resolved the earlier baseline gate failures instead of waiving them: bridge JSON responses now carry `cache-control: no-store`; the four oversized current docs and the router are back inside their read budgets; `detect.ts` reuses label buffers so the native synthetic 1000px budget passes; `tests/apply.test.ts` asserts the two new builder undo kinds.
+
+Verified: focused builder + shell suites 81 passed; `tests/apply.test.ts` 20 passed; `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 pre-existing warnings); `npm run quality:changed -- --files <explicit changed source list>` PASS; `npm run verify:fast -- --base HEAD` PASS all lanes; `npm run verify -- --base HEAD` PASS all lanes (399 files / 4094 tests with coverage, 30 native perf tests, production build PASS). No waivers remain.
+
+Attribution: Arena.ai Agent Mode — authored from the user's request and local repository research.

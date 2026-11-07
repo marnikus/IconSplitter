@@ -20,13 +20,15 @@ import { isReview } from "../lib/svgmodel";
 import { applySvgEdit } from "../svg/svgedit";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
-import { getAppState, patchBatch, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
+import { applyBuilderConfig } from "../svgBuilder/undoBinding";
+import { getAppState, patchBatch, patchBuilder, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
 export const ENTRY_TYPES = [
   "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
   "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit",
+  "builderChecked", "builderConfig",
 ] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
@@ -46,6 +48,7 @@ function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promis
     case "svgEdit": return applySvgEdit(value);
     case "uploadSettings": return applyUploadSettings(value);
     case "uploadRowBadges": return applyRowBadgeState(value);
+    case "builderConfig": return applyBuilderConfig(value);
     default: return false; // an entry from a future schema: refuse, do not guess
   }
 }
@@ -62,6 +65,7 @@ function applySelectionEntry(entry: HistoryEntry, value: unknown): boolean | nul
     case "batchChecked": return applyBatchChecked(value);
     case "svgChecked": return applyTabChecked(value, () => getAppState().svg.checked, patchSvg, "generateSvg");
     case "uploadChecked": return applyTabChecked(value, () => getAppState().upload.checked, patchUpload, "upload");
+    case "builderChecked": return applyTabChecked(value, () => getAppState().builder.checked, patchBuilder, "svgBuilder");
     case "stockUploadChecked": return applyTabChecked(value, () => getAppState().stockUpload.checked, patchStockUpload, "stockUpload");
     default: return null;
   }

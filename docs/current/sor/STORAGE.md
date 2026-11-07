@@ -2,7 +2,7 @@
 
 Jump to a domain; validate everything read from storage (RULE 13). Image-edit keys carry metadata only, never image bytes or prompts.
 
-**Detail pages:** [Generate SVG and image edits](storage/svg.md) · [SVG to upload](storage/upload.md).
+**Detail pages:** [Generate SVG and image edits](storage/svg.md) · [SVG to upload](storage/upload.md) · [SVG builder](storage/svg-builder.md).
 
 ## Batch and sheets
 
@@ -35,3 +35,16 @@ Original Selection tab removal: stored `tab: "selection"` is read as
 `selectionV2`; the existing `selection` session view slice remains V2's filter,
 sort, active row and comparison state. Obsolete `collapsed` state is dropped.
 No session schema/key, shared root handle or pair-sidecar deletion is performed.
+
+## SVG builder
+
+| Where | What | Rules |
+|---|---|---|
+| `iconSplitter.svgBuilder.config.v1` | validated sheet config | one owner: `src/svgBuilder/configstore.ts` |
+| `iconSplitter.svgBuilder.prefs.v1` | zoom, card open state, thumb size | display-only, validated |
+| `iconSplitter.svgBuilder.prompt.v1` / `.prompts.v1` | sheet prompt and presets | no key or image bytes |
+| `iconSplitter.svgBuilder.listView.v1` | library query/category/sort | display-only, validated |
+| IndexedDB `iconSplitter/handles["__svgBuilder__"]` | builder root | falls back to older roots; permission re-requested |
+| shared Gemini config + key vault | endpoint/model/limits and API key | no second builder key store; masked, redacted, local |
+
+See [the builder storage page](storage/svg-builder.md) for the full contract.

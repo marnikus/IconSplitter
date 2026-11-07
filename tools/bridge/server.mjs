@@ -127,7 +127,10 @@ function cors(req, res) {
 
 function json(res, status, body) {
   const text = JSON.stringify(body);
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(text) });
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(text),
+    "cache-control": "no-store",
+  });
   res.end(text);
   return Buffer.byteLength(text);
 }

@@ -120,10 +120,7 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
 * **I-83 (the Getty web request keeps its per-icon manifest in the body, never a
   header, RULE 4/7 — 2026-10-30):** `x-getty-web-config` carries settings,
   credentials and `manifestBytes` only (< 8 KB); the manifest is the **last
-  `manifestBytes` bytes of the body**, after the staged file bytes. 100 icons with
-  2 KB descriptions is a ~290 KB base64 header, and Node's 16 KB `maxHeaderSize`
-  answers **431 and destroys the socket before any route runs** — the 209-icon
-  failure, not a size cap and never a missing helper. `configFromBody` rebuilds
+  `manifestBytes` bytes of the body**, after the staged file bytes. `configFromBody` rebuilds
   the config before validating, an older `icons` header still works, and the
   helper's own `maxHeaderSize` is 1 MB as defence. Pinned by `getty_web_upload`
   (header < 8 KB, body > 200 KB) and `bridge_getty_web` (200 KB manifest).

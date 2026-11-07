@@ -27,7 +27,7 @@ arrow, `data-dir`, reverses any order), `svg-search` (name too), `svg-shown`
 | `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow, regenerated — new review); disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |
 
-New lists start unchecked; selection gestures use global Undo ([RULE 25](../rules/BEHAVIOR.md#rule-25)). ↑/↓ move active; E/Q check/uncheck, Space toggles; A/D/W review the active valid SVG. Paid actions need the exact-input confirmation. The image batch action and Stop are [owned by AI-source image edits](svg-image-edits.md#image-regeneration-actions-and-row-feedback).
+New lists start unchecked; gestures use global Undo ([RULE 25](../rules/BEHAVIOR.md#rule-25)). ↑/↓ move active; E/Q check/uncheck, Space toggles; A/D/W review the active valid SVG. Paid actions need confirmation. Image batch and Stop are [owned by AI-source image edits](svg-image-edits.md#image-regeneration-actions-and-row-feedback).
 
 ## Rows (`svg-rows`, `role="listbox"`, rows in `svg-list`)
 

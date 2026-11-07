@@ -18,10 +18,10 @@ import type { ZoomMode } from "./reviewprefs";
 
 export const SESSION_VERSION = 1;
 
-export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload" | "stockUpload";
+export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload" | "svgBuilder" | "stockUpload";
 
 export const TAB_IDS: readonly TabId[] = [
-  "sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload",
+  "sheets", "batch", "selectionV2", "generateSvg", "upload", "svgBuilder", "stockUpload",
 ];
 
 /** Selection V2 review state; the JSON slice name stays compatible with saved sessions. */
@@ -59,6 +59,13 @@ export interface SessionUpload {
   anchorId: string | null;
 }
 
+/** What only the SVG builder tab adds: its own placed/active/anchor asset ids. */
+export interface SessionBuilder {
+  checked: string[];
+  activeId: string | null;
+  anchorId: string | null;
+}
+
 /** What only the Upload (stock FTPS) tab adds: its own selection and active row. */
 export interface SessionStockUpload {
   checked: string[];
@@ -82,6 +89,7 @@ export interface SessionState {
   selectionV2: SessionV2;
   svg: SessionSvg;
   upload: SessionUpload;
+  builder: SessionBuilder;
   stockUpload?: SessionStockUpload;
   batch: SessionBatch;
 }
@@ -95,6 +103,8 @@ export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null, anchorId: 
 
 export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null, anchorId: null };
 
+export const DEFAULT_BUILDER: SessionBuilder = { checked: [], activeId: null, anchorId: null };
+
 export const DEFAULT_STOCK_UPLOAD: SessionStockUpload = { checked: [], activeId: null, anchorId: null };
 
 export const DEFAULT_BATCH: SessionBatch = { checked: [], activeId: null, anchorId: null };
@@ -102,7 +112,8 @@ export const DEFAULT_BATCH: SessionBatch = { checked: [], activeId: null, anchor
 export const DEFAULT_SESSION: SessionState = {
   tab: "sheets", sheets: DEFAULT_SHEET_OPTS,
   selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0, anchorId: null },
-  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, stockUpload: DEFAULT_STOCK_UPLOAD, batch: DEFAULT_BATCH,
+  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, builder: DEFAULT_BUILDER,
+  stockUpload: DEFAULT_STOCK_UPLOAD, batch: DEFAULT_BATCH,
 };
 
 /**
@@ -143,6 +154,7 @@ function toSession(raw: unknown): SessionState {
     selectionV2: parseV2(raw.selectionV2),
     svg: parseSvgSlice(raw.svg),
     upload: parseUploadSlice(raw.upload),
+    builder: parseBuilderSlice(raw.builder),
     stockUpload: parseUploadSlice(raw.stockUpload),
     batch: parseBatchSlice(raw.batch),
   };
@@ -168,6 +180,15 @@ function parseSvgSlice(raw: unknown): SessionSvg {
 
 function parseUploadSlice(raw: unknown): SessionUpload {
   if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_UPLOAD;
+  return {
+    checked: raw.checked.filter((id): id is string => typeof id === "string"),
+    activeId: typeof raw.activeId === "string" ? raw.activeId : null,
+    anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
+  };
+}
+
+function parseBuilderSlice(raw: unknown): SessionBuilder {
+  if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_BUILDER;
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
     activeId: typeof raw.activeId === "string" ? raw.activeId : null,

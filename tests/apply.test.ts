@@ -19,6 +19,12 @@ const applyDecisionsSpy = vi.mocked(applyDecisionPatch);
 import { getAppState, patchSvg, patchUpload, patchV2, patchView, resetAppStore, setAppState } from "../src/state/appstore";
 import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
 import { DEFAULT_SESSION } from "../src/lib/session";
+import { selectionPayloads } from "../src/lib/selectiondelta";
+import { rememberListTargets } from "../src/state/listtargets";
+import { DEFAULT_CONFIG } from "../src/lib/svgBuilder/config";
+import { DEFAULT_SELECTION_RECIPE } from "../src/lib/svgBuilder/selection";
+import { builderUndoPatchOf } from "../src/lib/svgBuilder/undo";
+import { bindBuilderConfigApplier } from "../src/svgBuilder/undoBinding";
 import { HISTORY_VERSION, type HistoryEntry } from "../src/lib/history";
 
 beforeEach(() => {
@@ -160,9 +166,25 @@ describe("applyEntry", () => {
     await expect(applyEntry(entry("stockUploadChecked"), "invalid")).resolves.toBe(false);
   });
 
+  it("restores builderChecked through the shared selection delta", async () => {
+    const before = { checked: [], anchor: null, active: null };
+    const after = { checked: ["asset_a"], anchor: "asset_a", active: "asset_a" };
+    const payload = selectionPayloads(before, after).after;
+    rememberListTargets("svgBuilder", ["asset_a"]);
+    await expect(applyEntry(entry("builderChecked", ["asset_a"]), payload)).resolves.toBe(true);
+    expect(getAppState().builder.checked).toEqual(["asset_a"]);
+  });
+
+  it("restores builderConfig through the one bound applier", async () => {
+    const unbind = bindBuilderConfigApplier((patch) => patch.config.artboard.width === DEFAULT_CONFIG.artboard.width);
+    const patch = builderUndoPatchOf({ config: DEFAULT_CONFIG, seed: 3, lockedIds: [], recipe: DEFAULT_SELECTION_RECIPE });
+    await expect(applyEntry(entry("builderConfig"), patch)).resolves.toBe(true);
+    unbind();
+  });
+
   it("refuses a kind it does not know instead of guessing", async () => {
     await expect(applyEntry(entry("deleteFiles"), { all: true })).resolves.toBe(false);
-    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit"]);
+    expect(ENTRY_TYPES).toEqual(["decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked", "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit", "builderChecked", "builderConfig"]);
   });
 });
 
