@@ -1,0 +1,88 @@
+{
+  "schema": 1,
+  "environment": {
+    "node": "v22.22.3",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 2,
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "memoryBytes": 4131278848
+  },
+  "runs": [
+    {
+      "label": "baseline-1",
+      "command": [
+        "npx",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "seconds": 108.76,
+      "cpuUserSeconds": 181.57,
+      "files": 407,
+      "tests": 4274,
+      "failed": 2,
+      "note": "2 known pre-existing failures (docs read budget, algo_efficiency) — same before and after this investigation"
+    },
+    {
+      "label": "baseline-2",
+      "command": [
+        "npx",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "seconds": 108.63,
+      "note": "second warm run, same tree"
+    },
+    {
+      "label": "exp-drop-1000row-cases",
+      "command": [
+        "npx",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "seconds": 105.63,
+      "note": "three 1000-row cases in upload_response_research temporarily skipped (10.7s of test work removed): wall -3.0s = 3%. Reverted."
+    },
+    {
+      "label": "exp-jsxdev-false-3files",
+      "command": [
+        "npx",
+        "vitest",
+        "run",
+        "upload_ui",
+        "svg_queue_ui",
+        "svg_imgreg_ui"
+      ],
+      "seconds": 14.9,
+      "baselineSeconds": 15.8,
+      "note": "jsxDev:false on the 3 heaviest DOM files: -6%. Reverted."
+    },
+    {
+      "label": "exp-threads-pool",
+      "command": [
+        "npx",
+        "vitest",
+        "run",
+        "--config",
+        "vitest.threads.config.ts"
+      ],
+      "seconds": 215.4,
+      "baselineSeconds": 108.8,
+      "note": "main project on threads instead of vmThreads: 2x worse. Config removed."
+    },
+    {
+      "label": "trivial-dom-files",
+      "command": [
+        "npx",
+        "vitest",
+        "run",
+        "<12 trivial DOM files>"
+      ],
+      "seconds": 1.54,
+      "note": "per-file harness+DOM setup ~0.03s/file: negligible"
+    }
+  ]
+}
