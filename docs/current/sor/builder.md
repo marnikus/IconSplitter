@@ -9,7 +9,7 @@ Handles: [selectors/builder](../selectors/builder.md). Storage keys:
 
 ## Status
 
-**Shell + library + artboard (P0–P2, 2026-11-07).** The tab is registered, persists
+**Shell, library, artboard and controls (P0–P3, 2026-11-07).** The tab is registered, persists
 its session slice, reads the picked folder into an approved-icon rail, and draws the
 sheet from that library. The artboard, controls,
 recipes, export and sheet metadata land in the phases below; until each lands, its
@@ -19,7 +19,7 @@ absence is said out loud, never shown as a dead control.
 |---|---|
 | ~~P1~~ done | folder scan (approved icons), library rail, exclusions + audit |
 | ~~P2~~ done | layout math and the live artboard |
-| P3 | controls, presets, undo, persistence |
+| ~~P3~~ done | controls, undo, persistence (presets land with P4) |
 | P4 | selection recipes, locks, user presets |
 | P5 | serializer, PNG, ZIP, `builder/` commit |
 | P6 | sheet metadata (text-only request) |
@@ -66,6 +66,18 @@ absence is said out loud, never shown as a dead control.
 * **Placement in P2** is honest scaffolding: the first `capacity` icons fill the cells in
   scan order, artwork is read at most 4 at a time and sanitised once per icon, and a
   still-unread cell says so. P4 replaces only the slot source with the recipe engine.
+
+* **The controls (P3)** — `lib/builder/config` is the ONE reader: a stored record,
+  a control's change and an old history entry all pass through it, so a control can
+  never hold a value the reader would refuse. Out of range → the nearest usable value;
+  wrong type → that field's default; one junk field never costs the sheet.
+  `iconSplitter.builder.config.v1` (via `builder/configstore`) and the session slice
+  both carry it, and the session copy wins on boot.
+* **Undo (P3)** — the builder adds exactly three entry kinds to the app's one
+  timeline: `builderConfig`, `builderSelection`, `builderSeed`. `state/apply` clamps
+  what it applies and refuses a seed of 0 or junk (0 would silently re-seed); a
+  refused payload never moves the cursor. A control click and an undo therefore take
+  the same path.
 
 ## Contracts this tab will keep (from the design)
 

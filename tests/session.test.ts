@@ -7,6 +7,7 @@
 // mode + zoom by prefsstore — the session must not duplicate any of them.
 import { describe, expect, it } from "vitest";
 import { ALL_FILTER } from "../src/lib/reviewfilter";
+import { DEFAULT_BUILDER_CONFIG } from "../src/lib/builder/defaults";
 import {
   TAB_IDS, DEFAULT_SESSION, parseSession, pruneIds, serializeSession, SESSION_VERSION,
 } from "../src/lib/session";
@@ -151,6 +152,7 @@ describe("original Selection removal compatibility", () => {
       ...parseSession(null),
       tab: "builder",
       builder: {
+        config: DEFAULT_BUILDER_CONFIG,
         slots: ["pair_a", null, "pair_b"], locked: ["pair_b"], seed: 2841,
         recipe: { mode: "filtered", threshold: 70, folder: "Kitchen", tag: "food" },
       },
@@ -158,6 +160,7 @@ describe("original Selection removal compatibility", () => {
     const restored = parseSession(raw);
     expect(restored.tab).toBe("builder");
     expect(restored.builder).toEqual({
+      config: DEFAULT_BUILDER_CONFIG,
       slots: ["pair_a", null, "pair_b"], locked: ["pair_b"], seed: 2841,
       recipe: { mode: "filtered", threshold: 70, folder: "Kitchen", tag: "food" },
     });
@@ -165,11 +168,19 @@ describe("original Selection removal compatibility", () => {
   it("costs one ignored field, never the whole builder slice, when it is junk (RULE 13)", () => {
     const restored = parseSession(asText({
       tab: "builder",
-      builder: { slots: ["pair_a", 7, null], locked: "nope", seed: "x", recipe: { mode: "wild", threshold: 1e9, folder: 3, tag: {} } },
+      builder: {
+        config: { artboard: { width: "wide", padding: 88 }, grid: { columns: 900 } },
+        slots: ["pair_a", 7, null], locked: "nope", seed: "x", recipe: { mode: "wild", threshold: 1e9, folder: 3, tag: {} },
+      },
     }));
     expect(restored.tab).toBe("builder");
+    // a junk config costs its own fields only: the width fell back, padding survived
+    expect(restored.builder?.config.artboard.width).toBe(DEFAULT_BUILDER_CONFIG.artboard.width);
+    expect(restored.builder?.config.artboard.padding).toBe(88);
+    expect(restored.builder?.config.grid.columns).toBe(16); // clamped, not defaulted
     // position is the sheet's meaning: the junk slot becomes a hole IN PLACE
     expect(restored.builder).toEqual({
+      config: expect.objectContaining({ artboard: expect.objectContaining({ padding: 88 }) }),
       slots: ["pair_a", null, null], locked: [], seed: 1,
       recipe: { mode: "random", threshold: 100, folder: "", tag: "" },
     });

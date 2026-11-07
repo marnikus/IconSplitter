@@ -57,6 +57,22 @@ The artboard (P2):
 | `builder-cell-loading` | `<text>` | the artwork is still being read (`…`) |
 | `builder-overflow` | `role="status"` note | the grid had to shrink; it states the percentage |
 
+The sheet controls (P3) — every field is clamped by `lib/builder/config`:
+
+| Test id | Element | Notes |
+|---|---|---|
+| `builder-controls` | `<section aria-label="Sheet controls">` | groups + one honest note about what P4 adds |
+| `builder-controls-sheet` / `-grid` / `-captions` | group containers | the three groups |
+| `builder-width`, `-height`, `-padding` | number inputs | artboard, 256–4096 / 0–200 |
+| `builder-paper` (colour input) | `type="color"` | note: the artboard's `<rect>` uses `builder-paper` too; the input is `builder-paper` inside `builder-controls` |
+| `builder-columns`, `-rows` | number inputs | 1–16 each |
+| `builder-gap-x`, `-gap-y` | number inputs | 0–200 |
+| `builder-box` | number input | icon box, 8–400 |
+| `builder-caption-case` | `<select>` | `As written` / `UPPER` |
+| `builder-caption-size` | number input | 4–40 |
+| `builder-captions` | checkbox | show captions |
+| `builder-controls-note` | text | says recipes/locks are not here yet |
+
 Later phases add `builder-recipe-*`, `builder-recipe-*`, `builder-stage`,
 `builder-artboard`, `builder-cell-{n}`, `builder-<section>-*` controls, `builder-export-*`
 and `builder-meta-*`; each is added here in the same change that introduces it (RULE 17).

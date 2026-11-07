@@ -12,6 +12,7 @@ import { useRunning } from "../ui/rebuildwatch";
 import BuilderSourceBar from "./BuilderSourceBar";
 import BuilderLibrary from "./BuilderLibrary";
 import BuilderArtboard from "./BuilderArtboard";
+import BuilderControls from "./BuilderControls";
 import { useBuilderArt } from "./useBuilderArt";
 import { BuilderPickRoot, BuilderUnsupported } from "./BuilderEmpty";
 import { useBuilderShell } from "./useBuilderShell";
@@ -32,7 +33,10 @@ export default function BuilderPanel({ active = true }: { active?: boolean }) {
       {g.root === null
         ? <BuilderPickRoot onPick={g.chooseRoot} />
         : <div className="bld-work">
-          <BuilderLibrary shell={g} />
+          <div className="bld-side">
+            <BuilderControls config={g.config} onChange={g.setConfig} />
+            <BuilderLibrary shell={g} />
+          </div>
           <BuilderArtboard config={g.config} slots={art.slots} placed={art.placed} zoom={art.zoom} />
         </div>}
       {g.toast !== null && (

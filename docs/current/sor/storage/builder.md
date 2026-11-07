@@ -6,6 +6,7 @@ Validate on read (RULE 13). Part of the [storage map](../STORAGE.md).
 |---|---|---|
 | IndexedDB `iconSplitter/handles["__builder__"]` | the builder's root handle, in its own slot | falls back to SVG to upload's handle, then Generate SVG's; its persisted path rebinds to THIS handle (I-51/I-63) |
 | IndexedDB `iconSplitter/rootpaths` | the picked folder's real path | shared with every tab: one record per folder handle, normalised and validated (I-29/I-39) |
+| localStorage `iconSplitter.builder.config.v1` | the sheet design `{ v: 1, ...sections }` | every field clamped/validated on read (RULE 13): out of range → the nearest usable value, wrong type → that field's default; an unknown enum member is never guessed. The session's `builder.config` wins on boot; this key is what a reset session falls back to |
 | localStorage `iconSplitter.session.v1` → `builder` | the session slice `{ slots, locked, seed, recipe }` | validated field by field: a junk slot becomes a hole **in place** (position is the sheet's meaning), locks keep only placed ids, the seed is a positive integer (0 would re-seed), the recipe falls back per field and is capped at `BUILDER_MAX_SLOTS` = 256 |
 
 **Shared, never duplicated:** the Gemini key (`iconSplitter/gemini-api-key`), the

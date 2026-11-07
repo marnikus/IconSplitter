@@ -20,13 +20,16 @@ import { isReview } from "../lib/svgmodel";
 import { applySvgEdit } from "../svg/svgedit";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
-import { getAppState, patchBatch, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
+import type { SessionBuilder } from "../lib/session";
+import { getAppState, patchBatch, patchBuilder, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
+import { parseBuilderConfig } from "../lib/builder/config";
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
 export const ENTRY_TYPES = [
   "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
   "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit",
+  "builderConfig", "builderSelection", "builderSeed",
 ] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
@@ -46,8 +49,57 @@ function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promis
     case "svgEdit": return applySvgEdit(value);
     case "uploadSettings": return applyUploadSettings(value);
     case "uploadRowBadges": return applyRowBadgeState(value);
-    default: return false; // an entry from a future schema: refuse, do not guess
+    default: return applyBuilderEntry(entry.type, value);
   }
+}
+
+/** The builder's three kinds, kept together so the domain switch stays small. */
+function applyBuilderEntry(type: string, value: unknown): boolean {
+  if (type === "builderConfig") return applyBuilderConfig(value);
+  if (type === "builderSelection") return applyBuilderSelection(value);
+  if (type === "builderSeed") return applyBuilderSeed(value);
+  return false; // an entry from a future schema: refuse, do not guess
+}
+
+/** The sheet design: a value that is not a config is refused, not guessed. */
+export function applyBuilderConfig(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  patchBuilder({ config: parseBuilderConfig(value) });
+  return true;
+}
+
+/** Cell-order slots, locks and seed — the selection half of the sheet. */
+export function applyBuilderSelection(value: unknown): boolean {
+  const patch = toBuilderSelection(value);
+  return patch === null ? false : (patchBuilder(patch), true);
+}
+
+/** A positive finite seed; 0 or junk is refused (0 would re-seed). */
+export function applyBuilderSeed(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.seed !== "number" || !Number.isFinite(value.seed) || value.seed <= 0) return false;
+  patchBuilder({ seed: Math.round(value.seed) });
+  return true;
+}
+
+/** A selection patch, or null when the payload carries nothing readable. */
+export function toBuilderSelection(value: unknown): Partial<SessionBuilder> | null {
+  if (!isRecord(value)) return null;
+  const patch: Partial<SessionBuilder> = {};
+  if (Array.isArray(value.slots)) patch.slots = value.slots.map((id) => (typeof id === "string" && id !== "" ? id : null));
+  if (Array.isArray(value.locked)) patch.locked = value.locked.filter((id): id is string => typeof id === "string");
+  if (typeof value.seed === "number" && Number.isFinite(value.seed) && value.seed > 0) patch.seed = Math.round(value.seed);
+  if (isRecord(value.recipe)) patch.recipe = { ...getAppState().builder.recipe, ...recipePatch(value.recipe) };
+  return Object.keys(patch).length === 0 ? null : patch;
+}
+
+/** The recipe fields the payload actually carries. */
+function recipePatch(r: Record<string, unknown>): Partial<SessionBuilder["recipe"]> {
+  const patch: Partial<SessionBuilder["recipe"]> = {};
+  if (r.mode === "similar" || r.mode === "random" || r.mode === "filtered") patch.mode = r.mode;
+  if (typeof r.threshold === "number" && Number.isFinite(r.threshold)) patch.threshold = Math.max(0, Math.min(100, Math.round(r.threshold)));
+  if (typeof r.folder === "string") patch.folder = r.folder;
+  if (typeof r.tag === "string") patch.tag = r.tag;
+  return patch;
 }
 
 function applyUploadSettings(value: unknown): boolean {

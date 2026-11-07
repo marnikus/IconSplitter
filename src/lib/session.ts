@@ -15,6 +15,9 @@ import { DEFAULT_SHEET_OPTS, parseSheetOpts, type SheetOpts } from "./exportopts
 import { ALL_FILTER, parseFilter, type ListFilter } from "./reviewfilter";
 import { DEFAULT_SORT, parseSort, type SortState } from "./reviewsort";
 import type { ZoomMode } from "./reviewprefs";
+import type { BuilderConfig } from "./builder/defaults";
+import { DEFAULT_BUILDER_CONFIG } from "./builder/defaults";
+import { parseBuilderConfig } from "./builder/config";
 
 export const SESSION_VERSION = 1;
 
@@ -67,6 +70,8 @@ export interface SessionUpload {
  * `recipe` is the selection recipe that produced (or would re-produce) it.
  */
 export interface SessionBuilder {
+  /** The sheet design (P3). A junk record costs every field, never the slice. */
+  config: BuilderConfig;
   slots: (string | null)[];
   /** Icon ids pinned across re-rolls and cell-count changes. */
   locked: string[];
@@ -125,6 +130,7 @@ export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null, anch
 
 /** An empty sheet: every cell a hole, nothing locked, the first seed, no filter. */
 export const DEFAULT_BUILDER: SessionBuilder = {
+  config: DEFAULT_BUILDER_CONFIG,
   slots: [], locked: [], seed: 1,
   recipe: { mode: "random", threshold: 70, folder: "", tag: "" },
 };
@@ -226,6 +232,8 @@ function parseBuilderSlice(raw: unknown): SessionBuilder {
     .map((id) => (typeof id === "string" && id !== "" ? id : null));
   const placed = new Set(slots.filter((id): id is string => id !== null));
   return {
+    // A junk config costs every FIELD (each falls back on its own), never the slice.
+    config: parseBuilderConfig(raw.config),
     slots,
     locked: idsOf(raw.locked).filter((id) => placed.has(id)),
     seed: seedOf(raw.seed),

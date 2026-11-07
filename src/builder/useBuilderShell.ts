@@ -20,6 +20,9 @@ import { pickFolderFor } from "../ui/pickroot";
 import { bootRoot, rememberRoot, BUILDER_HANDLE_KEY } from "./store";
 import { discoverBuilderIcons, type BuilderLibrary, type BuilderScope } from "./scan";
 import { DEFAULT_BUILDER_CONFIG, DENSE_BUILDER_CONFIG, withGrid, type BuilderConfig } from "../lib/builder/defaults";
+import { loadBuilderConfig, saveBuilderConfig } from "./configstore";
+import { useAppState } from "../state/useAppState";
+import { applyBuilderConfig } from "../state/apply";
 
 export type { BuilderScope };
 
@@ -140,9 +143,22 @@ function useRootBinding(
   return { root, chooseRoot, rescan };
 }
 
-/** The sheet design: the default until P3 lets it be edited and persisted. */
+/**
+ * The sheet design: the session's copy when it has one (it always does), else the
+ * stored one, else the default. Every change is written to the store (so another
+ * tab's undo can see it) and to disk, and is recorded by the caller as one
+ * `builderConfig` history entry.
+ */
 function useSheetConfig(): [BuilderConfig, (next: BuilderConfig) => void] {
-  const [config, setConfig] = useState<BuilderConfig>(DEFAULT_BUILDER_CONFIG);
+  const sessionConfig = useAppState().builder.config;
+  const [fallback, setFallback] = useState<BuilderConfig>(() => loadBuilderConfig());
+  const config = sessionConfig ?? fallback ?? DEFAULT_BUILDER_CONFIG;
+  const setConfig = useCallback((next: BuilderConfig) => {
+    // ONE path for a click and for undo (RULE 12): the same apply the timeline uses.
+    applyBuilderConfig(next);
+    setFallback(next);
+    saveBuilderConfig(next);
+  }, []);
   return [config, setConfig];
 }
 

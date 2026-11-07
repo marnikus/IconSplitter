@@ -11,6 +11,7 @@ import type { ReactElement } from "react";
 import BuilderPanel from "../src/builder/BuilderPanel";
 import BuilderArtboard from "../src/builder/BuilderArtboard";
 import { DENSE_BUILDER_CONFIG } from "../src/lib/builder/defaults";
+import { getAppState } from "../src/state/appstore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion, type VerOpts } from "./helpers/svgpair";
@@ -208,5 +209,35 @@ describe("SVG builder — the artboard (P2)", () => {
     await mount(libraryRoot());
     await pick();
     expect(q("builder-artboard-size")?.textContent).toContain("1000 × 800");
+  });
+});
+
+describe("SVG builder — controls (P3)", () => {
+  it("a grid change reaches the artboard and the store", async () => {
+    await mount(libraryRoot());
+    await pick();
+    const columns = q("builder-columns") as HTMLInputElement;
+    await setValue("builder-columns", "2");
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(getAppState().builder.config.grid.columns).toBe(2);
+    expect(qa("builder-cell")).toHaveLength(2 * getAppState().builder.config.grid.rows);
+    expect(columns.value).toBe("2");
+  });
+
+  it("a control cannot push the sheet out of range", async () => {
+    await mount(libraryRoot());
+    await pick();
+    await setValue("builder-columns", "900");
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(getAppState().builder.config.grid.columns).toBe(16);
+  });
+
+  it("turning captions off removes them from every cell", async () => {
+    await mount(libraryRoot());
+    await pick();
+    expect(qa("builder-cell-caption").length).toBeGreaterThan(0);
+    await click(q("builder-captions"));
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(qa("builder-cell-caption")).toHaveLength(0);
   });
 });

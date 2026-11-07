@@ -2343,3 +2343,34 @@
   font-size: 10.5px;
   line-height: 1.5;
 }
+
+/* ── the sheet controls (P3): every field clamped by lib/builder/config ───── */
+
+.bld-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.bld-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  background: var(--v2-surface);
+  padding: 12px 14px;
+}
+
+.bld-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bld-group-title { grid-column: 1 / -1; margin: 0; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--v2-muted); }
+.bld-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bld-field-inline { flex-direction: row; align-items: center; gap: 6px; grid-column: 1 / -1; }
+.bld-label { font-size: 10.5px; color: var(--v2-muted); }
+.bld-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--v2-line);
+  border-radius: 5px;
+  background: #0b1222;
+  color: var(--v2-text);
+  font-size: 11.5px;
+  padding: 4px 6px;
+}
+.bld-colour { width: 100%; height: 26px; border: 1px solid var(--v2-line); border-radius: 5px; background: #0b1222; padding: 2px; }
