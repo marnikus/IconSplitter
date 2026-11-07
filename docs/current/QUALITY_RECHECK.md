@@ -4989,3 +4989,11 @@ Resolved the earlier baseline gate failures instead of waiving them: bridge JSON
 Verified: focused builder + shell suites 81 passed; `tests/apply.test.ts` 20 passed; `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 pre-existing warnings); `npm run quality:changed -- --files <explicit changed source list>` PASS; `npm run verify:fast -- --base HEAD` PASS all lanes; `npm run verify -- --base HEAD` PASS all lanes (399 files / 4094 tests with coverage, 30 native perf tests, production build PASS). No waivers remain.
 
 Attribution: Arena.ai Agent Mode — authored from the user's request and local repository research.
+
+## 2026-11-07 — SVG builder focused-test performance
+
+User asked to improve new-code test performance by at least 80%. Measured six-file focused Vitest builder/apply suite wall-clock median: **2.556 s** (3 runs); 80% reduction target: **≤ 0.511 s**. Added `npm run test:builder:fast`, a single Node/esbuild bundle of the real pure builder modules, injected provider seams, recursive discovery, session/undo payloads, export verification and static dark panel shell. Measured fast lane: **0.222 s** median (5 runs; **91.3% faster**), or **0.332 s** through the npm wrapper (5 runs; **87.0% faster**). Full Vitest TDD suite remains the contract; no tests were removed. `SheetPreviewDeps.rasterize` is a production injection seam so the provider test can run in Node without browser canvas/DOMParser; the UI test pins happy-dom explicitly.
+
+Verified: `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 pre-existing warnings); `npm run quality:changed -- --files src/svgBuilder/preview.ts` PASS; focused Vitest builder/apply/docs_navigation 7 files / 57 tests PASS; `npm run test:builder:fast` 14/14 PASS; `npm run verify:fast -- --base HEAD` PASS; `npm run verify -- --base HEAD` PASS (Types 5.1s, Lint 1.6s, changed quality gate 0.5s, native perf 5 files / 30 tests 3.4s, Tests+coverage 399 files / 4094 tests 145.2s, Build 10.3s, `ALL LANES PASSED`). No waivers; no live Gemini/provider calls.
+
+Attribution: Arena.ai Agent Mode — authored from the user's request and local repository research.

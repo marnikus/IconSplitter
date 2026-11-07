@@ -12,3 +12,9 @@ Back to the [test index](../TESTS.md) and [behaviour contract](../svg-builder.md
 | `tests/apply.test.ts`, `tests/workbench_ui.test.tsx`, `tests/session.test.ts`, `tests/log_ui.test.tsx`, `tests/scroll_top.test.tsx` | global `builderChecked`/`builderConfig` undo routing and seven-tab shell regressions |
 
 The finish gate also runs `npx tsc --noEmit`, `npm run lint`, the explicit changed-file quality gate, `npm run verify:fast` and `npm run verify`. The dated measurement is appended to `QUALITY_RECHECK.md`.
+
+## Fast lane
+
+`npm run test:builder:fast` runs `tools/builder-fast-test.mjs`: esbuild bundles `tools/builder-fast.spec.ts` into one Node ESM file, with `tools/builder-fast-hook.ts` supplying an in-memory API for the static panel render. The 14 assertions exercise the real pure domain, recursive discovery, validated session/undo payloads, injected sheet preview, one-request Gemini guard, export verification and the dark panel handles. The full Vitest UI suite still mounts Workbench with the real hook, so this is a smoke lane, not a coverage reduction.
+
+Measured medians (same sandbox): six-file Vitest builder suite **2.556 s**, fast Node lane **0.222 s** (**91.3% faster**), `npm run` wrapper **0.332 s** (**87.0% faster**). Target was at least an 80% wall-clock reduction (≤ 0.511 s).

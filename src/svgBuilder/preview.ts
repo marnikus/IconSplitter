@@ -10,6 +10,8 @@ export const SHEET_PREVIEW_QUALITY = 0.82;
 export interface SheetPreviewDeps {
   render?: RasterDeps["render"];
   encode?: RasterDeps["encode"];
+  /** Test seam: skip the browser-only canvas/DOMParser path in Node lanes. */
+  rasterize?: typeof rasterizeJpeg;
 }
 
 export type SheetPreviewResult =
@@ -21,7 +23,8 @@ export async function sheetPreviewFor(svgText: string, deps: SheetPreviewDeps = 
   if (box === null) return { ok: false, reason: "the composed sheet has no usable dimensions" };
   const width = SHEET_PREVIEW_WIDTH;
   const height = Math.max(1, Math.round(width * box.height / box.width));
-  const out = await rasterizeJpeg(svgText, {
+  const rasterize = deps.rasterize ?? rasterizeJpeg;
+  const out = await rasterize(svgText, {
     width, height, quality: SHEET_PREVIEW_QUALITY,
     background: normalizeHex(box.background) ?? "#FFFFFF",
   }, { render: deps.render, encode: deps.encode });

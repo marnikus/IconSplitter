@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 // svg_builder_ui.test.tsx — TDD for the seventh Workbench tab and its dark shell.
 // Only the browser APIs a DOM cannot provide are stubbed; the panel, folder
 // widget, prompt window and provider card are the real components.

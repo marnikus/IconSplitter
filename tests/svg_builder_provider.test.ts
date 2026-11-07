@@ -1,9 +1,10 @@
-// @vitest-environment happy-dom
+// @vitest-environment node
 // svg_builder_provider.test.ts — TDD for the ONE previewed sheet-metadata
-// request. No live provider call: fetch is injected, and a retryable failure
-// must never be resent automatically (RULE 20).
+// request. No live provider call: fetch and the browser rasterizer are injected,
+// and a retryable failure must never be resent automatically (RULE 20).
 import { describe, expect, it, vi } from "vitest";
 import { AUTH_HEADER, DEFAULT_GEMINI_CONFIG, generateContentUrl } from "../src/lib/upload/gemini";
+import type { RasterDeps, RasterResult, RasterTarget } from "../src/lib/upload/raster";
 import { DEFAULT_SHEET_PROMPT } from "../src/lib/svgBuilder/metadata";
 import { sheetPreviewFor } from "../src/svgBuilder/preview";
 import { generateSheetMetadata } from "../src/svgBuilder/runSheetMetadata";
@@ -16,12 +17,23 @@ function response(text: string, status = 200): Response {
   return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] }, finishReason: "STOP" }] }), { status });
 }
 
+function fakeRasterize(_svg: string, target: RasterTarget, _deps?: RasterDeps): Promise<RasterResult> {
+  const jpeg = minimalJpeg(target.width, target.height);
+  const record = { width: target.width, height: target.height, quality: target.quality,
+    bytes: jpeg.length, hash: "test", profile: "baseline" };
+  return Promise.resolve({ ok: true, jpeg, record } as unknown as RasterResult);
+}
+
 describe("sheet preview", () => {
   it("renders one bounded JPEG from the composed sheet and returns its exact data URL", async () => {
+    const seen: { target: RasterTarget | null } = { target: null };
     const out = await sheetPreviewFor(SHEET, {
-      render: async () => ({}) as HTMLCanvasElement,
-      encode: async (_canvas, _quality) => minimalJpeg(768, 469),
+      rasterize: async (svg, box, deps) => { seen.target = box; return fakeRasterize(svg, box, deps); },
     });
+    expect(seen.target).not.toBeNull();
+    expect(seen.target?.width).toBe(768);
+    expect(seen.target?.height).toBe(469);
+    expect(seen.target?.quality).toBe(0.82);
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.dataUrl.startsWith("data:image/jpeg;base64,")).toBe(true);

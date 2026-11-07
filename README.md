@@ -292,6 +292,7 @@ numbered quality, testing, documentation and behaviour rules. Before every
 push run the verification lanes:
 
 ```bash
+npm run test:builder:fast # ~0.22s SVG-builder smoke lane; not a replacement for verify
 npm run verify:fast   # every commit: types + lint + gate + one suite run + build
 npm run verify        # before push: adds the standalone test lane (what the hook runs)
 npm run hooks:install # optional: enforce the full gate automatically via a pre-push hook
