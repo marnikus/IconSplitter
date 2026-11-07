@@ -33,6 +33,9 @@ export class FakeDir implements DirHandleLike {
   async getDirectoryHandle(n: string, opts?: { create?: boolean }): Promise<FakeDir> {
     const c = this.children.get(n);
     if (c instanceof FakeDir) return c;
+    // A same-named FILE is a TypeMismatch, exactly like the real API — creating a
+    // directory over a file is never what the caller meant.
+    if (c instanceof FakeFile) throw new DOMException("A file exists at this path", "TypeMismatchError");
     if (!opts?.create) throw new DOMException("Not found", "NotFoundError");
     const d = new FakeDir(n);
     this.children.set(n, d);
@@ -41,6 +44,7 @@ export class FakeDir implements DirHandleLike {
   async getFileHandle(n: string, opts?: { create?: boolean }): Promise<FakeFile> {
     const c = this.children.get(n);
     if (c instanceof FakeFile) return c;
+    if (c instanceof FakeDir) throw new DOMException("A directory exists at this path", "TypeMismatchError");
     if (!opts?.create) throw new DOMException("Not found", "NotFoundError");
     const f = new FakeFile(n);
     this.children.set(n, f);

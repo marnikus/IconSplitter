@@ -15,6 +15,8 @@ shared ones.
 | Config + undo (P3) | `tests/builder_config.test.ts`, `tests/builder_undo.test.ts`, controls in `tests/builder_ui.test.tsx` | every field clamped on its own, nearest-value clamping (not the default), colours/enums refused, round-trip stability, fingerprint ignores display-only fields; the three builder entry kinds apply and clamp, a seed of 0 or junk is refused, a control change reaches the store and the artboard |
 | Selection (P4) | `tests/builder_select.test.ts` | seeded determinism, threshold, locks, shortfall |
 | Serializer (P5) | `tests/builder_serialize.test.ts` | artboard px, nested per-icon `<svg>`, one stroke declaration, real `<text>`, byte-identical output, passes `validateSvg` |
+| Serializer (P5) | `tests/builder_serialize.test.ts` | the six guarantees: artboard px, one nested `<svg>` per icon with paths verbatim, the stroke declared once, real escaped `<text>`, byte-identical output, well-formed and safe; nesting is why the sheet has its own validator |
+| Commit (P5) | `tests/builder_commit.test.ts` | `builder/` created when missing, create-only (a collision gets `-1`), exact bytes, a failure is a reason, a file where the folder goes is refused |
 | Metadata (P6) | `tests/builder_metarequest.test.ts`, `tests/builder_meta.test.ts` | text-only body (no `inlineData`), source equals the exported SVG, cap → announced digest; upload's prompt/parser/validator reused unchanged |
 
 ## Conventions

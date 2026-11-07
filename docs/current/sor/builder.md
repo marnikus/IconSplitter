@@ -9,7 +9,7 @@ Handles: [selectors/builder](../selectors/builder.md). Storage keys:
 
 ## Status
 
-**Shell, library, artboard and controls (P0–P3, 2026-11-07).** The tab is registered, persists
+**Shell through export (P0–P5, 2026-11-07).** The tab is registered, persists
 its session slice, reads the picked folder into an approved-icon rail, and draws the
 sheet from that library. The artboard, controls,
 recipes, export and sheet metadata land in the phases below; until each lands, its
@@ -21,7 +21,7 @@ absence is said out loud, never shown as a dead control.
 | ~~P2~~ done | layout math and the live artboard |
 | ~~P3~~ done | controls, undo, persistence (presets land with P4) |
 | P4 | selection recipes, locks, user presets |
-| P5 | serializer, PNG, ZIP, `builder/` commit |
+| ~~P5~~ done | serializer, PNG, ZIP, `builder/` commit |
 | P6 | sheet metadata (text-only request) |
 
 ## What exists now
@@ -78,6 +78,24 @@ absence is said out loud, never shown as a dead control.
   what it applies and refuses a seed of 0 or junk (0 would silently re-seed); a
   refused payload never moves the cursor. A control click and an undo therefore take
   the same path.
+
+* **Export (P5)** — `lib/builder/serialize` writes ONE editable SVG: the artboard's
+  own pixels, every icon a nested `<svg>` inside a `<g data-cell="n">` with its paths
+  verbatim, the stroke declared **once** on the owning group, captions as real
+  `<text>`, byte-identical for identical input, and nothing with a script or a remote
+  reference. A sheet is validated by `validateSheet`, **not** `lib/svgvalidate`: that
+  gate allows exactly one `<svg>` because it judges a provider's answer, and a sheet
+  nests one per icon by design — loosening it would weaken the AI gate
+  (`tests/svg_extract.test.ts` pins it).
+* **The commit** goes into `builder/` only, is **create-only** (a second export gets
+  `-1`, `-2`, … — an existing file is never overwritten), and the name is sanitised so
+  nothing can escape the folder. The library walk already ignores `builder/`, so a
+  committed sheet is never read back as an icon.
+* **A partial export is reported as partial.** The SVG is the deliverable; the PNG and
+  the ZIP are conveniences. A browser that cannot render a canvas still gets the SVG
+  written, and the status line says exactly which files landed and why the rest did not.
+  The PNG's real pixel size is read back and compared with the artboard — a raster that
+  came out the wrong size is a silent failure the user would only find on their site.
 
 ## Contracts this tab will keep (from the design)
 

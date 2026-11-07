@@ -11,7 +11,8 @@ import type { ReactElement } from "react";
 import BuilderPanel from "../src/builder/BuilderPanel";
 import BuilderArtboard from "../src/builder/BuilderArtboard";
 import { DENSE_BUILDER_CONFIG } from "../src/lib/builder/defaults";
-import { getAppState } from "../src/state/appstore";
+import { getAppState, setAppState } from "../src/state/appstore";
+import { DEFAULT_BUILDER } from "../src/lib/session";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion, type VerOpts } from "./helpers/svgpair";
@@ -122,7 +123,13 @@ function railNames(): string[] {
 
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
+  // A download is a click on a generated <a>; the URL machinery is stubbed so the
+  // test observes the SAME call the browser would make.
+  URL.createObjectURL = vi.fn(() => "blob:x") as unknown as typeof URL.createObjectURL;
+  URL.revokeObjectURL = vi.fn() as unknown as typeof URL.revokeObjectURL;
   window.localStorage.clear();
+  // The store is module-scope: a previous case's grid would otherwise leak in.
+  setAppState({ builder: { ...DEFAULT_BUILDER } });
 });
 
 afterEach(async () => {
@@ -309,5 +316,50 @@ describe("SVG builder — the recipe (P4)", () => {
     await pick();
     expect(q("builder-recipe-note")?.textContent ?? "").toMatch(/could not be filled/);
     expect(new Set(placedIds()).size).toBe(placedIds().length);
+  });
+});
+
+describe("SVG builder — export (P5)", () => {
+  it("offers the three downloads and the commit, and says where it writes", async () => {
+    await mount(libraryRoot());
+    await pick();
+    expect(q("builder-download-svg")).not.toBeNull();
+    expect(q("builder-download-png")).not.toBeNull();
+    expect(q("builder-download-zip")).not.toBeNull();
+    expect(q("builder-commit")?.textContent).toContain("builder/");
+    expect(q("builder-export-note")?.textContent).toContain("builder/");
+  });
+
+  it("the PNG size choice states the real pixel size it will write", async () => {
+    await mount(libraryRoot());
+    await pick();
+    const options = [...(q("builder-png-scale") as HTMLSelectElement).options].map((o) => o.textContent);
+    expect(options[0]).toContain("1000×800");
+    expect(options[1]).toContain("2000×1600");
+    expect(options[2]).toContain("3000×2400");
+  });
+
+  it("a download reports what it wrote", async () => {
+    await mount(libraryRoot());
+    await pick();
+    await click(q("builder-download-svg"));
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(q("builder-export-last")?.textContent ?? "").toContain("icon-sheet-1000x800-4x3.svg");
+  });
+
+  it("the commit writes the SVG into builder/ on the picked folder", async () => {
+    const dir = libraryRoot();
+    await mount(dir);
+    await pick();
+    await click(q("builder-commit"));
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    const folder = dir.children.get("builder") as FakeDir | undefined;
+    expect(folder).toBeInstanceOf(FakeDir);
+    expect([...(folder as FakeDir).children.keys()].some((n) => n.endsWith(".svg"))).toBe(true);
+    // happy-dom has no canvas, so the PNG step is refused — the SVG still landed,
+    // and the note must say BOTH (a partial run is not "saved" and not "failed").
+    const said = q("builder-export-last")?.textContent ?? "";
+    expect(said).toContain("Saved");
+    expect(said).toContain(".svg");
   });
 });

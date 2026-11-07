@@ -73,6 +73,30 @@ The sheet controls (P3) — every field is clamped by `lib/builder/config`:
 | `builder-captions` | checkbox | show captions |
 | `builder-controls-note` | text | says recipes/locks are not here yet |
 
-Later phases add `builder-recipe-*`, `builder-recipe-*`, `builder-stage`,
+The recipe (P4):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `builder-recipe` | `<section aria-label="Icon recipe">` | mode, its own fields, the seed, two actions |
+| `builder-recipe-mode` | `<select>` | similar / filtered / random |
+| `builder-threshold` | number input | similar mode only, 0–100 |
+| `builder-recipe-folder`, `builder-recipe-tag` | selects | filtered mode only |
+| `builder-seed` | number input | positive; the same seed reproduces the sheet |
+| `builder-reroll` | button `↻ New sheet` | new seed → a different sheet |
+| `builder-clear` | text button | empties every cell; the recipe is untouched |
+| `builder-recipe-note` | text | shortfall, repetition, stale locks, scoring basis — in one sentence |
+
+Export (P5):
+
+| Test id | Element | Notes |
+|---|---|---|
+| `builder-export` | `<section aria-label="Export the sheet">` | |
+| `builder-png-scale` | `<select>` | options state the real pixels (`2× — 2000×1600`) |
+| `builder-download-svg`, `-png`, `-zip` | buttons | local downloads, no disk access |
+| `builder-commit` | button `Save to builder/` | disabled without a folder; its label is the busy words |
+| `builder-export-note` | text | where files go, or why they cannot yet |
+| `builder-export-last` | `role="status"` | what landed — and why the rest did not |
+
+Later phases add `builder-meta-*`, `builder-recipe-*`, `builder-stage`,
 `builder-artboard`, `builder-cell-{n}`, `builder-<section>-*` controls, `builder-export-*`
-and `builder-meta-*`; each is added here in the same change that introduces it (RULE 17).
+each is added here in the same change that introduces it (RULE 17).
