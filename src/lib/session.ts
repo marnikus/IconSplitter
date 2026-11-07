@@ -18,10 +18,11 @@ import type { ZoomMode } from "./reviewprefs";
 
 export const SESSION_VERSION = 1;
 
-export type TabId = "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload" | "stockUpload";
+export type TabId =
+  | "sheets" | "batch" | "selectionV2" | "generateSvg" | "upload" | "builder" | "stockUpload";
 
 export const TAB_IDS: readonly TabId[] = [
-  "sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload",
+  "sheets", "batch", "selectionV2", "generateSvg", "upload", "builder", "stockUpload",
 ];
 
 /** Selection V2 review state; the JSON slice name stays compatible with saved sessions. */
@@ -59,6 +60,31 @@ export interface SessionUpload {
   anchorId: string | null;
 }
 
+/**
+ * What only the SVG builder tab adds: the composed sheet. `slots` is the sheet in
+ * CELL ORDER (index 0 is the first cell) and null is a real, honest hole — a flat
+ * id list would silently reflow the sheet when the column count changes.
+ * `recipe` is the selection recipe that produced (or would re-produce) it.
+ */
+export interface SessionBuilder {
+  slots: (string | null)[];
+  /** Icon ids pinned across re-rolls and cell-count changes. */
+  locked: string[];
+  /** Deterministic selection seed — the same seed reproduces the same sheet. */
+  seed: number;
+  recipe: SessionBuilderRecipe;
+}
+
+export interface SessionBuilderRecipe {
+  mode: "similar" | "random" | "filtered";
+  /** Similar mode: the minimum tag-match percentage. */
+  threshold: number;
+  /** Filtered mode: a folder path ("" = all folders). */
+  folder: string;
+  /** Filtered mode: one tag ("" = all tags). */
+  tag: string;
+}
+
 /** What only the Upload (stock FTPS) tab adds: its own selection and active row. */
 export interface SessionStockUpload {
   checked: string[];
@@ -82,6 +108,8 @@ export interface SessionState {
   selectionV2: SessionV2;
   svg: SessionSvg;
   upload: SessionUpload;
+  /** Additive: a session saved by a build that predates the tab has no `builder`. */
+  builder?: SessionBuilder;
   stockUpload?: SessionStockUpload;
   batch: SessionBatch;
 }
@@ -95,6 +123,16 @@ export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null, anchorId: 
 
 export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null, anchorId: null };
 
+/** An empty sheet: every cell a hole, nothing locked, the first seed, no filter. */
+export const DEFAULT_BUILDER: SessionBuilder = {
+  slots: [], locked: [], seed: 1,
+  recipe: { mode: "random", threshold: 70, folder: "", tag: "" },
+};
+
+export const BUILDER_MODES = ["similar", "random", "filtered"] as const;
+/** A sheet never carries more cells than this; a stored list is cut, never trusted. */
+export const BUILDER_MAX_SLOTS = 256;
+
 export const DEFAULT_STOCK_UPLOAD: SessionStockUpload = { checked: [], activeId: null, anchorId: null };
 
 export const DEFAULT_BATCH: SessionBatch = { checked: [], activeId: null, anchorId: null };
@@ -102,7 +140,8 @@ export const DEFAULT_BATCH: SessionBatch = { checked: [], activeId: null, anchor
 export const DEFAULT_SESSION: SessionState = {
   tab: "sheets", sheets: DEFAULT_SHEET_OPTS,
   selection: DEFAULT_SELECTION, selectionV2: { checked: [], scrollY: 0, anchorId: null },
-  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, stockUpload: DEFAULT_STOCK_UPLOAD, batch: DEFAULT_BATCH,
+  svg: DEFAULT_SVG, upload: DEFAULT_UPLOAD, builder: DEFAULT_BUILDER,
+  stockUpload: DEFAULT_STOCK_UPLOAD, batch: DEFAULT_BATCH,
 };
 
 /**
@@ -143,6 +182,7 @@ function toSession(raw: unknown): SessionState {
     selectionV2: parseV2(raw.selectionV2),
     svg: parseSvgSlice(raw.svg),
     upload: parseUploadSlice(raw.upload),
+    builder: parseBuilderSlice(raw.builder),
     stockUpload: parseUploadSlice(raw.stockUpload),
     batch: parseBatchSlice(raw.batch),
   };
@@ -173,6 +213,46 @@ function parseUploadSlice(raw: unknown): SessionUpload {
     activeId: typeof raw.activeId === "string" ? raw.activeId : null,
     anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
   };
+}
+
+/**
+ * The sheet, field by field (RULE 13): a non-string slot becomes a hole, locks keep
+ * only strings that are actually placed, the seed is a positive integer, and the
+ * recipe falls back per field — one bad value never costs the whole sheet.
+ */
+function parseBuilderSlice(raw: unknown): SessionBuilder {
+  if (!isRecord(raw) || !Array.isArray(raw.slots)) return DEFAULT_BUILDER;
+  const slots = raw.slots.slice(0, BUILDER_MAX_SLOTS)
+    .map((id) => (typeof id === "string" && id !== "" ? id : null));
+  const placed = new Set(slots.filter((id): id is string => id !== null));
+  return {
+    slots,
+    locked: idsOf(raw.locked).filter((id) => placed.has(id)),
+    seed: seedOf(raw.seed),
+    recipe: parseRecipe(raw.recipe),
+  };
+}
+
+function parseRecipe(raw: unknown): SessionBuilderRecipe {
+  if (!isRecord(raw)) return DEFAULT_BUILDER.recipe;
+  const mode = BUILDER_MODES.find((m) => m === raw.mode) ?? DEFAULT_BUILDER.recipe.mode;
+  const threshold = typeof raw.threshold === "number" && Number.isFinite(raw.threshold)
+    ? Math.min(100, Math.max(0, Math.round(raw.threshold))) : DEFAULT_BUILDER.recipe.threshold;
+  return { mode, threshold, folder: textOrEmpty(raw.folder), tag: textOrEmpty(raw.tag) };
+}
+
+function idsOf(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string" && id !== "") : [];
+}
+
+function textOrEmpty(raw: unknown): string {
+  return typeof raw === "string" ? raw : "";
+}
+
+/** A real seed is a positive integer; anything else is the default (never 0: seed 0 re-seeds). */
+function seedOf(raw: unknown): number {
+  return typeof raw === "number" && Number.isFinite(raw) && raw > 0
+    ? Math.min(Number.MAX_SAFE_INTEGER, Math.round(raw)) : DEFAULT_BUILDER.seed;
 }
 
 function parseSelection(raw: unknown): SessionSelection {

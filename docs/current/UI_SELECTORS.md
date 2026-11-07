@@ -79,6 +79,10 @@ activity log, history, and selector conventions. Per RULE 21, prefer
 
 [SVG to upload](selectors/upload.md#r-svg-to-upload--srcupload-verified-2026-10-07).
 
+## T. SVG builder — `src/builder/*` (verified 2026-11-07)
+
+[SVG builder](selectors/builder.md), the seventh Workbench tab (after SVG to upload).
+
 ## S1. Persistent progress header — `src/svg/SvgProgressHeader.tsx` (2026-10-11)
 
 [SVG generation progress header](selectors/svg-generation-run.md#s1-persistent-progress-header--srcsvgsvgprogressheadertsx-2026-10-11), visible on every tab.

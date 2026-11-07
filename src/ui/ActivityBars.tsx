@@ -24,5 +24,5 @@ function ActivityBar({ a }: { a: Activity }) {
 
 const SOURCES: Record<string, string> = {
   sheets: "Single sheets", batch: "Batch folders", selection: "Selection V2",
-  svg: "Generate SVG", upload: "SVG to upload", stock: "Upload",
+  svg: "Generate SVG", upload: "SVG to upload", builder: "SVG builder", stock: "Upload",
 };

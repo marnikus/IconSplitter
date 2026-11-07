@@ -49,7 +49,7 @@ describe("agent documentation routes", () => {
     expect(Buffer.byteLength(bootstrap)).toBeLessThan(6_000);
     expect(bootstrap).toContain("docs/current/README.md");
     const route = doc("docs/current/README.md");
-    for (const tab of ["sheets", "batch", "selection", "svg-generation", "svg-image-edits", "upload"]) {
+    for (const tab of ["sheets", "batch", "selection", "svg-generation", "svg-image-edits", "upload", "builder"]) {
       expect(route).toContain(`sor/${tab}`);
       expect(route).toContain(`selectors/${tab}`);
     }

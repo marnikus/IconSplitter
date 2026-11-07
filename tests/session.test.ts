@@ -129,8 +129,10 @@ describe("pruneIds — stale ids never survive a rescan", () => {
 });
 
 describe("original Selection removal compatibility", () => {
-  it("keeps only the six supported tabs", () => {
-    expect(TAB_IDS).toEqual(["sheets", "batch", "selectionV2", "generateSvg", "upload", "stockUpload"]);
+  it("keeps the supported tabs, with SVG builder after SVG to upload", () => {
+    expect(TAB_IDS).toEqual([
+      "sheets", "batch", "selectionV2", "generateSvg", "upload", "builder", "stockUpload",
+    ]);
   });
   it("round-trips the stockUpload tab and checked slice", () => {
     const raw = serializeSession({
@@ -142,6 +144,34 @@ describe("original Selection removal compatibility", () => {
     expect(restored.tab).toBe("stockUpload");
     expect(restored.stockUpload).toEqual({
       checked: ["export::icon_01"], activeId: "export::icon_01", anchorId: "export::icon_01",
+    });
+  });
+  it("round-trips the SVG builder tab and its slots/locked/seed/recipe slice", () => {
+    const raw = serializeSession({
+      ...parseSession(null),
+      tab: "builder",
+      builder: {
+        slots: ["pair_a", null, "pair_b"], locked: ["pair_b"], seed: 2841,
+        recipe: { mode: "filtered", threshold: 70, folder: "Kitchen", tag: "food" },
+      },
+    }, NOW);
+    const restored = parseSession(raw);
+    expect(restored.tab).toBe("builder");
+    expect(restored.builder).toEqual({
+      slots: ["pair_a", null, "pair_b"], locked: ["pair_b"], seed: 2841,
+      recipe: { mode: "filtered", threshold: 70, folder: "Kitchen", tag: "food" },
+    });
+  });
+  it("costs one ignored field, never the whole builder slice, when it is junk (RULE 13)", () => {
+    const restored = parseSession(asText({
+      tab: "builder",
+      builder: { slots: ["pair_a", 7, null], locked: "nope", seed: "x", recipe: { mode: "wild", threshold: 1e9, folder: 3, tag: {} } },
+    }));
+    expect(restored.tab).toBe("builder");
+    // position is the sheet's meaning: the junk slot becomes a hole IN PLACE
+    expect(restored.builder).toEqual({
+      slots: ["pair_a", null, null], locked: [], seed: 1,
+      recipe: { mode: "random", threshold: 100, folder: "", tag: "" },
     });
   });
   it("moves old Selection sessions to V2 without losing review/check state", () => {

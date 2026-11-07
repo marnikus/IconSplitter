@@ -2196,3 +2196,73 @@
 .svg-edit-ai img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .svg-edit-ai-tag { position: absolute; top: 6px; left: 6px; padding: 1px 5px; border-radius: 4px; background: rgb(12 18 34 / 85%); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .04em; }
 .svg-edit-ai-missing { color: #667; font-size: 12px; }
+
+/* ══ SVG builder — docs/archive/2026-11-07-svg-builder.
+   Dark chrome around a sheet the USER colours: the app theme is the `--v2-*`
+   family, while the artboard keeps whatever paper/ink the sheet config names.
+   Every class is `bld-` prefixed so nothing here can restyle another tab. ══ */
+
+.bld-shell[hidden] { display: none; } /* parked on another tab: mounted, not shown */
+.bld-shell {
+  width: 100%;
+  min-height: 100%;
+  background: var(--v2-bg);
+  color: var(--v2-text);
+}
+
+.bld {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+}
+
+.bld :where(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--v2-purple-2);
+  outline-offset: 2px;
+}
+
+/* ── the shared top menu, in the builder's words ─────────────────────────── */
+
+.bld-source {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--v2-line);
+  border-radius: var(--v2-radius);
+  background: #090f1d;
+  padding: 12px 14px 10px;
+}
+
+.bld-source-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.bld-scope { color: var(--v2-muted); font-size: 11px; }
+.bld-audit { margin: 0; color: var(--v2-muted); font-size: 10px; }
+.bld-note { margin: 0; color: var(--v2-muted); font-size: 11px; }
+
+/* ── the honest empty states (RULE 4) ───────────────────────────────────── */
+
+.bld-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px dashed var(--v2-line-strong);
+  border-radius: var(--v2-radius);
+  background: var(--v2-surface);
+  padding: 22px 20px;
+  max-width: 620px;
+}
+
+.bld-empty-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--v2-text); }
+.bld-empty-note { margin: 0; font-size: 11.5px; line-height: 1.55; color: var(--v2-muted); }
+
+.bld-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--v2-purple-2);
+  font-size: 11.5px;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -44,6 +44,7 @@ source doc's "Missing Selectors" section.
 | `tab-selection-v2` | `Selection V2` | mounts `SelectionV2Panel` ([§N](selection.md#n-selection-review-v2--srcselectionv2-verified-2026-10-01)) |
 | `tab-generate-svg` | `Generate SVG` | mounts `SvgPanel` ([§P](svg-generation.md#p-generate-svg--srcsvg-verified-2026-10-01)) |
 | `tab-upload` | `SVG to upload` | mounts `UploadPanel` ([§R](upload.md#r-svg-to-upload--srcupload-verified-2026-10-07)), after Generate SVG |
+| `tab-builder` | `SVG builder` | mounts `BuilderPanel` ([§T](builder.md#t-svg-builder--srcbuilder-verified-2026-11-07)), after SVG to upload |
 
 Semantic fallback: button role + visible text.
 

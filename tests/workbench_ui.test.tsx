@@ -112,11 +112,37 @@ describe("the shell", () => {
     expect(q("[data-testid='padding-slider']")).toBeNull();
   });
 
+  it("offers the SVG builder tab after SVG to upload, and opens its panel", async () => {
+    mountWorkbench();
+    await click("[data-testid='tab-builder']");
+    await settle();
+    expect(getAppState().tab).toBe("builder");
+    // this DOM has no File System Access API, so the panel renders its note
+    expect(q("[data-testid='builder-unsupported']")).not.toBeNull();
+    expect(q("[data-testid='builder-panel']")).toBeNull();
+    await act(async () => { await new Promise((r) => setTimeout(r, 300)); }); // session autosave is debounced
+    expect(loadSessionState().tab).toBe("builder"); // the switch survives a restart
+  });
+
+  it("mounts the builder once and parks it hidden, so its sheet is never unmounted", async () => {
+    mountWorkbench();
+    await click("[data-testid='tab-builder']");
+    await settle();
+    const parked = q("[data-testid='builder-shell']") as HTMLElement;
+    expect(parked).not.toBeNull();
+    expect(parked.hidden).toBe(false);
+    await click("[data-testid='tab-batch']");
+    await settle();
+    expect(q("[data-testid='builder-shell']")).toBe(parked);
+    expect(parked.hidden).toBe(true);
+  });
+
   it("offers the SVG to upload and Upload tabs right after Generate SVG, and opens their panels", async () => {
     mountWorkbench();
     const tabs = [...host.querySelectorAll("[data-testid^='tab-']")].map((el) => el.getAttribute("data-testid"));
     expect(tabs).toEqual([
-      "tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload", "tab-stock-upload",
+      "tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload",
+      "tab-builder", "tab-stock-upload",
     ]);
     await click("[data-testid='tab-upload']");
     await settle();

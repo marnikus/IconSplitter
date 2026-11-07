@@ -4,7 +4,7 @@ The five current modes are routed from [the current-doc index](../README.md). Pr
 
 ## 1. What this is
 
-A browser app with six modes (top tabs, `src/ui/Workbench.tsx`):
+A browser app with seven modes (top tabs, `src/ui/Workbench.tsx`):
 
 1. **Single sheets** — detect individual icons in a sprite sheet, review,
    resize and exclude them, export equal-size square PNGs (ZIP / downloads /

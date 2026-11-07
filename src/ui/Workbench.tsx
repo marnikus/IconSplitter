@@ -6,6 +6,7 @@ import App from "../App";
 import LogDock from "../log/LogDock";
 import { log } from "../log/logstore";
 import BatchPanel from "../batch/BatchPanel";
+import BuilderPanel from "../builder/BuilderPanel";
 import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
 import StockUploadPanel from "../stockupload/StockUploadPanel";
@@ -29,6 +30,7 @@ const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
   { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
   { id: "upload", label: "SVG to upload", testid: "tab-upload" },
+  { id: "builder", label: "SVG builder", testid: "tab-builder" },
   { id: "stockUpload", label: "Upload", testid: "tab-stock-upload" },
 ];
 
@@ -55,6 +57,7 @@ function Shell() {
         <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
         <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
         <div id="upload-progress-mount" data-testid="upload-progress-mount"></div>
+        <div id="builder-progress-mount" data-testid="builder-progress-mount"></div>
         <div id="stock-upload-progress-mount" data-testid="stock-upload-progress-mount"></div>
       </div>
       <Nav tab={tab} />
@@ -112,6 +115,7 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
         <SvgPanel active={tab === "generateSvg"} />
       </div>
       <UploadWorkspace active={tab === "upload"} />
+      <BuilderWorkspace active={tab === "builder"} />
       <StockUploadWorkspace active={tab === "stockUpload"} />
     </>
   );
@@ -123,6 +127,14 @@ function UploadWorkspace({ active }: { active: boolean }) {
   useEffect(() => { if (active) setVisited(true); }, [active]);
   if (!active && !visited) return null;
   return <div className="up-shell px-4 py-3" data-testid="upload-shell" hidden={!active}><UploadPanel active={active} /></div>;
+}
+
+/** Lazy on first visit; after that a hidden panel keeps its composed sheet. */
+function BuilderWorkspace({ active }: { active: boolean }) {
+  const [visited, setVisited] = useState(active);
+  useEffect(() => { if (active) setVisited(true); }, [active]);
+  if (!active && !visited) return null;
+  return <div className="bld-shell px-4 py-3" data-testid="builder-shell" hidden={!active}><BuilderPanel active={active} /></div>;
 }
 
 function StockUploadWorkspace({ active }: { active: boolean }) {
