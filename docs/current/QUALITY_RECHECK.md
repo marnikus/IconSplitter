@@ -5110,3 +5110,7 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 ## 2026-11-08 — Stock upload: Upload history button moved into the bulk bar
 
 - Now right before Remove selected / Upload (N). stockupload_ui 11/11 (position assertion added, failed first); tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — Stock upload: compact setup panel (layout only)
+
+- Header with icon + two-line title; Connection | Stock preset + Add preset | Sign-in & test as three cards; status badge in the sign-in card head; Test connection right-aligned. No control added/removed. stockupload suites 143/143 (layout assertions added, failed first); tsc PASS; lint 0 errors; quality gate PASS; build PASS.

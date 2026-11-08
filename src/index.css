@@ -2272,78 +2272,120 @@
   .stock-presets-name { width: auto; flex: auto; }
 }
 
-/* Stock Upload setup: compact presets, connection, sign-in and list filters. */
-.stock-ftp-provider { flex: 1 1 100%; min-width: 0; padding: 7px 9px; gap: 5px; }
+/* Stock Upload setup (2026-11-08 compact redesign): a header (icon, stock name +
+   method · endpoint, quick stock switch, Minimize), then three cards side by
+   side — Connection settings | Stock preset + Add preset | Sign-in & test — and
+   the one-row Find & filter card. Same controls as before; layout only. */
+.stock-ftp-provider { flex: 1 1 100%; min-width: 0; padding: 9px 10px; gap: 8px; }
 .stock-ftp-provider-top {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) auto auto;
-  gap: 8px;
+  grid-template-columns: auto minmax(150px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
   min-width: 0;
 }
-.stock-provider-summary { display: flex; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; }
-.stock-provider-summary strong { flex: 0 0 auto; white-space: nowrap; }
-.stock-provider-summary > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.stock-ftp-provider-top [role="group"] { min-width: 0; flex-wrap: nowrap !important; }
-.stock-ftp-provider-top [role="group"] .svg-btn { max-width: 112px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-ftp-icon {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px;
+  background: color-mix(in srgb, var(--v2-purple) 22%, var(--v2-surface-2)); color: var(--v2-purple-2); font-size: 14px;
+}
+.stock-provider-summary { display: grid; gap: 1px; min-width: 0; overflow: hidden; }
+.stock-provider-summary strong { color: var(--v2-text); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stock-provider-summary > span { min-width: 0; overflow: hidden; color: var(--v2-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.stock-quick-switch { display: inline-flex; gap: 4px; min-width: 0; flex-wrap: nowrap; }
+.stock-quick-switch .svg-btn { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stock-ftp-toggle { white-space: nowrap; }
 
+.stock-ftp-body {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.45fr) minmax(300px, 1.45fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+/* the cards: the legend sits INSIDE the card as its heading */
 .stock-ftp-section,
 .stock-filter-section {
+  position: relative;
   min-width: 0;
   margin: 0;
-  padding: 5px 8px 6px;
+  padding: 9px 11px 10px;
   border: 1px solid var(--v2-line);
-  border-radius: 6px;
+  border-radius: 7px;
   background: #0b1220;
 }
 .stock-ftp-section legend,
 .stock-filter-section legend {
-  padding: 0 5px;
+  float: left;
+  width: 100%;
+  margin-bottom: 7px;
+  padding: 0;
   color: var(--v2-muted-2);
   font-size: 9px;
   font-weight: 800;
   letter-spacing: .07em;
   text-transform: uppercase;
 }
+.stock-ftp-section legend + *,
+.stock-filter-section legend + * { clear: both; }
+.stock-card-head { position: absolute; top: 7px; right: 10px; }
+.stock-card-head .svg-badge { white-space: nowrap; font-size: 9px; }
 .stock-ftp-section .svg-label,
-.stock-filter-section .svg-label { margin-bottom: 2px; font-size: 9px; letter-spacing: .04em; }
+.stock-filter-section .svg-label { margin-bottom: 3px; font-size: 9px; letter-spacing: .02em; text-transform: none; }
 .stock-ftp-section .svg-input,
-.stock-filter-section .svg-input { height: 27px; padding-inline: 7px; font-size: 9px; }
-.stock-ftp-section .svg-btn.tiny { min-height: 25px; padding: 3px 7px; font-size: 9px; }
-.stock-preset-row {
-  display: grid;
-  grid-template-columns: minmax(180px, .9fr) auto minmax(220px, 1fr);
-  gap: 6px;
-  align-items: end;
-}
-.stock-preset-select { min-width: 0; }
-.stock-preset-actions,
-.stock-credential-actions { display: flex; align-items: end; flex-wrap: wrap; gap: 4px; }
-.stock-new-preset { display: grid; grid-template-columns: minmax(120px, 1fr) auto; gap: 5px; align-items: end; min-width: 0; }
-.stock-new-preset .svg-field { min-width: 0; }
+.stock-filter-section .svg-input { height: 28px; padding-inline: 8px; font-size: 10px; }
+.stock-ftp-section .svg-btn.tiny { min-height: 26px; padding: 4px 9px; font-size: 9px; }
+
+/* Connection settings: two compact rows (Host · Port · Protocol / path · TLS · helper) */
 .stock-connection-grid {
   display: grid;
-  grid-template-columns: minmax(145px, 1.1fr) 72px minmax(175px, 1.35fr) minmax(155px, 1.15fr) minmax(165px, 1.25fr) minmax(175px, 1.25fr);
-  gap: 6px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px 8px;
   align-items: end;
 }
-.stock-connection-grid .svg-field { min-width: 0; }
+.stock-connection-grid .svg-field { min-width: 0; grid-column: span 2; }
+.stock-connection-grid .stock-f-host { grid-column: span 3; }
+.stock-connection-grid .stock-f-port { grid-column: span 1; }
+.stock-connection-grid .stock-f-protocol { grid-column: span 2; }
+.stock-connection-grid .stock-f-pin { grid-column: 1 / -1; }
+
+/* Stock preset | Add preset, split by a hairline */
+.stock-preset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.stock-preset-main { display: grid; grid-template-columns: minmax(130px, 1fr) auto; gap: 6px; align-items: end; min-width: 0; }
+.stock-preset-select { min-width: 0; }
+.stock-preset-actions,
+.stock-credential-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.stock-new-preset {
+  display: grid; grid-template-columns: minmax(110px, 1fr) auto; gap: 5px 6px; align-items: end; min-width: 0;
+  padding-left: 12px; border-left: 1px solid var(--v2-line);
+}
+.stock-new-preset .stock-subhead { grid-column: 1 / -1; }
+.stock-subhead { color: var(--v2-muted-2); font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.stock-new-preset .svg-field { min-width: 0; }
+
+/* Sign-in & test: account | password, then Save · Forget … Test connection */
 .stock-credential-row {
   display: grid;
-  grid-template-columns: minmax(130px, auto) repeat(2, minmax(140px, 1fr)) auto;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 8px;
   align-items: end;
 }
-.stock-credential-row > .svg-badge { align-self: center; white-space: nowrap; font-size: 9px; }
-.stock-credential-row.esp { grid-template-columns: minmax(130px, auto) repeat(4, minmax(130px, 1fr)) auto; }
-.stock-credential-actions { min-width: 0; }
-.stock-ftp-help { margin-top: 4px; color: var(--v2-muted); font-size: 9px; }
+.stock-credential-row.esp { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stock-credential-actions { grid-column: 1 / -1; min-width: 0; }
+.stock-credential-actions [data-testid="stock-ftp-test"] { margin-left: auto; }
+.stock-ftp-help { margin-top: 6px; color: var(--v2-muted); font-size: 9px; }
 .stock-ftp-help summary { width: fit-content; color: var(--v2-muted-2); cursor: pointer; }
 .stock-ftp-help .up-hint { display: block; max-width: 1200px; margin-top: 5px; }
 .stock-test-banner { margin-top: 6px; }
+
+/* Find & filter: one row — wide search, then the filters and actions */
 .stock-filter-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(130px, 160px) minmax(130px, 160px) auto minmax(130px, 160px) auto;
+  grid-template-columns: minmax(240px, 1fr) minmax(120px, 150px) minmax(120px, 150px) auto minmax(120px, 150px) auto;
   gap: 8px;
   align-items: end;
 }
@@ -2351,40 +2393,36 @@
 .stock-filter-grid .svg-field,
 .stock-filter-grid .multi-select { min-width: 0; }
 
-@media (max-width: 1200px) {
-  .stock-connection-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .stock-credential-row { grid-template-columns: minmax(120px, auto) repeat(2, minmax(120px, 1fr)) auto; }
-  .stock-credential-row.esp { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stock-filter-grid { grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(125px, 160px)); }
+@media (max-width: 1350px) {
+  .stock-ftp-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stock-ftp-body > [data-testid="stock-ftp-cred-box"] { grid-column: 1 / -1; }
 }
-@media (max-width: 1000px) {
-  .stock-preset-row { grid-template-columns: minmax(180px, 1fr) auto; }
-  .stock-new-preset { grid-column: 1 / -1; }
+@media (max-width: 1200px) {
+  .stock-filter-grid { grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(120px, 150px)); }
+}
+@media (max-width: 900px) {
+  .stock-ftp-body { grid-template-columns: minmax(0, 1fr); }
+  .stock-preset-row { grid-template-columns: minmax(0, 1fr); }
+  .stock-new-preset { padding-left: 0; border-left: 0; }
 }
 @media (max-width: 760px) {
   .stock-ftp-provider-top { display: flex; flex-wrap: wrap; }
-  .stock-provider-summary { flex: 1 1 100%; }
-  .stock-ftp-provider-top [role="group"] { flex-wrap: wrap !important; }
+  .stock-provider-summary { flex: 1 1 60%; }
+  .stock-quick-switch { flex-wrap: wrap; }
   .stock-ftp-toggle { margin-left: auto; }
-  .stock-preset-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .stock-new-preset { grid-column: 1 / -1; }
   .stock-connection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stock-credential-row,
-  .stock-credential-row.esp { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stock-credential-row > .svg-badge,
-  .stock-credential-actions { grid-column: 1 / -1; }
-  .stock-filter-grid { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(115px, 160px)); }
+  .stock-connection-grid .svg-field, .stock-connection-grid .stock-f-host,
+  .stock-connection-grid .stock-f-port, .stock-connection-grid .stock-f-protocol { grid-column: span 1; }
+  .stock-filter-grid { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(115px, 150px)); }
 }
 @media (max-width: 500px) {
-  .stock-preset-row,
+  .stock-preset-main,
   .stock-connection-grid,
   .stock-filter-grid,
   .stock-new-preset,
   .stock-credential-row,
   .stock-credential-row.esp { grid-template-columns: minmax(0, 1fr); }
-  .stock-credential-row > .svg-badge,
-  .stock-credential-actions { grid-column: auto; }
-  .stock-preset-actions { align-items: flex-start; }
+  .stock-card-head { position: static; margin-bottom: 6px; }
 }
 
 .stock-upload-reupload {

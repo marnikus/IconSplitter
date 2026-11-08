@@ -50,10 +50,12 @@ function EspBatchReadyCard({ active, testStatus, actions }: {
   return (
     <fieldset className="stock-ftp-section stock-credentials-section" data-testid="stock-ftp-cred-box">
       <legend>Sign-in & test</legend>
-      <div className="stock-credential-row">
+      <div className="stock-card-head">
         <span className="svg-badge processed" data-testid="stock-ftp-cred-status">
           Ready locally (no API key or FTP password required)
         </span>
+      </div>
+      <div className="stock-credential-row">
         <div className="stock-credential-actions">
           <button type="button" className="svg-btn tiny" data-testid="stock-ftp-test"
             disabled={testStatus.busy} onClick={() => { void actions.testConnection(active.id); }}>
@@ -88,8 +90,8 @@ function NetworkCredentialsCard({ active, saved, testStatus, actions }: LocalCre
   return (
     <fieldset className="stock-ftp-section stock-credentials-section" data-testid="stock-ftp-cred-box">
       <legend>Sign-in & test</legend>
+      <div className="stock-card-head"><CredentialStatus saved={saved} /></div>
       <div className={`stock-credential-row${isEsp ? " esp" : ""}`}>
-        <CredentialStatus saved={saved} />
         {isEsp && <EspApiInputs saved={saved} apiKey={apiKey} apiSecret={apiSecret} onKey={setApiKey} onSecret={setApiSecret} />}
         <LoginInputs active={active} saved={saved} user={user} pass={pass} onUser={setUser} onPass={setPass} />
         <div className="stock-credential-actions">

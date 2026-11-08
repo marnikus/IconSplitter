@@ -260,6 +260,13 @@ describe("Upload (stockUpload) tab UI", () => {
     expect((q("stock-ftp-help") as HTMLDetailsElement).open).toBe(false);
     expect(filters?.querySelector("legend")?.textContent).toContain("Find & filter");
     expect(filters?.querySelector("[data-testid='stock-filter-search']")).not.toBeNull();
+    // Compact layout (2026-11-08): header with icon, then three cards side by side — Connection | Stock preset | Sign-in.
+    expect(q("stock-ftp-panel")!.querySelector(".stock-ftp-icon")).not.toBeNull();
+    const body = q("stock-ftp-body")!;
+    expect([...body.children].map((c) => (c as HTMLElement).dataset.testid))
+      .toEqual(["stock-ftp-connection-group", "stock-ftp-preset-group", "stock-ftp-cred-box"]);
+    expect(credentials!.querySelector(".stock-card-head [data-testid='stock-ftp-cred-status']")).not.toBeNull();
+    expect(presets!.querySelector("[data-testid='stock-ftp-new-name']")!.closest(".stock-new-preset")).not.toBeNull();
   });
 
   it("sizes the raster preview frame to the original file aspect ratio", async () => {
