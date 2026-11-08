@@ -188,6 +188,42 @@ describe("SVG builder workspace", () => {
     expect(text("builder-toast")).toContain("≥ 90% similar"); // threshold changes re-pick without a shortfall toast
   });
 
+  it("shows each placed icon's % closeness to the locked group on the artboard, with a show/hide toggle", async () => {
+    setIndexRuntime(fakeIndexRuntime());
+    await openLibrary();
+    await click("builder-index-start");
+    await waitUntil(() => text("builder-index-count").includes("12/12 indexed"), "all icons indexed");
+    const food = new Set(all('[data-testid^="builder-asset-"]').filter((t) => /^(Apple|Bread|Cake|Donut|Egg)/.test(t.title)).map((t) => t.dataset.assetId));
+    const order = await idsInOrder();
+    const foodCell = order.findIndex((id) => food.has(id));
+    const uiCell = order.findIndex((id) => !food.has(id));
+    await act(async () => { q(`builder-cell-lock-${foodCell}`)!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(text(`builder-cell-score-${foodCell}`)).toBe("REF");
+    const otherFood = order.findIndex((id, i) => food.has(id) && i !== foodCell);
+    expect(text(`builder-cell-score-${otherFood}`)).toBe("100%");
+    expect(text(`builder-cell-score-${uiCell}`)).toBe("0%");
+    await click("builder-toggle-scores");
+    expect(q(`builder-cell-score-${uiCell}`)).toBeNull();
+    await click("builder-toggle-scores");
+    expect(q(`builder-cell-score-${uiCell}`)).not.toBeNull();
+  });
+
+  it("the artboard × removes an icon and keeps it out of later reshuffles until restored", async () => {
+    await openLibrary();
+    await click("builder-recipe-mode-random");
+    const removed = (await idsInOrder())[0];
+    await click("builder-cell-exclude-0");
+    expect(await idsInOrder()).not.toContain(removed);
+    expect(text("builder-excluded-count")).toBe("1 excluded");
+    expect(q(`builder-asset-${removed}`)!.dataset.excluded).toBe("true");
+    for (let i = 0; i < 3; i++) await click("builder-reshuffle-stage");
+    expect(await idsInOrder()).not.toContain(removed);
+    await click("builder-excluded-restore");
+    expect(q("builder-excluded-count")).toBeNull();
+    await click(`builder-asset-${removed}`); // the library click also re-includes and re-adds
+    expect(await idsInOrder()).toContain(removed);
+  });
+
   it("presets, CUSTOM pill, RESET and the global undo", async () => {
     await openLibrary();
     await click("builder-layout-plain");

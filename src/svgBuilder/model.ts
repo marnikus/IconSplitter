@@ -49,6 +49,8 @@ export interface BuilderModel {
   recipe: SelectionRecipe;
   seed: number;
   lockedIds: readonly string[];
+  /** Removed with the artboard ×; kept out of reshuffles until restored (working state, like locks). */
+  excludedIds: readonly string[];
   listView: BuilderListView;
   prefs: BuilderPrefs;
   prompt: string;
@@ -72,7 +74,7 @@ export function initialBuilderModel(): BuilderModel {
     supported: hasFolderPicker(), root: null, discovery: null, busy: null,
     status: "Open a folder to build from approved SVGs", error: false,
     config: loadSheetConfig(), recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SEED,
-    lockedIds: [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
+    lockedIds: [], excludedIds: [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
     prompt: loadBuilderPrompt(), presets: builderPresets.load(), presetPick: "",
     gemini: loadGeminiConfig(), key: emptyKeyInfo(),
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null,

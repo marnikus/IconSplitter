@@ -143,6 +143,16 @@ describe("selection recipes", () => {
     expect(r.shortfall).toEqual({ pool: 3, cells: 5 });
   });
 
+  it("excluded icons are never drawn, topped up or appended", () => {
+    const excludedIds = ["apple", "bread", "cake", "donut"];
+    const r = reshuffleSheet({ assets: library, profiles, recipe: recipe({ mode: "filtered", category: "Food icons" }), seed: 2,
+      capacity: 12, current: [], lockedIds: [], excludedIds });
+    expect(r.ids.some((id) => excludedIds.includes(id))).toBe(false);
+    expect(r.ids).toHaveLength(8);
+    const grown = resizeSheet({ assets: library, profiles, recipe: recipe(), seed: 5, capacity: 12, current: ["egg"], lockedIds: [], excludedIds });
+    expect(grown.some((id) => excludedIds.includes(id))).toBe(false);
+  });
+
   it("growing appends new picks, shrinking truncates", () => {
     const grown = resizeSheet({ assets: library, profiles, recipe: recipe(), seed: 5, capacity: 6, current: ["apple", "home"], lockedIds: [] });
     expect(grown.slice(0, 2)).toEqual(["apple", "home"]);

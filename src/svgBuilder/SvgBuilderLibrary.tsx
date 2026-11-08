@@ -48,20 +48,25 @@ function IconGrid({ b }: { b: BuilderApi }) {
   </>;
 }
 
-function IconTile({ b, asset }: { b: BuilderApi; asset: BuilderIconAsset }) {
+/** Every flag a library tile shows, in one place. */
+function tileFlags(b: BuilderApi, asset: BuilderIconAsset) {
   const placed = b.checked.includes(asset.id);
   const raw = b.scoreOf(asset);
   const score = raw === null ? null : Math.round(raw * 100);
-  const match = !placed && b.recipe.mode === "similar" && score !== null && score >= b.recipe.threshold;
-  const unindexed = b.indexStates.get(asset.id) !== "ok";
-  const noMeta = iconText(asset) === "";
+  return { placed, score, match: !placed && b.recipe.mode === "similar" && score !== null && score >= b.recipe.threshold,
+    unindexed: b.indexStates.get(asset.id) !== "ok", noMeta: iconText(asset) === "", excluded: b.excludedIds.includes(asset.id) };
+}
+
+function IconTile({ b, asset }: { b: BuilderApi; asset: BuilderIconAsset }) {
+  const { placed, score, match, unindexed, noMeta, excluded } = tileFlags(b, asset);
   return <button type="button" data-testid={`builder-asset-${asset.id}`} data-asset-id={asset.id} data-selected={placed}
-    data-unindexed={unindexed} data-nometa={noMeta} aria-pressed={placed}
-    className={`bld-tile${placed ? " is-on" : ""}${noMeta ? " is-nometa" : ""}`}
+    data-unindexed={unindexed} data-nometa={noMeta} data-excluded={excluded} aria-pressed={placed}
+    className={`bld-tile${placed ? " is-on" : ""}${noMeta ? " is-nometa" : ""}${excluded ? " is-excluded" : ""}`}
     title={tileTitle({ asset, score, placed, unindexed, noMeta })} onClick={() => b.actions.toggleAsset(asset.id)}>
     <SvgBuilderAssetThumb asset={asset} repository={b.repository} />
     {placed && <span className="bld-tile-check" aria-hidden="true">✓</span>}
     {match && <span className="bld-tile-dot" data-testid={`builder-match-${asset.id}`} aria-hidden="true" />}
+    {excluded && <span className="bld-tile-excluded" aria-hidden="true">⊘</span>}
     {unindexed && <span className="bld-tile-warn" data-testid={`builder-unindexed-${asset.id}`} aria-hidden="true">⚠</span>}
   </button>;
 }
@@ -78,6 +83,16 @@ function tileTitle(t: TileInfo): string {
   return lines.join("\n");
 }
 
+function ExcludedPill({ b }: { b: BuilderApi }) {
+  const n = b.excludedIds.length;
+  if (n === 0) return null;
+  return <>
+    <span className="bld-pill" data-testid="builder-excluded-count">{n} excluded</span>
+    <button type="button" className="svg-link" data-testid="builder-excluded-restore" title="Let excluded icons be picked again"
+      onClick={b.actions.restoreExcluded}>restore</button>
+  </>;
+}
+
 function LibraryFooter({ b }: { b: BuilderApi }) {
   const used = Math.min(b.checked.length, b.layout.capacity);
   const locked = b.lockedIds.length;
@@ -85,6 +100,7 @@ function LibraryFooter({ b }: { b: BuilderApi }) {
     <div className="bld-foot-row">
       <span data-testid="builder-cells"><b>{used}</b> of {b.layout.capacity} cells</span>
       {locked > 0 && <span className="bld-pill" data-testid="builder-locked-count">{locked} locked</span>}
+      <ExcludedPill b={b} />
       <button type="button" className="svg-btn ghost tiny" data-testid="builder-clear" disabled={b.checked.length === 0}
         onClick={b.actions.clearSelection}>CLEAR</button>
     </div>

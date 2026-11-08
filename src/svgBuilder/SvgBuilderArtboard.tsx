@@ -29,8 +29,7 @@ function CellOverlays({ b, placed }: { b: BuilderApi; placed: readonly string[] 
   return <div className="bld-overlay" style={{ color: b.config.icons.color }}>
     {b.layout.cells.map((cell) => {
       const id = placed[cell.index];
-      return id === undefined ? <Placeholder key={`e${cell.index}`} cell={cell} />
-        : <LockButton key={id} cell={cell} id={id} locked={b.lockedIds.includes(id)} onToggle={b.actions.toggleLock} />;
+      return id === undefined ? <Placeholder key={`e${cell.index}`} cell={cell} /> : <PlacedCell key={id} b={b} cell={cell} id={id} />;
     })}
   </div>;
 }
@@ -41,10 +40,35 @@ function Placeholder({ cell }: { cell: CellFrame }) {
     style={{ left: cell.x + inset, top: cell.y + inset, width: cell.glyph, height: cell.glyph, fontSize: Math.max(5, cell.glyph * 0.19) }}>+</span>;
 }
 
-function LockButton({ cell, id, locked, onToggle }: { cell: CellFrame; id: string; locked: boolean; onToggle: (id: string) => void }) {
+/** Hover controls (lock, exclude) and the optional % closeness to the reference group. */
+function PlacedCell({ b, cell, id }: { b: BuilderApi; cell: CellFrame; id: string }) {
+  const locked = b.lockedIds.includes(id);
   const label = locked ? "Unlock this icon" : "Lock this icon while reshuffling";
+  const small = Math.max(7, Math.min(13, cell.size * 0.22));
   return <span className={`bld-cell${locked ? " is-locked" : ""}`} style={{ left: cell.x, top: cell.y, width: cell.size, height: cell.size }}>
     <button type="button" className="bld-cell-lock" data-testid={`builder-cell-lock-${cell.index}`} aria-pressed={locked}
-      aria-label={label} title={label} onClick={() => onToggle(id)}>{locked ? "🔒" : "○"}</button>
+      aria-label={label} title={label} onClick={() => b.actions.toggleLock(id)}>{locked ? "🔒" : "○"}</button>
+    <button type="button" className="bld-cell-exclude" data-testid={`builder-cell-exclude-${cell.index}`}
+      aria-label="Exclude this icon from the sheet" title="Exclude this icon from the sheet (kept out of reshuffles)"
+      onClick={() => b.actions.excludeAsset(id)}>×</button>
+    {b.prefs.showScores && <CellScore b={b} cell={cell} id={id} fontSize={small} />}
   </span>;
+}
+
+/** "REF" for the reference group, "NN%" closeness (green ≥ threshold, amber below), "–" without vectors. */
+function CellScore({ b, cell, id, fontSize }: { b: BuilderApi; cell: CellFrame; id: string; fontSize: number }) {
+  const isRef = b.referenceIds.includes(id) && b.reference.count > 0;
+  const asset = b.assets.find((a) => a.id === id);
+  const v = scoreView(isRef || asset === undefined ? null : b.scoreOf(asset), isRef, b.recipe.threshold);
+  return <span className="bld-cell-score" data-tone={v.tone} data-testid={`builder-cell-score-${cell.index}`} title={v.title} style={{ fontSize }}>{v.value}</span>;
+}
+
+interface ScoreView { value: string; tone: "ref" | "none" | "high" | "low"; title: string }
+
+/** The label, colour and tooltip of one cell's closeness number. */
+export function scoreView(raw: number | null, isRef: boolean, threshold: number): ScoreView {
+  if (isRef) return { value: "REF", tone: "ref", title: "Part of the reference group" };
+  if (raw === null) return { value: "–", tone: "none", title: "No similarity yet — index the icons and lock a reference" };
+  const pct = Math.round(raw * 100);
+  return { value: `${pct}%`, tone: pct >= threshold ? "high" : "low", title: `${pct}% similar to the reference group` };
 }

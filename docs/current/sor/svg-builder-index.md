@@ -30,6 +30,11 @@ Both vectors are normalised and written to **`<approved svg>.index.json`** besid
 - **Similarity** = (100 − T) % image-vector cosine + T % text-vector cosine, each clamped 0–1; when either side has no text vector, the image cosine alone (`src/lib/iconIndex/similarity.ts`). **Similarity ≥ N %** (0–100) is the cut-off; **Look alike ◀▶ Mean alike** (`builder-text-weight`, 0–100 % step 5, default 50) sets T, shown as a split bar (`builder-weight-image` / `builder-weight-text`). Both re-pick without a toast and update every tile's `NN% similar`; T is part of the recipe (`textWeight`).
 - The pool is every icon ≥ N % (seeded draw); a short pool is topped up with the **next most similar** icons and reported. Without an indexed reference, Similar refuses with a toast; the first-scan auto placement falls back to Random. Tile tooltips show `NN% similar`; a dot marks unplaced icons ≥ N %.
 
+## On the artboard
+
+- **% closeness** (`builder-cell-score-{i}`, preview only, never exported): every placed icon shows its similarity to the reference group with the current look/mean mix — `REF` on reference icons, green at or above the Similarity threshold, amber below, `–` without vectors. **% Similarity** in the stage toolbar (`builder-toggle-scores`, pref `showScores`) shows / hides them.
+- **× exclude** (`builder-cell-exclude-{i}`, on hover beside the lock): removes the icon from the sheet (later cells shift up, lock dropped) and keeps it out of every later reshuffle, top-up and grow (`excludedIds`, working state like locks). The library tile is dimmed with ⊘ (`data-excluded`); clicking it re-adds and re-includes it; the footer pill `N excluded` + **restore** (`builder-excluded-restore`) clears all exclusions.
+
 ## Network, privacy and storage
 
 The worker runs the vendored `src/vendor/transformers/transformers.min.js` (transformers.js 3.8.1, Apache-2.0; see its README). First use downloads the two public models from `huggingface.co` and the ONNX WASM runtime from `cdn.jsdelivr.net` — **downloads only**; no icon, name, metadata or key is sent anywhere. Model files are kept in IndexedDB `iconSplitter-models` (`indexer/modelcache.ts`) so later runs load offline. See [storage](storage/svg-builder.md).

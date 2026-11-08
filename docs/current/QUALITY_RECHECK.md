@@ -5033,3 +5033,8 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 
 - Similar score = (100−T)% image + T% text cosine; `textWeight` in the recipe (0–100 step 5, default 50); slider + split bar in the Similar pane; caption shows the mix.
 - Tests: icon_index +1, parity caption +1, workspace weight assertions; builder+index suites 83/83; test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: artboard % closeness numbers, show/hide, × exclude
+
+- Per placed cell: REF / NN% (green ≥ threshold, amber below) / – ; toolbar toggle (pref showScores); × removes + excludes from later picks (excludedIds), library ⊘, footer restore.
+- Tests: parity +1 (exclusion in reshuffle/resize), workspace +2; builder+index suites 86/86; test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate PASS.

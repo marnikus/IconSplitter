@@ -50,6 +50,9 @@ function StageToolbar({ b, zoom }: { b: BuilderApi; zoom: number }) {
       className={`svg-btn ghost bld-preset${b.prefs.layout === p.id ? " is-on" : ""}`} aria-pressed={b.prefs.layout === p.id}
       onClick={() => b.actions.applyLayoutPreset(p.id)}><PresetThumb id={p.id} /><span>{p.label}</span></button>)}
     {b.prefs.layout === "custom" && <span className="bld-pill" data-testid="builder-custom-pill">CUSTOM</span>}
+    <button type="button" className={`svg-btn tiny${b.prefs.showScores ? " primary" : " ghost"}`} data-testid="builder-toggle-scores"
+      aria-pressed={b.prefs.showScores} title={b.prefs.showScores ? "Hide the % similarity numbers on the artboard" : "Show each icon's % similarity to the reference group"}
+      onClick={() => b.actions.toggleScores(!b.prefs.showScores)}>% Similarity</button>
     <div className="bld-zoom" aria-label="Artboard zoom">
       <button type="button" className="svg-btn tiny" data-testid="builder-zoom-out" onClick={() => b.actions.setZoom(zoom - 0.1)}>−</button>
       <button type="button" className="svg-btn ghost tiny bld-zoom-value" data-testid="builder-zoom" title="Fit to stage"

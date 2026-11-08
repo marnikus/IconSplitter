@@ -6,7 +6,7 @@ Back to the [storage map](../STORAGE.md) and [behaviour contract](../svg-builder
 |---|---|---|
 | `SESSION_KEY` builder slice | `checked`, `activeId`, `anchorId`, `config`, `seed`, `lockedIds`, `recipe` | parsed by `parseBuilderSlice`; unknown tab/slice → default |
 | localStorage `iconSplitter.svgBuilder.config.v1` | full `SheetConfig` | `parseSheetConfig` clamps every field; one owner in `configstore.ts` |
-| localStorage `iconSplitter.svgBuilder.prefs.v1` | zoom, fit, provider-card open state, layout choice (`editorial`/`masthead`/`plain`/`custom`), metadata widget `metaOpen` and dragged `metaHeight` (160–1200 px or null) | `parseBuilderPrefs`; display-only, not undoable |
+| localStorage `iconSplitter.svgBuilder.prefs.v1` | zoom, fit, provider-card open state, layout choice (`editorial`/`masthead`/`plain`/`custom`), metadata widget `metaOpen` and dragged `metaHeight` (160–1200 px or null), artboard `showScores` | `parseBuilderPrefs`; display-only, not undoable |
 | localStorage `iconSplitter.svgBuilder.prompt.v1` | sheet metadata prompt | `parseBuilderPrompt`; default restored on junk, key never stored here |
 | localStorage `iconSplitter.svgBuilder.prompts.v1` | prompt preset list | shared `presetStore`; validated on read |
 | localStorage `iconSplitter.svgBuilder.listView.v1` | library query, category, sort | `parseBuilderListView`; display-only |

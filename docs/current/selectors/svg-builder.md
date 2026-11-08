@@ -45,6 +45,7 @@
 | `builder-artboard` | scaled artboard | `data-zoom`; composed SVG in a shadow root |
 | `builder-empty-cell-{i}` | dashed `+` placeholder | `data-placeholder`, preview only |
 | `builder-cell-lock-{i}` | per-cell lock | `aria-pressed`; visible on hover / when locked |
+| `builder-cell-exclude-{i}` / `builder-cell-score-{i}` | per-cell × exclude / % closeness | score `data-tone` ref/high/low/none; `builder-toggle-scores` toolbar toggle; footer `builder-excluded-count` + `builder-excluded-restore`; tile `data-excluded` |
 | `builder-reshuffle-stage` | floating Reshuffle | top-right |
 | `builder-stage-status` | status line | overflow / empty cells / "N glyphs placed…" + "LIVE VECTOR PREVIEW · W × H px" |
 

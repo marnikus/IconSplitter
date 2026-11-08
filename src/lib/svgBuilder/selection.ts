@@ -23,6 +23,15 @@ export interface SheetPick {
   lockedIds: readonly string[];
   /** Vector similarity to the reference (0–1); null = not indexed. When given, Similar uses it instead of tag profiles. */
   score?: (asset: BuilderIconAsset) => number | null;
+  /** Icons the user removed with the artboard ×: never drawn, topped up or appended until restored. */
+  excludedIds?: readonly string[];
+}
+
+/** The pick with excluded icons taken out of the library it draws from. */
+function withoutExcluded(p: SheetPick): SheetPick {
+  if (!p.excludedIds || p.excludedIds.length === 0) return p;
+  const out = new Set(p.excludedIds);
+  return { ...p, assets: p.assets.filter((a) => !out.has(a.id)) };
 }
 
 export function parseSelectionRecipe(raw: unknown): SelectionRecipe {
@@ -53,7 +62,8 @@ export function poolOf(assets: readonly BuilderIconAsset[], profiles: readonly B
 }
 
 /** Re-draw every unlocked cell; locked icons keep their cell index. */
-export function reshuffleSheet(p: SheetPick): SelectionResult {
+export function reshuffleSheet(pick: SheetPick): SelectionResult {
+  const p = withoutExcluded(pick);
   const locked = new Set(p.lockedIds);
   const slots: (string | null)[] = Array.from({ length: p.capacity }, (_, i) => (locked.has(p.current[i] ?? "") ? p.current[i] : null));
   const kept = new Set(slots.filter((id): id is string => id !== null));
@@ -66,7 +76,8 @@ export function reshuffleSheet(p: SheetPick): SelectionResult {
 }
 
 /** Grid size change: shrinking truncates; growing appends seeded picks (seed + capacity) not already placed. */
-export function resizeSheet(p: SheetPick): string[] {
+export function resizeSheet(pick: SheetPick): string[] {
+  const p = withoutExcluded(pick);
   if (p.current.length >= p.capacity) return p.current.slice(0, p.capacity);
   const have = new Set(p.current);
   const pool = poolOf(p.assets, p.profiles, p.recipe, p.score).filter((a) => !have.has(a.id));

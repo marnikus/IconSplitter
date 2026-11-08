@@ -13,7 +13,7 @@ import { isBuilderDefaultPrompt, saveBuilderPrompt } from "../promptstore";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
 type ConfigActions = Pick<BuilderActions,
-  "setConfig" | "applyLayoutPreset" | "resetConfig" | "setZoom" | "fitZoom" | "toggleProvider" | "toggleMeta" | "setMetaHeight"
+  "setConfig" | "applyLayoutPreset" | "resetConfig" | "setZoom" | "fitZoom" | "toggleProvider" | "toggleMeta" | "setMetaHeight" | "toggleScores"
   | "setPrompt" | "resetPrompt" | "setSearch" | "undo" | "redo">;
 
 export function configActions(get: () => BuilderActionContext): ConfigActions {
@@ -25,6 +25,7 @@ export function configActions(get: () => BuilderActionContext): ConfigActions {
     fitZoom: () => prefs(get(), { fit: true }),
     toggleProvider: (providerOpen) => prefs(get(), { providerOpen }),
     toggleMeta: (metaOpen) => prefs(get(), { metaOpen }),
+    toggleScores: (showScores) => prefs(get(), { showScores }),
     setMetaHeight: (h) => prefs(get(), { metaHeight: h === null ? null : Math.round(Math.min(META_HEIGHT.max, Math.max(META_HEIGHT.min, h))) }),
     setPrompt: (text) => prompt(get(), text),
     resetPrompt: () => prompt(get(), DEFAULT_SHEET_PROMPT),

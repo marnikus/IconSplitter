@@ -7,7 +7,8 @@ import { saveBuilderListView } from "../listview";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
 type SelectionActions = Pick<BuilderActions,
-  "setRecipe" | "reshuffle" | "toggleAsset" | "toggleLock" | "clearSelection" | "setCategory" | "autoPlace" | "fitSelection">;
+  "setRecipe" | "reshuffle" | "toggleAsset" | "toggleLock" | "clearSelection" | "setCategory" | "autoPlace" | "fitSelection"
+  | "excludeAsset" | "restoreExcluded">;
 
 export const FULL_MESSAGE = "Every cell is filled. Deselect an icon first, or add a row to the grid.";
 
@@ -21,12 +22,15 @@ export function selectionActions(get: () => BuilderActionContext): SelectionActi
     setCategory: (category) => setCategory(get(), category),
     autoPlace: () => autoPlace(get()),
     fitSelection: () => fitSelection(get()),
+    excludeAsset: (id) => excludeAsset(get(), id),
+    restoreExcluded: () => { get().dispatch({ excludedIds: [] }); get().say("Excluded icons can be picked again"); },
   };
 }
 
 function pickOf(ctx: BuilderActionContext, recipe: SelectionRecipe, seed: number): SheetPick {
   return { assets: ctx.assets, profiles: ctx.profiles, recipe, seed, capacity: ctx.layout.capacity,
-    current: ctx.placedIds, lockedIds: ctx.model.lockedIds, score: ctx.reference.image === null ? undefined : ctx.scoreOf };
+    current: ctx.placedIds, lockedIds: ctx.model.lockedIds, score: ctx.reference.image === null ? undefined : ctx.scoreOf,
+    excludedIds: ctx.model.excludedIds };
 }
 
 export const NO_REFERENCE = "Similar needs an indexed reference: run Icons indexing, then lock (or place) an icon to compare against.";
@@ -60,7 +64,16 @@ function toggleAsset(ctx: BuilderActionContext, id: string): void {
     return place(ctx, ctx.placedIds.filter((x) => x !== id), "Remove an icon from the sheet");
   }
   if (ctx.placedIds.length >= ctx.layout.capacity) return ctx.say(FULL_MESSAGE, true);
+  if (ctx.model.excludedIds.includes(id)) ctx.dispatch({ excludedIds: ctx.model.excludedIds.filter((x) => x !== id) });
   place(ctx, [...ctx.placedIds, id], "Add an icon to the sheet");
+}
+
+/** Artboard ×: out of the sheet (later cells shift up), unlocked, and excluded from later picks. */
+function excludeAsset(ctx: BuilderActionContext, id: string): void {
+  ctx.dispatch({ lockedIds: ctx.model.lockedIds.filter((x) => x !== id),
+    excludedIds: ctx.model.excludedIds.includes(id) ? ctx.model.excludedIds : [...ctx.model.excludedIds, id] });
+  place(ctx, ctx.placedIds.filter((x) => x !== id), "Exclude an icon from the sheet");
+  ctx.say("Icon excluded — it stays out of reshuffles until you restore it or add it from the library");
 }
 
 function toggleLock(ctx: BuilderActionContext, id: string): void {
