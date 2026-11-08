@@ -153,6 +153,7 @@ describe.each([
   it("draws from the whole list even when filters hide most rows, and undo/redo is one step", async () => {
     await mount(tab);
     await click(`${prefix}-row-${ARCH}`);
+    if (tab === "stockUpload") await click("stock-deselect"); // plain Stock Upload row picks replace the check set
     const before = { checked: checkedOf(tab), active: getAppState()[tab].activeId, anchor: getAppState()[tab].anchorId };
     expect(before.checked).toEqual([]);
     await search(prefix, "arch");
