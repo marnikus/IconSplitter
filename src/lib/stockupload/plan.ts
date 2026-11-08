@@ -22,6 +22,7 @@ export interface SkippedFormat {
   itemId: string;
   stem: string;
   format: UploadFormatKey;
+  targetId?: string;
 }
 
 export interface StockUploadPlanInput {
@@ -31,10 +32,12 @@ export interface StockUploadPlanInput {
   checkedTargets: readonly string[];
   formats: StockFormatFlags;
   combineTitleDescription?: boolean;
+  targetOptions?: Record<string, import("./types").StockTargetOptions>;
 }
 
 export interface StockUploadPlan {
   combineTitleDescription: boolean;
+  combineByTarget?: Record<string, boolean>;
   targets: StockFtpPreset[];
   selectedRows: ExportedItem[];
   selectedFormats: UploadFormatKey[];
@@ -181,10 +184,15 @@ export function buildStockUploadPlan(input: StockUploadPlanInput): StockUploadPl
   const targetSet = new Set(input.checkedTargets);
   const checkedPresets = input.presets.filter((p) => targetSet.has(p.id));
   const targets = checkedPresets.filter((p) => p.host.trim() !== "");
-  const selectedFormats = selectedFormatsOf(input.formats);
+  const formatsFor = (id: string) => input.targetOptions?.[id]?.formats ?? input.formats;
+  const selectedFormats = FORMAT_ORDER.filter((key) => checkedPresets.some((p) => formatsFor(p.id)[key]));
   const preflightErrors = collectPreflightErrors(selectedRows, checkedPresets, selectedFormats);
-  const skippedMissing = collectSkippedFormats(selectedRows, selectedFormats);
-  const tasks = expandPlannedTransfers(targets, selectedRows, selectedFormats);
+  for (const target of checkedPresets) {
+    if (selectedFormatsOf(formatsFor(target.id)).length === 0) preflightErrors.push(`Select at least one file format for ${target.name}.`);
+  }
+  const skippedMissing = targets.flatMap((target) => collectSkippedFormats(selectedRows, selectedFormatsOf(formatsFor(target.id))).map((s) => ({ ...s, targetId: target.id })));
+  const tasks = targets.flatMap((target) => expandPlannedTransfers([target], selectedRows, selectedFormatsOf(formatsFor(target.id))));
+  const combineByTarget = Object.fromEntries(targets.map((target) => [target.id, input.targetOptions?.[target.id]?.combineTitleDescription ?? (input.combineTitleDescription === true)]));
 
   if (preflightErrors.length === 0 && tasks.length === 0) {
     preflightErrors.push("None of the selected items have the requested exported format(s) on disk.");
@@ -193,7 +201,7 @@ export function buildStockUploadPlan(input: StockUploadPlanInput): StockUploadPl
   const warnings = [
     ...collectShutterstockWarnings(targets, tasks),
     ...collectAdobeStockWarnings(targets, selectedRows, tasks),
-    ...collectGettyWarnings(targets, selectedRows, input.formats, tasks),
+    ...targets.flatMap((target) => collectGettyWarnings([target], selectedRows, formatsFor(target.id), tasks)),
   ];
-  return { targets, selectedRows, selectedFormats, tasks, skippedMissing, warnings, preflightErrors, totalBytes, combineTitleDescription: input.combineTitleDescription === true };
+  return { targets, selectedRows, selectedFormats, tasks, skippedMissing, warnings, preflightErrors, totalBytes, combineTitleDescription: Object.values(combineByTarget).some(Boolean), combineByTarget };
 }

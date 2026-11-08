@@ -97,6 +97,9 @@ function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
       <p className="svg-note">
         Formats: <strong>{plan.selectedFormats.join(", ").toUpperCase()}</strong>
       </p>
+      <ul className="svg-note" data-testid="stock-upload-target-formats">
+        {plan.targets.map((target) => <li key={target.id}>{target.name}: {Array.from(new Set(plan.tasks.filter((task) => task.targetId === target.id).map((task) => task.format))).join(", ").toUpperCase() || "no available files"}{plan.combineByTarget?.[target.id] ? " · Title + description" : ""}</li>)}
+      </ul>
       {plan.limit !== undefined && <LimitNote limit={plan.limit} />}
       {plan.targets.some((t) => t.protocol === "getty-web") && (
         <p className="svg-note" data-testid="stock-upload-getty-batches">

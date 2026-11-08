@@ -5063,3 +5063,7 @@ Verified: focused Stock Upload suites (19 files / 129 tests), history/summary/ru
 ### 2026-11-08 — Random selection controls on Upload tabs
 
 Verified: random-selection and Stock Upload UI suites 3 files / 26 tests PASS; docs-navigation plus random-selection suites 3 files / 24 tests PASS; `npx tsc --noEmit` and `npm run quality:changed` PASS; `npm run verify:fast` and `npm run verify` PASS (including coverage and native performance: 5 files / 30 tests); production build PASS. Lint: 0 errors / 22 existing warnings. The docs-navigation size check prompted a compact rewrite of the Stock Upload pinned-bar description (final page: 8,985 bytes).
+
+### 2026-11-08 — Per-stock upload presets
+
+Verified: focused target-options, Stock Upload UI/runner, docs-navigation, and random-selection suites 6 files / 39 tests PASS; TypeScript, changed-files quality, `npm run verify:fast`, and `npm run verify` PASS; native performance 5 files / 30 tests and production build PASS. Lint: 0 errors / 22 existing warnings. Per-stock options cover format selection and Title + description; global Random batches and Limit remain global. Docs navigation passes with Getty-web handles and target-option details split into linked pages.

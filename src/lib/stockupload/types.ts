@@ -29,11 +29,17 @@ export interface StockFtpPreset {
   timeoutMs: number;
 }
 
+export interface StockTargetOptions {
+  formats: StockFormatFlags;
+  combineTitleDescription: boolean;
+}
+
 export interface StockPresetState {
   v: 1 | 2 | 3;
   presets: StockFtpPreset[];
   activePresetId: string;
   checkedTargets: string[];
+  targetOptions?: Record<string, StockTargetOptions>;
   formats: StockFormatFlags;
 }
 

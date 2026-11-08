@@ -34,7 +34,7 @@ vi.mock("../src/batch/store", async (importOriginal) => {
 
 let host: HTMLDivElement;
 let ui: Root;
-const q = (id: string) => host.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
+const q = (id: string) => document.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 
 function clickEl(el: HTMLElement): Promise<void> {
   return act(async () => {
@@ -197,11 +197,13 @@ describe("Upload (stockUpload) tab UI", () => {
     stored.set("__stock_upload__", { source: makeWorkspace() });
     act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
     await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
-    const checkbox = q("stock-combine-title-description") as HTMLInputElement;
+    await clickEl(q("stock-presets-open")!);
+    const checkbox = q("stock-preset-shutterstock-title-description") as HTMLInputElement;
     expect(checkbox).not.toBeNull();
     expect(checkbox.checked).toBe(false);
     await clickEl(checkbox);
     expect(checkbox.checked).toBe(true);
+    await clickEl(q("stock-presets-close")!);
     await clickEl(q("stock-check-item-star")!);
     await clickEl(q("stock-upload-start")!);
     expect(q("stock-upload-confirm-dialog")?.textContent).toContain("Title + description");
@@ -299,9 +301,11 @@ describe("Upload (stockUpload) tab UI", () => {
     await waitUntil(() => q("stock-meta-state-item-star")?.textContent?.includes("accepted") === true, "metadata accepted");
 
     // Choose formats: SVG + EPS + ZIP (raster off since test fixture has SVG+EPS)
-    await clickEl(q("stock-format-raster")!); // uncheck default raster
-    await clickEl(q("stock-format-svg")!);    // check svg
-    await clickEl(q("stock-format-zip")!);    // check zip (eps is already checked by default)
+    await clickEl(q("stock-presets-open")!);
+    await clickEl(q("stock-preset-shutterstock-raster")!); // uncheck default raster
+    await clickEl(q("stock-preset-shutterstock-svg")!);    // check svg
+    await clickEl(q("stock-preset-shutterstock-zip")!);    // check zip (eps is already checked by default)
+    await clickEl(q("stock-presets-close")!);
     await settle();
 
     // Click Upload -> Confirm upload -> sends 3 files (svg, eps, zip) sharing stem star_icon
@@ -428,8 +432,10 @@ describe("Upload (stockUpload) tab UI", () => {
     // Target Adobe Stock only (uncheck Shutterstock, check Adobe Stock) and upload SVG + EPS
     await clickEl(q("stock-target-check-shutterstock")!);
     await clickEl(q("stock-target-check-adobe-stock")!);
-    await clickEl(q("stock-format-raster")!);
-    await clickEl(q("stock-format-svg")!);
+    await clickEl(q("stock-presets-open")!);
+    await clickEl(q("stock-preset-adobe-stock-raster")!);
+    await clickEl(q("stock-preset-adobe-stock-svg")!);
+    await clickEl(q("stock-presets-close")!);
     await clickEl(q("stock-check-item-star")!);
     await settle();
 

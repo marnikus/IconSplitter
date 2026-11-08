@@ -104,14 +104,14 @@ function recordIconOutcomes(
 
 async function runGettyWebIcons(ctx: NetworkCtx): Promise<number> {
   const icons = groupEspTasks(ctx.targetTasks).map((tasks) => ({
-    tasks, missing: ctx.plan.skippedMissing, item: ctx.itemsById.get(tasks[0].itemId),
+    tasks, missing: ctx.plan.skippedMissing.filter((m) => !m.targetId || m.targetId === ctx.target.id), item: ctx.itemsById.get(tasks[0].itemId),
   }));
   for (const icon of icons) markUploadInFlight(icon.tasks[0].itemId, ctx.target.id);
   // Getty reports each file while the batch is in flight; show that live.
   const progress = liveGettyProgress(ctx);
   const res = await uploadGettyWebRun({
     icons, root: ctx.deps.root, target: ctx.target, creds: ctx.creds,
-    combine: ctx.plan.combineTitleDescription,
+    combine: ctx.plan.combineByTarget?.[ctx.target.id] ?? ctx.plan.combineTitleDescription,
     submissionType: GETTY_WEB_SUBMISSION_TYPE, sessionKey: ctx.sessionKey,
     bridgeUrl: ctx.deps.bridgeUrl, signal: ctx.deps.signal,
     uploadFn: ctx.deps.gettyWebUploadFn, finishFn: ctx.deps.finishGettyWebFn,
