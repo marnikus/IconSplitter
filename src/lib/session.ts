@@ -160,7 +160,7 @@ function toSession(raw: unknown): SessionState {
   };
 }
 
-function parseBatchSlice(raw: unknown): SessionBatch {
+export function parseBatchSlice(raw: unknown): SessionBatch {
   if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_BATCH;
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
@@ -169,7 +169,7 @@ function parseBatchSlice(raw: unknown): SessionBatch {
   };
 }
 
-function parseSvgSlice(raw: unknown): SessionSvg {
+export function parseSvgSlice(raw: unknown): SessionSvg {
   if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_SVG;
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
@@ -178,7 +178,7 @@ function parseSvgSlice(raw: unknown): SessionSvg {
   };
 }
 
-function parseUploadSlice(raw: unknown): SessionUpload {
+export function parseUploadSlice(raw: unknown): SessionUpload {
   if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_UPLOAD;
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
@@ -187,7 +187,7 @@ function parseUploadSlice(raw: unknown): SessionUpload {
   };
 }
 
-function parseBuilderSlice(raw: unknown): SessionBuilder {
+export function parseBuilderSlice(raw: unknown): SessionBuilder {
   if (!isRecord(raw) || !Array.isArray(raw.checked)) return DEFAULT_BUILDER;
   return {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
@@ -196,7 +196,7 @@ function parseBuilderSlice(raw: unknown): SessionBuilder {
   };
 }
 
-function parseSelection(raw: unknown): SessionSelection {
+export function parseSelection(raw: unknown): SessionSelection {
   if (!isRecord(raw)) return DEFAULT_SELECTION;
   return {
     filter: parseFilter(raw.filter),
@@ -208,7 +208,7 @@ function parseSelection(raw: unknown): SessionSelection {
   };
 }
 
-function parseV2(raw: unknown): SessionV2 {
+export function parseV2(raw: unknown): SessionV2 {
   if (!isRecord(raw)) return DEFAULT_SESSION.selectionV2;
   const scroll = raw.scrollY;
   return {

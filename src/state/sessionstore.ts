@@ -2,13 +2,12 @@
 // Validation lives in lib/session, so a corrupt payload costs one ignored load
 // and the app opens on its defaults instead of a blank screen (RULE 13).
 //
-// A write is VERIFIED (2026-11-08): `localStorage.setItem` can refuse (quota,
-// blocked storage) and a silent refusal left the browser holding the PREVIOUS
-// selection — exactly what came back after a reload. One retry, then an honest
-// `false`, so the caller can report it instead of losing the change silently.
+// The snapshot no longer carries the checked ids: the selection document owns
+// them (lib/selectiondoc, state/selectionstore). What is stored here is the tab,
+// the sheets options, the view filters and the active rows.
 
 import { parseSession, serializeSession, type SessionState } from "../lib/session";
-import { readKey, writeKey } from "./safestorage";
+import { readKey, readSavedAt, writeVerified } from "./safestorage";
 
 export const SESSION_KEY = "iconSplitter.session.v1";
 
@@ -18,27 +17,13 @@ export function loadSessionState(): SessionState {
 
 /**
  * The stamp of the stored snapshot, or null. A page compares it with its own
- * last write to tell another page's newer selection from its own (sessionorder).
+ * last write to tell another page's newer state from its own (sessionorder).
  */
 export function readStoredStamp(): string | null {
-  const text = readKey(SESSION_KEY);
-  if (text === null) return null;
-  try {
-    const raw: unknown = JSON.parse(text);
-    const savedAt = typeof raw === "object" && raw !== null ? (raw as { savedAt?: unknown }).savedAt : null;
-    return typeof savedAt === "string" ? savedAt : null;
-  } catch {
-    return null;
-  }
+  return readSavedAt(SESSION_KEY);
 }
 
 /** Writes the snapshot and proves it landed; true when storage holds it now. */
 export function saveSessionState(session: SessionState, nowIso: string): boolean {
-  const text = serializeSession(session, nowIso);
-  return writeAndVerify(text) || writeAndVerify(text); // one retry: a concurrent write may free room
-}
-
-function writeAndVerify(text: string): boolean {
-  writeKey(SESSION_KEY, text);
-  return readKey(SESSION_KEY) === text;
+  return writeVerified(SESSION_KEY, serializeSession(session, nowIso));
 }

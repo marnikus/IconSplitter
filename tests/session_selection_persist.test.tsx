@@ -1,9 +1,11 @@
 // session_selection_persist.test.tsx — the restart snapshot keeps the user's
-// LAST selection (2026-11-08). The report: a new selection was never stored and
-// the 100 checks picked before came back after every reload. The contracts
-// pinned here: a check gesture writes the snapshot in the SAME task; a page may
-// never resurrect a selection another page already replaced; a scan that found
-// nothing empties nothing; and a refused write is retried, never lost silently.
+// LAST selection (2026-11-08). The report: a new selection is never stored and
+// the 100 checks picked before come back after every reload. The contracts
+// pinned here: a check gesture writes the selection document in the SAME task;
+// the selection lives in its own key, so a page still running an older build
+// (which writes only the session snapshot) cannot resurrect the old checks; a
+// scan that found nothing empties nothing; a refused write is retried, never
+// lost silently; a hidden tab flushes.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -34,6 +36,8 @@ vi.mock("../src/batch/store", async (importOriginal) => {
 const FOLDER = "architecture";
 const FOG = uploadPairId(FOLDER, "fog");
 const ARCH = uploadPairId(FOLDER, "arch");
+/** The selection document: the ONE owner of what is checked (2026-11-08). */
+const SELECTION_KEY = "iconSplitter.selection.v1";
 
 let host: HTMLDivElement;
 let ui: Root;
@@ -59,6 +63,8 @@ async function mountUpload(): Promise<void> {
   await waitUntil(() => q("upload-busy") === null, "the scan to finish");
 }
 
+const check = (id: string) => act(async () => { (q(`upload-check-${id}`) as HTMLElement).click(); });
+
 /** The browser's "this tab is hidden now" signal, as a frozen/discarded tab sees it. */
 function hideDocument(): void {
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
@@ -66,19 +72,33 @@ function hideDocument(): void {
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
 }
 
-const check = (id: string) => act(async () => { (q(`upload-check-${id}`) as HTMLElement).click(); });
-
-/** A snapshot as ANOTHER page would have written it, stamped in the future. */
-function foreignSnapshot(checked: string[], savedAt: string): void {
-  writeStored({ checked, savedAt });
+function readJson(key: string): Record<string, unknown> | null {
+  const text = localStorage.getItem(key);
+  return text === null ? null : (JSON.parse(text) as Record<string, unknown>);
 }
 
-function writeStored(upload: { checked: string[]; savedAt: string }): void {
+/** A selection document as a page of THIS build writes it. */
+function selectionDoc(checked: string[], savedAt: string): Record<string, unknown> {
+  return {
+    v: 1, savedAt,
+    upload: { checked, activeId: checked[0] ?? null, anchorId: checked[0] ?? null },
+    stockUpload: { checked: [], activeId: null, anchorId: null },
+    svg: { checked: [], activeId: null, anchorId: null },
+    builder: { checked: [], activeId: null, anchorId: null },
+    batch: { checked: [], activeId: null, anchorId: null },
+    v2: { checked: [], scrollY: 0, anchorId: null },
+  };
+}
+
+/** A session snapshot as an OLDER build writes it: it still carries the checks. */
+function legacySession(checked: string[], savedAt: string): void {
   localStorage.setItem(SESSION_KEY, JSON.stringify({
-    v: 1, savedAt: upload.savedAt, ...DEFAULT_SESSION, tab: "upload",
-    upload: { checked: upload.checked, activeId: upload.checked[0] ?? null, anchorId: upload.checked[0] ?? null },
+    v: 1, savedAt, ...DEFAULT_SESSION, tab: "upload",
+    upload: { checked, activeId: checked[0] ?? null, anchorId: checked[0] ?? null },
   }));
 }
+
+const hundred = () => Array.from({ length: 100 }, (_, i) => `old-${i}`);
 
 beforeEach(() => {
   localStorage.clear();
@@ -96,48 +116,62 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("the restart snapshot keeps the last selection", () => {
+describe("the last selection survives the reload", () => {
   it("stores an SVG to upload check in the same task as the click", async () => {
     handles.set("__upload__", { source: approvedUploadRoot() });
     await mountUpload();
-    expect(loadSessionState().upload.checked).toEqual([]);
+    expect(readJson(SELECTION_KEY)?.upload).toMatchObject({ checked: [] });
 
     await check(FOG);
     // No timer has been advanced: the gesture itself is the write.
-    expect(loadSessionState().upload.checked).toEqual([FOG]);
+    expect(readJson(SELECTION_KEY)?.upload).toMatchObject({ checked: [FOG] });
   });
 
-  it("stores a Stock Upload replacement immediately, so a reload cannot bring back the previous pick", () => {
-    mountUi(<AutosaveProbe />);
-    const previous = Array.from({ length: 100 }, (_, i) => `old-${i}`);
-    patchStockUpload({ checked: previous, activeId: previous[0], anchorId: previous[0] });
-    expect(loadSessionState().stockUpload?.checked).toEqual(previous);
-
-    patchStockUpload({ checked: [ARCH], activeId: ARCH, anchorId: ARCH });
-    expect(loadSessionState().stockUpload?.checked).toEqual([ARCH]);
+  it("keeps an idle page of an OLDER build from resurrecting the previous 100 checks", () => {
+    // This build stored the new pick…
+    localStorage.setItem(SELECTION_KEY, JSON.stringify(selectionDoc([ARCH], new Date().toISOString())));
+    // …and a page still running the older build flushes its stale 100 checks
+    // into the session snapshot, stamped later than anything else.
+    legacySession(hundred(), new Date(Date.now() + 1000).toISOString());
+    bootStores();
+    expect(getAppState().upload.checked).toEqual([ARCH]);
   });
 
-  it("never overwrites a snapshot another page wrote after this page's last change", () => {
+  it("restores a checked set saved by an older build that has no selection document yet", () => {
+    legacySession([FOG, ARCH], new Date().toISOString());
+    bootStores();
+    expect(getAppState().upload.checked).toEqual([FOG, ARCH]);
+  });
+
+  it("keeps the checked ids out of the session snapshot", async () => {
+    handles.set("__upload__", { source: approvedUploadRoot() });
+    await mountUpload();
+    await check(FOG);
+    act(() => { window.dispatchEvent(new Event("pagehide")); });
+    expect((readJson(SESSION_KEY)?.upload as { checked: string[] }).checked).toEqual([]);
+    expect(readJson(SELECTION_KEY)?.upload).toMatchObject({ checked: [FOG] });
+  });
+
+  it("never overwrites a selection document another page wrote after this page's last change", () => {
     mountUi(<AutosaveProbe />);
     patchUpload({ checked: [FOG], activeId: FOG, anchorId: FOG });
-    expect(loadSessionState().upload.checked).toEqual([FOG]);
+    expect(readJson(SELECTION_KEY)?.upload).toMatchObject({ checked: [FOG] });
 
     const later = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-    foreignSnapshot([ARCH], later);
+    localStorage.setItem(SELECTION_KEY, JSON.stringify(selectionDoc([ARCH], later)));
     act(() => { window.dispatchEvent(new Event("pagehide")); }); // an idle page leaving
-    expect(loadSessionState().upload.checked).toEqual([ARCH]); // the newer pick survives
+    expect(readJson(SELECTION_KEY)?.upload).toMatchObject({ checked: [ARCH] }); // the newer pick survives
   });
 
   it("keeps a remembered selection when the rescan finds nothing to check", async () => {
-    const openedAt = new Date().toISOString();
-    writeStored({ checked: [FOG], savedAt: openedAt });
+    localStorage.setItem(SELECTION_KEY, JSON.stringify(selectionDoc([FOG], new Date().toISOString())));
     bootStores();
     expect(getAppState().upload.checked).toEqual([FOG]);
     handles.set("__upload__", { source: approvedUploadRoot(FOLDER, []) }); // nothing listable
     await mountUpload();
     expect(q(`upload-row-${FOG}`)).toBeNull();
     expect(getAppState().upload.checked).toEqual([FOG]);
-    expect(loadSessionState().upload.checked).toEqual([FOG]);
+    expect(readJson(SELECTION_KEY)?.upload).toMatchObject({ checked: [FOG] });
   });
 
   it("retries a refused write instead of silently keeping the older selection", () => {
@@ -146,12 +180,12 @@ describe("the restart snapshot keeps the last selection", () => {
     const real = localStorage.setItem.bind(localStorage);
     let refusals = 1;
     const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key: string, value: string) {
-      if (key === SESSION_KEY && refusals > 0) { refusals -= 1; throw new DOMException("full", "QuotaExceededError"); }
+      if (key === SELECTION_KEY && refusals > 0) { refusals -= 1; throw new DOMException("full", "QuotaExceededError"); }
       real(key, value);
     });
     patchBatch({ checked: ["second"], activeId: "second", anchorId: "second" });
     spy.mockRestore();
-    expect(loadSessionState().batch.checked).toEqual(["second"]);
+    expect(readJson(SELECTION_KEY)?.batch).toMatchObject({ checked: ["second"] });
   });
 
   it("flushes a pending debounced change when the page is hidden, so a frozen tab keeps it", () => {
@@ -162,9 +196,17 @@ describe("the restart snapshot keeps the last selection", () => {
     expect(loadSessionState().selection.filter.search).toBe("nebula");
   });
 
-  it("writes a snapshot that was read from storage normally (the reload path)", () => {
-    const stored = saveSessionState({ ...DEFAULT_SESSION, tab: "upload" }, new Date().toISOString());
-    expect(stored).toBe(true);
+  it("writes the session snapshot it was given (the reload path stays intact)", () => {
+    expect(saveSessionState({ ...DEFAULT_SESSION, tab: "upload" }, new Date().toISOString())).toBe(true);
     expect(loadSessionState().tab).toBe("upload");
+  });
+
+  it("replaces a 100-id Stock Upload pick at once, as the report asked", () => {
+    mountUi(<AutosaveProbe />);
+    patchStockUpload({ checked: hundred(), activeId: "old-0", anchorId: "old-0" });
+    expect(readJson(SELECTION_KEY)?.stockUpload).toMatchObject({ checked: hundred() });
+
+    patchStockUpload({ checked: [ARCH], activeId: ARCH, anchorId: ARCH });
+    expect(readJson(SELECTION_KEY)?.stockUpload).toMatchObject({ checked: [ARCH] });
   });
 });

@@ -2,6 +2,7 @@
 // the tail, and the four controls (cap, Copy all, Clear, minimize). The rules
 // behind those controls live in lib/log and logstore; this file is the wiring.
 
+import { buildStamp } from "../lib/buildstamp";
 import { LOG_MAX_CHOICES, formatLogText, type LogEntry } from "../lib/log";
 import { LOG_DOCK_HEAD_PX } from "./dockheight";
 import { clearLog, log, setLogMax, setLogMinimized } from "./logstore";
@@ -24,6 +25,8 @@ export default function LogHead({ entries, max, minimized, follow, note, setNote
       style={{ minHeight: LOG_DOCK_HEAD_PX }} data-testid="log-head">
       <span className="font-semibold text-slate-200">Activity log</span>
       <span data-testid="log-count">{countText(entries, max)}</span>
+      <span className="text-slate-500" title="Source fingerprint of the build this page runs — a restart must keep it"
+        data-testid="build-stamp">build {buildStamp()}</span>
       <span className="text-slate-400" data-testid="log-autoscroll">
         {follow ? "following new entries" : "paused — scroll to the bottom to resume"}
       </span>

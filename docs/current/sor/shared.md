@@ -23,31 +23,41 @@ The shared review helpers and persistent handle/sidecar keys remain compatible.
 
 ## The last selection survives the reload (2026-11-08)
 
-The restart snapshot (`iconSplitter.session.v1`, `state/sessionstore.ts`, parsed by
-`lib/session`) carries each list tab's **checked ids**, active id and anchor, not
-just its filters. Three rules, one report ("a new selection is never stored and
-the 100 checks picked before come back after every reload"):
+What a restart must remember lives in **two documents with one owner each**
+(`state/boot.ts` reads both, the selection wins):
 
-- **A selection gesture IS the write.** Any change to a selection slice
-  (`upload`, `stockUpload`, `svg`, `builder`, `batch`, `v2`) is written in the
-  same task (`state/useSessionAutosave.ts`); every other change keeps the 250 ms
-  debounce, and `pagehide`/`beforeunload`/unmount — plus a tab the browser hides
-  or freezes (`visibilitychange`) — still flush. A page that is killed, reloaded
-  by the helper or closed without a clean unload therefore cannot lose the last
-  pick.
-- **A verified write, never a silent one.** `saveSessionState` reads the document
-  back (`state/sessionstore.ts`), retries once, and the caller logs
-  `session.save-refused` at `error` when storage still refuses — the app never
-  pretends a refused write stored the selection.
-- **A page may not resurrect an older selection.** A snapshot stamped after this
-  page's own last selection change came from ANOTHER page (the helper opens a
-  second tab), so this page keeps it instead of overwriting it
-  (`lib/sessionorder`, logged at `debug` as `session.kept-newer-snapshot`).
+- **`iconSplitter.selection.v1` — the selection document**
+  (`state/selectionstore.ts`, parsed by `lib/selectiondoc`). The only place a
+  tab's **checked ids**, active id and anchor live. Its own key is the fix for
+  the report "a new selection is never stored and the 100 checks picked before
+  come back after every reload": pages still running an older build know only the
+  session snapshot and can therefore never write this document, so their stale
+  100 checks cannot come back over a newer pick. A check gesture writes it in the
+  same task; the write is read back, retried once, and a refusal is logged as
+  `session.save-refused` (`error`) instead of being swallowed.
+- **`iconSplitter.session.v1` — the session snapshot** (`state/sessionstore.ts`,
+  parsed by `lib/session`): tab, sheets options, view filters, active rows — with
+  the selections **stored empty** (`clearSelectionOf`). Nothing here is a second
+  copy of the checks. Its first-run/migration read is the one exception: while no
+  selection document exists, its ids are still restored (an install upgrading from
+  an older build), and mounting the autosave immediately writes them into the
+  selection document so the snapshot stops being read.
+- **No page resurrects an older pick.** Both documents are guarded: a stamp later
+  than this page's last change to that document came from ANOTHER page, so the
+  page keeps it (`lib/sessionorder`, logged `debug` as
+  `session.kept-newer-snapshot`). `pagehide`/`beforeunload`/unmount and a hidden
+  or frozen tab (`visibilitychange`) flush; every non-selection change keeps the
+  250 ms debounce.
 - **A scan that found nothing removes nothing.** An unreadable folder or a
   permission the page has not been granted yet must not empty the restored checks
   (`upload/rowmodel.pruneChecked`, `stockupload/useStockUpload`,
-  `svg/rowmodel.pruneChecked`): only a non-empty scan may prune, because only a
-  non-empty scan can say which ids no longer exist.
-- Tests: `session_selection_persist.test.tsx` (same-task write through the real
-  panel, the 100-→-new replacement, the other-page snapshot, the empty scan, the
-  refused write), `session.test.ts`, `workbench_ui.test.tsx`.
+  `svg/rowmodel.pruneChecked`): only a non-empty scan may prune.
+- **The reload names its build.** Every boot logs `session.restored` at `debug`
+  ("build <stamp>: tab …, N row(s) selected, restored from the selection
+  document|session snapshot"), and the log dock head shows the source
+  fingerprint vite stamps into the page (`lib/buildstamp`) — a tab opened before
+  a rebuild runs older code, and a report must say which.
+- Tests: `session_selection_persist.test.tsx` (same-task write, the older-build
+  page that must not resurrect the 100, the migration read, the ids kept out of
+  the snapshot, the newer document of another page, the empty scan, the refused
+  write), `buildstamp.test.ts`, `session.test.ts`, `workbench_ui.test.tsx`.

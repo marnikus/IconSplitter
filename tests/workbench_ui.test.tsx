@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SESSION } from "../src/lib/session";
 import { getAppState, patchBatch, patchStockUpload, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
+import { loadSelectionDoc } from "../src/state/selectionstore";
 import { loadSessionState, saveSessionState, SESSION_KEY } from "../src/state/sessionstore";
 import Workbench from "../src/ui/Workbench";
 import { useSvgHotkeys, type SvgHotActions } from "../src/svg/SvgHotkeys";
@@ -101,18 +102,20 @@ describe("the shell", () => {
     expect(loadSessionState().tab).toBe("batch"); // …and now it is
   });
 
-  it("immediately replaces a saved Stock Upload bulk selection and flushes the latest state on exit", () => {
+  it("immediately replaces a saved Stock Upload bulk selection in the selection document", () => {
     mountWorkbench();
     const oldBulkPick = Array.from({ length: 100 }, (_, i) => `old-${i}`);
     patchStockUpload({ checked: oldBulkPick, activeId: "old-99", anchorId: "old-0" });
-    expect(loadSessionState().stockUpload?.checked).toEqual(oldBulkPick);
+    expect(loadSelectionDoc()?.stockUpload.checked).toEqual(oldBulkPick);
 
     patchStockUpload({ checked: ["new-a", "new-b"], activeId: "new-b", anchorId: "new-a" });
-    expect(loadSessionState().stockUpload?.checked).toEqual(["new-a", "new-b"]);
+    // A gesture is its own write, and the session snapshot never holds the ids.
+    expect(loadSelectionDoc()?.stockUpload.checked).toEqual(["new-a", "new-b"]);
+    expect(loadSessionState().stockUpload?.checked).toEqual([]);
 
     patchStockUpload({ activeId: "new-a" }); // active-only changes remain debounced
     act(() => { window.dispatchEvent(new Event("pagehide")); });
-    expect(loadSessionState().stockUpload).toEqual({
+    expect(loadSelectionDoc()?.stockUpload).toEqual({
       checked: ["new-a", "new-b"], activeId: "new-a", anchorId: "new-a",
     });
   });

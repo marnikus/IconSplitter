@@ -75,3 +75,41 @@ the write itself was never the missing piece:
 - The Generate SVG tab keeps its own empty-scan rule only for the known-target
   set (undo validation); its selection is preserved exactly like the upload
   tabs'.
+
+## Round 2 — the fix did not hold in the real app (same day)
+
+The user re-tested the shipped fix with the exact repro (Deselect all → tick 2
+rows → restart the page) and **the 100 checks came back**. Why the first round
+was insufficient: it made *this* build write correctly, but the snapshot is one
+document that *older* pages also write — and `run_app_ftp.bat` opens a new tab
+on every run, so tabs of earlier builds accumulate. Any of them flushes the 100
+checks it booted with, and the next reload reads them as the newest state. The
+guard cannot help a page that does not have it yet.
+
+Round 2 therefore removes the shared copy instead of policing it:
+
+- The checked ids moved to their own document, `iconSplitter.selection.v1`
+  (`lib/selectiondoc`, `state/selectionstore.ts`). Older builds have never heard
+  of that key, so no older page can overwrite the newer pick.
+- The session snapshot stores the selections **empty** (`clearSelectionOf`) and
+  keeps the tab, sheets options and view filters. Its ids are still *read* while
+  no selection document exists (an upgrade from an older build), and the
+  autosave writes them into the new document on mount, so the snapshot stops
+  being read from then on.
+- Both documents keep the "no page resurrects a newer write" rule, each with its
+  own stamp and its own last-change time.
+- The reload now names itself: `session.restored` (`debug`) logs the build stamp,
+  the tab, the number of restored rows and which document they came from, and the
+  log dock head shows the build (`lib/buildstamp`) — a tab opened before a
+  rebuild runs older code, and the report must be able to say so.
+
+### Witnessed failures before round 2
+
+| Test | Before | After |
+|---|---|---|
+| an older-build page flushes its 100 checks after the new pick | 100 restored | the 2-row pick restored |
+| a check gesture writes the selection document | no document at all | `[pair…]` in the same task |
+| the session snapshot after a pick | carries the checked ids | `upload.checked: []` |
+| a first run over a legacy snapshot | ids dropped | ids migrated into the document |
+| an existing document (other page, newer stamp) | overwritten | kept |
+| the build stamp on a page without the meta | — | `dev` |
