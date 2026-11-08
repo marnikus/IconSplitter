@@ -21,13 +21,14 @@ export interface IconIndexView {
 const EMPTY = new Map<string, IconIndexRecord>();
 
 export function useIconIndex(assets: readonly BuilderIconAsset[], index: ReadonlyMap<string, IconIndexRecord> | undefined,
-  sheet: { placed: readonly string[]; locked: readonly string[] }): IconIndexView {
+  sheet: { placed: readonly string[]; locked: readonly string[]; textWeight: number }): IconIndexView {
   const idx = index ?? EMPTY;
   const indexStates = useMemo(() => new Map(assets.map((a) => [a.id, indexStateOf(a, idx.get(a.id))])), [assets, idx]);
   const indexStats = useMemo(() => statsOf(assets, indexStates), [assets, indexStates]);
   const referenceIds = useMemo(() => referenceIdsOf(sheet.placed, sheet.locked), [sheet.placed, sheet.locked]);
   const reference = useMemo(() => referenceOf(referenceIds, idx), [referenceIds, idx]);
-  const scoreOf = useMemo(() => (a: BuilderIconAsset) => similarityOf(reference, idx.get(a.id)?.vectors), [reference, idx]);
+  const weight = sheet.textWeight / 100;
+  const scoreOf = useMemo(() => (a: BuilderIconAsset) => similarityOf(reference, idx.get(a.id)?.vectors, weight), [reference, idx, weight]);
   return { index: idx, indexStates, indexStats, referenceIds, reference, scoreOf };
 }
 

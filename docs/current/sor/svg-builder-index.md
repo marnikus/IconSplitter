@@ -1,6 +1,6 @@
 # SVG builder — icon vector index (Icons indexing)
 
-Detail page of the [SVG builder contract](svg-builder.md). User decisions 2026-11-08: local AI (transformers.js), one JSON per icon next to its approved SVG, PNG render kept in memory only, Similar reference = locked icons, one balanced 0–100 % similarity.
+Detail page of the [SVG builder contract](svg-builder.md). User decisions 2026-11-08: local AI (transformers.js), one JSON per icon next to its approved SVG, PNG render kept in memory only, Similar reference = locked icons, one 0–100 % similarity with a user-set look/mean mix.
 
 ## What an index is
 
@@ -27,7 +27,7 @@ Both vectors are normalised and written to **`<approved svg>.index.json`** besid
 ## Similar mode (replaces tag profiles)
 
 - **Reference** = the locked icons on the sheet (their centroid), else the first placed icon (`useIconIndex.ts`).
-- **Similarity** = 50 % image-vector cosine + 50 % text-vector cosine, each clamped 0–1; when either side has no text vector, the image cosine alone (`src/lib/iconIndex/similarity.ts`). One slider **Similarity ≥ N %** (0–100).
+- **Similarity** = (100 − T) % image-vector cosine + T % text-vector cosine, each clamped 0–1; when either side has no text vector, the image cosine alone (`src/lib/iconIndex/similarity.ts`). **Similarity ≥ N %** (0–100) is the cut-off; **Look alike ◀▶ Mean alike** (`builder-text-weight`, 0–100 % step 5, default 50) sets T, shown as a split bar (`builder-weight-image` / `builder-weight-text`). Both re-pick without a toast and update every tile's `NN% similar`; T is part of the recipe (`textWeight`).
 - The pool is every icon ≥ N % (seeded draw); a short pool is topped up with the **next most similar** icons and reported. Without an indexed reference, Similar refuses with a toast; the first-scan auto placement falls back to Random. Tile tooltips show `NN% similar`; a dot marks unplaced icons ≥ N %.
 
 ## Network, privacy and storage

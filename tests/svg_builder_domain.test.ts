@@ -33,7 +33,7 @@ const assets: BuilderIconAsset[] = [
 ];
 
 function recipe(over: Partial<SelectionRecipe> = {}): SelectionRecipe {
-  return { mode: "random", profileId: "all", threshold: 70, category: "All", ...over };
+  return { mode: "random", profileId: "all", threshold: 70, category: "All", textWeight: 50, ...over };
 }
 
 const FRAME = { index: 0, x: 10, y: 20, size: 48, glyph: 44, captionY: 76, captionSize: 9 };

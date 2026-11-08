@@ -41,7 +41,7 @@ export function useBuilderComputed(
   }), [repository, ready, model.config, layout, assets, placedIds, model.svgTexts, model.metadata]);
   const auditLine = useMemo(() => model.discovery === null ? "No approved assets scanned yet"
     : builderAuditLine(model.discovery), [model.discovery]);
-  const indexView = useIconIndex(assets, model.discovery?.index, { placed: placedIds, locked: model.lockedIds });
+  const indexView = useIconIndex(assets, model.discovery?.index, { placed: placedIds, locked: model.lockedIds, textWeight: model.recipe.textWeight });
   return { assets, visibleAssets, categories, profiles, layout, repository, document, auditLine, ...indexView };
 }
 

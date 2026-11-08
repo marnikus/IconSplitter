@@ -39,7 +39,7 @@ function place(ctx: BuilderActionContext, ids: readonly string[], label: string)
 function setRecipe(ctx: BuilderActionContext, patch: Partial<SelectionRecipe>): void {
   const recipe = { ...ctx.model.recipe, ...patch };
   ctx.dispatch({ recipe });
-  reshuffle(ctx, recipe, { toast: patch.threshold === undefined });
+  reshuffle(ctx, recipe, { toast: patch.threshold === undefined && patch.textWeight === undefined });
 }
 
 function reshuffle(ctx: BuilderActionContext, recipe: SelectionRecipe, opts: { toast: boolean }): void {

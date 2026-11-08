@@ -5028,3 +5028,8 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 - Similar = 50% image + 50% text cosine to the locked reference, one 0–100% slider; tiles mark unindexed (⚠) and no-metadata (dashed amber).
 - Tests: icon_index 9, icon_indexing_run 6, workspace +2, parity +1; builder+index suites 82/82; test:builder:fast 14/14; secret_hygiene 7/7; tsc PASS; lint 0 errors (22 pre-existing warnings); quality gate (--base 61e14b90) PASS; build PASS (dist 2.1 → 3.1 MB). Full vitest 4142 passed / 16 failed (same 8 pre-existing env files).
 - Not verified: real model download/inference in a browser (no browser in this session).
+
+## 2026-11-08 — SVG builder: user-set look alike / mean alike mix
+
+- Similar score = (100−T)% image + T% text cosine; `textWeight` in the recipe (0–100 step 5, default 50); slider + split bar in the Similar pane; caption shows the mix.
+- Tests: icon_index +1, parity caption +1, workspace weight assertions; builder+index suites 83/83; test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate PASS.

@@ -1,7 +1,8 @@
-// similarity.ts — the one balanced similarity (user decision 2026-11-08):
-// final = 50 % image-vector match + 50 % text-vector match, each a cosine of
-// normalised vectors clamped to 0–1. When either side has no text vector
-// (no metadata), the image match alone is the score. All local maths.
+// similarity.ts — the one balanced similarity (user decisions 2026-11-08):
+// final = (1 − w) × image-vector match + w × text-vector match, each a cosine of
+// normalised vectors clamped to 0–1; w is the user's "mean alike" share
+// (default 0.5). When either side has no text vector (no metadata), the image
+// match alone is the score. All local maths.
 import type { IconIndexRecord, IconVectors } from "./record";
 
 /** The reference group's centroids (the locked / picked icons). */
@@ -29,12 +30,13 @@ export function referenceOf(ids: readonly string[], index: ReadonlyMap<string, I
   return { image: centroid(records.map((r) => r.vectors.image)), text: centroid(texts), count: records.length };
 }
 
-/** 0–1, or null when there is no indexed reference or the icon has no vectors. */
-export function similarityOf(ref: SimilarityReference, vectors: IconVectors | undefined): number | null {
+/** 0–1, or null when there is no indexed reference or the icon has no vectors. `textWeight` 0 = look alike only, 1 = mean alike only. */
+export function similarityOf(ref: SimilarityReference, vectors: IconVectors | undefined, textWeight = 0.5): number | null {
   if (ref.image === null || vectors === undefined) return null;
   const image = clamp01(dot(ref.image, vectors.image));
   if (ref.text === null || vectors.text === null) return image;
-  return 0.5 * image + 0.5 * clamp01(dot(ref.text, vectors.text));
+  const w = clamp01(textWeight);
+  return (1 - w) * image + w * clamp01(dot(ref.text, vectors.text));
 }
 
 function clamp01(x: number): number {

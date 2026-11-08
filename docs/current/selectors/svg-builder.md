@@ -25,7 +25,7 @@
 |---|---|---|
 | `builder-library` | column | `builder-library-count`; footer `builder-library-footer` |
 | `builder-recipe` | Selection recipe card | `builder-recipe-mode` (segmented; `-similar`, `-random`, `-filtered`) |
-| `builder-reference` / `builder-threshold` / `builder-similar-unindexed` | Similar pane | reference line; Similarity slider `≥ N%` 0–100 (`builder-threshold-value`); not-indexed warning |
+| `builder-reference` / `builder-threshold` / `builder-similar-unindexed` | Similar pane | reference line; Similarity slider `≥ N%` 0–100 (`builder-threshold-value`); `builder-weight` Look alike ◀▶ Mean alike: `builder-text-weight` slider + split bar, `builder-weight-image`, `builder-weight-text`; not-indexed warning |
 | `builder-recipe-category-{c}` | Filtered pane chips | shared category with the library chips |
 | `builder-random-note` | Random pane | "A seeded draw from all N glyphs…" |
 | `builder-reshuffle-recipe` / `builder-recipe-caption` | `Reshuffle N icons` + caption | |

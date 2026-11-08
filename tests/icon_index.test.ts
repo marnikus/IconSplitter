@@ -71,6 +71,16 @@ describe("balanced similarity", () => {
     expect(similarityOf(ref, { image: unit(-1, 0, 0), text: unit(-1, 0) })).toBe(0); // negatives clamp to 0
   });
 
+  it("the text weight sets the mix: 0 = look alike only, 1 = mean alike only", () => {
+    const index = new Map([["r", record({ id: "r", vectors: { image: unit(1, 0, 0), text: unit(1, 0) } })]]);
+    const ref = referenceOf(["r"], index);
+    const v = { image: unit(1, 0, 0), text: unit(0, 1) }; // looks identical, means something else
+    expect(similarityOf(ref, v, 0)).toBeCloseTo(1, 5);
+    expect(similarityOf(ref, v, 1)).toBeCloseTo(0, 5);
+    expect(similarityOf(ref, v, 0.25)).toBeCloseTo(0.75, 5);
+    expect(similarityOf(ref, v, 7)).toBeCloseTo(0, 5); // clamped to 0–1
+  });
+
   it("falls back to the image match when either side has no text vector", () => {
     const index = new Map([["r", record({ id: "r", vectors: { image: unit(1, 0, 0), text: null } })]]);
     expect(similarityOf(referenceOf(["r"], index), { image: unit(1, 1, 0), text: unit(1, 0) })).toBeCloseTo(Math.SQRT1_2, 5);

@@ -173,6 +173,15 @@ describe("SVG builder workspace", () => {
       slider.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await settle(0);
+    const weight = q("builder-text-weight") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(weight, "20");
+      weight.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle(0);
+    expect(text("builder-weight-image")).toBe("80% look alike");
+    expect(text("builder-weight-text")).toBe("20% mean alike");
+    expect(text("builder-recipe-caption")).toBe("≥ 90% similar · 80% look alike + 20% mean alike");
     const after = await idsInOrder();
     expect(after.filter((id) => food.has(id))).toHaveLength(5);
     expect(after.slice(0, 5).filter((id) => food.has(id)).length).toBeGreaterThanOrEqual(4);

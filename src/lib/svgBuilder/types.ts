@@ -48,6 +48,8 @@ export interface SelectionRecipe {
   profileId: string;
   threshold: number;
   category: string;
+  /** Similar: the "mean alike" (text vector) share in %, 0–100; the rest is "look alike" (image vector). */
+  textWeight: number;
 }
 
 /** A pick that had to top up from the whole library reports how short its pool was. */

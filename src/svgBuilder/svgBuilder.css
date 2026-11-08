@@ -83,6 +83,13 @@
 .bld-tile-warn { position: absolute; left: 2px; bottom: 1px; color: var(--v2-yellow); font-size: 9px; line-height: 1; text-shadow: 0 0 2px #000; }
 .bld-tile.is-nometa { border-style: dashed; border-color: #b8860b; background: color-mix(in srgb, #b8860b 14%, var(--v2-surface-2)); }
 .bld-tile.is-nometa.is-on { border-style: solid; }
+.bld-weight { display: grid; gap: 5px; }
+.bld-weight-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--v2-surface-3); }
+.bld-weight-image { background: var(--v2-purple); transition: width .12s; }
+.bld-weight-text { background: var(--v2-green); transition: width .12s; }
+.bld-weight-legend { display: flex; justify-content: space-between; font-size: 9px; font-weight: 700; }
+.bld-weight-legend span:first-child { color: var(--v2-purple-2); }
+.bld-weight-legend span:last-child { color: var(--v2-green); }
 .bld-reference { font-size: 10px; color: var(--v2-text); }
 .bld-empty-note { padding: 10px; border: 1px dashed var(--v2-line); border-radius: var(--v2-radius); color: var(--v2-muted); font-size: 10px; }
 

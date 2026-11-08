@@ -28,7 +28,7 @@ const food = ["apple", "bread", "cake", "donut", "egg"].map((id) => asset(id, "F
 const ui = ["home", "gear", "bell", "user", "mail", "lock", "star"].map((id) => asset(id, "Interface"));
 const library = [...food, ...ui];
 const recipe = (over: Partial<SelectionRecipe> = {}): SelectionRecipe =>
-  ({ mode: "random", profileId: "Food icons", threshold: 70, category: "All", ...over });
+  ({ mode: "random", profileId: "Food icons", threshold: 70, category: "All", textWeight: 50, ...over });
 
 describe("ranges and config parsing", () => {
   it("clamps an out-of-range value instead of reverting to the default", () => {
@@ -153,6 +153,7 @@ describe("selection recipes", () => {
 
   it("captions the recipe like the reference", () => {
     expect(recipeCaption(recipe({ mode: "similar" }))).toBe("≥ 70% similar · 50% look alike + 50% mean alike");
+    expect(recipeCaption(recipe({ mode: "similar", textWeight: 80 }))).toBe("≥ 70% similar · 20% look alike + 80% mean alike");
     expect(recipeCaption(recipe({ mode: "random" }))).toBe("Random from the full library");
     expect(recipeCaption(recipe({ mode: "filtered", category: "All" }))).toBe("Random from every category");
     expect(recipeCaption(recipe({ mode: "filtered", category: "Interface" }))).toBe("Random from interface");

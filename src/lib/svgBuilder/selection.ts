@@ -10,7 +10,7 @@ import type { BuilderIconAsset, BuilderProfile, SelectionRecipe, SelectionResult
 export const DEFAULT_SEED = 2841;
 
 export const DEFAULT_SELECTION_RECIPE: SelectionRecipe = {
-  mode: "similar", profileId: "", threshold: 70, category: "All",
+  mode: "similar", profileId: "", threshold: 70, category: "All", textWeight: 50,
 };
 
 export interface SheetPick {
@@ -33,6 +33,7 @@ export function parseSelectionRecipe(raw: unknown): SelectionRecipe {
     profileId: typeof raw.profileId === "string" ? raw.profileId.slice(0, 80) : d.profileId,
     threshold: clampTo(RANGES.threshold, raw.threshold, d.threshold),
     category: typeof raw.category === "string" && raw.category !== "" ? raw.category.slice(0, 80) : d.category,
+    textWeight: clampTo(RANGES.textWeight, raw.textWeight, d.textWeight),
   };
 }
 
@@ -77,7 +78,7 @@ export function resizeSheet(p: SheetPick): string[] {
 export function recipeCaption(recipe: SelectionRecipe): string {
   if (recipe.mode === "random") return "Random from the full library";
   if (recipe.mode === "filtered") return isAll(recipe.category) ? "Random from every category" : `Random from ${recipe.category.toLowerCase()}`;
-  return `≥ ${recipe.threshold}% similar · 50% look alike + 50% mean alike`;
+  return `≥ ${recipe.threshold}% similar · ${100 - recipe.textWeight}% look alike + ${recipe.textWeight}% mean alike`;
 }
 
 /** The honest shortfall toast (reference wording). */

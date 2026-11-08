@@ -31,10 +31,30 @@ function SimilarPane({ b }: { b: BuilderApi }) {
     <Field label="Reference"><p className="bld-reference" data-testid="builder-reference">{referenceText(b)}</p></Field>
     <Slider label="Similarity" value={b.recipe.threshold} range={RANGES.threshold} testid="builder-threshold"
       display={`≥ ${b.recipe.threshold}%`} onChange={(threshold) => b.actions.setRecipe({ threshold })} />
-    <p className="bld-hint">Balanced index: 50% look alike (image) + 50% mean alike (title, description, tags).</p>
+    <WeightControl b={b} />
     {pending > 0 && <p className="bld-hint bld-warn" data-testid="builder-similar-unindexed">
       {pending} icon{pending === 1 ? " is" : "s are"} not indexed and cannot be matched — run Icons indexing.</p>}
   </>;
+}
+
+/** Look alike (image vector) ◀▶ Mean alike (text vector): one slider, shown as a split percentage bar. */
+function WeightControl({ b }: { b: BuilderApi }) {
+  const text = b.recipe.textWeight;
+  return <div className="bld-weight" data-testid="builder-weight">
+    <div className="svg-field-label"><span>Look alike ◀▶ Mean alike</span></div>
+    <div className="bld-weight-bar" aria-hidden="true">
+      <span className="bld-weight-image" style={{ width: `${100 - text}%` }} />
+      <span className="bld-weight-text" style={{ width: `${text}%` }} />
+    </div>
+    <input type="range" className="bld-range" data-testid="builder-text-weight" aria-label="Mean alike share (text vector) in percent"
+      min={RANGES.textWeight.min} max={RANGES.textWeight.max} step={RANGES.textWeight.step} value={text}
+      onChange={(e) => b.actions.setRecipe({ textWeight: Number(e.target.value) })} />
+    <div className="bld-weight-legend">
+      <span data-testid="builder-weight-image">{100 - text}% look alike</span>
+      <span data-testid="builder-weight-text">{text}% mean alike</span>
+    </div>
+    <p className="bld-hint">Look alike = image vector (shape, style). Mean alike = text vector (title, description, tags).</p>
+  </div>;
 }
 
 /** Who the sheet is compared against: locked icons, else the first placed icon. */
