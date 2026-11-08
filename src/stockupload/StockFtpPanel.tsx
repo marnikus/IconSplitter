@@ -76,17 +76,22 @@ function PresetSelectorBar({ presetState, active, actions, onDownloadGettyCsv }:
   onDownloadGettyCsv?: () => void;
 }) {
   return (
-    <div className="svg-toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
-      <label className="svg-field">
-        <span className="svg-label">Stock website preset</span>
-        <select className="svg-input" data-testid="stock-ftp-preset-select" aria-label="Stock website preset"
-          value={active.id} onChange={(e) => actions.selectPreset(e.target.value)}>
-          {presetState.presets.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
-        </select>
-      </label>
-      <PresetActionButtons active={active} actions={actions} onDownloadGettyCsv={onDownloadGettyCsv} />
-      <NewPresetField onAdd={actions.addPreset} />
-    </div>
+    <fieldset className="stock-ftp-section stock-preset-section" data-testid="stock-ftp-preset-group">
+      <legend>Stock preset</legend>
+      <div className="stock-preset-row">
+        <label className="svg-field stock-preset-select">
+          <span className="svg-label">Stock website preset</span>
+          <select className="svg-input" data-testid="stock-ftp-preset-select" aria-label="Stock website preset"
+            value={active.id} onChange={(e) => actions.selectPreset(e.target.value)}>
+            {presetState.presets.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+          </select>
+        </label>
+        <div className="stock-preset-actions">
+          <PresetActionButtons active={active} actions={actions} onDownloadGettyCsv={onDownloadGettyCsv} />
+        </div>
+        <NewPresetField onAdd={actions.addPreset} />
+      </div>
+    </fieldset>
   );
 }
 
@@ -129,11 +134,14 @@ function NewPresetField({ onAdd }: { onAdd: (name: string) => void }) {
   const [newName, setNewName] = useState("");
   const create = () => { onAdd(newName || "Custom Stock"); setNewName(""); };
   return (
-    <>
-      <input className="svg-input" type="text" placeholder="New stock name…" aria-label="New stock name"
-        data-testid="stock-ftp-new-name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+    <div className="stock-new-preset">
+      <label className="svg-field">
+        <span className="svg-label">Add preset</span>
+        <input className="svg-input" type="text" placeholder="New stock name…" aria-label="New stock name"
+          data-testid="stock-ftp-new-name" value={newName} onChange={(e) => setNewName(e.target.value)} />
+      </label>
       <button type="button" className="svg-btn tiny" data-testid="stock-ftp-add" onClick={create}>+ Add stock</button>
-    </>
+    </div>
   );
 }
 
@@ -142,13 +150,16 @@ function ConnectionFields({ active, bridgeUrl, onBridgeUrl, actions }: {
 }) {
   const patch = (next: Partial<StockFtpPreset>) => actions.updatePreset(active.id, next);
   return (
-    <div className="svg-toolbar" style={{ gap: 8, flexWrap: "wrap" }}>
-      {active.protocol !== "esp-batch" && <HostPortFields active={active} onPatch={patch} />}
-      <ProtocolAndFolderFields active={active} onPatch={patch} />
-      {active.protocol !== "esp-batch" && (
-        <SecurityFields active={active} bridgeUrl={bridgeUrl} onBridgeUrl={onBridgeUrl} onPatch={patch} />
-      )}
-    </div>
+    <fieldset className="stock-ftp-section stock-connection-section" data-testid="stock-ftp-connection-group">
+      <legend>Connection settings</legend>
+      <div className="stock-connection-grid">
+        {active.protocol !== "esp-batch" && <HostPortFields active={active} onPatch={patch} />}
+        <ProtocolAndFolderFields active={active} onPatch={patch} />
+        {active.protocol !== "esp-batch" && (
+          <SecurityFields active={active} bridgeUrl={bridgeUrl} onBridgeUrl={onBridgeUrl} onPatch={patch} />
+        )}
+      </div>
+    </fieldset>
   );
 }
 
@@ -165,7 +176,7 @@ function HostPortFields({ active, onPatch }: {
     <>
       <label className="svg-field">
         <span className="svg-label">Host</span>
-        <input className="svg-input" style={{ minWidth: 250 }} data-testid="stock-ftp-host" value={active.host}
+        <input className="svg-input" data-testid="stock-ftp-host" value={active.host}
           onChange={(e) => onPatch({ host: e.target.value })} placeholder={defaultHostHint(active)} />
       </label>
       <label className="svg-field">

@@ -5076,3 +5076,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - Added TDD coverage for EPS sibling-image lookup, hover/click previews with aspect-ratio sizing, backward-compatible batch notes, and upload-note persistence/rendering.
 - Verification: focused Stock Upload history tests passed; `npm run verify:fast` passed; `npm run verify` passed, including native performance budgets and production build.
+
+## 2026-11-08 — Stock Upload settings layout
+- Grouped preset selection/actions, connection settings, sign-in/test actions, and list filters into compact labeled sections with responsive grids; collapsed the long protocol guidance behind a disclosure.
+- Preserved existing control behavior and selectors; added integration assertions and updated the Stock Upload selector reference.
+- Verification: focused Stock Upload UI tests (13 passed); `npm run verify:fast` and `npm run verify` passed, including typecheck, lint, changed-file quality gate, full coverage suite, and production build. Existing lint warnings and transient `router.requesty.ai` ECONNRESET messages were non-fatal.

@@ -159,6 +159,26 @@ describe("Upload (stockUpload) tab UI", () => {
     expect(getAppState().stockUpload.checked).toEqual(["item-star"]);
   });
 
+  it("groups stock configuration and filters into clearly labeled compact sections", async () => {
+    const ws = makeWorkspace();
+    stored.set("__stock_upload__", { source: ws });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+
+    const presets = q("stock-ftp-preset-group");
+    const connection = q("stock-ftp-connection-group");
+    const credentials = q("stock-ftp-cred-box");
+    const filters = q("stock-filters");
+    expect(presets?.querySelector("legend")?.textContent).toContain("Stock preset");
+    expect(connection?.querySelector("legend")?.textContent).toContain("Connection settings");
+    expect(connection?.querySelector("[data-testid='stock-ftp-host']")).not.toBeNull();
+    expect(credentials?.querySelector("legend")?.textContent).toContain("Sign-in & test");
+    expect(q("stock-ftp-help")?.tagName).toBe("DETAILS");
+    expect((q("stock-ftp-help") as HTMLDetailsElement).open).toBe(false);
+    expect(filters?.querySelector("legend")?.textContent).toContain("Find & filter");
+    expect(filters?.querySelector("[data-testid='stock-filter-search']")).not.toBeNull();
+  });
+
   it("shows an aspect-preserving hover thumbnail preview and retains click-to-enlarge", async () => {
     const ws = makeWorkspace();
     const folder = (ws.children.get("icons_a") as FakeDir).children.get("export") as FakeDir;

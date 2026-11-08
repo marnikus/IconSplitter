@@ -1,5 +1,5 @@
 // StockUploadControls.tsx — top controls of the "Upload" tab: Open folder +
-// full root path, Rescan, counts, StockFtpPanel, and general Badge / Sort bar.
+// full root path, Rescan, counts, grouped StockFtpPanel, and Find & filter bar.
 
 
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
@@ -71,11 +71,14 @@ function UploadHistoryButton({ onClick }: { onClick: () => void }) {
 
 function FilterBar({ g }: { g: StockUploadApi }) {
   return (
-    <div className="svg-toolbar" data-testid="stock-filters">
-      <SearchAndFormatFilters g={g} />
-      <BadgeFilterControl g={g} />
-      <SortAndResetControls g={g} />
-    </div>
+    <fieldset className="stock-filter-section" data-testid="stock-filters">
+      <legend>Find &amp; filter</legend>
+      <div className="stock-filter-grid">
+        <SearchAndFormatFilters g={g} />
+        <BadgeFilterControl g={g} />
+        <SortAndResetControls g={g} />
+      </div>
+    </fieldset>
   );
 }
 

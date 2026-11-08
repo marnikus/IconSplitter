@@ -13,13 +13,14 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 
 ## Stock presets, Getty ESP CSV & local-only credentials (`StockFtpPanel.tsx`, `StockFtpCredentials.tsx`)
 - `stock-ftp-panel`, `stock-ftp-toggle`, `stock-ftp-active-name`, `stock-ftp-quick-<presetId>` — collapsible preset panel & quick preset switch (`Shutterstock`, `Adobe Stock`, `Getty Images`, plus custom presets).
+- `stock-ftp-preset-group`, `stock-ftp-connection-group`, `stock-ftp-cred-box` — labeled Stock preset, Connection settings, and Sign-in & test groups; `stock-ftp-help` expands the long protocol-specific credential guidance.
 - `stock-ftp-preset-select`, `stock-ftp-new-name`, `stock-ftp-add`, `stock-ftp-delete`, `stock-ftp-reset-builtin`, `stock-getty-csv`, `stock-open-esp`, `stock-open-deepmeta` — stock preset dropdown, CRUD, built-in reset, Getty ESP metadata CSV export (`getty-esp-metadata.csv`), and direct launchers for `esp.gettyimages.com` & DeepMeta 4 (`deepmeta.creativ.zone`).
 - `stock-ftp-host`, `stock-ftp-port`, `stock-ftp-protocol`, `stock-ftp-remotedir`, `stock-ftp-tls`, `stock-ftp-pin`, `stock-ftp-bridge-url` — per-stock connection settings (`esp-https`, `getty-web`, `ftps-explicit`, `sftp`, `ftps-implicit`, `ftp`); no retired local batch option. `getty-web` shows "Getty Images web upload (browser automation)" and the contributor page path (`/contribute`).
 - Getty website automation handles and waits: see [Getty web selectors](stock-upload-getty-web.md).
 - `stock-ftp-cred-status`, `stock-ftp-user`, `stock-ftp-pass`, `stock-ftp-apikey`, `stock-ftp-apisecret`, `stock-ftp-cred-save`, `stock-ftp-cred-forget`, `stock-esp-oauth`, `stock-ftp-test`, `stock-ftp-test-note`, `stock-ftp-trust-cert` — local-only non-expanded credentials (Getty e-mail/ID + password for `getty-web`), OAuth2 PKCE, & connection test (`getty-web` signs in without creating a batch).
 
 ## Filters, unified badges & pinned bulk bar
-- `stock-filters`, `stock-filter-search`, `stock-filter-format`, `stock-filter-badge`, `stock-rowbadges-open`, `stock-sort`, `stock-clear-filters` — filter/sort bar & unified badge catalog button.
+- `stock-filters`, `stock-filter-search`, `stock-filter-format`, `stock-filter-badge`, `stock-rowbadges-open`, `stock-sort`, `stock-clear-filters` — labeled **Find & filter** section with responsive filter/sort controls and unified badge catalog button.
 - `stock-bulkbar-pin`, `stock-bulk`, `stock-check-all`, `stock-selected-count`, `stock-select-visible`, `stock-deselect` — pinned selection controls (`stockUploadChecked` undo). `stock-select-random` / `stock-random-count` / `stock-random-scope`: [Select random](../sor/list-selection-filters.md#select-random).
 - `stock-upload-zoom`, `stock-zoom-label`, `stock-bg-<preset>` — thumbnail zoom & preview background.
 - `stock-format-raster`, `stock-format-svg`, `stock-format-eps`, `stock-format-zip` — same-stem representation checks.

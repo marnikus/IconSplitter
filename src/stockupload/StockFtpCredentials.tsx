@@ -28,6 +28,15 @@ function credentialHelpCopy(active: StockFtpPreset): string {
   return "Username and password are stored ONLY in this browser's local device vault — never expanded, exported, or logged.";
 }
 
+function CredentialHelp({ active }: { active: StockFtpPreset }) {
+  return (
+    <details className="stock-ftp-help" data-testid="stock-ftp-help">
+      <summary>About credentials and this upload method</summary>
+      <small className="up-hint">{credentialHelpCopy(active)}</small>
+    </details>
+  );
+}
+
 export default function StockFtpCredentials({ active, saved, testStatus, actions }: LocalCredentialsProps) {
   if (active.protocol === "esp-batch") {
     return <EspBatchReadyCard active={active} testStatus={testStatus} actions={actions} />;
@@ -39,20 +48,29 @@ function EspBatchReadyCard({ active, testStatus, actions }: {
   active: StockFtpPreset; testStatus: FtpTestStatus; actions: StockFtpActions;
 }) {
   return (
-    <div className="svg-provider-foot" data-testid="stock-ftp-cred-box">
-      <div className="svg-toolbar" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+    <fieldset className="stock-ftp-section stock-credentials-section" data-testid="stock-ftp-cred-box">
+      <legend>Sign-in & test</legend>
+      <div className="stock-credential-row">
         <span className="svg-badge processed" data-testid="stock-ftp-cred-status">
           Ready locally (no API key or FTP password required)
         </span>
-        <button type="button" className="svg-btn tiny" data-testid="stock-ftp-test"
-          disabled={testStatus.busy} onClick={() => { void actions.testConnection(active.id); }}>
-          {testStatus.busy ? "Checking…" : "Test batch folder"}
-        </button>
+        <div className="stock-credential-actions">
+          <button type="button" className="svg-btn tiny" data-testid="stock-ftp-test"
+            disabled={testStatus.busy} onClick={() => { void actions.testConnection(active.id); }}>
+            {testStatus.busy ? "Checking…" : "Test batch folder"}
+          </button>
+        </div>
       </div>
       <TestResultNote active={active} testStatus={testStatus} onTrust={actions.trustPinnedCert} />
-      <small className="up-hint">{credentialHelpCopy(active)}</small>
-    </div>
+      <CredentialHelp active={active} />
+    </fieldset>
   );
+}
+
+function CredentialStatus({ saved }: { saved: boolean }) {
+  return <span className={`svg-badge ${saved ? "processed" : "pending"}`} data-testid="stock-ftp-cred-status">
+    {saved ? "Saved locally (never expanded)" : "No local credentials"}
+  </span>;
 }
 
 function NetworkCredentialsCard({ active, saved, testStatus, actions }: LocalCredentialsProps) {
@@ -68,19 +86,20 @@ function NetworkCredentialsCard({ active, saved, testStatus, actions }: LocalCre
     });
   };
   return (
-    <div className="svg-provider-foot" data-testid="stock-ftp-cred-box">
-      <div className="svg-toolbar" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <span className={`svg-badge ${saved ? "processed" : "pending"}`} data-testid="stock-ftp-cred-status">
-          {saved ? "Saved locally (never expanded)" : "No local credentials"}
-        </span>
+    <fieldset className="stock-ftp-section stock-credentials-section" data-testid="stock-ftp-cred-box">
+      <legend>Sign-in & test</legend>
+      <div className={`stock-credential-row${isEsp ? " esp" : ""}`}>
+        <CredentialStatus saved={saved} />
         {isEsp && <EspApiInputs saved={saved} apiKey={apiKey} apiSecret={apiSecret} onKey={setApiKey} onSecret={setApiSecret} />}
         <LoginInputs active={active} saved={saved} user={user} pass={pass} onUser={setUser} onPass={setPass} />
-        <CredentialButtons active={active} saved={saved} canSave={canSave} busy={testStatus.busy}
-          onSave={onSave} actions={actions} />
+        <div className="stock-credential-actions">
+          <CredentialButtons active={active} saved={saved} canSave={canSave} busy={testStatus.busy}
+            onSave={onSave} actions={actions} />
+        </div>
       </div>
       <TestResultNote active={active} testStatus={testStatus} onTrust={actions.trustPinnedCert} />
-      <small className="up-hint">{credentialHelpCopy(active)}</small>
-    </div>
+      <CredentialHelp active={active} />
+    </fieldset>
   );
 }
 
