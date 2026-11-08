@@ -1,12 +1,14 @@
-// useSessionAutosave.ts — writes the restart snapshot a moment after the store
-// settles. Debounced so a slider drag is one write, and mounted above the tabs
-// so a change on any panel is captured (design doc §6).
+// useSessionAutosave.ts — writes the restart snapshot above every tab. Tab and
+// selection changes flush immediately; less critical bursts are debounced so a
+// slider drag is one write (design doc §6).
 
 import { useEffect } from "react";
+import { log } from "../log/logstore";
 import { getAppState, sessionOf, subscribe, type AppState } from "./appstore";
-import { saveSessionState } from "./sessionstore";
+import { saveSessionState, type SessionSaveResult } from "./sessionstore";
 
 const AUTOSAVE_MS = 250;
+let lastReportedSaveResult: SessionSaveResult = "local";
 
 export function useSessionAutosave(): void {
   useEffect(() => {
@@ -54,5 +56,12 @@ function hasImmediateSessionChange(previous: AppState, next: AppState): boolean 
 }
 
 function save(): void {
-  saveSessionState(sessionOf(getAppState()), new Date().toISOString());
+  const result = saveSessionState(sessionOf(getAppState()), new Date().toISOString());
+  if (result === lastReportedSaveResult) return;
+  lastReportedSaveResult = result;
+  if (result === "session") {
+    log({ level: "warn", feature: "session.save", action: "fallback", detail: "localStorage refused the restart snapshot; saved to this tab's sessionStorage, which survives reloads but not closing the tab" });
+  } else if (result === "unavailable") {
+    log({ level: "error", feature: "session.save", action: "refused", detail: "this browser refused both localStorage and sessionStorage; the last state remains in memory and will not survive a reload" });
+  }
 }

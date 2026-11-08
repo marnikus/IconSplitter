@@ -16,7 +16,24 @@ const ENTRY: HistoryEntry = {
 // A second, different change — an identical repeat would collapse into one entry.
 const ENTRY2: HistoryEntry = { ...ENTRY, id: "act2", label: "Padding 20%", after: { padding: 20 } };
 
-beforeEach(() => localStorage.clear());
+beforeEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});
+
+function refuseLocalStorageWrites(reason = "quota"): void {
+  const backing = window.localStorage;
+  vi.stubGlobal("localStorage", {
+    get length() { return backing.length; },
+    clear: backing.clear.bind(backing),
+    getItem: backing.getItem.bind(backing),
+    key: backing.key.bind(backing),
+    removeItem: backing.removeItem.bind(backing),
+    setItem: () => { throw new Error(reason); },
+  } satisfies Storage);
+}
 
 describe("history store", () => {
   it("starts empty", () => {
@@ -43,8 +60,16 @@ describe("session store", () => {
   });
 
   it("round-trips the snapshot", () => {
-    saveSessionState({ ...DEFAULT_SESSION, tab: "selectionV2" }, NOW);
+    expect(saveSessionState({ ...DEFAULT_SESSION, tab: "selectionV2" }, NOW)).toBe("local");
     expect(loadSessionState().tab).toBe("selectionV2");
+  });
+
+  it("falls back to the per-tab session store when localStorage refuses, including over a stale local snapshot", () => {
+    saveSessionState({ ...DEFAULT_SESSION, tab: "sheets" }, NOW);
+    refuseLocalStorageWrites("quota");
+    expect(saveSessionState({ ...DEFAULT_SESSION, tab: "batch" }, "2026-10-01T12:01:00.000Z")).toBe("session");
+    vi.restoreAllMocks();
+    expect(loadSessionState().tab).toBe("batch");
   });
 
   it("survives a corrupt payload", () => {
@@ -54,11 +79,20 @@ describe("session store", () => {
 });
 
 describe("blocked storage (private mode)", () => {
-  it("never throws and simply does not persist", () => {
-    vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("denied"); });
+  it("keeps session state through reload when localStorage refuses it", () => {
+    refuseLocalStorageWrites("denied");
     expect(() => saveHistory(pushEntry(emptyTimeline(), ENTRY))).not.toThrow();
-    expect(() => saveSessionState(DEFAULT_SESSION, NOW)).not.toThrow();
+    expect(saveSessionState({ ...DEFAULT_SESSION, tab: "stockUpload" }, NOW)).toBe("session");
     vi.restoreAllMocks();
     expect(loadHistory()).toEqual(emptyTimeline());
+    expect(loadSessionState().tab).toBe("stockUpload");
+  });
+
+  it("reports that neither storage area is usable instead of throwing", () => {
+    refuseLocalStorageWrites("denied");
+    vi.spyOn(window.sessionStorage, "setItem").mockImplementation(() => { throw new Error("denied"); });
+    expect(saveSessionState({ ...DEFAULT_SESSION, tab: "batch" }, NOW)).toBe("unavailable");
+    vi.restoreAllMocks();
+    expect(loadSessionState()).toEqual(DEFAULT_SESSION);
   });
 });
