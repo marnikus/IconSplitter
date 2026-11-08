@@ -5055,3 +5055,7 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 ## 2026-11-08 — SVG builder: Similar top-up limited to 5% below the threshold
 
 - TOP_UP_BAND = 5: random picks only from [T−5, T), then next most similar in rank order. Parity +1 test, band test rewritten; builder+index suites 91/91; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS; dist rebuilt.
+
+### 2026-11-08 — Stock Upload batch-history
+
+Verified: focused Stock Upload suites (19 files / 129 tests), history/summary/runner/UI suites (4 files / 20 tests), and docs navigation (4 tests) PASS; `npm run verify:fast` PASS (types, lint: 0 errors / 22 existing warnings, changed-files quality, 4,174-test coverage suite, production build); `npm run verify` PASS (same plus native performance: 5 files / 30 tests). An earlier full run hit one scan timing-budget outlier; the isolated suite and both subsequent aggregate gates passed. External `router.requesty.ai` TLS resets appeared in logs but did not fail any lane.

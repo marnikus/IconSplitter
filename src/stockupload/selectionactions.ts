@@ -18,6 +18,7 @@ import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 export interface StockSelectionApi {
   toggleCheck: (id: string) => void;
   selectVisible: () => void;
+  selectIds: (ids: readonly string[]) => void;
   invertVisible: () => void;
   uncheckVisible: () => void;
   deselectAll: () => void;
@@ -60,6 +61,11 @@ function buildSelectionApi(ref: { current: { visible: readonly ExportedItem[]; h
   return {
     toggleCheck: (id) => commitSelection(ref.current.hist, { ...currentSelection(), checked: toggleChecked(currentSelection().checked, id) }, "Toggle exported row"),
     selectVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: setChecked(currentSelection().checked, ids(), true) }, "Select visible"),
+    selectIds: (requested) => {
+      const visibleSet = new Set(ids());
+      const matches = [...new Set(requested)].filter((id) => visibleSet.has(id));
+      commitSelection(ref.current.hist, { ...currentSelection(), checked: setChecked([], matches, true) }, "Select batch items");
+    },
     uncheckVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: setChecked(currentSelection().checked, ids(), false) }, "Deselect visible"),
     deselectAll: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: [] }, "Deselect all"),
     invertVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: invertChecked(currentSelection().checked, ids()) }, "Invert selection"),

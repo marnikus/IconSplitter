@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearKnownRoots } from "../src/lib/knownroots";
+import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
 import { MANDATORY_TAGS } from "../src/lib/upload/meta";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
@@ -10,6 +10,7 @@ import { HistoryProvider } from "../src/state/HistoryProvider";
 import { getAppState, resetAppStore } from "../src/state/appstore";
 import StockUploadPanel from "../src/stockupload/StockUploadPanel";
 import { resetStockHistory } from "../src/stockupload/historystore";
+import { appendStockUploadBatch, batchesForStock, resetStockUploadBatches } from "../src/stockupload/batchhistorystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { resetFtpCredentialsForTests } from "../src/stockupload/keystore";
 import { resetStockPresets } from "../src/stockupload/presetstore";
@@ -105,6 +106,7 @@ describe("Upload (stockUpload) tab UI", () => {
     resetRowBadges();
     resetStockPresets();
     resetStockHistory();
+    resetStockUploadBatches();
     resetUploadJournal();
     await resetFtpCredentialsForTests();
     vi.stubGlobal("showDirectoryPicker", () => Promise.reject(new Error("picker not needed")));
@@ -117,6 +119,43 @@ describe("Upload (stockUpload) tab UI", () => {
     act(() => ui.unmount());
     host.remove();
     vi.unstubAllGlobals();
+  });
+
+  it("opens per-stock batch history and selects only the batch items visible in the current list", async () => {
+    const ws = makeWorkspace();
+    stored.set("__stock_upload__", { source: ws });
+    rememberKnownRoot(ws, "F:\\Stocks 2026\\icons testing");
+    appendStockUploadBatch({
+      id: "run-1", stockId: "shutterstock", stockName: "Shutterstock",
+      uploadedAt: "2026-11-08T10:00:00.000Z", uploadedCount: 1, failedCount: 0,
+      cancelled: false, rootPath: "F:\\Stocks 2026\\icons testing",
+      files: [{ itemId: "item-star", fileName: "star_icon.svg", format: "svg",
+        relPath: "icons_a/export/star_icon.svg",
+        fullPath: "F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.svg" }],
+    });
+    appendStockUploadBatch({
+      id: "run-2", stockId: "adobe-stock", stockName: "Adobe Stock",
+      uploadedAt: "2026-11-08T11:00:00.000Z", uploadedCount: 0, failedCount: 1,
+      cancelled: false, rootPath: "F:\\Stocks 2026\\icons testing", files: [],
+    });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+    await clickEl(q("stock-upload-history-open")!);
+    expect(q("stock-upload-history-dialog")).not.toBeNull();
+    expect(q("stock-upload-history-batch-run-1")?.textContent).toContain("1 file");
+    await setSelect(q("stock-history-stock-select") as HTMLSelectElement, "adobe-stock");
+    expect(q("stock-upload-history-batch-run-2")?.textContent).toContain("0 files");
+    expect(q("stock-upload-history-batch-run-1")).toBeNull();
+    await setSelect(q("stock-history-stock-select") as HTMLSelectElement, "shutterstock");
+    await clickEl(q("stock-upload-history-batch-run-1")!);
+    expect(q("stock-history-file-run-1-0")?.textContent).toContain("star_icon.svg");
+    expect(q("stock-history-location-run-1-0")?.getAttribute("title"))
+      .toBe("F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.svg");
+    await clickEl(q("stock-history-thumb-run-1-0")!);
+    expect(q("stock-history-preview")).not.toBeNull();
+    await clickEl(q("stock-history-preview-close")!);
+    await clickEl(q("stock-history-select-files")!);
+    expect(getAppState().stockUpload.checked).toEqual(["item-star"]);
   });
 
   it("Ctrl-click removes an applied site badge from all checked Stock Upload rows", async () => {
@@ -170,6 +209,7 @@ describe("Upload (stockUpload) tab UI", () => {
 
   it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats", async () => {
     const ws = makeWorkspace();
+    rememberKnownRoot(ws, "F:\\Stocks 2026\\icons testing");
     stored.set("__stock_upload__", { source: ws });
 
     const uploadedConfigs: string[] = [];
@@ -274,6 +314,12 @@ describe("Upload (stockUpload) tab UI", () => {
     const sentFiles = uploadedConfigs.map((b64) => JSON.parse(atob(b64)).fileName as string);
     expect(sentFiles).toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
     expect(getRowBadgeState().assigned["item-star"]).toEqual([badgeId, "shutterstock"]);
+    await waitUntil(() => batchesForStock("shutterstock").length === 1, "upload batch history recorded");
+    expect(batchesForStock("shutterstock")[0]).toMatchObject({ uploadedCount: 3, failedCount: 0, cancelled: false });
+    expect(batchesForStock("shutterstock")[0].files.map((file) => file.fileName))
+      .toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
+    expect(batchesForStock("shutterstock")[0].files[0].fullPath)
+      .toBe("F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.svg");
   });
 
   it("supports Adobe Stock SFTP (:22) with SFTP Member ID / generated password fields, reset defaults, and standalone vector upload", async () => {

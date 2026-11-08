@@ -2,12 +2,14 @@
 
 import { useMemo, useRef } from "react";
 import { copyFolderText } from "../lib/copypath";
+import { boundRootPathInfo } from "../lib/knownroots";
+import { newUploadRunHistory, recordUploadTaskResult, saveUploadRunHistory, type UploadRunHistoryDrafts } from "./historyrecord";
 import type { DirHandleLike } from "../lib/fs";
 import { probeBridgeFtps } from "../lib/stockupload/bridgeclient";
 import { probeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import { buildGettyEspCsv } from "../lib/stockupload/gettycsv";
 import { gettyWebRequestBytes } from "../lib/stockupload/gettyweb";
-import { buildStockUploadPlan, type StockUploadPlan } from "../lib/stockupload/plan";
+import { buildStockUploadPlan, type PlannedTransfer, type StockUploadPlan } from "../lib/stockupload/plan";
 import { limitStockUploadPlan, uploadIsRandomized } from "../lib/stockupload/uploadlimit";
 import type { ExportedItem, StockFtpPreset, StockPresetState } from "../lib/stockupload/types";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -21,6 +23,7 @@ import { ALL_STOCK_FILTER, initialMetaDraft, type StockListFilter, type StockMet
 import { log } from "../log/logstore";
 import { executeStockUploadBatch, type UploadBatchSummary, type UploadProgressStep } from "./runupload";
 import { rememberStockRoot } from "./scan";
+import { summarizeUploadRun } from "./uploadsummary";
 
 export interface OpsCtx {
   model: StockUploadModel;
@@ -42,6 +45,7 @@ export interface StockPanelOps {
   setSort: (sort: StockUploadSort) => void;
   clearFilters: () => void;
   openRowBadges: () => void;
+  openUploadHistory: () => void;
   closeDialog: () => void;
   metaDraftOf: (item: ExportedItem) => StockMetaDraft;
   editMeta: (item: ExportedItem, patch: Partial<IconMetadata>) => void;
@@ -82,35 +86,6 @@ async function performAcceptMeta(c: OpsCtx, item: ExportedItem): Promise<void> {
   c.say(`Metadata embedded into ${item.stem}`);
 }
 
-/** The re-upload list, said out loud instead of hiding in the failure count. */
-function reuploadNote(summary: UploadBatchSummary): string {
-  const icons = summary.reuploadIcons ?? 0;
-  return icons > 0 ? ` — ${icons} icon(s) need re-upload` : "";
-}
-
-function summarizeBatch(summary: UploadBatchSummary, targetCount: number): { text: string; err: boolean } {
-  const reupload = reuploadNote(summary);
-  if (summary.cancelled) {
-    return { text: `Upload cancelled (${summary.uploadedFiles} file(s) sent)${reupload}`, err: false };
-  }
-  if (summary.failedFiles > 0) {
-    return { text: `Uploaded ${summary.uploadedFiles} file(s), ${summary.failedFiles} failed: ${summary.lastError ?? ""}${reupload}`, err: true };
-  }
-  if (summary.stagedDir) {
-    return {
-      text: `Staged ${summary.uploadedFiles} file(s) + getty_esp_metadata.csv into ${summary.stagedDir}/ — drag into esp.gettyimages.com or DeepMeta 4`,
-      err: false,
-    };
-  }
-  if (summary.lastError) {
-    return {
-      text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s) — ${summary.lastError}`,
-      err: true,
-    };
-  }
-  return { text: `Uploaded ${summary.uploadedFiles} file(s) across ${targetCount} stock site(s)`, err: false };
-}
-
 /** What the helper said about its Getty limits, or why the probe refused the run. */
 interface HelperProbe { failure: string | null; gettyMaxBytes: number }
 
@@ -142,14 +117,17 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
   const root = c.r.root.current;
   if (root === null) return;
   const runId = crypto.randomUUID();
+  const history = newUploadRunHistory(boundRootPathInfo(root).path);
   c.dispatch(startProgress(runId, plan.tasks.length));
   const budget = await budgetFor(c, plan.targets.filter((t) => t.protocol !== "esp-batch"));
   if (budget.failure !== null) return abortStart(c, budget.failure);
   const controller = new AbortController();
   c.r.abort.current = controller;
-  const summary = await executeStockUploadBatch(plan, depsFor(c, root, { runId, signal: controller.signal, gettyMaxBytes: budget.gettyMaxBytes }));
+  const deps = depsFor(c, root, { runId, signal: controller.signal, gettyMaxBytes: budget.gettyMaxBytes }, history);
+  const summary = await executeStockUploadBatch(plan, deps);
   c.r.abort.current = null;
-  const msg = summarizeBatch(summary, plan.targets.length);
+  saveUploadRunHistory(plan, history, { runId, cancelled: summary.cancelled });
+  const msg = summarizeUploadRun(summary, plan.targets.length);
   const done = finishedProgress(plan, summary, msg.text, { runId, stopped: controller.signal.aborted });
   c.dispatch({ type: "patch", patch: { uploading: false, progress: done } });
   c.say(msg.text, msg.err);
@@ -164,6 +142,7 @@ function abortStart(c: OpsCtx, reason: string): void {
 /** What the batch runner gets from the panel — one object, one place to read it. */
 function depsFor(
   c: OpsCtx, root: DirHandleLike, run: { runId: string; signal: AbortSignal; gettyMaxBytes?: number },
+  history: UploadRunHistoryDrafts,
 ) {
   return {
     root,
@@ -178,6 +157,8 @@ function depsFor(
     // Every live step carries the run id, so the bar's cue is one per run.
     onProgress: (progress: UploadProgressStep) => c.dispatch({ type: "patch", patch: { progress: { ...progress, runId: run.runId } } }),
     logFn: log,
+    onTaskResult: (task: PlannedTransfer, result: { ok: true } | { ok: false; reason: string }) =>
+      recordUploadTaskResult(history, task, result),
     onCertWarning: (_id: string, sha256: string) => c.dispatch({ type: "patch", patch: { testStatus: { busy: false, ok: false, note: "Server certificate requires trust", certSha256: sha256 } } }),
   };
 }
@@ -289,6 +270,7 @@ export function useStockPanelOps(ctx: OpsCtx): StockPanelOps {
     setSort: (sort) => ref.current.dispatch({ type: "patch", patch: { sort } }),
     clearFilters: () => ref.current.dispatch({ type: "patch", patch: { filter: ALL_STOCK_FILTER } }),
     openRowBadges: () => ref.current.dispatch({ type: "patch", patch: { dialog: { kind: "rowBadges" } } }),
+    openUploadHistory: () => ref.current.dispatch({ type: "patch", patch: { dialog: { kind: "uploadHistory" } } }),
     closeDialog: () => ref.current.dispatch({ type: "patch", patch: { dialog: null } }),
     ...buildMetaAndUploadOps(ref),
   }), []);

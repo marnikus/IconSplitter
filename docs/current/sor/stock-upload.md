@@ -28,6 +28,8 @@ Unrecorded files inside `export/`, uncommitted records, and source files outside
   - **Getty Images** (default `esp-https` at `api.gettyimages.com:443`; old local-stage presets migrate). Automatic upload requires Getty-issued ESP Submission and Ingestion API access, not merely an ESP web login or catalog API key. OAuth uses browser PKCE where supported. One illustration contribution contains its JPEG and optional matching EPS. Local multipart protocol follows the [Getty ESP tutorial](https://github.com/mpimedia/esp_api_code_examples/blob/main/tutorial%20%281%29.pdf); present-day compatibility and illustration batch type have not been verified against Getty. Metadata is embedded in exported files for ESP extraction. Uploading is not the same as submission for review. Retries after failures can leave incomplete remote contributions.
 - **Credentials (`src/lib/stockupload/credvault.ts`, [I-81](invariants/upload.md#i-81))**: login/username, password, and optional Getty ESP `apiKey`/`apiSecret` live **only** in IndexedDB `iconSplitter/secrets` (`stock-ftp-cred:<presetId>`, session fallback if blocked). Never written to `localStorage`, `export.json`, presets, or logs, and **never expanded** in the UI.
 
+See [Stock Upload History](stock-upload-history.md).
+
 ## 4. Multi-target transfer (`src/stockupload/espstage.ts`, `tools/bridge/{ftps,sftp,esp}/`)
 
 - **Pinned bar**: thumbnail zoom slider, `Apply badges`, same-stem format checkboxes (`JPEG/PNG`, `SVG`, `EPS`, `ZIP` packed deterministically in memory via `JSZip` without `export.json`), multi-upload target site checkboxes, and `Upload`.

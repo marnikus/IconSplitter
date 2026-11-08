@@ -1693,6 +1693,33 @@
 
 .svg-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 
+.stock-history-modal { width: min(900px, 94vw); }
+.stock-history-picker { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--v2-line); font-size: 10px; }
+.stock-history-picker .svg-input { width: min(320px, 70vw); }
+.stock-history-batches { max-height: 190px; overflow: auto; border-bottom: 1px solid var(--v2-line); }
+.stock-history-batch { width: 100%; min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 16px; border: 0; border-bottom: 1px solid #192138; background: transparent; color: var(--v2-text); text-align: left; cursor: pointer; }
+.stock-history-batch:hover, .stock-history-batch.active { background: #151e34; }
+.stock-history-batch strong, .stock-history-batch small { display: block; }
+.stock-history-batch strong { font-size: 10px; }
+.stock-history-batch small, .stock-history-outcome, .stock-history-detail header > span { color: var(--v2-muted-2); font-size: 9px; }
+.stock-history-empty { padding: 14px 16px; }
+.stock-history-detail { padding: 10px 16px 16px; }
+.stock-history-detail > header { display: flex; align-items: center; gap: 12px; min-height: 32px; margin-bottom: 5px; font-size: 10px; }
+.stock-history-detail > header .svg-btn { margin-left: auto; }
+.stock-history-copy-status { display: block; min-height: 18px; color: var(--v2-muted-2); font-size: 9px; }
+.stock-history-files { max-height: 44vh; overflow: auto; border: 1px solid var(--v2-line); border-radius: 5px; }
+.stock-history-file { min-height: 30px; display: grid; grid-template-columns: 28px minmax(120px, 220px) minmax(100px, 1fr) auto; align-items: center; gap: 7px; padding: 2px 6px; border-bottom: 1px solid #192138; font-size: 9px; }
+.stock-history-file:last-child { border-bottom: 0; }
+.stock-history-thumb { width: 24px; height: 24px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--v2-line); border-radius: 3px; padding: 0; background: #080c16; color: var(--v2-muted-2); cursor: zoom-in; font-size: 7px; }
+.stock-history-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.stock-history-file-name, .stock-history-file-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-history-file-path { color: var(--v2-muted-2); }
+.stock-history-preview-backdrop { z-index: 22; }
+.stock-history-preview-modal { width: min(760px, 92vw); }
+.stock-history-large-preview { min-height: 240px; display: grid; place-items: center; padding: 20px; }
+.stock-history-large-preview img { max-width: 100%; max-height: 68vh; object-fit: contain; background: #080c16; }
+.stock-history-large-preview p { color: var(--v2-muted-2); font-size: 11px; }
+
 .svg-toast {
   position: fixed;
   right: 18px;

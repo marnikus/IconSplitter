@@ -64,6 +64,8 @@ export interface UploadBatchDeps {
   logFn?: (spec: LogSpec) => void;
   /** Live per-file counts of the running upload, for the panel's progress line. */
   gettyWebProgressFn?: (bridgeUrl: string, sessionKey: string) => Promise<GettyWebProgress | null>;
+  /** Every terminal task result, so UI-owned history can keep only successful files. */
+  onTaskResult?: (task: PlannedTransfer, result: { ok: true } | { ok: false; reason: string }) => void;
 }
 
 export interface UploadBatchSummary {

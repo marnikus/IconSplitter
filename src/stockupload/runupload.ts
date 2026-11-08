@@ -143,7 +143,7 @@ async function runNetworkTargetGroup(
   const trackers = buildTrackers(plan, targetTasks);
   const creds = await deps.loadCreds(target.id);
   if (creds === null) {
-    recordMissingCreds(target, targetTasks.length, { trackers, counters, deps });
+    recordMissingCreds(target, targetTasks, { trackers, counters, deps });
     return;
   }
   const itemsById = new Map(plan.selectedRows.map((r) => [r.id, r]));
