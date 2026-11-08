@@ -214,7 +214,7 @@ describe("the restart snapshot keeps the last selection", () => {
 
   it("writes a snapshot that was read from storage normally (the reload path)", () => {
     const stored = saveSessionState({ ...DEFAULT_SESSION, tab: "upload" }, new Date().toISOString());
-    expect(stored).toEqual({ ok: true, freed: [] });
+    expect(stored).toEqual({ ok: true, freed: [], reason: null });
     expect(loadSessionState().tab).toBe("upload");
   });
 });

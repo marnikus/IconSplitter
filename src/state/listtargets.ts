@@ -16,6 +16,11 @@ export function rememberListTargets(tab: CheckableList, ids: readonly string[]):
   targets[tab] = new Set(ids);
 }
 
+/** True once a scan has reported this list's sources (the first scan after start has not). */
+export function listTargetsKnown(tab: CheckableList): boolean {
+  return targets[tab] !== null;
+}
+
 /** Before a scan there is no authority; afterwards stale history is refused. */
 export function selectionTargetsKnown(tab: CheckableList, selection: RowSelection): boolean {
   const known = targets[tab];

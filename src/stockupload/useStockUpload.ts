@@ -4,14 +4,14 @@ import { LIST_VIEW_KEYS, useSaveListView } from "../state/listviewstore";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
-import { pruneRowSelection } from "../lib/reviewselect";
+import { pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import { dropFromMulti } from "../lib/multifilter";
 import type { StockDiscovery } from "../lib/stockupload/discovery";
 import type { ExportedItem, StockPresetState } from "../lib/stockupload/types";
 import { ensureHardcodedBadges, ensureNamedBadge, type RowBadgeState } from "../lib/upload/rowbadge";
 import { useHistoryActions } from "../state/HistoryProvider";
 import { getAppState, patchStockUpload } from "../state/appstore";
-import { rememberListTargets } from "../state/listtargets";
+import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { useAppSlice } from "../state/useAppState";
 import { getRowBadgeState, setRowBadgeState, subscribeRowBadges } from "../upload/rowbadgestore";
 import { useStockFtpActions, type StockFtpActions } from "./ftpactions";
@@ -45,19 +45,22 @@ export interface StockUploadApi extends StockSelectionApi, StockBadgeApi, StockF
   removeItems: (ids: string[]) => void;
 }
 
-/** Drops checks a rescan no longer knows — never on a scan that found nothing (2026-11-08). */
-function commitKnownSelection(knownIds: readonly string[]): void {
-  if (knownIds.length === 0) return; // nothing found is not "everything was removed"
+/**
+ * Drops checks a rescan no longer knows. Writes ONLY a real prune (an unchanged selection is no gesture, so an
+ * idle page finishing a scan cannot claim the snapshot), and the first scan after start that found nothing
+ * prunes nothing (2026-11-08).
+ */
+export function commitKnownSelection(knownIds: readonly string[]): void {
+  const firstScan = !listTargetsKnown("stockUpload");
+  rememberListTargets("stockUpload", knownIds);
+  if (knownIds.length === 0 && firstScan) return;
   const cur = getAppState().stockUpload;
-  const pruned = pruneRowSelection(
-    { checked: cur.checked, active: cur.activeId, anchor: cur.anchorId },
-    new Set(knownIds),
-  );
-  patchStockUpload({ checked: pruned.checked, activeId: pruned.active, anchorId: pruned.anchor });
+  const before = { checked: cur.checked, active: cur.activeId, anchor: cur.anchorId };
+  const pruned = pruneRowSelection(before, new Set(knownIds));
+  if (!sameRowSelection(before, pruned)) patchStockUpload({ checked: pruned.checked, activeId: pruned.active, anchorId: pruned.anchor });
 }
 
 function applyDiscoveredItems(found: StockDiscovery, dispatch: (a: StockModelAction) => void): void {
-  rememberListTargets("stockUpload", found.items.map((it) => it.id));
   commitKnownSelection(found.items.map((it) => it.id));
   dispatch({ type: "patch", patch: { discovery: found } });
 }

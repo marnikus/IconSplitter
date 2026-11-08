@@ -14,7 +14,7 @@ import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
 import { settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { cleanMetadata, metadataFingerprint } from "../lib/upload/meta";
 import { getAppState, patchUpload } from "../state/appstore";
-import { rememberListTargets } from "../state/listtargets";
+import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import { cachedMeta, restoredMeta } from "./metacache";
 import type { UploadRowSource } from "./discovery";
@@ -279,8 +279,9 @@ export function countsOf(rows: readonly UploadRow[]): UploadCounts {
  */
 export function pruneChecked(rows: readonly UploadRow[]): void {
   const known = new Set(rows.map((r) => r.source.id));
+  const firstScan = !listTargetsKnown("upload");
   rememberListTargets("upload", [...known]);
-  if (known.size === 0) return;
+  if (known.size === 0 && firstScan) return; // the restore scan found nothing yet; a LATER empty rescan prunes
   const state = getAppState().upload;
   const before = { checked: state.checked, active: state.activeId, anchor: state.anchorId };
   const after = pruneRowSelection(before, known);

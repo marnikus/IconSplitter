@@ -24,6 +24,9 @@ export function loadSessionState(): SessionState {
 export function readStoredStamp(): string | null {
   const text = readKey(SESSION_KEY);
   if (text === null) return null;
+  // serializeSession writes `{"v":…,"savedAt":"…"` first: read the stamp from the head, no full parse.
+  const head = /^\{"v":\d+,"savedAt":"([^"]+)"/.exec(text.slice(0, 80));
+  if (head !== null) return head[1];
   try {
     const raw: unknown = JSON.parse(text);
     const savedAt = typeof raw === "object" && raw !== null ? (raw as { savedAt?: unknown }).savedAt : null;
@@ -39,4 +42,15 @@ export function readStoredStamp(): string | null {
  */
 export function saveSessionState(session: SessionState, nowIso: string): RoomedWrite {
   return writeWithRoom(SESSION_KEY, serializeSession(session, nowIso));
+}
+
+/**
+ * An outdated page (another page stored a newer selection) may still store its OWN tab / options /
+ * view, but every selection comes from the stored snapshot — the newer pick is never resurrected over.
+ */
+export function withStoredSelections(own: SessionState): SessionState {
+  const stored = loadSessionState();
+  return { ...own, svg: stored.svg, upload: stored.upload, builder: stored.builder, stockUpload: stored.stockUpload,
+    batch: stored.batch, selectionV2: { ...own.selectionV2, checked: stored.selectionV2.checked, anchorId: stored.selectionV2.anchorId },
+    selection: { ...own.selection, selectedId: stored.selection.selectedId } };
 }

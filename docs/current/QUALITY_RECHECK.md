@@ -5114,3 +5114,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 ## 2026-11-08 — Stock upload: compact setup panel (layout only)
 
 - Header with icon + two-line title; Connection | Stock preset + Add preset | Sign-in & test as three cards; status badge in the sign-in card head; Test connection right-aligned. No control added/removed. stockupload suites 143/143 (layout assertions added, failed first); tsc PASS; lint 0 errors; quality gate PASS; build PASS.
+
+## 2026-11-08 — Session snapshot: code-review fixes
+
+- Only real selection fields claim the snapshot (stock rescan writes only a real prune; builder marks synced only when different; V2 scroll is a debounced view change). An outdated page writes its own tab/options/view with the stored selections and stays behind. First empty scan after start keeps restored checks, later empty rescans prune. Blocked storage reported as unavailable. Eviction: caches, then the log compacts itself (undo timeline untouched); guarded storage helpers live in safestorage. Stamp read from the document head (no separate key — robust against older builds). Builder locks/exclusions of vanished icons pruned.
+- Tests: session_review_fixes 8 (each witnessed failing first); session/builder/stock/undo suites 181/182 (random_select_ui fails identically on clean HEAD); fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.

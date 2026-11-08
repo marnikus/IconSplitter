@@ -12,7 +12,7 @@ import {
   type SvgDir, type SvgListFilter, type SvgListRow, type SvgSort,
 } from "../lib/svglist";
 import { getAppState, patchSvg } from "../state/appstore";
-import { rememberListTargets } from "../state/listtargets";
+import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { checkState, pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import type { SvgSource } from "./sources";
 import type { SvgRow } from "./types";
@@ -199,8 +199,9 @@ export function headerState(visible: SvgRow[], checked: string[]): "none" | "som
  */
 export function pruneChecked(rows: SvgRow[]): void {
   const known = new Set(rows.map((r) => r.source.id));
+  const firstScan = !listTargetsKnown("generateSvg");
   rememberListTargets("generateSvg", [...known]);
-  if (known.size === 0) return;
+  if (known.size === 0 && firstScan) return; // the restore scan found nothing yet; a LATER empty rescan prunes
   const state = getAppState().svg;
   const before = { checked: state.checked, active: state.activeId, anchor: state.anchorId };
   const after = pruneRowSelection(before, known);

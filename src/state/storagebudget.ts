@@ -1,32 +1,47 @@
 // storagebudget.ts — room for the restart snapshot when localStorage is full
-// (2026-11-08). The reported bug: every session write was refused
-// (`session.save-refused`), so a reload kept bringing back the last snapshot
-// that still fitted. The snapshot is small and must win over caches: a refused
-// write frees the stores below — REBUILDABLE caches first, the log and the undo
-// timeline last — retrying after each, and never touches user data (metadata
-// cache, upload batches, presets, prompts, keys).
+// (2026-11-08). The field log showed every session write refused, so a reload
+// kept bringing back the last snapshot that still fitted. The small snapshot
+// wins over caches: a refused write first evicts REBUILDABLE caches (rebuilt by
+// the next scan), then asks registered stores to compact themselves (the log
+// keeps only its newest entries — deleting its key would just be refilled from
+// memory). The undo timeline and user data are never touched. A blocked or
+// unreadable storage is reported as such, never as "full".
+import { hasKey, readKey, removeKey, writeKeyChecked } from "./safestorage";
 
-/** Evicted in this order; each is rebuilt or only shortened when gone. */
+/** Rebuilt by the next scan when gone. */
 export const EVICTABLE_KEYS: readonly string[] = [
-  "iconSplitter.upload.sourceHash.v1", // source-hash cache — rebuilt on the next scan
-  "iconSplitter.svg.index.v1", // id → path index — rebuilt on the next scan
-  "iconSplitter.log.v1", // global activity log — the live log keeps running in memory
-  "iconSplitter.history.v1", // stored undo timeline — the live timeline keeps running in memory
+  "iconSplitter.upload.sourceHash.v1", // source-hash cache
+  "iconSplitter.svg.index.v1", // id -> path index
 ];
 
-export interface RoomedWrite { ok: boolean; freed: string[] }
+/** A store that can shrink what it persists; returns a label of what it freed, or null. */
+type Compactor = () => string | null;
+const compactors: Compactor[] = [];
 
-/** Writes `text` under `key` (one plain retry), freeing evictable stores one by one until it lands. */
+export function registerStorageCompactor(fn: Compactor): void {
+  if (!compactors.includes(fn)) compactors.push(fn);
+}
+
+export interface RoomedWrite { ok: boolean; freed: string[]; reason: "quota" | "unavailable" | null }
+
+/** Writes `text` under `key` (one plain retry), making room step by step while the quota refuses it. */
 export function writeWithRoom(key: string, text: string): RoomedWrite {
   const freed: string[] = [];
-  if (tryWrite(key, text) || tryWrite(key, text)) return { ok: true, freed };
-  for (const victim of EVICTABLE_KEYS) {
-    if (victim === key || !has(victim)) continue;
-    remove(victim);
-    freed.push(victim);
-    if (tryWrite(key, text)) return { ok: true, freed };
+  let outcome = writeKeyChecked(key, text);
+  if (outcome !== "ok") outcome = writeKeyChecked(key, text);
+  for (const step of roomSteps(key)) {
+    if (outcome !== "quota") break;
+    const label = step();
+    if (label === null) continue;
+    freed.push(label);
+    outcome = writeKeyChecked(key, text);
   }
-  return { ok: false, freed };
+  return { ok: outcome === "ok", freed, reason: outcome === "ok" ? null : outcome };
+}
+
+function roomSteps(key: string): Compactor[] {
+  const evict = EVICTABLE_KEYS.filter((k) => k !== key).map((k) => () => (hasKey(k) ? (removeKey(k), k) : null));
+  return [...evict, ...compactors];
 }
 
 /** The largest stored keys (chars ≈ bytes / 2), for an honest "storage is full" report. */
@@ -35,7 +50,7 @@ export function largestKeys(top = 6): { key: string; chars: number }[] {
   try {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key !== null) out.push({ key, chars: key.length + (localStorage.getItem(key) ?? "").length });
+      if (key !== null) out.push({ key, chars: key.length + (readKey(key) ?? "").length });
     }
   } catch {
     return [];
@@ -46,21 +61,4 @@ export function largestKeys(top = 6): { key: string; chars: number }[] {
 export function describeLargest(top = 6): string {
   const list = largestKeys(top).map((k) => `${k.key} ${(k.chars / 1024).toFixed(0)} k`).join(", ");
   return list === "" ? "storage could not be read" : list;
-}
-
-function tryWrite(key: string, text: string): boolean {
-  try {
-    localStorage.setItem(key, text);
-    return localStorage.getItem(key) === text;
-  } catch {
-    return false;
-  }
-}
-
-function has(key: string): boolean {
-  try { return localStorage.getItem(key) !== null; } catch { return false; }
-}
-
-function remove(key: string): void {
-  try { localStorage.removeItem(key); } catch { /* nothing more can be done */ }
 }

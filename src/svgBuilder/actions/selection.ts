@@ -109,12 +109,20 @@ function setCategory(ctx: BuilderActionContext, category: string): void {
 function autoPlace(ctx: BuilderActionContext): void {
   if (ctx.assets.length === 0) return;
   const known = new Set(ctx.assets.map((a) => a.id));
+  pruneMarks(ctx, known);
   const kept = ctx.placedIds.filter((id) => known.has(id) || isEmptySlot(id));
   if (kept.length !== ctx.placedIds.length) return ctx.setCheckedQuiet(kept.length > 0 ? kept : reshuffleSheet(pickOf(ctx, ctx.model.recipe, ctx.model.seed)).ids);
   if (ctx.placedIds.length > 0) return;
   const recipe = ctx.model.recipe.mode === "similar" ? { ...ctx.model.recipe, mode: "random" as const } : ctx.model.recipe;
   const result = reshuffleSheet(pickOf(ctx, recipe, ctx.model.seed));
   ctx.setCheckedQuiet(result.ids);
+}
+
+/** Locks / exclusions of icons the scan no longer has are dropped (they would persist forever otherwise). */
+function pruneMarks(ctx: BuilderActionContext, known: ReadonlySet<string>): void {
+  const lockedIds = ctx.model.lockedIds.filter((id) => known.has(id));
+  const excludedIds = ctx.model.excludedIds.filter((id) => known.has(id));
+  if (lockedIds.length !== ctx.model.lockedIds.length || excludedIds.length !== ctx.model.excludedIds.length) ctx.dispatch({ lockedIds, excludedIds });
 }
 
 /** The grid's cell count changed: shrink truncates, grow appends seeded picks (no undo entry, no seed change). */

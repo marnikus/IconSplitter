@@ -8,7 +8,7 @@ import { saveBuilderPrefs } from "./prefsstore";
 import { saveBuilderPrompt } from "./promptstore";
 import { useSaveBuilderListView } from "./listview";
 import { bindBuilderConfigApplier } from "./undoBinding";
-import { patchBuilder } from "../state/appstore";
+import { getAppState, patchBuilder } from "../state/appstore";
 
 export function useBuilderPersistence(model: BuilderModel, patch: (value: Partial<BuilderModel>) => void): void {
   useEffect(() => { saveSheetConfig(model.config); }, [model.config]);
@@ -16,7 +16,7 @@ export function useBuilderPersistence(model: BuilderModel, patch: (value: Partia
   useEffect(() => { saveBuilderPrompt(model.prompt); }, [model.prompt]);
   useSaveBuilderListView(model.listView);
   // Locks and exclusions live in the session's builder slice, so the autosave stores them at once (a selection slice).
-  useEffect(() => { patchBuilder({ lockedIds: [...model.lockedIds], excludedIds: [...model.excludedIds] }); }, [model.lockedIds, model.excludedIds]);
+  useEffect(() => { syncBuilderMarks(model.lockedIds, model.excludedIds); }, [model.lockedIds, model.excludedIds]);
   useEffect(() => bindBuilderConfigApplier((value) => {
     const parsed = parseBuilderUndoPatch(value);
     if (parsed === null) return false;
@@ -24,4 +24,15 @@ export function useBuilderPersistence(model: BuilderModel, patch: (value: Partia
     saveSheetConfig(parsed.config);
     return true;
   }), [patch]);
+}
+
+/** Mirrors locks / exclusions into the session slice — only when they differ, so a mount is never a gesture. */
+export function syncBuilderMarks(locked: readonly string[], excluded: readonly string[]): void {
+  const b = getAppState().builder;
+  if (sameIds(b.lockedIds ?? [], locked) && sameIds(b.excludedIds ?? [], excluded)) return;
+  patchBuilder({ lockedIds: [...locked], excludedIds: [...excluded] });
+}
+
+function sameIds(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
 }
