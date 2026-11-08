@@ -52,7 +52,7 @@ export interface StockPanelOps {
   acceptMeta: (item: ExportedItem) => void;
   copyMeta: (item: ExportedItem, field: "title" | "description" | "tags") => void;
   startUploadFlow: () => void;
-  confirmUpload: () => void;
+  confirmUpload: (note: string) => void;
   cancelUpload: () => void;
   /** Closes a finished (or cancelled) bar there is nothing left to watch. */
   dismissProgress: () => void;
@@ -113,7 +113,7 @@ async function budgetFor(c: OpsCtx, targets: readonly StockFtpPreset[]): Promise
   return probe.failure !== null ? { failure: probe.failure } : { failure: null, gettyMaxBytes: probe.gettyMaxBytes };
 }
 
-async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<void> {
+async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan, note: string): Promise<void> {
   const root = c.r.root.current;
   if (root === null) return;
   const runId = crypto.randomUUID();
@@ -126,7 +126,7 @@ async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan): Promise<v
   const deps = depsFor(c, root, { runId, signal: controller.signal, gettyMaxBytes: budget.gettyMaxBytes }, history);
   const summary = await executeStockUploadBatch(plan, deps);
   c.r.abort.current = null;
-  saveUploadRunHistory(plan, history, { runId, cancelled: summary.cancelled });
+  saveUploadRunHistory(plan, history, { runId, cancelled: summary.cancelled }, note);
   const msg = summarizeUploadRun(summary, plan.targets.length);
   const done = finishedProgress(plan, summary, msg.text, { runId, stopped: controller.signal.aborted });
   c.dispatch({ type: "patch", patch: { uploading: false, progress: done } });
@@ -235,9 +235,9 @@ function buildMetaAndUploadOps(ref: { current: OpsCtx }): Pick<
     acceptMeta: (item) => { void performAcceptMeta(ref.current, item); },
     copyMeta: (item, field) => copyMetaField(ref.current, item, field),
     startUploadFlow: () => performStartUpload(ref.current),
-    confirmUpload: () => {
+    confirmUpload: (note) => {
       const d = ref.current.model.dialog;
-      if (d?.kind === "confirmUpload") void performConfirmUpload(ref.current, d.plan);
+      if (d?.kind === "confirmUpload") void performConfirmUpload(ref.current, d.plan, note);
     },
     cancelUpload: () => {
       ref.current.r.abort.current?.abort();

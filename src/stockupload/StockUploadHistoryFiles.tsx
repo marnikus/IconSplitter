@@ -48,15 +48,40 @@ function HistoryFileRow({ batch, file, rootRef, rootToken, onPreview, onCopy, in
   const location = file.fullPath ?? file.relPath ?? file.fileName;
   return (
     <div className="stock-history-file" role="listitem" data-testid={`stock-history-file-${batch.id}-${index}`}>
-      <button type="button" className="stock-history-thumb" aria-label={`Preview ${file.fileName}`}
-        data-testid={`stock-history-thumb-${batch.id}-${index}`} onClick={() => onPreview(file)}>
-        {url ? <img src={url} alt="" loading="lazy" /> : <span>{file.fileName.split(".").at(-1)?.toUpperCase() ?? "FILE"}</span>}
-      </button>
+      <HistoryThumbnail batchId={batch.id} file={file} index={index} url={url} onPreview={onPreview} />
       <span className="stock-history-file-name" title={file.fileName}>{file.fileName}</span>
       <span className="stock-history-file-path" title={location}>{location}</span>
       <button type="button" className="svg-btn tiny" data-testid={`stock-history-location-${batch.id}-${index}`}
         title={location} onClick={() => onCopy(location)}>Location</button>
     </div>
+  );
+}
+
+function hoverPreviewAt(button: HTMLButtonElement): { left: number; top: number } {
+  const rect = button.getBoundingClientRect();
+  return { left: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 240)),
+    top: Math.max(8, Math.min(rect.top, window.innerHeight - 200)) };
+}
+
+function HistoryThumbnail({ batchId, file, index, url, onPreview }: {
+  batchId: string; file: StockUploadHistoryFile; index: number; url: string | null;
+  onPreview: (file: StockUploadHistoryFile) => void;
+}) {
+  const [hoverAt, setHoverAt] = useState<{ left: number; top: number } | null>(null);
+  const showHover = (button: HTMLButtonElement) => { if (url) setHoverAt(hoverPreviewAt(button)); };
+  return (
+    <>
+      <button type="button" className="stock-history-thumb" aria-label={`Preview ${file.fileName}`}
+        data-testid={`stock-history-thumb-${batchId}-${index}`} onClick={() => onPreview(file)}
+        onMouseEnter={(event) => showHover(event.currentTarget)} onMouseLeave={() => setHoverAt(null)}
+        onFocus={(event) => showHover(event.currentTarget)} onBlur={() => setHoverAt(null)}>
+        {url ? <img src={url} alt="" loading="lazy" /> : <span>{file.fileName.split(".").at(-1)?.toUpperCase() ?? "FILE"}</span>}
+      </button>
+      {hoverAt && url && <div className="stock-history-hover-preview" role="tooltip"
+        data-testid={`stock-history-hover-preview-${batchId}-${index}`} style={hoverAt}>
+        <img src={url} alt={`${file.fileName} preview`} style={{ width: "auto", height: "auto" }} />
+      </div>}
+    </>
   );
 }
 
@@ -69,7 +94,7 @@ function LargePreview({ batch, file, rootRef, rootToken, onClose }: {
       <section className="svg-modal stock-history-preview-modal" role="dialog" aria-modal="true" aria-label={`Preview ${file.fileName}`}
         onClick={(event) => event.stopPropagation()}>
         <header className="svg-modal-head"><h2>{file.fileName}</h2><button type="button" className="svg-btn tiny" data-testid="stock-history-preview-close" onClick={onClose}>Close</button></header>
-        <div className="stock-history-large-preview">{url ? <img src={url} alt={file.fileName} /> : <p>Preview unavailable for this file or workspace.</p>}</div>
+        <div className="stock-history-large-preview">{url ? <img src={url} alt={file.fileName} style={{ width: "auto", height: "auto" }} /> : <p>Preview unavailable for this file or workspace.</p>}</div>
       </section>
     </div>
   );

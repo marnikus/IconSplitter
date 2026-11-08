@@ -23,6 +23,8 @@ export interface StockUploadBatch {
   uploadedCount: number;
   failedCount: number;
   cancelled: boolean;
+  /** Optional user-entered upload context; absent on pre-note history rows. */
+  note?: string;
   rootPath: string;
   files: StockUploadHistoryFile[];
 }
@@ -90,15 +92,24 @@ function validBatchHeader(raw: unknown): raw is BatchHeader {
   return isRecord(raw) && validBatchIdentity(raw) && validBatchOutcome(raw);
 }
 
+function optionalNoteOf(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  return typeof value === "string" && value.length <= 1000 ? value : null;
+}
+
+function validStoredFiles(raw: BatchHeader & Record<string, unknown>): raw is BatchHeader & Record<string, unknown> & { files: unknown[] } {
+  return Array.isArray(raw.files) && raw.files.length <= 3000 && raw.files.length === raw.uploadedCount;
+}
+
 /** Rejects malformed batch records instead of partially showing misleading data. */
 export function parseStockUploadBatch(raw: unknown): StockUploadBatch | null {
   if (!isRecord(raw) || !validBatchHeader(raw)) return null;
   const rootPath = rootPathOf(raw.rootPath);
-  if (rootPath === null || !Array.isArray(raw.files) || raw.files.length > 3000) return null;
-  if (raw.files.length !== raw.uploadedCount) return null;
+  const note = optionalNoteOf(raw.note);
+  if (rootPath === null || note === null || !validStoredFiles(raw)) return null;
   const files = raw.files.map((file) => parseFile(file, rootPath));
   if (files.some((file) => file === null)) return null;
   return { id: raw.id, stockId: raw.stockId, stockName: raw.stockName, uploadedAt: raw.uploadedAt,
     uploadedCount: raw.uploadedCount, failedCount: raw.failedCount, cancelled: raw.cancelled,
-    rootPath, files: files as StockUploadHistoryFile[] };
+    ...(note === undefined ? {} : { note }), rootPath, files: files as StockUploadHistoryFile[] };
 }

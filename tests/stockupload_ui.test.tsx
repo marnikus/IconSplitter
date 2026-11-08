@@ -118,6 +118,7 @@ describe("Upload (stockUpload) tab UI", () => {
   afterEach(() => {
     act(() => ui.unmount());
     host.remove();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -156,6 +157,44 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-history-preview-close")!);
     await clickEl(q("stock-history-select-files")!);
     expect(getAppState().stockUpload.checked).toEqual(["item-star"]);
+  });
+
+  it("shows an aspect-preserving hover thumbnail preview and retains click-to-enlarge", async () => {
+    const ws = makeWorkspace();
+    const folder = (ws.children.get("icons_a") as FakeDir).children.get("export") as FakeDir;
+    folder.children.set("star_icon.jpg", new FakeFile("star_icon.jpg", 12, 1000, "jpeg-preview"));
+    stored.set("__stock_upload__", { source: ws });
+    rememberKnownRoot(ws, "F:\\Stocks 2026\\icons testing");
+    appendStockUploadBatch({
+      id: "run-eps", stockId: "shutterstock", stockName: "Shutterstock",
+      uploadedAt: "2026-11-08T10:00:00.000Z", uploadedCount: 1, failedCount: 0,
+      cancelled: false, rootPath: "F:\\Stocks 2026\\icons testing",
+      files: [{ itemId: "item-star", fileName: "star_icon.eps", format: "eps",
+        relPath: "icons_a/export/star_icon.eps",
+        fullPath: "F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.eps" }],
+    });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:history-hover-preview");
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+    await clickEl(q("stock-upload-history-open")!);
+    await clickEl(q("stock-upload-history-batch-run-eps")!);
+    await waitUntil(() => q("stock-history-thumb-run-eps-0")?.querySelector("img") !== null, "EPS companion image loaded");
+
+    const thumb = q("stock-history-thumb-run-eps-0")!;
+    await act(async () => { thumb.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); });
+    const hover = q("stock-history-hover-preview-run-eps-0");
+    expect(hover).not.toBeNull();
+    const hoverImage = hover?.querySelector("img");
+    expect(hoverImage?.getAttribute("src")).toBe("blob:history-hover-preview");
+    expect(hoverImage?.style.width).toBe("auto");
+    expect(hoverImage?.style.height).toBe("auto");
+
+    await clickEl(thumb);
+    expect(q("stock-history-preview")).not.toBeNull();
+    const largeImage = q("stock-history-preview")?.querySelector("img");
+    expect(largeImage?.getAttribute("src")).toBe("blob:history-hover-preview");
+    expect(largeImage?.style.width).toBe("auto");
+    expect(largeImage?.style.height).toBe("auto");
   });
 
   it("Ctrl-click removes an applied site badge from all checked Stock Upload rows", async () => {
@@ -209,7 +248,7 @@ describe("Upload (stockUpload) tab UI", () => {
     expect(q("stock-upload-confirm-dialog")?.textContent).toContain("Title + description");
   });
 
-  it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats", async () => {
+  it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats with a history note", async () => {
     const ws = makeWorkspace();
     rememberKnownRoot(ws, "F:\\Stocks 2026\\icons testing");
     stored.set("__stock_upload__", { source: ws });
@@ -312,6 +351,9 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-upload-start")!);
     await settle();
     expect(q("stock-upload-confirm-dialog")).not.toBeNull();
+    const uploadNote = q("stock-upload-confirm-note") as HTMLTextAreaElement;
+    expect(uploadNote).not.toBeNull();
+    await setInput(uploadNote, "Autumn catalog refresh");
     await clickEl(q("stock-upload-confirm-go")!);
     await waitUntil(() => uploadedConfigs.length === 3, "3 files uploaded");
 
@@ -319,11 +361,15 @@ describe("Upload (stockUpload) tab UI", () => {
     expect(sentFiles).toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
     expect(getRowBadgeState().assigned["item-star"]).toEqual([badgeId, "shutterstock"]);
     await waitUntil(() => batchesForStock("shutterstock").length === 1, "upload batch history recorded");
-    expect(batchesForStock("shutterstock")[0]).toMatchObject({ uploadedCount: 3, failedCount: 0, cancelled: false });
-    expect(batchesForStock("shutterstock")[0].files.map((file) => file.fileName))
+    const savedBatch = batchesForStock("shutterstock")[0];
+    expect(savedBatch).toMatchObject({ uploadedCount: 3, failedCount: 0, cancelled: false, note: "Autumn catalog refresh" });
+    expect(savedBatch.files.map((file) => file.fileName))
       .toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
-    expect(batchesForStock("shutterstock")[0].files[0].fullPath)
+    expect(savedBatch.files[0].fullPath)
       .toBe("F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.svg");
+    await clickEl(q("stock-upload-history-open")!);
+    const savedHistoryRow = q(`stock-upload-history-batch-${savedBatch.id}`);
+    expect(savedHistoryRow?.querySelector(".stock-history-note")?.textContent).toBe("Autumn catalog refresh");
   });
 
   it("supports Adobe Stock SFTP (:22) with SFTP Member ID / generated password fields, reset defaults, and standalone vector upload", async () => {

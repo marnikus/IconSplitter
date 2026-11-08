@@ -5071,3 +5071,8 @@ Verified: focused target-options, Stock Upload UI/runner, docs-navigation, and r
 ### 2026-11-08 — Compact random-select bulk-bar controls
 
 Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript PASS; lint 0 errors / 22 existing warnings; changed-files quality PASS; `npm run verify:fast` PASS; `npm run verify` PASS (native performance 5 files / 30 tests, coverage and production build). One full run had an unrelated detector timing outlier (204.9 ms vs 200 ms); isolated native tests and the subsequent full run passed.
+
+## 2026-11-08 — Stock Upload history previews and upload notes
+
+- Added TDD coverage for EPS sibling-image lookup, hover/click previews with aspect-ratio sizing, backward-compatible batch notes, and upload-note persistence/rendering.
+- Verification: focused Stock Upload history tests passed; `npm run verify:fast` passed; `npm run verify` passed, including native performance budgets and production build.

@@ -54,4 +54,12 @@ describe("per-stock upload batch history", () => {
       ...batch("bad-file").files[0], relPath: "../../secret.svg",
     }] })).toBeNull();
   });
+
+  it("persists an optional note while remaining compatible with older history rows", () => {
+    const noted = parseStockUploadBatch({ ...batch("noted"), note: "Autumn catalog refresh" });
+    expect(noted).toMatchObject({ id: "noted", note: "Autumn catalog refresh" });
+    expect(parseStockUploadBatch(batch("legacy"))).toMatchObject({ id: "legacy" });
+    expect(parseStockUploadBatch({ ...batch("bad-note"), note: 42 })).toBeNull();
+    expect(parseStockUploadBatch({ ...batch("long-note"), note: "x".repeat(2001) })).toBeNull();
+  });
 });

@@ -22,14 +22,15 @@ export function recordUploadTaskResult(
 }
 
 export function saveUploadRunHistory(
-  plan: StockUploadPlan, history: UploadRunHistoryDrafts, run: { runId: string; cancelled: boolean },
+  plan: StockUploadPlan, history: UploadRunHistoryDrafts, run: { runId: string; cancelled: boolean }, note?: string,
 ): void {
   const uploadedAt = new Date().toISOString();
+  const savedNote = note?.trim().slice(0, 1000) || undefined;
   for (const target of plan.targets) {
     const draft = history.byTarget.get(target.id) ?? { files: [], failedCount: 0 };
     const batch: StockUploadBatch = { id: `${run.runId}-${target.id}`, stockId: target.id, stockName: target.name,
       uploadedAt, uploadedCount: draft.files.length, failedCount: draft.failedCount, cancelled: run.cancelled,
-      rootPath: history.rootPath, files: draft.files };
+      ...(savedNote === undefined ? {} : { note: savedNote }), rootPath: history.rootPath, files: draft.files };
     appendStockUploadBatch(batch);
   }
 }

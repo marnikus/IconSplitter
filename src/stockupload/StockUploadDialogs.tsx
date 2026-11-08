@@ -1,6 +1,7 @@
 // StockUploadDialogs.tsx — row-badge catalog dialog, FTPS/SFTP preflight
 // confirmation modal, and cross-tab portal progress header.
 
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import { gettyWebBatchSummaryOf, gettyWebIconSizes } from "../lib/stockupload/gettyweb";
 import type { StockUploadPlan } from "../lib/stockupload/plan";
@@ -45,9 +46,21 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function UploadNoteField({ note, onChange }: { note: string; onChange: (value: string) => void }) {
+  return (
+    <div className="stock-upload-confirm-note-field">
+      <label htmlFor="stock-upload-confirm-note">Upload note <span>Optional · saved with batch history</span></label>
+      <textarea id="stock-upload-confirm-note" className="svg-input" data-testid="stock-upload-confirm-note"
+        maxLength={1000} rows={2} placeholder="Add context for this upload run" value={note}
+        onChange={(event) => onChange(event.target.value)} />
+    </div>
+  );
+}
+
 function ConfirmUploadModal({ plan, onConfirm, onCancel }: {
-  plan: StockUploadPlan; onConfirm: () => void; onCancel: () => void;
+  plan: StockUploadPlan; onConfirm: (note: string) => void; onCancel: () => void;
 }) {
+  const [note, setNote] = useState("");
   return (
     <div className="svg-backdrop" data-testid="stock-upload-confirm-backdrop" onClick={onCancel}>
       <section className="svg-modal narrow" role="dialog" aria-modal="true"
@@ -59,11 +72,12 @@ function ConfirmUploadModal({ plan, onConfirm, onCancel }: {
           <button type="button" className="svg-btn tiny" onClick={onCancel}>Close</button>
         </header>
         <ConfirmPlanBody plan={plan} />
+        <UploadNoteField note={note} onChange={setNote} />
         <footer className="svg-modal-foot" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button type="button" className="svg-btn" data-testid="stock-upload-confirm-cancel" onClick={onCancel}>
             Cancel
           </button>
-          <button type="button" className="svg-btn primary" data-testid="stock-upload-confirm-go" onClick={onConfirm}>
+          <button type="button" className="svg-btn primary" data-testid="stock-upload-confirm-go" onClick={() => onConfirm(note)}>
             ⇪ Start Upload
           </button>
         </footer>

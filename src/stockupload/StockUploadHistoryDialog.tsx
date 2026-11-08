@@ -73,6 +73,9 @@ function HistoryBatchList({ batches, openedId, onOpen }: {
           data-testid={`stock-upload-history-batch-${batch.id}`}
           aria-expanded={openedId === batch.id} onClick={() => onOpen(openedId === batch.id ? null : batch.id)}>
           <span><strong>{uploadDate(batch.uploadedAt)}</strong><small>{fileCount(batch)}</small></span>
+          <span className="stock-history-note" data-testid={`stock-upload-history-note-${batch.id}`} title={batch.note ?? "No note"}>
+            {batch.note?.trim() || "—"}
+          </span>
           <span className="stock-history-outcome">{batch.failedCount > 0 ? `${batch.failedCount} failed` : batch.cancelled ? "Cancelled" : "Complete"}</span>
         </button>
       ))}

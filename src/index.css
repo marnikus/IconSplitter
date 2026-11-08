@@ -1717,11 +1717,12 @@
 .stock-history-picker { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--v2-line); font-size: 10px; }
 .stock-history-picker .svg-input { width: min(320px, 70vw); }
 .stock-history-batches { max-height: 190px; overflow: auto; border-bottom: 1px solid var(--v2-line); }
-.stock-history-batch { width: 100%; min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 16px; border: 0; border-bottom: 1px solid #192138; background: transparent; color: var(--v2-text); text-align: left; cursor: pointer; }
+.stock-history-batch { width: 100%; min-height: 46px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, 1fr) auto; align-items: center; gap: 12px; padding: 6px 16px; border: 0; border-bottom: 1px solid #192138; background: transparent; color: var(--v2-text); text-align: left; cursor: pointer; }
 .stock-history-batch:hover, .stock-history-batch.active { background: #151e34; }
 .stock-history-batch strong, .stock-history-batch small { display: block; }
 .stock-history-batch strong { font-size: 10px; }
-.stock-history-batch small, .stock-history-outcome, .stock-history-detail header > span { color: var(--v2-muted-2); font-size: 9px; }
+.stock-history-batch small, .stock-history-note, .stock-history-outcome, .stock-history-detail header > span { color: var(--v2-muted-2); font-size: 9px; }
+.stock-history-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stock-history-empty { padding: 14px 16px; }
 .stock-history-detail { padding: 10px 16px 16px; }
 .stock-history-detail > header { display: flex; align-items: center; gap: 12px; min-height: 32px; margin-bottom: 5px; font-size: 10px; }
@@ -1732,13 +1733,19 @@
 .stock-history-file:last-child { border-bottom: 0; }
 .stock-history-thumb { width: 24px; height: 24px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--v2-line); border-radius: 3px; padding: 0; background: #080c16; color: var(--v2-muted-2); cursor: zoom-in; font-size: 7px; }
 .stock-history-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.stock-history-hover-preview { position: fixed; z-index: 23; max-width: min(240px, 70vw); max-height: 200px; padding: 5px; border: 1px solid var(--v2-line-strong); border-radius: 5px; background: #080c16; box-shadow: 0 8px 28px #000a; pointer-events: none; }
+.stock-history-hover-preview img { display: block; width: auto; height: auto; max-width: min(220px, 68vw); max-height: 180px; object-fit: contain; }
 .stock-history-file-name, .stock-history-file-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stock-history-file-path { color: var(--v2-muted-2); }
 .stock-history-preview-backdrop { z-index: 22; }
 .stock-history-preview-modal { width: min(760px, 92vw); }
 .stock-history-large-preview { min-height: 240px; display: grid; place-items: center; padding: 20px; }
-.stock-history-large-preview img { max-width: 100%; max-height: 68vh; object-fit: contain; background: #080c16; }
+.stock-history-large-preview img { width: auto; height: auto; max-width: 100%; max-height: 68vh; object-fit: contain; background: #080c16; }
 .stock-history-large-preview p { color: var(--v2-muted-2); font-size: 11px; }
+.stock-upload-confirm-note-field { display: grid; gap: 5px; padding: 0 16px 14px; }
+.stock-upload-confirm-note-field label { display: flex; align-items: baseline; gap: 7px; color: var(--v2-text); font-size: 10px; }
+.stock-upload-confirm-note-field label span { color: var(--v2-muted-2); font-size: 8px; }
+.stock-upload-confirm-note-field .svg-input { width: 100%; min-height: 52px; resize: vertical; }
 
 .svg-toast {
   position: fixed;

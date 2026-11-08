@@ -26,7 +26,7 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-combine-title-description` — opt-in, persisted title + description in upload copies only.
 - `stock-random-batches` — opt-in, saved: every site draws random, mixed 100-icon batches and uploads each under a shuffled number before its name.
 - `stock-target-check-<presetId>` — multi-upload target stock checkboxes.
-- `stock-upload-start`, `stock-upload-cancel`, `stock-upload-confirm-dialog`, `stock-upload-confirm-go`, `stock-upload-confirm-cancel` — preflight confirmation & upload trigger.
+- `stock-upload-start`, `stock-upload-cancel`, `stock-upload-confirm-dialog`, `stock-upload-confirm-note`, `stock-upload-confirm-go`, `stock-upload-confirm-cancel` — preflight confirmation, optional note (saved with each target batch), and upload trigger.
 - `stock-upload-getty-batches` — the confirmation's Getty line whenever `getty-web` is a target (`250 icon(s) → 3 batches (Getty takes 100 uploads per batch; a JPEG + EPS pair counts once)`, singular `1 batch` for a short run), so the chunking (100 icons, 64 MB) is visible before Upload.
 
 ## Rows & local metadata (`StockUploadRow.tsx`, `StockUploadMetaFields.tsx`)
