@@ -11,12 +11,21 @@ const AUTOSAVE_MS = 250;
 export function useSessionAutosave(): void {
   useEffect(() => {
     let timer = 0;
+    let lastStockChecked = getAppState().stockUpload.checked;
     const flush = () => {
       window.clearTimeout(timer);
       timer = 0;
       save();
     };
     const off = subscribe(() => {
+      const checked = getAppState().stockUpload.checked;
+      if (checked !== lastStockChecked) {
+        // This is the user's upload queue: persist replacements/toggles at the
+        // gesture boundary so a reload cannot resurrect an older bulk pick.
+        lastStockChecked = checked;
+        flush();
+        return;
+      }
       window.clearTimeout(timer);
       timer = window.setTimeout(save, AUTOSAVE_MS);
     });

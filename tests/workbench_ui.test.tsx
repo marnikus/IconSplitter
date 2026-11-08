@@ -101,13 +101,19 @@ describe("the shell", () => {
     expect(loadSessionState().tab).toBe("batch"); // …and now it is
   });
 
-  it("flushes the latest Stock Upload selection on page exit", () => {
+  it("immediately replaces a saved Stock Upload bulk selection and flushes the latest state on exit", () => {
     mountWorkbench();
-    patchStockUpload({ checked: ["item-a", "item-b"], activeId: "item-b", anchorId: "item-a" });
-    expect(loadSessionState().stockUpload?.checked).toEqual([]); // still within autosave debounce
+    const oldBulkPick = Array.from({ length: 100 }, (_, i) => `old-${i}`);
+    patchStockUpload({ checked: oldBulkPick, activeId: "old-99", anchorId: "old-0" });
+    expect(loadSessionState().stockUpload?.checked).toEqual(oldBulkPick);
+
+    patchStockUpload({ checked: ["new-a", "new-b"], activeId: "new-b", anchorId: "new-a" });
+    expect(loadSessionState().stockUpload?.checked).toEqual(["new-a", "new-b"]);
+
+    patchStockUpload({ activeId: "new-a" }); // active-only changes remain debounced
     act(() => { window.dispatchEvent(new Event("pagehide")); });
     expect(loadSessionState().stockUpload).toEqual({
-      checked: ["item-a", "item-b"], activeId: "item-b", anchorId: "item-a",
+      checked: ["new-a", "new-b"], activeId: "new-a", anchorId: "new-a",
     });
   });
 
