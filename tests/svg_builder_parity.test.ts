@@ -134,18 +134,25 @@ describe("selection recipes", () => {
     expect(r.ids.filter((id) => id !== "apple").every((id) => ui.some((u) => u.id === id))).toBe(true);
   });
 
-  it("with vector scores, Similar keeps the most similar in rank order and shuffles only the rest", () => {
-    const sim: Record<string, number> = { apple: 0.95, bread: 0.9, cake: 0.85, home: 0.5, gear: 0.4, bell: 0.3 };
+  it("with vector scores, Similar keeps ≥ threshold in rank order and shuffles only within 5% below it", () => {
+    const sim: Record<string, number> = { apple: 0.95, bread: 0.9, cake: 0.85, donut: 0.79, egg: 0.78, home: 0.77, gear: 0.76, bell: 0.75, user: 0.5 };
     const score = (a: BuilderIconAsset) => sim[a.id] ?? 0.1;
     const pick = (seed: number) => reshuffleSheet({ assets: library, profiles, recipe: recipe({ mode: "similar", threshold: 80 }), seed,
       capacity: 6, current: [], lockedIds: [], score });
     const runs = [1, 2, 3, 4, 5, 6].map(pick);
     for (const r of runs) {
       expect(r.ids.slice(0, 3)).toEqual(["apple", "bread", "cake"]); // stable, best first
-      expect(r.ids.slice(3).every((id) => (sim[id] ?? 0.1) < 0.8)).toBe(true);
-      expect(r.shortfall).toEqual({ pool: 3, cells: 6 });
+      expect(r.ids.slice(3).every((id) => sim[id] >= 0.75 && sim[id] < 0.8)).toBe(true); // only 75–79 %
     }
-    expect(new Set(runs.map((r) => r.ids.slice(3).join())).size).toBeGreaterThan(1); // the lower part changes per seed
+    expect(new Set(runs.map((r) => r.ids.slice(3).join())).size).toBeGreaterThan(1); // the band part changes per seed
+  });
+
+  it("when the 5% band runs out, the next most similar follow in rank order (no far-off random picks)", () => {
+    const sim: Record<string, number> = { apple: 0.9, bread: 0.77, cake: 0.6, donut: 0.5, egg: 0.4 };
+    const score = (a: BuilderIconAsset) => sim[a.id] ?? 0.1;
+    const r = reshuffleSheet({ assets: library, profiles, recipe: recipe({ mode: "similar", threshold: 80 }), seed: 9,
+      capacity: 5, current: [], lockedIds: [], score });
+    expect(r.ids).toEqual(["apple", "bread", "cake", "donut", "egg"]);
   });
 
   it("excluded icons are never drawn, topped up or appended", () => {

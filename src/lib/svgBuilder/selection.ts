@@ -102,7 +102,7 @@ export function recipeCaption(recipe: SelectionRecipe): string {
 
 /** The honest shortfall toast (reference wording). */
 export function shortfallMessage(recipe: SelectionRecipe, s: { pool: number; cells: number }): string {
-  if (recipe.mode === "similar") return `Only ${s.pool} icons are ≥${recipe.threshold}% similar — they stay first; random picks fill the remaining cells.`;
+  if (recipe.mode === "similar") return `Only ${s.pool} icons are ≥${recipe.threshold}% similar — they stay first; random picks from up to ${TOP_UP_BAND}% below the threshold (then the next most similar) fill the remaining cells.`;
   return `That filter has ${s.pool} icons for ${s.cells} cells. The closest library pick fills the rest.`;
 }
 
@@ -125,17 +125,32 @@ export function shuffled<T>(items: readonly T[], random: () => number): T[] {
   return out;
 }
 
+/** Similar top-up: random picks only from icons at most this many points below the threshold. */
+export const TOP_UP_BAND = 5;
+
 /**
- * The pool first, then a seeded random top-up from the rest of the library (seed + 99). With vector scores
- * (Similar) the pool is taken in RANK order, most similar first, so Reshuffle keeps the best matches stable
- * and only the lower, below-threshold part changes; otherwise the pool itself is a seeded draw.
+ * The pool first, then the top-up from the rest of the library. With vector scores (Similar) the pool is
+ * taken in RANK order (most similar first, stable on Reshuffle) and the top-up is a seeded random pick from
+ * the band just below the threshold (≥ threshold − 5 %), then the next most similar in rank order — never a
+ * far-off icon. Without scores both are seeded draws (seed, seed + 99).
  */
 function drawIds(p: SheetPick, pool: readonly BuilderIconAsset[], taken: ReadonlySet<string>, count: number): string[] {
   const first = poolOrder(p, pool).map((a) => a.id).slice(0, count);
   if (first.length >= count) return first;
   const used = new Set([...taken, ...first]);
-  const rest = shuffled(p.assets.filter((a) => !used.has(a.id)), mulberry32(p.seed + 99)).map((a) => a.id);
+  const rest = topUpOrder(p, p.assets.filter((a) => !used.has(a.id))).map((a) => a.id);
   return [...first, ...rest.slice(0, count - first.length)];
+}
+
+function topUpOrder(p: SheetPick, rest: BuilderIconAsset[]): BuilderIconAsset[] {
+  const random = shuffled(rest, mulberry32(p.seed + 99));
+  const score = p.score;
+  if (p.recipe.mode !== "similar" || score === undefined) return random;
+  const floor = (p.recipe.threshold - TOP_UP_BAND) / 100;
+  const band = random.filter((a) => (score(a) ?? -1) >= floor);
+  const below = rest.filter((a) => (score(a) ?? -1) < floor)
+    .map((a) => ({ a, s: score(a) ?? -1 })).sort((x, y) => y.s - x.s || compareIds(x.a.id, y.a.id)).map((x) => x.a);
+  return [...band, ...below];
 }
 
 function poolOrder(p: SheetPick, pool: readonly BuilderIconAsset[]): BuilderIconAsset[] {

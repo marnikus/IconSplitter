@@ -5051,3 +5051,7 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 ## 2026-11-08 — SVG builder: Similar keeps the best matches stable, shuffles the rest
 
 - With vector scores the ≥ threshold pool is placed in rank order (stable across Reshuffle); the below-threshold top-up is a seeded random pick (changes per Reshuffle). Parity test rewritten (6 seeds); builder+index suites 90/90; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: Similar top-up limited to 5% below the threshold
+
+- TOP_UP_BAND = 5: random picks only from [T−5, T), then next most similar in rank order. Parity +1 test, band test rewritten; builder+index suites 91/91; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS; dist rebuilt.
