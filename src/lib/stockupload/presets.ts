@@ -1,3 +1,4 @@
+import { parseTargetOptions } from "./targetoptions";
 // presets.ts — Stock FTPS/SFTP/ESP preset definitions, protocol-varying field rules
 // and validate-on-read normalization (RULE 13/20). Credentials never exist here.
 
@@ -193,7 +194,6 @@ function healGettyPreset(p: StockFtpPreset): StockFtpPreset {
   }
   return p;
 }
-
 /** v1 = original two sites, v2 = Getty ESP HTTPS, v3 = the Getty web upload. */
 function isKnownPresetVersion(version: unknown): boolean {
   return version === 1 || version === 2 || version === 3;
@@ -215,7 +215,7 @@ export function parseStockPresetState(text: string | null): StockPresetState {
     const checkedTargets = Array.isArray(raw.checkedTargets)
       ? raw.checkedTargets.filter((id): id is string => typeof id === "string" && ids.has(id))
       : [presets[0].id];
-    return { v: STOCK_PRESETS_VERSION, presets, activePresetId, checkedTargets, formats: parseFormats(raw.formats) };
+    return { v: STOCK_PRESETS_VERSION, presets, activePresetId, checkedTargets, formats: parseFormats(raw.formats), targetOptions: parseTargetOptions(raw.targetOptions, ids, parseFormats) };
   } catch {
     return DEFAULT_STOCK_STATE;
   }

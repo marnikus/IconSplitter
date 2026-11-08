@@ -71,7 +71,10 @@ describe("stock upload planner, batch runner and crash journal", () => {
     expect(plan.tasks).toHaveLength(10);
     expect(plan.tasks.filter((t) => t.itemId === "icon-1" && t.targetId === "shutterstock").map((t) => t.fileName))
       .toEqual(["star_01.jpg", "star_01.eps", "star_01.zip"]);
-    expect(plan.skippedMissing).toEqual([{ itemId: "icon-2", stem: "moon_02", format: "eps" }]);
+    expect(plan.skippedMissing).toEqual([
+      { itemId: "icon-2", stem: "moon_02", format: "eps", targetId: "shutterstock" },
+      { itemId: "icon-2", stem: "moon_02", format: "eps", targetId: "dreamstime" },
+    ]);
   });
 
   it("isolates per-file failures, supports mid-run cancellation, and updates local history", async () => {

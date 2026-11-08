@@ -5055,3 +5055,9 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 ## 2026-11-08 — SVG builder: Similar top-up limited to 5% below the threshold
 
 - TOP_UP_BAND = 5: random picks only from [T−5, T), then next most similar in rank order. Parity +1 test, band test rewritten; builder+index suites 91/91; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS; dist rebuilt.
+
+## 2026-11-08 — Per-stock upload options
+
+- Added a Stocks preset popup with independently persisted format and title/description options per target; Random batches and Limit stay global. Upload plans, missing-format tracking, confirmation and transfers use target-specific choices, with legacy choices as defaults.
+- Verification: 18 stock-upload test files / 123 tests passed; TypeScript and lint passed (22 existing warnings); quality:changed passed. verify:fast did not finish within the 180-second command timeout.
+- Follow-up push verification: `npm run verify` passed all lanes, including 4,168 tests and coverage; the initial run exposed oversized docs, corrected before the successful rerun.

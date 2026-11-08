@@ -70,8 +70,6 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-filters`, `stock-filter-search`, `stock-filter-format`, `stock-filter-badge`, `stock-rowbadges-open`, `stock-sort`, `stock-clear-filters` — filter/sort bar & unified badge catalog button.
 - `stock-bulkbar-pin`, `stock-bulk`, `stock-check-all`, `stock-selected-count`, `stock-select-visible`, `stock-deselect` — pinned selection controls (`stockUploadChecked` undo).
 - `stock-upload-zoom`, `stock-zoom-label`, `stock-bg-<preset>` — thumbnail zoom & preview background.
-- `stock-format-raster`, `stock-format-svg`, `stock-format-eps`, `stock-format-zip` — same-stem representation checkboxes.
-- `stock-combine-title-description` — opt-in persisted combination of accepted title and description in upload copies only.
 - `stock-random-batches` — opt-in, saved: every site walks 100-icon batches, each drawn at random and mixed, every icon under a shuffled number before its name.
 - `stock-target-check-<presetId>` — multi-upload target stock checkboxes.
 - `stock-upload-start`, `stock-upload-cancel`, `stock-upload-confirm-dialog`, `stock-upload-confirm-go`, `stock-upload-confirm-cancel` — preflight confirmation & upload trigger.
@@ -83,3 +81,5 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-location-<id>`, `stock-meta-btn-<id>` — copy folder path & expand metadata actions.
 - `stock-meta-fields-<id>`, `stock-meta-title-<id>`, `stock-meta-description-<id>`, `stock-meta-tags-<id>`, `stock-meta-accept-<id>`, `stock-meta-state-<id>` — local metadata editor & in-place carrier re-embedder.
 - `stock-remove-<id>`, `stock-remove-selected` — [Remove](../sor/svg-remove-row.md#upload).
+
+- `stock-presets-open`, `stock-presets-popup`, `stock-presets-close`, `stock-preset-<presetId>-<raster|svg|eps|zip|title-description>` — per-stock upload options popup. `stock-upload-target-formats` shows the planned formats per target.

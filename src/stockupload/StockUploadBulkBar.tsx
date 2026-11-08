@@ -2,19 +2,12 @@
 // multi-target stock checkboxes, same-stem format checkboxes, Apply badges & Upload.
 
 import { BG_PRESETS, backgroundLabel, selectCustom, selectPreset, type PreviewBackground } from "../lib/svgbackground";
-import type { UploadFormatKey } from "../lib/stockupload/types";
+import StockPresetsPopup from "./StockPresetsPopup";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import UploadRowBadgeApply from "../upload/UploadRowBadgeApply";
 import type { StockUploadApi } from "./useStockUpload";
 import { parseUploadLimit } from "../lib/stockupload/uploadlimit";
 import InvertButton from "../ui/InvertButton";
-
-const FORMAT_LABELS: { key: UploadFormatKey; label: string }[] = [
-  { key: "raster", label: "JPEG/PNG" },
-  { key: "svg", label: "SVG" },
-  { key: "eps", label: "EPS" },
-  { key: "zip", label: "ZIP" },
-];
 
 export default function StockUploadBulkBar({ g }: { g: StockUploadApi }) {
   return (
@@ -56,9 +49,8 @@ function ActionCluster({ g }: { g: StockUploadApi }) {
       <span className="svg-divider" aria-hidden="true" />
       <UploadRowBadgeApply state={g.rowBadges} ids={g.checked} onApply={g.applyRowBadgeSelected} />
       <span className="svg-divider" aria-hidden="true" />
-      <FormatCheckboxes g={g} />
-      <CombinedTitleOption g={g} />
       <RandomBatchesOption g={g} />
+      <StockPresetsPopup g={g} />
       <LimitOption g={g} />
       <span className="svg-divider" aria-hidden="true" />
       <TargetSiteCheckboxes g={g} />
@@ -89,32 +81,6 @@ function ZoomControl({ thumb, onThumb }: { thumb: number; onThumb: (px: number) 
         data-testid="stock-upload-zoom" aria-label="Thumbnail zoom" value={thumb}
         onChange={(e) => onThumb(Number(e.target.value))} />
       <span data-testid="stock-zoom-label">{zoomLabel(thumb)}</span>
-    </label>
-  );
-}
-
-function FormatCheckboxes({ g }: { g: StockUploadApi }) {
-  return (
-    <div className="svg-toolbar" role="group" aria-label="File formats to upload" style={{ gap: 6 }}>
-      {FORMAT_LABELS.map(({ key, label }) => (
-        <label key={key} className="svg-chip" style={{ cursor: "pointer" }}>
-          <input type="checkbox" data-testid={`stock-format-${key}`}
-            checked={g.presetState.formats[key]}
-            onChange={(e) => g.setFormat(key, e.target.checked)} />
-          <span>{label}</span>
-        </label>
-      ))}
-    </div>
-  );
-}
-
-function CombinedTitleOption({ g }: { g: StockUploadApi }) {
-  return (
-    <label className="svg-chip" title="Changes only upload copies, not your original files" style={{ cursor: "pointer" }}>
-      <input type="checkbox" data-testid="stock-combine-title-description"
-        checked={g.model.prefs.combineTitleDescription}
-        onChange={(e) => g.setPrefs({ combineTitleDescription: e.target.checked })} />
-      <span>Title + description</span>
     </label>
   );
 }

@@ -55,10 +55,10 @@ function uploadGroup(run: GroupRun): Promise<UploadResult> {
   const { plan, target, tasks, deps, creds, sessionKey, itemsById } = run;
   const item = itemsById.get(tasks[0].itemId);
   if (target.protocol === "esp-https") {
-    return uploadEspGroup({ tasks, missing: plan.skippedMissing, root: deps.root, bridgeUrl: deps.bridgeUrl,
-      target, creds, sessionKey, signal: deps.signal, uploadFn: deps.uploadFn, item, combine: plan.combineTitleDescription });
+    return uploadEspGroup({ tasks, missing: plan.skippedMissing.filter((m) => !m.targetId || m.targetId === target.id), root: deps.root, bridgeUrl: deps.bridgeUrl,
+      target, creds, sessionKey, signal: deps.signal, uploadFn: deps.uploadFn, item, combine: plan.combineByTarget?.[target.id] ?? plan.combineTitleDescription });
   }
-  return runSingleTask(tasks[0], { target, creds, sessionKey, itemsById, deps, combine: plan.combineTitleDescription }, tasks[0].fileName);
+  return runSingleTask(tasks[0], { target, creds, sessionKey, itemsById, deps, combine: plan.combineByTarget?.[target.id] ?? plan.combineTitleDescription }, tasks[0].fileName);
 }
 
 function groupUploadTasks(target: StockFtpPreset, targetTasks: PlannedTransfer[]): PlannedTransfer[][] {
@@ -69,7 +69,7 @@ function groupUploadTasks(target: StockFtpPreset, targetTasks: PlannedTransfer[]
 export function buildTrackers(plan: StockUploadPlan, targetTasks: readonly PlannedTransfer[]): Map<string, ItemTracker> {
   const map = new Map<string, ItemTracker>();
   for (const task of targetTasks) {
-    const missingCount = plan.skippedMissing.filter((m) => m.itemId === task.itemId).length;
+    const missingCount = plan.skippedMissing.filter((m) => m.itemId === task.itemId && (!m.targetId || m.targetId === task.targetId)).length;
     const prev = map.get(task.itemId) ?? { expected: 0, succeeded: [], missingCount, lastError: null };
     prev.expected += 1;
     map.set(task.itemId, prev);
@@ -142,7 +142,7 @@ function batchFiles(ctx: NetworkCtx): BatchFile[] {
  */
 export async function runFileBatches(ctx: NetworkCtx): Promise<number> {
   const { target, deps, counters, trackers, creds, sessionKey, itemsById } = ctx;
-  const taskCtx: TaskCtx = { target, creds, sessionKey, itemsById, deps, combine: ctx.plan.combineTitleDescription };
+  const taskCtx: TaskCtx = { target, creds, sessionKey, itemsById, deps, combine: ctx.plan.combineByTarget?.[target.id] ?? ctx.plan.combineTitleDescription };
   let uploaded = 0;
   for (const entry of batchFiles(ctx)) {
     if (deps.signal.aborted) break;

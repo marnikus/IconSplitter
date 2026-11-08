@@ -207,7 +207,7 @@ function performStartUpload(c: OpsCtx): void {
   const full = buildStockUploadPlan({
     items: c.items, checkedIds: c.checked, presets: c.presetState.presets,
     checkedTargets: c.presetState.checkedTargets, formats: c.presetState.formats,
-    combineTitleDescription: c.model.prefs.combineTitleDescription,
+    combineTitleDescription: c.model.prefs.combineTitleDescription, targetOptions: c.presetState.targetOptions,
   });
   // "Limit": only N icons, drawn now so the confirmation shows the real run.
   const plan = limitStockUploadPlan(full, c.model.prefs.uploadLimit);
