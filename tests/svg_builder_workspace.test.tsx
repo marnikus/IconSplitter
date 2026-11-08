@@ -259,6 +259,25 @@ describe("SVG builder workspace", () => {
     expect(q("builder-empty-cell-1")).not.toBeNull(); // undo works with an empty cell in the sheet
   });
 
+  it("the % label of a refilled cell shows the NEW icon's similarity at once", async () => {
+    setIndexRuntime(fakeIndexRuntime());
+    await openLibrary();
+    await click("builder-index-start");
+    await waitUntil(() => text("builder-index-count").includes("12/12 indexed"), "all icons indexed");
+    await click("builder-recipe-mode-random");
+    for (let i = 0; i < 3; i++) await click("builder-rows-dec"); // 8 cells, 4 spare icons
+    await waitUntil(() => placed().length === 8, "8 placed");
+    const food = new Set(all('[data-testid^="builder-asset-"]').filter((t) => /^(Apple|Bread|Cake|Donut|Egg)/.test(t.title)).map((t) => t.dataset.assetId));
+    const order = await idsInOrder();
+    const ref = order.findIndex((id) => food.has(id));
+    await act(async () => { q(`builder-cell-lock-${ref}`)!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    const target = order.findIndex((_, i) => i !== ref);
+    await click(`builder-cell-exclude-${target}`);
+    const replacement = (await idsInOrder())[target];
+    expect(replacement).not.toBe(order[target]);
+    expect(text(`builder-cell-score-${target}`)).toBe(food.has(replacement) ? "100%" : "0%");
+  });
+
   it("presets, CUSTOM pill, RESET and the global undo", async () => {
     await openLibrary();
     await click("builder-layout-plain");
