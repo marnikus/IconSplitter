@@ -25,3 +25,9 @@ Choose the row for your change, then open that source file. Part of the [owner m
   `svg/panelcounts.ts` and tab view hooks — [selection response redesign](../selection-performance.md):
   compact ordered history, deferred persistence, stable actions/slice subscriptions,
   summaries, active-row projection and Batch mirror-only caching.
+
+* `lib/sessionorder.ts`, `state/{sessionstore,useSessionAutosave}.ts` — [the last
+  selection survives the reload](../shared.md#the-last-selection-survives-the-reload-2026-11-08):
+  the restart snapshot document, its same-task selection write, the verified
+  (read-back + one retry) write, and the rule that a page may not overwrite a
+  snapshot another page stamped later.

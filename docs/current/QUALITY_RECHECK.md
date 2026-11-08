@@ -5086,3 +5086,15 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - Confirmation now skips icons carrying the destination stock badge by default; an independent checkbox per selected stock opts its already-badged icons into re-upload. Unbadged icons remain in the plan.
 - Planner tests cover mixed badges across multiple targets; confirmation UI tests cover independent choices and preventing an empty run. Stock Upload behavior and selector docs updated.
 - Verification: 140 Stock Upload tests passed; docs navigation passed; `npm run verify:fast` and `npm run verify` passed (types, lint, changed-file quality, full coverage tests, and build). Existing lint warnings and `router.requesty.ai` ECONNRESET messages were non-fatal.
+
+## 2026-11-08 — Upload tabs: the last selection survives a reload
+
+- Root cause of the third report: one snapshot writer, so an idle SECOND app page
+  re-wrote its older checks over the newer selection; the same-task write now
+  happens for every selection slice, a page may not overwrite a snapshot stamped
+  after its own last selection change (`lib/sessionorder`), a refused write is
+  read back, retried and reported (`session.save-refused`), and a zero-row rescan
+  prunes nothing. Five new tests failed before the change (`session_selection_persist.test.tsx`).
+- Tests: full suite 414 files / 4214 passed; new suite 6/6; tsc PASS; lint 0 errors
+  (22 pre-existing warnings); `quality:changed` GATE PASSED (6 changed source files);
+  `verify:fast` ALL LANES PASSED (suite + coverage + build).

@@ -92,6 +92,11 @@ opt-in class as Generate SVG → Requesty; design
   unchanged. `src/upload/uploadundo.ts` applies settings live when mounted and
   writes the store directly when unmounted. Neither local files/downloads nor
   a confirmed paid metadata call can be undone.
+* Checked rows are remembered across a reload (2026-11-08): every selection
+  gesture writes the restart snapshot in the same task, and a rescan that found
+  NOTHING (unreadable folder, permission not granted yet) prunes nothing, so the
+  restored checks are never emptied by the very reload that restored them —
+  [the session contract](shared.md#the-last-selection-survives-the-reload-2026-11-08).
 
 ## Batch progress
 

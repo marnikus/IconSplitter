@@ -192,10 +192,15 @@ export function headerState(visible: SvgRow[], checked: string[]): "none" | "som
   return checkState(visible.map((r) => r.source.id), checked);
 }
 
-/** A restored check must never point at a source the rescan removed. */
+/**
+ * A restored check must never point at a source the rescan removed. A scan that
+ * found nothing (2026-11-08) removes nothing: the remembered selection belongs
+ * to the user, and a folder that could not be read yet is not evidence.
+ */
 export function pruneChecked(rows: SvgRow[]): void {
   const known = new Set(rows.map((r) => r.source.id));
   rememberListTargets("generateSvg", [...known]);
+  if (known.size === 0) return;
   const state = getAppState().svg;
   const before = { checked: state.checked, active: state.activeId, anchor: state.anchorId };
   const after = pruneRowSelection(before, known);

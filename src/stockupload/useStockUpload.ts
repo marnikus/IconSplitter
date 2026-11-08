@@ -45,15 +45,20 @@ export interface StockUploadApi extends StockSelectionApi, StockBadgeApi, StockF
   removeItems: (ids: string[]) => void;
 }
 
-function applyDiscoveredItems(found: StockDiscovery, dispatch: (a: StockModelAction) => void): void {
-  const knownIds = found.items.map((it) => it.id);
-  rememberListTargets("stockUpload", knownIds);
+/** Drops checks a rescan no longer knows — never on a scan that found nothing (2026-11-08). */
+function commitKnownSelection(knownIds: readonly string[]): void {
+  if (knownIds.length === 0) return; // nothing found is not "everything was removed"
   const cur = getAppState().stockUpload;
   const pruned = pruneRowSelection(
     { checked: cur.checked, active: cur.activeId, anchor: cur.anchorId },
     new Set(knownIds),
   );
   patchStockUpload({ checked: pruned.checked, activeId: pruned.active, anchorId: pruned.anchor });
+}
+
+function applyDiscoveredItems(found: StockDiscovery, dispatch: (a: StockModelAction) => void): void {
+  rememberListTargets("stockUpload", found.items.map((it) => it.id));
+  commitKnownSelection(found.items.map((it) => it.id));
   dispatch({ type: "patch", patch: { discovery: found } });
 }
 

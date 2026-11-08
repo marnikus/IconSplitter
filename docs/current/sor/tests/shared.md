@@ -62,6 +62,14 @@ All-tab audio: `completion_sound.test.ts`, `process_completion_sound.test.tsx`, 
 
 * `list_state_sort.test.ts` and four real-panel regressions — [binary state grouping, reversal, persistence, live sorting and navigation](../list-state-sorting.md#source-and-test-owners).
 
+* `session_selection_persist.test.tsx` — [the last selection survives the
+  reload](../shared.md#the-last-selection-survives-the-reload-2026-11-08): a
+  real checkbox click is in `iconSplitter.session.v1` in the same task (no timer
+  advanced), a 100-id Stock Upload pick is replaced by a new one at once, a
+  snapshot another page stamped later is kept instead of overwritten, an empty
+  rescan keeps the remembered checks, and a refused write is retried (and
+  reported) instead of silently leaving the older selection.
+
 * `selectiondelta`, `history_persist`, `selection_perf_budgets` — [performance
   redesign verification](../selection-performance.md#verification-and-timing):
   ordered delta round trips/legacy reads, deferred history flush, byte/render/id-read
