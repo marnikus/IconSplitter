@@ -13,6 +13,8 @@ import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { settle, waitUntil } from "./helpers/quiet";
 import { setIndexRuntime, type IndexRuntime } from "../src/svgBuilder/indexer/runtime";
+import { loadSessionState } from "../src/state/sessionstore";
+import { initialBuilderModel } from "../src/svgBuilder/model";
 
 /** Model seam: food icons share one image direction, interface icons another (no metadata → no text). */
 function fakeIndexRuntime(): IndexRuntime {
@@ -276,6 +278,19 @@ describe("SVG builder workspace", () => {
     const replacement = (await idsInOrder())[target];
     expect(replacement).not.toBe(order[target]);
     expect(text(`builder-cell-score-${target}`)).toBe(food.has(replacement) ? "100%" : "0%");
+  });
+
+  it("stores locks and exclusions with the sheet, so a reload keeps them", async () => {
+    await openLibrary();
+    await click("builder-recipe-mode-random");
+    const order = await idsInOrder();
+    await act(async () => { q("builder-cell-lock-1")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await click("builder-cell-exclude-0");
+    const stored = loadSessionState().builder;
+    expect(stored.lockedIds).toEqual([order[1]]);
+    expect(stored.excludedIds).toEqual([order[0]]);
+    expect(stored.checked).not.toContain(order[0]);
+    expect(initialBuilderModel()).toMatchObject({ lockedIds: [order[1]], excludedIds: [order[0]] }); // what a reload starts from
   });
 
   it("presets, CUSTOM pill, RESET and the global undo", async () => {

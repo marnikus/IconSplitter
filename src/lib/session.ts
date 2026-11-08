@@ -64,6 +64,9 @@ export interface SessionBuilder {
   checked: string[];
   activeId: string | null;
   anchorId: string | null;
+  /** Artboard locks and × exclusions — restored with the sheet after a reload. */
+  lockedIds?: string[];
+  excludedIds?: string[];
 }
 
 /** What only the Upload (stock FTPS) tab adds: its own selection and active row. */
@@ -103,7 +106,7 @@ export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null, anchorId: 
 
 export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null, anchorId: null };
 
-export const DEFAULT_BUILDER: SessionBuilder = { checked: [], activeId: null, anchorId: null };
+export const DEFAULT_BUILDER: SessionBuilder = { checked: [], activeId: null, anchorId: null, lockedIds: [], excludedIds: [] };
 
 export const DEFAULT_STOCK_UPLOAD: SessionStockUpload = { checked: [], activeId: null, anchorId: null };
 
@@ -193,7 +196,13 @@ function parseBuilderSlice(raw: unknown): SessionBuilder {
     checked: raw.checked.filter((id): id is string => typeof id === "string"),
     activeId: typeof raw.activeId === "string" ? raw.activeId : null,
     anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
+    lockedIds: stringIds(raw.lockedIds),
+    excludedIds: stringIds(raw.excludedIds),
   };
+}
+
+function stringIds(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
 }
 
 function parseSelection(raw: unknown): SessionSelection {

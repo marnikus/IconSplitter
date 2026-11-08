@@ -30,6 +30,7 @@ Jump to a domain; validate everything read from storage (RULE 13). Image-edit ke
 |---|---|---|
 | IndexedDB `iconSplitter/rootpaths` | the picked folders' real full paths, records `[{ handle, path, how }]` — one per folder HANDLE (I-63) | normalised + validated on write and read (I-29/I-39); identity is `isSameEntry`, never the name; capped at 20; never leaves the browser. The old name-keyed `localStorage iconSplitter.rootpaths.v1` is **never read** (a guess may not survive as data, I-59) |
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
+| localStorage `iconSplitter.session.v1` | the restart snapshot: last tab, the review view, the sheet options and each list tab's **checked ids** + active id + anchor (`svg`, `upload`, `builder`, `stockUpload`, `batch`, `v2`) | validated field by field on read (`lib/session`, RULE 13); a selection change is written in the same task, everything else after 250 ms; the write is read back and retried once (`state/sessionstore.ts`); a page never overwrites a snapshot another page stamped after its own last selection change (`lib/sessionorder`) |
 
 Original Selection tab removal: stored `tab: "selection"` is read as
 `selectionV2`; the existing `selection` session view slice remains V2's filter,

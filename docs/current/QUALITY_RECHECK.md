@@ -5086,3 +5086,23 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - Confirmation now skips icons carrying the destination stock badge by default; an independent checkbox per selected stock opts its already-badged icons into re-upload. Unbadged icons remain in the plan.
 - Planner tests cover mixed badges across multiple targets; confirmation UI tests cover independent choices and preventing an empty run. Stock Upload behavior and selector docs updated.
 - Verification: 140 Stock Upload tests passed; docs navigation passed; `npm run verify:fast` and `npm run verify` passed (types, lint, changed-file quality, full coverage tests, and build). Existing lint warnings and `router.requesty.ai` ECONNRESET messages were non-fatal.
+
+## 2026-11-08 — Upload tabs: the last selection survives a reload
+
+- Root cause of the third report: one snapshot writer, so an idle SECOND app page
+  re-wrote its older checks over the newer selection; the same-task write now
+  happens for every selection slice, a page may not overwrite a snapshot stamped
+  after its own last selection change (`lib/sessionorder`), a refused write is
+  read back, retried and reported (`session.save-refused`), and a zero-row rescan
+  prunes nothing. Five new tests failed before the change (`session_selection_persist.test.tsx`).
+- Tests: full suite 414 files / 4214 passed; new suite 6/6; tsc PASS; lint 0 errors
+  (22 pre-existing warnings); `quality:changed` GATE PASSED (6 changed source files);
+  `verify:fast` ALL LANES PASSED (suite + coverage + build).
+
+## 2026-11-08 — Session snapshot: storage-full fix (+ ported multi-page guard), builder locks persisted
+
+- Field log showed `session.save-refused` on every write (localStorage full) → the last snapshot that fitted (100 checks) returned on each reload. New `state/storagebudget.ts`: evict source-hash cache → svg index → log → undo timeline, retrying after each; never user data; refusal names the largest keys.
+- Ported 3733d2e3 from arena/d8ede24d (multi-page guard, same-task selection write, verified write, empty-rescan prune guard); it was never on this branch.
+- Test fix: spies on `Storage.prototype.setItem` do not intercept happy-dom localStorage — the ported refusal test never refused; now spies on the instance, restored in finally.
+- Builder lockedIds/excludedIds in the session builder slice.
+- Tests: session_selection_persist 10 (2 new quota + user-flow test, each witnessed failing first), svg_builder_session +1, workspace +1; 169/169 in session/builder/undo/stock suites; fast lane 14/14; tsc PASS; lint 0 errors; quality gate (--base HEAD) PASS. Full vitest 4192 passed / 29 failed — the 3 new failing files (quality_base, random_select_ui, upload_flag_viewport) fail identically on clean HEAD (from merged stock-upload commits).

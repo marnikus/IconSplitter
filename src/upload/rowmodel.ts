@@ -270,10 +270,17 @@ export function countsOf(rows: readonly UploadRow[]): UploadCounts {
   return counts;
 }
 
-/** A restored check must never point at a pair the rescan removed. */
+/**
+ * A restored check must never point at a pair the rescan removed. A scan that
+ * found NOTHING (2026-11-08) knows nothing to remove — an unreadable folder or
+ * a permission the page has not been granted yet must not empty the selection
+ * the user left behind, or the remembered state dies on the very reload that
+ * was supposed to restore it.
+ */
 export function pruneChecked(rows: readonly UploadRow[]): void {
   const known = new Set(rows.map((r) => r.source.id));
   rememberListTargets("upload", [...known]);
+  if (known.size === 0) return;
   const state = getAppState().upload;
   const before = { checked: state.checked, active: state.activeId, anchor: state.anchorId };
   const after = pruneRowSelection(before, known);

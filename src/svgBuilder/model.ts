@@ -2,6 +2,7 @@
 // validated initial state; storage, provider calls and disk IO stay in siblings.
 import type { GeminiConfig } from "../lib/upload/gemini";
 import { loadGeminiConfig } from "../upload/configstore";
+import { getAppState } from "../state/appstore";
 import type { KeyRead, KeySource } from "../lib/keyvault";
 import { maskKey } from "../lib/svgsecret";
 import { DEFAULT_SEED, DEFAULT_SELECTION_RECIPE } from "../lib/svgBuilder/selection";
@@ -74,7 +75,7 @@ export function initialBuilderModel(): BuilderModel {
     supported: hasFolderPicker(), root: null, discovery: null, busy: null,
     status: "Open a folder to build from approved SVGs", error: false,
     config: loadSheetConfig(), recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SEED,
-    lockedIds: [], excludedIds: [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
+    lockedIds: getAppState().builder.lockedIds ?? [], excludedIds: getAppState().builder.excludedIds ?? [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
     prompt: loadBuilderPrompt(), presets: builderPresets.load(), presetPick: "",
     gemini: loadGeminiConfig(), key: emptyKeyInfo(),
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null,

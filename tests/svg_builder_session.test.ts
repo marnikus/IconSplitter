@@ -28,6 +28,18 @@ describe("SVG builder session slice", () => {
     expect(parsed.builder.activeId).toBe("b");
   });
 
+  it("keeps the builder's locks and exclusions across a reload, dropping junk", () => {
+    const saved = serializeSession({ ...DEFAULT_SESSION, tab: "svgBuilder",
+      builder: { checked: ["a", "b"], activeId: "a", anchorId: "a", lockedIds: ["a"], excludedIds: ["z"] } }, NOW);
+    const parsed = parseSession(saved);
+    expect(parsed.builder.lockedIds).toEqual(["a"]);
+    expect(parsed.builder.excludedIds).toEqual(["z"]);
+    const junk = JSON.parse(saved);
+    junk.builder.lockedIds = ["ok", 7, null];
+    delete junk.builder.excludedIds;
+    expect(parseSession(JSON.stringify(junk)).builder).toMatchObject({ lockedIds: ["ok"], excludedIds: [] });
+  });
+
   it("defaults a missing or corrupt builder slice (RULE 13)", () => {
     const missing = JSON.stringify({ v: SESSION_VERSION, tab: "svgBuilder" });
     expect(parseSession(missing).builder).toEqual(DEFAULT_BUILDER);

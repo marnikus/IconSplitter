@@ -20,3 +20,39 @@ The shared review helpers and persistent handle/sidecar keys remain compatible.
 - A list scrolls its restored active row into view the first time that row appears (`ui/checkedrows`).
 - The SVG edit mode makes the row it opens the active row, so the last edited row is the one you return to.
 - Tests: `scroll_memory.test.tsx`.
+
+## The last selection survives the reload (2026-11-08)
+
+The restart snapshot (`iconSplitter.session.v1`, `state/sessionstore.ts`, parsed by
+`lib/session`) carries each list tab's **checked ids**, active id and anchor, not
+just its filters. Three rules, one report ("a new selection is never stored and
+the 100 checks picked before come back after every reload"):
+
+- **A selection gesture IS the write.** Any change to a selection slice
+  (`upload`, `stockUpload`, `svg`, `builder`, `batch`, `v2`) is written in the
+  same task (`state/useSessionAutosave.ts`); every other change keeps the 250 ms
+  debounce, and `pagehide`/`beforeunload`/unmount — plus a tab the browser hides
+  or freezes (`visibilitychange`) — still flush. A page that is killed, reloaded
+  by the helper or closed without a clean unload therefore cannot lose the last
+  pick.
+- **A verified write that makes room.** `saveSessionState` reads the document
+  back and retries once. When localStorage is full (the 2026-11-08 field log
+  showed `session.save-refused` on every write, so the last snapshot that still
+  fitted — 100 checks — came back on each reload), `state/storagebudget.ts`
+  evicts, in order, the source-hash cache, the SVG id→path index, the stored log
+  and the stored undo timeline, retrying after each (user data — metadata cache,
+  upload batches, presets, keys — is never touched) and logs
+  `session.storage-freed` at `warn`. Only if nothing helps does the caller log
+  `session.save-refused` at `error`, naming the largest stored keys.
+- **A page may not resurrect an older selection.** A snapshot stamped after this
+  page's own last selection change came from ANOTHER page (the helper opens a
+  second tab), so this page keeps it instead of overwriting it
+  (`lib/sessionorder`, logged at `debug` as `session.kept-newer-snapshot`).
+- **A scan that found nothing removes nothing.** An unreadable folder or a
+  permission the page has not been granted yet must not empty the restored checks
+  (`upload/rowmodel.pruneChecked`, `stockupload/useStockUpload`,
+  `svg/rowmodel.pruneChecked`): only a non-empty scan may prune, because only a
+  non-empty scan can say which ids no longer exist.
+- Tests: `session_selection_persist.test.tsx` (same-task write through the real
+  panel, the 100-→-new replacement, the other-page snapshot, the empty scan, the
+  refused write), `session.test.ts`, `workbench_ui.test.tsx`.
