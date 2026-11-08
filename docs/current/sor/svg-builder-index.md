@@ -28,7 +28,7 @@ Both vectors are normalised and written to **`<approved svg>.index.json`** besid
 
 - **Reference** = the locked icons on the sheet (their centroid), else the first placed icon (`useIconIndex.ts`).
 - **Similarity** = (100 − T) % image-vector cosine + T % text-vector cosine, each clamped 0–1; when either side has no text vector, the image cosine alone (`src/lib/iconIndex/similarity.ts`). **Similarity ≥ N %** (0–100) is the cut-off; **Look alike ◀▶ Mean alike** (`builder-text-weight`, 0–100 % step 5, default 50) sets T, shown as a split bar (`builder-weight-image` / `builder-weight-text`). Both re-pick without a toast and update every tile's `NN% similar`; T is part of the recipe (`textWeight`).
-- The pool is every icon ≥ N % (seeded draw); a short pool is topped up with the **next most similar** icons and reported. Without an indexed reference, Similar refuses with a toast; the first-scan auto placement falls back to Random. Tile tooltips show `NN% similar`; a dot marks unplaced icons ≥ N %.
+- Icons ≥ N % fill the open cells in **rank order (most similar first) and stay stable on Reshuffle**; the remaining cells get a **seeded random** pick from the rest (seed + 99), so only the lower part changes per Reshuffle. The shortfall is reported. The × refill (`refillOne`) takes the best unplaced icon ≥ N %, else a random one. Without an indexed reference, Similar refuses with a toast; the first-scan auto placement falls back to Random. Tile tooltips show `NN% similar`; a dot marks unplaced icons ≥ N %.
 
 ## On the artboard
 

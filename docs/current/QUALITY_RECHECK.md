@@ -5047,3 +5047,7 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 
 - refillOne (recipe pool, not placed/excluded; Similar best-first) fills the same cell; Shift keeps a hole via unique `~empty:N` placeholder ids (registered as undo targets; skipped by compose/export/counts/presets; library click fills the first hole).
 - Tests: parity +2, workspace +1 (incl. undo with a hole); builder+index+apply suites 109/109; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: Similar keeps the best matches stable, shuffles the rest
+
+- With vector scores the ≥ threshold pool is placed in rank order (stable across Reshuffle); the below-threshold top-up is a seeded random pick (changes per Reshuffle). Parity test rewritten (6 seeds); builder+index suites 90/90; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.

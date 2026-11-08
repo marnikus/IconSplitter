@@ -102,7 +102,7 @@ export function recipeCaption(recipe: SelectionRecipe): string {
 
 /** The honest shortfall toast (reference wording). */
 export function shortfallMessage(recipe: SelectionRecipe, s: { pool: number; cells: number }): string {
-  if (recipe.mode === "similar") return `Only ${s.pool} icons are ≥${recipe.threshold}% similar. The next most similar fill the remaining cells.`;
+  if (recipe.mode === "similar") return `Only ${s.pool} icons are ≥${recipe.threshold}% similar — they stay first; random picks fill the remaining cells.`;
   return `That filter has ${s.pool} icons for ${s.cells} cells. The closest library pick fills the rest.`;
 }
 
@@ -125,20 +125,27 @@ export function shuffled<T>(items: readonly T[], random: () => number): T[] {
   return out;
 }
 
-/** Seeded draw from the pool, topped up from the rest of the library (next most similar with vectors, else seed + 99). */
+/**
+ * The pool first, then a seeded random top-up from the rest of the library (seed + 99). With vector scores
+ * (Similar) the pool is taken in RANK order, most similar first, so Reshuffle keeps the best matches stable
+ * and only the lower, below-threshold part changes; otherwise the pool itself is a seeded draw.
+ */
 function drawIds(p: SheetPick, pool: readonly BuilderIconAsset[], taken: ReadonlySet<string>, count: number): string[] {
-  const first = shuffled(pool, mulberry32(p.seed)).map((a) => a.id).slice(0, count);
+  const first = poolOrder(p, pool).map((a) => a.id).slice(0, count);
   if (first.length >= count) return first;
   const used = new Set([...taken, ...first]);
-  const rest = restOrder(p, p.assets.filter((a) => !used.has(a.id))).map((a) => a.id);
+  const rest = shuffled(p.assets.filter((a) => !used.has(a.id)), mulberry32(p.seed + 99)).map((a) => a.id);
   return [...first, ...rest.slice(0, count - first.length)];
 }
 
-function restOrder(p: SheetPick, rest: BuilderIconAsset[]): BuilderIconAsset[] {
-  const random = shuffled(rest, mulberry32(p.seed + 99));
+function poolOrder(p: SheetPick, pool: readonly BuilderIconAsset[]): BuilderIconAsset[] {
   const score = p.score;
-  if (p.recipe.mode !== "similar" || score === undefined) return random;
-  return random.map((a) => ({ a, s: score(a) ?? -1 })).sort((x, y) => y.s - x.s).map((x) => x.a);
+  if (p.recipe.mode !== "similar" || score === undefined) return shuffled(pool, mulberry32(p.seed));
+  return pool.map((a) => ({ a, s: score(a) ?? -1 })).sort((x, y) => y.s - x.s || compareIds(x.a.id, y.a.id)).map((x) => x.a);
+}
+
+function compareIds(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function isAll(category: string): boolean {
