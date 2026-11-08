@@ -104,16 +104,16 @@ function NetworkCredentialsCard({ active, saved, testStatus, actions }: LocalCre
 }
 
 function loginLabels(active: StockFtpPreset): { user: string; pass: string; hint: string } {
-  if (active.template === "adobe-stock") return { user: "SFTP Member ID", pass: "Generated SFTP password", hint: "e.g. 210333617" };
-  if (active.protocol === "esp-https") return { user: "ESP login (optional with PKCE)", pass: "ESP password (optional)", hint: "Enter username…" };
+  if (active.template === "adobe-stock") return { user: "Member ID", pass: "Generated password", hint: "e.g. 210333617" };
+  if (active.protocol === "esp-https") return { user: "ESP login · optional", pass: "ESP password · optional", hint: "Enter username…" };
   if (active.protocol === "getty-web") {
     return {
-      user: "Getty contributor e-mail or account ID",
-      pass: "Getty contributor password",
-      hint: "you@example.com or your contributor ID",
+      user: "Getty account · e-mail or ID",
+      pass: "Getty password",
+      hint: "you@example.com or contributor ID",
     };
   }
-  return { user: "Contributor email / username", pass: "Password", hint: "Enter username…" };
+  return { user: "E-mail / username", pass: "Password", hint: "Enter username…" };
 }
 
 function LoginInputs(p: {
@@ -127,7 +127,7 @@ function LoginInputs(p: {
   return (
     <>
       <label className="svg-field">
-        <span className="svg-label">{userLabel}</span>
+        <span className="svg-label" title={userLabel}>{userLabel}</span>
         <input className="svg-input" type="text" autoComplete="off" data-testid="stock-ftp-user"
           placeholder={userHint} value={p.user} onChange={(e) => p.onUser(e.target.value)} />
       </label>

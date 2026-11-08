@@ -53,8 +53,8 @@ describe("Getty web upload preset UI", () => {
       root.render(<StockFtpCredentials active={GETTY_WEB_PRESET} saved testStatus={IDLE} actions={actions} />);
     });
     const text = host.textContent ?? "";
-    expect(text).toContain("Getty contributor e-mail or account ID");
-    expect(text).toContain("Getty contributor password");
+    expect(text).toContain("Getty account · e-mail or ID");
+    expect(text).toContain("Getty password");
     expect(text).toContain("esp.gettyimages.com/contribute");
     expect(text).toContain("never expanded");
     expect(q("stock-ftp-apikey")).toBeNull();
@@ -89,7 +89,7 @@ describe("Getty web upload preset UI", () => {
     const protocol = q("stock-ftp-protocol") as HTMLSelectElement;
     expect(Array.from(protocol.options).map((o) => o.value)).toContain("getty-web");
     expect(protocol.value).toBe("getty-web");
-    expect(host.textContent).toContain("Getty Images web upload (background browser)");
+    expect(host.textContent).toContain("Getty web");
     expect(host.textContent).toContain("https://esp.gettyimages.com/contribute");
     expect((q("stock-ftp-remotedir") as HTMLInputElement).value).toBe("/contribute");
     expect(q("stock-ftp-quick-getty-images-web")?.textContent).toContain("Getty Images (web upload)");

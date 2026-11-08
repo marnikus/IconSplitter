@@ -11,13 +11,22 @@ const AUTOSAVE_MS = 250;
 export function useSessionAutosave(): void {
   useEffect(() => {
     let timer = 0;
+    const flush = () => {
+      window.clearTimeout(timer);
+      timer = 0;
+      save();
+    };
     const off = subscribe(() => {
       window.clearTimeout(timer);
       timer = window.setTimeout(save, AUTOSAVE_MS);
     });
+    window.addEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
     return () => {
-      window.clearTimeout(timer);
+      flush();
       off();
+      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("beforeunload", flush);
     };
   }, []);
 }

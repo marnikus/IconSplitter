@@ -14,7 +14,7 @@ import { resetStockHistory } from "../src/stockupload/historystore";
 import { appendStockUploadBatch, batchesForStock, resetStockUploadBatches } from "../src/stockupload/batchhistorystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { resetFtpCredentialsForTests } from "../src/stockupload/keystore";
-import { resetStockPresets } from "../src/stockupload/presetstore";
+import { loadStockPresetState, resetStockPresets, STOCK_PRESETS_KEY } from "../src/stockupload/presetstore";
 import HistoryBar from "../src/ui/HistoryBar";
 import { getRowBadgeState, resetRowBadges, setRowBadgeState } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
@@ -62,7 +62,7 @@ function setSelect(el: HTMLSelectElement, value: string): Promise<void> {
   });
 }
 
-function makeWorkspace(): FakeDir {
+function makeWorkspace(withRaster = false): FakeDir {
   const root = new FakeDir("stock_ws");
   const packA = new FakeDir("icons_a");
   const expA = new FakeDir("export");
@@ -70,6 +70,7 @@ function makeWorkspace(): FakeDir {
   root.children.set("icons_a", packA);
 
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>';
+  const raster = "fake JPEG preview bytes";
   const eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 moveto 10 10 lineto stroke\n%%EOF\n";
 
   const rec = newExportRecord({
@@ -85,13 +86,14 @@ function makeWorkspace(): FakeDir {
   rec.timestamps.committedAt = "2026-10-27T10:01:00.000Z";
   rec.outputs = {
     svg: { path: "icons_a/export/star_icon.svg", bytes: svg.length, hash: "sha256:s" },
-    jpg: null,
+    jpg: withRaster ? { path: "icons_a/export/star_icon.jpg", bytes: raster.length, hash: "sha256:j" } : null,
     eps: { path: "icons_a/export/star_icon.eps", bytes: eps.length, hash: "sha256:e" },
   };
   const json = serializeExportRecord(rec);
   expA.children.set("export.json", new FakeFile("export.json", json.length, 1000, json));
   expA.children.set("star_icon.svg", new FakeFile("star_icon.svg", svg.length, 1000, svg));
   expA.children.set("star_icon.eps", new FakeFile("star_icon.eps", eps.length, 1000, eps));
+  if (withRaster) expA.children.set("star_icon.jpg", new FakeFile("star_icon.jpg", raster.length, 1000, raster));
   // Unrecorded stray file in export/ -> MUST NOT create a second row
   expA.children.set("orphan.svg", new FakeFile("orphan.svg", svg.length, 1000, svg));
 
@@ -178,6 +180,37 @@ describe("Upload (stockUpload) tab UI", () => {
     expect((q("stock-ftp-help") as HTMLDetailsElement).open).toBe(false);
     expect(filters?.querySelector("legend")?.textContent).toContain("Find & filter");
     expect(filters?.querySelector("[data-testid='stock-filter-search']")).not.toBeNull();
+  });
+
+  it("sizes the raster preview frame to the original file aspect ratio", async () => {
+    const ws = makeWorkspace(true);
+    stored.set("__stock_upload__", { source: ws });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:stock-raster-preview");
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+    await waitUntil(() => q("stock-prev-item-star")?.getAttribute("src") === "blob:stock-raster-preview", "raster preview loaded");
+
+    const image = q("stock-prev-item-star") as HTMLImageElement;
+    const zoom = Number((q("stock-upload-zoom") as HTMLInputElement).value);
+    Object.defineProperty(image, "naturalWidth", { configurable: true, value: zoom * 2 });
+    Object.defineProperty(image, "naturalHeight", { configurable: true, value: zoom });
+    await act(async () => { image.dispatchEvent(new Event("load", { bubbles: true })); });
+
+    const frame = q("stock-prev-item-star-frame")!;
+    expect(frame.style.width).toBe(`${zoom * 2}px`);
+    expect(frame.style.height).toBe(`${zoom}px`);
+  });
+
+  it("remembers the most recently selected stock preset after reload", async () => {
+    const ws = makeWorkspace();
+    stored.set("__stock_upload__", { source: ws });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+
+    await setSelect(q("stock-ftp-preset-select") as HTMLSelectElement, "getty-images-web");
+    await settle();
+    expect(JSON.parse(localStorage.getItem(STOCK_PRESETS_KEY) ?? "{}").activePresetId).toBe("getty-images-web");
+    expect(loadStockPresetState().activePresetId).toBe("getty-images-web");
   });
 
   it("shows an aspect-preserving hover thumbnail preview and retains click-to-enlarge", async () => {
@@ -477,8 +510,8 @@ describe("Upload (stockUpload) tab UI", () => {
     expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("sftp.contributor.adobestock.com");
     expect((q("stock-ftp-port") as HTMLInputElement).value).toBe("22");
     expect((q("stock-ftp-protocol") as HTMLSelectElement).value).toBe("sftp");
-    expect(q("stock-ftp-cred-box")?.textContent).toContain("SFTP Member ID");
-    expect(q("stock-ftp-cred-box")?.textContent).toContain("Generated SFTP password");
+    expect(q("stock-ftp-cred-box")?.textContent).toContain("Member ID");
+    expect(q("stock-ftp-cred-box")?.textContent).toContain("Generated password");
 
     // Edit host and verify built-in Reset restores Adobe Stock defaults
     await setInput(q("stock-ftp-host") as HTMLInputElement, "custom.example.com");

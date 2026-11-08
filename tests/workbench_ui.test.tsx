@@ -6,7 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SESSION } from "../src/lib/session";
-import { getAppState, patchBatch, resetAppStore } from "../src/state/appstore";
+import { getAppState, patchBatch, patchStockUpload, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
 import { loadSessionState, saveSessionState, SESSION_KEY } from "../src/state/sessionstore";
 import Workbench from "../src/ui/Workbench";
@@ -99,6 +99,16 @@ describe("the shell", () => {
     expect(loadSessionState().tab).toBe("sheets"); // debounced, not written yet
     await act(async () => { await new Promise((r) => setTimeout(r, 300)); });
     expect(loadSessionState().tab).toBe("batch"); // …and now it is
+  });
+
+  it("flushes the latest Stock Upload selection on page exit", () => {
+    mountWorkbench();
+    patchStockUpload({ checked: ["item-a", "item-b"], activeId: "item-b", anchorId: "item-a" });
+    expect(loadSessionState().stockUpload?.checked).toEqual([]); // still within autosave debounce
+    act(() => { window.dispatchEvent(new Event("pagehide")); });
+    expect(loadSessionState().stockUpload).toEqual({
+      checked: ["item-a", "item-b"], activeId: "item-b", anchorId: "item-a",
+    });
   });
 
   it("opens on the tab the last session ended on", () => {

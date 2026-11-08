@@ -6,7 +6,7 @@ import { readBytesAt, type DirHandleLike } from "../lib/fs";
 import type { ExportedItem } from "../lib/stockupload/types";
 import { previewFrame, type PreviewBackground } from "../lib/svgbackground";
 import { buildSvgPreview } from "../lib/svgpreview";
-import { zoomBoxFit } from "../lib/zoom";
+import { zoomBox, zoomBoxFit } from "../lib/zoom";
 import SvgPreviewBox from "../svg/SvgPreview";
 import { useSvgText } from "../svg/usesvgtext";
 
@@ -64,10 +64,12 @@ function PreviewInner(p: {
   svgCode: string | null;
   box: { width: number; height: number };
   testid: string;
+  onRasterLoad: (size: { w: number; h: number }) => void;
 }) {
   if (p.item.files.raster !== null && p.rasterUrl !== null) {
     return (
       <img src={p.rasterUrl} alt={p.item.stem} data-testid={p.testid}
+        onLoad={(event) => p.onRasterLoad({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
         style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
     );
   }
@@ -80,17 +82,23 @@ function PreviewInner(p: {
 export default function StockUploadPreview({ rootRef, rootToken, item, thumb, bg }: StockUploadPreviewProps) {
   const raster = item.files.raster;
   const rasterUrl = useRasterBlobUrl(rootRef, rootToken, raster?.relPath ?? null, rasterExtOf(item));
+  const [rasterDims, setRasterDims] = useState<{ url: string; w: number; h: number } | null>(null);
+  const rasterSize = rasterDims?.url === rasterUrl ? rasterDims : null;
   const svgPath = raster === null && item.files.svg !== null ? item.files.svg.relPath : "";
   const svgCode = useSvgText(rootRef, rootToken, svgPath);
-  const ratio = useMemo(() => (raster ? 1 : svgRatioOf(svgCode)), [raster, svgCode]);
-  const box = useMemo(() => zoomBoxFit(thumb, ratio), [thumb, ratio]);
+  const ratio = useMemo(() => svgRatioOf(svgCode), [svgCode]);
+  const box = useMemo(() => raster !== null ? zoomBox(thumb, rasterSize) : zoomBoxFit(thumb, ratio),
+    [raster, rasterSize, thumb, ratio]);
   const frame = previewFrame(bg);
   const testid = `stock-prev-${item.id}`;
+  const onRasterLoad = (size: { w: number; h: number }) => {
+    if (rasterUrl !== null && size.w > 0 && size.h > 0) setRasterDims({ ...size, url: rasterUrl });
+  };
 
   return (
     <div className={`svg-preview-frame${frame.outline ? " contrast" : ""}`} data-testid={`${testid}-frame`}
       style={{ width: box.width, height: box.height, background: frame.color }}>
-      <PreviewInner item={item} rasterUrl={rasterUrl} svgCode={svgCode} box={box} testid={testid} />
+      <PreviewInner item={item} rasterUrl={rasterUrl} svgCode={svgCode} box={box} testid={testid} onRasterLoad={onRasterLoad} />
     </div>
   );
 }

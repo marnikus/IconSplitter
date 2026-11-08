@@ -19,10 +19,11 @@ export interface StockFtpPanelProps {
 }
 
 function protocolBadgeCopy(protocol: FtpProtocol): string {
-  if (protocol === "getty-web") return "Getty Images web upload (background browser)";
-  if (protocol === "esp-batch") return "Getty ESP Batch Folder (Web / DeepMeta 4)";
-  if (protocol === "esp-https") return "Getty ESP Partner API (:443)";
-  return protocol === "sftp" ? "SFTP stock preset" : "FTPS stock preset";
+  if (protocol === "getty-web") return "Getty web";
+  if (protocol === "esp-batch") return "Getty ESP staging";
+  if (protocol === "esp-https") return "Getty ESP API";
+  if (protocol === "sftp") return "SFTP";
+  return protocol === "ftp" ? "FTP · unencrypted" : "FTPS";
 }
 
 function endpointSummary(active: StockFtpPreset): string {
@@ -35,13 +36,15 @@ export default function StockFtpPanel(p: StockFtpPanelProps) {
   const active = p.presetState.presets.find((s) => s.id === p.presetState.activePresetId) ?? p.presetState.presets[0];
   const saved = Boolean(p.credSaved[active.id]);
   return (
-    <div className={`svg-provider${p.ftpOpen ? "" : " closed"}`} data-testid="stock-ftp-panel">
-      <div className="svg-provider-top" style={{ flexWrap: "wrap", gap: 8 }}>
-        <span><strong data-testid="stock-ftp-active-name">{active.name}</strong> · {protocolBadgeCopy(active.protocol)}</span>
-        <span>{endpointSummary(active)}</span>
+    <div className={`svg-provider stock-ftp-provider${p.ftpOpen ? "" : " closed"}`} data-testid="stock-ftp-panel">
+      <div className="svg-provider-top stock-ftp-provider-top">
+        <span className="stock-provider-summary" title={endpointSummary(active)}>
+          <strong data-testid="stock-ftp-active-name">{active.name}</strong>
+          <span>{protocolBadgeCopy(active.protocol)} · {endpointSummary(active)}</span>
+        </span>
         <QuickPresetSwitch presets={p.presetState.presets} activeId={active.id} ftpOpen={p.ftpOpen}
           actions={p.actions} onToggleOpen={p.onToggleOpen} />
-        <button type="button" className="svg-link" data-testid="stock-ftp-toggle" aria-expanded={p.ftpOpen}
+        <button type="button" className="svg-link stock-ftp-toggle" data-testid="stock-ftp-toggle" aria-expanded={p.ftpOpen}
           onClick={() => p.onToggleOpen(!p.ftpOpen)}>{p.ftpOpen ? "Minimize" : "Restore"}</button>
       </div>
       {p.ftpOpen && (
@@ -63,7 +66,8 @@ function QuickPresetSwitch(p: {
   return (
     <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }} role="group" aria-label="Quick stock preset switch">
       {p.presets.map((pr) => (
-        <button key={pr.id} type="button" data-testid={`stock-ftp-quick-${pr.id}`}
+        <button key={pr.id} type="button" data-testid={`stock-ftp-quick-${pr.id}`} title={pr.name}
+          aria-label={`Select ${pr.name}`}
           className={`svg-btn tiny${pr.id === p.activeId ? " primary" : ""}`}
           onClick={() => { p.actions.selectPreset(pr.id); if (!p.ftpOpen) p.onToggleOpen(true); }}>{pr.name}</button>
       ))}
@@ -80,7 +84,7 @@ function PresetSelectorBar({ presetState, active, actions, onDownloadGettyCsv }:
       <legend>Stock preset</legend>
       <div className="stock-preset-row">
         <label className="svg-field stock-preset-select">
-          <span className="svg-label">Stock website preset</span>
+          <span className="svg-label">Preset</span>
           <select className="svg-input" data-testid="stock-ftp-preset-select" aria-label="Stock website preset"
             value={active.id} onChange={(e) => actions.selectPreset(e.target.value)}>
             {presetState.presets.map((pr) => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
@@ -102,7 +106,8 @@ function PresetActionButtons({ active, actions, onDownloadGettyCsv }: {
     <>
       {active.template !== "custom" ? (
         <button type="button" className="svg-btn tiny" data-testid="stock-ftp-reset-builtin"
-          onClick={() => actions.resetBuiltin(active.id)}>↺ Reset {active.name} defaults</button>
+          title={`Restore ${active.name} connection defaults`}
+          onClick={() => actions.resetBuiltin(active.id)}>↺ Reset defaults</button>
       ) : (
         <button type="button" className="svg-btn tiny danger" data-testid="stock-ftp-delete"
           onClick={() => actions.deletePreset(active.id)}>Remove preset</button>
@@ -119,13 +124,13 @@ function GettyPortalButtons({ onDownloadGettyCsv }: { onDownloadGettyCsv?: () =>
     <>
       {onDownloadGettyCsv && (
         <button type="button" className="svg-btn tiny" data-testid="stock-getty-csv" onClick={onDownloadGettyCsv}>
-          ⇩ Download ESP CSV
+          ⇩ ESP CSV
         </button>
       )}
       <a className="svg-btn tiny" data-testid="stock-open-esp" href="https://esp.gettyimages.com"
-        target="_blank" rel="noopener noreferrer">↗ Open Getty ESP</a>
+        target="_blank" rel="noopener noreferrer" title="Open Getty ESP">↗ ESP</a>
       <a className="svg-btn tiny" data-testid="stock-open-deepmeta" href="https://deepmeta.creativ.zone"
-        target="_blank" rel="noopener noreferrer">↗ Open DeepMeta 4</a>
+        target="_blank" rel="noopener noreferrer" title="Open DeepMeta 4">↗ DeepMeta</a>
     </>
   );
 }
@@ -189,9 +194,9 @@ function HostPortFields({ active, onPatch }: {
 }
 
 function folderLabelOf(protocol: FtpProtocol): string {
-  if (protocol === "esp-batch") return "Staged ESP batch folder (in workspace)";
-  if (protocol === "getty-web") return "Contributor page path";
-  if (protocol === "esp-https") return "ESP batches endpoint / ID";
+  if (protocol === "esp-batch") return "Workspace folder";
+  if (protocol === "getty-web") return "Contributor path";
+  if (protocol === "esp-https") return "ESP endpoint";
   return "Remote folder";
 }
 
@@ -202,15 +207,15 @@ function ProtocolAndFolderFields({ active, onPatch }: {
   return (
     <>
       <label className="svg-field">
-        <span className="svg-label">Connection method / Protocol</span>
+        <span className="svg-label">Protocol</span>
         <select className="svg-input" data-testid="stock-ftp-protocol" value={active.protocol}
           disabled={sftpOnly} onChange={(e) => onPatch({ protocol: e.target.value as FtpProtocol })}>
-          {!sftpOnly && <option value="getty-web">Getty Images web upload (browser automation)</option>}
-          {!sftpOnly && <option value="esp-https">Getty ESP Partner API (:443 OAuth2 PKCE)</option>}
-          {!sftpOnly && <option value="ftps-explicit">Explicit FTPS (AUTH TLS :21)</option>}
-          <option value="sftp">SFTP (SSH :22)</option>
-          {!sftpOnly && <option value="ftps-implicit">Implicit FTPS (TLS :990)</option>}
-          {!sftpOnly && <option value="ftp">Plain FTP (unencrypted)</option>}
+          {!sftpOnly && <option value="getty-web">Getty web · browser</option>}
+          {!sftpOnly && <option value="esp-https">Getty ESP API · OAuth2</option>}
+          {!sftpOnly && <option value="ftps-explicit">Explicit FTPS · 21</option>}
+          <option value="sftp">SFTP · 22</option>
+          {!sftpOnly && <option value="ftps-implicit">Implicit FTPS · 990</option>}
+          {!sftpOnly && <option value="ftp">FTP · unencrypted</option>}
         </select>
       </label>
       <label className="svg-field">
@@ -257,7 +262,7 @@ function PinnedShaField({ value, onPatch }: { value: string; onPatch: (p: Partia
 function BridgeUrlInput({ bridgeUrl, onBridgeUrl }: { bridgeUrl: string; onBridgeUrl: (u: string) => void }) {
   return (
     <label className="svg-field">
-      <span className="svg-label">Local FTPS/SFTP helper</span>
+      <span className="svg-label" title="Local FTPS/SFTP helper URL">Helper URL</span>
       <input className="svg-input" data-testid="stock-ftp-bridge-url" value={bridgeUrl}
         onChange={(e) => onBridgeUrl(e.target.value)} />
     </label>
