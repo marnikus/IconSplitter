@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
@@ -9,6 +9,9 @@ import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { applyBadgeToIds } from "../src/lib/upload/rowbadge";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { getAppState, resetAppStore } from "../src/state/appstore";
+import { bootStores } from "../src/state/boot";
+import { useSessionAutosave } from "../src/state/useSessionAutosave";
+import { loadSessionState } from "../src/state/sessionstore";
 import StockUploadPanel from "../src/stockupload/StockUploadPanel";
 import { resetStockHistory } from "../src/stockupload/historystore";
 import { appendStockUploadBatch, batchesForStock, resetStockUploadBatches } from "../src/stockupload/batchhistorystore";
@@ -62,41 +65,50 @@ function setSelect(el: HTMLSelectElement, value: string): Promise<void> {
   });
 }
 
-function makeWorkspace(withRaster = false): FakeDir {
-  const root = new FakeDir("stock_ws");
-  const packA = new FakeDir("icons_a");
-  const expA = new FakeDir("export");
-  packA.children.set("export", expA);
-  root.children.set("icons_a", packA);
+function AutosavingStockUploadPanel() {
+  useSessionAutosave();
+  return <HistoryProvider><StockUploadPanel active /></HistoryProvider>;
+}
 
+function makeWorkspace(withRaster = false, itemCount = 1): FakeDir {
+  const root = new FakeDir("stock_ws");
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>';
   const raster = "fake JPEG preview bytes";
   const eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 moveto 10 10 lineto stroke\n%%EOF\n";
 
-  const rec = newExportRecord({
-    pair: { id: "item-star", base: "star_icon", suffix: "", dir: "icons_a" },
-    source: { svgPath: "icons_a/star_icon_AI.svg", version: 1, approval: "approved", fingerprint: "10:1" },
-    settings: { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, effective: DEFAULT_UPLOAD_SETTINGS, fingerprint: "f" },
-    svgo: { enabled: true, version: "3", config: "default", beforeBytes: 10, afterBytes: 10, beforeHash: "0", afterHash: "0" },
-    epsEnabled: true,
-    now: "2026-10-27T10:00:00.000Z",
-  });
-  rec.stage = "committed";
-  rec.status = "processed";
-  rec.timestamps.committedAt = "2026-10-27T10:01:00.000Z";
-  rec.outputs = {
-    svg: { path: "icons_a/export/star_icon.svg", bytes: svg.length, hash: "sha256:s" },
-    jpg: withRaster ? { path: "icons_a/export/star_icon.jpg", bytes: raster.length, hash: "sha256:j" } : null,
-    eps: { path: "icons_a/export/star_icon.eps", bytes: eps.length, hash: "sha256:e" },
-  };
-  const json = serializeExportRecord(rec);
-  expA.children.set("export.json", new FakeFile("export.json", json.length, 1000, json));
-  expA.children.set("star_icon.svg", new FakeFile("star_icon.svg", svg.length, 1000, svg));
-  expA.children.set("star_icon.eps", new FakeFile("star_icon.eps", eps.length, 1000, eps));
-  if (withRaster) expA.children.set("star_icon.jpg", new FakeFile("star_icon.jpg", raster.length, 1000, raster));
-  // Unrecorded stray file in export/ -> MUST NOT create a second row
-  expA.children.set("orphan.svg", new FakeFile("orphan.svg", svg.length, 1000, svg));
+  for (let i = 0; i < itemCount; i += 1) {
+    const packName = i === 0 ? "icons_a" : `icons_${i}`;
+    const itemId = i === 0 ? "item-star" : `item-${i}`;
+    const base = i === 0 ? "star_icon" : `icon_${i}`;
+    const pack = new FakeDir(packName);
+    const exp = new FakeDir("export");
+    pack.children.set("export", exp);
+    root.children.set(packName, pack);
 
+    const rec = newExportRecord({
+      pair: { id: itemId, base, suffix: "", dir: packName },
+      source: { svgPath: `${packName}/${base}_AI.svg`, version: 1, approval: "approved", fingerprint: "10:1" },
+      settings: { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, effective: DEFAULT_UPLOAD_SETTINGS, fingerprint: "f" },
+      svgo: { enabled: true, version: "3", config: "default", beforeBytes: 10, afterBytes: 10, beforeHash: "0", afterHash: "0" },
+      epsEnabled: true,
+      now: "2026-10-27T10:00:00.000Z",
+    });
+    rec.stage = "committed";
+    rec.status = "processed";
+    rec.timestamps.committedAt = "2026-10-27T10:01:00.000Z";
+    rec.outputs = {
+      svg: { path: `${packName}/export/${base}.svg`, bytes: svg.length, hash: "sha256:s" },
+      jpg: withRaster ? { path: `${packName}/export/${base}.jpg`, bytes: raster.length, hash: "sha256:j" } : null,
+      eps: { path: `${packName}/export/${base}.eps`, bytes: eps.length, hash: "sha256:e" },
+    };
+    const json = serializeExportRecord(rec);
+    exp.children.set("export.json", new FakeFile("export.json", json.length, 1000, json));
+    exp.children.set(`${base}.svg`, new FakeFile(`${base}.svg`, svg.length, 1000, svg));
+    exp.children.set(`${base}.eps`, new FakeFile(`${base}.eps`, eps.length, 1000, eps));
+    if (withRaster) exp.children.set(`${base}.jpg`, new FakeFile(`${base}.jpg`, raster.length, 1000, raster));
+    // An unrecorded stray file must not create an extra row.
+    if (i === 0) exp.children.set("orphan.svg", new FakeFile("orphan.svg", svg.length, 1000, svg));
+  }
   return root;
 }
 
@@ -160,6 +172,70 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-history-preview-close")!);
     await clickEl(q("stock-history-select-files")!);
     expect(getAppState().stockUpload.checked).toEqual(["item-star"]);
+  });
+
+  it("replaces a 100-file history pick with row, history, and checkbox selections and restores the latest set", async () => {
+    const ws = makeWorkspace(false, 100);
+    stored.set("__stock_upload__", { source: ws });
+    const itemIds = Array.from({ length: 100 }, (_, i) => i === 0 ? "item-star" : `item-${i}`);
+    appendStockUploadBatch({
+      id: "bulk-history-run", stockId: "shutterstock", stockName: "Shutterstock",
+      uploadedAt: "2026-11-08T10:00:00.000Z", uploadedCount: 100, failedCount: 0,
+      cancelled: false, rootPath: "F:\\Stocks\\icons",
+      files: itemIds.map((itemId, i) => ({
+        itemId, fileName: `${i === 0 ? "star_icon" : `icon_${i}`}.svg`, format: "svg",
+        relPath: `icons_${i === 0 ? "a" : i}/export/${i === 0 ? "star_icon" : `icon_${i}`}.svg`,
+        fullPath: null,
+      })),
+    });
+    appendStockUploadBatch({
+      id: "newer-history-run", stockId: "shutterstock", stockName: "Shutterstock",
+      uploadedAt: "2026-11-08T11:00:00.000Z", uploadedCount: 2, failedCount: 0,
+      cancelled: false, rootPath: "F:\\Stocks\\icons",
+      files: [1, 3].map((i) => ({
+        itemId: `item-${i}`, fileName: `icon_${i}.svg`, format: "svg" as const,
+        relPath: `icons_${i}/export/icon_${i}.svg`, fullPath: null,
+      })),
+    });
+    act(() => { ui.render(<StrictMode><AutosavingStockUploadPanel /></StrictMode>); });
+    await waitUntil(() => q("stock-row-item-99") !== null, "100 stock rows loaded");
+
+    await clickEl(q("stock-upload-history-open")!);
+    await clickEl(q("stock-upload-history-batch-bulk-history-run")!);
+    await clickEl(q("stock-history-select-files")!);
+    expect(getAppState().stockUpload.checked).toHaveLength(100);
+    expect(loadSessionState().stockUpload?.checked).toHaveLength(100);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(100);
+
+    // Choosing a row after the history bulk pick replaces that old queue item-set.
+    await clickEl(q("stock-row-item-4")!);
+    expect(getAppState().stockUpload.checked).toEqual(["item-4"]);
+    expect(loadSessionState().stockUpload?.checked).toEqual(["item-4"]);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(1);
+
+    await clickEl(q("stock-upload-history-batch-newer-history-run")!);
+    await clickEl(q("stock-history-select-files")!);
+    let expected = ["item-1", "item-3"];
+    expect(getAppState().stockUpload.checked).toEqual(expected);
+    expect(loadSessionState().stockUpload?.checked).toEqual(expected);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(2);
+
+    await clickEl(q("stock-upload-history-backdrop")!);
+    await clickEl(q("stock-check-item-3")!);
+    await clickEl(q("stock-check-item-5")!);
+    expected = ["item-1", "item-5"];
+    expect(getAppState().stockUpload.checked).toEqual(expected);
+    expect(loadSessionState().stockUpload?.checked).toEqual(expected);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(2);
+
+    act(() => { ui.unmount(); });
+    act(() => { bootStores(); });
+    ui = createRoot(host);
+    act(() => { ui.render(<StrictMode><AutosavingStockUploadPanel /></StrictMode>); });
+    await waitUntil(() => q("stock-row-item-99") !== null, "stock rows reloaded");
+    expect(getAppState().stockUpload.checked).toEqual(expected);
+    expect(loadSessionState().stockUpload?.checked).toEqual(expected);
+    await waitUntil(() => host.querySelectorAll(".stock-up-row input.up-check:checked").length === 2, "restored checked rows projected");
   });
 
   it("groups stock configuration and filters into clearly labeled compact sections", async () => {

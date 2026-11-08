@@ -97,7 +97,16 @@ function buildSelectionApi(ref: { current: SelectionSource }): StockSelectionApi
       const b = currentSelection();
       if (b.active) commitSelection(ref.current.hist, { ...b, checked: setChecked(b.checked, [b.active], false) }, "Deselect active row");
     },
-    selectRow: (id, intent) => commitSelection(ref.current.hist, applyRowGesture(currentSelection(), { id, intent, visibleIds: ids() }), intent === "replace" ? "Select row" : "Select range"),
+    selectRow: (id, intent) => {
+      const before = currentSelection();
+      // In Stock Upload, a plain row pick replaces the queued upload set; the
+      // checkbox is the additive/toggle affordance for composing a larger set.
+      const gesture = applyRowGesture(before, { id, intent, visibleIds: ids() });
+      const after = intent === "replace" && gesture !== before
+        ? { ...gesture, checked: [id] }
+        : gesture;
+      commitSelection(ref.current.hist, after, intent === "replace" ? "Select row" : "Select range");
+    },
     setActive: (id) => commitSelection(ref.current.hist, { ...currentSelection(), active: id }, "Move active row", "active"),
   };
 }

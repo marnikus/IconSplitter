@@ -93,7 +93,7 @@ function ListFooter({ visible, total }: { visible: number; total: number }) {
   return (
     <footer className="svg-list-footer">
       <span data-testid="stock-footer-summary">Showing {visible} of {total} exported items</span>
-      <span className="svg-hints">↑↓ active · E/Q check/uncheck · click a row to edit & embed metadata</span>
+      <span className="svg-hints">↑↓ active · E/Q check/uncheck · row click selects one &amp; edits metadata</span>
     </footer>
   );
 }
