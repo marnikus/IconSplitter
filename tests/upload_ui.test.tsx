@@ -68,7 +68,8 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
   "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
   "coin", "dollar", "euro", "yen", "currency", "cash", "payment", "wallet", "bank", "investment",
   "profit", "success", "target", "goal", "idea", "creative", "design"];
-const GOOD_ANSWER = `Title: Minimal line icon of growth and speed\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}`;
+const GOOD_ANSWER = `Title: Minimal line icon of growth and speed\nDescription: Clean line icon showing growth and rising business trends\nTags: ${TAGS.join(", ")}
+Name: growth`;
 const BAD_ANSWER = `Title: Tiny\nDescription: way too short\nTags: icon, pictogram`;
 
 let host: HTMLDivElement;
@@ -1557,15 +1558,16 @@ describe("new metadata is accepted automatically", () => {
     expect(text("[data-testid=upload-metadata-progress-title]")).toContain("cancelled");
   });
 
-  itSlow("row Regenerate accepts the replacement automatically and retains user ownership fields", async () => {
+  itSlow("row Regenerate accepts the replacement automatically and replaces the Icon Name; no Creator/Copyright fields exist", async () => {
     const root = makeRoot(); const first = geminiTransport(GOOD_ANSWER);
     vi.stubGlobal("fetch", first.fetch);
     await saveGeminiKey(fakeKey("AIza", "auto_accept_regenerate")); await mount(root); await activate(FOG);
     await click(`[data-testid=upload-meta-gen-${FOG}]`); await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => first.calls.length === 1 && q("[data-testid=upload-progress]") === null, "initial generation");
-    await type(`[data-testid=upload-meta-creator-${FOG}]`, "User author");
-    await type(`[data-testid=upload-meta-copyright-${FOG}]`, "© User rights");
-    const next = geminiTransport(GOOD_ANSWER.replace("growth and speed", "a renewed business strategy"));
+    expect(input(`[data-testid=upload-meta-name-${FOG}]`).value).toBe("growth");
+    expect(q(`[data-testid=upload-meta-creator-${FOG}]`)).toBeNull();
+    expect(q(`[data-testid=upload-meta-copyright-${FOG}]`)).toBeNull();
+    const next = geminiTransport(GOOD_ANSWER.replace("growth and speed", "a renewed business strategy").replace("Name: growth", "Name: Renewal Plan"));
     vi.stubGlobal("fetch", next.fetch);
     await click(`[data-testid=upload-meta-regen-${FOG}]`);
     expect(next.calls).toHaveLength(0);
@@ -1573,14 +1575,13 @@ describe("new metadata is accepted automatically", () => {
     await waitFor(() => next.calls.length === 1 && q("[data-testid=upload-progress]") === null, "row regeneration");
     expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toBe("accepted");
     expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toContain("renewed business strategy");
-    expect(input(`[data-testid=upload-meta-creator-${FOG}]`).value).toBe("User author");
-    expect(input(`[data-testid=upload-meta-copyright-${FOG}]`).value).toBe("© User rights");
+    expect(input(`[data-testid=upload-meta-name-${FOG}]`).value).toBe("renewal");
     const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
-    expect(Object.values(cached.cache)).toEqual([expect.objectContaining({ state: "accepted", meta: expect.objectContaining({ creator: "User author", copyright: "© User rights" }) })]);
+    expect(Object.values(cached.cache)).toEqual([expect.objectContaining({ state: "accepted", meta: expect.objectContaining({ name: "renewal" }) })]);
     expect(first.calls).toHaveLength(1); expect(next.calls).toHaveLength(1);
   });
 
-  itSlow("bulk Generate and Regenerate auto-accept and sequentially refresh existing packages only", async () => {
+  itSlow("bulk Generate and Regenerate auto-accept but never write files by themselves; an explicit Export refreshes the packages", async () => {
     const root = makeRegenerationRoot(); const first = geminiTransport(GOOD_ANSWER);
     vi.stubGlobal("fetch", first.fetch);
     await saveGeminiKey(fakeKey("AIza", "auto_accept_existing")); await mount(root);
@@ -1589,23 +1590,43 @@ describe("new metadata is accepted automatically", () => {
       await waitFor(() => text(`[data-testid=upload-status-${id}]`).includes("Processed"), "initial package");
       await check(id);
     }
+    const svgBefore = ["fog", "arch"].map((name) => fileText(root, `${DIR}/export/${name}.svg`));
+    const jsonBefore = fileText(root, `${DIR}/export/export.json`);
     await click("[data-testid=upload-meta-selected]"); await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => first.calls.length === 2 && q("[data-testid=upload-progress]") === null, "bulk generation finished");
     for (const id of [FOG, ARCH]) expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
+    // "after metadata accepted the export starts but I did not ask" (2026-11-08): nothing was exported
+    expect(["fog", "arch"].map((name) => fileText(root, `${DIR}/export/${name}.svg`))).toEqual(svgBefore);
+    expect(fileText(root, `${DIR}/export/export.json`)).toBe(jsonBefore);
+    // the accepted text is stored for the row; the files wait for an explicit export
+    const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
+    expect(Object.values(cached.cache).map((v) => (v as { state: string }).state)).toEqual(["accepted"]); // both rows share one source, so one entry
+    for (const id of [FOG, ARCH]) {
+      await click(`[data-testid=upload-export-${id}]`);
+      await waitFor(() => JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata?.response === GOOD_ANSWER, "explicit export stores the metadata block");
+    }
     for (const name of ["fog", "arch"]) {
       expect(fileText(root, `${DIR}/export/${name}.svg`)).toContain("Minimal line icon of growth and speed");
-
     }
     const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
     expect(record.metadata.state).toBe("accepted");
+    expect(record.metadata.response).toBe(GOOD_ANSWER); // the provider's full answer, verbatim, next to the prompt (2026-11-08)
+    expect(record.metadata.prompt).toBeTruthy();
     await check(COURT); // selected empty row must remain excluded from Regenerate
     const next = geminiTransport(GOOD_ANSWER.replace("growth and speed", "a renewed business strategy"));
     vi.stubGlobal("fetch", next.fetch);
+    const svgAccepted = ["fog", "arch"].map((name) => fileText(root, `${DIR}/export/${name}.svg`));
     await click("[data-testid=upload-meta-regenerate-selected]"); await click("[data-testid=upload-meta-confirm]");
     await waitFor(() => next.calls.length === 2 && q("[data-testid=upload-progress]") === null, "bulk regeneration finished");
     for (const id of [FOG, ARCH]) expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
-    for (const name of ["fog", "arch"]) expect(fileText(root, `${DIR}/export/${name}.svg`)).toContain("renewed business strategy");
+    expect(["fog", "arch"].map((name) => fileText(root, `${DIR}/export/${name}.svg`))).toEqual(svgAccepted); // no automatic re-export
+    expect(JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata.response).toBe(GOOD_ANSWER);
     expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("empty");
+    for (const id of [FOG, ARCH]) {
+      await click(`[data-testid=upload-export-${id}]`);
+      await waitFor(() => JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata?.response === GOOD_ANSWER.replace("growth and speed", "a renewed business strategy"), "the regenerated answer stored by the explicit export");
+    }
+    for (const name of ["fog", "arch"]) expect(fileText(root, `${DIR}/export/${name}.svg`)).toContain("renewed business strategy");
     expect(((root.children.get(DIR) as BinDir).children.get("export") as BinDir).children.has("court.svg")).toBe(false);
     expect(first.calls).toHaveLength(2); expect(next.calls).toHaveLength(2);
   });
@@ -1631,7 +1652,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect([FOG, ARCH, COURT].every((id) => text(`[data-testid=upload-meta-cell-${id}]`).includes("generated"))).toBe(true);
     await check(COURT); // retains its draft, but unchecked => must not be accepted
     expect(button().textContent).toContain("Accept metadata (2)");
-    await activate(FOG); await type(`[data-testid=upload-meta-creator-${FOG}]`, "User test author");
+    await activate(FOG); await type(`[data-testid=upload-meta-name-${FOG}]`, "authored");
     await click("[data-testid=upload-meta-accept-selected]");
     await waitFor(() => ["fog", "arch"].every((name) => fileText(root, `${DIR}/export/${name}.svg`).includes("<metadata>")), "both committed packages re-embedded");
     for (const id of [FOG, ARCH]) expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
@@ -1640,18 +1661,19 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(button().disabled).toBe(true);
     const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
     expect(Object.values(cached.cache).filter((v) => (v as {state: string}).state === "accepted")).toHaveLength(2);
-    expect(fileText(root, `${DIR}/export/fog.svg`)).toContain("User test author");
-    await type(`[data-testid=upload-meta-creator-${FOG}]`, "Edited author");
+    await waitFor(() => JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata?.name === "authored", "the edited Icon Name committed to export.json");
+    await type(`[data-testid=upload-meta-title-${FOG}]`, "Edited title for the icon");
     expect(button().textContent).toContain("Accept metadata (1)");
     await click("[data-testid=upload-meta-accept-selected]");
-    await waitFor(() => fileText(root, `${DIR}/export/fog.svg`).includes("Edited author"), "edited accepted identity re-embedded");
+    await waitFor(() => fileText(root, `${DIR}/export/fog.svg`).includes("Edited title for the icon"), "edited accepted title re-embedded");
     expect(t.calls).toHaveLength(0);
     await waitFor(() => q("[data-testid=upload-progress]") === null, "re-embedding finished");
     await act(async () => { ui!.unmount(); }); await mount(root);
     await waitFor(() => [FOG, ARCH, COURT].every((id) => q(`[data-testid=upload-meta-cell-${id}]`) !== null), "reloaded rows");
     for (const id of [FOG, ARCH]) expect(text(`[data-testid=upload-meta-cell-${id}]`)).toContain("accepted");
     expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("generated");
-    await activate(FOG); expect(input(`[data-testid=upload-meta-creator-${FOG}]`).value).toBe("Edited author");
+    await activate(FOG); expect(input(`[data-testid=upload-meta-title-${FOG}]`).value).toBe("Edited title for the icon");
+    expect(input(`[data-testid=upload-meta-name-${FOG}]`).value).toBe("authored");
   });
 
   itSlow("bulk Accept metadata validates each draft, skips empty rows, and leaves unchecked drafts alone", async () => {
@@ -1803,8 +1825,6 @@ describe("metadata — the exact request, editable fields, accept", () => {
       && text(`[data-testid=upload-meta-cell-${ARCH}]`).includes("accepted"), "the initial metadata to land");
 
     await click(`[data-testid=upload-row-${FOG}]`);
-    await type(`[data-testid=upload-meta-creator-${FOG}]`, "User test author");
-    await type(`[data-testid=upload-meta-copyright-${FOG}]`, "© User test rights");
 
     await check(COURT); // selected, approved SVG, but no metadata yet
     expect(text("[data-testid=upload-meta-selected]")).toContain("Generate metadata (1)");
@@ -1825,8 +1845,7 @@ describe("metadata — the exact request, editable fields, accept", () => {
     expect(text(`[data-testid=upload-meta-cell-${ARCH}]`)).toContain("accepted");
     expect((q(`[data-testid=upload-meta-accept-${FOG}]`) as HTMLButtonElement).disabled).toBe(true);
     expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("empty");
-    expect(input(`[data-testid=upload-meta-creator-${FOG}]`).value).toBe("User test author");
-    expect(input(`[data-testid=upload-meta-copyright-${FOG}]`).value).toBe("© User test rights");
+    expect(input(`[data-testid=upload-meta-name-${FOG}]`).value).toBe("growth");
   });
 
   itSlow("export selected generates metadata FIRST, then exports everything", async () => {
@@ -2379,7 +2398,7 @@ function holdJpegEncodes(): (() => void)[] {
 }
 
 describe("real export batch progress", () => {
-  itSlow("metadata hands off to sequential export, reporting 0%, 50%, 100% from committed packages", async () => {
+  itSlow("metadata hands off to the export (icons overlap since 2026-11-08), reporting 0%, 50%, 100% from committed packages", async () => {
     const transport = geminiTransport(GOOD_ANSWER);
     vi.stubGlobal("fetch", transport.fetch);
     const root = makeRoot();
@@ -2394,15 +2413,14 @@ describe("real export batch progress", () => {
     recordCompletionAudio();
     await settleCompletionAudio(); // the earlier scan cue is spent, not this action's
     await click("[data-testid=upload-meta-confirm]");
-    await waitFor(() => releases.length === 1, "first export JPEG");
+    await waitFor(() => releases.length === 2, "both export JPEGs in flight at once");
     expect(text("[data-testid=upload-metadata-progress-title]")).toContain("complete");
     await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
     const bar = () => q("[data-testid=upload-export-progress-track]")!;
     expect(bar().getAttribute("aria-valuenow")).toBe("0");
     expect(text("[data-testid=upload-export-progress-file]")).toContain("_AI.svg");
     await act(async () => releases[0]());
-    await waitFor(() => releases.length === 2, "second export JPEG");
-    expect(bar().getAttribute("aria-valuenow")).toBe("50");
+    await waitFor(() => bar().getAttribute("aria-valuenow") === "50", "one committed package of two");
     await act(async () => releases[1]());
     await waitFor(() => text("[data-testid=upload-export-progress-title]").includes("complete"), "export completion");
     expect(bar().getAttribute("aria-valuenow")).toBe("100");

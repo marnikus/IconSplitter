@@ -19,7 +19,7 @@ Only explicit confirmation sends the displayed prompt/input to Gemini; export re
   IndexedDB under `gemini-api-key`, masked/redacted everywhere) answers the
   prompt above (the documented default until the user edits it); the answer is
   parsed deterministically (three labeled
-  lines) and validated against a MINIMUM policy (2026-10-07, "no need be
+  lines, plus an optional fourth: Name) and validated against a MINIMUM policy (2026-10-07, "no need be
   strict"): at least 10 unique tags — case-insensitively unique, and the list
   must still contain the 7 mandatory terms — a title of at least 5 words and a
   description of at least 7 words, where a hyphenated compound counts as ONE
@@ -53,14 +53,26 @@ Only explicit confirmation sends the displayed prompt/input to Gemini; export re
 defines valid new results, persistence, existing-package refresh, cancellation
 and the checked-only Accept action for old drafts/edited fields.
 
-## Optional user identity
+## Icon Name and user identity
 
-Creator and Copyright inputs appear below each row’s generated metadata. They
-are optional explicit user claims, not Gemini output. Accept persists them in
-the cache and export record; reload and regeneration retain them. Clearing and
-accepting removes them from subsequent exports. Editing either field re-embeds
-accepted SVG/JPEG/EPS metadata without re-rendering JPEG pixels or calling AI.
-[File metadata](upload-file-metadata.md) defines XMP/IIM mappings and byte limits.
+* **Icon Name (2026-11-08).** The default prompt asks for a fourth line,
+  `Name: <one word, less than 10 characters>`, chosen from the title and
+  description. `parseMetadata` reads it; `cleanName` keeps the first word,
+  lowercase, letters/digits only, at most 9 characters (a shape rule, never a
+  refusal). The line is optional on read, so a prompt saved before it existed
+  still parses and the row simply has no name. The row shows it as the editable
+  "Icon Name" field under Tags (`upload-meta-name-{id}`). It persists in the
+  metadata cache and the `export.json` metadata block (`name`), joins the
+  fingerprint only when present (older records keep theirs), and is NOT written
+  into SVG/JPEG/EPS carriers (so the EPS envelope id ignores it: the audit
+  rebuilds the envelope from the file's own metadata). Regeneration replaces it.
+* **Provider answer (2026-11-08).** The `export.json` metadata block keeps the
+  provider's full last answer verbatim as `response`, right after `prompt`; the
+  cache keeps it too. User edits never change it; regeneration replaces it.
+* **Creator/Copyright inputs were removed (2026-11-08).** No UI edits them any
+  more. The lib carriers (`lib/upload/rights.ts`, XMP/IIM) are unchanged: values
+  already stored in a cache or record are still read, kept and embedded.
+  [File metadata](upload-file-metadata.md) defines XMP/IIM mappings and byte limits.
 
 ## Title and description normalization
 

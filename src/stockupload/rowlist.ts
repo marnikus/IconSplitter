@@ -47,6 +47,7 @@ export function initialMetaDraft(item: ExportedItem): StockMetaDraft {
       title: recMeta.title,
       description: recMeta.description,
       tags: [...recMeta.tags],
+      ...(recMeta.name ? { name: recMeta.name } : {}),
       ...metadataRights(recMeta),
     },
     edited: false,

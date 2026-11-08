@@ -63,7 +63,7 @@ not the active row or the visible filter subset. N counts legacy drafts/invalid 
 and accepted-but-edited values; disabled with none or while work is running.
 Click validates each candidate locally; invalid fields stay unaccepted and show
 `upload-meta-validation-{id}`. The toast summarizes accepted/invalid/skipped.
-Existing packages re-embed as one sequential batch; no new AI requests.
+Existing packages re-embed as one batch; no new AI requests.
 
 ## Metadata fields (`upload-detail-{id}`, empty until generated)
 `upload-meta-empty-{id}` (with `upload-meta-gen-{id}`), the editable fields

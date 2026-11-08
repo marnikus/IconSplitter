@@ -110,3 +110,4 @@ The implemented [response redesign](upload-response.md) removes warm boot reload
 render-time destination planning and quadratic local-map updates, targets stale
 projection, shares popup derivation and reuses already-built preview results.
 Exact export algorithms and all controls remain; browser latency is not claimed.
+The export pipeline itself (JPEG worker pool, overlapping batch, directory cache, commit passes) is in [export speed](upload-export-speed.md).

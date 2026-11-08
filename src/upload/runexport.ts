@@ -65,7 +65,7 @@ export interface ExportRunArgs {
   /** Accepted metadata (null = no embed stage). */
   metadata: IconMetadata | null;
   metadataInfo: {
-    prompt: string; provider: string; model: string; requestId: string | null;
+    prompt: string; response?: string; provider: string; model: string; requestId: string | null;
     usage: GeminiUsage; validation: MetadataValidation;
   } | null;
   /** The previous export.json, parsed (null = none/corrupt). */

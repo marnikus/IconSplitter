@@ -1,8 +1,7 @@
 // StockUploadMetaFields.tsx — local editable metadata fields for an exported
-// item (Title, Description, Tags, Creator, Copyright) + Accept & re-embed.
+// item (Title, Description, Tags) + Accept & re-embed.
 
 import { countWords, dedupeTags, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
-import UploadMetaRights from "../upload/UploadMetaRights";
 import type { StockMetaDraft } from "./rowlist";
 
 export interface StockUploadMetaFieldsProps {
@@ -27,7 +26,6 @@ export default function StockUploadMetaFields({ id, draft, onEdit, onAccept, onC
         hint="At least 10 unique lowercase tags including icon, pictogram, vector, stroke, line, editable, web"
         multiline onChange={(v) => onEdit({ tags: dedupeTags(v.split(",").map((t) => t.trim()).filter(Boolean)) })}
         onCopy={() => onCopy("tags")} />
-      <UploadMetaRights id={id} metadata={m} onEdit={onEdit} />
       <ValidationView id={id} validation={draft.validation} />
       <div className="up-meta-actions">
         <span className="up-meta-state" data-testid={`stock-meta-state-${id}`}>{statusText(draft)}</span>

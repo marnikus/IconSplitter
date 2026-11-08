@@ -7,17 +7,18 @@ Part of [metadata generation and provider confirmation](upload-metadata.md).
 Every complete generated response that passes the existing policy becomes
 **accepted immediately**, for row and selected Generate/Regenerate as well as
 Export selected. No second Accept click or confirmation is required. The runner
-publishes/caches that accepted state once, retains Creator/Copyright, logs one
+publishes/caches that accepted state once, retains any stored Creator/Copyright, logs one
 acceptance and reports the actual accepted count, not the number of replies.
 Reload restores accepted state without another paid call or acceptance prompt.
 
 Invalid/malformed/truncated results are never accepted as new metadata. Fixable
 invalid text remains editable; failure/cancellation retains previous text/state.
 Cancellation retains results already accepted but never starts chained exports.
-A normally completed metadata-only run refreshes existing packages in one
-sequential export batch, using the run's own accepted states rather than a stale
-React render; unexported rows do not acquire unsolicited packages. Explicit
-Export selected still exports the whole promised selection. Old cached drafts
+A metadata-only run (Generate/Regenerate, row or selected) NEVER exports on its
+own (2026-11-08): it stores the accepted text, and a row whose package holds
+older text shows as stale until the user exports it. Only explicit Export
+selected exports after its answers, using the run's own accepted states rather
+than a stale React render. Old cached drafts
 are not silently promoted, and manual edits still use local Accept below.
 The initial exact-input provider confirmation remains mandatory.
 
@@ -36,10 +37,10 @@ reports accepted, invalid and skipped counts. There is no AI request, no new
 metadata generation, and no additional paid confirmation.
 
 Accepting unexported rows stores their metadata without creating files. Rows
-with existing packages are re-embedded together through ONE sequential export
+with existing packages are re-embedded together through ONE export
 batch, carrying the newly accepted states directly rather than waiting for a
 React render. This prevents parallel per-row runs from skipping selected files.
-User-entered Creator/Copyright survive, and edited accepted fields can be
+Any stored Creator/Copyright survive, and edited accepted fields can be
 accepted again. Acceptance persists in cache/export records through reload;
 a sibling pair's shared-folder record cannot make an unchecked row accepted.
 

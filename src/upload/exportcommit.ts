@@ -4,8 +4,15 @@ import { outputFormats } from "../lib/upload/formats";
 // cleanup (RULE 23); `export.json` is written LAST and is the commit marker,
 // so a crash mid-commit leaves the last valid package in place. The record's
 // outputs/status/timestamps are filled here, from what was actually written.
+//
+// Speed (2026-11-08): the same protocol with fewer passes over the bytes — the
+// svg/jpg/eps files commit side by side (they are independent; export.json
+// still goes LAST), the saved file is compared byte-for-byte with what was
+// meant to be written instead of being verified a second time (equal bytes
+// verify the same), and each output record hashes the bytes just proven saved
+// instead of reading the file again.
 
-import { ensureDirPath, readBytesAt, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
+import { ensureDirPath, type DirHandleLike } from "../lib/fs";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
 import { verifyEpsDocument } from "../lib/upload/eps";
 import { verifyEpsMetadata } from "../lib/upload/epsmetadata";
@@ -56,22 +63,40 @@ export async function commitExport(input: CommitExportInput): Promise<CommitExpo
   const outputs: CommitExportOutput["outputs"] = { svg: null, jpg: null, eps: null };
   // The new files are written and verified FIRST; only then may anything go
   // (RULE 23: the sweep can never cost the user their only copy).
-  if (enabled.svg && input.svgOut !== null) {
-    await commitFile(dir, `${input.stem}.svg`, encode(input.svgOut), (back) => svgParses(decode(back)));
-    outputs.svg = `${input.stem}.svg`;
-  }
-  if (enabled.jpg && input.jpeg !== null) {
-    await commitFile(dir, `${input.stem}.jpg`, input.jpeg, (back) => jpegVerifies(back, input));
-    outputs.jpg = `${input.stem}.jpg`;
-  }
-  if (enabled.eps && input.epsText !== null) {
-    await commitFile(dir, `${input.stem}.eps`, encode(input.epsText), (back) => epsVerifies(back, input));
-    outputs.eps = `${input.stem}.eps`;
+  const written = new Map<string, Uint8Array>();
+  await commitFilesTogether(plannedFiles(input, enabled), dir, written);
+  for (const ext of ["svg", "jpg", "eps"] as const) {
+    if (written.has(`${input.stem}.${ext}`)) outputs[ext] = `${input.stem}.${ext}`;
   }
   const named = previousNames(input);
   const removed = await sweepSuperseded(dir, input.stem, named);
   const replaced = removed.map((n) => `${input.exportDir}/${n}`);
-  return { outputs, record: await writeRecord(input, dir, outputs, replaced), replaced };
+  return { outputs, record: await writeRecord(input, dir, { outputs, replaced, written }), replaced };
+}
+
+interface PlannedFile { name: string; bytes: Uint8Array; verify: (back: Uint8Array) => boolean }
+
+/** The enabled outputs this run rebuilt, with the check each must pass when read back. */
+function plannedFiles(input: CommitExportInput, enabled: ReturnType<typeof outputFormats>): PlannedFile[] {
+  const files: PlannedFile[] = [];
+  if (enabled.svg && input.svgOut !== null) files.push({ name: `${input.stem}.svg`, bytes: encode(input.svgOut), verify: (back) => svgParses(decode(back)) });
+  if (enabled.jpg && input.jpeg !== null) files.push({ name: `${input.stem}.jpg`, bytes: input.jpeg, verify: (back) => jpegVerifies(back, input) });
+  if (enabled.eps && input.epsText !== null) files.push({ name: `${input.stem}.eps`, bytes: encode(input.epsText), verify: (back) => epsVerifies(back, input) });
+  return files;
+}
+
+/**
+ * Commits the files side by side. Every one runs to its end (a verify failure in
+ * one never leaves another half-written), then the first failure is thrown, so
+ * the outcome is the sequential one: a throw means export.json is not written.
+ */
+async function commitFilesTogether(files: PlannedFile[], dir: DirHandleLike, written: Map<string, Uint8Array>): Promise<void> {
+  const settled = await Promise.allSettled(files.map(async (f) => {
+    await commitFile(dir, f.name, f.bytes, f.verify);
+    written.set(f.name, f.bytes);
+  }));
+  const failed = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+  if (failed) throw failed.reason;
 }
 
 /** The file names the previous record claims, rebased onto this export folder. */
@@ -81,12 +106,18 @@ function previousNames(input: CommitExportInput): Set<string> {
   return new Set(outs.flatMap((o) => (o === null || !o.path.startsWith(prefix) ? [] : [o.path.slice(prefix.length)])));
 }
 
+/** What the file commits proved: the names, the superseded files removed, and the bytes saved under each name. */
+interface CommitDone {
+  outputs: CommitExportOutput["outputs"];
+  replaced: readonly string[];
+  written: ReadonlyMap<string, Uint8Array>;
+}
+
 /** Fills outputs/status/timestamps from what was written, then writes export.json. */
-async function writeRecord(
-  input: CommitExportInput, dir: DirHandleLike, outputs: CommitExportOutput["outputs"], replaced: readonly string[],
-): Promise<ExportRecord> {
+async function writeRecord(input: CommitExportInput, dir: DirHandleLike, done: CommitDone): Promise<ExportRecord> {
+  const { outputs, replaced, written } = done;
   const kept = pruneRemoved(input.record.outputs, replaced, outputs);
-  input.record.outputs = await committedOutputs(input, outputs, kept);
+  input.record.outputs = await committedOutputs(input, { written: outputs, kept, bytes: written });
   input.record.stage = "committed";
   input.record.status = input.partial ? "partial" : "processed";
   input.record.validation = input.validation;
@@ -105,13 +136,16 @@ async function writeRecord(
 }
 
 /** Disabled/failed outputs leave earlier bytes on disk, but never enter the new package. */
-async function committedOutputs(input: CommitExportInput, written: CommitExportOutput["outputs"], kept: ExportRecord["outputs"]): Promise<ExportRecord["outputs"]> {
+async function committedOutputs(
+  input: CommitExportInput,
+  from: { written: CommitExportOutput["outputs"]; kept: ExportRecord["outputs"]; bytes: ReadonlyMap<string, Uint8Array> },
+): Promise<ExportRecord["outputs"]> {
   const enabled = outputFormats(input.record.settings.effective);
   enabled.eps = enabled.eps && !input.partial;
-  const outputs = { ...kept };
+  const outputs = { ...from.kept };
   for (const ext of ["svg", "jpg", "eps"] as const) {
-    const name = written[ext];
-    outputs[ext] = !enabled[ext] ? null : name === null ? kept[ext] : await outputRecord(input, name);
+    const name = from.written[ext];
+    outputs[ext] = !enabled[ext] ? null : name === null ? from.kept[ext] : await outputRecord(input, name, from.bytes.get(name) as Uint8Array);
   }
   return outputs;
 }
@@ -146,9 +180,11 @@ async function commitFile(dir: DirHandleLike, name: string, content: Uint8Array,
   await w.close();
   const back = new Uint8Array(await (await fh.getFile()).arrayBuffer());
   if (!verify(back)) throw new Error(`tmp verify failed for ${name}`);
-  await writeFileOverwrite(dir, name, new Blob([content as BlobPart]));
-  const saved = await readBytesAt(dir, name);
-  if (saved === null || !verify(saved) || !sameBytes(saved, content)) {
+  const tmpIsContent = sameBytes(back, content);
+  const saved = await overwriteAndReadBack(dir, name, content);
+  // Equal bytes verify alike: the saved file is compared with the content, and
+  // only re-verified when the tmp read-back was not already that exact content.
+  if (saved === null || !sameBytes(saved, content) || (!tmpIsContent && !verify(saved))) {
     await dir.removeEntry?.(name);
     throw new Error(`saved-file verify failed for ${name}`);
   }
@@ -159,12 +195,25 @@ async function commitFile(dir: DirHandleLike, name: string, content: Uint8Array,
   }
 }
 
-async function outputRecord(input: CommitExportInput, name: string) {
-  const bytes = await readBytesAt(input.root, `${input.exportDir}/${name}`);
+/** Overwrites `name` and reads it back through the SAME handle (no second lookup); null when it cannot be read. */
+async function overwriteAndReadBack(dir: DirHandleLike, name: string, content: Uint8Array): Promise<Uint8Array | null> {
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(new Blob([content as BlobPart]));
+  await w.close();
+  try {
+    return new Uint8Array(await (await fh.getFile()).arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+/** The record of a file just committed: its bytes were proven saved, so they are hashed as held. */
+async function outputRecord(input: CommitExportInput, name: string, bytes: Uint8Array) {
   return {
     path: `${input.exportDir}/${name}`,
-    bytes: bytes?.length ?? 0,
-    hash: bytes === null ? "" : `sha256:${await sha256Hex(bytes)}`,
+    bytes: bytes.length,
+    hash: `sha256:${await sha256Hex(bytes)}`,
   };
 }
 
@@ -194,6 +243,17 @@ function svgParses(svg: string): boolean {
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-  return a.length === b.length && a.every((v, i) => v === b[i]);
+/** Byte equality: 32-bit words when both views are aligned (about 10x a per-byte callback), bytes otherwise. */
+export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let i = 0;
+  if (a.byteOffset % 4 === 0 && b.byteOffset % 4 === 0) {
+    const words = a.length >> 2;
+    const wa = new Uint32Array(a.buffer, a.byteOffset, words);
+    const wb = new Uint32Array(b.buffer, b.byteOffset, words);
+    for (; i < words; i++) if (wa[i] !== wb[i]) return false;
+    i <<= 2;
+  }
+  for (; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }

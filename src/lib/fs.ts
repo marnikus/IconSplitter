@@ -185,6 +185,41 @@ async function fileAt(root: DirHandleLike, relPath: string): Promise<FileHandleL
   return dir === null ? null : tryGetFile(dir, relPath.slice(at + 1));
 }
 
+/**
+ * A directory handle that remembers the sub-directory handles it has handed out
+ * (2026-11-08, export speed). Every `readTextAt` / `fileExistsAt` / `ensureDirPath`
+ * walks its path from the root, one `getDirectoryHandle` round trip per level — a
+ * package six folders deep paid ~40 of them per icon. Behind this wrapper a
+ * folder is resolved once per batch and shared by every lane; a lookup in flight
+ * is shared too. Only SUCCESSFUL lookups are kept (a missing folder is asked
+ * again, so one created later is found), `removeEntry` forgets the name, and the
+ * wrapper is made per batch and dropped with it, so a handle never outlives the
+ * run it was cached for. Files are never cached: every read still opens the file.
+ */
+export function withDirCache(dir: DirHandleLike): DirHandleLike {
+  const children = new Map<string, Promise<DirHandleLike>>();
+  const open = (name: string, create: boolean): Promise<DirHandleLike> => {
+    const known = children.get(name);
+    if (known !== undefined) return known;
+    const pending = dir.getDirectoryHandle(name, { create }).then(withDirCache);
+    children.set(name, pending);
+    pending.catch(() => { if (children.get(name) === pending) children.delete(name); });
+    return pending;
+  };
+  return {
+    kind: "directory",
+    name: dir.name,
+    getDirectoryHandle: (name, opts) => open(name, opts?.create === true),
+    getFileHandle: (name, opts) => dir.getFileHandle(name, opts),
+    entries: () => dir.entries(),
+    removeEntry: dir.removeEntry === undefined ? undefined : (name, opts) => {
+      children.delete(name);
+      return dir.removeEntry!(name, opts);
+    },
+    isSameEntry: dir.isSameEntry === undefined ? undefined : (other) => dir.isSameEntry!(other),
+  };
+}
+
 /** Names of every child (dirs and files) of a directory. */
 export async function listChildNames(dir: DirHandleLike): Promise<string[]> {
   const out: string[] = [];

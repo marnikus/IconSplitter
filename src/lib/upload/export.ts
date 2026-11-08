@@ -110,9 +110,13 @@ export interface ExportRecord {
     title: string;
     description: string;
     tags: string[];
+    /** The one-word icon name (2026-11-08); absent on older packages. */
+    name?: string;
     creator?: string;
     copyright?: string;
     prompt: string;
+    /** The provider's full last answer, verbatim (2026-11-08); absent on older packages and manual entries. */
+    response?: string;
     provider: string;
     model: string;
     requestId: string | null;
@@ -197,6 +201,7 @@ export { planStages, recordConverter, type PlanInput, type Stage, type StagePlan
 /** The metadata block for a record (null until metadata is accepted). */
 export function metadataBlock(meta: IconMetadata, args: {
   prompt: string;
+  response?: string;
   provider: string;
   model: string;
   requestId: string | null;
@@ -209,8 +214,10 @@ export function metadataBlock(meta: IconMetadata, args: {
     title: meta.title,
     description: meta.description,
     tags: meta.tags,
+    ...(meta.name ? { name: meta.name } : {}),
     ...metadataRights(meta),
     prompt: args.prompt,
+    ...(args.response ? { response: args.response } : {}),
     provider: args.provider,
     model: args.model,
     requestId: args.requestId,

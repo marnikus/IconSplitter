@@ -128,13 +128,14 @@ function metadataMoved(record: ExportRecord, meta: UploadMetaState): boolean {
 export function metaFromRecord(record: ExportRecord | null, interrupted: boolean): UploadMetaState {
   if (interrupted) return { ...EMPTY_META, state: "interrupted", detail: "a metadata request was in flight when the app closed — its outcome is unknown; generate again to retry" };
   const block = record?.metadata ?? null;
-  const metadata = block === null ? null : cleanMetadata({ title: block.title, description: block.description, tags: [...block.tags], ...metadataRights(block) });
+  const metadata = block === null ? null : cleanMetadata({ title: block.title, description: block.description, tags: [...block.tags], name: block.name, ...metadataRights(block) });
   if (block === null || metadata === null || block.state !== "accepted" || metadata.title === "") return EMPTY_META;
   return {
     state: "accepted",
     metadata,
     validation: block.validation,
     usage: block.usage,
+    ...(block.response ? { response: block.response } : {}),
     detail: "",
     edited: false,
   };

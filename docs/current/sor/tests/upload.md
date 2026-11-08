@@ -72,7 +72,7 @@
   (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo
   entry; reset), request confirmation, editable/copiable metadata, automatic valid-result acceptance for row/bulk Generate/Regenerate,
   accepted-cache reload, preserved ownership, exact mixed-batch acceptance counts,
-  sequential package refresh without unsolicited exports,
+  no automatic export after Generate/Regenerate (explicit Export refreshes packages),
   legacy-draft/manual-edit acceptance, invalid/malformed/truncated refusal,
   failed/cancelled regeneration preserving accepted text/cache, cancel (never
   resent), interrupted after a

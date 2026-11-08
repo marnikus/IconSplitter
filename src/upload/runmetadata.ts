@@ -38,6 +38,8 @@ export interface MetadataResult {
   requestId: string | null;
   failure: GeminiFailure | null;
   attempts: number;
+  /** The provider's full answer text, verbatim (2026-11-08) — kept in export.json next to the prompt; absent when there was no answer. */
+  response?: string;
   /** The safe, redacted one-line cause (never a key, never a raw dump). */
   detail: string;
 }
@@ -126,6 +128,7 @@ function interpret(input: InterpretInput): MetadataResult {
     requestId: null,
     failure: null,
     attempts,
+    response: text,
     detail: validation.ok ? "" : validation.errors.join("; "),
   };
 }

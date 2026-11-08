@@ -27,7 +27,7 @@ export function acceptMetadataRow(c: UploadCtx, row: UploadRow): UploadMetaState
   }
   const accepted: UploadMetaState = { ...row.meta, metadata, state: "accepted", validation, edited: false };
   c.dispatch({ type: "meta", id: row.source.id, meta: accepted });
-  rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: metadata });
+  rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: metadata, ...(row.meta.response === undefined ? {} : { response: row.meta.response }) });
   log(namedSpec({ id: row.source.id, base: row.source.base, model: c.m.gemini.model, tags: metadata.tags.length }));
   return accepted;
 }

@@ -74,15 +74,17 @@ async function finishMetadataRun(ctx: MetaRunCtx, opts: MetaBatchOptions, status
 }
 
 /**
- * Export selected keeps its whole-selection promise. Ordinary generation only
- * refreshes packages already on disk; it never creates unsolicited packages.
- * Both use this run's accepted states before React re-renders (RULE 24).
+ * Only an explicit **Export selected** exports after the answers are in (its
+ * confirmation said so). An ordinary Generate/Regenerate never writes files by
+ * itself (2026-11-08, "after metadata accepted the export starts but I did not
+ * ask"): the accepted text is stored, and a row whose package holds older text
+ * shows as stale until the user exports it. The run's accepted states travel
+ * with the export before React re-renders (RULE 24).
  */
 function exportAfterMetadata(
   latest: Latest, opts: MetaBatchOptions, accepted: ReadonlyMap<string, UploadMetaState>,
 ): Promise<void> {
-  const then = opts.thenExport?.length ? opts.thenExport
-    : [...accepted.keys()].filter((id) => rowOf(latest.current, id)?.record != null);
+  const then = opts.thenExport ?? [];
   return then.length > 0 ? runExportBatch(latest, then, accepted) : Promise.resolve();
 }
 
@@ -163,13 +165,14 @@ function acceptNow(ctx: MetaRunCtx, id: string, result: MetadataResult): void {
   const meta: UploadMetaState = {
     state: "accepted", metadata: result.metadata, validation: result.validation,
     usage: result.usage, detail: result.detail, edited: false,
+    ...responseOf(result),
   };
   c.dispatch({ type: "meta", id, meta });
   // The dispatch above is not readable from `latest.current` until React
   // re-renders, and the export of THIS task runs before that — so the answer
   // travels with the run instead of being looked up again (RULE 24).
   ctx.accepted.set(id, meta);
-  rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: result.metadata });
+  rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: result.metadata, ...responseOf(result) });
   log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: result.metadata.tags.length }));
 }
 
@@ -186,7 +189,7 @@ function applyMetaResult(latest: Latest, id: string, base: UploadMetaState, resu
   }
   // Even an invalid answer is paid work: remember its draft so fixing it does
   // not require another provider call (CP-15).
-  rememberMeta(row.sourceHash ?? "", { state: "generated", meta: result.metadata });
+  rememberMeta(row.sourceHash ?? "", { state: "generated", meta: result.metadata, ...responseOf(result) });
   log(nameRefusedSpec({ ...ref, why: result.detail }));
 }
 
@@ -206,7 +209,13 @@ function metaFromResult(base: UploadMetaState, result: MetadataResult): UploadMe
     usage: result.usage,
     detail: result.detail,
     edited: false,
+    ...responseOf(result),
   };
+}
+
+/** The provider's verbatim answer, when the result carries one. */
+function responseOf(result: MetadataResult): { response?: string } {
+  return result.response === undefined || result.response === "" ? {} : { response: result.response };
 }
 
 /** Regeneration replaces descriptive text, never the user's ownership claims. */

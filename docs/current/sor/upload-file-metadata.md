@@ -92,8 +92,8 @@ and a Chromium file upload with the actual supplied artwork.
 
 ## Owners and tests
 
-- Shared optional identity/field comparison: `lib/upload/rights.ts`;
-  row identity inputs: `upload/UploadMetaRights.tsx`.
+- Shared optional identity/field comparison: `lib/upload/rights.ts` (no row
+  inputs since 2026-11-08; values already in a cache/record still round-trip).
 - Shared IIM and byte/resource rules: `lib/upload/{iptc,photoshop,metadatabytes}.ts`.
 - JPEG carriers: `lib/upload/{jpeg,jpegiptc,jpegmarkers}.ts`.
 - EPS carriers/envelope audit: `lib/upload/{epsmetadata,epsiptc,epscheck}.ts`.

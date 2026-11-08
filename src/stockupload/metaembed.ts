@@ -78,7 +78,7 @@ async function reembedEps(
 
 function preservedOrigin(prev: ExportRecord["metadata"]) {
   if (prev !== null) {
-    return { prompt: prev.prompt, provider: prev.provider, model: prev.model, requestId: prev.requestId, usage: prev.usage };
+    return { prompt: prev.prompt, response: prev.response, provider: prev.provider, model: prev.model, requestId: prev.requestId, usage: prev.usage };
   }
   return { prompt: "", provider: "local", model: "manual", requestId: null, usage: { input: null, output: null, total: null } };
 }

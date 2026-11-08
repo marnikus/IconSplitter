@@ -40,6 +40,8 @@ export interface UploadMetaState {
   validation: MetadataValidation | null;
   /** The last request's usage (Gemini reports tokens, never a cost). */
   usage: GeminiUsage;
+  /** The provider's last full answer, verbatim (never the user's edits); written to export.json. */
+  response?: string;
   /** The safe, redacted cause of the last failure ("" when none). */
   detail: string;
   /** True once the user edited the generated text (accept re-validates). */

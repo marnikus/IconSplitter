@@ -1,6 +1,8 @@
 // exportactions.ts — the export actions and their batch runner (design §3.2):
-// export the selection or one row, cancel in flight. The batch is sequential
-// (local compute), per-item isolated (one icon's failure never touches
+// export the selection or one row, cancel in flight. The batch keeps a few icons
+// in flight at once (2026-11-08, `exportLanes`: the JPEG encode runs in a worker
+// pool and the file commits wait on the disk, so one icon at a time left both
+// idle), per-item isolated (one icon's failure never touches
 // another's package, RULE 5) and cancel-aware; every row's run reports its
 // stage, and a committed package clears the row's stale flag. The pipeline
 // itself (preflight → prepare → optimize → render → embed → eps → validate →
@@ -11,12 +13,13 @@ import { startUploadProgress } from "./processprogress";
 import { useCallback, useRef } from "react";
 import { copyFolderText } from "../lib/copypath";
 import { log } from "../log/logstore";
-import type { DirHandleLike } from "../lib/fs";
+import { withDirCache, type DirHandleLike } from "../lib/fs";
 import { publishedJpegPath } from "../lib/upload/export";
 import type { IconMetadata } from "../lib/upload/meta";
 import { rowSettings } from "../lib/upload/decorations";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
+import { poolSize } from "../lib/upload/jpegworker";
 import { rememberJob } from "./jobstore";
 import { loadBridgeConfig } from "./configstore";
 import { CONVERTERS } from "../lib/upload/epsconv/registry";
@@ -96,8 +99,9 @@ export async function runExportBatch(
   freshMeta: ReadonlyMap<string, UploadMetaState> = new Map(),
 ): Promise<void> {
   const c = latest.current;
-  const root = c.refs.root.current as DirHandleLike | null;
-  if (root === null || c.refs.abortExport.current !== null) return;
+  const picked = c.refs.root.current as DirHandleLike | null;
+  if (picked === null || c.refs.abortExport.current !== null) return;
+  const root = withDirCache(picked); // folders resolve once per batch, not once per file
   const abort = new AbortController();
   c.refs.abortExport.current = abort;
   c.dispatch({ type: "running", kind: "export", n: ids.length });
@@ -127,17 +131,36 @@ async function exportBatchItems(work: ExportBatchWork): Promise<string | null> {
   for (const id of work.ids) rememberJob(id, "queued");
   const epsNote = await probeEpsNote(c, work.ids);
   if (epsNote !== null) c.say(epsNote, true);
-  for (const id of work.ids) {
-    if (work.signal.aborted) break;
+  const queue = { next: 0, stopped: false };
+  const lanes = exportLanes(c, work.ids);
+  await Promise.all(Array.from({ length: lanes }, () => exportLane(work, queue)));
+  return epsNote;
+}
+
+/** One lane takes the next waiting icon until none is left, the run is cancelled, or an icon reports a cancel. */
+async function exportLane(work: ExportBatchWork, queue: { next: number; stopped: boolean }): Promise<void> {
+  while (!queue.stopped && !work.signal.aborted && queue.next < work.ids.length) {
+    const id = work.ids[queue.next++];
     rememberJob(id, "running");
     const outcome = await exportOne({ ...work, id });
-    if (outcome.cancelled) break;
+    if (outcome.cancelled) { queue.stopped = true; return; }
     work.tally.fixed += outcome.fixed;
     work.tally.failed += outcome.failed;
     work.tally.done += 1;
     work.progress.advance();
   }
-  return epsNote;
+}
+
+/**
+ * How many icons run at once: as many as the JPEG worker pool has workers (so no
+ * rasterized picture waits holding ~130 MB), never more than there are icons —
+ * and ONE when a row writes its EPS through the Inkscape helper, whose process
+ * load was never measured against overlapping runs.
+ */
+export function exportLanes(c: UploadCtx, ids: readonly string[]): number {
+  const settings = ids.map((id) => rowSettings(c.m.defaults, id, c.m.overrides, c.m.applied));
+  if (settings.some((s) => s.includeEps && s.epsConverter === "inkscape")) return 1;
+  return Math.max(1, Math.min(ids.length, poolSize()));
 }
 
 /** The batch's end: the run flags off, the cancel logged, the one toast line. */
@@ -209,7 +232,7 @@ function acceptedOf(meta: UploadMetaState): (UploadMetaState & { metadata: IconM
 function metadataInfoOf(c: UploadCtx, meta: (UploadMetaState & { metadata: IconMetadata }) | null): ExportRunArgs["metadataInfo"] {
   if (meta === null || meta.validation === null) return null;
   return {
-    prompt: c.m.prompt, provider: PROVIDER_NAME, model: c.m.gemini.model,
+    prompt: c.m.prompt, response: meta.response, provider: PROVIDER_NAME, model: c.m.gemini.model,
     requestId: null, usage: meta.usage, validation: meta.validation,
   };
 }

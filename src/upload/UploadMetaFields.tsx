@@ -1,11 +1,10 @@
 // UploadMetaFields.tsx — the editable, copiable metadata fields below an
-// active row (design §2.13): Title, Description and the Tags, EMPTY until
-// generated, each with its own copy button. Accept re-validates the edited
+// active row (design §2.13): Title, Description, the Tags and the one-word
+// Icon Name, EMPTY until generated (all but the name with their own copy button). Accept re-validates the edited
 // text and refuses with the exact rule violations; the last validation's
 // errors and warnings show under the fields. Nothing here writes files: the
 // accepted text persists in the pair's export.json at the next export commit.
 
-import UploadMetaRights from "./UploadMetaRights";
 import { countWords, dedupeTags, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
 import type { UploadMetaState } from "./types";
 
@@ -39,7 +38,6 @@ export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, o
   return (
     <div className="up-meta" data-testid={`upload-meta-fields-${id}`}>
       <MetaFieldsGrid id={id} m={m} onEdit={onEdit} onCopy={onCopy} />
-      <UploadMetaRights id={id} metadata={m} onEdit={onEdit} />
       <ValidationLine id={id} validation={meta.validation} />
       <MetaActions id={id} meta={meta} onAccept={onAccept} onRegenerate={onRegenerate} />
     </div>
@@ -63,6 +61,9 @@ function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
         hint="at least 10 unique, comma-separated, including icon, pictogram, vector, stroke, line, editable, web"
         multiline onEdit={(v) => onEdit({ tags: dedupeTags(v.split(",").map((t) => t.trim()).filter((t) => t !== "")) })}
         onCopy={() => onCopy("tags")} />
+      <Field id={id} label="Icon Name" testid="name" value={m.name ?? ""} count={(m.name ?? "").length}
+        hint="ONE word, less than 10 characters, lowercase — cut to the first word at Accept"
+        onEdit={(v) => onEdit({ name: v })} />
     </>
   );
 }
@@ -88,7 +89,7 @@ function MetaActions({ id, meta, onAccept, onRegenerate }: {
 /** One editable field with its live count and its own copy button. */
 function Field({ id, label, testid, value, count, hint, multiline, onEdit, onCopy }: {
   id: string; label: string; testid: string; value: string; count: number; hint: string;
-  multiline?: boolean; onEdit: (v: string) => void; onCopy: () => void;
+  multiline?: boolean; onEdit: (v: string) => void; onCopy?: () => void;
 }) {
   const common = {
     className: "svg-input", "data-testid": `upload-meta-${testid}-${id}`, "aria-label": label,
@@ -100,8 +101,8 @@ function Field({ id, label, testid, value, count, hint, multiline, onEdit, onCop
       {multiline
         ? <textarea {...common} rows={2} />
         : <input {...common} type="text" />}
-      <button type="button" className="svg-btn tiny" data-testid={`upload-copy-${testid}-${id}`}
-        title={`Copy the ${label.toLowerCase()}`} onClick={onCopy}>Copy</button>
+      {onCopy && <button type="button" className="svg-btn tiny" data-testid={`upload-copy-${testid}-${id}`}
+        title={`Copy the ${label.toLowerCase()}`} onClick={onCopy}>Copy</button>}
       <small className="up-hint">{hint}</small>
     </div>
   );
