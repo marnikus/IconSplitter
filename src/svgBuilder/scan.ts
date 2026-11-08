@@ -7,6 +7,7 @@ import { fnv1a32 } from "../lib/pairing";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import { restoreKnownRoot } from "../lib/knownroots";
 import { rememberListTargets } from "../state/listtargets";
+import { ALL_EMPTY_SLOTS } from "../lib/svgBuilder/slots";
 import { builderAuditLine, discoverBuilderAssets, type BuilderDiscovery } from "./discovery";
 
 export const BUILDER_HANDLE_KEY = "__svgBuilder__";
@@ -51,7 +52,7 @@ export async function scanBuilderRoot(
     refs.scanKey.current = key;
     setters.setRoot(root);
     setters.setDiscovery(found);
-    rememberListTargets("svgBuilder", found.assets.map((a) => a.id));
+    rememberListTargets("svgBuilder", [...found.assets.map((a) => a.id), ...ALL_EMPTY_SLOTS]);
     setters.say(builderAuditLine(found));
     for (const warning of warnings(found)) setters.say(warning, true);
   } catch {

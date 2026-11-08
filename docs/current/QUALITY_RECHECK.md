@@ -5042,3 +5042,8 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 ## 2026-11-08 — SVG builder: opacity slider for the artboard % labels
 
 - 1–100% slider beside % Similarity (pref scoreOpacity, default 100; hidden with the labels). Workspace test extended; builder+index suites 86/86; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: × refills the cell, Shift+× leaves it empty
+
+- refillOne (recipe pool, not placed/excluded; Similar best-first) fills the same cell; Shift keeps a hole via unique `~empty:N` placeholder ids (registered as undo targets; skipped by compose/export/counts/presets; library click fills the first hole).
+- Tests: parity +2, workspace +1 (incl. undo with a hole); builder+index+apply suites 109/109; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.

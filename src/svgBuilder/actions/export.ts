@@ -3,6 +3,7 @@
 import { sheetCopy } from "../../lib/svgBuilder/compose";
 import { parseSheetPreset, serializeSheetPreset } from "../../lib/svgBuilder/preset";
 import type { SheetPreset } from "../../lib/svgBuilder/types";
+import { placedOnly } from "../../lib/svgBuilder/slots";
 import { copySheetSvg, downloadSheetPng, downloadSheetPreset, downloadSheetSvg, verifySheetDocument } from "../exporter";
 import { commitConfig, prefs } from "./config";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
@@ -52,7 +53,7 @@ const DONE: Record<Kind, string> = {
 function presetOfModel(ctx: BuilderActionContext): SheetPreset {
   const m = ctx.model;
   return serializeSheetPreset({
-    v: 1, config: m.config, placedIds: ctx.placedIds, lockedIds: m.lockedIds, seed: m.seed, recipe: m.recipe, metadata: m.metadata,
+    v: 1, config: m.config, placedIds: placedOnly(ctx.placedIds), lockedIds: m.lockedIds, seed: m.seed, recipe: m.recipe, metadata: m.metadata,
     sources: ctx.assets.filter((a) => ctx.placedIds.includes(a.id)).map((a) => ({ id: a.id, fingerprint: a.fingerprint })),
   });
 }

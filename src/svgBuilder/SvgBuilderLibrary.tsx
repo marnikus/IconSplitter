@@ -2,6 +2,7 @@
 // selection recipe, search, category chips, a 6-column icon grid (click to add
 // / remove, selected check, Similar-match dot) and the "N of C cells" footer.
 import { iconText } from "../lib/iconIndex/record";
+import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderIconAsset } from "../lib/svgBuilder/types";
 import SvgBuilderAssetThumb from "./SvgBuilderAssetThumb";
 import SvgBuilderRecipe, { CategoryChips } from "./SvgBuilderRecipe";
@@ -94,7 +95,7 @@ function ExcludedPill({ b }: { b: BuilderApi }) {
 }
 
 function LibraryFooter({ b }: { b: BuilderApi }) {
-  const used = Math.min(b.checked.length, b.layout.capacity);
+  const used = Math.min(placedOnly(b.checked).length, b.layout.capacity);
   const locked = b.lockedIds.length;
   return <div className="bld-col-foot" data-testid="builder-library-footer">
     <div className="bld-foot-row">

@@ -5,6 +5,7 @@
 import { useEffect, useRef } from "react";
 import type { CellFrame, SheetDocument } from "../lib/svgBuilder/types";
 import type { BuilderApi } from "./useSvgBuilder";
+import { isEmptySlot } from "../lib/svgBuilder/slots";
 
 export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; doc: SheetDocument; zoom: number }) {
   const host = useRef<HTMLDivElement | null>(null);
@@ -19,7 +20,7 @@ export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; do
     <div className="bld-artboard" data-testid="builder-artboard" data-zoom={zoom} aria-label="Editable SVG sheet artboard"
       style={{ width, height, transform: `scale(${zoom})` }}>
       <div className="bld-artboard-svg" ref={host} />
-      <CellOverlays b={b} placed={doc.placedIds} />
+      <CellOverlays b={b} placed={b.checked} />
     </div>
     <span className="bld-artboard-caption">ARTBOARD 01 · {width} × {height}</span>
   </div>;
@@ -29,7 +30,7 @@ function CellOverlays({ b, placed }: { b: BuilderApi; placed: readonly string[] 
   return <div className="bld-overlay" style={{ color: b.config.icons.color }}>
     {b.layout.cells.map((cell) => {
       const id = placed[cell.index];
-      return id === undefined ? <Placeholder key={`e${cell.index}`} cell={cell} /> : <PlacedCell key={id} b={b} cell={cell} id={id} />;
+      return id === undefined || isEmptySlot(id) ? <Placeholder key={`e${cell.index}`} cell={cell} /> : <PlacedCell key={id} b={b} cell={cell} id={id} />;
     })}
   </div>;
 }
@@ -49,8 +50,8 @@ function PlacedCell({ b, cell, id }: { b: BuilderApi; cell: CellFrame; id: strin
     <button type="button" className="bld-cell-lock" data-testid={`builder-cell-lock-${cell.index}`} aria-pressed={locked}
       aria-label={label} title={label} onClick={() => b.actions.toggleLock(id)}>{locked ? "🔒" : "○"}</button>
     <button type="button" className="bld-cell-exclude" data-testid={`builder-cell-exclude-${cell.index}`}
-      aria-label="Exclude this icon from the sheet" title="Exclude this icon from the sheet (kept out of reshuffles)"
-      onClick={() => b.actions.excludeAsset(id)}>×</button>
+      aria-label="Exclude this icon and refill its cell" title="Exclude and refill this cell · Shift+click: remove and leave the cell empty"
+      onClick={(e) => b.actions.excludeAsset(id, e.shiftKey)}>×</button>
     {b.prefs.showScores && <CellScore b={b} cell={cell} id={id} fontSize={small} />}
   </span>;
 }

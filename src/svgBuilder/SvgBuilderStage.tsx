@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LAYOUT_PRESETS, type LayoutPresetId } from "../lib/svgBuilder/config";
 import SvgBuilderArtboard from "./SvgBuilderArtboard";
+import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderStage({ b }: { b: BuilderApi }) {
@@ -90,7 +91,7 @@ function StageEmpty({ b }: { b: BuilderApi }) {
 }
 
 function StageStatus({ b }: { b: BuilderApi }) {
-  const placed = Math.min(b.checked.length, b.layout.capacity);
+  const placed = Math.min(placedOnly(b.checked.slice(0, b.layout.capacity)).length, b.layout.capacity);
   const empty = b.layout.capacity - placed;
   const line = b.layout.overflow ? <span className="bld-warn">Grid auto-fitted to {Math.round(b.layout.fitScale * 100)}% to remain inside the artboard</span>
     : empty > 0 ? <span>{empty} empty cell{empty === 1 ? "" : "s"} · reshuffle to fill</span>

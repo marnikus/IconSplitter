@@ -1,7 +1,8 @@
 // actions/selection.ts — the reference selection behaviour. Placement changes
 // are ONE global selection entry each; the recipe, seed and locks are working
 // state (as in the reference) and do not add undo entries of their own.
-import { recipeCaption, reshuffleSheet, resizeSheet, shortfallMessage, type SheetPick } from "../../lib/svgBuilder/selection";
+import { recipeCaption, refillOne, reshuffleSheet, resizeSheet, shortfallMessage, type SheetPick } from "../../lib/svgBuilder/selection";
+import { emptySlotFor, isEmptySlot, placedOnly, trimTrailingEmpty } from "../../lib/svgBuilder/slots";
 import type { SelectionRecipe } from "../../lib/svgBuilder/types";
 import { saveBuilderListView } from "../listview";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
@@ -22,7 +23,7 @@ export function selectionActions(get: () => BuilderActionContext): SelectionActi
     setCategory: (category) => setCategory(get(), category),
     autoPlace: () => autoPlace(get()),
     fitSelection: () => fitSelection(get()),
-    excludeAsset: (id) => excludeAsset(get(), id),
+    excludeAsset: (id, keepEmpty) => excludeAsset(get(), id, keepEmpty === true),
     restoreExcluded: () => { get().dispatch({ excludedIds: [] }); get().say("Excluded icons can be picked again"); },
   };
 }
@@ -36,7 +37,8 @@ function pickOf(ctx: BuilderActionContext, recipe: SelectionRecipe, seed: number
 export const NO_REFERENCE = "Similar needs an indexed reference: run Icons indexing, then lock (or place) an icon to compare against.";
 
 function place(ctx: BuilderActionContext, ids: readonly string[], label: string): void {
-  ctx.setChecked({ checked: [...ids], anchor: null, active: ids[0] ?? null }, label);
+  const checked = trimTrailingEmpty(ids);
+  ctx.setChecked({ checked, anchor: null, active: placedOnly(checked)[0] ?? null }, label);
 }
 
 /** A mode / profile / threshold / category change re-picks with seed + 1 (threshold: no toast). */
@@ -63,17 +65,30 @@ function toggleAsset(ctx: BuilderActionContext, id: string): void {
     ctx.dispatch({ lockedIds: ctx.model.lockedIds.filter((x) => x !== id) });
     return place(ctx, ctx.placedIds.filter((x) => x !== id), "Remove an icon from the sheet");
   }
-  if (ctx.placedIds.length >= ctx.layout.capacity) return ctx.say(FULL_MESSAGE, true);
+  const hole = ctx.placedIds.findIndex(isEmptySlot);
+  if (hole < 0 && ctx.placedIds.length >= ctx.layout.capacity) return ctx.say(FULL_MESSAGE, true);
   if (ctx.model.excludedIds.includes(id)) ctx.dispatch({ excludedIds: ctx.model.excludedIds.filter((x) => x !== id) });
-  place(ctx, [...ctx.placedIds, id], "Add an icon to the sheet");
+  place(ctx, hole < 0 ? [...ctx.placedIds, id] : ctx.placedIds.map((x, i) => (i === hole ? id : x)), "Add an icon to the sheet");
 }
 
-/** Artboard ×: out of the sheet (later cells shift up), unlocked, and excluded from later picks. */
-function excludeAsset(ctx: BuilderActionContext, id: string): void {
-  ctx.dispatch({ lockedIds: ctx.model.lockedIds.filter((x) => x !== id),
-    excludedIds: ctx.model.excludedIds.includes(id) ? ctx.model.excludedIds : [...ctx.model.excludedIds, id] });
-  place(ctx, ctx.placedIds.filter((x) => x !== id), "Exclude an icon from the sheet");
-  ctx.say("Icon excluded — it stays out of reshuffles until you restore it or add it from the library");
+/**
+ * Artboard ×: the icon leaves its cell (unlocked). Plain click → excluded from later picks and the SAME cell
+ * is refilled at once from the recipe; Shift+click → only removed, the cell stays empty (a placeholder id).
+ */
+function excludeAsset(ctx: BuilderActionContext, id: string, keepEmpty: boolean): void {
+  const at = ctx.placedIds.indexOf(id);
+  if (at < 0) return;
+  const lockedIds = ctx.model.lockedIds.filter((x) => x !== id);
+  if (keepEmpty) {
+    ctx.dispatch({ lockedIds });
+    place(ctx, ctx.placedIds.map((x, i) => (i === at ? emptySlotFor(ctx.placedIds) : x)), "Remove an icon, keep its cell empty");
+    return ctx.say("Icon removed — its cell is left empty");
+  }
+  const excludedIds = ctx.model.excludedIds.includes(id) ? ctx.model.excludedIds : [...ctx.model.excludedIds, id];
+  ctx.dispatch({ lockedIds, excludedIds });
+  const next = refillOne({ ...pickOf(ctx, ctx.model.recipe, ctx.model.seed + at + excludedIds.length), excludedIds });
+  place(ctx, ctx.placedIds.map((x, i) => (i === at ? next ?? emptySlotFor(ctx.placedIds) : x)), "Exclude an icon and refill its cell");
+  ctx.say(next === null ? "Icon excluded — no other icon is available, the cell stays empty" : "Icon excluded — its cell was refilled");
 }
 
 function toggleLock(ctx: BuilderActionContext, id: string): void {
@@ -94,7 +109,7 @@ function setCategory(ctx: BuilderActionContext, category: string): void {
 function autoPlace(ctx: BuilderActionContext): void {
   if (ctx.assets.length === 0) return;
   const known = new Set(ctx.assets.map((a) => a.id));
-  const kept = ctx.placedIds.filter((id) => known.has(id));
+  const kept = ctx.placedIds.filter((id) => known.has(id) || isEmptySlot(id));
   if (kept.length !== ctx.placedIds.length) return ctx.setCheckedQuiet(kept.length > 0 ? kept : reshuffleSheet(pickOf(ctx, ctx.model.recipe, ctx.model.seed)).ids);
   if (ctx.placedIds.length > 0) return;
   const recipe = ctx.model.recipe.mode === "similar" ? { ...ctx.model.recipe, mode: "random" as const } : ctx.model.recipe;

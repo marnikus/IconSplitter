@@ -8,6 +8,7 @@ import type { BuilderIconAsset, BuilderProfile, SheetDocument, SheetLayout } fro
 import { builderAuditLine } from "./discovery";
 import { createAssetRepository, type AssetRepository } from "./repository";
 import { useIconIndex, type IconIndexView } from "./useIconIndex";
+import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderModel } from "./model";
 
 export interface BuilderComputed extends IconIndexView {
@@ -32,10 +33,11 @@ export function useBuilderComputed(
   const layout = useMemo(() => computeLayout(model.config), [model.config]);
   const repository = useMemo(() => model.root === null ? null : createAssetRepository(model.root, assets),
     [model.root, assets]);
-  const needed = useMemo(() => withHero(placedIds, model.config.banner.heroIconId), [placedIds, model.config.banner.heroIconId]);
+  const realIds = useMemo(() => placedOnly(placedIds), [placedIds]);
+  const needed = useMemo(() => withHero(realIds, model.config.banner.heroIconId), [realIds, model.config.banner.heroIconId]);
   useLoadSvgTexts(repository, needed, model.svgTexts, patch);
-  const ready = useMemo(() => placedIds.every((id) => model.svgTexts[id] !== undefined),
-    [placedIds, model.svgTexts]);
+  const ready = useMemo(() => realIds.every((id) => model.svgTexts[id] !== undefined),
+    [realIds, model.svgTexts]);
   const document = useMemo(() => repository === null || !ready ? null : composeSheet({
     config: model.config, layout, assets, placedIds, svgTexts: model.svgTexts, metadata: model.metadata,
   }), [repository, ready, model.config, layout, assets, placedIds, model.svgTexts, model.metadata]);

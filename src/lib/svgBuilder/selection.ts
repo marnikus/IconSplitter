@@ -85,6 +85,14 @@ export function resizeSheet(pick: SheetPick): string[] {
   return [...p.current, ...extra];
 }
 
+/** One new icon for one cell (artboard ×): from the recipe's pool, never placed, never excluded; null when none is left. */
+export function refillOne(pick: SheetPick): string | null {
+  const p = withoutExcluded(pick);
+  const have = new Set(p.current);
+  const pool = poolOf(p.assets, p.profiles, p.recipe, p.score).filter((a) => !have.has(a.id));
+  return drawIds(p, pool, have, 1)[0] ?? null;
+}
+
 /** The line under "Reshuffle N icons". */
 export function recipeCaption(recipe: SelectionRecipe): string {
   if (recipe.mode === "random") return "Random from the full library";

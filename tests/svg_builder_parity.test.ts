@@ -9,7 +9,8 @@ import { DEFAULT_CONFIG, LAYOUT_PRESETS, applyPresetConfig, parseSheetConfig } f
 import { RANGES, bannerRange, clampTo } from "../src/lib/svgBuilder/ranges";
 import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { filterAssets, profilesOf, scoreOf } from "../src/lib/svgBuilder/assets";
-import { recipeCaption, reshuffleSheet, resizeSheet } from "../src/lib/svgBuilder/selection";
+import { recipeCaption, refillOne, reshuffleSheet, resizeSheet } from "../src/lib/svgBuilder/selection";
+import { emptySlotFor, isEmptySlot, placedOnly } from "../src/lib/svgBuilder/slots";
 import { wrapLines } from "../src/lib/svgBuilder/banner";
 import { composeSheet } from "../src/lib/svgBuilder/compose";
 import { parseSheetPreset, sheetSlug } from "../src/lib/svgBuilder/preset";
@@ -151,6 +152,26 @@ describe("selection recipes", () => {
     expect(r.ids).toHaveLength(8);
     const grown = resizeSheet({ assets: library, profiles, recipe: recipe(), seed: 5, capacity: 12, current: ["egg"], lockedIds: [], excludedIds });
     expect(grown.some((id) => excludedIds.includes(id))).toBe(false);
+  });
+
+  it("refillOne picks one new icon: never placed, never excluded, best similar first", () => {
+    const sim: Record<string, number> = { apple: 0.95, bread: 0.9, cake: 0.6 };
+    const score = (a: BuilderIconAsset) => sim[a.id] ?? 0;
+    const pick = { assets: library, profiles, recipe: recipe({ mode: "similar", threshold: 80 }), seed: 4, capacity: 4,
+      current: ["apple", "home", "gear"], lockedIds: [], excludedIds: ["home"], score };
+    expect(refillOne(pick)).toBe("bread");
+    expect(refillOne({ ...pick, current: library.map((a) => a.id) })).toBeNull();
+    const random = refillOne({ ...pick, recipe: recipe({ mode: "random" }) })!;
+    expect(["apple", "home", "gear"]).not.toContain(random);
+  });
+
+  it("empty-cell placeholders are unique, recognisable and skipped by placedOnly", () => {
+    const a = emptySlotFor(["x"]);
+    const b = emptySlotFor(["x", a]);
+    expect(a).not.toBe(b);
+    expect(isEmptySlot(a) && isEmptySlot(b)).toBe(true);
+    expect(isEmptySlot("apple")).toBe(false);
+    expect(placedOnly(["apple", a, "egg", b])).toEqual(["apple", "egg"]);
   });
 
   it("growing appends new picks, shrinking truncates", () => {

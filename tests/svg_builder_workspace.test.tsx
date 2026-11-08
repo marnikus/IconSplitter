@@ -233,6 +233,32 @@ describe("SVG builder workspace", () => {
     expect(await idsInOrder()).toContain(removed);
   });
 
+  it("× refills the same cell at once; Shift+× only removes and leaves the cell empty", async () => {
+    await openLibrary();
+    await click("builder-recipe-mode-random");
+    for (let i = 0; i < 3; i++) await click("builder-rows-dec"); // 8 cells, 12 icons → 4 spare
+    await waitUntil(() => placed().length === 8, "8 placed");
+    const before = await idsInOrder();
+    await click("builder-cell-exclude-0");
+    const after = await idsInOrder();
+    expect(after).toHaveLength(8);
+    expect(after[0]).not.toBe(before[0]);
+    expect(after.slice(1)).toEqual(before.slice(1));
+    expect(text("builder-excluded-count")).toBe("1 excluded");
+    const second = after[1];
+    await act(async () => { q("builder-cell-exclude-1")!.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true })); });
+    await settle(0);
+    expect(q("builder-empty-cell-1")).not.toBeNull();
+    expect(await idsInOrder()).not.toContain(second);
+    expect(text("builder-cells")).toContain("7 of 8 cells");
+    expect(text("builder-excluded-count")).toBe("1 excluded"); // Shift only removes
+    const spare = all('[data-testid^="builder-asset-"][data-selected="false"][data-excluded="false"]')[0];
+    await act(async () => { spare.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(q("builder-empty-cell-1")).toBeNull(); // a library click fills the empty cell first
+    await click("builder-undo");
+    expect(q("builder-empty-cell-1")).not.toBeNull(); // undo works with an empty cell in the sheet
+  });
+
   it("presets, CUSTOM pill, RESET and the global undo", async () => {
     await openLibrary();
     await click("builder-layout-plain");

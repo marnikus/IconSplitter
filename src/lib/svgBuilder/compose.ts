@@ -6,6 +6,7 @@ import { configFingerprint } from "./config";
 import { bannerMarkup, type HeroPainter } from "./banner";
 import { attr, escapeText, round, textEl } from "./markup";
 import { cellGroupOf } from "./svgAsset";
+import { isEmptySlot } from "./slots";
 import type { BuilderIconAsset, CellFrame, SheetConfig, SheetDocument, SheetLayout, SheetMetadata } from "./types";
 
 export interface ComposeSheetArgs {
@@ -22,7 +23,8 @@ interface Placed { id: string; asset: BuilderIconAsset | undefined; frame: CellF
 export function composeSheet(args: ComposeSheetArgs): SheetDocument {
   const byId = new Map(args.assets.map((asset) => [asset.id, asset]));
   const placed: Placed[] = [...new Set(args.placedIds)].slice(0, args.layout.cells.length)
-    .map((id, index) => ({ id, asset: byId.get(id), frame: args.layout.cells[index] }));
+    .map((id, index) => ({ id, asset: byId.get(id), frame: args.layout.cells[index] }))
+    .filter((p) => !isEmptySlot(p.id));
   const brokenIds: string[] = [];
   const cells = placed.map((p) => cellMarkup(args, p, brokenIds));
   const fingerprint = configFingerprint(args.config);

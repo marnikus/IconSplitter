@@ -54,7 +54,7 @@ export interface BuilderActions {
   toggleAsset: (id: string) => void;
   toggleLock: (id: string) => void;
   /** Artboard ×: remove the icon from the sheet and keep it out of later picks. */
-  excludeAsset: (id: string) => void;
+  excludeAsset: (id: string, keepEmpty?: boolean) => void;
   restoreExcluded: () => void;
   toggleScores: (show: boolean) => void;
   /** Opacity of the artboard % labels, 1–100. */

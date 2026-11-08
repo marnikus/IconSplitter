@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { iconText, indexStateOf, type IconIndexRecord, type IndexState } from "../lib/iconIndex/record";
 import { referenceOf, similarityOf, type SimilarityReference } from "../lib/iconIndex/similarity";
 import type { BuilderIconAsset } from "../lib/svgBuilder/types";
+import { placedOnly } from "../lib/svgBuilder/slots";
 
 export interface IndexStats { indexed: number; pending: number; noMeta: number }
 
@@ -34,8 +35,9 @@ export function useIconIndex(assets: readonly BuilderIconAsset[], index: Readonl
 
 /** The Similar reference: locked icons on the sheet, else the first placed icon. */
 export function referenceIdsOf(placed: readonly string[], locked: readonly string[]): string[] {
-  const lockedPlaced = placed.filter((id) => locked.includes(id));
-  return lockedPlaced.length > 0 ? lockedPlaced : placed.slice(0, 1);
+  const real = placedOnly(placed);
+  const lockedPlaced = real.filter((id) => locked.includes(id));
+  return lockedPlaced.length > 0 ? lockedPlaced : real.slice(0, 1);
 }
 
 function statsOf(assets: readonly BuilderIconAsset[], states: ReadonlyMap<string, IndexState>): IndexStats {
