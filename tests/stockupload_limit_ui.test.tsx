@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LimitOption, RandomBatchesOption } from "../src/stockupload/StockUploadBulkBar";
 import StockUploadDialogs from "../src/stockupload/StockUploadDialogs";
 import { uploadIsRandomized } from "../src/lib/stockupload/uploadlimit";
+import { ADOBE_STOCK_PRESET, SHUTTERSTOCK_PRESET } from "../src/lib/stockupload/presets";
+import type { StockUploadPlan } from "../src/lib/stockupload/plan";
 import { DEFAULT_STOCK_PREFS } from "../src/stockupload/prefsstore";
 import type { StockUploadApi } from "../src/stockupload/useStockUpload";
 
@@ -61,6 +63,38 @@ describe("the Limit control", () => {
 });
 
 describe("the confirmation", () => {
+  it("offers independent re-upload checkboxes for previously submitted stock targets", async () => {
+    const task = (targetId: string, itemId: string) => ({
+      targetId, itemId, stem: itemId, targetName: targetId, format: "raster" as const,
+      fileName: `${itemId}.jpg`, relPath: `${itemId}.jpg`, estimatedBytes: 10,
+    });
+    const plan = {
+      combineTitleDescription: false, targets: [SHUTTERSTOCK_PRESET, ADOBE_STOCK_PRESET],
+      selectedRows: ["old-shutter", "old-adobe", "new"].map((id) => ({ id, record: { metadata: null } })),
+      selectedFormats: ["raster"], tasks: [task("shutterstock", "old-shutter"), task("shutterstock", "new"),
+        task("adobe-stock", "old-adobe"), task("adobe-stock", "new")],
+      skippedMissing: [], warnings: [], preflightErrors: [], totalBytes: 40,
+      submittedItemIdsByTarget: { shutterstock: ["old-shutter"], "adobe-stock": ["old-adobe"] },
+      targetFormats: {
+        shutterstock: { raster: true, svg: false, eps: false, zip: false },
+        "adobe-stock": { raster: true, svg: false, eps: false, zip: false },
+      },
+    } as unknown as StockUploadPlan;
+    const confirmUpload = vi.fn();
+    const g = api({}, {
+      model: { prefs: DEFAULT_STOCK_PREFS, dialog: { kind: "confirmUpload", plan }, progress: null, uploading: false },
+      confirmUpload, closeDialog: vi.fn(),
+    });
+    await act(async () => { ui.render(<StockUploadDialogs g={g} />); });
+    const shutter = host.querySelector("[data-testid='stock-upload-reupload-shutterstock']") as HTMLInputElement;
+    const adobe = host.querySelector("[data-testid='stock-upload-reupload-adobe-stock']") as HTMLInputElement;
+    expect(shutter.checked).toBe(false);
+    expect(adobe.checked).toBe(false);
+    await act(async () => { shutter.click(); });
+    await act(async () => { (host.querySelector("[data-testid='stock-upload-confirm-go']") as HTMLButtonElement).click(); });
+    expect(confirmUpload).toHaveBeenCalledWith("", ["shutterstock"]);
+  });
+
   it("says how many icons were drawn and how many stay for a later run", async () => {
     const plan = {
       combineTitleDescription: false, targets: [], selectedRows: [], selectedFormats: ["raster"], tasks: [], skippedMissing: [],

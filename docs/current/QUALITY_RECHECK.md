@@ -5081,3 +5081,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - Grouped preset selection/actions, connection settings, sign-in/test actions, and list filters into compact labeled sections with responsive grids; collapsed the long protocol guidance behind a disclosure.
 - Preserved existing control behavior and selectors; added integration assertions and updated the Stock Upload selector reference.
 - Verification: focused Stock Upload UI tests (13 passed); `npm run verify:fast` and `npm run verify` passed, including typecheck, lint, changed-file quality gate, full coverage suite, and production build. Existing lint warnings and transient `router.requesty.ai` ECONNRESET messages were non-fatal.
+
+## 2026-11-08 — Skip previously submitted Stock Upload items
+- Confirmation now skips icons carrying the destination stock badge by default; an independent checkbox per selected stock opts its already-badged icons into re-upload. Unbadged icons remain in the plan.
+- Planner tests cover mixed badges across multiple targets; confirmation UI tests cover independent choices and preventing an empty run. Stock Upload behavior and selector docs updated.
+- Verification: 140 Stock Upload tests passed; docs navigation passed; `npm run verify:fast` and `npm run verify` passed (types, lint, changed-file quality, full coverage tests, and build). Existing lint warnings and `router.requesty.ai` ECONNRESET messages were non-fatal.

@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { gettyWebBatchSummaryOf, gettyWebIconSizes } from "../lib/stockupload/gettyweb";
-import type { StockUploadPlan } from "../lib/stockupload/plan";
+import { applySubmittedUploadPolicy, type StockUploadPlan } from "../lib/stockupload/plan";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
 import UploadRowBadgeSettings from "../upload/UploadRowBadgeSettings";
 import { stockStatusOf, uploadBar } from "./progressmodel";
@@ -57,10 +57,44 @@ function UploadNoteField({ note, onChange }: { note: string; onChange: (value: s
   );
 }
 
+function submittedIconCount(plan: StockUploadPlan, targetId: string): number {
+  const submitted = new Set(plan.submittedItemIdsByTarget?.[targetId] ?? []);
+  return new Set(plan.tasks.filter((task) => task.targetId === targetId && submitted.has(task.itemId)).map((task) => task.itemId)).size;
+}
+
+function SubmittedReuploadChoices({ plan, selected, onToggle }: {
+  plan: StockUploadPlan; selected: readonly string[]; onToggle: (id: string, enabled: boolean) => void;
+}) {
+  const choices = plan.targets.map((target) => ({ target, count: submittedIconCount(plan, target.id) }))
+    .filter((choice) => choice.count > 0);
+  if (choices.length === 0) return null;
+  return (
+    <fieldset className="stock-upload-reupload" data-testid="stock-upload-reupload-options">
+      <legend>Already submitted icons</legend>
+      <p>Badged icons are skipped by default. Check a stock to re-upload its marked icons; unbadged icons still upload.</p>
+      <div className="stock-upload-reupload-list">
+        {choices.map(({ target, count }) => <label key={target.id}>
+          <input type="checkbox" data-testid={`stock-upload-reupload-${target.id}`}
+            checked={selected.includes(target.id)} onChange={(event) => onToggle(target.id, event.target.checked)} />
+          <span>Re-upload {count} previously submitted icon(s) to <strong>{target.name}</strong></span>
+        </label>)}
+      </div>
+    </fieldset>
+  );
+}
+
+function useSubmittedReuploadChoice(plan: StockUploadPlan) {
+  const [targetIds, setTargetIds] = useState<string[]>([]);
+  const toggle = (id: string, enabled: boolean) => setTargetIds((current) =>
+    enabled ? current.includes(id) ? current : [...current, id] : current.filter((targetId) => targetId !== id));
+  return { targetIds, toggle, effectivePlan: applySubmittedUploadPolicy(plan, targetIds) };
+}
+
 function ConfirmUploadModal({ plan, onConfirm, onCancel }: {
-  plan: StockUploadPlan; onConfirm: (note: string) => void; onCancel: () => void;
+  plan: StockUploadPlan; onConfirm: (note: string, reuploadTargetIds: readonly string[]) => void; onCancel: () => void;
 }) {
   const [note, setNote] = useState("");
+  const choice = useSubmittedReuploadChoice(plan);
   return (
     <div className="svg-backdrop" data-testid="stock-upload-confirm-backdrop" onClick={onCancel}>
       <section className="svg-modal narrow" role="dialog" aria-modal="true"
@@ -71,18 +105,25 @@ function ConfirmUploadModal({ plan, onConfirm, onCancel }: {
           <h2 id="stock-upload-confirm-title">Confirm Stock Upload</h2>
           <button type="button" className="svg-btn tiny" onClick={onCancel}>Close</button>
         </header>
-        <ConfirmPlanBody plan={plan} />
+        <SubmittedReuploadChoices plan={plan} selected={choice.targetIds} onToggle={choice.toggle} />
+        <ConfirmPlanBody plan={choice.effectivePlan} />
         <UploadNoteField note={note} onChange={setNote} />
-        <footer className="svg-modal-foot" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" className="svg-btn" data-testid="stock-upload-confirm-cancel" onClick={onCancel}>
-            Cancel
-          </button>
-          <button type="button" className="svg-btn primary" data-testid="stock-upload-confirm-go" onClick={() => onConfirm(note)}>
-            ⇪ Start Upload
-          </button>
-        </footer>
+        <ConfirmUploadActions canUpload={choice.effectivePlan.tasks.length > 0}
+          onCancel={onCancel} onConfirm={() => onConfirm(note, choice.targetIds)} />
       </section>
     </div>
+  );
+}
+
+function ConfirmUploadActions({ canUpload, onCancel, onConfirm }: {
+  canUpload: boolean; onCancel: () => void; onConfirm: () => void;
+}) {
+  return (
+    <footer className="svg-modal-foot" style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+      <button type="button" className="svg-btn" data-testid="stock-upload-confirm-cancel" onClick={onCancel}>Cancel</button>
+      <button type="button" className="svg-btn primary" data-testid="stock-upload-confirm-go"
+        disabled={!canUpload} onClick={onConfirm}>⇪ Start Upload</button>
+    </footer>
   );
 }
 
@@ -100,20 +141,24 @@ function LimitNote({ limit }: { limit: NonNullable<StockUploadPlan["limit"]> }) 
   );
 }
 
+function ConfirmationCount({ plan }: { plan: StockUploadPlan }) {
+  if (plan.tasks.length === 0) {
+    return <p className="svg-warning">No files will be uploaded. Choose a stock above to re-upload its already-marked icons.</p>;
+  }
+  return <p>
+    Upload <strong>{plan.tasks.length}</strong> file(s) ({formatBytes(plan.totalBytes)}) for{" "}
+    <strong>{plan.selectedRows.length}</strong> item(s) across <strong>{plan.targets.map(targetPlanLabel).join(", ")}</strong>.
+  </p>;
+}
+
 function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
   return (
     <div className="svg-modal-body">
-      <p>
-        Upload <strong>{plan.tasks.length}</strong> file(s) ({formatBytes(plan.totalBytes)}) for{" "}
-        <strong>{plan.selectedRows.length}</strong> item(s) across{" "}
-        <strong>{plan.targets.map(targetPlanLabel).join(", ")}</strong>.
-      </p>
-      <p className="svg-note">
-        Formats: <strong>{plan.selectedFormats.join(", ").toUpperCase()}</strong>
-      </p>
-      <ul className="svg-note" data-testid="stock-upload-target-formats">
+      <ConfirmationCount plan={plan} />
+      {plan.tasks.length > 0 && <p className="svg-note">Formats: <strong>{plan.selectedFormats.join(", ").toUpperCase()}</strong></p>}
+      {plan.tasks.length > 0 && <ul className="svg-note" data-testid="stock-upload-target-formats">
         {plan.targets.map((target) => <li key={target.id}>{target.name}: {Array.from(new Set(plan.tasks.filter((task) => task.targetId === target.id).map((task) => task.format))).join(", ").toUpperCase() || "no available files"}{plan.combineByTarget?.[target.id] ? " · Title + description" : ""}</li>)}
-      </ul>
+      </ul>}
       {plan.limit !== undefined && <LimitNote limit={plan.limit} />}
       {plan.targets.some((t) => t.protocol === "getty-web") && (
         <p className="svg-note" data-testid="stock-upload-getty-batches">

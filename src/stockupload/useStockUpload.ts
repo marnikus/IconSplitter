@@ -156,7 +156,7 @@ export function useStockUpload(): StockUploadApi {
     setCredSaved: (id, saved) => dispatch({ type: "cred", id, saved }),
     setTestStatus: (testStatus) => dispatch({ type: "patch", patch: { testStatus } }),
   });
-  const ops = useStockPanelOps({ model, items, checked: selSlice.checked, presetState, r, dispatch, say, runScan });
+  const ops = useStockPanelOps({ model, items, checked: selSlice.checked, presetState, rowBadges, r, dispatch, say, runScan });
   const removeItems = useRemoveItems({ model, items, r, dispatch, runScan, say, hist });
   return {
     supported: fsSupported(), model, rootRef: r.root, presetState, rowBadges,

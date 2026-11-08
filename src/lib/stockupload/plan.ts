@@ -6,6 +6,7 @@ import type {
 } from "./types";
 
 export const FORMAT_ORDER: readonly UploadFormatKey[] = ["raster", "svg", "eps", "zip"];
+const EMPTY_FORMATS: StockFormatFlags = { raster: false, svg: false, eps: false, zip: false };
 
 export interface PlannedTransfer {
   itemId: string;
@@ -33,6 +34,7 @@ export interface StockUploadPlanInput {
   formats: StockFormatFlags;
   combineTitleDescription?: boolean;
   targetOptions?: Record<string, import("./types").StockTargetOptions>;
+  submittedBadgeIdsByItem?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface StockUploadPlan {
@@ -46,6 +48,10 @@ export interface StockUploadPlan {
   warnings: string[];
   preflightErrors: string[];
   totalBytes: number;
+  /** Items already carrying their destination stock badge, keyed by target. */
+  submittedItemIdsByTarget?: Record<string, string[]>;
+  /** Per-target format preferences, retained for confirmation policy recalculation. */
+  targetFormats?: Record<string, StockFormatFlags>;
   /** Set when "Limit" drew only some icons (uploadlimit.ts); absent = the whole selection. */
   limit?: import("./uploadlimit").PlanLimit;
 }
@@ -178,6 +184,51 @@ function expandPlannedTransfers(
   return tasks;
 }
 
+function submittedIdsByTarget(
+  targets: readonly StockFtpPreset[], tasks: readonly PlannedTransfer[], badgeIds: StockUploadPlanInput["submittedBadgeIdsByItem"],
+): Record<string, string[]> {
+  return Object.fromEntries(targets.map((target) => [target.id, [...new Set(tasks
+    .filter((task) => task.targetId === target.id && (badgeIds?.[task.itemId] ?? []).includes(target.id))
+    .map((task) => task.itemId))]]));
+}
+
+function collectPlanWarnings(
+  targets: readonly StockFtpPreset[], rows: readonly ExportedItem[], tasks: readonly PlannedTransfer[],
+  formats: Readonly<Record<string, StockFormatFlags>>,
+): string[] {
+  return [
+    ...collectShutterstockWarnings(targets, tasks), ...collectAdobeStockWarnings(targets, rows, tasks),
+    ...targets.flatMap((target) => collectGettyWarnings([target], rows, formats[target.id] ?? EMPTY_FORMATS, tasks)),
+  ];
+}
+
+function keepMissingFormat(
+  skipped: SkippedFormat, reupload: ReadonlySet<string>, submitted: Readonly<Record<string, string[]>>,
+): boolean {
+  if (skipped.targetId === undefined) return true;
+  return reupload.has(skipped.targetId) || !(submitted[skipped.targetId] ?? []).includes(skipped.itemId);
+}
+
+export function applySubmittedUploadPolicy(plan: StockUploadPlan, reuploadTargetIds: readonly string[]): StockUploadPlan {
+  if (!plan.submittedItemIdsByTarget) return plan;
+  const reupload = new Set(reuploadTargetIds);
+  const submitted = plan.submittedItemIdsByTarget;
+  const tasks = plan.tasks.filter((task) => reupload.has(task.targetId) || !(submitted[task.targetId] ?? []).includes(task.itemId));
+  const targets = plan.targets.filter((target) => !(submitted[target.id]?.length) || tasks.some((task) => task.targetId === target.id));
+  const itemIds = new Set(tasks.map((task) => task.itemId));
+  const selectedRows = plan.selectedRows.filter((row) => itemIds.has(row.id));
+  const skippedMissing = plan.skippedMissing.filter((skipped) => keepMissingFormat(skipped, reupload, submitted));
+  const targetFormats = plan.targetFormats ?? {};
+  const combineByTarget = Object.fromEntries(targets.map((target) => [target.id, plan.combineByTarget?.[target.id] ?? plan.combineTitleDescription]));
+  return {
+    ...plan, targets, selectedRows, tasks, skippedMissing, combineByTarget,
+    selectedFormats: FORMAT_ORDER.filter((format) => tasks.some((task) => task.format === format)),
+    totalBytes: tasks.reduce((sum, task) => sum + task.estimatedBytes, 0),
+    combineTitleDescription: Object.values(combineByTarget).some(Boolean),
+    warnings: collectPlanWarnings(targets, selectedRows, tasks, targetFormats),
+  };
+}
+
 export function buildStockUploadPlan(input: StockUploadPlanInput): StockUploadPlan {
   const idSet = new Set(input.checkedIds);
   const selectedRows = input.items.filter((it) => idSet.has(it.id));
@@ -185,6 +236,7 @@ export function buildStockUploadPlan(input: StockUploadPlanInput): StockUploadPl
   const checkedPresets = input.presets.filter((p) => targetSet.has(p.id));
   const targets = checkedPresets.filter((p) => p.host.trim() !== "");
   const formatsFor = (id: string) => input.targetOptions?.[id]?.formats ?? input.formats;
+  const targetFormats = Object.fromEntries(checkedPresets.map((target) => [target.id, { ...formatsFor(target.id) }]));
   const selectedFormats = FORMAT_ORDER.filter((key) => checkedPresets.some((p) => formatsFor(p.id)[key]));
   const preflightErrors = collectPreflightErrors(selectedRows, checkedPresets, selectedFormats);
   for (const target of checkedPresets) {
@@ -198,10 +250,11 @@ export function buildStockUploadPlan(input: StockUploadPlanInput): StockUploadPl
     preflightErrors.push("None of the selected items have the requested exported format(s) on disk.");
   }
   const totalBytes = tasks.reduce((sum, t) => sum + t.estimatedBytes, 0);
-  const warnings = [
-    ...collectShutterstockWarnings(targets, tasks),
-    ...collectAdobeStockWarnings(targets, selectedRows, tasks),
-    ...targets.flatMap((target) => collectGettyWarnings([target], selectedRows, formatsFor(target.id), tasks)),
-  ];
-  return { targets, selectedRows, selectedFormats, tasks, skippedMissing, warnings, preflightErrors, totalBytes, combineTitleDescription: Object.values(combineByTarget).some(Boolean), combineByTarget };
+  const warnings = collectPlanWarnings(targets, selectedRows, tasks, targetFormats);
+  const submittedItems = submittedIdsByTarget(targets, tasks, input.submittedBadgeIdsByItem);
+  return {
+    targets, selectedRows, selectedFormats, tasks, skippedMissing, warnings, preflightErrors, totalBytes,
+    combineTitleDescription: Object.values(combineByTarget).some(Boolean), combineByTarget,
+    submittedItemIdsByTarget: submittedItems, targetFormats,
+  };
 }

@@ -9,10 +9,11 @@ import { probeBridgeFtps } from "../lib/stockupload/bridgeclient";
 import { probeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import { buildGettyEspCsv } from "../lib/stockupload/gettycsv";
 import { gettyWebRequestBytes } from "../lib/stockupload/gettyweb";
-import { buildStockUploadPlan, type PlannedTransfer, type StockUploadPlan } from "../lib/stockupload/plan";
+import { applySubmittedUploadPolicy, buildStockUploadPlan, type PlannedTransfer, type StockUploadPlan } from "../lib/stockupload/plan";
 import { limitStockUploadPlan, uploadIsRandomized } from "../lib/stockupload/uploadlimit";
 import type { ExportedItem, StockFtpPreset, StockPresetState } from "../lib/stockupload/types";
 import type { IconMetadata } from "../lib/upload/meta";
+import type { RowBadgeState } from "../lib/upload/rowbadge";
 import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
 import { readFtpCredentials } from "./keystore";
@@ -30,6 +31,7 @@ export interface OpsCtx {
   items: ExportedItem[];
   checked: string[];
   presetState: StockPresetState;
+  rowBadges: RowBadgeState;
   r: StockRefs;
   dispatch: (a: StockModelAction) => void;
   say: (msg: string, err?: boolean) => void;
@@ -52,7 +54,7 @@ export interface StockPanelOps {
   acceptMeta: (item: ExportedItem) => void;
   copyMeta: (item: ExportedItem, field: "title" | "description" | "tags") => void;
   startUploadFlow: () => void;
-  confirmUpload: (note: string) => void;
+  confirmUpload: (note: string, reuploadTargetIds: readonly string[]) => void;
   cancelUpload: () => void;
   /** Closes a finished (or cancelled) bar there is nothing left to watch. */
   dismissProgress: () => void;
@@ -113,22 +115,25 @@ async function budgetFor(c: OpsCtx, targets: readonly StockFtpPreset[]): Promise
   return probe.failure !== null ? { failure: probe.failure } : { failure: null, gettyMaxBytes: probe.gettyMaxBytes };
 }
 
-async function performConfirmUpload(c: OpsCtx, plan: StockUploadPlan, note: string): Promise<void> {
+async function performConfirmUpload(
+  c: OpsCtx, plan: StockUploadPlan, note: string, reuploadTargetIds: readonly string[],
+): Promise<void> {
+  const uploadPlan = applySubmittedUploadPolicy(plan, reuploadTargetIds);
   const root = c.r.root.current;
-  if (root === null) return;
+  if (root === null || uploadPlan.tasks.length === 0) return;
   const runId = crypto.randomUUID();
   const history = newUploadRunHistory(boundRootPathInfo(root).path);
-  c.dispatch(startProgress(runId, plan.tasks.length));
-  const budget = await budgetFor(c, plan.targets.filter((t) => t.protocol !== "esp-batch"));
+  c.dispatch(startProgress(runId, uploadPlan.tasks.length));
+  const budget = await budgetFor(c, uploadPlan.targets.filter((t) => t.protocol !== "esp-batch"));
   if (budget.failure !== null) return abortStart(c, budget.failure);
   const controller = new AbortController();
   c.r.abort.current = controller;
   const deps = depsFor(c, root, { runId, signal: controller.signal, gettyMaxBytes: budget.gettyMaxBytes }, history);
-  const summary = await executeStockUploadBatch(plan, deps);
+  const summary = await executeStockUploadBatch(uploadPlan, deps);
   c.r.abort.current = null;
-  saveUploadRunHistory(plan, history, { runId, cancelled: summary.cancelled }, note);
-  const msg = summarizeUploadRun(summary, plan.targets.length);
-  const done = finishedProgress(plan, summary, msg.text, { runId, stopped: controller.signal.aborted });
+  saveUploadRunHistory(uploadPlan, history, { runId, cancelled: summary.cancelled }, note);
+  const msg = summarizeUploadRun(summary, uploadPlan.targets.length);
+  const done = finishedProgress(uploadPlan, summary, msg.text, { runId, stopped: controller.signal.aborted });
   c.dispatch({ type: "patch", patch: { uploading: false, progress: done } });
   c.say(msg.text, msg.err);
 }
@@ -189,6 +194,7 @@ function performStartUpload(c: OpsCtx): void {
     items: c.items, checkedIds: c.checked, presets: c.presetState.presets,
     checkedTargets: c.presetState.checkedTargets, formats: c.presetState.formats,
     combineTitleDescription: c.model.prefs.combineTitleDescription, targetOptions: c.presetState.targetOptions,
+    submittedBadgeIdsByItem: c.rowBadges.assigned,
   });
   // "Limit": only N icons, drawn now so the confirmation shows the real run.
   const plan = limitStockUploadPlan(full, c.model.prefs.uploadLimit);
@@ -235,9 +241,9 @@ function buildMetaAndUploadOps(ref: { current: OpsCtx }): Pick<
     acceptMeta: (item) => { void performAcceptMeta(ref.current, item); },
     copyMeta: (item, field) => copyMetaField(ref.current, item, field),
     startUploadFlow: () => performStartUpload(ref.current),
-    confirmUpload: (note) => {
+    confirmUpload: (note, reuploadTargetIds) => {
       const d = ref.current.model.dialog;
-      if (d?.kind === "confirmUpload") void performConfirmUpload(ref.current, d.plan, note);
+      if (d?.kind === "confirmUpload") void performConfirmUpload(ref.current, d.plan, note, reuploadTargetIds);
     },
     cancelUpload: () => {
       ref.current.r.abort.current?.abort();

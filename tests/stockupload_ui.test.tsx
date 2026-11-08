@@ -6,6 +6,7 @@ import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
 import { MANDATORY_TAGS } from "../src/lib/upload/meta";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
+import { applyBadgeToIds } from "../src/lib/upload/rowbadge";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { getAppState, resetAppStore } from "../src/state/appstore";
 import StockUploadPanel from "../src/stockupload/StockUploadPanel";
@@ -15,7 +16,7 @@ import { resetUploadJournal } from "../src/stockupload/journal";
 import { resetFtpCredentialsForTests } from "../src/stockupload/keystore";
 import { resetStockPresets } from "../src/stockupload/presetstore";
 import HistoryBar from "../src/ui/HistoryBar";
-import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
+import { getRowBadgeState, resetRowBadges, setRowBadgeState } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { settle, waitUntil } from "./helpers/quiet";
 import { isMultiSelect, pickOnly } from "./helpers/multiselect";
@@ -367,10 +368,19 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-presets-close")!);
     await settle();
 
-    // Click Upload -> Confirm upload -> sends 3 files (svg, eps, zip) sharing stem star_icon
+    // An existing stock badge skips this icon by default; opting into that site re-uploads it.
+    setRowBadgeState(applyBadgeToIds(getRowBadgeState(), ["item-star"], "shutterstock"));
+    await settle();
+
+    // Click Upload -> confirmation -> sends 3 files after opting into re-upload.
     await clickEl(q("stock-upload-start")!);
     await settle();
     expect(q("stock-upload-confirm-dialog")).not.toBeNull();
+    const reupload = q("stock-upload-reupload-shutterstock") as HTMLInputElement;
+    expect(reupload.checked).toBe(false);
+    expect((q("stock-upload-confirm-go") as HTMLButtonElement).disabled).toBe(true);
+    await clickEl(reupload);
+    expect((q("stock-upload-confirm-go") as HTMLButtonElement).disabled).toBe(false);
     const uploadNote = q("stock-upload-confirm-note") as HTMLTextAreaElement;
     expect(uploadNote).not.toBeNull();
     await setInput(uploadNote, "Autumn catalog refresh");
