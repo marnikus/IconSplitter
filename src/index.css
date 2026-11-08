@@ -1042,6 +1042,26 @@
 .svg-scope-copy { color: var(--v2-muted); font-size: 10px; }
 .svg-divider { width: 1px; height: 25px; background: var(--v2-line); }
 
+/* The general .svg-input is full-width for form fields. Keep the count picker
+   compact and inline in the bulk bar rather than letting it push controls down. */
+.svg-toolbar.svg-random-select {
+  width: auto;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.svg-random-select > .svg-input {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  flex: 0 0 72px;
+  padding: 0 7px;
+  text-align: center;
+}
+.svg-random-select > .svg-btn { min-height: 30px; padding: 6px 10px; }
+.svg-random-select > .svg-scope-copy { white-space: nowrap; }
+
 .svg-zoom { display: flex; align-items: center; gap: 8px; color: var(--v2-muted); font-size: 10px; }
 .svg-zoom label { font-weight: 700; letter-spacing: 0.08em; }
 .svg-zoom input[type="range"] { width: 126px; accent-color: var(--v2-purple); }

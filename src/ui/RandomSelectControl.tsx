@@ -19,7 +19,7 @@ export default function RandomSelectControl({ prefix, checkedCount, totalCount, 
   const pool = checkedCount > 0 ? checkedCount : totalCount;
   const scope = checkedCount > 0 ? `from ${pool} selected` : `from all ${pool}`;
   return (
-    <span className="svg-toolbar" role="group" aria-label="Select random items" style={{ gap: 6 }}>
+    <span className="svg-toolbar svg-random-select" role="group" aria-label="Select random items">
       <DraftNumberInput value={count} onCommit={(v) => setCount(normalizeRandomCount(v))}
         testid={`${prefix}-random-count`} label="Number of items to select at random"
         min={RANDOM_SELECT_MIN} max={Number.MAX_SAFE_INTEGER} step={1} />

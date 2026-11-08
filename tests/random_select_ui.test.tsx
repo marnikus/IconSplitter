@@ -146,6 +146,7 @@ describe.each([
     expect(field.step).toBe("1");
     expect(field.value).toBe("2");
     expect(q(`${prefix}-select-random`)).not.toBeNull();
+    expect(field.closest(".svg-random-select")).not.toBeNull();
     expect(q(`${prefix}-random-scope`)?.textContent).toContain("4");
   });
 
