@@ -5055,3 +5055,9 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 ## 2026-11-08 — SVG builder: Similar top-up limited to 5% below the threshold
 
 - TOP_UP_BAND = 5: random picks only from [T−5, T), then next most similar in rank order. Parity +1 test, band test rewritten; builder+index suites 91/91; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS; dist rebuilt.
+
+## 2026-11-08 — Select random (SVG to upload + Upload)
+
+- Focused: `random_select`, `random_select_ui`, `getty_web_chunk`, `upload_row_gestures`, `stockupload_ui`, `invert_selection`, `stockupload_limit_ui` — 67/67 PASS; `docs_navigation` + `tailcut_speed` rerun 7/7 PASS.
+- `npx tsc --noEmit` PASS; `npm run lint` 0 errors / 22 pre-existing warnings; `npm run quality:changed` GATE PASSED (11 changed src files, shallow fallback vs HEAD).
+- `npm run verify` (full, warm rerun): Types PASS, Lint PASS, Quality PASS, native perf 30/30 PASS, tests+coverage 408 files / 4187 tests PASS, single-file build PASS (dist/index.html 3,155.44 kB). First cold full run hit unrelated wall-clock flakes (algo_efficiency 203.7 ms < 200 ms budget; upload_ui terminal-summary wait) and an earlier verify:fast hit tailcut_speed 36.9 ms < 30 ms; all passed on warm rerun without budget changes.

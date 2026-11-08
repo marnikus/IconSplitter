@@ -98,7 +98,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
   const bulk = useBulkSummary(g);
   return (
     <div className="svg-bulkbar-pin" data-testid="upload-bulkbar-pin">
-      <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
+      <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length} totalCount={g.rows.length}
         thumb={g.thumb} bg={g.bg} stroke={g.defaults.strokePx > 0 ? g.defaults.strokePx : null}
         onStroke={(px) => g.setDefaults({ strokePx: px ?? 0 })} progress={g.progress}
         runningMeta={g.runningMeta} runningExport={g.runningExport} downloading={g.processes.download?.status === "running"}
@@ -107,7 +107,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         metaAcceptBusy={g.busy !== null || g.runningMeta + g.runningExport > 0}
         downloadFiles={bulk.download}
         overriddenCount={bulk.overridden}
-        onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible} onInvert={g.invertVisible}
+        onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible} onSelectRandom={g.selectRandom} onInvert={g.invertVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
         onResetSettings={() => g.resetOverridesSelected(g.checked)}

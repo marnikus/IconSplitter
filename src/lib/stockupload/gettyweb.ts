@@ -91,19 +91,9 @@ export function isGettyWebPreset(preset: StockFtpPreset): boolean {
   return preset.protocol === "getty-web";
 }
 
-/**
- * The order a run uploads its icons in when **random batch selection** is on: a
- * Fisher–Yates shuffle, so the 100-icon chunks are random draws from what is
- * left instead of the next slice of the list. `rng` is injectable for tests.
- */
-export function randomBatchOrder(count: number, rng: () => number = Math.random): number[] {
-  const order = Array.from({ length: Math.max(0, Math.trunc(count)) }, (_value, index) => index);
-  for (let i = order.length - 1; i > 0; i -= 1) {
-    const pick = Math.min(i, Math.max(0, Math.floor(rng() * (i + 1))));
-    [order[i], order[pick]] = [order[pick], order[i]];
-  }
-  return order;
-}
+// The shuffle itself is shared with random selection (lib/randomorder); this
+// re-export keeps the Getty batch consumers' import path stable.
+export { randomBatchOrder } from "../randomorder";
 
 /**
  * The part of an icon's name that makes two icons look alike: `icon-snowflake_2_01`

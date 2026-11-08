@@ -8,6 +8,7 @@ import UploadRowBadgeApply from "../upload/UploadRowBadgeApply";
 import type { StockUploadApi } from "./useStockUpload";
 import { parseUploadLimit } from "../lib/stockupload/uploadlimit";
 import InvertButton from "../ui/InvertButton";
+import RandomSelectControl from "../ui/RandomSelectControl";
 
 const FORMAT_LABELS: { key: UploadFormatKey; label: string }[] = [
   { key: "raster", label: "JPEG/PNG" },
@@ -40,6 +41,7 @@ function SelectionCluster({ g }: { g: StockUploadApi }) {
         Select all visible
       </button>
       <InvertButton prefix="stock" onClick={g.invertVisible} />
+      <RandomSelectControl prefix="stock" checkedCount={g.checked.length} totalCount={g.items.length} onSelect={g.selectRandom} />
       <button type="button" className="svg-btn" data-testid="stock-deselect" onClick={g.deselectAll}>
         Deselect all
       </button>
