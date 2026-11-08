@@ -60,7 +60,8 @@ function CellScore({ b, cell, id, fontSize }: { b: BuilderApi; cell: CellFrame; 
   const isRef = b.referenceIds.includes(id) && b.reference.count > 0;
   const asset = b.assets.find((a) => a.id === id);
   const v = scoreView(isRef || asset === undefined ? null : b.scoreOf(asset), isRef, b.recipe.threshold);
-  return <span className="bld-cell-score" data-tone={v.tone} data-testid={`builder-cell-score-${cell.index}`} title={v.title} style={{ fontSize }}>{v.value}</span>;
+  return <span className="bld-cell-score" data-tone={v.tone} data-testid={`builder-cell-score-${cell.index}`} title={v.title}
+    style={{ fontSize, opacity: b.prefs.scoreOpacity / 100 }}>{v.value}</span>;
 }
 
 interface ScoreView { value: string; tone: "ref" | "none" | "high" | "low"; title: string }

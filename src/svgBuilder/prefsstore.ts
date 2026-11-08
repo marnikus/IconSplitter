@@ -19,9 +19,11 @@ export interface BuilderPrefs {
   metaHeight: number | null;
   /** The small % closeness numbers on the artboard. */
   showScores: boolean;
+  /** Their opacity in %, 1–100. */
+  scoreOpacity: number;
 }
 
-export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true };
+export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100 };
 export const META_HEIGHT = { min: 160, max: 1200 } as const;
 const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "custom"];
 
@@ -34,6 +36,7 @@ export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
     layout: LAYOUTS.includes(raw.layout as BuilderLayoutChoice) ? raw.layout as BuilderLayoutChoice : "custom",
     metaOpen: raw.metaOpen !== false,
     showScores: raw.showScores !== false,
+    scoreOpacity: Math.round(num(raw.scoreOpacity, 100, 1, 100)),
     metaHeight: typeof raw.metaHeight === "number" ? num(raw.metaHeight, 0, META_HEIGHT.min, META_HEIGHT.max) || null : null,
   };
 }

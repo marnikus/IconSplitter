@@ -57,6 +57,8 @@ export interface BuilderActions {
   excludeAsset: (id: string) => void;
   restoreExcluded: () => void;
   toggleScores: (show: boolean) => void;
+  /** Opacity of the artboard % labels, 1–100. */
+  setScoreOpacity: (percent: number) => void;
   clearSelection: () => void;
   setSearch: (query: string) => void;
   setCategory: (category: string) => void;

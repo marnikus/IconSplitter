@@ -202,8 +202,17 @@ describe("SVG builder workspace", () => {
     const otherFood = order.findIndex((id, i) => food.has(id) && i !== foodCell);
     expect(text(`builder-cell-score-${otherFood}`)).toBe("100%");
     expect(text(`builder-cell-score-${uiCell}`)).toBe("0%");
+    const opacity = q("builder-score-opacity") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(opacity, "25");
+      opacity.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(q(`builder-cell-score-${uiCell}`)!.style.opacity).toBe("0.25");
+    expect(text("builder-score-opacity-value")).toBe("25%");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.prefs.v1")!).scoreOpacity).toBe(25);
     await click("builder-toggle-scores");
     expect(q(`builder-cell-score-${uiCell}`)).toBeNull();
+    expect(q("builder-score-opacity")).toBeNull(); // the slider goes with the labels
     await click("builder-toggle-scores");
     expect(q(`builder-cell-score-${uiCell}`)).not.toBeNull();
   });

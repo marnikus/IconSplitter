@@ -53,6 +53,7 @@ function StageToolbar({ b, zoom }: { b: BuilderApi; zoom: number }) {
     <button type="button" className={`svg-btn tiny${b.prefs.showScores ? " primary" : " ghost"}`} data-testid="builder-toggle-scores"
       aria-pressed={b.prefs.showScores} title={b.prefs.showScores ? "Hide the % similarity numbers on the artboard" : "Show each icon's % similarity to the reference group"}
       onClick={() => b.actions.toggleScores(!b.prefs.showScores)}>% Similarity</button>
+    {b.prefs.showScores && <ScoreOpacity b={b} />}
     <div className="bld-zoom" aria-label="Artboard zoom">
       <button type="button" className="svg-btn tiny" data-testid="builder-zoom-out" onClick={() => b.actions.setZoom(zoom - 0.1)}>−</button>
       <button type="button" className="svg-btn ghost tiny bld-zoom-value" data-testid="builder-zoom" title="Fit to stage"
@@ -62,6 +63,16 @@ function StageToolbar({ b, zoom }: { b: BuilderApi; zoom: number }) {
       <button type="button" className="svg-btn ghost tiny" data-testid="builder-zoom-1" title="Actual size" onClick={() => b.actions.setZoom(1)}>1:1</button>
     </div>
   </div>;
+}
+
+/** How visible the artboard % labels are: 1–100 %. */
+function ScoreOpacity({ b }: { b: BuilderApi }) {
+  return <label className="bld-opacity" title="Opacity of the % similarity labels">
+    <span aria-hidden="true">◐</span>
+    <input type="range" className="bld-range" data-testid="builder-score-opacity" aria-label="Similarity label opacity in percent"
+      min={1} max={100} step={1} value={b.prefs.scoreOpacity} onChange={(e) => b.actions.setScoreOpacity(Number(e.target.value))} />
+    <span className="bld-opacity-value" data-testid="builder-score-opacity-value">{b.prefs.scoreOpacity}%</span>
+  </label>;
 }
 
 function PresetThumb({ id }: { id: LayoutPresetId }) {

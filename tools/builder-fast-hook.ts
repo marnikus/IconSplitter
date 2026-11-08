@@ -20,7 +20,7 @@ export function useSvgBuilder() {
     supported: false, root: null, discovery: null, busy: null, status: "Fast smoke lane", error: false,
     config: DEFAULT_CONFIG, recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SEED,
     lockedIds: [], excludedIds: [], listView: { query: "", category: "All", sort: "name" },
-    prefs: { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true },
+    prefs: { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100 },
     prompt: DEFAULT_SHEET_PROMPT, presets: [], presetPick: "", gemini: DEFAULT_GEMINI_CONFIG,
     key: { value: null, source: "none", mask: "not set", title: "No Gemini API key yet",
       note: "stored in IndexedDB", keySet: false },
@@ -34,7 +34,7 @@ export function useSvgBuilder() {
     checked: [], activeId: null, anchorId: null, placedIds: [],
     actions: {
       openFolder: noop, rescan: noop, setConfig: noop, applyLayoutPreset: noop, resetConfig: noop, setRecipe: noop,
-      reshuffle: noop, toggleAsset: noop, toggleLock: noop, excludeAsset: noop, restoreExcluded: noop, toggleScores: noop, clearSelection: noop, autoPlace: noop, fitSelection: noop,
+      reshuffle: noop, toggleAsset: noop, toggleLock: noop, excludeAsset: noop, restoreExcluded: noop, toggleScores: noop, setScoreOpacity: noop, clearSelection: noop, autoPlace: noop, fitSelection: noop,
       setSearch: noop, setCategory: noop, setZoom: noop, fitZoom: noop, undo: noop, redo: noop, toggleProvider: noop, toggleMeta: noop, setMetaHeight: noop,
       setPrompt: noop, resetPrompt: noop, presets, setGemini: noop, checkModel: noop, saveKey: noop,
       forgetKey: noop, generateMetadata: noop, confirmMetadata: noop, cancelMetadata: noop,

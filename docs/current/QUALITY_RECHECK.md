@@ -5038,3 +5038,7 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 
 - Per placed cell: REF / NN% (green ≥ threshold, amber below) / – ; toolbar toggle (pref showScores); × removes + excludes from later picks (excludedIds), library ⊘, footer restore.
 - Tests: parity +1 (exclusion in reshuffle/resize), workspace +2; builder+index suites 86/86; test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: opacity slider for the artboard % labels
+
+- 1–100% slider beside % Similarity (pref scoreOpacity, default 100; hidden with the labels). Workspace test extended; builder+index suites 86/86; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.

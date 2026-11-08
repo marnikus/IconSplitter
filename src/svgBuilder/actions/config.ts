@@ -13,7 +13,7 @@ import { isBuilderDefaultPrompt, saveBuilderPrompt } from "../promptstore";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
 type ConfigActions = Pick<BuilderActions,
-  "setConfig" | "applyLayoutPreset" | "resetConfig" | "setZoom" | "fitZoom" | "toggleProvider" | "toggleMeta" | "setMetaHeight" | "toggleScores"
+  "setConfig" | "applyLayoutPreset" | "resetConfig" | "setZoom" | "fitZoom" | "toggleProvider" | "toggleMeta" | "setMetaHeight" | "toggleScores" | "setScoreOpacity"
   | "setPrompt" | "resetPrompt" | "setSearch" | "undo" | "redo">;
 
 export function configActions(get: () => BuilderActionContext): ConfigActions {
@@ -26,6 +26,7 @@ export function configActions(get: () => BuilderActionContext): ConfigActions {
     toggleProvider: (providerOpen) => prefs(get(), { providerOpen }),
     toggleMeta: (metaOpen) => prefs(get(), { metaOpen }),
     toggleScores: (showScores) => prefs(get(), { showScores }),
+    setScoreOpacity: (p) => prefs(get(), { scoreOpacity: Math.round(Math.min(100, Math.max(1, p))) }),
     setMetaHeight: (h) => prefs(get(), { metaHeight: h === null ? null : Math.round(Math.min(META_HEIGHT.max, Math.max(META_HEIGHT.min, h))) }),
     setPrompt: (text) => prompt(get(), text),
     resetPrompt: () => prompt(get(), DEFAULT_SHEET_PROMPT),

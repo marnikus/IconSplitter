@@ -101,6 +101,9 @@
 .bld-preset-thumb { width: 18px; height: 13px; fill: currentColor; color: var(--v2-muted); }
 .bld-preset.is-on .bld-preset-thumb { color: var(--v2-purple-2); }
 .bld-pill { padding: 3px 7px; border-radius: 999px; background: var(--v2-surface-3); color: var(--v2-muted); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; white-space: nowrap; }
+.bld-opacity { display: inline-flex; align-items: center; gap: 5px; color: var(--v2-muted); font-size: 10px; }
+.bld-opacity .bld-range { width: 84px; }
+.bld-opacity-value { min-width: 30px; font-weight: 700; color: var(--v2-text); }
 .bld-zoom { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .bld-zoom-value { min-width: 48px; }
 .bld-canvas { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; padding: 28px;

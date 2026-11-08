@@ -32,7 +32,7 @@ Both vectors are normalised and written to **`<approved svg>.index.json`** besid
 
 ## On the artboard
 
-- **% closeness** (`builder-cell-score-{i}`, preview only, never exported): every placed icon shows its similarity to the reference group with the current look/mean mix — `REF` on reference icons, green at or above the Similarity threshold, amber below, `–` without vectors. **% Similarity** in the stage toolbar (`builder-toggle-scores`, pref `showScores`) shows / hides them.
+- **% closeness** (`builder-cell-score-{i}`, preview only, never exported): every placed icon shows its similarity to the reference group with the current look/mean mix — `REF` on reference icons, green at or above the Similarity threshold, amber below, `–` without vectors. **% Similarity** in the stage toolbar (`builder-toggle-scores`, pref `showScores`) shows / hides them; beside it, while shown, an opacity slider 1–100 % (`builder-score-opacity`, pref `scoreOpacity`, default 100) makes them fainter or stronger.
 - **× exclude** (`builder-cell-exclude-{i}`, on hover beside the lock): removes the icon from the sheet (later cells shift up, lock dropped) and keeps it out of every later reshuffle, top-up and grow (`excludedIds`, working state like locks). The library tile is dimmed with ⊘ (`data-excluded`); clicking it re-adds and re-includes it; the footer pill `N excluded` + **restore** (`builder-excluded-restore`) clears all exclusions.
 
 ## Network, privacy and storage
