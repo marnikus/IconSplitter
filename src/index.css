@@ -2299,7 +2299,7 @@
   display: grid;
   grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.45fr) minmax(300px, 1.45fr);
   gap: 8px;
-  align-items: stretch;
+  align-items: start;
 }
 
 /* the cards: the legend sits INSIDE the card as its heading */
@@ -2325,8 +2325,9 @@
   letter-spacing: .07em;
   text-transform: uppercase;
 }
-.stock-ftp-section legend + *,
-.stock-filter-section legend + * { clear: both; }
+/* every card child sits BELOW the floated heading (a grid beside a float shrinks to a sliver) */
+.stock-ftp-section > :not(legend),
+.stock-filter-section > :not(legend) { clear: both; }
 .stock-card-head { position: absolute; top: 7px; right: 10px; }
 .stock-card-head .svg-badge { white-space: nowrap; font-size: 9px; }
 .stock-ftp-section .svg-label,
