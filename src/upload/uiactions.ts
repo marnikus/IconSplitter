@@ -1,19 +1,20 @@
 // uiactions.ts — SVG to upload tab UI actions
 import { useCallback, useRef } from "react";
 import { applyRowGesture, invertChecked, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
+import { drawRandomIds, randomSelectionMessage, randomSelectionPool } from "../lib/randomselect";
 import type { IconMetadata } from "../lib/upload/meta";
 import { selectionPayloads } from "../lib/selectiondelta";
 import { getAppState, patchUpload } from "../state/appstore";
 import type { UploadActions, UploadCtx } from "./actions";
-type UiSlice = Pick<UploadActions, "toggleCheck" | "selectVisible" | "invertVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "openSettings" | "dismissDialog" | "copyMeta">;
+type UiSlice = Pick<UploadActions, "toggleCheck" | "selectVisible" | "selectRandom" | "invertVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "openSettings" | "dismissDialog" | "copyMeta">;
 export function useUiActions(ctx: UploadCtx): UiSlice {
   return { ...useSelectActions(ctx), ...useDialogActions(ctx), ...useCopyActions(ctx) };
 }
-function useSelectActions(ctx: UploadCtx): Pick<UiSlice, "toggleCheck" | "selectVisible" | "invertVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive"> {
+function useSelectActions(ctx: UploadCtx): Pick<UiSlice, "toggleCheck" | "selectVisible" | "selectRandom" | "invertVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive"> {
   const latest = useRef(ctx); latest.current = ctx;
   return {
-    toggleCheck: useToggleCheck(latest), selectVisible: useSelectVisible(latest), invertVisible: useInvertVisible(latest),
-    uncheckVisible: useUncheckVisible(latest), deselectAll: useDeselectAll(latest),
+    toggleCheck: useToggleCheck(latest), selectVisible: useSelectVisible(latest), selectRandom: useSelectRandom(latest),
+    invertVisible: useInvertVisible(latest), uncheckVisible: useUncheckVisible(latest), deselectAll: useDeselectAll(latest),
     checkActive: useCheckActive(latest), uncheckActive: useUncheckActive(latest),
     selectRow: useSelectRow(latest), setActive: useSetActive(latest),
   };
@@ -47,6 +48,16 @@ function useSelectVisible(latest: { current: UploadCtx }) {
     const before = currentSelection();
     const ids = latest.current.visible.map((r) => r.source.id);
     editSelection(latest.current, { ...before, checked: setChecked(before.checked, ids, true) }, "Select visible");
+  }, [latest]);
+}
+function useSelectRandom(latest: { current: UploadCtx }) {
+  return useCallback((count: number) => {
+    const c = latest.current;
+    const before = currentSelection();
+    const pool = randomSelectionPool(c.rows.map((r) => r.source.id), before.checked);
+    const after = { ...before, checked: drawRandomIds(pool, count) };
+    editSelection(c, after, "Select random");
+    if (!sameRowSelection(before, after)) c.say(randomSelectionMessage(after.checked.length));
   }, [latest]);
 }
 function useInvertVisible(latest: { current: UploadCtx }) {

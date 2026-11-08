@@ -27,7 +27,9 @@ opt-in class as Generate SVG → Requesty; design
   unchecked. Only approved valid SVG rows can be checked; there are no A/D
   review decisions or shortcuts on this tab. Checked rows drive local
   export/download or explicitly confirmed metadata requests (RULE 20), never
-  automatic sends.
+  automatic sends. **Select random** replaces the checks with N random items
+  from the checked-only pool, or the whole list when nothing is checked
+  ([shared contract](list-selection-filters.md#select-random)).
 * In the Export settings popup, checked rows drive a local **Shadow** checkbox:
   apply/remove the template gradient below selected icons, with checked-only
   width/gap controls and a matching live export preview. The active unchecked

@@ -96,6 +96,8 @@ export interface UploadActions extends PromptActions {
   forgetKey: () => void;
   toggleCheck: (id: string) => void;
   selectVisible: () => void;
+  /** Replace the checks with N random listed items (checked-only pool when some are checked). */
+  selectRandom: (count: number) => void;
   invertVisible: () => void;
   uncheckVisible: () => void;
   deselectAll: () => void;

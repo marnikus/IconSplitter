@@ -149,7 +149,7 @@ export function useStockUpload(): StockUploadApi {
   const runScan = useScanTrigger(r, dispatch, say);
   useBootEffects(r, presetState.presets, dispatch, runScan);
   const { items, visible, header } = useDerivedList(model, selSlice.checked, rowBadges);
-  const selection = useStockSelectionActions(visible, hist);
+  const selection = useStockSelectionActions(items, visible, hist, say);
   const badges = useStockRowBadgeActions(hist, say, (id) => dropBadgeFromFilter(model, dispatch, id));
   const ftp = useStockFtpActions({
     presetState, bridgeUrl: model.prefs.bridgeUrl, rootRef: r.root, say,

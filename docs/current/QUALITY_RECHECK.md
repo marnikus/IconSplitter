@@ -5059,3 +5059,7 @@ Attribution: Arena.ai Agent Mode — authored from the user's request and local 
 ### 2026-11-08 — Stock Upload batch-history
 
 Verified: focused Stock Upload suites (19 files / 129 tests), history/summary/runner/UI suites (4 files / 20 tests), and docs navigation (4 tests) PASS; `npm run verify:fast` PASS (types, lint: 0 errors / 22 existing warnings, changed-files quality, 4,174-test coverage suite, production build); `npm run verify` PASS (same plus native performance: 5 files / 30 tests). An earlier full run hit one scan timing-budget outlier; the isolated suite and both subsequent aggregate gates passed. External `router.requesty.ai` TLS resets appeared in logs but did not fail any lane.
+
+### 2026-11-08 — Random selection controls on Upload tabs
+
+Verified: random-selection and Stock Upload UI suites 3 files / 26 tests PASS; docs-navigation plus random-selection suites 3 files / 24 tests PASS; `npx tsc --noEmit` and `npm run quality:changed` PASS; `npm run verify:fast` and `npm run verify` PASS (including coverage and native performance: 5 files / 30 tests); production build PASS. Lint: 0 errors / 22 existing warnings. The docs-navigation size check prompted a compact rewrite of the Stock Upload pinned-bar description (final page: 8,985 bytes).

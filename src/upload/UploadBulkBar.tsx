@@ -17,12 +17,14 @@ import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import UploadRowBadgeApply from "./UploadRowBadgeApply";
 import InvertButton from "../ui/InvertButton";
+import RandomSelectControl from "../ui/RandomSelectControl";
 import PreviewBgPicker from "../ui/PreviewBgPicker";
 
 export interface UploadBulkBarProps {
   header: "none" | "some" | "all";
   checkedCount: number;
   visibleCount: number;
+  totalCount: number;
   thumb: number;
   bg: PreviewBackground;
   /** The export stroke width (the defaults' strokePx); null = default, each file's own widths. */
@@ -43,6 +45,7 @@ export interface UploadBulkBarProps {
   overriddenCount: number;
   onToggleAll: (on: boolean) => void;
   onSelectVisible: () => void;
+  onSelectRandom: (count: number) => void;
   onInvert: () => void;
   onDeselectAll: () => void;
   onThumb: (px: number) => void;
@@ -86,6 +89,7 @@ function BulkLeft({ p }: { p: UploadBulkBarProps }) {
       <span className="svg-divider" aria-hidden="true" />
       <button type="button" className="svg-btn" data-testid="upload-select-visible" onClick={p.onSelectVisible}>Select all visible</button>
       <InvertButton prefix="upload" onClick={p.onInvert} />
+      <RandomSelectControl prefix="upload" checkedCount={p.checkedCount} totalCount={p.totalCount} onSelect={p.onSelectRandom} />
       <button type="button" className="svg-btn" data-testid="upload-deselect" onClick={p.onDeselectAll}>Deselect all</button>
     </div>
   );

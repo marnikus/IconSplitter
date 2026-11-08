@@ -64,15 +64,15 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
   `Dismiss|Cancel|Close|OK|Got it` control clicked. A scope with no such control is
   left alone — the helper never guesses.
 - Getty contributor page (driven by the helper, not the app) — captured handles `[data-cy="create-batch-button"]`, `[role="dialog"][aria-labelledby="create-batch-dialog"]` *or* `[data-cy="create-batch-dialog"]`, `[data-cy="create-batch-submission-type"]` + `role=combobox` (opens on mousedown; options in a `role=listbox` portal), `input[name="submission_name"]`, `input[name="event_id"]`, `[data-cy="create-batch-confirm-button"]`, the hidden contribution uploader `input[type="file"][data-cy="upload-button-file-input"][multiple]` (release inputs such as `model-release-input` are never used); sign-in fields/buttons and the metadata editor + Complete control are matched by behaviour and label, never by a captured id.
-- `stock-ftp-cred-status`, `stock-ftp-user`, `stock-ftp-pass`, `stock-ftp-apikey`, `stock-ftp-apisecret`, `stock-ftp-cred-save`, `stock-ftp-cred-forget`, `stock-esp-oauth`, `stock-ftp-test`, `stock-ftp-test-note`, `stock-ftp-trust-cert` — local-only non-expanded credentials ("Getty contributor e-mail or account ID" + password for `getty-web`), Getty OAuth2 PKCE browser authorization, & connection test (for `getty-web` it signs the helper's background browser in without creating a batch).
+- `stock-ftp-cred-status`, `stock-ftp-user`, `stock-ftp-pass`, `stock-ftp-apikey`, `stock-ftp-apisecret`, `stock-ftp-cred-save`, `stock-ftp-cred-forget`, `stock-esp-oauth`, `stock-ftp-test`, `stock-ftp-test-note`, `stock-ftp-trust-cert` — local-only non-expanded credentials (Getty e-mail/ID + password for `getty-web`), OAuth2 PKCE, & connection test (`getty-web` signs in without creating a batch).
 
 ## Filters, unified badges & pinned bulk bar
 - `stock-filters`, `stock-filter-search`, `stock-filter-format`, `stock-filter-badge`, `stock-rowbadges-open`, `stock-sort`, `stock-clear-filters` — filter/sort bar & unified badge catalog button.
-- `stock-bulkbar-pin`, `stock-bulk`, `stock-check-all`, `stock-selected-count`, `stock-select-visible`, `stock-deselect` — pinned selection controls (`stockUploadChecked` undo).
+- `stock-bulkbar-pin`, `stock-bulk`, `stock-check-all`, `stock-selected-count`, `stock-select-visible`, `stock-deselect` — pinned selection controls (`stockUploadChecked` undo). `stock-select-random` / `stock-random-count` / `stock-random-scope`: [Select random](../sor/list-selection-filters.md#select-random).
 - `stock-upload-zoom`, `stock-zoom-label`, `stock-bg-<preset>` — thumbnail zoom & preview background.
 - `stock-format-raster`, `stock-format-svg`, `stock-format-eps`, `stock-format-zip` — same-stem representation checkboxes.
 - `stock-combine-title-description` — opt-in persisted combination of accepted title and description in upload copies only.
-- `stock-random-batches` — opt-in, saved: every site walks 100-icon batches, each drawn at random and mixed, every icon under a shuffled number before its name.
+- `stock-random-batches` — opt-in, saved: random 100-icon batches, mixed, each icon under a shuffled number before its name.
 - `stock-target-check-<presetId>` — multi-upload target stock checkboxes.
 - `stock-upload-start`, `stock-upload-cancel`, `stock-upload-confirm-dialog`, `stock-upload-confirm-go`, `stock-upload-confirm-cancel` — preflight confirmation & upload trigger.
 - `stock-upload-getty-batches` — the confirmation's Getty line whenever `getty-web` is a target (`250 icon(s) → 3 batches (Getty takes 100 uploads per batch; a JPEG + EPS pair counts once)`, singular `1 batch` for a short run), so the chunking (100 icons, 64 MB) is visible before Upload.

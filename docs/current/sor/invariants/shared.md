@@ -74,5 +74,7 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   Post-decision auto-next uses the [closest pending row below in displayed
   order](../review-navigation.md), never raw scan order or wrapping.
   Tab-specific eligibility and paid confirmation still constrain bulk actions.
+  Both upload tabs also offer [Select random](../list-selection-filters.md#select-random):
+  checked-only pool when checks exist, else the whole listed set; one undo entry.
   [Large-list presentation](../selection-performance.md) projects this same
   canonical checked state without rerendering unchanged row contents.

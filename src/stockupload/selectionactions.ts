@@ -6,6 +6,7 @@ import {
   type RowSelection, type SelectIntent,
 } from "../lib/reviewselect";
 import { selectionPayloads } from "../lib/selectiondelta";
+import { drawRandomIds, randomSelectionMessage, randomSelectionPool } from "../lib/randomselect";
 import type { ExportedItem } from "../lib/stockupload/types";
 import {
   addBadge, applyBadgeToIds, recolorBadge, removeBadge, removeBadgeFromIds, renameBadge, statesEqual,
@@ -19,6 +20,8 @@ export interface StockSelectionApi {
   toggleCheck: (id: string) => void;
   selectVisible: () => void;
   selectIds: (ids: readonly string[]) => void;
+  /** Replace the checks with N random listed items (checked-only pool when some are checked). */
+  selectRandom: (count: number) => void;
   invertVisible: () => void;
   uncheckVisible: () => void;
   deselectAll: () => void;
@@ -56,7 +59,23 @@ function commitSelection(hist: HistoryActions, after: RowSelection, label: strin
   });
 }
 
-function buildSelectionApi(ref: { current: { visible: readonly ExportedItem[]; hist: HistoryActions } }): StockSelectionApi {
+interface SelectionSource {
+  items: readonly ExportedItem[];
+  visible: readonly ExportedItem[];
+  hist: HistoryActions;
+  say: (msg: string, err?: boolean) => void;
+}
+
+/** One random draw through the same selection commit path as every other gesture. */
+function commitRandomSelection(ref: { current: SelectionSource }, count: number): void {
+  const before = currentSelection();
+  const pool = randomSelectionPool(ref.current.items.map((r) => r.id), before.checked);
+  const after = { ...before, checked: drawRandomIds(pool, count) };
+  commitSelection(ref.current.hist, after, "Select random");
+  if (!sameRowSelection(before, after)) ref.current.say(randomSelectionMessage(after.checked.length));
+}
+
+function buildSelectionApi(ref: { current: SelectionSource }): StockSelectionApi {
   const ids = () => ref.current.visible.map((r) => r.id);
   return {
     toggleCheck: (id) => commitSelection(ref.current.hist, { ...currentSelection(), checked: toggleChecked(currentSelection().checked, id) }, "Toggle exported row"),
@@ -66,6 +85,7 @@ function buildSelectionApi(ref: { current: { visible: readonly ExportedItem[]; h
       const matches = [...new Set(requested)].filter((id) => visibleSet.has(id));
       commitSelection(ref.current.hist, { ...currentSelection(), checked: setChecked([], matches, true) }, "Select batch items");
     },
+    selectRandom: (count) => commitRandomSelection(ref, count),
     uncheckVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: setChecked(currentSelection().checked, ids(), false) }, "Deselect visible"),
     deselectAll: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: [] }, "Deselect all"),
     invertVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: invertChecked(currentSelection().checked, ids()) }, "Invert selection"),
@@ -82,9 +102,11 @@ function buildSelectionApi(ref: { current: { visible: readonly ExportedItem[]; h
   };
 }
 
-export function useStockSelectionActions(visible: readonly ExportedItem[], hist: HistoryActions): StockSelectionApi {
-  const ref = useRef({ visible, hist });
-  ref.current = { visible, hist };
+export function useStockSelectionActions(
+  items: readonly ExportedItem[], visible: readonly ExportedItem[], hist: HistoryActions, say: (msg: string, err?: boolean) => void,
+): StockSelectionApi {
+  const ref = useRef({ items, visible, hist, say });
+  ref.current = { items, visible, hist, say };
   return useMemo(() => buildSelectionApi(ref), []);
 }
 

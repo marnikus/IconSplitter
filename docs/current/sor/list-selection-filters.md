@@ -18,6 +18,28 @@ the tab's own selection entry (`batchChecked`, `checked`, `svgChecked`,
 
 Batch inverts only its selectable rows (`selectableIds`), as Select visible does.
 
+<a id="select-random"></a>
+
+## Select random (the two upload tabs, 2026-11-08)
+
+SVG to upload and Upload add **🎲 Select random** beside Invert: an integer
+count field (min 2, default 2) and a button that REPLACES the checks with N
+distinct random items. With no checks the pool is the whole listed set,
+including rows hidden by filters; with checks the pool is only those checked
+items. A count above the pool draws the whole pool (the field keeps the typed
+request). Active/anchor stay; one draw is one undoable selection entry
+(`uploadChecked` / `stockUploadChecked`). No provider or file work.
+
+| Part | Where |
+|---|---|
+| Count normalization, pool choice, capped draw, toast line | `lib/randomselect.ts` |
+| The ONE Fisher–Yates order (also Getty batches via re-export) | `lib/randomorder.ts` |
+| Button + draft count + scope line; handles `<prefix>-select-random`, `<prefix>-random-count`, `<prefix>-random-scope` (`upload`, `stock`) | `ui/RandomSelectControl.tsx` |
+| Tab actions `selectRandom` | `upload/uiactions.ts`, `stockupload/selectionactions.ts` |
+
+The count is local UI state, not a persisted preference. Tests:
+`random_select.test.ts`, `random_select_ui.test.tsx`.
+
 ## Multi-choice filters
 
 Every **filter** dropdown is a checkbox menu: pick one value, several
