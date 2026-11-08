@@ -49,7 +49,6 @@ function SourceBar({ g }: { g: StockUploadApi }) {
               {g.model.busy ?? "↻ Rescan"}
             </button>
           )}
-          <UploadHistoryButton onClick={g.openUploadHistory} />
           <span className="svg-recursive" data-testid="stock-scope-copy">
             Exported packages only (`export/` + `export.json`) · {total} items
           </span>
@@ -63,10 +62,6 @@ function SourceBar({ g }: { g: StockUploadApi }) {
       <FolderPathRow root={g.rootRef.current} testid="stock-folder-path" />
     </>
   );
-}
-
-function UploadHistoryButton({ onClick }: { onClick: () => void }) {
-  return <button type="button" className="svg-btn" data-testid="stock-upload-history-open" onClick={onClick}>Upload history</button>;
 }
 
 function FilterBar({ g }: { g: StockUploadApi }) {

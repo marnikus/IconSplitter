@@ -3,6 +3,7 @@
 Behavior: [Stock Upload History](../sor/stock-upload-history.md) · Main Upload controls: [Stock Upload selectors](stock-upload.md).
 
 ## Upload history
+- `stock-upload-history-open` — the **Upload history** button in the bulk bar (`stock-bulk-right`), right before `stock-remove-selected` and `stock-upload-start` (moved from the folder row 2026-11-08).
 - `stock-upload-history-backdrop`, `stock-upload-history-dialog`, `stock-history-stock-select` — history modal and per-stock dropdown.
 - `stock-upload-history-batch-<runId>-<stockId>` — one user-started run for that stock, newest first, with date/count, optional note in its second column (`stock-upload-history-note-<batchId>`), and outcome; clicking expands its details.
 - `stock-history-file-<batchId>-<index>`, `stock-history-thumb-<batchId>-<index>`, `stock-history-hover-preview-<batchId>-<index>`, `stock-history-location-<batchId>-<index>` — compact uploaded-file row, clickable thumbnail with nearby hover preview, and copy-location action. `stock-history-preview`, `stock-history-preview-close` — enlarged preview dialog.

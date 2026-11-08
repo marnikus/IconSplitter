@@ -5106,3 +5106,7 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - Test fix: spies on `Storage.prototype.setItem` do not intercept happy-dom localStorage — the ported refusal test never refused; now spies on the instance, restored in finally.
 - Builder lockedIds/excludedIds in the session builder slice.
 - Tests: session_selection_persist 10 (2 new quota + user-flow test, each witnessed failing first), svg_builder_session +1, workspace +1; 169/169 in session/builder/undo/stock suites; fast lane 14/14; tsc PASS; lint 0 errors; quality gate (--base HEAD) PASS. Full vitest 4192 passed / 29 failed — the 3 new failing files (quality_base, random_select_ui, upload_flag_viewport) fail identically on clean HEAD (from merged stock-upload commits).
+
+## 2026-11-08 — Stock upload: Upload history button moved into the bulk bar
+
+- Now right before Remove selected / Upload (N). stockupload_ui 11/11 (position assertion added, failed first); tsc PASS; lint 0 errors; quality gate PASS.

@@ -156,7 +156,11 @@ describe("Upload (stockUpload) tab UI", () => {
     });
     act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
     await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
-    await clickEl(q("stock-upload-history-open")!);
+    // The button sits in the bulk bar, right before Remove selected and Upload (2026-11-08).
+    const history = q("stock-upload-history-open")!;
+    expect(q("stock-bulk-right")!.contains(history)).toBe(true);
+    expect(history.nextElementSibling).toBe(q("stock-remove-selected"));
+    await clickEl(history);
     expect(q("stock-upload-history-dialog")).not.toBeNull();
     expect(q("stock-upload-history-batch-run-1")?.textContent).toContain("1 file");
     await setSelect(q("stock-history-stock-select") as HTMLSelectElement, "adobe-stock");

@@ -142,6 +142,8 @@ function UploadButtons({ g }: { g: StockUploadApi }) {
           Cancel upload
         </button>
       )}
+      <button type="button" className="svg-btn" data-testid="stock-upload-history-open" onClick={g.openUploadHistory}
+        title="Past upload batches per stock: review them and re-select their items">Upload history</button>
       <button type="button" className="svg-btn danger" data-testid="stock-remove-selected"
         disabled={g.checked.length === 0 || g.model.uploading} onClick={() => g.removeItems(g.checked)}
         title="Remove the checked items from this list: declines their sources in Generate SVG, so they also leave SVG to upload (Undo brings them back)">
