@@ -3,7 +3,7 @@
 // so a change on any panel is captured (design doc §6).
 
 import { useEffect } from "react";
-import { getAppState, sessionOf, subscribe } from "./appstore";
+import { getAppState, sessionOf, subscribe, type AppState } from "./appstore";
 import { saveSessionState } from "./sessionstore";
 
 const AUTOSAVE_MS = 250;
@@ -11,18 +11,19 @@ const AUTOSAVE_MS = 250;
 export function useSessionAutosave(): void {
   useEffect(() => {
     let timer = 0;
-    let lastStockChecked = getAppState().stockUpload.checked;
+    let previous = getAppState();
     const flush = () => {
       window.clearTimeout(timer);
       timer = 0;
       save();
     };
     const off = subscribe(() => {
-      const checked = getAppState().stockUpload.checked;
-      if (checked !== lastStockChecked) {
-        // This is the user's upload queue: persist replacements/toggles at the
-        // gesture boundary so a reload cannot resurrect an older bulk pick.
-        lastStockChecked = checked;
+      const next = getAppState();
+      const mustPersistNow = hasImmediateSessionChange(previous, next);
+      previous = next;
+      if (mustPersistNow) {
+        // Tabs and row selections are the user's current working position and
+        // queue. Save them at the interaction boundary, not after a debounce.
         flush();
         return;
       }
@@ -38,6 +39,18 @@ export function useSessionAutosave(): void {
       window.removeEventListener("beforeunload", flush);
     };
   }, []);
+}
+
+function hasImmediateSessionChange(previous: AppState, next: AppState): boolean {
+  return previous.tab !== next.tab
+    || previous.view !== next.view
+    || previous.v2.checked !== next.v2.checked
+    || previous.v2.anchorId !== next.v2.anchorId
+    || previous.svg !== next.svg
+    || previous.upload !== next.upload
+    || previous.builder !== next.builder
+    || previous.stockUpload !== next.stockUpload
+    || previous.batch !== next.batch;
 }
 
 function save(): void {

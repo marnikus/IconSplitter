@@ -91,14 +91,14 @@ describe("the shell", () => {
     expect(q("[data-testid='tabbar']")).not.toBeNull();
   });
 
-  it("switches tabs through the store, so the choice is the one restored next time", async () => {
+  it("persists a tab change immediately so reload restores the tab just chosen", async () => {
     mountWorkbench();
     await click("[data-testid='tab-batch']");
     await settle();
     expect(getAppState().tab).toBe("batch");
-    expect(loadSessionState().tab).toBe("sheets"); // debounced, not written yet
-    await act(async () => { await new Promise((r) => setTimeout(r, 300)); });
-    expect(loadSessionState().tab).toBe("batch"); // …and now it is
+    expect(loadSessionState().tab).toBe("batch");
+    bootStores();
+    expect(getAppState().tab).toBe("batch");
   });
 
   it("immediately replaces a saved Stock Upload bulk selection and flushes the latest state on exit", () => {
