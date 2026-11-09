@@ -4,15 +4,8 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import type { StockUploadBatch } from "../lib/stockupload/batchhistory";
 import { getStockUploadBatches, subscribeStockUploadBatches } from "./batchhistorystore";
 import StockUploadHistoryFiles from "./StockUploadHistoryFiles";
+import { stockOptionsOf, type StockOption } from "./stockoptions";
 import type { StockUploadApi } from "./useStockUpload";
-
-interface StockOption { id: string; name: string }
-
-function optionsOf(presets: StockUploadApi["presetState"]["presets"], batches: readonly StockUploadBatch[]): StockOption[] {
-  const options = new Map(presets.map((preset) => [preset.id, { id: preset.id, name: preset.name }]));
-  for (const batch of batches) if (!options.has(batch.stockId)) options.set(batch.stockId, { id: batch.stockId, name: batch.stockName });
-  return [...options.values()];
-}
 
 function uploadDate(value: string): string {
   const date = new Date(value);
@@ -25,7 +18,7 @@ function fileCount(batch: StockUploadBatch): string {
 
 export default function StockUploadHistoryDialog({ g }: { g: StockUploadApi }) {
   const batches = useSyncExternalStore(subscribeStockUploadBatches, getStockUploadBatches);
-  const options = useMemo(() => optionsOf(g.presetState.presets, batches), [g.presetState.presets, batches]);
+  const options = useMemo(() => stockOptionsOf(g.presetState.presets, batches), [g.presetState.presets, batches]);
   const [stockId, setStockId] = useState(g.presetState.activePresetId);
   const [batchId, setBatchId] = useState<string | null>(null);
   const selected = batches.filter((batch) => batch.stockId === stockId).slice().reverse();

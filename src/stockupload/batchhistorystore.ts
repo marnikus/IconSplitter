@@ -49,6 +49,12 @@ export function appendStockUploadBatch(batch: StockUploadBatch): void {
   if (valid !== null) persist([...current, valid]);
 }
 
+/** Saves an edited history (rejected files taken out); a no-op for the same array. */
+export function replaceStockUploadBatches(batches: readonly StockUploadBatch[]): void {
+  if (batches === current) return;
+  persist(batches.map(parseStockUploadBatch).filter((batch): batch is StockUploadBatch => batch !== null));
+}
+
 export function subscribeStockUploadBatches(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };

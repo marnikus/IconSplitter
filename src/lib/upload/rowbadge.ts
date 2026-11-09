@@ -232,6 +232,14 @@ export function ensureHardcodedBadges(state: RowBadgeState): RowBadgeState {
   return unchanged ? state : { ...clean, catalog: nextCatalog };
 }
 
+/** The badge a stock's uploads assign: its preset id, else the same name (e.g. hardcoded "Adobe Stock"). */
+export function findNamedBadge(state: RowBadgeState, name: string, preferredId?: string): RowBadge | null {
+  const key = normalizeName(name).toLowerCase();
+  return state.catalog.find(
+    (b) => (preferredId !== undefined && b.id === preferredId) || (key !== "" && b.name.toLowerCase() === key),
+  ) ?? null;
+}
+
 export function ensureNamedBadge(
   state: RowBadgeState,
   name: string,
@@ -239,9 +247,7 @@ export function ensureNamedBadge(
 ): { state: RowBadgeState; id: string | null } {
   const trimmed = normalizeName(name);
   if (trimmed === "") return { state, id: null };
-  const existing = state.catalog.find(
-    (b) => (preferredId !== undefined && b.id === preferredId) || b.name.toLowerCase() === trimmed.toLowerCase(),
-  );
+  const existing = findNamedBadge(state, trimmed, preferredId);
   if (existing) return { state, id: existing.id };
   if (state.catalog.length >= ROW_BADGE_MAX) return { state, id: null };
   const idTaken = preferredId !== undefined && state.catalog.some((b) => b.id === preferredId);

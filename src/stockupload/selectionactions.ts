@@ -15,6 +15,10 @@ import {
 import type { HistoryActions } from "../state/HistoryProvider";
 import { getAppState, patchStockUpload } from "../state/appstore";
 import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
+import {
+  dropRejectedFromHistory, planRejectedRemoval, rejectedSummary, withoutStockBadge,
+  type RejectedRemovalInput, type RejectedRemovalResult,
+} from "./rejectedremoval";
 
 export interface StockSelectionApi {
   toggleCheck: (id: string) => void;
@@ -39,6 +43,8 @@ export interface StockBadgeApi {
   toggleRowBadge: (pairId: string, badgeId: string) => void;
   removeRowBadgeSelected: (badgeId: string) => void;
   applyRowBadgeSelected: (ids: string[], badgeId: string) => void;
+  /** Pasted names a stock refused: drop that stock's badge (undoable) and its history records. */
+  removeRejectedUploads: (input: RejectedRemovalInput) => RejectedRemovalResult;
 }
 
 function currentSelection(): RowSelection {
@@ -89,6 +95,15 @@ function buildSelectionApi(ref: { current: SelectionSource }): StockSelectionApi
     uncheckVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: setChecked(currentSelection().checked, ids(), false) }, "Deselect visible"),
     deselectAll: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: [] }, "Deselect all"),
     invertVisible: () => commitSelection(ref.current.hist, { ...currentSelection(), checked: invertChecked(currentSelection().checked, ids()) }, "Invert selection"),
+    ...buildActiveRowGestures(ref, ids),
+  };
+}
+
+/** Gestures on the active row and row clicks (Space/Enter, click, Shift-click, arrow moves). */
+function buildActiveRowGestures(
+  ref: { current: SelectionSource }, ids: () => string[],
+): Pick<StockSelectionApi, "checkActive" | "uncheckActive" | "selectRow" | "setActive"> {
+  return {
     checkActive: () => {
       const b = currentSelection();
       if (b.active) commitSelection(ref.current.hist, { ...b, checked: setChecked(b.checked, [b.active], true) }, "Select active row");
@@ -157,5 +172,21 @@ export function useStockRowBadgeActions(
       commitBadgeChange(ref.current.hist, ref.current.say, { before, after: removeBadgeFromIds(before, ids, badgeId), label: "Remove badge from selected", ids });
     },
     applyRowBadgeSelected: (ids, badgeId) => commitBadgeChange(ref.current.hist, ref.current.say, { before: getRowBadgeState(), after: applyBadgeToIds(getRowBadgeState(), ids, badgeId), label: "Apply badge to selected", ids }),
+    removeRejectedUploads: (input) => applyRejectedRemoval(ref.current, input),
   }), []);
+}
+
+/** One Process click: badge change on the undo timeline, then the stored history edit. */
+function applyRejectedRemoval(
+  c: { hist: HistoryActions; say: (msg: string, err?: boolean) => void }, input: RejectedRemovalInput,
+): RejectedRemovalResult {
+  const match = planRejectedRemoval(input);
+  const before = getRowBadgeState();
+  const badge = withoutStockBadge(before, input.stock, match.itemIds);
+  const label = `Remove ${input.stock.name} badge from rejected uploads`;
+  commitBadgeChange(c.hist, () => {}, { before, after: badge.after, label, ids: match.itemIds });
+  const stored = dropRejectedFromHistory(input.stock.id, match.itemIds);
+  const result = { items: match.itemIds.length, badges: badge.removed, ...stored, unmatched: match.unmatchedNames };
+  c.say(rejectedSummary(input.stock.name, result), result.items === 0);
+  return result;
 }

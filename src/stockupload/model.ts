@@ -14,7 +14,7 @@ import { type StockListFilter, type StockMetaDraft, type StockUploadSort } from 
 import type { UploadProgressStep } from "./runupload";
 import { loadStockListView } from "./listview";
 
-export type StockDialog = null | { kind: "rowBadges" } | { kind: "uploadHistory" } | { kind: "confirmUpload"; plan: StockUploadPlan };
+export type StockDialog = null | { kind: "rowBadges" } | { kind: "uploadHistory" } | { kind: "rejectedUploads" } | { kind: "confirmUpload"; plan: StockUploadPlan };
 
 export interface StockUploadModel {
   rootName: string;

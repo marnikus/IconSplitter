@@ -41,7 +41,7 @@ No session schema/key, shared root handle or pair-sidecar deletion is performed.
 
 | Where | What | Rules |
 |---|---|---|
-| localStorage `iconSplitter.stockUpload.batches.v1` | bounded (200 records), validated per-target upload-run history: stock/run IDs and name snapshot, timestamp, success/failure counts, cancellation flag, optional upload note (max 1000 characters), relative file paths, and captured full paths when known | append-only run records; old rows without notes remain valid; successful file entries only; no credentials or image bytes; a full path is built only from the exact path captured for that root handle, otherwise only the relative path is retained |
+| localStorage `iconSplitter.stockUpload.batches.v1` | bounded (200 records), validated per-target upload-run history: stock/run IDs and name snapshot, timestamp, success/failure counts, cancellation flag, optional upload note (max 1000 characters), relative file paths, and captured full paths when known | append-only run records, except **Remove unsuccessful uploads**, which takes refused items' files out of one stock's runs and adds them to the failed count; old rows without notes remain valid; successful file entries only; no credentials or image bytes; a full path is built only from the exact path captured for that root handle, otherwise only the relative path is retained |
 
 ## SVG builder
 

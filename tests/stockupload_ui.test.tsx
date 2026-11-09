@@ -6,7 +6,7 @@ import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
 import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
 import { MANDATORY_TAGS } from "../src/lib/upload/meta";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
-import { applyBadgeToIds } from "../src/lib/upload/rowbadge";
+import { applyBadgeToIds, ensureHardcodedBadges } from "../src/lib/upload/rowbadge";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { getAppState, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
@@ -176,6 +176,48 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-history-preview-close")!);
     await clickEl(q("stock-history-select-files")!);
     expect(getAppState().stockUpload.checked).toEqual(["item-star"]);
+  });
+
+  it("removes the chosen stock's badge and history records for pasted rejected files, with undo for the badge", async () => {
+    const ws = makeWorkspace(false, 3);
+    stored.set("__stock_upload__", { source: ws });
+    const file = (itemId: string, fileName: string) => ({ itemId, fileName, format: "eps" as const, relPath: null, fullPath: null });
+    appendStockUploadBatch({
+      id: "adobe-run", stockId: "adobe-stock", stockName: "Adobe Stock", uploadedAt: "2026-11-09T15:00:00.000Z",
+      uploadedCount: 3, failedCount: 0, cancelled: false, rootPath: "",
+      files: [file("item-star", "star_icon.eps"), file("item-1", "icon_1.eps"), file("item-2", "icon_2.eps")],
+    });
+    let badges = applyBadgeToIds(ensureHardcodedBadges(getRowBadgeState()), ["item-star", "item-1", "item-2"], "adobe-stock");
+    badges = applyBadgeToIds(badges, ["item-star"], "shutterstock");
+    setRowBadgeState(badges);
+    act(() => { ui.render(<HistoryProvider><HistoryBar /><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-2") !== null, "stock rows loaded");
+
+    await clickEl(q("stock-rejected-open")!);
+    expect(q("stock-rejected-process")!.hasAttribute("disabled")).toBe(true);
+    await setSelect(q("stock-rejected-stock") as HTMLSelectElement, "adobe-stock");
+    await setInput(q("stock-rejected-text") as HTMLTextAreaElement,
+      '<div role="rowheader"><span>0569-star_icon.eps</span></div><div role="gridcell"><span>Upload limit reached</span></div>'
+      + "<div role=\"rowheader\"><span>0102-unknown.eps</span></div>");
+    expect(q("stock-rejected-summary")!.textContent).toContain("1 matching item");
+    expect(q("stock-rejected-unmatched")!.textContent).toContain("unknown.eps");
+
+    // A plain comma list works the same way.
+    await setInput(q("stock-rejected-text") as HTMLTextAreaElement, "star_icon.eps, icon_1.jpg");
+    expect(q("stock-rejected-summary")!.textContent).toContain("2 matching item");
+    await clickEl(q("stock-rejected-process")!);
+
+    expect(q("stock-rejected-dialog")).toBeNull();
+    const after = getRowBadgeState();
+    expect(after.assigned["item-star"]).toEqual(["shutterstock"]);
+    expect(after.assigned["item-1"]).toBeUndefined();
+    expect(after.assigned["item-2"]).toEqual(["adobe-stock"]);
+    const run = batchesForStock("adobe-stock")[0];
+    expect(run.files.map((f) => f.itemId)).toEqual(["item-2"]);
+    expect(run).toMatchObject({ uploadedCount: 1, failedCount: 2 });
+
+    await clickEl(q("hist-undo")!);
+    expect(getRowBadgeState().assigned["item-1"]).toEqual(["adobe-stock"]);
   });
 
   it("replaces a 100-file history pick with row, history, and checkbox selections and restores the latest set", async () => {

@@ -142,6 +142,10 @@ function UploadButtons({ g }: { g: StockUploadApi }) {
           Cancel upload
         </button>
       )}
+      <button type="button" className="svg-btn" data-testid="stock-rejected-open" onClick={g.openRejectedUploads}
+        title="Paste the files a stock site refused (its failed-files table or a list of names): they lose that stock's badge and leave its upload history">
+        Remove unsuccessful uploads
+      </button>
       <button type="button" className="svg-btn" data-testid="stock-upload-history-open" onClick={g.openUploadHistory}
         title="Past upload batches per stock: review them and re-select their items">Upload history</button>
       <button type="button" className="svg-btn danger" data-testid="stock-remove-selected"

@@ -48,6 +48,7 @@ export interface StockPanelOps {
   clearFilters: () => void;
   openRowBadges: () => void;
   openUploadHistory: () => void;
+  openRejectedUploads: () => void;
   closeDialog: () => void;
   metaDraftOf: (item: ExportedItem) => StockMetaDraft;
   editMeta: (item: ExportedItem, patch: Partial<IconMetadata>) => void;
@@ -277,6 +278,7 @@ export function useStockPanelOps(ctx: OpsCtx): StockPanelOps {
     clearFilters: () => ref.current.dispatch({ type: "patch", patch: { filter: ALL_STOCK_FILTER } }),
     openRowBadges: () => ref.current.dispatch({ type: "patch", patch: { dialog: { kind: "rowBadges" } } }),
     openUploadHistory: () => ref.current.dispatch({ type: "patch", patch: { dialog: { kind: "uploadHistory" } } }),
+    openRejectedUploads: () => ref.current.dispatch({ type: "patch", patch: { dialog: { kind: "rejectedUploads" } } }),
     closeDialog: () => ref.current.dispatch({ type: "patch", patch: { dialog: null } }),
     ...buildMetaAndUploadOps(ref),
   }), []);

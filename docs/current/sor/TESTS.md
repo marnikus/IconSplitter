@@ -7,7 +7,7 @@ No frozen test count: consult the runner for current measurements. The focused s
 - [Generate SVG and AI-source image edits](tests/svg.md) · [prompt, regeneration and review suites](tests/svg-prompt-review.md)
 - [SVG to upload](tests/upload.md)
 - [SVG builder](tests/svg-builder.md)
-- Stock Upload (`stockUpload`): `stockupload_batchhistory.test.ts` covers validated per-stock history, caps and safe full paths; `stockupload_batchsummary.test.ts` covers run-result text; `stockupload_runner.test.ts` covers transfer outcomes; `stockupload_ui.test.tsx` covers dialog, file rows, enlarged preview, current-list selection and recorded run counts.
+- Stock Upload (`stockUpload`): `stockupload_batchhistory.test.ts` covers validated per-stock history, caps and safe full paths; `stockupload_batchsummary.test.ts` covers run-result text; `stockupload_runner.test.ts` covers transfer outcomes; `stockupload_rejected.test.ts` / `stockupload_rejected_removal.test.ts` cover pasted rejected-file parsing, stem matching, badge removal and history edits; `stockupload_ui.test.tsx` covers dialog, file rows, the Remove unsuccessful uploads dialog with undo, enlarged preview, current-list selection and recorded run counts.
 - [Shared log, secrets and gate tooling](tests/shared.md)
 
 ## Acceptance expectation
