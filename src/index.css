@@ -2245,6 +2245,10 @@
 /* the frame clips 72 px beyond the artboard, no closer: lines, anchors and handles out there stay visible and editable */
 .svg-edit-board { clip-path: inset(-72px); }
 /* the layer that takes the pointer over that margin; the art sits above it (it comes later in the board) */
+/* The Getty web upload's wait line (2026-11-12): what it waits for, a counter, the next step. */
+.getty-wait { color: #f4c36b; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.getty-wait.doing { color: #8fb8ff; }
+.getty-wait small { color: var(--v2-muted); }
 .svg-edit-pasteboard { position: absolute; inset: -72px; cursor: crosshair; touch-action: none; user-select: none; }
 /* the margin reaches 72 px under its neighbours: the bar, the arrows, the AI panel and the legend paint (and click) above it */
 .svg-edit-toolbar, .svg-edit-legend, .svg-edit-arrow, .svg-edit-aside { position: relative; z-index: 2; }

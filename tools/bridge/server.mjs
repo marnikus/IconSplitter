@@ -31,7 +31,7 @@ import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } fro
 import { connectBrowser, findBrowser, resetProfile, resolveProfileDir } from "./gettyweb/browser.mjs";
 import { openCdp } from "./gettyweb/cdp.mjs";
 import {
-  gettyWebBusy, gettyWebHealth, handleGettyWebClose, handleGettyWebFinish, handleGettyWebProgress,
+  gettyWebBusy, gettyWebHealth, handleGettyWebClose, handleGettyWebFinish, handleGettyWebProgress, handleGettyWebSkipWait,
   releaseIdleSessions,
   handleGettyWebTest, handleGettyWebUpload,
 } from "./gettyweb/routes.mjs";
@@ -256,6 +256,7 @@ async function route(req, res, port) {
   if (req.method === "POST" && url === "/getty-web/finish") return handleGettyWebFinish(req, res, readBody, json);
   if (req.method === "POST" && url === "/getty-web/close") return handleGettyWebClose(req, res, readBody, json);
   if (req.method === "GET" && url === "/getty-web/progress") return handleGettyWebProgress(req, res, json);
+  if (req.method === "POST" && url === "/getty-web/skip-wait") return handleGettyWebSkipWait(req, res, readBody, json);
   if (req.method === "POST" && url === "/aichat/send") return handleAichatSend(req, res, readBody, json);
   if (req.method === "GET" && url === "/aichat/progress") return handleAichatProgress(req, res, json);
   if (req.method === "POST" && url === "/aichat/cancel") return handleAichatCancel(req, res, readBody, json);

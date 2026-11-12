@@ -18,6 +18,22 @@ export interface GettyWebProgress {
   reloads: number;
   /** Which 100-icon batch of the run these counts belong to (1-based). */
   batch?: number;
+  /** What the helper waits for right now (a retry timer or a deadline), when it waits. */
+  wait?: GettyWait;
+  /** What the helper is doing once a wait is over ("Reloading the Getty page…"). */
+  activity?: string;
+}
+
+/** A wait the helper reports: why, what comes next, which attempt, the time left (2026-11-12). */
+export interface GettyWait {
+  kind: string;
+  reason: string;
+  next: string;
+  remainingMs: number;
+  attempt?: number;
+  of?: number;
+  /** A retry timer can be skipped ("Retry now"); a deadline cannot. */
+  skippable: boolean;
 }
 
 function trimSlash(url: string): string {
@@ -26,7 +42,21 @@ function trimSlash(url: string): string {
 
 const countOf = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0);
 
+const TEXT_MAX = 240;
+const textOf = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value.slice(0, TEXT_MAX) : null);
+
+/** A wait with its words and counts; anything damaged is no wait at all. */
+function readWait(raw: unknown): GettyWait | null {
+  if (!isRecord(raw)) return null;
+  const kind = textOf(raw.kind), reason = textOf(raw.reason), next = textOf(raw.next);
+  if (kind === null || reason === null || next === null) return null;
+  const attempt = countOf(raw.attempt), of = countOf(raw.of);
+  return { kind, reason, next, remainingMs: countOf(raw.remainingMs), ...(attempt > 0 && of > 0 ? { attempt, of } : {}), skippable: raw.skippable === true };
+}
+
 function readProgress(raw: Record<string, unknown>): GettyWebProgress {
+  const wait = readWait(raw.wait);
+  const activity = textOf(raw.activity);
   return {
     phase: typeof raw.phase === "string" ? raw.phase : "uploading",
     total: countOf(raw.total), uploaded: countOf(raw.uploaded),
@@ -35,6 +65,8 @@ function readProgress(raw: Record<string, unknown>): GettyWebProgress {
     ...(countOf(raw.ready) > 0 ? { ready: countOf(raw.ready) } : {}),
     reloads: countOf(raw.reloads),
     ...(countOf(raw.batch) > 0 ? { batch: countOf(raw.batch) } : {}),
+    ...(wait !== null ? { wait } : {}),
+    ...(activity !== null ? { activity } : {}),
   };
 }
 
@@ -55,5 +87,27 @@ export async function gettyWebProgress(
     return readProgress(body.progress);
   } catch {
     return null;
+  }
+}
+
+/**
+ * "Retry now": asks the helper to cut its running retry timer short. True only
+ * when a timer was running and was skipped; a deadline, an idle run, a helper
+ * that is gone or too old to know the route all answer false — never an error.
+ */
+export async function gettyWebSkipWait(
+  bridgeUrl: string,
+  sessionKey: string,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): Promise<boolean> {
+  try {
+    const res = await fetchImpl(`${trimSlash(bridgeUrl)}/getty-web/skip-wait`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionKey }),
+    });
+    if (!res.ok) return false;
+    const body: unknown = await res.json();
+    return isRecord(body) && body.ok === true && body.skipped === true;
+  } catch {
+    return false;
   }
 }

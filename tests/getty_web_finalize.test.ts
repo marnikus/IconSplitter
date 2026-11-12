@@ -5,6 +5,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { finalizeBatch, gettyCreatedDate } from "../tools/bridge/gettyweb/contribute.mjs";
+import { createWaitControl } from "../tools/bridge/gettyweb/waits.mjs";
 import { gettyWebCreatedDate } from "../src/lib/stockupload/gettyweb";
 import type { CdpConnection } from "../tools/bridge/gettyweb/cdp.mjs";
 
@@ -567,6 +568,40 @@ describe("Getty web automatic finalize", () => {
     expect(afterReload).toContain("saveMetadataEditor");
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, notReady: [], resaves: 2 });
+  });
+
+  it("says what the readiness ladder waits for and what it does next; Retry now skips the timer", async () => {
+    // The retry window is a minute: only the skip lets the ladder move on in time.
+    const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      readUploadState: [notReady, notReady, notReady, notReady, { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] }],
+    };
+    const cdp = connection(queue);
+    const waits = createWaitControl();
+    const told: Array<{ next: string; attempt?: number; of?: number; remainingMs: number; skippable: boolean }> = [];
+    const doing: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 60_000, readyTimeoutMs: 600_000, waits,
+      onState: () => {
+        const now = waits.current();
+        if (now?.wait !== undefined) { told.push(now.wait); waits.skip(); }
+        if (now?.activity !== undefined) doing.push(now.activity);
+      },
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // the first timer is the re-save, the second the page reload — each with its attempt and a counter
+    expect(told[0]).toMatchObject({ attempt: 1, of: 5, skippable: true });
+    expect(told[0].next).toMatch(/Save metadata again/);
+    expect(told[0].remainingMs).toBeGreaterThan(50_000);
+    expect(told.some((w) => /reload the Getty page/.test(w.next) && w.attempt === 2)).toBe(true);
+    expect(cdp.calls).toContain("Page.reload");
+    expect(doing.some((line) => /Reloading the Getty page/.test(line))).toBe(true);
+    expect(waits.current()).toBeNull(); // nothing is left waiting once the gate has answered
   });
 
   it("always reloads a stuck batch page at least once before giving up on it", async () => {

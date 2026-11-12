@@ -1,3 +1,4 @@
+import type { WaitControl } from "./waits.mjs";
 export function runDriverStep(connection: any, sessionId: string, name: string, arg?: unknown): Promise<any>;
 export function openContributePage(connection: any, sessionId: string, url: string): Promise<any>;
 export function ensureSignedIn(connection: any, sessionId: string, options: {
@@ -18,6 +19,8 @@ export function createBatch(connection: any, sessionId: string, options: any): P
 export function attachFiles(connection: any, sessionId: string, options: {
   /** How long the page may stay silent before it is reloaded and retried. */
   stallMs?: number;
+  /** Tells the app what the retry timers wait for, and lets "Retry now" skip one. */
+  waits?: WaitControl;
   onReload?: (reloads: number) => void;
   paths: string[];
   names: string[];
@@ -48,6 +51,7 @@ export function notReadyContributions(expected: string[], state: any): string[];
  * stays unvalidated. `verified:false` means the page could not report readiness.
  */
 export function finishBatch(connection: any, sessionId: string, options?: {
+  waits?: WaitControl;
   expected?: string[];
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
@@ -87,6 +91,7 @@ export function reattachFiles(
   sessionId: string,
   files: Array<{ name: string; path: string }>,
   options?: {
+    waits?: WaitControl;
     pollMs?: number;
     /** How long the re-attached files may take to come back on the page. */
     retryTimeoutMs?: number;
@@ -99,6 +104,7 @@ export function reattachFiles(
 ): Promise<{ ok: boolean; code?: string; reason?: string; state: any }>;
 
 export function finalizeBatch(connection: any, sessionId: string, options: {
+  waits?: WaitControl;
   files: Array<{
     name: string;
     metadata: { title: string; description: string; keywords: string[]; dateCreated?: string } | null;

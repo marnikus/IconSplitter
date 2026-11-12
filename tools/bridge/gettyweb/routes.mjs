@@ -348,6 +348,19 @@ export function handleGettyWebProgress(req, res, json) {
   return json(res, 200, { ok: true, progress: entry.session.progress ?? null });
 }
 
+/**
+ * `POST /getty-web/skip-wait` {sessionKey}: "Retry now" — the retry timer the run
+ * is waiting on ends at once and the run takes its next step. `skipped` says
+ * whether a timer was running; a deadline or an idle run answers false.
+ */
+export async function handleGettyWebSkipWait(req, res, post, json) {
+  const parsed = parseCloseBody(await post(req, 65536));
+  const key = typeof parsed?.sessionKey === "string" ? parsed.sessionKey : null;
+  const entry = [...sessions.values()].find((item) => item.sessionKey === key && item.session);
+  if (!entry) return json(res, 404, { ok: false, code: "bad-request", reason: "no Getty upload is running for this run" });
+  return json(res, 200, { ok: true, skipped: entry.session.skipWait() === true });
+}
+
 function sessionKeyOf(rawUrl) {
   try {
     const value = new URL(String(rawUrl ?? "/"), "http://127.0.0.1").searchParams.get("sessionKey");

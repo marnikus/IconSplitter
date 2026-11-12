@@ -27,3 +27,5 @@ export function failureOutcome(headed: boolean, reason: unknown): { keepOpen: bo
 export function releaseSession(session: any, headed: boolean): "kept" | "closed";
 /** The per-batch state a new batch starts from. */
 export function resetBatchState(state: any): any;
+/** The live counts plus what the run waits for now (the wait, or what it is doing). */
+export function withWaitInfo(progress: any, waits: any): any;

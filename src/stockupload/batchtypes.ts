@@ -6,7 +6,7 @@ import type { LogSpec } from "../lib/log";
 import type { BridgeUploadInput, BridgeUploadResult } from "../lib/stockupload/bridgeclient";
 import type { FtpCredentials } from "../lib/stockupload/credvault";
 import type { PlannedTransfer, StockUploadPlan } from "../lib/stockupload/plan";
-import type { GettyWebProgress } from "../lib/stockupload/gettyprogress";
+import type { GettyWait, GettyWebProgress } from "../lib/stockupload/gettyprogress";
 import type {
   GettyWebFinishInput, GettyWebResult, GettyWebUploadInput,
 } from "../lib/stockupload/gettywebclient";
@@ -14,6 +14,11 @@ import type { ExportedItem, StockFtpPreset, UploadFormatKey } from "../lib/stock
 
 /** Which half of a run the bar is showing: bytes in, or chips validated. */
 export type UploadProgressPhase = "uploading" | "verifying";
+
+/** What the Getty run waits for, as the panel counts it down: the helper's reading and when it was taken. */
+export interface StepWait extends GettyWait {
+  readAt: number;
+}
 
 export interface UploadProgressStep {
   done: number;
@@ -33,6 +38,12 @@ export interface UploadProgressStep {
   runId?: string;
   /** The user stopped the run: it ended, but it is not a completion. */
   stopped?: boolean;
+  /** Getty web: what the helper waits for right now (2026-11-12) — a retry timer or a deadline. */
+  wait?: StepWait;
+  /** Getty web: what the helper is doing once a wait is over. */
+  activity?: string;
+  /** Getty web: "Retry now" — asks the helper to skip the running retry timer. */
+  skipWait?: () => void;
 }
 
 export interface UploadBatchDeps {
@@ -64,6 +75,8 @@ export interface UploadBatchDeps {
   logFn?: (spec: LogSpec) => void;
   /** Live per-file counts of the running upload, for the panel's progress line. */
   gettyWebProgressFn?: (bridgeUrl: string, sessionKey: string) => Promise<GettyWebProgress | null>;
+  /** "Retry now": skips the helper's running retry timer; the real route unless a test injects one. */
+  gettyWebSkipWaitFn?: (bridgeUrl: string, sessionKey: string) => Promise<boolean>;
   /** Every terminal task result, so UI-owned history can keep only successful files. */
   onTaskResult?: (task: PlannedTransfer, result: { ok: true } | { ok: false; reason: string }) => void;
 }

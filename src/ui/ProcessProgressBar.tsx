@@ -42,8 +42,10 @@ export interface ProcessProgressBarProps {
   onReview: () => void;
   /** The only way a finished bar goes away (besides the next run). */
   onDismiss: () => void;
-  /** One extra honest line next to "N remaining" (e.g. how many files a pass registered). */
-  note?: string;
+  /** One extra honest line next to "N remaining" (e.g. how many files a pass registered; the Getty wait with its counter). */
+  note?: ReactNode;
+  /** Extra controls of a RUNNING bar, beside Cancel (the Getty "Retry now"); a finished bar drops them. */
+  runningExtra?: ReactNode;
 }
 
 const MARKS: Record<Exclude<ProcessStatus, "running">, string> = { completed: "✓", failed: "!", cancelled: "■" };
@@ -79,8 +81,11 @@ function Leading({ p }: { p: ProcessProgressBarProps }) {
 function ProcessActions({ p }: { p: ProcessProgressBarProps }) {
   if (p.status === "running") {
     return (
-      <button type="button" className="svg-btn tiny" data-testid={`${p.prefix}-progress-cancel`}
-        disabled={p.cancelDisabled === true} onClick={p.onCancel}>{p.cancelLabel ?? "✕ Cancel"}</button>
+      <>
+        {p.runningExtra}
+        <button type="button" className="svg-btn tiny" data-testid={`${p.prefix}-progress-cancel`}
+          disabled={p.cancelDisabled === true} onClick={p.onCancel}>{p.cancelLabel ?? "✕ Cancel"}</button>
+      </>
     );
   }
   return (

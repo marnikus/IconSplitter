@@ -10,6 +10,7 @@ import path from "node:path";
 import { connectBrowser } from "./browser.mjs";
 import { openCdp } from "./cdp.mjs";
 import { restoreSessionCookies, saveSessionCookies } from "./sessioncookies.mjs";
+import { createWaitControl } from "./waits.mjs";
 import {
   attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage,
   reattachFiles, runDriverStep,
@@ -40,6 +41,17 @@ export function progressOf(read, reloads = 0, batch = 0) {
   // `batch` says which 100-icon batch the counts belong to: the app keeps the
   // bar's total across batches instead of restarting it at every new batch.
   return { total, uploaded, failed, listed, ...(ready > 0 ? { ready } : {}), reloads, ...(batch > 0 ? { batch } : {}) };
+}
+
+/**
+ * The live counts plus what the run waits for right now (2026-11-12): the wait
+ * (its reason, what comes next, the attempt, the time left) and what the run is
+ * doing once a wait is over. Counts only and our own wording — nothing else.
+ */
+export function withWaitInfo(progress, waits) {
+  if (!progress) return progress ?? null;
+  const info = waits.current();
+  return { ...progress, ...(info?.wait ? { wait: info.wait } : {}), ...(info?.activity ? { activity: info.activity } : {}) };
 }
 
 /**
@@ -258,6 +270,8 @@ function buildSession(ctx) {
   const { connection, page, options, cleanup } = ctx;
   const tempDir = mkdtempSync(path.join(tmpdir(), "getty-web-files-"));
   const state = { batchId: null, expected: [], progress: null, reloads: 0, batchNo: 0 };
+  // What the retry timers wait for, shared by every loop of this session (waits.mjs).
+  const waits = createWaitControl();
   // Kept for the finish call: the same staged copies are re-uploaded if the page
   // still shows a card without Getty's "Ready to submit" icon.
   const staged = { files: [], paths: [] };
@@ -289,6 +303,7 @@ function buildSession(ctx) {
      */
     async startBatch(input) {
       resetBatchState(state);
+      waits.end();
       // The previous batch's staged copies belong to a finished batch; the repair
       // hook must only ever re-attach files of the batch that is open now.
       staged.files = [];
@@ -327,8 +342,9 @@ function buildSession(ctx) {
         // Polled by the app, so the panel shows what Getty reports while it runs.
         onState: (read) => { state.progress = { ...at(read), phase: "uploading" }; },
         onReload: (count) => { state.reloads = count; },
-        onProgress: options.onProgress, signal: options.signal,
+        onProgress: options.onProgress, signal: options.signal, waits,
       });
+      waits.end();
       if (!result.ok) {
         state.progress = { ...at(result.state), phase: "failed" };
         return { ...result, batchId: state.batchId };
@@ -349,14 +365,15 @@ function buildSession(ctx) {
         // Cards without a picture have no drawer to fill: the walk jumps over
         // them and the readiness ladder's re-upload is what brings them back.
         uploaded: result.state?.uploaded ?? [],
-        onProgress: options.onProgress, signal: options.signal, onState, onReload, ...readyOptionsOf(options),
+        onProgress: options.onProgress, signal: options.signal, onState, onReload, waits, ...readyOptionsOf(options),
         // One counter for the whole batch: a reload during the metadata walk and
         // one during the readiness gate both show up in the panel's total.
         reloadMeter: { count: 0 },
         // A card Getty never validates (or rejected) is re-uploaded from its own
         // staged copy instead of being reported as uploaded.
-        repair: repairCapability(connection, page.sessionId, files, paths, { onState, onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs }),
+        repair: repairCapability(connection, page.sessionId, files, paths, { onState, onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs, waits }),
       });
+      waits.end();
       // The phase says whether Getty validated every card, not just that the
       // request returned: a failed readiness leaves the run unfinished.
       state.progress = { ...at(done.report?.readiness?.state ?? result.state), phase: done.ok ? "done" : "failed" };
@@ -377,19 +394,21 @@ function buildSession(ctx) {
       const baseReloads = state.reloads;
       const result = await finishBatch(connection, page.sessionId, {
         expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
-        onProgress: options.onProgress, ...readyOptionsOf(options),
+        onProgress: options.onProgress, waits, ...readyOptionsOf(options),
         onReload: (count) => { state.reloads = baseReloads + count; },
         repair: repairCapability(connection, page.sessionId, staged.files, staged.paths, {
-          onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs,
+          onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs, waits,
         }),
-      });
+      }).finally(() => waits.end());
       state.progress = { ...(state.progress ?? progressOf(null, state.reloads, state.batchNo)), phase: result.ok ? "done" : "failed" };
       return result;
     },
     /** Names this session has uploaded so far, for the finish report. */
     get expected() { return [...state.expected]; },
     /** Live per-file progress of the upload, polled by the app for its panel. */
-    get progress() { return state.progress ? { ...state.progress } : null; },
+    get progress() { return withWaitInfo(state.progress ? { ...state.progress } : null, waits); },
+    /** "Retry now": cuts the running retry timer short; false when none is running. */
+    skipWait() { return waits.skip(); },
     close() {
       if (closed) return;
       closed = true;

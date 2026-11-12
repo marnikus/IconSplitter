@@ -2,6 +2,7 @@
 // dialog shape. No queued success replies that could hide selector errors.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { attachFiles, createBatch, finishBatch, reattachFiles } from "../tools/bridge/gettyweb/contribute.mjs";
+import { createWaitControl } from "../tools/bridge/gettyweb/waits.mjs";
 
 const TYPE = "iStock creative illustration";
 const DIALOG = `<div role="dialog" aria-labelledby="create-batch-dialog" aria-modal="true">
@@ -763,6 +764,60 @@ describe("completing one batch for several icons", () => {
       ]);
       // The a.eps card covers the whole first pair; b.jpg has its own.
       expect(settled.state.uploaded).toEqual(["a.jpg", "a.eps", "b.jpg"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("counts down to the reload while no file appears, and says it is the reload", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new SilentPageThenCards();
+      const waits = createWaitControl();
+      const left: number[] = [];
+      let attempt: unknown = null;
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg", "/staged/a.eps", "/staged/b.jpg"], names: ["a.jpg", "a.eps", "b.jpg"],
+        timeoutMs: 120000, readyTimeoutMs: 2000, stallMs: 30000, waits,
+        onProgress: () => {
+          const wait = waits.current()?.wait;
+          if (wait === undefined) return;
+          left.push(wait.remainingMs);
+          attempt = { next: wait.next, attempt: wait.attempt, of: wait.of, skippable: wait.skippable };
+        },
+      });
+      await vi.advanceTimersByTimeAsync(11000);
+      expect(left.length).toBeGreaterThan(3);
+      expect(left[0]).toBeGreaterThan(left[left.length - 1]); // it counts down
+      expect(left[0] - left[left.length - 1]).toBeGreaterThanOrEqual(8000);
+      expect(attempt).toMatchObject({ attempt: 1, of: 2, skippable: true });
+      expect((attempt as { next: string }).next).toMatch(/reload the Getty page/);
+      expect(page.reloads).toBe(0); // 30 s have not passed: nothing was reloaded yet
+      await vi.advanceTimersByTimeAsync(30000);
+      expect((await result).ok).toBe(true);
+      expect(page.reloads).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Retry now skips the stall timer: the reload happens at once, not after 30 s", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new SilentPageThenCards();
+      const waits = createWaitControl();
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg", "/staged/a.eps", "/staged/b.jpg"], names: ["a.jpg", "a.eps", "b.jpg"],
+        timeoutMs: 120000, readyTimeoutMs: 2000, stallMs: 30000, waits,
+        onProgress: () => { if (waits.current()?.wait !== undefined) waits.skip(); },
+      });
+      await vi.advanceTimersByTimeAsync(4000); // far below the 30 s window
+      const settled = await result;
+      expect(settled.ok).toBe(true);
+      expect(page.reloads).toBe(1);
+      expect(waits.current()).toBeNull();
     } finally {
       vi.useRealTimers();
     }

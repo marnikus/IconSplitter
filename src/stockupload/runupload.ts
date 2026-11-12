@@ -4,10 +4,10 @@
 import { closeBridgeFtpsSession } from "../lib/stockupload/bridgeclient";
 import { GETTY_WEB_SUBMISSION_TYPE } from "../lib/stockupload/gettyweb";
 import { closeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
-import type { GettyWebProgress } from "../lib/stockupload/gettyprogress";
+import { gettyWebSkipWait, type GettyWebProgress } from "../lib/stockupload/gettyprogress";
 import type { StockUploadPlan } from "../lib/stockupload/plan";
 import type { StockFtpPreset } from "../lib/stockupload/types";
-import type { NetworkCtx, RunCounters, UploadBatchDeps, UploadBatchSummary } from "./batchtypes";
+import type { NetworkCtx, RunCounters, UploadBatchDeps, UploadBatchSummary, UploadProgressStep } from "./batchtypes";
 import { groupEspTasks } from "./esptransfer";
 import {
   buildTrackers, rejectLocalEspStage, runFileBatches, runNetworkGroups,
@@ -47,6 +47,18 @@ function noteReload(ctx: NetworkCtx, bound: ProgressBound, reloads: number): voi
   ctx.deps.logFn?.(pageReloadedSpec({ target: ctx.target.name, reloads: reload }));
 }
 
+/** The helper's wait (or what it is doing), with a way to skip a retry timer: what the panel shows beside the counts. */
+function waitStepOf(ctx: NetworkCtx, progress: GettyWebProgress): Partial<UploadProgressStep> {
+  const skip = ctx.deps.gettyWebSkipWaitFn ?? gettyWebSkipWait;
+  return {
+    ...(progress.wait !== undefined ? {
+      wait: { ...progress.wait, readAt: Date.now() },
+      skipWait: () => { void skip(ctx.deps.bridgeUrl, ctx.sessionKey); },
+    } : {}),
+    ...(progress.activity !== undefined ? { activity: progress.activity } : {}),
+  };
+}
+
 /** Getty's live counts in the panel: every card that turns moves the bar at once,
  *  across the whole run — the total carries from batch to batch. */
 function liveGettyProgress(ctx: NetworkCtx): { stop: () => void; onBatch: (label: string) => void } {
@@ -64,6 +76,7 @@ function liveGettyProgress(ctx: NetworkCtx): { stop: () => void; onBatch: (label
         // stage travels with the counts: bytes in, or chips flipping.
         phase: progressPhase(progress),
         label: progressLabel(progress, ctx.target.name, bound.batch),
+        ...waitStepOf(ctx, progress),
       });
     },
     ctx.deps.gettyWebProgressFn,

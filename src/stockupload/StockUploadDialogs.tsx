@@ -13,6 +13,7 @@ import type { StockUploadApi } from "./useStockUpload";
 import StockUploadHistoryDialog from "./StockUploadHistoryDialog";
 import StockRejectedUploadsDialog from "./StockRejectedUploadsDialog";
 import StockRemovalProgress from "./StockRemovalProgress";
+import { GettyWaitNote, GettyWaitSkip } from "./GettyWaitInfo";
 
 /** The Getty web target ids of a plan, so its icons can be sized per pair. */
 function gettyTargetIds(plan: StockUploadPlan): ReadonlySet<string> {
@@ -188,6 +189,8 @@ function StockProgressPortal({ g }: { g: StockUploadApi }) {
     <ProcessProgressBar prefix="stock-upload" theme="svg" title={bar.title} detail={bar.detail}
       done={bar.done} total={bar.total} remaining={bar.remaining} percent={bar.percent}
       status={stockStatusOf(p)} runId={p.runId ?? ""}
+      note={p.wait !== undefined || p.activity !== undefined ? <GettyWaitNote step={p} /> : undefined}
+      runningExtra={<GettyWaitSkip step={p} />}
       leading={<span className="svg-progress-check" aria-hidden="true">◍</span>}
       onCancel={g.cancelUpload} onReview={() => setAppState({ tab: "stockUpload" })} onDismiss={g.dismissProgress} />
   );

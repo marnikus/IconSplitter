@@ -49,6 +49,15 @@ const CONTRIBUTION_FILE_INPUT = 'input[type="file"][data-cy="upload-button-file-
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Runs a waiting loop and, however it ends, tells the app nothing is waited for any more (2026-11-12). */
+async function endWaits(options, run) {
+  try {
+    return await run();
+  } finally {
+    options.waits?.end();
+  }
+}
+
 /**
  * Getty needs a beat after a click that closes an overlay (the confirmation
  * dialog, the grid-wide save). The two settle windows are injectable so a test
@@ -265,7 +274,11 @@ export async function createBatch(connection, sessionId, options) {
  * proof and is what lets the metadata step start: the chip only appears once the
  * metadata has been saved, so waiting for it here would deadlock.
  */
-async function waitForFileNames(connection, sessionId, names, options) {
+function waitForFileNames(connection, sessionId, names, options) {
+  return endWaits(options, () => waitForFileNamesLoop(connection, sessionId, names, options));
+}
+
+async function waitForFileNamesLoop(connection, sessionId, names, options) {
   const timeoutMs = options.timeoutMs ?? 180000;
   const deadline = Date.now() + timeoutMs;
   const stallMs = options.stallMs ?? STALL_MS;
@@ -291,10 +304,19 @@ async function waitForFileNames(connection, sessionId, names, options) {
     } else {
       options.onProgress?.("the Getty page stopped answering — it is given another chance before the reload");
     }
+    // Say what this timer is for and let "Retry now" cut it short (2026-11-12).
+    const noReloadLeft = reloads.count >= MAX_RELOADS;
+    options.waits?.begin({
+      kind: "files", reason: `Getty has listed ${seen} of ${names.length} file(s) and nothing new has appeared`,
+      next: noReloadLeft ? "stop: the page did not move after the reloads" : "reload the Getty page and attach the missing files",
+      endsAt: movedAt + stallMs, attempt: Math.min(reloads.count + 1, MAX_RELOADS), of: MAX_RELOADS, skippable: !noReloadLeft,
+    });
+    if (options.waits?.takeSkip()) movedAt = Date.now() - stallMs;
     if (Date.now() - movedAt >= stallMs) {
       // Nothing has arrived for a while: reload, then re-attach only the rest.
       if (reloads.count >= MAX_RELOADS) return { ok: false, code: "page", reason: PAGE_STOPPED, state: last };
       options.onProgress?.(`no file for ${Math.round(stallMs / 1000)} s — reloading the Getty page and retrying the rest`);
+      options.waits?.act(`Reloading the Getty page (reload ${reloads.count + 1} of ${MAX_RELOADS}) and attaching the missing files…`);
       const reloaded = await reloadBatchPage(connection, sessionId, options);
       const recovered = reloaded ? await reattachMissing(connection, sessionId, last, options).catch(() => false) : false;
       if (!recovered) options.onProgress?.("the reload did not take — waiting for the page to answer again");
@@ -387,6 +409,7 @@ function settled(state, names) {
 /** Reloads a page that stopped rendering pictures, and returns its cards. */
 async function reloadForPicture(connection, sessionId, names, options, last, stallMs) {
   options.onProgress?.(`no new picture for ${Math.round(stallMs / 1000)} s — reloading the Getty page`);
+  options.waits?.act(`Reloading the Getty page (reload ${(options.reloadMeter?.count ?? 0) + 1} of ${MAX_RELOADS}) so it draws the missing pictures…`);
   await reloadBatchPage(connection, sessionId, options);
   const after = keepCards(last, await readStateSafe(connection, sessionId, names));
   options.onState?.(after);
@@ -398,7 +421,11 @@ async function reloadForPicture(connection, sessionId, names, options, last, sta
  * step — which starts the moment the last picture is on the page. A file that
  * never arrives (or is rejected) is reported, never called uploaded.
  */
-async function waitForVerified(connection, sessionId, names, options, first) {
+function waitForVerified(connection, sessionId, names, options, first) {
+  return endWaits(options, () => waitForVerifiedLoop(connection, sessionId, names, options, first));
+}
+
+async function waitForVerifiedLoop(connection, sessionId, names, options, first) {
   const deadline = Date.now() + (options.readyTimeoutMs ?? VERIFY_TIMEOUT_MS);
   let last = first;
   // A page that renders no contribution cards cannot show a picture at all:
@@ -419,7 +446,17 @@ async function waitForVerified(connection, sessionId, names, options, first) {
       moved = last.uploaded.length;
       movedAt = Date.now();
     }
-    if (Date.now() - movedAt < stallMs || meter.count >= MAX_RELOADS) continue;
+    const canReload = meter.count < MAX_RELOADS;
+    options.waits?.begin(canReload ? {
+      kind: "pictures", reason: `${last.uploaded.length} of ${names.length} file(s) show their picture and nothing new has appeared`,
+      next: "reload the Getty page so it draws the missing pictures", endsAt: movedAt + stallMs,
+      attempt: meter.count + 1, of: MAX_RELOADS, skippable: true,
+    } : {
+      kind: "pictures-bound", reason: `${last.uploaded.length} of ${names.length} file(s) show their picture and no reload is left`,
+      next: "report the files that never got one", endsAt: deadline, skippable: false,
+    });
+    if (canReload && options.waits?.takeSkip()) movedAt = Date.now() - stallMs;
+    if (Date.now() - movedAt < stallMs || !canReload) continue;
     // A card listed without its picture for a whole stall window is the page
     // giving up on its own uploader: the reload is what renders it.
     last = await reloadForPicture(connection, sessionId, names, options, last, stallMs);
@@ -485,6 +522,7 @@ export async function reattachFiles(connection, sessionId, files, options = {}) 
   if (list.length === 0) return { ok: false, code: "bad-request", reason: "no staged copy of the file(s) left to re-upload", state: null };
   const names = list.map((file) => file.name);
   options.onProgress?.(`re-uploading ${list.length} file(s) Getty has not marked Ready to submit`);
+  options.waits?.act(`Re-attaching ${list.length} file(s) to the batch page…`);
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
   const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
     sessionId, timeoutMs: options.uploaderTimeoutMs ?? 60000, intervalMs: pollMsOf(options),
@@ -501,6 +539,10 @@ export async function reattachFiles(connection, sessionId, files, options = {}) 
 /** Waits until the re-attached files are back on the page (a picture or a chip). */
 async function waitForReupload(connection, sessionId, names, options) {
   const deadline = Date.now() + (options.retryTimeoutMs ?? REPAIR_TIMEOUT_MS);
+  options.waits?.begin({
+    kind: "reupload", reason: `waiting for ${names.length} re-uploaded file(s) to come back on Getty's page`,
+    next: "report them as failed if they do not", endsAt: deadline, skippable: false,
+  });
   let state = null;
   const arrived = (read) => names.every((name) => read.uploaded.includes(name) || read.failed.includes(name));
   while (Date.now() < deadline) {
@@ -676,6 +718,7 @@ async function fillEveryFileMetadata(connection, sessionId, options) {
     options.onProgress?.(walk.problem === "editor-skeleton"
       ? "a file's metadata drawer is still a loading skeleton — reloading the Getty page and starting the files again from the first one"
       : "a file's metadata drawer never unlocked — reloading the Getty page and starting the files again from the first one");
+    options.waits?.act("Reloading the Getty page and walking the files' metadata again from the first one…");
     await reloadBatchPage(connection, sessionId, options);
     walk = await fillWalk(connection, sessionId, options, used < restarts);
   }
@@ -746,10 +789,11 @@ async function repairPending(connection, sessionId, pending, options) {
  */
 function waitForReadyToSubmit(connection, sessionId, expected, options, first) {
   const total = contributionCount(expected);
+  const plan = readyPlan(options);
   const ctx = {
     connection, sessionId, expected, options, total, state: first ?? null,
     resaves: 0, repairs: 0, meter: options.reloadMeter ?? { count: 0 },
-    plan: readyPlan(options), nextAt: Date.now() + (options.readyRetryMs ?? READY_RETRY_MS),
+    plan, planTotal: plan.length, nextAt: Date.now() + (options.readyRetryMs ?? READY_RETRY_MS),
   };
   return readFirst(ctx).then((ready) => ready ?? awaitReady(ctx));
 }
@@ -784,8 +828,31 @@ async function readFirst(ctx) {
   return { ok: true, verified: false, ready: 0, total, notReady: [], resaves: 0, repairs: 0, state: ctx.state };
 }
 
+/** What each ladder step will do, in the words the app shows (2026-11-12). */
+const READY_NEXT = {
+  resave: () => "press Save metadata again",
+  reload: () => "reload the Getty page, then save the metadata again",
+  repair: (count) => `re-upload ${count} file(s) from the staged copy`,
+};
+
+/** Tells the app what the readiness gate waits for: the ladder's next step with its timer, or the gate's deadline. */
+function announceReady(ctx, pending) {
+  const reason = `${pending.length} of ${ctx.total} file(s) are not marked "Ready to submit" yet`;
+  const step = ctx.plan[0];
+  ctx.options.waits?.begin(step === undefined
+    ? { kind: "ready-bound", reason, next: "report the files that never turned ready", endsAt: ctx.deadline, skippable: false }
+    : {
+      kind: "ready", reason, next: READY_NEXT[step](pending.length), endsAt: ctx.nextAt,
+      attempt: ctx.planTotal - ctx.plan.length + 1, of: ctx.planTotal, skippable: true,
+    });
+}
+
 /** Polls the cards, taking the ladder's next step whenever a whole window passes. */
-async function awaitReady(ctx) {
+function awaitReady(ctx) {
+  return endWaits(ctx.options, () => awaitReadyLoop(ctx));
+}
+
+async function awaitReadyLoop(ctx) {
   for (;;) {
     const pending = notReadyContributions(ctx.expected, ctx.state);
     if (pending.length === 0) {
@@ -795,6 +862,8 @@ async function awaitReady(ctx) {
     if (Date.now() >= (ctx.deadline ??= Date.now() + (ctx.options.readyTimeoutMs ?? READY_TIMEOUT_MS))) {
       return { ...refusalOf(ctx, pending), code: "timeout", reason: notReadyReason(pending, ctx.resaves, ctx.repairs) };
     }
+    announceReady(ctx, pending);
+    if (ctx.plan.length > 0 && ctx.options.waits?.takeSkip()) ctx.nextAt = Date.now();
     if (ctx.plan.length > 0 && Date.now() >= ctx.nextAt) {
       ctx.nextAt = Date.now() + (ctx.options.readyRetryMs ?? READY_RETRY_MS);
       await takeStep(ctx, pending, ctx.plan.shift());
@@ -821,11 +890,13 @@ async function takeStep(ctx, pending, action) {
   const { connection, sessionId, options } = ctx;
   if (action === "resave") {
     ctx.resaves += 1;
+    options.waits?.act(`Pressing Save metadata again (${ctx.resaves} of ${options.readyResaves ?? READY_RESAVES})…`);
     options.onProgress?.(`${pending.length} file(s) are not ready to submit — saving the metadata again (${ctx.resaves}/${options.readyResaves ?? READY_RESAVES})`);
     await saveEverySelected(connection, sessionId, options).catch(() => null);
   } else if (action === "reload") {
     // Reload, then apply the metadata again: a fresh page re-validates a card
     // only once its metadata is saved, so the save and the card reading follow.
+    options.waits?.act("Reloading the Getty page, then saving the metadata again…");
     options.onProgress?.(`${pending.length} file(s) are not ready to submit — reloading the Getty page, then saving their metadata again`);
     const back = await reloadBatchPage(connection, sessionId, { ...options, reloadMeter: ctx.meter });
     if (back) await saveEverySelected(connection, sessionId, options).catch(() => null);
@@ -833,6 +904,7 @@ async function takeStep(ctx, pending, action) {
     // Two re-saves were not enough: re-upload the cards instead of sitting on a
     // drawer Getty clearly will not validate. Its metadata is re-applied after.
     ctx.repairs += 1;
+    options.waits?.act(`Re-uploading ${pending.length} file(s) from the staged copy…`);
     await repairPending(connection, sessionId, pending, options);
   }
   const reread = await readStateSafe(connection, sessionId, ctx.expected);

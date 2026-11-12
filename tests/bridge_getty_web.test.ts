@@ -177,6 +177,13 @@ describe("Getty web helper routes", () => {
     expect(tested.status).toBe(503);
   });
 
+  it("has no wait to skip for a run that is not uploading", async () => {
+    const helper = await startHelper();
+    const res = await fetch(`${helper.url}/getty-web/skip-wait`, { method: "POST", body: JSON.stringify({ sessionKey: "run-1" }) });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ ok: false, code: "bad-request" });
+  });
+
   it("has no progress to report for a run that is not uploading", async () => {
     const helper = await startHelper();
     const res = await fetch(`${helper.url}/getty-web/progress?sessionKey=run-1`);

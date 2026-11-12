@@ -24,7 +24,7 @@ export interface ProgressFrameProps {
   /** The lifecycle state, mirrored as data-status for styles and tests. */
   status?: string;
   titleClass?: string;
-  note?: string;
+  note?: ReactNode;
   /** A new run id is a new bar in the one-bar-on-top stack (lib/barstack). */
   runId?: string;
 }

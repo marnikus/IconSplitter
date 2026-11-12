@@ -308,6 +308,54 @@ describe("Getty web upload in the batch runner", () => {
     expect(summary.lastError).toBeNull();
   });
 
+  it("carries what the helper waits for, and a way to skip it, into the panel's step", async () => {
+    vi.useFakeTimers();
+    try {
+      const root = new FakeDir("ws");
+      addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+      const found = await discoverExportedItems(root);
+      const steps: Array<Record<string, unknown>> = [];
+      const skips: string[] = [];
+      let reading: Record<string, unknown> | null = null;
+      let gate: () => void = () => undefined;
+      const run = executeStockUploadBatch(planFor(found.items), {
+        root,
+        bridgeUrl: "http://127.0.0.1:47391",
+        signal: new AbortController().signal,
+        loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+        onProgress: (step) => steps.push({ ...step }),
+        gettyWebUploadFn: async (input) => {
+          reading = {
+            phase: "uploading", batch: 1, total: 2, uploaded: 0, failed: 0, listed: 0, reloads: 0,
+            wait: { kind: "files", reason: "nothing new", next: "reload the Getty page", remainingMs: 21_000, attempt: 1, of: 2, skippable: true },
+          };
+          await new Promise<void>((resolve) => { gate = resolve; });
+          return { ok: true, batchId: "b", accepted: input.icons.flatMap((icon) => icon.files.map((file) => file.name)), failed: [], completed: false, completion: null, metadata: [] };
+        },
+        gettyWebProgressFn: async () => reading as unknown as GettyWebProgress | null,
+        gettyWebSkipWaitFn: async (_url, key) => { skips.push(key); return true; },
+        finishGettyWebFn: async () => ({ ok: true, batchId: "b", accepted: [], completed: true, completion: { clicked: true, label: "SUBMIT", confirmed: true }, metadata: [] }),
+        closeGettyWebFn: async () => undefined,
+      });
+      await vi.advanceTimersByTimeAsync(2500);
+      const withWait = steps.filter((step) => step.wait !== undefined);
+      expect(withWait.length).toBeGreaterThan(0);
+      const last = withWait[withWait.length - 1] as { wait: { next: string; remainingMs: number; readAt: number; skippable: boolean }; skipWait: () => void };
+      expect(last.wait).toMatchObject({ next: "reload the Getty page", remainingMs: 21_000, skippable: true });
+      expect(typeof last.wait.readAt).toBe("number");
+      last.skipWait();
+      expect(skips).toHaveLength(1);
+      // the helper moved on: the next reading says what it is doing now
+      reading = { phase: "uploading", batch: 1, total: 2, uploaded: 0, failed: 0, listed: 0, reloads: 1, activity: "Reloading the Getty page (reload 1 of 2)…" };
+      await vi.advanceTimersByTimeAsync(2500);
+      expect(steps.some((step) => step.activity === "Reloading the Getty page (reload 1 of 2)…" && step.wait === undefined)).toBe(true);
+      gate();
+      await run;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps the bar's total across batches instead of restarting at every 100 icons", async () => {
     // Batch 1's icons were validated, so batch 2 starts from them: the panel used
     // to fall back to batch 2's own counts (0 of 418) and never recovered.
