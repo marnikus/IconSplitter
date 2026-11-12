@@ -72,6 +72,49 @@ function snapMarks(doc: Document, st: EditorState, look: OverlayLook): Element[]
   return [el(doc, "path", { d }, `fill:none;stroke:${SNAP};stroke-width:1.5px`)];
 }
 
+/** The crosshair on the skew's fixed point (the box centre). */
+function skewPivot(doc: Document, c: Pt, look: OverlayLook): Element {
+  const g = doc.createElementNS(SVG_NS, "g");
+  g.setAttribute("data-skew-pivot", "");
+  const r = 5 * look.u, arm = 9 * look.u;
+  const css = `fill:none;stroke:${BLUE};stroke-width:1.2px`;
+  g.appendChild(el(doc, "circle", { cx: n(c.x), cy: n(c.y), r: n(r) }, css));
+  g.appendChild(el(doc, "line", { x1: n(c.x - arm), y1: n(c.y), x2: n(c.x + arm), y2: n(c.y) }, css));
+  g.appendChild(el(doc, "line", { x1: n(c.x), y1: n(c.y - arm), x2: n(c.x), y2: n(c.y + arm) }, css));
+  return g;
+}
+
+/** "⊿ : -11.6°" beside the pointer: a dark label with the skew angle. */
+function skewReadout(doc: Document, angle: number, at: Pt, look: OverlayLook): Element[] {
+  const u = look.u;
+  const x = at.x + 14 * u, y = at.y + 14 * u;
+  const text = el(doc, "text", { x: n(x + 7 * u), y: n(y + 13 * u) }, `fill:#fff;stroke:none;font-size:${n(11 * u)}px;font-family:sans-serif`);
+  text.setAttribute("data-skew-readout", "");
+  text.textContent = `⊿ : ${(Math.round(angle * 10) / 10 + 0).toFixed(1)}°`;
+  const back = el(doc, "rect", { x: n(x), y: n(y), width: n(72 * u), height: n(18 * u), rx: n(3 * u) }, "fill:#12182a;stroke:#35405e;stroke-width:1px");
+  return [back, text];
+}
+
+/** While a box edge is dragged: the skewed box (dashed), the fixed centre and the angle. */
+function skewMarks(doc: Document, st: EditorState, look: OverlayLook): Element[] {
+  const h = st.skewHint;
+  if (h == null) return [];
+  const points = h.quad.map((p) => `${n(p.x)},${n(p.y)}`).join(" ");
+  const quad = el(doc, "polygon", { points }, `fill:rgba(26,140,255,0.06);stroke:${BLUE};stroke-width:1px;stroke-dasharray:5 3`);
+  quad.setAttribute("data-skew-quad", "");
+  return [quad, skewPivot(doc, h.center, look), ...skewReadout(doc, h.angle, h.at, look)];
+}
+
+/** Alt + Shift over a line: the part a click would remove, laid over the line in red (never written). */
+function cutHintMarks(doc: Document, st: EditorState): Element[] {
+  const pts = st.cutHint;
+  if (pts == null || pts.length < 2) return [];
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${n(p.x)} ${n(p.y)}`).join("");
+  const line = el(doc, "path", { d }, "fill:none;stroke:#ff0000;stroke-width:4px;stroke-linecap:round;stroke-linejoin:round");
+  line.setAttribute("data-cut-hint", "");
+  return [line];
+}
+
 function marqueeBox(doc: Document, st: EditorState): Element[] {
   const m = st.marquee;
   if (m === null) return [];
@@ -122,11 +165,11 @@ export function drawEditOverlay(svg: Element, st: EditorState, look: OverlayLook
   const model = { subs: st.session.model.subs.map((s, i) => (editableSub(st.session, i) ? s : { ...s, anchors: [] })) };
   const selected = new Set(st.session.selection.map((r) => `${r.sub}:${r.i}`));
   const guide = look.guide === false ? [] : [el(doc, "path", { d: toPathData(model, 3) }, "fill:none;stroke:#c8d2e0;stroke-width:1px")];
-  const parts: Element[] = [...guide, ...snapMarks(doc, st, look)];
+  const parts: Element[] = [...guide, ...snapMarks(doc, st, look), ...cutHintMarks(doc, st)];
   // anchors first; a selected point's handles above them
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => parts.push(anchorDot(doc, a, selected.has(`${sub}:${i}`), look))));
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => { if (selected.has(`${sub}:${i}`)) parts.push(...handlesOf(doc, a, look)); }));
-  parts.push(...marqueeBox(doc, st), ...scaleBoxMarks(doc, st, look));
+  parts.push(...marqueeBox(doc, st), ...scaleBoxMarks(doc, st, look), ...skewMarks(doc, st, look));
   for (const p of parts) g.appendChild(p);
   svg.appendChild(g);
 }

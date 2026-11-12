@@ -9,6 +9,9 @@ import type { StockUploadApi } from "./useStockUpload";
 import { parseUploadLimit } from "../lib/stockupload/uploadlimit";
 import InvertButton from "../ui/InvertButton";
 import RandomSelectControl from "../ui/RandomSelectControl";
+import GetDataButton from "../ui/GetDataButton";
+import { stockDataRows } from "./getdatarows";
+import { getStockHistory } from "./historystore";
 
 export default function StockUploadBulkBar({ g }: { g: StockUploadApi }) {
   return (
@@ -50,6 +53,7 @@ function ActionCluster({ g }: { g: StockUploadApi }) {
       <ZoomControl thumb={g.model.prefs.thumb} onThumb={(thumb) => g.setPrefs({ thumb: clampZoom(thumb) })} />
       <span className="svg-divider" aria-hidden="true" />
       <UploadRowBadgeApply state={g.rowBadges} ids={g.checked} onApply={g.applyRowBadgeSelected} />
+      <GetDataButton testid="stock" count={g.checked.length} rows={() => selectedData(g)} />
       <span className="svg-divider" aria-hidden="true" />
       <RandomBatchesOption g={g} />
       <StockPresetsPopup g={g} />
@@ -59,6 +63,12 @@ function ActionCluster({ g }: { g: StockUploadApi }) {
       <UploadButtons g={g} />
     </div>
   );
+}
+
+/** The checked items for "Get data": files, and what each stock says (names from the stock presets). */
+function selectedData(g: StockUploadApi) {
+  const names = new Map(g.presetState.presets.map((p) => [p.id, p.name] as const));
+  return stockDataRows(g.items, g.checked, getStockHistory(), names);
 }
 
 function PreviewBgControl({ bg, onBg }: { bg: PreviewBackground; onBg: (b: PreviewBackground) => void }) {

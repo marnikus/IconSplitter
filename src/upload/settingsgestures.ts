@@ -5,7 +5,7 @@ import { SIZE_GUIDE_FIELDS } from "../lib/upload/settingssizeguide";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 
 const ENDPOINT_FIELDS: (keyof UploadSettings)[] = ["strokeLinecap"];
-const SHADOW_FIELDS: (keyof UploadSettings)[] = ["shadowEnabled", "shadowWidthPct", "shadowGapPct"];
+const SHADOW_FIELDS: (keyof UploadSettings)[] = ["shadowEnabled", "shadowWidthPct", "shadowGapPct", "shadowTemplateSvg"];
 const BADGE_FIELDS: (keyof UploadSettings)[] = [
   "badgeEnabled", "badgeTemplateSvg", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
 ];

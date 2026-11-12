@@ -41,11 +41,22 @@ export function withoutStockBadge(
   return { after: removed === 0 ? state : removeBadgeFromIds(base, itemIds, badge.id), removed };
 }
 
-/** Upload history and per-site status lose the matched items for this stock (not undoable: stored records). */
-export function dropRejectedFromHistory(stockId: string, itemIds: readonly string[]): { historyFiles: number; statuses: number } {
+/** The stock's upload runs lose the matched items; returns how many history files went. */
+export function dropHistoryFiles(stockId: string, itemIds: readonly string[]): number {
   const dropped = dropItemsFromBatches(getStockUploadBatches(), stockId, new Set(itemIds));
   replaceStockUploadBatches(dropped.batches);
-  return { historyFiles: dropped.removedFiles, statuses: markSitesRejected(itemIds, stockId, REJECTED_REASON) };
+  return dropped.removedFiles;
+}
+
+/** Upload history and per-site status lose the matched items for this stock (not undoable: stored records). */
+export function dropRejectedFromHistory(stockId: string, itemIds: readonly string[]): { historyFiles: number; statuses: number } {
+  const historyFiles = dropHistoryFiles(stockId, itemIds);
+  return { historyFiles, statuses: markSitesRejected(itemIds, stockId, REJECTED_REASON) };
+}
+
+/** The saved per-site status of the matched items turns "failed"; returns how many changed. */
+export function markStatusesRejected(stockId: string, itemIds: readonly string[]): number {
+  return markSitesRejected(itemIds, stockId, REJECTED_REASON);
 }
 
 export function rejectedSummary(stockName: string, r: RejectedRemovalResult): string {

@@ -5,19 +5,24 @@
 //
 // Select: click selects, drag moves (anchor, handle, segment), empty drag is a
 // marquee, Ctrl+click toggles smooth/corner, Alt on a smooth handle breaks the
-// mirror, Shift snaps the grabbed anchor. Draw: empty click adds (a drag pulls
+// mirror, Shift snaps the grabbed anchor, Alt+click on a line removes that one
+// segment (the rest stays), double-click selects a whole line (Shift adds it, Alt excludes it), Ctrl+A selects everything, dragging a box edge along itself skews the group by angle about its centre, Alt+Shift+click removes the part between the two
+// crossings around the click (hover shows it). Draw: empty click adds (a drag pulls
 // a smooth pair), segment click inserts, first anchor closes, another open
 // end joins. Keys: Delete, Esc, Enter (= Finish), Ctrl+Z / Ctrl+Y.
 
-import { anchorsInRect, hitTest, objectAt, snapPoint, type Hit, type HitRadii, type Snap } from "./hit";
+import { anchorsInRect, objectAt, snapPoint, type Hit, type Snap } from "./hit";
+import { hitOf } from "./hitof";
+import { cutStretchAt, removeAt } from "./linegesture";
 import { nextIndex, type AnchorRef, type PathModel, type Pt } from "./model";
 import {
   addAnchor, breakSmooth, closeSubpath, insertOnSegment, joinSubpaths,
   moveAnchors, moveHandle, pullHandles, toggleSmooth,
 } from "./ops";
-import { commit, editableSub, preview, type EditSession } from "./session";
+import { commit, preview, type EditSession } from "./session";
 import { rotateAnchors, rotateAngle, scaleAnchors, scaleFor, type Box, type BoxHandleId } from "./scale";
 import { boxCursorAt, boxTargetAt } from "./boxtarget";
+import { alongEdge, boxCenter, skewAngleFor, skewAnchors, skewedCorners, type SkewEdge } from "./skew";
 import { HIT_PX } from "./hitpx";
 
 export interface PointerInput {
@@ -31,6 +36,8 @@ export interface PointerInput {
   target?: number | null;
   /** How far (screen px) from a shape a single click still picks it — Edit settings; HIT_PX.pick when absent. */
   pickPx?: number;
+  /** The event's time (ms): quick clicks that make a double-click are told apart by it. */
+  time?: number;
 }
 
 type Drag =
@@ -39,7 +46,8 @@ type Drag =
   | { kind: "marquee"; start: Pt; objects: number[]; base: AnchorRef[]; mode: SelectMode }
   | { kind: "draw"; before: PathModel; base: PathModel; ref: AnchorRef }
   | { kind: "scale"; before: PathModel; refs: AnchorRef[]; handle: BoxHandleId; box: Box; start: Pt }
-  | { kind: "rotate"; before: PathModel; refs: AnchorRef[]; center: Pt; start: Pt };
+  | { kind: "rotate"; before: PathModel; refs: AnchorRef[]; center: Pt; start: Pt }
+  | { kind: "skew"; before: PathModel; refs: AnchorRef[]; edge: SkewEdge; box: Box; start: Pt };
 
 /** How a click or box changes the anchor selection: plain replaces, Shift adds, Alt removes. */
 export type SelectMode = "replace" | "add" | "remove";
@@ -53,6 +61,12 @@ export interface EditorState {
   marquee: { a: Pt; b: Pt } | null;
   /** When the last arrow-key nudge happened: a quick burst is one undo step (keys.ts). */
   nudgeAt?: number;
+  /** Alt + Shift over a line: the stretch between its two crossings a click would remove (drawn red). */
+  cutHint?: Pt[] | null;
+  /** While a box edge is dragged: the angle (degrees), the pointer, the fixed centre and the skewed box (drawn by the overlay). */
+  skewHint?: { angle: number; at: Pt; center: Pt; quad: Pt[] } | null;
+  /** The last Alt + click that removed a segment: when it was and the session before it (an Alt + double-click undoes it). */
+  lineCut?: { at: number; before: EditSession } | null;
 }
 
 /** Hit radii in screen pixels: generous anchors and handles, a 6 px band around a segment. */
@@ -64,12 +78,13 @@ export function cursorAt(st: EditorState, input: PointerInput): string | null {
   return st.drag === null ? boxCursorAt(st.session, input.p, input.unitsPerPx) : null;
 }
 
-/** A press on the box: the knob or a corner zone starts a rotation, a handle a scale drag. */
+/** A press on the box: the knob or a corner zone starts a rotation, a handle a scale drag, an edge a distortion. */
 function scaleDown(st: EditorState, input: PointerInput): EditorState | null {
   const t = boxTargetAt(st.session, input.p, input.unitsPerPx);
   if (t === null) return null;
   const { box } = t;
   const base = { before: st.session.model, refs: st.session.selection, start: input.p };
+  if (t.kind === "skew") return { ...st, drag: { kind: "skew", ...base, edge: t.edge, box } };
   if (t.kind === "rotate") return { ...st, drag: { kind: "rotate", ...base, center: { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2 } } };
   return { ...st, drag: { kind: "scale", ...base, handle: t.handle, box } };
 }
@@ -80,24 +95,27 @@ function scaleMove(st: EditorState, d: Extract<Drag, { kind: "scale" }>, input: 
   return withSession(st, preview(st.session, scaleAnchors(d.before, d.refs, f)));
 }
 
-export function editorState(session: EditSession): EditorState {
-  return { session, drag: null, snap: null, marquee: null };
+/** An edge drag: skew by the angle the pointer's travel asks for (Shift: 15° steps), and say so. */
+function skewMove(st: EditorState, d: Extract<Drag, { kind: "skew" }>, input: PointerInput): EditorState {
+  const angle = skewAngleFor(d.edge, d.box, alongEdge(d.edge, d.start, input.p), input.shift);
+  const skewHint = { angle: (angle * 180) / Math.PI, at: input.p, center: boxCenter(d.box), quad: skewedCorners(d.box, d.edge, angle) };
+  return { ...withSession(st, preview(st.session, skewAnchors(d.before, d.refs, { edge: d.edge, box: d.box, angle }))), skewHint };
 }
 
-function radii(u: number): HitRadii {
-  return { anchor: HIT_PX.anchor * u, handle: HIT_PX.handle * u, segment: HIT_PX.segment * u };
+export function editorState(session: EditSession): EditorState {
+  return { session, drag: null, snap: null, marquee: null };
 }
 
 const at = (m: PathModel, r: AnchorRef): Pt => m.subs[r.sub].anchors[r.i];
 const hasRef = (list: readonly AnchorRef[], r: AnchorRef): boolean => list.some((x) => x.sub === r.sub && x.i === r.i);
 const withSession = (st: EditorState, session: EditSession): EditorState => ({ ...st, session });
 
-/** What is under the pointer among the SELECTED objects (others are not editable, only snappable). */
-function hitOf(s: EditSession, input: PointerInput, selection: readonly AnchorRef[] = s.selection): Hit {
-  return hitTest(s.model, input.p, { radii: radii(input.unitsPerPx), selected: selection, editable: (sub) => editableSub(s, sub) });
+export function pointerDown(st: EditorState, input: PointerInput): EditorState {
+  const next = pressDown(st, input);
+  return next.cutHint ? { ...next, cutHint: null } : next;
 }
 
-export function pointerDown(st: EditorState, input: PointerInput): EditorState {
+function pressDown(st: EditorState, input: PointerInput): EditorState {
   const scaling = scaleDown(st, input);
   if (scaling !== null) return scaling;
   const hit = hitOf(st.session, input);
@@ -122,13 +140,14 @@ function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState
   return { ...st, session: { ...s, selection: base }, drag: { kind: "marquee", start: input.p, objects: s.objects, base, mode }, marquee: null };
 }
 
-/** A press on something: Ctrl toggles a point / inserts on a line, a handle starts a handle drag, else a move. */
+/** A press on something: Alt on a line removes it, Ctrl toggles a point / inserts on a line, a handle starts a handle drag, else a move. */
 function pressOn(st: EditorState, input: PointerInput, hit: Exclude<Hit, { kind: "none" }>): EditorState {
   const s = st.session;
   if (hit.kind === "handle") {
     const base = input.alt ? breakSmooth(s.model, hit.ref) : s.model;
     return { ...st, session: preview(s, base), drag: { kind: "handle", before: s.model, base, ref: hit.ref, side: hit.side } };
   }
+  if (input.alt && hit.kind === "segment") return input.shift ? cutStretchAt(st, hit) : removeAt(st, hit, input.time);
   if (input.ctrl) {
     return hit.kind === "segment" ? insertAt(st, hit) : withSession(st, { ...commit(s, toggleSmooth(s.model, hit.ref)), selection: [hit.ref] });
   }
@@ -182,7 +201,9 @@ function grab(st: EditorState, input: PointerInput, hit: Extract<Hit, { kind: "a
   // a line of the selection drags the whole selection, like one of its anchors (2026-11-06)
   const held = refs.find((r) => hasRef(s.selection, r));
   if (held !== undefined) return { ...st, drag: anchorDrag(s.model, s.selection, held, p) };
-  return { ...st, session: { ...s, selection: refs }, drag: anchorDrag(s.model, refs, refs[0], p) };
+  // Shift adds the line's two points to the selection (2026-11-10), a plain press replaces it
+  const next = input.shift ? [...s.selection, ...refs.filter((r) => !hasRef(s.selection, r))] : refs;
+  return { ...st, session: { ...s, selection: next }, drag: anchorDrag(s.model, next, refs[0], p) };
 }
 
 function anchorDrag(model: PathModel, refs: AnchorRef[], grab: AnchorRef, start: Pt): Drag {
@@ -232,6 +253,7 @@ export function pointerMove(st: EditorState, input: PointerInput): EditorState {
   if (d === null) return st;
   if (d.kind === "anchors") return anchorMove(st, d, input);
   if (d.kind === "scale") return scaleMove(st, d, input);
+  if (d.kind === "skew") return skewMove(st, d, input);
   if (d.kind === "rotate") return withSession(st, preview(st.session, rotateAnchors(d.before, d.refs, d.center, rotateAngle(d.center, d.start, input.p, input.shift))));
   if (d.kind === "handle") return withSession(st, preview(st.session, moveHandle(d.base, d.ref, d.side, input.p)));
   if (d.kind === "marquee") return marqueeMove(st, d, input.p);
@@ -243,7 +265,7 @@ export function pointerMove(st: EditorState, input: PointerInput): EditorState {
 /** Release: the gesture becomes one undo step (a plain click changed nothing and records nothing). */
 export function pointerUp(st: EditorState): EditorState {
   const d = st.drag;
-  const cleared = { ...st, drag: null, snap: null, marquee: null };
+  const cleared = { ...st, drag: null, snap: null, marquee: null, skewHint: null };
   if (d === null || d.kind === "marquee") return cleared;
   return { ...cleared, session: commit(st.session, st.session.model, d.before) };
 }
@@ -254,13 +276,5 @@ function insertAt(st: EditorState, hit: Extract<Hit, { kind: "segment" }>): Edit
   return ins === null ? st : withSession(st, { ...commit(st.session, ins.model), selection: [ins.ref] });
 }
 
-/** Double-click on a line (or one of its anchors) in Select selects all of that line's anchors (2026-11-06). */
-export function doubleClick(st: EditorState, input: PointerInput): EditorState {
-  const hit = hitOf(st.session, input, []);
-  if (st.session.tool !== "select" || (hit.kind !== "segment" && hit.kind !== "anchor")) return st;
-  const sub = hit.kind === "segment" ? hit.sub : hit.ref.sub;
-  const selection = st.session.model.subs[sub].anchors.map((_, i) => ({ sub, i }));
-  return withSession(st, { ...st.session, selection });
-}
-
 export { clearEditClipboard, keyDown, type KeyInput } from "./keys";
+export { doubleClick, hoverAt } from "./linegesture";

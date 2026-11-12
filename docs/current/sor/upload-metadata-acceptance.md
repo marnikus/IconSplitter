@@ -11,6 +11,17 @@ publishes/caches that accepted state once, retains any stored Creator/Copyright,
 acceptance and reports the actual accepted count, not the number of replies.
 Reload restores accepted state without another paid call or acceptance prompt.
 
+**Every field must be filled (2026-11-08).** Title, description, tags AND the
+one-word Icon Name: if any is empty the metadata is NOT accepted (state
+`invalid`, red message under the fields naming it, e.g. "Icon Name is empty …"),
+for a generated answer, a remembered draft and a manual or bulk Accept alike
+(`lib/upload/meta.validateUploadMetadata`; the stock tab keeps the shared
+`validateMetadata`). The draft stays editable: fill the field, then Accept. A
+saved prompt without a `Name:` line therefore yields invalid drafts until it
+asks for the name (Reset prompt restores the default). A package already
+exported before the Icon Name existed keeps its accepted state — a row that is
+not accepted exports WITHOUT metadata — and shows a yellow warning instead.
+
 Invalid/malformed/truncated results are never accepted as new metadata. Fixable
 invalid text remains editable; failure/cancellation retains previous text/state.
 Cancellation retains results already accepted but never starts chained exports.

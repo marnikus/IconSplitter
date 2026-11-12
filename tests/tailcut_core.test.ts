@@ -82,3 +82,26 @@ describe("the one-pass write", () => {
       .toBe('<svg><path d="M1 1L2 2" ></path></svg>');
   });
 });
+
+describe("what a tail is made of (for the highlight)", () => {
+  it("carries its tip (the open end) and the exact path from the tip to the crossing", () => {
+    const [tail] = findTails(svg('<path d="M0 50L100 50"/><path d="M40 10L40 55"/>'), 10);
+    expect(tail.tip).toEqual({ x: 40, y: 55 });
+    expect(tail.path[0]).toEqual(tail.tip);
+    expect(tail.path.at(-1)).toEqual(tail.cut);
+    expect(tail.path).toHaveLength(2);
+  });
+
+  it("follows a curved tail point by point, from the tip to the crossing", () => {
+    const [tail] = findTails(svg('<path d="M0 50L100 50"/><path d="M20 10C20 30 30 40 30 56"/>'), 10);
+    expect(tail.tip).toEqual({ x: 30, y: 56 });
+    expect(tail.path.length).toBeGreaterThan(2);
+    expect(tail.path.at(-1)?.y).toBeCloseTo(50, 1);
+    expect(tail.path.every((p) => p.y >= 50 - 1e-6 && p.y <= 56 + 1e-6)).toBe(true);
+  });
+
+  it("a tail at the start of a path has the start as its tip", () => {
+    const [tail] = findTails(svg('<path d="M0 50L100 50"/><path d="M40 53L40 10"/>'), 10);
+    expect(tail.tip).toEqual({ x: 40, y: 53 });
+  });
+});

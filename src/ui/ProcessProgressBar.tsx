@@ -64,7 +64,7 @@ export default function ProcessProgressBar(p: ProcessProgressBarProps) {
   useCompletionCue(p.runId, p.status, p.total);
   return (
     <ProgressFrame prefix={p.prefix} theme={p.theme} title={p.title} detail={p.detail} done={p.done} total={p.total}
-      remaining={p.remaining} percent={p.percent} note={p.note} stateClass={CLASSES[p.status]} status={p.status}
+      remaining={p.remaining} percent={p.percent} note={p.note} runId={p.runId} stateClass={CLASSES[p.status]} status={p.status}
       titleClass={p.status === "failed" ? "error" : p.status === "completed" ? "success" : undefined}
       leading={<Leading p={p} />} actions={<ProcessActions p={p} />} />
   );

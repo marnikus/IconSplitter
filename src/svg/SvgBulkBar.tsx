@@ -22,6 +22,9 @@ import TailCutBar from "./tailcut/TailCutBar";
 import type { RunProgress } from "./types";
 import PreviewBgPicker from "../ui/PreviewBgPicker";
 
+import GetDataButton from "../ui/GetDataButton";
+import type { DataRow } from "../lib/getdata";
+
 export interface SvgBulkBarProps {
   header: "none" | "some" | "all";
   checkedCount: number;
@@ -47,6 +50,8 @@ export interface SvgBulkBarProps {
   onBg: (bg: PreviewBackground) => void;
   onStroke: (px: number | null) => void;
   onGenerate: () => void;
+  /** The selected rows for "Get data" (read only when the button is pressed). */
+  getData?: () => readonly DataRow[];
   onRegenerate: () => void;
   /** AI source regeneration through the image connection (2026-10-16). */
   onImageRegen: () => void;
@@ -101,6 +106,7 @@ function BulkRight({ p }: { p: SvgBulkBarProps }) {
       <span className="svg-divider" aria-hidden="true" />
       <PreviewStroke stroke={p.stroke} onStroke={p.onStroke} sheet={SVG_STROKE_SHEET} idPrefix="svg" />
       <EditSettingsButton />
+      {p.getData && <GetDataButton testid="svg" count={p.checkedCount} rows={p.getData} />}
       <span className="svg-divider" aria-hidden="true" />
       <div className="svg-zoom">
         <label htmlFor="svg-thumb">ZOOM</label>

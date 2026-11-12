@@ -20,9 +20,14 @@ import InvertButton from "../ui/InvertButton";
 import RandomSelectControl from "../ui/RandomSelectControl";
 import PreviewBgPicker from "../ui/PreviewBgPicker";
 
+import GetDataButton from "../ui/GetDataButton";
+import type { DataRow } from "../lib/getdata";
+
 export interface UploadBulkBarProps {
   header: "none" | "some" | "all";
   checkedCount: number;
+  /** The selected rows for "Get data" (read only when the button is pressed). */
+  getData?: () => readonly DataRow[];
   visibleCount: number;
   totalCount: number;
   thumb: number;
@@ -108,6 +113,7 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
       <button type="button" className="svg-btn" data-testid="upload-settings-open" onClick={p.onSettings}>
         ⚙ Export settings…
       </button>
+      {p.getData && <GetDataButton testid="upload" count={p.checkedCount} rows={p.getData} />}
       <UploadRowBadgeApply state={p.rowBadges} ids={p.checkedIds} onApply={p.onApplyRowBadge} />
       <span className="svg-divider" aria-hidden="true" />
       <Progress p={p} running={running} />

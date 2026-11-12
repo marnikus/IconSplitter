@@ -157,6 +157,34 @@ export function validateMetadata(meta: IconMetadata): MetadataValidation {
   return { ok: errors.length === 0, errors, warnings: restrictedWarnings(meta) };
 }
 
+/** The error (and, for an already exported row, the warning) for an empty Icon Name. */
+export const NAME_EMPTY_MESSAGE = `Icon Name is empty — one word of at most ${NAME_MAX_CHARS} characters is required`;
+
+/**
+ * The "SVG to upload" acceptance rule (2026-11-08): EVERY field must be filled —
+ * title, description, tags AND the one-word Icon Name — or the metadata is not
+ * accepted and the row says which field is missing. `validateMetadata` stays the
+ * shared minimum policy (the stock tab has no Icon Name field).
+ */
+export function validateUploadMetadata(meta: IconMetadata): MetadataValidation {
+  const base = validateMetadata(meta);
+  if (cleanName(meta.name ?? "") !== "") return base;
+  return { ...base, ok: false, errors: [...base.errors, NAME_EMPTY_MESSAGE] };
+}
+
+/**
+ * A package exported before the Icon Name existed keeps its accepted state — a
+ * re-export of a row that is NOT accepted ships without metadata, so downgrading
+ * every old row would strip the files that already carry it — but it SAYS the
+ * field is empty (a yellow warning under the fields). New answers, edits and
+ * remembered drafts are held to the full rule (`validateUploadMetadata`).
+ */
+export function warnIfNameEmpty(validation: MetadataValidation | null, name: string | undefined): MetadataValidation | null {
+  if (cleanName(name ?? "") !== "") return validation;
+  const base = validation ?? { ok: true, errors: [], warnings: [] };
+  return { ...base, warnings: [...(base.warnings ?? []), NAME_EMPTY_MESSAGE] };
+}
+
 /**
  * The tags as they will be stored and searched: case-insensitive duplicates
  * gone, the FIRST spelling of each kept, the order untouched. The same

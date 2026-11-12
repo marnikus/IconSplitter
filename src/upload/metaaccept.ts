@@ -1,5 +1,5 @@
 // One acceptance gate for row and checked-only bulk actions. No model requests.
-import { cleanMetadata, validateMetadata } from "../lib/upload/meta";
+import { cleanMetadata, validateUploadMetadata } from "../lib/upload/meta";
 import { rememberMeta } from "./metacache";
 import { log } from "../log/logstore";
 import { namedSpec } from "./uploadlog";
@@ -19,7 +19,7 @@ export function idsAwaitingAcceptance(rows: readonly UploadRow[], ids: readonly 
 export function acceptMetadataRow(c: UploadCtx, row: UploadRow): UploadMetaState | null {
   if (row.meta.metadata === null) { c.say("Nothing to accept — generate metadata first", true); return null; }
   const metadata = cleanMetadata(row.meta.metadata);
-  const validation = validateMetadata(metadata);
+  const validation = validateUploadMetadata(metadata);
   if (!validation.ok) {
     c.dispatch({ type: "meta", id: row.source.id, meta: { ...row.meta, validation } });
     c.say(validation.errors.join("; "), true);

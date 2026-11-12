@@ -70,7 +70,7 @@ function ShadowSvg({ html, box, testid, label, version, stroke, marks }: ShadowP
   // Ctrl + hover: the drawing's anchor points (2026-11-05).
   useAnchorOverlay(host, html, useCtrlHover(host));
   useTailMarks(host, html, marks);
-  // Ctrl+Shift + scroll: zoom 10–400 % inside the same frame (2026-11-06).
+  // Ctrl + scroll: zoom 10–400 % inside the same frame (2026-11-06).
   const zoom = usePreviewZoom(frame);
   return (
     <div ref={frame} className="svg-zoom-box" style={{ width: box.width, height: box.height }}>

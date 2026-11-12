@@ -16,9 +16,10 @@ import type { HistoryActions } from "../state/HistoryProvider";
 import { getAppState, patchStockUpload } from "../state/appstore";
 import { getRowBadgeState, setRowBadgeState } from "../upload/rowbadgestore";
 import {
-  dropRejectedFromHistory, planRejectedRemoval, rejectedSummary, withoutStockBadge,
+  dropHistoryFiles, markStatusesRejected, planRejectedRemoval, rejectedSummary, withoutStockBadge,
   type RejectedRemovalInput, type RejectedRemovalResult,
 } from "./rejectedremoval";
+import { beginRemoval } from "./removalprogress";
 
 export interface StockSelectionApi {
   toggleCheck: (id: string) => void;
@@ -180,13 +181,23 @@ export function useStockRowBadgeActions(
 function applyRejectedRemoval(
   c: { hist: HistoryActions; say: (msg: string, err?: boolean) => void }, input: RejectedRemovalInput,
 ): RejectedRemovalResult {
-  const match = planRejectedRemoval(input);
-  const before = getRowBadgeState();
-  const badge = withoutStockBadge(before, input.stock, match.itemIds);
-  const label = `Remove ${input.stock.name} badge from rejected uploads`;
-  commitBadgeChange(c.hist, () => {}, { before, after: badge.after, label, ids: match.itemIds });
-  const stored = dropRejectedFromHistory(input.stock.id, match.itemIds);
-  const result = { items: match.itemIds.length, badges: badge.removed, ...stored, unmatched: match.unmatchedNames };
-  c.say(rejectedSummary(input.stock.name, result), result.items === 0);
-  return result;
+  const run = beginRemoval(input.stock.name);
+  try {
+    const match = planRejectedRemoval(input);
+    const before = getRowBadgeState();
+    const badge = withoutStockBadge(before, input.stock, match.itemIds);
+    const label = `Remove ${input.stock.name} badge from rejected uploads`;
+    commitBadgeChange(c.hist, () => {}, { before, after: badge.after, label, ids: match.itemIds });
+    run.step("Removing history files");
+    const historyFiles = dropHistoryFiles(input.stock.id, match.itemIds);
+    run.step("Updating site statuses");
+    const statuses = markStatusesRejected(input.stock.id, match.itemIds);
+    const result = { items: match.itemIds.length, badges: badge.removed, historyFiles, statuses, unmatched: match.unmatchedNames };
+    run.finish(result);
+    c.say(rejectedSummary(input.stock.name, result), result.items === 0);
+    return result;
+  } catch (error) {
+    run.fail();
+    throw error;
+  }
 }

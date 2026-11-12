@@ -43,7 +43,7 @@ For [Upload](upload.md); [I-60/I-62](invariants/upload.md).
 
 * **Selected-only Shadow** (2026-10-20): the global Export settings popup's
   **Checked icons** checkbox adds or removes the bundled
-  `src/svg/templates/shadow.svg` radial-gradient oval on CHECKED icons, hidden
+  `src/svg/templates/shadow.svg` radial-gradient oval ([or any SVG you paste](upload-shadow-template.md)) on CHECKED icons, hidden
   checks included, never the active unchecked row; mixed adds, all-on removes. Width/Gap change only checked icons that already have
   Shadow on — a dimension never enables one. Width 10–200% (80%) of the *final
   painted* icon width and bottom gap 0–100% (5%) of its height are not

@@ -5,6 +5,8 @@ import { iconText } from "../lib/iconIndex/record";
 import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderIconAsset } from "../lib/svgBuilder/types";
 import SvgBuilderAssetThumb from "./SvgBuilderAssetThumb";
+import GetDataButton from "../ui/GetDataButton";
+import { builderDataRows } from "./getdatarows";
 import SvgBuilderRecipe, { CategoryChips } from "./SvgBuilderRecipe";
 import type { BuilderApi } from "./useSvgBuilder";
 
@@ -15,6 +17,7 @@ export default function SvgBuilderLibrary({ b }: { b: BuilderApi }) {
     <div className="bld-col-head">
       <h3>Icon library <span className="bld-count" data-testid="builder-library-count">{b.assets.length}</span></h3>
       <span className="bld-eyebrow">STROKE ONLY</span>
+      <GetDataButton testid="builder" count={b.checked.length} rows={() => builderDataRows(b.assets, b.checked)} />
     </div>
     <div className="bld-col-scroll">
       <SvgBuilderRecipe b={b} />

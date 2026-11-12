@@ -16,14 +16,15 @@ import { bakeGeometry } from "./bake";
 import { expandStrokes } from "./expand";
 import type { PaddingSides } from "./padding";
 import { fitArtboard, paddingBox, type ArtboardFit, type FitTarget } from "./geom";
-import { visibleBounds, type Bounds } from "./geom/bounds";
-import { identity, type Matrix } from "./geom/matrix";
+import type { Bounds } from "./geom/bounds";
+import type { Matrix } from "./geom/matrix";
+import { FILE_PRECISION, insideArtboard, shippedBounds } from "./shippedbounds";
 import { restyleStrokes, type StrokeStyle } from "./restyle";
-import { appendUploadShadow } from "./shadow";
+import { appendUploadShadow, type ShadowSpec } from "./shadow";
+
+export { insideArtboard, shippedBounds };
 
 export const MAX_PASSES = 4;
-/** The file is written to 3 decimals; a residual under this is the rounding, not a misfit. */
-const FILE_PRECISION = 0.002;
 
 export interface PlaceWant {
   paddingPct: number | PaddingSides;
@@ -33,7 +34,7 @@ export interface PlaceWant {
   /** Default padding: fit the source viewBox (or width/height frame) — its margins, not just the measured artwork. */
   frame?: Bounds | null;
   /** Optional shadow sized from the final painted icon, then fitted together with it. */
-  shadow?: { widthPct: number; gapPct: number };
+  shadow?: ShadowSpec;
 }
 
 export interface Placed {
@@ -128,28 +129,12 @@ function unionBounds(a: Bounds, b: Bounds): Bounds {
   };
 }
 
-/** The bounds of the artwork as it ships: strokes measured by their real outline; the analytic bounds when the expander refuses. */
-export function shippedBounds(root: Element): Bounds | null {
-  const probe = root.cloneNode(true) as Element;
-  const exact = bakeGeometry(probe, identity()).unsupported.length === 0 && expandStrokes(probe).refused === null;
-  return visibleBounds(exact ? probe : root)?.bounds ?? null;
-}
-
 /** Enlarging the source viewport for a shadow would reveal this previously clipped paint. */
 export function overflowsSourceFrame(root: Element, frame: Bounds, painted: Bounds | null = shippedBounds(root)): boolean {
   if (painted === null) return false;
   return painted.minX < frame.minX - FILE_PRECISION || painted.minY < frame.minY - FILE_PRECISION
     || painted.minX + painted.width > frame.minX + frame.width + FILE_PRECISION
     || painted.minY + painted.height > frame.minY + frame.height + FILE_PRECISION;
-}
-
-/** True when nothing the document paints lies outside its viewBox (to the file's precision). */
-export function insideArtboard(root: Element): boolean {
-  const [x, y, w, h] = (root.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
-  const b = shippedBounds(root);
-  if (b === null || [x, y, w, h].some((n) => !Number.isFinite(n))) return false;
-  return b.minX >= x - FILE_PRECISION && b.minY >= y - FILE_PRECISION
-    && b.minX + b.width <= x + w + FILE_PRECISION && b.minY + b.height <= y + h + FILE_PRECISION;
 }
 
 /** One pass: clone → bake the fit → the configured stroke → expansion → measure. */
@@ -171,7 +156,7 @@ function candidate(source: Element, fit: ArtboardFit, want: PlaceWant): Candidat
 /** Add the ellipse only after the icon's shipped stroke/expansion is measured; fit their union. */
 function shadowedBounds(root: Element, icon: Bounds, spec: PlaceWant["shadow"]): { bounds: Bounds; shadow?: Element } | null {
   if (!spec) return { bounds: icon };
-  const shadow = appendUploadShadow(root, icon, spec.widthPct, spec.gapPct);
+  const shadow = appendUploadShadow(root, icon, spec);
   if (shadow === null) return null;
   const bounds = shippedBounds(root);
   return bounds === null ? null : { bounds, shadow };

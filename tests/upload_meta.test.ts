@@ -17,6 +17,7 @@ import {
   dedupeTags,
   parseMetadata,
   validateMetadata,
+  validateUploadMetadata,
   type IconMetadata,
 } from "../src/lib/upload/meta";
 import { metadataBlock } from "../src/lib/upload/export";
@@ -232,6 +233,42 @@ Name: growth`;
   it("has no `response` key when there was no AI answer (manual entry, older package)", () => {
     expect("response" in metadataBlock(VALID, info)!).toBe(false);
     expect("response" in metadataBlock(VALID, { ...info, response: "" })!).toBe(false);
+  });
+});
+
+describe("SVG to upload: every field must be filled to be accepted (2026-11-08)", () => {
+  const named = meta({ name: "team" });
+
+  it("a complete answer is valid", () => {
+    expect(validateUploadMetadata(named)).toMatchObject({ ok: true, errors: [] });
+  });
+
+  it("an empty or missing Icon Name is an error that names the field; the other rules are unchanged", () => {
+    for (const bad of [meta(), meta({ name: "" }), meta({ name: "   " }), meta({ name: "!!!" })]) {
+      const v = validateUploadMetadata(bad);
+      expect(v.ok).toBe(false);
+      expect(v.errors).toEqual(["Icon Name is empty — one word of at most 9 characters is required"]);
+    }
+  });
+
+  it.each<[string, Partial<IconMetadata>, string]>([
+    ["title", { title: "" }, "title must be at least 5 words (got 0)"],
+    ["description", { description: "" }, "description must be at least 7 words (got 0)"],
+    ["tags", { tags: [] }, "tags must be at least 10 (got 0)"],
+  ])("an empty %s is an error", (_field, over, message) => {
+    const v = validateUploadMetadata({ ...named, ...over });
+    expect(v.ok).toBe(false);
+    expect(v.errors).toContain(message);
+  });
+
+  it("everything empty reports every field", () => {
+    const v = validateUploadMetadata({ title: "", description: "", tags: [] });
+    expect(v.errors.length).toBeGreaterThanOrEqual(4);
+    expect(v.errors).toContain("Icon Name is empty — one word of at most 9 characters is required");
+  });
+
+  it("validateMetadata itself (the stock tab, which has no Icon Name field) does not require a name", () => {
+    expect(validateMetadata(meta()).ok).toBe(true);
   });
 });
 

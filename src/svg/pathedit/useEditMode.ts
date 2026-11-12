@@ -10,13 +10,15 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { editorState, type EditorState } from "../../lib/pathedit/gesture";
 import { IDENTITY, invertAffine, multiplyAffine, type Affine } from "../../lib/pathedit/model";
 import { loadObjects, previewData, writeObjects } from "../../lib/pathedit/objects";
-import { newSession, setTool } from "../../lib/pathedit/session";
+import { newSession, setTool, type Tool } from "../../lib/pathedit/session";
 import { GEOMETRY, pathTags, type PathTag } from "../../lib/pathedit/svgdoc";
 import { PREVIEW_CSS } from "../../lib/svgpreview";
 import { useEditSettings } from "../editsettings";
 import { SVG_STROKE_SHEET } from "../strokesheet";
 import { clearEditOverlay, drawEditOverlay } from "./editoroverlay";
 import { modalKeyAction, type ModalAction } from "./hotkeys";
+import { cutIntoSession, useEditorTailCut, type EditorTailCut } from "./useEditorTailCut";
+import { useRowMoves } from "./useRowMoves";
 import { toPathSpace, useEditorInput } from "./useEditorInput";
 import { usePreviewZoom, type PreviewZoom } from "../../ui/usePreviewZoom";
 
@@ -47,6 +49,9 @@ function objectMatrices(root: ShadowRoot, count: number): Affine[] {
   });
 }
 
+/** The picture does not clip: lines, anchors and handles beyond the artboard's edge stay visible (the board's margin is the limit). */
+const FREE_CSS = "<style>svg{overflow:visible}</style>";
+
 /** Paints the icon (re-painted when the stroke view changes); the counter tells the overlay to redraw. */
 function useArtboard(host: RefObject<HTMLDivElement | null>, html: string, view: StrokeView): number {
   const [painted, setPainted] = useState(0);
@@ -54,7 +59,7 @@ function useArtboard(host: RefObject<HTMLDivElement | null>, html: string, view:
     const node = host.current;
     if (node === null) return;
     const root = node.shadowRoot ?? node.attachShadow({ mode: "open" });
-    root.innerHTML = `${PREVIEW_CSS}${view === "thin" ? THIN_CSS : ""}${html}`;
+    root.innerHTML = `${PREVIEW_CSS}${FREE_CSS}${view === "thin" ? THIN_CSS : ""}${html}`;
     const r = root as ShadowRoot & { adoptedStyleSheets?: CSSStyleSheet[] };
     if (view === "preset") SVG_STROKE_SHEET.adopt(root);
     else if (r.adoptedStyleSheets !== undefined) r.adoptedStyleSheets = r.adoptedStyleSheets.filter((s) => s !== SVG_STROKE_SHEET.sheet());
@@ -108,7 +113,9 @@ function liveShape(root: ShadowRoot, t: PathTag, d: string): void {
 
 export interface EditModeArgs {
   host: RefObject<HTMLDivElement | null>;
-  /** The artboard frame: Ctrl+Shift + scroll over it zooms the icon inside it. */
+  /** The margin layer behind the art: it takes the pointer over the pasteboard round the artboard. */
+  margin?: RefObject<HTMLDivElement | null>;
+  /** The artboard frame: Ctrl + scroll over it zooms the icon inside it. */
   board: RefObject<HTMLDivElement | null>;
   source: string;
   html: string;
@@ -128,43 +135,36 @@ export interface EditMode {
   finish: () => void;
   dirty: boolean;
   zoom: PreviewZoom;
+  /** The tail cutter on this artwork (Ctrl+J / Ctrl+L, the top bar's Cut tails). */
+  cut: EditorTailCut;
 }
 
 export function useEditMode(a: EditModeArgs): EditMode {
   const { anchorPx, pickPx } = useEditSettings();
   const [view, setView] = useState<StrokeView>("preset");
-  const [leave, setLeave] = useState<1 | -1 | null>(null);
   const painted = useArtboard(a.host, a.html, view);
   const zoom = usePreviewZoom(a.board);
   const { st, setSt, matrices } = useStartSession(a.host, a.source, a.html);
   // a zoom changes the units per screen pixel: the overlay is redrawn at screen size
   usePaintSession(a.host, { source: a.source, st, matrices: matrices.current, anchorPx, painted: painted + zoom.view.scale, view });
   const markup = useCallback(() => (st === null ? null : writeObjects(a.source, st.session, matrices.current)), [st, a.source, matrices]);
-  const go = useCallback((dir: 1 | -1, mode: "ask" | "save" | "discard" | "save-approve") => {
-    const nav = a.nav;
-    if (nav === undefined || !(dir === 1 ? nav.canNext : nav.canPrev)) return;
-    const out = markup();
-    if (mode === "save-approve") { nav.onGo(dir, out, true); return; } // approves even with nothing to save
-    if (out === null || mode === "discard") nav.onGo(dir, null);
-    else if (mode === "save") nav.onGo(dir, out);
-    else setLeave(dir);
-  }, [a.nav, markup]);
-  const finish = useCallback(() => { const out = markup(); if (out !== null) a.onFinish(out); }, [markup, a]);
+  const written = markup();
+  const applyCut = useCallback((text: string) => {
+    if (st !== null) setSt(cutIntoSession(st, loadObjects(text, matrices.current)));
+  }, [st, setSt, matrices]);
+  const cut = useEditorTailCut({ host: a.host, current: written ?? a.source, html: a.html, view, applyCut });
+  const { leave, resolveLeave, go, finish } = useRowMoves(a, markup);
   const toggleView = useCallback(() => setView((v) => (v === "thin" ? "preset" : "thin")), []);
-  const resolveLeave = useCallback((choice: "save" | "discard" | "stay") => {
-    const dir = leave;
-    setLeave(null);
-    if (dir !== null && choice !== "stay") go(dir, choice);
-  }, [leave, go]);
-  const onKey = useModeKeys({ leave, resolveLeave, go, toggleView, st, setSt });
-  useEditorInput({ host: a.host, pathEl: () => a.host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish, pickPx, onKey });
-  return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty: markup() !== null, zoom };
+  const onKey = useModeKeys({ leave, resolveLeave, go, toggleView, st, setSt, cut });
+  useEditorInput({ host: a.host, margin: a.margin, pathEl: () => a.host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish, pickPx, onKey });
+  return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty: written !== null, zoom, cut };
 }
 
 interface KeyParts {
   leave: 1 | -1 | null;
   resolveLeave: EditMode["resolveLeave"];
   go: EditMode["go"];
+  cut: EditorTailCut;
   toggleView: () => void;
   st: EditorState | null;
   setSt: (st: EditorState) => void;
@@ -188,9 +188,17 @@ function useModeKeys(k: KeyParts): (e: KeyboardEvent) => boolean {
 }
 
 function runAction(action: ModalAction, k: KeyParts): void {
-  if (action === "prev" || action === "next") k.go(action === "next" ? 1 : -1, "ask");
-  else if (action === "save-next") k.go(1, "save-approve");
-  else if (action === "discard-next") k.go(1, "discard");
-  else if (action === "toggle-stroke") k.toggleView();
-  else if (k.st !== null) k.setSt({ ...k.st, session: setTool(k.st.session, action === "tool-draw" ? "draw" : "select") });
+  const tool = (t: Tool) => { if (k.st !== null) k.setSt({ ...k.st, session: setTool(k.st.session, t) }); };
+  const run: Record<ModalAction, () => void> = {
+    prev: () => k.go(-1, "ask"),
+    next: () => k.go(1, "ask"),
+    "save-next": () => k.go(1, "save-approve"),
+    "discard-next": () => k.go(1, "discard"),
+    "toggle-stroke": k.toggleView,
+    "tool-select": () => tool("select"),
+    "tool-draw": () => tool("draw"),
+    "cut-highlight": k.cut.highlight,
+    "cut-apply": k.cut.apply,
+  };
+  run[action]();
 }

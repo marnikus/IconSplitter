@@ -18,6 +18,7 @@ import { CorruptNote, Overlays, PairFilesNote, WriteBanner } from "../selection/
 import { useSideThumbs, type SideThumbFor } from "../selection/thumbs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import BulkBar from "./BulkBar";
+import { pairDataRows } from "./getdatarows";
 import FilterGrid from "./FilterGrid";
 import ReviewList from "./ReviewList";
 import SourceBar from "./SourceBar";
@@ -74,7 +75,7 @@ function Body({ v, thumbFor, onBulkArmed }: { v: SelectionV2Api; thumbFor: SideT
         onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckVisible())} onSelectVisible={v.checkVisible} onInvert={v.invertVisible}
         onDeselectAll={v.uncheckAll} onThumb={v.setThumb}
         onDecide={(d) => v.core.decideBulk(v.affected, d)} onReset={() => v.core.resetBulk(v.affected)}
-        onArmedChange={onBulkArmed} />
+        onArmedChange={onBulkArmed} getData={() => pairDataRows(v.core.s.pairs, v.checked)} />
       <ReviewList rows={v.core.visible} total={v.core.s.pairs.length} activeId={v.core.s.selectedId}
         checked={v.checked} thumb={v.prefs.thumbHeight} autoNext={v.core.s.autoNext} thumbFor={thumbFor}
         setAutoNext={(on) => v.core.patch({ autoNext: on })} onRowClick={(id, mods) => v.selectRow(id, selectIntent(mods))}

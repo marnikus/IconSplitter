@@ -14,6 +14,7 @@ import { useUpload, type UploadApi } from "./useUpload";
 import { uploadBulkSummary } from "./bulksummary";
 import UploadProgressHeaders from "./UploadProgressHeaders";
 import UploadBulkBar from "./UploadBulkBar";
+import { uploadDataRows } from "./getdatarows";
 import { resettableIds } from "./selectedsettings";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
@@ -116,7 +117,8 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         onAcceptMetadata={() => g.acceptMetadataSelected(g.checked)}
         onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)} onRemove={() => g.removeRows(g.checked)}
         onCancel={() => g.processes.download?.status === "running" ? g.cancelDownload() : g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport()}
-        rowBadges={g.rowBadges} checkedIds={g.checked} onApplyRowBadge={g.applyRowBadgeSelected} />
+        rowBadges={g.rowBadges} checkedIds={g.checked} onApplyRowBadge={g.applyRowBadgeSelected}
+        getData={() => uploadDataRows(g.rows, g.checked)} />
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { createRowReader, flushSourceHashes, type RowReader } from "./rowreads";
 import type { ExportRecord } from "../lib/upload/export";
 import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
 import { settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
-import { cleanMetadata, metadataFingerprint } from "../lib/upload/meta";
+import { cleanMetadata, metadataFingerprint, warnIfNameEmpty } from "../lib/upload/meta";
 import { getAppState, patchUpload } from "../state/appstore";
 import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
@@ -133,7 +133,7 @@ export function metaFromRecord(record: ExportRecord | null, interrupted: boolean
   return {
     state: "accepted",
     metadata,
-    validation: block.validation,
+    validation: warnIfNameEmpty(block.validation, metadata.name),
     usage: block.usage,
     ...(block.response ? { response: block.response } : {}),
     detail: "",

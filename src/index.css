@@ -1130,6 +1130,12 @@
 .svg-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
 .svg-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }
 .svg-progress-close:hover { color: var(--v2-text); }
+/* One bar on top (2026-11-09): the others stay mounted but hidden; ▲/▼ + a note on the main one. */
+.process-progress-header[hidden] { display: none; }
+.bar-stack-arrows { display: inline-flex; flex-direction: column; gap: 0; }
+.bar-stack-arrow { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; font-size: 8px; line-height: 10px; padding: 0 4px; }
+.bar-stack-arrow:hover { color: var(--v2-text); }
+.bar-stack-note { color: var(--v2-purple-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .batch-progress-header {
   display: grid;
   grid-template-columns: 260px 1fr 180px;
@@ -2194,13 +2200,15 @@
 }
 .svg-edit-position { color: var(--v2-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .svg-edit-spacer { flex: 1; }
+.svg-edit-cutnote { color: var(--v2-muted); font-size: 12px; white-space: nowrap; }
 .svg-edit-cancel { background: none; border: 0; color: var(--v2-text); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 2px 4px; }
 .svg-edit-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 14px; }
-.svg-edit-board { position: relative; background: #fff; border-radius: 4px; box-shadow: 0 10px 30px rgb(0 0 0 / 50%); }
+/* a 72 px pasteboard ring (a spread shadow: it paints UNDER the art, so lines beyond the border show on it) round the artboard (2026-11-10) */
+.svg-edit-board { position: relative; background: #fff; border-radius: 4px; box-shadow: 0 0 0 72px #858b99; }
 .svg-edit-board.contrast { outline: 1px solid #8aa0c8; } /* a dark background keeps black artwork findable */
 /* the board paints the chosen PREVIEW BG: the preview's own transparency checkerboard must not cover it */
 .svg-edit-board .svg-preview { background: none; }
-.svg-preview.editing { cursor: crosshair; touch-action: none; user-select: none; }
+.svg-preview.editing { cursor: crosshair; touch-action: none; user-select: none; overflow: visible; }
 .svg-edit-arrow {
   width: 44px; height: 88px; border-radius: 10px; border: 1px solid var(--v2-line); background: var(--v2-surface);
   color: var(--v2-text); font-size: 34px; line-height: 1; cursor: pointer;
@@ -2232,9 +2240,14 @@
 }
 .svg-edit-settings-pop small { color: var(--v2-muted); }
 
-/* Ctrl+Shift + scroll zoom inside a preview frame (ui/usePreviewZoom, 2026-11-06). */
+/* Ctrl + scroll zoom inside a preview frame (ui/usePreviewZoom, 2026-11-06). */
 .svg-zoom-box { position: relative; overflow: hidden; }
-.svg-edit-board { overflow: hidden; }
+/* the frame clips 72 px beyond the artboard, no closer: lines, anchors and handles out there stay visible and editable */
+.svg-edit-board { clip-path: inset(-72px); }
+/* the layer that takes the pointer over that margin; the art sits above it (it comes later in the board) */
+.svg-edit-pasteboard { position: absolute; inset: -72px; cursor: crosshair; touch-action: none; user-select: none; }
+/* the margin reaches 72 px under its neighbours: the bar, the arrows, the AI panel and the legend paint (and click) above it */
+.svg-edit-toolbar, .svg-edit-legend, .svg-edit-arrow, .svg-edit-aside { position: relative; z-index: 2; }
 .zoom-reset {
   position: absolute; top: 4px; right: 4px; z-index: 3; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--v2-line);
   background: rgb(12 18 34 / 88%); color: var(--v2-text); font-size: 11px; cursor: pointer; white-space: nowrap;

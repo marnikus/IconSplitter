@@ -6,7 +6,7 @@ import { cleanExportDom } from "./cleandom";
 import { writeEps } from "./eps";
 import type { Bounds } from "./geom/bounds";
 import { identity } from "./geom/matrix";
-import { insideArtboard } from "./place";
+import { insideArtboard } from "./shippedbounds";
 import { BADGE_SVG_NS, templateSafetyError } from "./badgetemplatesafety";
 
 export const DEFAULT_BADGE_TEMPLATE = bundledBadge;

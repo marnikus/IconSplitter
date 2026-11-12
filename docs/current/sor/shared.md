@@ -53,6 +53,7 @@ the 100 checks picked before come back after every reload"):
   (`upload/rowmodel.pruneChecked`, `stockupload/useStockUpload`,
   `svg/rowmodel.pruneChecked`): only a non-empty scan may prune, because only a
   non-empty scan can say which ids no longer exist.
+- **Get data** (every tab with selectable rows): copy the selected rows' names, status or paths as a comma-separated list — [Get data](get-data.md).
 - Tests: `session_selection_persist.test.tsx` (same-task write through the real
   panel, the 100-→-new replacement, the other-page snapshot, the empty scan, the
   refused write), `session.test.ts`, `workbench_ui.test.tsx`.

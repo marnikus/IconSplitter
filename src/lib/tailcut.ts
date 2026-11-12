@@ -28,6 +28,10 @@ export interface Tail {
   length: number;
   /** The tail's bounding box (without padding). */
   box: TailBox;
+  /** The open end the tail hangs from. */
+  tip: Pt;
+  /** The tail itself, tip first, ending at the crossing (curves flattened finely) — what a highlight draws. */
+  path: Pt[];
 }
 
 interface Piece { sub: number; seg: number; t0: number; t1: number; a: Pt; b: Pt; x0: number; y0: number; x1: number; y1: number; seen: number }
@@ -144,7 +148,8 @@ function tailFrom(c: { step: Step; r: number; length: number; walked: Pt[]; at: 
   if (c.length > tolerance || c.length < 1e-6) return null;
   const { step, r } = c;
   const cut = { x: step.from.x + (step.to.x - step.from.x) * r, y: step.from.y + (step.to.y - step.from.y) * r };
-  return { sub: c.at.sub, end: c.at.end, seg: step.seg, t: step.tFrom + (step.tTo - step.tFrom) * r, cut, length: c.length, box: boxOf([...c.walked, cut]) };
+  const path = [...c.walked, cut];
+  return { sub: c.at.sub, end: c.at.end, seg: step.seg, t: step.tFrom + (step.tTo - step.tFrom) * r, cut, length: c.length, box: boxOf(path), tip: c.walked[0], path };
 }
 
 /** The tail at one open end, if the first crossing is within `tolerance` of it. */

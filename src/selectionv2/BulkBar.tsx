@@ -13,6 +13,8 @@ import type { CheckState } from "../lib/reviewselect";
 import type { Decision } from "../lib/reviewfilter";
 import ZoomSlider from "./ZoomSlider";
 import InvertButton from "../ui/InvertButton";
+import GetDataButton from "../ui/GetDataButton";
+import type { DataRow } from "../lib/getdata";
 
 export type BulkAction = "approve" | "decline" | "reset";
 
@@ -32,6 +34,8 @@ export interface BulkBarProps {
   onDecide: (decision: Decision) => void;
   onReset: () => void;
   onArmedChange?: (armed: boolean) => void;
+  /** The selected rows for "Get data" (read only when the button is pressed). */
+  getData?: () => readonly DataRow[];
 }
 
 interface ActionSpec {
@@ -63,6 +67,7 @@ export default function BulkBar(p: BulkBarProps) {
       <div className="v2-bulk-right">
         <ZoomSlider value={p.thumb} onChange={p.onThumb} />
         <span className="v2-divider" aria-hidden="true" />
+        {p.getData && <GetDataButton testid="v2" count={p.checkedCount} rows={p.getData} />}
         {armed && (
           <button type="button" className="v2-btn ghost" data-testid="v2-cancel-bulk" onClick={() => setArmed(null)}>
             Cancel

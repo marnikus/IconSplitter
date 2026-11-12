@@ -56,10 +56,10 @@ export function useRowTailReview(id: string, svgPath: string, svg: string | null
   return r !== null && r.svgPath === svgPath && r.source === svg ? r : null;
 }
 
-/** A row's review and, unless hidden, its highlight boxes in the chosen colour and padding. */
+/** A row's review and, unless hidden, its highlights (end square + tail line) in the chosen colour and padding. */
 export function useRowTailMarks(id: string, svgPath: string, svg: string | null, look: { color: string; paddingPx: number }) {
   const review = useRowTailReview(id, svgPath, svg);
   const hidden = useTailMarksHidden();
-  const marks = review === null || hidden ? undefined : { boxes: review.tails.map((t) => t.box), color: look.color, paddingPx: look.paddingPx };
+  const marks = review === null || hidden ? undefined : { tails: review.tails.map((t) => ({ tip: t.tip, path: t.path, shape: t.shape })), color: look.color, paddingPx: look.paddingPx };
   return { review, marks };
 }

@@ -4,6 +4,8 @@
 // lifecycle on top; activity bars (ActivityBars) add nothing — they vanish
 // when their work ends. `percent: null` draws an indeterminate track.
 import type { ReactNode } from "react";
+import { BarStackArrows, BarStackNote } from "./BarStackControls";
+import { useBarStack, type BarSeat } from "./useBarStack";
 
 export interface ProgressFrameProps {
   prefix: string;
@@ -23,13 +25,28 @@ export interface ProgressFrameProps {
   status?: string;
   titleClass?: string;
   note?: string;
+  /** A new run id is a new bar in the one-bar-on-top stack (lib/barstack). */
+  runId?: string;
+}
+
+function KnownStats({ p }: { p: ProgressFrameProps }) {
+  const cls = `${p.theme}-progress`;
+  return (
+    <>
+      <span data-testid={`${p.prefix}-progress-completed`}>{p.done} completed / {p.total}</span>
+      <span data-testid={`${p.prefix}-progress-remaining`}>{p.remaining} remaining</span>
+      {p.note ? <span className={`${cls}-note`} data-testid={`${p.prefix}-progress-note`}>{p.note}</span> : null}
+    </>
+  );
 }
 
 export default function ProgressFrame(p: ProgressFrameProps) {
   const cls = `${p.theme}-progress`;
+  // Only the main bar is visible; the others stay mounted (their lifecycle and cues keep running).
+  const seat = useBarStack(p.title, p.percent, p.runId);
   return (
     <div className={`${cls}-header process-progress-header${p.stateClass ?? ""}`} data-testid={`${p.prefix}-progress-header`}
-      data-status={p.status}>
+      data-status={p.status} hidden={!seat.isMain}>
       <div className={`${cls}-left`}>
         {p.leading}
         <div className={`${cls}-text`}>
@@ -37,8 +54,9 @@ export default function ProgressFrame(p: ProgressFrameProps) {
           <span className={`${cls}-file`} data-testid={`${p.prefix}-progress-file`} title={p.detail}>{p.detail}</span>
         </div>
       </div>
-      <FrameStats p={p} />
+      <FrameStats p={p} seat={seat} />
       <div className={`${cls}-right`}>
+        <BarStackArrows seat={seat} />
         <span className={`${cls}-percent`} data-testid={`${p.prefix}-progress-percent`}>{p.percent === null ? "…" : `${p.percent}%`}</span>
         {p.actions}
       </div>
@@ -46,7 +64,7 @@ export default function ProgressFrame(p: ProgressFrameProps) {
   );
 }
 
-function FrameStats({ p }: { p: ProgressFrameProps }) {
+function FrameStats({ p, seat }: { p: ProgressFrameProps; seat: BarSeat }) {
   const cls = `${p.theme}-progress`;
   const known = p.percent !== null;
   return (
@@ -56,11 +74,10 @@ function FrameStats({ p }: { p: ProgressFrameProps }) {
         aria-valuetext={known ? `${p.done} of ${p.total} processed` : "working"}>
         <div className={`${cls}-fill`} style={{ width: known ? `${p.percent}%` : undefined }} />
       </div>
-      {known ? (
+      {known || (seat.isMain && seat.others.length > 0) ? (
         <div className={`${cls}-stats`}>
-          <span data-testid={`${p.prefix}-progress-completed`}>{p.done} completed / {p.total}</span>
-          <span data-testid={`${p.prefix}-progress-remaining`}>{p.remaining} remaining</span>
-          {p.note ? <span className={`${cls}-note`} data-testid={`${p.prefix}-progress-note`}>{p.note}</span> : null}
+          {known ? <KnownStats p={p} /> : null}
+          <BarStackNote seat={seat} />
         </div>
       ) : null}
     </div>

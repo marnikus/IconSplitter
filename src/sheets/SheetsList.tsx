@@ -18,11 +18,17 @@ export interface SheetsListProps {
   onAdd: () => void;
 }
 
+import GetDataButton from "../ui/GetDataButton";
+import { sheetDataRows } from "./getdatarows";
+
 export default function SheetsList(p: SheetsListProps) {
   const ids = p.sheets.map((s) => s.id);
   return (
     <section className="panel">
       <ListHeader ids={ids} checked={p.sel.checked} onSetCheck={p.onSetCheck} />
+      <div className="mb-2 flex justify-end">
+        <GetDataButton testid="sheet" count={p.sel.checked.filter((id) => ids.includes(id)).length} rows={() => sheetDataRows(p.sheets, p.sel.checked)} />
+      </div>
       <div className="space-y-2 outline-none" tabIndex={0} data-testid="sheet-list" onKeyDown={(e) => onListKey(e, p, ids)}>
         {p.sheets.map((s) => <SheetRow key={s.id} sheet={s} sel={p.sel} p={p} />)}
       </div>

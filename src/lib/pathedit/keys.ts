@@ -1,12 +1,12 @@
 // keys.ts — the SVG edit mode's keyboard rules (2026-11-06), split from
 // gesture.ts: Delete (keep the line joined) / Ctrl+Delete (break it), Esc,
-// Enter (= Finish), Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y on the session's history,
+// Enter (= Finish), Ctrl+A (select all), Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y on the session's history,
 // and Ctrl+C / Ctrl+V with a clipboard that outlives a session. Pure apart from
 // that clipboard.
 
 import { copyPieces, pasteOffset, pastePieces } from "./clipboard";
 import type { EditorState } from "./gesture";
-import type { SubPath } from "./model";
+import { ownersOf, type SubPath } from "./model";
 import { breakAtAnchors, deleteAnchors, moveAnchors } from "./ops";
 import { commit, redoSession, undoSession, type EditSession } from "./session";
 
@@ -20,6 +20,12 @@ const removeSelected = (s: EditSession): EditSession =>
 /** Ctrl + Delete: the line breaks at the selected points. */
 const breakSelected = (s: EditSession): EditSession =>
   (s.selection.length === 0 ? s : { ...commit(s, breakAtAnchors(s.model, s.selection)), selection: [], active: null });
+
+/** Ctrl + A (2026-11-10): every object on the artboard and all their anchors; the selection is not an edit, so no undo step. */
+function selectAll(s: EditSession): EditSession {
+  const selection = s.model.subs.flatMap((sub, si) => sub.anchors.map((_, i) => ({ sub: si, i })));
+  return { ...s, objects: ownersOf(s.model), selection, active: null };
+}
 
 /** Esc ends a draw in progress, else clears the selected anchors, else the selected paths. */
 function escape(s: EditSession): EditSession {
@@ -72,6 +78,7 @@ function nudge(st: EditorState, [dx, dy]: [number, number], step: number): Edito
 const CTRL_KEYS: Record<string, (s: EditSession, shift: boolean) => EditSession> = {
   z: (s, shift) => (shift ? redoSession(s) : undoSession(s)),
   y: (s) => redoSession(s),
+  a: (s) => selectAll(s),
   c: (s) => copySelected(s),
   v: (s) => pasteClipboard(s),
   delete: (s) => breakSelected(s),

@@ -94,10 +94,10 @@ describe("review, then approve", () => {
 });
 
 describe("highlights are preview only", () => {
-  it("the row preview draws a box per tail in the chosen colour; the file is untouched", async () => {
+  it("the row preview draws an end square and the tail line per tail in the chosen colour; the file is untouched", async () => {
     await act(async () => {
       ui.render(<SvgPreviewBox code={TAILED} box={{ width: 100, height: 100 }} testid="p" label="x" version={1}
-        marks={{ boxes: [{ x: 40, y: 50, width: 0, height: 5 }], color: "#00ff00", paddingPx: 6 }} />);
+        marks={{ tails: [{ tip: { x: 40, y: 55 }, path: [{ x: 40, y: 55 }, { x: 40, y: 50 }] }], color: "#00ff00", paddingPx: 6 }} />);
     });
     const shadow = (host.querySelector("[data-testid=p]") as HTMLElement).shadowRoot as ShadowRoot;
     const marks = shadow.querySelectorAll("[data-tail-mark] rect");

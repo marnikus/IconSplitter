@@ -14,6 +14,7 @@ import { OpenFolderButton } from "../ui/FolderBar";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import { PanelDialogs, panelRowActions } from "./panelbits";
 import SvgBulkBar from "./SvgBulkBar";
+import { svgDataRows } from "./getdatarows";
 import RunRecord from "./RunRecord";
 import SvgImgReview from "./SvgImgReview";
 import SvgImgInflight from "./SvgImgInflight";
@@ -121,7 +122,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
           onRegenerate={() => g.regenerateSelected(g.checked)}
           onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}
           onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun}
-          onRegisterExisting={() => g.registerExisting(g.checked)}
+          onRegisterExisting={() => g.registerExisting(g.checked)} getData={() => svgDataRows(g.rows, g.checked)}
           onRegisterImages={() => g.registerImages(g.checked)} onRemove={() => g.removeRows(g.checked)}
           checkedIds={g.checked} onCutTails={g.cutTails} onApproveCuts={g.approveCuts} />
       </div>

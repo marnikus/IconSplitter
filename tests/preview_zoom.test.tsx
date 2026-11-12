@@ -1,4 +1,4 @@
-// preview_zoom.test.tsx — Ctrl+Shift + scroll zooms an SVG preview (2026-11-06):
+// preview_zoom.test.tsx — Ctrl + scroll zooms an SVG preview (2026-11-06; plain Ctrl since 2026-11-09):
 // Generate SVG and SVG to upload row previews (both draw through SvgPreviewBox)
 // and the edit mode's artboard. 10 %–400 %, toward the pointer (the point under
 // it stays put); the frame keeps its size; a small "100 %" button resets.
@@ -37,7 +37,7 @@ beforeEach(() => { host = document.createElement("div"); document.body.append(ho
 afterEach(() => { act(() => ui.unmount()); host.remove(); });
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 /** happy-dom's WheelEvent drops modifiers and coordinates: they are set on the event as a browser would. */
-const wheel = (el: Element, deltaY: number, mods: { ctrlKey?: boolean; shiftKey?: boolean } = { ctrlKey: true, shiftKey: true }) => {
+const wheel = (el: Element, deltaY: number, mods: { ctrlKey?: boolean; shiftKey?: boolean } = { ctrlKey: true }) => {
   const e = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY });
   const props = { ctrlKey: mods.ctrlKey ?? false, shiftKey: mods.shiftKey ?? false, metaKey: false, clientX: 10, clientY: 10, deltaX: 0 };
   for (const [k, v] of Object.entries(props)) Object.defineProperty(e, k, { value: v });
@@ -48,7 +48,7 @@ describe("a row preview", () => {
   const SVG = '<svg viewBox="0 0 24 24"><path d="M2 2L20 20"/></svg>';
   const mount = () => act(async () => { ui.render(<SvgPreviewBox code={SVG} box={{ width: 100, height: 100 }} testid="p" label="icon" version={1} />); });
 
-  it("Ctrl+Shift + scroll zooms the artwork inside the same frame; 100 % resets", async () => {
+  it("Ctrl + scroll zooms the artwork inside the same frame; 100 % resets", async () => {
     await mount();
     const art = q("[data-testid=p]") as HTMLElement;
     expect(q("[data-testid=p-zoom]")).toBeNull();
@@ -63,6 +63,18 @@ describe("a row preview", () => {
     expect(q("[data-testid=p-zoom]")).toBeNull();
   });
 
+  it("Ctrl+Shift + scroll still zooms; Shift alone, like a plain scroll, leaves the page to scroll", async () => {
+    await mount();
+    const art = q("[data-testid=p]") as HTMLElement;
+    let prevented = false;
+    await act(async () => { prevented = !wheel(art, -100, { ctrlKey: true, shiftKey: true }); });
+    expect(prevented).toBe(true);
+    expect(art.style.transform).toMatch(/scale\(1\.1/);
+    await act(async () => { prevented = !wheel(art, -100, { shiftKey: true }); });
+    expect(prevented).toBe(false);
+    expect(art.style.transform).toMatch(/scale\(1\.1/); // unchanged by the Shift-only scroll
+  });
+
   it("a plain scroll still scrolls the page", async () => {
     await mount();
     const art = q("[data-testid=p]") as HTMLElement;
@@ -74,7 +86,7 @@ describe("a row preview", () => {
 });
 
 describe("the edit mode's artboard", () => {
-  it("zooms with Ctrl+Shift + scroll and resets with its 100 % button; the legend says so", async () => {
+  it("zooms with Ctrl + scroll and resets with its 100 % button; the legend says so", async () => {
     await act(async () => {
       ui.render(<SvgPathEditor source={'<svg viewBox="0 0 24 24"><path d="M2 2L12 2"/></svg>'} box={{ width: 200, height: 200 }}
         testid="e" label="icon" onFinish={vi.fn()} onCancel={vi.fn()} />);
@@ -85,7 +97,8 @@ describe("the edit mode's artboard", () => {
     expect(q("[data-testid=e-zoom]")?.textContent).toContain("121%");
     await act(async () => { (q("[data-testid=e-zoom]") as HTMLButtonElement).click(); });
     expect(art.style.transform).toMatch(/scale\(1\)/);
-    expect(q("[data-testid=e-legend]")?.textContent).toContain("Ctrl+Shift+Scroll");
+    expect(q("[data-testid=e-legend]")?.textContent).toContain("Ctrl+Scroll");
+    expect(q("[data-testid=e-legend]")?.textContent).not.toContain("Ctrl+Shift+Scroll");
   });
 });
 

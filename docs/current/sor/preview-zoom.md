@@ -1,8 +1,8 @@
-# Preview zoom and pan — Ctrl+Shift + scroll, middle-drag (2026-11-06)
+# Preview zoom and pan — Ctrl + scroll, middle-drag (2026-11-06)
 
 [Path editor](svg-path-editor.md) · [Generate SVG](svg-generation.md) · [SVG to upload](upload.md)
 
-**Ctrl+Shift + scroll** over an SVG preview zooms the artwork **10 %–400 %**
+**Ctrl + scroll** (Ctrl+Shift also works) over an SVG preview zooms the artwork **10 %–400 %**
 (×1.1 per notch) toward the pointer — the point under it stays put — inside a
 frame that keeps its size. A small **"n% ↺ 100%"** button appears in the
 frame's corner while zoomed and resets. A plain scroll still scrolls the page;

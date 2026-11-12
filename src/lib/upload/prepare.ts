@@ -31,6 +31,7 @@ import { overflowsSourceFrame, placeArtwork, shippedBounds } from "./place";
 import { cleanExportDom, unsupportedContent } from "./clean";
 import { visibleBounds, type Bounds } from "./geom/bounds";
 import { unifyStrokes, type GlobalStroke } from "./strokeglobal";
+import { hoistAroundShadow } from "./shadow";
 
 import { strokeStyleOf } from "./restyle";
 import { fmt, parseSvgLength, type ArtboardFit, type FitTarget } from "./geom";
@@ -103,14 +104,14 @@ function buildExport(doc: Document, root: Element, settings: UploadSettings, fra
     paddingPct: settings.paddingPct ?? 0, target: targetOf(settings, frame),
     style: strokeStyleOf(settings), expand: settings.expandStrokes,
     frame: settings.paddingPct === null ? frame : null,
-    shadow: settings.shadowEnabled ? { widthPct: settings.shadowWidthPct, gapPct: settings.shadowGapPct } : undefined,
+    shadow: settings.shadowEnabled ? { widthPct: settings.shadowWidthPct, gapPct: settings.shadowGapPct, templateSvg: settings.shadowTemplateSvg, expand: settings.expandStrokes } : undefined,
   });
   if (!placed.ok) return fail(placed.code, placed.detail);
   const background = backgroundOf(settings.background);
   const boardRect = applyArtboard(placed.root, placed.fit, background);
-  const globalStroke = unifyStrokes(placed.root); // the artboard rect included: it says `stroke="none"` only when the root hoists a paint
-  // The shadow is explicitly stroke-free even if the source has no strokes to hoist.
-  placed.shadow?.setAttribute("stroke", "none");
+  // The artboard rect is included: it says `stroke="none"` only when the root hoists a paint. The bundled shadow is
+  // explicitly stroke-free even if the source has no strokes to hoist; a user's shadow keeps its own stroke definition.
+  const globalStroke = hoistAroundShadow(placed.root, placed.shadow, () => unifyStrokes(placed.root));
   const guide = sizeGuideStageOf(placed.root, settings, placed.shadow, boardRect);
   if (guide.failure !== null) return guide.failure;
   const badge = badgeStageOf(placed.root, settings);

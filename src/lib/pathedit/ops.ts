@@ -161,7 +161,7 @@ export function joinSubpaths(m: PathModel, active: number, other: AnchorRef): { 
 }
 
 /** One run of kept anchors as an open subpath: its ends lose the handles that pointed at removed segments. */
-function openRun(run: Anchor[], owner: number | undefined): SubPath | null {
+export function openRun(run: Anchor[], owner: number | undefined): SubPath | null {
   if (run.length < 2) return null; // a lone point is no line
   const anchors = run.map((a) => ({ ...a }));
   const first = anchors[0], last = anchors[anchors.length - 1];
@@ -195,4 +195,20 @@ export function breakAtAnchors(m: PathModel, refs: readonly AnchorRef[]): PathMo
     return runs.map((r) => openRun(r, sub.owner)).filter((r): r is SubPath => r !== null);
   });
   return { subs };
+}
+
+/**
+ * Alt + click on a line (2026-11-09): removes only segment `i` (anchor i → the next). Both anchors stay,
+ * every other segment keeps its exact shape; an open line splits in two, a closed shape opens there.
+ * The handles that belonged to the removed segment go; a lone point left behind is no line.
+ */
+export function removeSegment(m: PathModel, sub: number, i: number): PathModel | null {
+  const s = m.subs[sub];
+  const j = s === undefined ? null : nextIndex(s, i);
+  if (s === undefined || j === null) return null;
+  const a = s.anchors;
+  const runs = s.closed ? [[...a.slice(j), ...a.slice(0, j)]] : [a.slice(0, i + 1), a.slice(j)];
+  const pieces = runs.map((r) => openRun(r, s.owner)).filter((r): r is SubPath => r !== null);
+  const subs = m.subs.flatMap((x, k) => (k === sub ? pieces : [x]));
+  return cloneModel({ subs });
 }

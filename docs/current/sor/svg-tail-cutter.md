@@ -35,10 +35,24 @@ exactly at its crossing.
 
 Each run / approve is **one undo step** across all its files (`svgEdit` entry
 with `files`, `svgedit.saveSvgEdits`). An approve re-reads the file and
-re-detects if it changed since the review. Highlights (`tailcut/tailmarks.ts`)
-are drawn in the preview only, while the file is exactly what was reviewed, and
-are never written. Shapes are read in their own coordinates (transforms are
+re-detects if it changed since the review. A highlight (`tailcut/tailmarks.ts`,
+2026-11-09) is a small square on the line's open END only, plus the tail itself
+laid over its own line in the highlight colour from the end to the crossing —
+exactly what a cut removes (`Tail.tip` / `Tail.path`). It is drawn in the preview only, while the file is exactly what was
+reviewed, and is never written. Shapes are read in their own coordinates (transforms are
 not applied).
+
+## In the full-screen edit mode (2026-11-09)
+
+[Path editor](svg-path-editor.md) top bar: **🙈 Hide highlights**, **⚙ Cutter algo**
+(same settings and hide switch as above) and **✂ Cut tails** (highlight; with
+cut automatically, cut at once) and **✓ Apply (n)** beside it (on while tails are highlighted). On the open artwork, unsaved edits included:
+**Ctrl+J** highlights every tail, **Ctrl+L** cuts the highlighted ones into the
+session (`useEditorTailCut`) as **one history step**: Ctrl+Z puts the tails back
+(and highlights them again), Ctrl+Shift+Z cuts again. **Finish edit** writes it
+(one global undo step), Cancel drops it. An edit after a highlight hides it and
+Ctrl+L asks for Ctrl+J again. Handles `<testid>-cut-{hide,settings,run,apply,note}`; test
+`pathedit_tailcut.test.tsx`.
 
 Handles: `svg-cut-run`, `svg-cut-hide`, `svg-cut-approve`, `svg-cut-settings`,
 `svg-cut-settings-dialog`, `svg-cut-tolerance`, `svg-cut-color`,

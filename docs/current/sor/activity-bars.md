@@ -30,6 +30,23 @@ Two kinds of bar, one frame (`src/ui/ProgressFrame.tsx`):
 
 The in-tab busy pills (`batch-busy`, `v2-busy`, Sheets overlay) are kept.
 
+## One bar on top (2026-11-09)
+
+`ProgressFrame` seats every bar (activity or job) in `lib/barstack` via
+`ui/useBarStack`. The **oldest** bar is main; the rest stay mounted but `hidden`
+(lifecycle and cues keep running). The main bar shows ▲/▼ (`bar-stack-prev`,
+`bar-stack-next`) and a note `bar-stack-note` ("+2 more: title 40% · …"). A pick
+holds until that bar closes; closing the main bar shows the next. A new `runId`
+is a new, newest bar. Test: `bar_stack.test.tsx`.
+
+## Remove unsuccessful uploads bar
+
+`stockupload/removalprogress.ts` runs three steps (badges, history files, site
+statuses) for one stock; `StockRemovalProgress` is its job bar
+(`stock-removal-progress-*`): title names the stock, the finished detail says
+"N badge(s) removed · N history file(s) removed". Stays until ✕. Test:
+`stockupload_removal_progress.test.tsx`.
+
 ## Handles
 
 `activity-bars`; per activity `activity-<source>-progress-{header,title,file,

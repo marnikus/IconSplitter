@@ -1,8 +1,8 @@
-// usePreviewZoom.ts — Ctrl+Shift + scroll over an SVG preview zooms it, and a
+// usePreviewZoom.ts — Ctrl + scroll over an SVG preview zooms it, and a
 // middle-button drag moves it (2026-11-06, lib/zoomview): one hook for the row
 // previews and the edit mode's artboard. The wheel listener is not passive, so
 // that scroll neither scrolls nor zooms the page (a plain scroll is left
-// alone); the middle button never starts the browser's auto-scroll there.
+// alone; Ctrl+Shift also zooms since Shift only turns the wheel sideways); the middle button never starts the browser's auto-scroll there.
 
 import { useCallback, useEffect, useState, type RefObject } from "react";
 import { NO_ZOOM, panBy, zoomAt, zoomTransform, type ZoomView } from "../lib/zoomview";
@@ -50,11 +50,11 @@ export function usePreviewZoom(frame: RefObject<HTMLElement | null>): PreviewZoo
     const node = frame.current;
     if (node === null) return undefined;
     const onWheel = (e: WheelEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
       e.stopPropagation();
       const r = node.getBoundingClientRect();
-      // Shift turns a vertical wheel into a horizontal one in some browsers
+      // Shift (if held too) turns a vertical wheel into a horizontal one in some browsers
       const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
       setView((v) => zoomAt(v, { x: e.clientX - r.left, y: e.clientY - r.top }, delta));
     };

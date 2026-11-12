@@ -7,7 +7,7 @@
 // Ctrl+Shift+Z / Ctrl+Y); no other app shortcut runs. Text fields keep theirs.
 
 import { useEffect, useRef, type RefObject } from "react";
-import { cursorAt, doubleClick, keyDown, pointerDown, pointerMove, pointerUp, type EditorState, type PointerInput } from "../../lib/pathedit/gesture";
+import { cursorAt, doubleClick, hoverAt, keyDown, pointerDown, pointerMove, pointerUp, type EditorState, type PointerInput } from "../../lib/pathedit/gesture";
 
 /** A curved-arrow rotate cursor (inline SVG), with a plain fallback. */
 const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 2.05 4.95" fill="none" stroke="#fff" stroke-width="4"/><path d="M5 12a7 7 0 1 1 2.05 4.95" fill="none" stroke="#1a8cff" stroke-width="2"/><path d="M2 9l3 4 3-4z" fill="#1a8cff"/></svg>')}") 12 12, alias`;
@@ -21,6 +21,15 @@ function hoverCursor(node: HTMLElement, c: { current: EditorInputCtx }, e: Point
   node.style.cursor = kind === null ? "" : kind === "rotate" ? ROTATE_CURSOR : kind;
 }
 import { isTextField } from "../../selection/hotkeys";
+
+/** Alt + Shift over a line shows the stretch an Alt + Shift click would remove (2026-11-09). */
+function hoverHint(c: { current: EditorInputCtx }, e: PointerEvent): void {
+  const { state, pathEl, setState } = c.current;
+  const path = pathEl();
+  const input = path === null || state === null || state.drag !== null ? null : inputOf(path, e, c.current.pickPx);
+  const next = input === null || state === null ? null : hoverAt(state, input);
+  if (next !== null && next !== state) setState(next);
+}
 
 interface Matrix { a: number; b: number; c: number; d: number; e: number; f: number }
 type Ctm = { getScreenCTM?: () => (Matrix & { inverse: () => Matrix }) | null };
@@ -36,6 +45,8 @@ export function toPathSpace(path: Element, clientX: number, clientY: number): { 
 
 export interface EditorInputCtx {
   host: RefObject<HTMLElement | null>;
+  /** The layer round the artboard (behind the art): a press there edits like on the art, so points beyond the border react too. */
+  margin?: RefObject<HTMLElement | null>;
   /** The element whose units the editor works in: the icon's root <svg>. */
   pathEl: () => Element | null;
   state: EditorState | null;
@@ -50,7 +61,7 @@ export interface EditorInputCtx {
 function inputOf(path: Element, e: PointerEvent | MouseEvent, pickPx?: number): PointerInput | null {
   const at = toPathSpace(path, e.clientX, e.clientY);
   if (at === null) return null;
-  return { p: { x: at.x, y: at.y }, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey, unitsPerPx: at.unitsPerPx, target: pickedPath(e), ...(pickPx === undefined ? {} : { pickPx }) };
+  return { p: { x: at.x, y: at.y }, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey, shift: e.shiftKey, unitsPerPx: at.unitsPerPx, target: pickedPath(e), time: e.timeStamp, ...(pickPx === undefined ? {} : { pickPx }) };
 }
 
 /** The icon path a click landed on (its data-edit-path number), if any. */
@@ -89,7 +100,7 @@ function pointerHandlers(c: { current: EditorInputCtx }, node: HTMLElement): Rec
       node.setPointerCapture?.(e.pointerId);
       applyPointer(c, e, pointerDown);
     },
-    pointermove: (e) => { if (c.current.state?.drag) applyPointer(c, e as PointerEvent, pointerMove); else hoverCursor(node, c, e as PointerEvent); },
+    pointermove: (e) => { if (c.current.state?.drag) applyPointer(c, e as PointerEvent, pointerMove); else { hoverCursor(node, c, e as PointerEvent); hoverHint(c, e as PointerEvent); } },
     pointerup: up,
     pointercancel: up,
     dblclick: (e) => { e.stopPropagation(); applyPointer(c, e as MouseEvent, doubleClick); },
@@ -97,13 +108,13 @@ function pointerHandlers(c: { current: EditorInputCtx }, node: HTMLElement): Rec
   };
 }
 
+/** The art and the margin round it: the same handlers on both (each captures the pointer on its own node). */
 function usePointer(c: { current: EditorInputCtx }): void {
   useEffect(() => {
-    const node = c.current.host.current;
-    if (node === null) return undefined;
-    const handlers = Object.entries(pointerHandlers(c, node));
-    for (const [type, fn] of handlers) node.addEventListener(type, fn);
-    return () => { for (const [type, fn] of handlers) node.removeEventListener(type, fn); };
+    const nodes = [c.current.host.current, c.current.margin?.current ?? null].filter((n): n is HTMLElement => n !== null);
+    const bound = nodes.map((node) => ({ node, handlers: Object.entries(pointerHandlers(c, node)) }));
+    for (const { node, handlers } of bound) for (const [type, fn] of handlers) node.addEventListener(type, fn);
+    return () => { for (const { node, handlers } of bound) for (const [type, fn] of handlers) node.removeEventListener(type, fn); };
   }, [c]);
 }
 

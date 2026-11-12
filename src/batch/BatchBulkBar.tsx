@@ -5,6 +5,8 @@ import type { CheckState } from "../lib/reviewselect";
 import ZoomSliderBase from "../ui/ZoomSliderBase";
 import type { BatchReviewStatus } from "../lib/statefile";
 import InvertButton from "../ui/InvertButton";
+import GetDataButton from "../ui/GetDataButton";
+import type { DataRow } from "../lib/getdata";
 
 export interface BatchBulkBarProps {
   header: CheckState;
@@ -26,6 +28,8 @@ export interface BatchBulkBarProps {
   onSplit: () => void;
   onPreview?: () => void;
   onRegenerate?: () => void;
+  /** The selected rows for "Get data" (read only when the button is pressed). */
+  getData?: () => readonly DataRow[];
   onDecide?: (review: BatchReviewStatus) => void;
   canSplit: boolean;
   canPreview?: boolean;
@@ -105,6 +109,7 @@ function Right(p: BatchBulkBarProps) {
   return (
     <>
       <ZoomAndTotal {...p} />
+      {p.getData && <GetDataButton testid="batch" count={p.selectedCount} rows={p.getData} />}
       <PreviewBtns {...p} />
       {showReview && <ReviewBtns decidable={decidable} onDecide={p.onDecide} />}
       <button type="button" className="svg-btn primary" data-testid="batch-process" disabled={!p.canSplit} onClick={p.onSplit}>{splitLabel(p, approvedSel)}</button>

@@ -35,32 +35,32 @@ export default function TailCutBar({ checked, onRun, onApprove }: TailCutBarProp
 }
 
 /** Hide / show the tail highlights on the rows (the reviews and their Approve buttons stay). */
-function HideMarksButton() {
+export function HideMarksButton({ testid = "svg-cut-hide" }: { testid?: string }) {
   const hidden = useTailMarksHidden();
   return (
-    <button type="button" className={`svg-btn${hidden ? " primary" : ""}`} data-testid="svg-cut-hide" aria-pressed={hidden}
+    <button type="button" className={`svg-btn${hidden ? " primary" : ""}`} data-testid={testid} aria-pressed={hidden}
       title={hidden ? "Show the tail highlights again" : "Hide the tail highlights (nothing is undone or cut)"}
       onClick={() => setTailMarksHidden(!hidden)}>{hidden ? "👁 Show highlights" : "🙈 Hide highlights"}</button>
   );
 }
 
-function CutterSettingsButton() {
+export function CutterSettingsButton({ testid = "svg-cut-settings" }: { testid?: string }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement | null>(null);
   const close = useRef(() => setOpen(false)).current;
   useDismiss(box, open, close);
   return (
     <div className="svg-edit-settings" ref={box}>
-      <button type="button" className="svg-btn" data-testid="svg-cut-settings" aria-expanded={open} onClick={() => setOpen((o) => !o)}>⚙ Cutter algo</button>
-      {open && <CutterSettings onClose={close} />}
+      <button type="button" className="svg-btn" data-testid={testid} aria-expanded={open} onClick={() => setOpen((o) => !o)}>⚙ Cutter algo</button>
+      {open && <CutterSettings onClose={close} testid={`${testid}-dialog`} />}
     </div>
   );
 }
 
-function CutterSettings({ onClose }: { onClose: () => void }) {
+function CutterSettings({ onClose, testid }: { onClose: () => void; testid: string }) {
   const s = useCutSettings();
   return (
-    <div className="svg-edit-settings-pop" role="dialog" aria-label="Cutter algo" data-testid="svg-cut-settings-dialog">
+    <div className="svg-edit-settings-pop" role="dialog" aria-label="Cutter algo" data-testid={testid}>
       <label className="svg-field">
         <span className="svg-label">Tail tolerance (icon px)</span>
         <input className="svg-input" type="number" min={TOLERANCE_MIN} max={TOLERANCE_MAX} step={0.5} data-testid="svg-cut-tolerance"

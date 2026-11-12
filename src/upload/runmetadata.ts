@@ -12,7 +12,7 @@ import {
   type FetchLike, type GeminiConfig, type GeminiFailure, type GeminiUsage,
 } from "../lib/upload/gemini";
 import {
-  DEFAULT_METADATA_PROMPT, metadataFingerprint, parseMetadata, validateMetadata,
+  DEFAULT_METADATA_PROMPT, metadataFingerprint, parseMetadata, validateUploadMetadata,
   type IconMetadata, type MetadataValidation,
 } from "../lib/upload/meta";
 import { rasterizeJpeg } from "../lib/upload/raster";
@@ -117,7 +117,7 @@ function interpret(input: InterpretInput): MetadataResult {
       detail: "the answer did not have the three labeled lines",
     };
   }
-  const validation = validateMetadata(parsed);
+  const validation = validateUploadMetadata(parsed);
   return {
     rowId,
     outcome: validation.ok ? "generated" : "invalid",

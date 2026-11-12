@@ -15,7 +15,9 @@ import ZoomReset from "../../ui/ZoomReset";
 import PreviewBgPicker from "../../ui/PreviewBgPicker";
 import { previewFrame } from "../../lib/svgbackground";
 import { setEditSettings, useEditSettings } from "../editsettings";
+import { CutterSettingsButton, HideMarksButton } from "../tailcut/TailCutBar";
 import { useEditMode, type EditMode, type EditNav } from "./useEditMode";
+import type { EditorTailCut } from "./useEditorTailCut";
 
 export type { EditNav } from "./useEditMode";
 
@@ -56,15 +58,16 @@ export default function SvgPathEditor(p: SvgPathEditorProps) {
   const art = useMemo(() => buildSvgPreview(annotatePaths(p.source)), [p.source]);
   const host = useRef<HTMLDivElement | null>(null);
   const board = useRef<HTMLDivElement | null>(null);
+  const margin = useRef<HTMLDivElement | null>(null);
   const box = useFittedBox(art.ok ? art.ratio : 1, p.box, p.aside !== undefined);
-  const mode = useEditMode({ host, board, source: p.source, html: art.html, onFinish: p.onFinish, nav: p.nav });
+  const mode = useEditMode({ host, board, margin, source: p.source, html: art.html, onFinish: p.onFinish, nav: p.nav });
   return (
     <div className="svg-edit-surface" data-testid={`${p.testid}-editor`} onClick={(e) => e.stopPropagation()}>
       <TopBar testid={p.testid} mode={mode} position={p.nav?.position ?? p.label} onCancel={p.onCancel} />
       <div className="svg-edit-stage">
         {p.aside !== undefined && <div className="svg-edit-aside">{p.aside}</div>}
         <SideArrow testid={`${p.testid}-prev`} glyph="‹" title="Previous SVG (←)" disabled={!(p.nav?.canPrev ?? false)} onClick={() => mode.go(-1, "ask")} />
-        <Board host={host} board={board} box={box} testid={p.testid} label={p.label} mode={mode} />
+        <Board host={host} board={board} margin={margin} box={box} testid={p.testid} label={p.label} mode={mode} />
         <SideArrow testid={`${p.testid}-next`} glyph="›" title="Next SVG (→)" disabled={!(p.nav?.canNext ?? false)} onClick={() => mode.go(1, "ask")} />
       </div>
       <Legend testid={p.testid} />
@@ -77,17 +80,19 @@ export default function SvgPathEditor(p: SvgPathEditorProps) {
 interface BoardProps {
   host: React.RefObject<HTMLDivElement | null>;
   board: React.RefObject<HTMLDivElement | null>;
+  margin: React.RefObject<HTMLDivElement | null>;
   box: { width: number; height: number };
   testid: string;
   label: string;
   mode: EditMode;
 }
 
-function Board({ host, board, box, testid, label, mode }: BoardProps) {
+function Board({ host, board, margin, box, testid, label, mode }: BoardProps) {
   const picking = mode.st !== null && mode.st.session.objects.length === 0;
   const frame = previewFrame(useEditSettings().bg);
   return (
     <div ref={board} className={`svg-edit-board${frame.outline ? " contrast" : ""}`} style={{ width: box.width, height: box.height, background: frame.color }}>
+      <div ref={margin} className="svg-edit-pasteboard" data-testid={`${testid}-pasteboard`} aria-hidden="true" />
       <div ref={host} className="svg-preview editing" style={{ width: box.width, height: box.height, transform: mode.zoom.transform, transformOrigin: "0 0" }}
         role="img" aria-label={`${label} — editing`} data-testid={testid} data-stroke={mode.view} />
       <ZoomReset testid={testid} zoom={mode.zoom} />
@@ -111,11 +116,32 @@ function TopBar({ testid, mode, position, onCancel }: { testid: string; mode: Ed
       </button>
       <BoardBg />
       <span className="svg-edit-position" data-testid={`${testid}-position`}>{position}</span>
+      <CutTools testid={testid} cut={mode.cut} />
       <span className="svg-edit-spacer" />
       <button type="button" className="svg-btn tiny primary" data-testid={`${testid}-finish`} disabled={!mode.dirty}
         title="Write the edited shapes into the SVG (Enter) — one undo step" onClick={mode.finish}>Finish edit</button>
       <button type="button" className="svg-edit-cancel" data-testid={`${testid}-cancel`} onClick={onCancel}>Cancel</button>
     </div>
+  );
+}
+
+/** The tail cutter, as in Generate SVG's bulk bar but on this artwork: Ctrl+J highlights, Ctrl+L applies. */
+function CutTools({ testid, cut }: { testid: string; cut: EditorTailCut }) {
+  const prefix = `${testid}-cut`;
+  return (
+    <>
+      <HideMarksButton testid={`${prefix}-hide`} />
+      <CutterSettingsButton testid={`${prefix}-settings`} />
+      <button type="button" className="svg-btn" data-testid={`${prefix}-run`} onClick={cut.run}
+        title="Find the small tails of lines poking through other lines in this artwork and highlight them (Ctrl+J) — Ctrl+L cuts them">
+        ✂ Cut tails
+      </button>
+      <button type="button" className="svg-btn success" data-testid={`${prefix}-apply`} disabled={cut.pending === 0} onClick={cut.apply}
+        title="Cut the highlighted tails into this artwork (Ctrl+L) — Ctrl+Z undoes, Finish edit saves">
+        ✓ Apply{cut.pending > 0 ? ` (${cut.pending})` : ""}
+      </button>
+      {cut.note !== "" && <span className="svg-edit-cutnote" data-testid={`${prefix}-note`}>{cut.note}</span>}
+    </>
   );
 }
 

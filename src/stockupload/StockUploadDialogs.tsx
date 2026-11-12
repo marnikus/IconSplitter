@@ -12,6 +12,7 @@ import { setAppState } from "../state/appstore";
 import type { StockUploadApi } from "./useStockUpload";
 import StockUploadHistoryDialog from "./StockUploadHistoryDialog";
 import StockRejectedUploadsDialog from "./StockRejectedUploadsDialog";
+import StockRemovalProgress from "./StockRemovalProgress";
 
 /** The Getty web target ids of a plan, so its icons can be sized per pair. */
 function gettyTargetIds(plan: StockUploadPlan): ReadonlySet<string> {
@@ -23,6 +24,7 @@ export default function StockUploadDialogs({ g }: { g: StockUploadApi }) {
   return (
     <>
       <StockProgressPortal g={g} />
+      <StockRemovalProgress />
       {d?.kind === "uploadHistory" && <StockUploadHistoryDialog g={g} />}
       {d?.kind === "rejectedUploads" && <StockRejectedUploadsDialog g={g} />}
       {d?.kind === "rowBadges" && (

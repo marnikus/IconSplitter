@@ -1,4 +1,4 @@
-// zoomview.ts — zooming an SVG preview inside its frame (2026-11-06): Ctrl+Shift
+// zoomview.ts — zooming an SVG preview inside its frame (2026-11-06): Ctrl
 // + scroll, 10 %–400 %, toward the pointer (the content point under it stays
 // put). The frame keeps its size; only the artwork is scaled and moved. Pure.
 

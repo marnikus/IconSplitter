@@ -1558,6 +1558,33 @@ describe("new metadata is accepted automatically", () => {
     expect(text("[data-testid=upload-metadata-progress-title]")).toContain("cancelled");
   });
 
+  itSlow("an answer with an empty field is NOT accepted: the row warns which field, and accepts once it is filled in (2026-11-08)", async () => {
+    const root = makeRoot();
+    const noName = GOOD_ANSWER.replace(`\nName: growth`, "");
+    const first = geminiTransport(noName);
+    vi.stubGlobal("fetch", first.fetch);
+    await saveGeminiKey(fakeKey("AIza", "empty_field")); await mount(root); await activate(FOG);
+    await click(`[data-testid=upload-meta-gen-${FOG}]`); await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => first.calls.length === 1 && q("[data-testid=upload-progress]") === null, "generation");
+    // not accepted, and the exact missing field is named under the fields
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toContain("invalid");
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).not.toBe("accepted");
+    expect(text(`[data-testid=upload-meta-validation-${FOG}]`)).toContain("Icon Name is empty");
+    expect(text(`[data-testid=upload-meta-cell-${FOG}]`)).not.toContain("accepted");
+    expect(input(`[data-testid=upload-meta-name-${FOG}]`).value).toBe("");
+    // the paid draft is kept (no second call needed): fill the field and Accept
+    await type(`[data-testid=upload-meta-name-${FOG}]`, "growth");
+    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).toBe("accepted");
+    expect(q(`[data-testid=upload-meta-validation-${FOG}]`)?.textContent ?? "").not.toContain("Icon Name is empty");
+    // clearing any field and accepting again is refused with the field named
+    await type(`[data-testid=upload-meta-name-${FOG}]`, "");
+    await click(`[data-testid=upload-meta-accept-${FOG}]`);
+    expect(text(`[data-testid=upload-meta-validation-${FOG}]`)).toContain("Icon Name is empty");
+    expect(text(`[data-testid=upload-meta-state-${FOG}]`)).not.toBe("accepted");
+    expect(first.calls).toHaveLength(1);
+  });
+
   itSlow("row Regenerate accepts the replacement automatically and replaces the Icon Name; no Creator/Copyright fields exist", async () => {
     const root = makeRoot(); const first = geminiTransport(GOOD_ANSWER);
     vi.stubGlobal("fetch", first.fetch);
