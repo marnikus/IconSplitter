@@ -496,6 +496,44 @@ describe("Getty web upload verification", () => {
     expect(done.reason).toContain("did not come back for the retry");
   });
 
+  it("counts down the wait for Getty's uploader during a re-attach, and lets the user skip it", async () => {
+    // 2026-11-12: "Re-attaching 28 file(s)…" sat there with no counter and no way out.
+    const page = new DomConnection();
+    document.body.innerHTML = "<p>the uploader has not come back yet</p>";
+    const waits = createWaitControl();
+    const seen: Array<{ kind: string; remainingMs: number; skippable: boolean }> = [];
+    const timer = setInterval(() => {
+      const now = waits.current()?.wait;
+      if (now?.kind === "reattach") { seen.push(now); waits.skip(); }
+    }, 5);
+    const started = Date.now();
+    const done = await reattachFiles(page, "page", [{ name: "a.eps", path: "/staged/a.eps" }], {
+      pollMs: 5, uploaderTimeoutMs: 60_000, retryTimeoutMs: 60_000, waits,
+    }).finally(() => clearInterval(timer));
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(seen[0]).toMatchObject({ kind: "reattach", skippable: true });
+    expect(seen[0].remainingMs).toBeGreaterThan(50_000);
+    expect(done).toMatchObject({ ok: false, code: "skipped" });
+  });
+
+  it("counts down the wait for re-uploaded files to come back, and lets the user skip it", async () => {
+    mountBatchPage();
+    const page = new DomConnection();
+    const waits = createWaitControl();
+    const seen: Array<{ kind: string; skippable: boolean }> = [];
+    const timer = setInterval(() => {
+      const now = waits.current()?.wait;
+      if (now?.kind === "reupload") { seen.push(now); waits.skip(); }
+    }, 5);
+    const started = Date.now();
+    const done = await reattachFiles(page, "page", [{ name: "ghost_01.eps", path: "/staged/ghost_01.eps" }], {
+      pollMs: 5, uploaderTimeoutMs: 1_000, retryTimeoutMs: 60_000, waits,
+    }).finally(() => clearInterval(timer));
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(seen[0]).toMatchObject({ kind: "reupload", skippable: true });
+    expect(done).toMatchObject({ ok: false, code: "skipped" });
+  });
+
   it("fails with the count when a card never appears", async () => {
     vi.useFakeTimers();
     try {

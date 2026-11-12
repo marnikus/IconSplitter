@@ -453,9 +453,13 @@ async function waitForVerifiedLoop(connection, sessionId, names, options, first)
       attempt: meter.count + 1, of: MAX_RELOADS, skippable: true,
     } : {
       kind: "pictures-bound", reason: `${last.uploaded.length} of ${names.length} file(s) show their picture and no reload is left`,
-      next: "report the files that never got one", endsAt: deadline, skippable: false,
+      next: "report the files that never got one — they go to a later batch", endsAt: deadline,
+      skippable: true, skipLabel: "Skip wait",
     });
-    if (canReload && options.waits?.takeSkip()) movedAt = Date.now() - stallMs;
+    if (options.waits?.takeSkip()) {
+      if (!canReload) break; // the user stops the deadline: report what never got a picture
+      movedAt = Date.now() - stallMs;
+    }
     if (Date.now() - movedAt < stallMs || !canReload) continue;
     // A card listed without its picture for a whole stall window is the page
     // giving up on its own uploader: the reload is what renders it.
@@ -524,10 +528,9 @@ export async function reattachFiles(connection, sessionId, files, options = {}) 
   options.onProgress?.(`re-uploading ${list.length} file(s) Getty has not marked Ready to submit`);
   options.waits?.act(`Re-attaching ${list.length} file(s) to the batch page…`);
   await runDriverStep(connection, sessionId, "dismissPageDialogs").catch(() => null);
-  const input = await waitFor(connection, `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`, {
-    sessionId, timeoutMs: options.uploaderTimeoutMs ?? 60000, intervalMs: pollMsOf(options),
-  }).catch(() => ({ ok: false }));
-  if (!input.ok) {
+  const input = await waitForUploader(connection, sessionId, list.length, options);
+  if (input === "skipped") return { ...SKIPPED_REATTACH };
+  if (input !== "ready") {
     return { ok: false, code: "page", reason: "Getty's uploader did not come back for the retry — re-upload those files by hand", state: null };
   }
   const attached = await setFiles(connection, list.map((file) => file.path), { sessionId, selector: CONTRIBUTION_FILE_INPUT });
@@ -536,17 +539,47 @@ export async function reattachFiles(connection, sessionId, files, options = {}) 
   return waitForReupload(connection, sessionId, names, options);
 }
 
+/** What a re-attach the user stopped waiting for answers: the files go to a later batch. */
+const SKIPPED_REATTACH = {
+  ok: false, code: "skipped", state: null,
+  reason: "the wait for the re-attached file(s) was skipped — they go to a later batch",
+};
+
+/**
+ * Waits for Getty's uploader to come back for a re-attach (2026-11-12): the wait
+ * says so with a counter and may be skipped. Answers "ready", "skipped" or "gone".
+ */
+async function waitForUploader(connection, sessionId, count, options) {
+  const deadline = Date.now() + (options.uploaderTimeoutMs ?? 60000);
+  options.waits?.begin({
+    kind: "reattach", reason: `re-attaching ${count} file(s): Getty's uploader is not back on the page yet`,
+    next: "give up the re-attach — the file(s) go to a later batch", endsAt: deadline, skippable: true, skipLabel: "Skip wait",
+  });
+  const probe = `Boolean(document.querySelector(${JSON.stringify(CONTRIBUTION_FILE_INPUT)}))`;
+  for (;;) {
+    if (options.signal?.aborted) return "gone";
+    if (options.waits?.takeSkip()) return "skipped";
+    const left = deadline - Date.now();
+    const found = await waitFor(connection, probe, {
+      sessionId, timeoutMs: Math.max(1, Math.min(1000, left)), intervalMs: pollMsOf(options),
+    }).catch(() => ({ ok: false }));
+    if (found.ok) return "ready";
+    if (Date.now() >= deadline) return "gone";
+  }
+}
+
 /** Waits until the re-attached files are back on the page (a picture or a chip). */
 async function waitForReupload(connection, sessionId, names, options) {
   const deadline = Date.now() + (options.retryTimeoutMs ?? REPAIR_TIMEOUT_MS);
   options.waits?.begin({
     kind: "reupload", reason: `waiting for ${names.length} re-uploaded file(s) to come back on Getty's page`,
-    next: "report them as failed if they do not", endsAt: deadline, skippable: false,
+    next: "report them as failed — they go to a later batch", endsAt: deadline, skippable: true, skipLabel: "Skip wait",
   });
   let state = null;
   const arrived = (read) => names.every((name) => read.uploaded.includes(name) || read.failed.includes(name));
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ok: false, code: "cancelled", reason: "upload cancelled", state };
+    if (options.waits?.takeSkip()) return { ...SKIPPED_REATTACH, state };
     const read = await readStateSafe(connection, sessionId, names);
     if (read.ok) {
       state = read.state;
@@ -775,8 +808,43 @@ async function repairPending(connection, sessionId, pending, options) {
   options.onProgress?.(`${pending.length} file(s) still not ready to submit — re-uploading them`);
   const done = await options.repair(pending).catch(() => null);
   if (done?.ok !== true) return false;
+  // A re-uploaded card arrives with empty fields: type the app's text into it again.
+  await refillPending(connection, sessionId, pending, options);
   await saveEverySelected(connection, sessionId, options).catch(() => null);
   return true;
+}
+
+/** One file per pending contribution that carries the app's own metadata. */
+function refillTargets(pending, files) {
+  const out = [];
+  const stems = new Set(pending.map(stemOf));
+  for (const file of Array.isArray(files) ? files : []) {
+    const stem = stemOf(file?.name);
+    if (!file?.metadata || !stems.has(stem)) continue;
+    stems.delete(stem);
+    out.push(file);
+  }
+  return out;
+}
+
+/**
+ * A card Getty drew but never validated is most often one with an empty Title or
+ * Description (2026-11-12): no grid save or reload fills an empty field. Its own
+ * drawer gets the app's metadata typed in again — only the empty fields, so no
+ * tag is ever doubled. Returns how many drawers took the text.
+ */
+async function refillPending(connection, sessionId, pending, options) {
+  const files = refillTargets(pending, options.files);
+  if (files.length === 0) return 0;
+  options.waits?.act(`Typing the app's metadata into ${files.length} not-ready file(s) again…`);
+  options.onProgress?.(`${files.length} file(s) not ready to submit — typing their title, description and keywords from the app again`);
+  let filled = 0;
+  for (const file of files) {
+    if (options.signal?.aborted) break;
+    const entry = await fillOneFileMetadata(connection, sessionId, file, options).catch(() => null);
+    if (entry?.status === "saved" || entry?.status === "filled-unsaved") filled += 1;
+  }
+  return filled;
 }
 
 /**
@@ -839,8 +907,13 @@ const READY_NEXT = {
 function announceReady(ctx, pending) {
   const reason = `${pending.length} of ${ctx.total} file(s) are not marked "Ready to submit" yet`;
   const step = ctx.plan[0];
+  // The deadline may be cut short too (2026-11-12): the files are reported not
+  // ready at once and go to a later batch instead of holding this one.
   ctx.options.waits?.begin(step === undefined
-    ? { kind: "ready-bound", reason, next: "report the files that never turned ready", endsAt: ctx.deadline, skippable: false }
+    ? {
+      kind: "ready-bound", reason, next: "report the files that never turned ready — they go to a later batch",
+      endsAt: ctx.deadline, skippable: true, skipLabel: "Skip wait",
+    }
     : {
       kind: "ready", reason, next: READY_NEXT[step](pending.length), endsAt: ctx.nextAt,
       attempt: ctx.planTotal - ctx.plan.length + 1, of: ctx.planTotal, skippable: true,
@@ -859,11 +932,16 @@ async function awaitReadyLoop(ctx) {
       return { ok: true, verified: true, ready: ctx.total, total: ctx.total, notReady: [], resaves: ctx.resaves, repairs: ctx.repairs, state: ctx.state };
     }
     if (ctx.options.signal?.aborted) return { ...refusalOf(ctx, pending), code: "cancelled", reason: "upload cancelled" };
-    if (Date.now() >= (ctx.deadline ??= Date.now() + (ctx.options.readyTimeoutMs ?? READY_TIMEOUT_MS))) {
+    ctx.deadline ??= Date.now() + (ctx.options.readyTimeoutMs ?? READY_TIMEOUT_MS);
+    announceReady(ctx, pending);
+    // A skip with no ladder step left cuts the deadline short.
+    if (ctx.options.waits?.takeSkip()) {
+      if (ctx.plan.length === 0) ctx.deadline = Date.now();
+      else ctx.nextAt = Date.now();
+    }
+    if (Date.now() >= ctx.deadline) {
       return { ...refusalOf(ctx, pending), code: "timeout", reason: notReadyReason(pending, ctx.resaves, ctx.repairs) };
     }
-    announceReady(ctx, pending);
-    if (ctx.plan.length > 0 && ctx.options.waits?.takeSkip()) ctx.nextAt = Date.now();
     if (ctx.plan.length > 0 && Date.now() >= ctx.nextAt) {
       ctx.nextAt = Date.now() + (ctx.options.readyRetryMs ?? READY_RETRY_MS);
       await takeStep(ctx, pending, ctx.plan.shift());
@@ -890,6 +968,8 @@ async function takeStep(ctx, pending, action) {
   const { connection, sessionId, options } = ctx;
   if (action === "resave") {
     ctx.resaves += 1;
+    // An empty field is what keeps a card from validating; a save alone cannot fill it.
+    await refillPending(connection, sessionId, pending, options);
     options.waits?.act(`Pressing Save metadata again (${ctx.resaves} of ${options.readyResaves ?? READY_RESAVES})…`);
     options.onProgress?.(`${pending.length} file(s) are not ready to submit — saving the metadata again (${ctx.resaves}/${options.readyResaves ?? READY_RESAVES})`);
     await saveEverySelected(connection, sessionId, options).catch(() => null);
@@ -920,6 +1000,9 @@ function readinessReport(readiness) {
     ok: readiness.ok === true, verified: readiness.verified !== false,
     ready: readiness.ready ?? 0, total: readiness.total ?? 0,
     notReady: readiness.notReady ?? [], resaves: readiness.resaves ?? 0, repairs: readiness.repairs ?? 0,
+    // The gate's last reading (2026-11-12): the batch's final counts and its
+    // accepted list come from it, never from the reading taken while attaching.
+    state: readiness.state ?? null,
   };
 }
 

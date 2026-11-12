@@ -120,6 +120,20 @@ describe("the bar's note and button", () => {
     await render(<GettyWaitSkip step={step({ skipWait })} />); // nothing is waiting
     expect(q("[data-testid=stock-upload-wait-skip]")).toBeNull();
   });
+
+  it("a wait that gives up early says so on its button instead of Retry now (2026-11-12)", async () => {
+    await render(<GettyWaitSkip step={step({ ...waiting({ kind: "reattach", skipLabel: "Skip wait" }), skipWait: vi.fn() })} />);
+    expect(q("[data-testid=stock-upload-wait-skip]")?.textContent).toMatch(/Skip wait/);
+  });
+});
+
+describe("the skip label travels with the reading", () => {
+  it("passes skipLabel on, and drops a damaged one", async () => {
+    const ok = await gettyWebProgress("http://h", "k", respond(reading({ wait: { ...WAIT, skipLabel: "Skip wait" } })));
+    expect(ok?.wait?.skipLabel).toBe("Skip wait");
+    const bad = await gettyWebProgress("http://h", "k", respond(reading({ wait: { ...WAIT, skipLabel: 7 } })));
+    expect(bad?.wait).not.toHaveProperty("skipLabel");
+  });
 });
 
 describe("in the shared bar", () => {

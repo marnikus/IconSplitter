@@ -95,7 +95,9 @@ type IconFate = { kind: "accepted" } | { kind: "failed"; reason: string };
 function fateOf(icon: GettyWebIconInput, lists: PageLists): IconFate {
   const stems = gettyWebFileOrder(icon.tasks).map((task) => gettyWebStem(task.fileName));
   const hit = (names: readonly string[]) => names.some((name) => stems.includes(gettyWebStem(name)));
-  if (hit(lists.accepted)) return { kind: "accepted" };
+  // Named not ready outranks a thumbnail (2026-11-12): a card Getty drew but never
+  // validated — an empty Description — is not an upload and goes back in the queue.
+  if (hit(lists.accepted) && !hit(lists.notReady)) return { kind: "accepted" };
   const rejected = lists.failed.find((entry) => stems.includes(gettyWebStem(entry.name)));
   if (rejected) {
     const id = rejected.id ? ` (${rejected.id})` : "";

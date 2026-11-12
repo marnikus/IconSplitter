@@ -6,6 +6,7 @@ export interface WaitInfo {
   attempt?: number;
   of?: number;
   skippable: boolean;
+  skipLabel?: string;
 }
 export interface PublicWait extends Omit<WaitInfo, "endsAt"> { remainingMs: number }
 export interface WaitControl {

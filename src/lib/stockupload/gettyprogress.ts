@@ -34,6 +34,8 @@ export interface GettyWait {
   of?: number;
   /** A retry timer can be skipped ("Retry now"); a deadline cannot. */
   skippable: boolean;
+  /** The skip button's own words when skipping gives up early ("Skip wait"), else "Retry now". */
+  skipLabel?: string;
 }
 
 function trimSlash(url: string): string {
@@ -51,7 +53,11 @@ function readWait(raw: unknown): GettyWait | null {
   const kind = textOf(raw.kind), reason = textOf(raw.reason), next = textOf(raw.next);
   if (kind === null || reason === null || next === null) return null;
   const attempt = countOf(raw.attempt), of = countOf(raw.of);
-  return { kind, reason, next, remainingMs: countOf(raw.remainingMs), ...(attempt > 0 && of > 0 ? { attempt, of } : {}), skippable: raw.skippable === true };
+  const skipLabel = textOf(raw.skipLabel);
+  return {
+    kind, reason, next, remainingMs: countOf(raw.remainingMs), ...(attempt > 0 && of > 0 ? { attempt, of } : {}),
+    skippable: raw.skippable === true, ...(skipLabel !== null ? { skipLabel: skipLabel.slice(0, 40) } : {}),
+  };
 }
 
 function readProgress(raw: Record<string, unknown>): GettyWebProgress {

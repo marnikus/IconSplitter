@@ -11,6 +11,7 @@ export function progressOf(read: any, reloads?: number, batch?: number): {
 export function acceptedOf(done: any, attachResult: any): string[];
 /** The contributions Getty never validated, by stem. */
 export function notReadyOf(done: any): string[];
+export function withoutStems(names: string[], stems: string[]): string[];
 /** The staged copies to re-upload for the named contributions (matched by stem). */
 export function repairTargets(files: any, paths: any, names: any): Array<{ name: string; path: string }>;
 /** The repair the readiness gate may call; undefined when nothing was staged. */

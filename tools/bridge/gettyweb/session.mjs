@@ -76,6 +76,17 @@ export function notReadyOf(done) {
   return Array.isArray(notReady) ? notReady.filter((name) => typeof name === "string" && name !== "") : [];
 }
 
+/**
+ * The batch's names without the contributions Getty never validated
+ * (2026-11-12): the finish step then submits what is ready instead of waiting on
+ * a card that already failed its gate — those files go to a later batch.
+ */
+export function withoutStems(names, stems) {
+  const drop = new Set((Array.isArray(stems) ? stems : []).map(stemOf));
+  if (drop.size === 0) return names;
+  return names.filter((name) => !drop.has(stemOf(name)));
+}
+
 /** A file name without its folder or extension, for matching against the page. */
 function stemOf(fileName) {
   const leaf = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
@@ -376,14 +387,17 @@ function buildSession(ctx) {
       waits.end();
       // The phase says whether Getty validated every card, not just that the
       // request returned: a failed readiness leaves the run unfinished.
-      state.progress = { ...at(done.report?.readiness?.state ?? result.state), phase: done.ok ? "done" : "failed" };
       // What counts as uploaded is the last reading, taken after the metadata was
       // saved: a file is accepted only when its card shows "Ready to submit".
-      const settledState = done.report?.readiness?.state ?? result.state;
+      // That reading is also the batch's final count — the next batch adds onto it.
+      const settledState = done.report?.readiness?.state ?? lastRead ?? result.state;
+      state.progress = { ...at(settledState), phase: done.ok ? "done" : "failed" };
+      const notReady = notReadyOf(done);
+      state.expected = withoutStems(state.expected, notReady);
       return {
         ...done, state: { ...result.state, ...done.report?.state }, report: done.report,
         accepted: acceptedOf(done, result), failed: settledState?.failures ?? result.state?.failures ?? [],
-        notReady: notReadyOf(done), batchId: state.batchId,
+        notReady, batchId: state.batchId,
       };
     },
     /**
@@ -392,12 +406,14 @@ function buildSession(ctx) {
      */
     async finish(input = {}) {
       const baseReloads = state.reloads;
+      // The finish gate moves the bar too, and may type the app's metadata again.
+      const onState = (read) => { state.progress = { ...progressOf(read, state.reloads, state.batchNo), phase: "metadata" }; };
       const result = await finishBatch(connection, page.sessionId, {
         expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
-        onProgress: options.onProgress, waits, ...readyOptionsOf(options),
+        onProgress: options.onProgress, waits, onState, files: staged.files, ...readyOptionsOf(options),
         onReload: (count) => { state.reloads = baseReloads + count; },
         repair: repairCapability(connection, page.sessionId, staged.files, staged.paths, {
-          onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs, waits,
+          onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs, waits, onState,
         }),
       }).finally(() => waits.end());
       state.progress = { ...(state.progress ?? progressOf(null, state.reloads, state.batchNo)), phase: result.ok ? "done" : "failed" };

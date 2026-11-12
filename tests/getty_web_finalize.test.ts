@@ -184,7 +184,8 @@ describe("Getty web automatic finalize", () => {
     });
     expect(result.ok).toBe(true);
     expect(cdp.steps.filter((step) => step === "selectAllContributions")).toHaveLength(2);
-    expect(cdp.steps.filter((step) => step === "saveMetadataEditor")).toHaveLength(3);
+    // drawer, grid, the not-ready card's drawer typed again (2026-11-12), grid again
+    expect(cdp.steps.filter((step) => step === "saveMetadataEditor")).toHaveLength(4);
     if (result.ok) {
       expect(result.report.readiness).toMatchObject({ ok: true, verified: true, notReady: [], resaves: 1 });
       expect(result.report.completion).toMatchObject({ clicked: true });

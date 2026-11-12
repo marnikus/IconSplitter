@@ -3,8 +3,8 @@ import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
-import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
-import { MANDATORY_TAGS } from "../src/lib/upload/meta";
+import { metadataBlock, newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
+import { MANDATORY_TAGS, metadataFingerprint } from "../src/lib/upload/meta";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 import { applyBadgeToIds, ensureHardcodedBadges } from "../src/lib/upload/rowbadge";
 import { HistoryProvider } from "../src/state/HistoryProvider";
@@ -70,7 +70,14 @@ function AutosavingStockUploadPanel() {
   return <HistoryProvider><StockUploadPanel active /></HistoryProvider>;
 }
 
-function makeWorkspace(withRaster = false, itemCount = 1): FakeDir {
+/** Accepted metadata for a fixture row: the Upload tab never sends a row without it (2026-11-12). */
+const ROW_META = { title: "Star icon", description: "A five-point star outline.", tags: ["star", "shape", "outline", "icon", "vector"] };
+const filledMetadata = () => metadataBlock(ROW_META, {
+  prompt: "", provider: "local", model: "manual", requestId: null, usage: { input: null, output: null, total: null },
+  fingerprint: metadataFingerprint(ROW_META), validation: { ok: true, errors: [], warnings: [] },
+});
+
+function makeWorkspace(withRaster = false, itemCount = 1, withMeta = false): FakeDir {
   const root = new FakeDir("stock_ws");
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>';
   const raster = "fake JPEG preview bytes";
@@ -95,6 +102,7 @@ function makeWorkspace(withRaster = false, itemCount = 1): FakeDir {
     });
     rec.stage = "committed";
     rec.status = "processed";
+    if (withMeta) rec.metadata = filledMetadata();
     rec.timestamps.committedAt = "2026-10-27T10:01:00.000Z";
     rec.outputs = {
       svg: { path: `${packName}/export/${base}.svg`, bytes: svg.length, hash: "sha256:s" },
@@ -416,7 +424,7 @@ describe("Upload (stockUpload) tab UI", () => {
   });
 
   it("offers an opt-in combined title and discloses it before upload", async () => {
-    stored.set("__stock_upload__", { source: makeWorkspace() });
+    stored.set("__stock_upload__", { source: makeWorkspace(false, 1, true) });
     act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
     await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
     await clickEl(q("stock-presets-open")!);
@@ -429,6 +437,16 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-check-item-star")!);
     await clickEl(q("stock-upload-start")!);
     expect(q("stock-upload-confirm-dialog")?.textContent).toContain("Title + description");
+  });
+
+  it("never opens the upload confirmation for rows whose metadata is empty (2026-11-12)", async () => {
+    stored.set("__stock_upload__", { source: makeWorkspace() });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
+    await clickEl(q("stock-check-item-star")!);
+    await clickEl(q("stock-upload-start")!);
+    expect(q("stock-upload-confirm-dialog")).toBeNull();
+    expect(host.textContent).toContain("None of the selected rows has metadata");
   });
 
   it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats with a history note", async () => {
@@ -565,7 +583,7 @@ describe("Upload (stockUpload) tab UI", () => {
   });
 
   it("supports Adobe Stock SFTP (:22) with SFTP Member ID / generated password fields, reset defaults, and standalone vector upload", async () => {
-    const ws = makeWorkspace();
+    const ws = makeWorkspace(false, 1, true);
     stored.set("__stock_upload__", { source: ws });
 
     let testAttempts = 0;

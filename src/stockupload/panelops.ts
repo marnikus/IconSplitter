@@ -10,6 +10,7 @@ import { probeBridgeGettyWeb } from "../lib/stockupload/gettywebclient";
 import { buildGettyEspCsv } from "../lib/stockupload/gettycsv";
 import { gettyWebRequestBytes } from "../lib/stockupload/gettyweb";
 import { applySubmittedUploadPolicy, buildStockUploadPlan, type PlannedTransfer, type StockUploadPlan } from "../lib/stockupload/plan";
+import { splitByMetadata, withSkippedNoMetadata } from "../lib/stockupload/metadatagate";
 import { limitStockUploadPlan, uploadIsRandomized } from "../lib/stockupload/uploadlimit";
 import type { ExportedItem, StockFtpPreset, StockPresetState } from "../lib/stockupload/types";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -191,12 +192,15 @@ function finishedProgress(
 
 function performStartUpload(c: OpsCtx): void {
   if (c.model.uploading) { c.say("An upload batch is already running", true); return; }
-  const full = buildStockUploadPlan({
-    items: c.items, checkedIds: c.checked, presets: c.presetState.presets,
+  // A row with empty metadata is never sent: it is left out and named in the confirmation.
+  const gate = splitByMetadata(c.items, c.checked);
+  const planned = buildStockUploadPlan({
+    items: c.items, checkedIds: gate.uploadable, presets: c.presetState.presets,
     checkedTargets: c.presetState.checkedTargets, formats: c.presetState.formats,
     combineTitleDescription: c.model.prefs.combineTitleDescription, targetOptions: c.presetState.targetOptions,
     submittedBadgeIdsByItem: c.rowBadges.assigned,
   });
+  const full = withSkippedNoMetadata(planned, gate.skipped);
   // "Limit": only N icons, drawn now so the confirmation shows the real run.
   const plan = limitStockUploadPlan(full, c.model.prefs.uploadLimit);
   if (plan.preflightErrors.length > 0) { c.say(plan.preflightErrors[0], true); return; }

@@ -54,6 +54,8 @@ export interface StockUploadPlan {
   targetFormats?: Record<string, StockFormatFlags>;
   /** Set when "Limit" drew only some icons (uploadlimit.ts); absent = the whole selection. */
   limit?: import("./uploadlimit").PlanLimit;
+  /** Checked rows left out because their metadata is empty (metadatagate.ts, 2026-11-12). */
+  skippedNoMetadata?: import("./metadatagate").SkippedNoMetadata[];
 }
 
 function selectedFormatsOf(flags: StockFormatFlags): UploadFormatKey[] {

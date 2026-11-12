@@ -176,8 +176,20 @@ function ConfirmPlanBody({ plan }: { plan: StockUploadPlan }) {
           ⚠ {plan.skippedMissing.length} requested format file(s) do not exist in `export/` and will be skipped.
         </p>
       )}
+      <SkippedNoMetadataNote plan={plan} />
       {plan.warnings.map((w) => <p key={w} className="svg-warning">⚠ {w}</p>)}
     </div>
+  );
+}
+
+/** The checked rows left out for empty metadata (2026-11-12), said before the run starts. */
+function SkippedNoMetadataNote({ plan }: { plan: StockUploadPlan }) {
+  const count = plan.skippedNoMetadata?.length ?? 0;
+  if (count === 0) return null;
+  return (
+    <p className="svg-warning" data-testid="stock-upload-skipped-no-metadata">
+      ⚠ {count} selected row(s) have empty metadata (title, description or keywords) and will not be uploaded.
+    </p>
   );
 }
 

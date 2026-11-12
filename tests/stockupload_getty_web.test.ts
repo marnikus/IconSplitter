@@ -572,6 +572,34 @@ describe("Getty web upload in the batch runner", () => {
     expect(summary.lastError).toContain('"Ready to submit" icon for icon-map-pin_6_03_v4');
   });
 
+  it("a not-ready card outranks its thumbnail: uploaded but missing metadata goes back in the queue (2026-11-12)", async () => {
+    // Getty drew the card (it is in `accepted`) but never validated it — an empty
+    // Description. It is not an upload: it is retried in a later batch.
+    const root = new FakeDir("ws");
+    addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });
+    addExported(root, "icon-2", "b", "moon_02", { jpg: true, eps: true });
+    const found = await discoverExportedItems(root);
+    const sent: string[][] = [];
+    const summary = await executeStockUploadBatch(planFor(found.items), {
+      root,
+      bridgeUrl: "http://127.0.0.1:47391",
+      signal: new AbortController().signal,
+      loadCreds: async () => ({ username: "contributor@example.com", password: "GettyPass!42" }),
+      gettyWebUploadFn: async (input) => {
+        sent.push(input.icons.map((icon) => icon.files[0].name));
+        return {
+          ok: false, code: "timeout", reason: "not ready",
+          accepted: ["star_01.jpg", "star_01.eps", "moon_02.jpg", "moon_02.eps"], notReady: ["moon_02"],
+        };
+      },
+      finishGettyWebFn: async () => ({ ok: true, batchId: "b", accepted: [], completed: true, completion: null, metadata: [] }),
+      closeGettyWebFn: async () => undefined,
+    });
+    expect(sent[1]?.some((name) => name.startsWith("moon_02"))).toBe(true); // re-sent in the retry batch
+    expect(summary.failedFiles).toBe(2);
+    expect(summary.lastError).toContain("moon_02");
+  });
+
   it("never marks a pair Getty answered with Upload failed as uploaded", async () => {
     const root = new FakeDir("ws");
     addExported(root, "icon-1", "a", "star_01", { jpg: true, eps: true });

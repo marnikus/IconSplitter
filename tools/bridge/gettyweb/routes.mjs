@@ -282,9 +282,13 @@ export function failurePayload(result, cfg) {
     code: result?.code ?? "page",
     reason: scrub(result?.reason, cfg),
     state,
-    accepted: state?.uploaded ?? [],
+    // A batch whose readiness gate ran says itself what it validated (2026-11-12):
+    // a card with a picture but an empty Description is not accepted — it is named
+    // not ready and goes to a later batch. Without a gate, the thumbnails stand.
+    accepted: Array.isArray(result?.accepted) ? result.accepted : (state?.uploaded ?? []),
     failed: state?.failures ?? [],
     seen: state?.namesSeen ?? [],
+    notReady: Array.isArray(result?.notReady) ? result.notReady : [],
   };
 }
 

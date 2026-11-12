@@ -12,5 +12,5 @@ export function sanitizeMetadata(raw: unknown): { title: string; description: st
 export function mayReleaseSession(entry: any): boolean;
 export function failurePayload(result: any, config: any): {
   ok: boolean; code: string; reason: string; state: any;
-  accepted: string[]; failed: Array<{ name: string; id: string | null }>; seen: string[];
+  accepted: string[]; failed: Array<{ name: string; id: string | null }>; seen: string[]; notReady: string[];
 };

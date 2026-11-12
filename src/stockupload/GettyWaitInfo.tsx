@@ -56,7 +56,7 @@ export function GettyWaitSkip({ step }: { step: UploadProgressStep }) {
   return (
     <button type="button" className="svg-btn tiny" data-testid="stock-upload-wait-skip" onClick={step.skipWait}
       title="Skip the wait and do the next step now">
-      ↻ Retry now
+      {step.wait.skipLabel !== undefined ? `⏭ ${step.wait.skipLabel}` : "↻ Retry now"}
     </button>
   );
 }
