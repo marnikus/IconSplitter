@@ -86,8 +86,8 @@ function TileBadges({ id, flags }: { id: string; flags: { placed: boolean; match
 
 /** ×N saved use (exported artboards) · +M on artboards whose use is not saved yet (2026-11-13). */
 function UseBadge({ id, used, pending }: { id: string; used: number; pending: number }) {
-  if (used === 0 && pending === 0) return null;
-  return <span className="bld-tile-used" data-testid={`builder-used-${id}`} aria-hidden="true">×{used}{pending > 0 ? ` +${pending}` : ""}</span>;
+  return <span className={`bld-tile-used${used === 0 && pending === 0 ? " is-zero" : ""}`} data-testid={`builder-used-${id}`} aria-hidden="true">
+    ×{used}{pending > 0 ? ` +${pending}` : ""}</span>;
 }
 
 interface TileInfo { asset: BuilderIconAsset; score: number | null; placed: boolean; unindexed: boolean; noMeta: boolean; used: number; pending: number }

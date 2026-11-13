@@ -57,7 +57,20 @@ function PlacedCell({ b, cell, id }: { b: BuilderApi; cell: CellFrame; id: strin
       aria-label="Exclude this icon and refill its cell" title="Exclude and refill this cell · Shift+click: remove and leave the cell empty"
       onClick={(e) => b.actions.excludeAsset(id, e.shiftKey)}>×</button>
     {b.prefs.showScores && <CellScore b={b} cell={cell} id={id} fontSize={small} />}
+    {b.prefs.showUsage && <CellUse b={b} cell={cell} id={id} fontSize={small} />}
   </span>;
+}
+
+/**
+ * How often the icon was already used (2026-11-13): saved use from exported
+ * artboards, and "+M" for artboards whose use is not saved yet. Preview only.
+ */
+function CellUse({ b, cell, id, fontSize }: { b: BuilderApi; cell: CellFrame; id: string; fontSize: number }) {
+  const used = b.discovery?.usage.get(id)?.used ?? 0;
+  const pending = b.pendingUse.get(id) ?? 0;
+  const title = `Used in ${used} exported artboard(s)${pending > 0 ? ` · on ${pending} more not exported yet` : ""}`;
+  return <span className="bld-cell-use" data-used={used} data-testid={`builder-cell-use-${cell.index}`} title={title} style={{ fontSize }}>
+    ×{used}{pending > 0 ? <small>+{pending}</small> : null}</span>;
 }
 
 /** "REF" for the reference group, "NN%" closeness (green ≥ threshold, amber below), "–" without vectors. */

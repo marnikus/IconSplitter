@@ -5182,3 +5182,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `<svg>.usage.json` beside each SVG (`usagestore.ts`, read with the scan), counted on SVG/PNG export once per artboard (`actions/usage.ts`), pending use from artboards (`pendingUse` by `countedIds`), library tile `×N +M`. Selectors split into `selectors/svg-builder-presets.md` (the page had passed 9 KB).
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 113/113; full vitest: the 9 clean-tree files + quality_base (dirty tree only).
+
+## 2026-11-13 — SVG builder: use index on every tile and on the artboard (# Used toggle)
+
+- Library badge always shown (`×0` dimmed); artboard cell index bottom-left (`CellUse`), stage toggle `builder-toggle-usage`, prefs `showUsage`.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 114/114.

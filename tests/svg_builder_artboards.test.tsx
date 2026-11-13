@@ -234,6 +234,25 @@ describe("final artboards — the list under the templates", () => {
     expect(JSON.parse(usageFile()!.text).used).toBe(1);
   });
 
+  it("every library tile and every icon on the artboard shows how often it was used; # Used switches the artboard index", async () => {
+    await openLibrary();
+    expect(tiles().every((el) => q(`builder-used-${el.dataset.assetId}`)?.textContent === "×0")).toBe(true); // shown even when never used
+    expect(q("builder-cell-use-0")?.textContent).toBe("×0"); // the auto-placed sheet: plain sheet, nothing pending
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await act(async () => { tiles()[0].dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await settle(0);
+    await waitUntil(() => q("builder-cell-use-0")?.textContent === "×0+1", "artboard index shows pending use");
+
+    expect(q("builder-toggle-usage")?.getAttribute("aria-pressed")).toBe("true");
+    await click("builder-toggle-usage");
+    expect(q("builder-cell-use-0")).toBeNull();
+    expect(JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.prefs.v1") ?? "{}").showUsage).toBe(false);
+    await click("builder-toggle-usage");
+    expect(q("builder-cell-use-0")).not.toBeNull();
+  });
+
   it("asks for the key before any artboard metadata request", async () => {
     await openLibrary();
     await click("builder-template-save");

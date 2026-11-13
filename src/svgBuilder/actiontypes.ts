@@ -59,6 +59,8 @@ export interface BuilderActions {
   toggleScores: (show: boolean) => void;
   /** Opacity of the artboard % labels, 1–100. */
   setScoreOpacity: (percent: number) => void;
+  /** Show / hide the "used N times" index on the artboard's icons (display-only). */
+  toggleUsage: (show: boolean) => void;
   clearSelection: () => void;
   setSearch: (query: string) => void;
   setCategory: (category: string) => void;

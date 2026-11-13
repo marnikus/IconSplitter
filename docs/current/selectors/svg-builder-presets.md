@@ -21,4 +21,5 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 
 | Testid | Element | Notes |
 |---|---|---|
-| `builder-used-<assetId>` | tile badge | `×N` saved use (exported artboards), `+M` on artboards whose use is not saved yet; the tooltip says both |
+| `builder-cell-use-<cell>` / `builder-toggle-usage` | artboard use index / # Used toggle | preview-only; `data-used`; pref `showUsage` |
+| `builder-used-<assetId>` | tile badge (always, `is-zero` when unused) | `×N` saved use (exported artboards), `+M` on artboards whose use is not saved yet; the tooltip says both |
