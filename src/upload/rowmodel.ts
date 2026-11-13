@@ -17,7 +17,7 @@ import { getAppState, patchUpload } from "../state/appstore";
 import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import { cachedMeta, restoredMeta } from "./metacache";
-import { draftFromRecord } from "./recorddraft";
+import { draftFromRecord, savedMetadataMoved } from "./recorddraft";
 import type { UploadRowSource } from "./discovery";
 import {
   EMPTY_META,
@@ -115,7 +115,7 @@ function settingsMoved(record: ExportRecord, effective: UploadSettings): boolean
 /** The accepted text differs from what the record carries (null = none). */
 function metadataMoved(record: ExportRecord, meta: UploadMetaState): boolean {
   const acceptedFp = meta.state === "accepted" && meta.metadata !== null ? metadataFingerprint(meta.metadata) : "";
-  return embeddedMetadataFp(record) !== acceptedFp;
+  return embeddedMetadataFp(record) !== acceptedFp || savedMetadataMoved(record, meta);
 }
 
 /**

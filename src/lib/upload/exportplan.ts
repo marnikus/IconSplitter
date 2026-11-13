@@ -17,6 +17,8 @@ export interface PlanInput {
   settingsFp: string;
   metadataFp: string;
   hasMetadata: boolean;
+  /** What export.json's metadata block should hold: accepted text, else a saved draft, else "" (2026-11-13). */
+  recordMetadataFp?: string;
   optimize: boolean;
   includeSvg?: boolean;
   includeJpeg?: boolean;
@@ -94,6 +96,8 @@ function hasDisabledOutputs(record: ExportRecord, input: PlanInput): boolean {
 
 function planDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
   planMetadataDelta(record, input, need, rebuild);
+  // A draft export.json does not hold yet is a record-only commit: no file is rebuilt.
+  if (input.recordMetadataFp !== undefined && (record.metadata?.fingerprint ?? "") !== input.recordMetadataFp) need.add("commit");
   planSvgOptimizeDelta(record, input, need, rebuild);
   planEpsToolDelta(record, input, need, rebuild);
   planMissingOutputs(input, need, rebuild);

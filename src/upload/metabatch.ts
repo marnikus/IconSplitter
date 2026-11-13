@@ -57,6 +57,7 @@ function prepareMetadataRun(latest: Latest, ids: string[], previews: readonly Se
     latest, root, key, queue: [...ids], previews, signal: abort.signal,
     tally: { done: 0, ok: 0, total: ids.length },
     accepted: new Map(),
+    fresh: new Map(),
     progress: startUploadProgress(c, "metadata", ids.length),
   };
 }
@@ -70,7 +71,7 @@ async function finishMetadataRun(ctx: MetaRunCtx, opts: MetaBatchOptions, status
   if (status !== "completed") return;
   const accepted = ` — ${ctx.accepted.size} accepted`;
   c.say(`Metadata ready for ${ctx.tally.ok} of ${ctx.tally.total} icon${ctx.tally.total === 1 ? "" : "s"}${accepted}`);
-  await exportAfterMetadata(ctx.latest, opts, ctx.accepted);
+  await exportAfterMetadata(ctx.latest, opts, ctx.fresh);
 }
 
 /**
@@ -99,8 +100,15 @@ interface MetaRunCtx {
   signal: AbortSignal;
   tally: { done: number; ok: number; total: number };
   progress: ProcessReporter;
-  /** What this run accepted, keyed by row id — the export's own truth. */
+  /** What this run accepted, keyed by row id (the count the run reports). */
   accepted: Map<string, UploadMetaState>;
+  /**
+   * EVERY state this run produced — accepted answers AND invalid drafts — keyed
+   * by row id: the export's own truth (RULE 24). Only the accepted ones used to
+   * travel, so an answer without its Icon Name was exported from the row as it
+   * was before the answer: export.json got "metadata": null (2026-11-13).
+   */
+  fresh: Map<string, UploadMetaState>;
 }
 
 async function drainMeta(ctx: MetaRunCtx): Promise<void> {
@@ -141,7 +149,8 @@ async function metaOne(ctx: MetaRunCtx, id: string): Promise<boolean> {
   if (result.outcome === "generated" && result.validation?.ok) {
     acceptNow(ctx, id, result);
   } else {
-    applyMetaResult(ctx.latest, id, row.meta, result);
+    const meta = applyMetaResult(ctx.latest, id, row.meta, result);
+    if (meta.metadata !== null) ctx.fresh.set(id, meta);
   }
   c.dispatch({ type: "run", id, run: { running: null } });
   return result.outcome === "generated" || result.outcome === "invalid";
@@ -172,25 +181,28 @@ function acceptNow(ctx: MetaRunCtx, id: string, result: MetadataResult): void {
   // re-renders, and the export of THIS task runs before that — so the answer
   // travels with the run instead of being looked up again (RULE 24).
   ctx.accepted.set(id, meta);
+  ctx.fresh.set(id, meta);
   rememberMeta(row.sourceHash ?? "", { state: "accepted", meta: result.metadata, ...responseOf(result) });
   log(namedSpec({ ...refOf(row), model: c.m.gemini.model, tags: result.metadata.tags.length }));
 }
 
 /** Invalid answers stay unaccepted; a failure keeps the prior text/state. */
-function applyMetaResult(latest: Latest, id: string, base: UploadMetaState, result: MetadataResult): void {
+function applyMetaResult(latest: Latest, id: string, base: UploadMetaState, result: MetadataResult): UploadMetaState {
   const c = latest.current;
   const row = rowOf(c, id);
-  c.dispatch({ type: "meta", id, meta: metaFromResult(base, result) });
-  if (row === null) return;
+  const meta = metaFromResult(base, result);
+  c.dispatch({ type: "meta", id, meta });
+  if (row === null) return meta;
   const ref = refOf(row);
   if (result.metadata === null) {
     if (result.outcome === "failed" || result.outcome === "cancelled") log(nameRefusedSpec({ ...ref, why: result.detail }));
-    return;
+    return meta;
   }
   // Even an invalid answer is paid work: remember its draft so fixing it does
   // not require another provider call (CP-15).
   rememberMeta(row.sourceHash ?? "", { state: "generated", meta: result.metadata, ...responseOf(result) });
   log(nameRefusedSpec({ ...ref, why: result.detail }));
+  return meta;
 }
 
 /** The log's identifying half, straight off the row's source. */

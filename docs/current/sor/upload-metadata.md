@@ -72,6 +72,7 @@ and the checked-only Accept action for old drafts/edited fields.
 * **Drafts are saved (2026-11-13).** Unaccepted text (e.g. no Name) goes to
   `export.json` as `state: "invalid"`/`"generated"`, never into files; reload
   restores it (`recorddraft.ts`); only accepted fingerprints count as embedded.
+  An unsaved draft makes the row stale; re-export rewrites only `export.json`.
 * **Creator/Copyright inputs were removed (2026-11-08).** No UI edits them any
   more. The lib carriers (`lib/upload/rights.ts`, XMP/IIM) are unchanged: values
   already stored in a cache or record are still read, kept and embedded.

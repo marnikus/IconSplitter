@@ -6,7 +6,7 @@
 
 import type { ExportRecord } from "../lib/upload/export";
 import type { GeminiUsage } from "../lib/upload/gemini";
-import { cleanMetadata, validateUploadMetadata, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
+import { cleanMetadata, metadataFingerprint, validateUploadMetadata, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
 import { metadataRights } from "../lib/upload/rights";
 import { EMPTY_META, type UploadMetaState } from "./types";
 
@@ -39,4 +39,15 @@ export function draftFromRecord(record: Pick<ExportRecord, "metadata"> | null): 
     ...(block.response ? { response: block.response } : {}),
     detail: validation.ok ? "" : "saved in export.json without being accepted — fill the missing field and accept",
   };
+}
+
+/**
+ * True while export.json does not hold the row's current DRAFT (unaccepted text):
+ * the row reads stale so an export saves it. Accepted text is `metadataMoved`'s.
+ */
+export function savedMetadataMoved(record: Pick<ExportRecord, "metadata">, meta: UploadMetaState): boolean {
+  const draft = meta.metadata !== null && meta.state !== "accepted" ? metadataFingerprint(meta.metadata) : "";
+  const block = record.metadata;
+  const saved = block !== null && block.state !== "accepted" ? block.fingerprint : "";
+  return draft !== saved;
 }

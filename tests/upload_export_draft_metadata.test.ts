@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { embeddedMetadataFp, metadataBlock, type ExportRecord } from "../src/lib/upload/export";
 import { metadataFingerprint, validateUploadMetadata, type IconMetadata } from "../src/lib/upload/meta";
 import { planStages } from "../src/lib/upload/exportplan";
-import { draftFromRecord } from "../src/upload/recorddraft";
+import { draftFromRecord, savedMetadataMoved as metadataMovedForTest } from "../src/upload/recorddraft";
 import { runExport } from "../src/upload/runexport";
 import { readBytesAt } from "../src/lib/fs";
 import { readEmbeddedMetadata } from "../src/lib/upload/embed";
@@ -67,5 +67,50 @@ describe("an export of a row whose metadata is not accepted", () => {
     const text = async (path: string) => new TextDecoder().decode(await readBytesAt(root, path) as Uint8Array);
     expect(JSON.parse(await text("export/export.json")).metadata?.title).toBe(NO_NAME.title);
     expect(readEmbeddedMetadata(await text("export/temporary.svg"))?.title ?? "").not.toBe(NO_NAME.title);
+  });
+});
+
+// 2026-11-13, second report: the row was ALREADY exported (export.json had
+// "metadata": null) and its answer came back without an Icon Name. Re-exporting
+// changed nothing — with no file to rebuild the export returned the old record
+// and never rewrote export.json — and the row showed "Processed", not stale.
+describe("a row that was already exported, then got a partial answer", () => {
+  it("re-export rewrites export.json with the draft and leaves the files alone", async () => {
+    const { args, root } = stockExportArgs(STOCK_TEST_SVGS[0]);
+    const first = await runExport({ ...args, metadata: null, metadataInfo: null });
+    expect(first.status).toBe("processed");
+    expect(first.record?.metadata).toBeNull();
+    const bytes = async (p: string) => Buffer.from(await readBytesAt(root, p) as Uint8Array).toString("base64");
+    const svgBefore = await bytes("export/temporary.svg");
+    const again = await runExport({
+      ...args, metadata: null, metadataInfo: null, record: first.record,
+      savedMetadata: { metadata: NO_NAME, state: "invalid", info: { ...INFO, validation: validateUploadMetadata(NO_NAME) } },
+    });
+    expect(again.status, again.error?.detail).toBe("processed");
+    expect(again.record?.metadata).toMatchObject({ state: "invalid", title: NO_NAME.title });
+    const text = new TextDecoder().decode(await readBytesAt(root, "export/export.json") as Uint8Array);
+    expect(JSON.parse(text).metadata?.description).toBe(NO_NAME.description);
+    expect(await bytes("export/temporary.svg")).toBe(svgBefore); // nothing embedded, nothing rebuilt
+  });
+
+  it("an unchanged draft is not written again", () => {
+    const record = { metadata: invalidBlock(), source: { fingerprint: "h" }, settings: { fingerprint: "s" }, outputs: { svg: {}, jpg: {}, eps: null }, tools: { eps: { enabled: false, converter: "builtin" }, svgo: { enabled: false } } } as unknown as ExportRecord;
+    const input = {
+      sourceHash: "h", settingsFp: "s", metadataFp: "", hasMetadata: false, optimize: false,
+      includeEps: false, epsConverter: "builtin" as const,
+      outputs: { svg: true, jpg: true, eps: true }, metadataOutputs: { svg: true, jpg: true, eps: true },
+    };
+    expect(planStages(record, { ...input, recordMetadataFp: metadataFingerprint(NO_NAME) }).stages).toEqual([]);
+    expect(planStages(record, { ...input, recordMetadataFp: "other" }).stages).toEqual(["validate", "commit"]);
+    expect(planStages(record, { ...input, recordMetadataFp: "other" }).rebuild).toEqual({ svg: false, jpg: false, eps: false });
+  });
+
+  it("the row says stale while export.json does not hold its current draft", () => {
+    const draft = draftFromRecord({ metadata: invalidBlock() } as ExportRecord);
+    const base = { source: { svgPath: "a.svg", version: 1 }, settings: { fingerprint: "x" } };
+    const nullRecord = { ...base, metadata: null } as unknown as ExportRecord;
+    const savedRecord = { ...base, metadata: invalidBlock() } as unknown as ExportRecord;
+    expect(metadataMovedForTest(nullRecord, draft)).toBe(true);
+    expect(metadataMovedForTest(savedRecord, draft)).toBe(false);
   });
 });

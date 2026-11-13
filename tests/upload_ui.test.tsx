@@ -1157,6 +1157,29 @@ describe("the metadata prompt panel — editable, saved, presets", () => {
     await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
     expect(fileText(root, `${DIR}/export/export.json`)).toContain(CUSTOM);
   });
+
+  itSlow("Export selected saves an answer without its Icon Name in export.json (2026-11-13)", async () => {
+    // The user's bread-slice row: the answer came back with title, description and
+    // tags but no Name line — invalid. The export that follows the generation read
+    // the row as it was before the answer and wrote "metadata": null.
+    const noName = GOOD_ANSWER.replace(/\nName: .*$/u, "");
+    vi.stubGlobal("fetch", geminiTransport(noName).fetch);
+    const root = makeRoot();
+    await mount(root);
+    await click("[data-testid=upload-key-state]");
+    await type("[data-testid=upload-key-input]", fakeKey("AIza", "ui_test_key_1"));
+    await click("[data-testid=upload-key-save]");
+    await check(FOG);
+    await activate(FOG);
+    await click("[data-testid=upload-export-selected]"); // no metadata yet → generate, then export
+    await click("[data-testid=upload-meta-confirm]");
+    await waitFor(() => text(`[data-testid=upload-meta-state-${FOG}]`).includes("invalid"), "the partial answer to land");
+    await waitFor(() => text(`[data-testid=upload-status-${FOG}]`).includes("Processed"), "the package to commit");
+    const record = JSON.parse(fileText(root, `${DIR}/export/export.json`));
+    expect(record.metadata).toMatchObject({ state: "invalid", title: "Minimal line icon of growth and speed" });
+    expect(record.metadata.tags.length).toBeGreaterThan(10);
+    expect(record.metadata.validation.errors.join(" ")).toMatch(/Icon Name is empty/);
+  });
 });
 
 describe("the Gemini panel and the toolbar — contained, not overlapping", () => {

@@ -118,6 +118,7 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
     settingsFp: settingsFingerprint(args.settings),
     metadataFp: args.metadata === null ? "" : metadataFingerprint(args.metadata),
     hasMetadata: args.metadata !== null,
+    recordMetadataFp: recordMetadataFpOf(args),
     optimize: args.settings.optimizeSvg,
     includeEps: args.settings.includeEps,
     includeSvg: args.settings.includeSvg, includeJpeg: args.settings.includeJpeg,
@@ -260,6 +261,12 @@ function commitInput(args: ExportRunArgs, plan: PlanFor, payload: CommitPayload)
 }
 
 // --- small helpers ----------------------------------------------------------------
+
+/** The fingerprint export.json should carry: accepted text, else the saved draft, else "". */
+function recordMetadataFpOf(args: ExportRunArgs): string {
+  const text = args.metadata ?? args.savedMetadata?.metadata ?? null;
+  return text === null ? "" : metadataFingerprint(text);
+}
 
 function isCancel(error: unknown): boolean {
   return error instanceof StageError && error.klass === "cancel";
