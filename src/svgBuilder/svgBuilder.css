@@ -306,3 +306,9 @@
   background: var(--v2-surface-2); color: var(--v2-text); font-weight: 800; line-height: 1.2; pointer-events: auto; white-space: nowrap; }
 .bld-cell-use[data-used="0"] { color: var(--v2-muted); font-weight: 600; }
 .bld-cell-use small { margin-left: 2px; color: var(--v2-yellow); font-size: 0.85em; }
+
+/* 🗑 remove from approved (2026-11-13): top-centre, beside × exclude and ○ lock; shown on hover. */
+.bld-cell-decline { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 15px; height: 15px; padding: 0; display: grid; place-items: center;
+  border: 1px solid #713249; border-radius: 50%; background: var(--v2-surface-2); font-size: 8px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; }
+.bld-cell:hover .bld-cell-decline, .bld-cell-decline:focus-visible { opacity: 1; }
+.bld-cell-decline:hover { background: #4a1f2c; border-color: #c25a74; }

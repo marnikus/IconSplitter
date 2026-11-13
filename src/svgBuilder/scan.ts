@@ -31,13 +31,24 @@ export async function rememberBuilderRoot(handle: DirHandleLike): Promise<void> 
   await saveHandles(BUILDER_HANDLE_KEY, { source: handle });
 }
 
+/** The other tabs' remembered folders, in the order the builder may borrow one. */
+const BORROWED_KEYS = ["__upload__", "__svg__", "__selection__"] as const;
+
+async function borrowedRoot(): Promise<DirHandleLike | null> {
+  for (const key of BORROWED_KEYS) {
+    const handle = (await loadHandles(key))?.source ?? null;
+    if (handle !== null) return handle;
+  }
+  return null;
+}
+
 export async function bootBuilderRoot(): Promise<DirHandleLike | null> {
-  const stored = (await loadHandles(BUILDER_HANDLE_KEY))?.source
-    ?? (await loadHandles("__upload__"))?.source
-    ?? (await loadHandles("__svg__"))?.source
-    ?? (await loadHandles("__selection__"))?.source
-    ?? null;
+  const own = (await loadHandles(BUILDER_HANDLE_KEY))?.source ?? null;
+  const stored = own ?? await borrowedRoot();
   if (stored !== null) await restoreKnownRoot(stored);
+  // A folder borrowed from another tab becomes the builder's own: a decline (🗑)
+  // finds its pair files through this key (2026-11-13).
+  if (own === null && stored !== null) await rememberBuilderRoot(stored).catch(() => undefined);
   return stored;
 }
 

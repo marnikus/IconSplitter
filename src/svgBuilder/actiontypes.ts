@@ -59,6 +59,10 @@ export interface BuilderActions {
   toggleScores: (show: boolean) => void;
   /** Opacity of the artboard % labels, 1–100. */
   setScoreOpacity: (percent: number) => void;
+  /** 🗑 Decline the icon in Generate SVG (no longer approved; one undoable step). */
+  declineAsset: (id: string) => void;
+  /** The builder follows a decline written to files: the icons leave the library, sheet and locks. */
+  dropAssets: (ids: readonly string[]) => void;
   /** Show / hide the "used N times" index on the artboard's icons (display-only). */
   toggleUsage: (show: boolean) => void;
   clearSelection: () => void;

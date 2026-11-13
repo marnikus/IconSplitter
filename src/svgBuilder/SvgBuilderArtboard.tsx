@@ -53,6 +53,9 @@ function PlacedCell({ b, cell, id }: { b: BuilderApi; cell: CellFrame; id: strin
   return <span className={`bld-cell${locked ? " is-locked" : ""}`} style={{ left: cell.x, top: cell.y, width: cell.size, height: cell.size }}>
     <button type="button" className="bld-cell-lock" data-testid={`builder-cell-lock-${cell.index}`} aria-pressed={locked}
       aria-label={label} title={label} onClick={() => b.actions.toggleLock(id)}>{locked ? "🔒" : "○"}</button>
+    <button type="button" className="bld-cell-decline" data-testid={`builder-cell-decline-${cell.index}`}
+      aria-label="Remove this icon from approved" title="Remove from approved — decline it in Generate SVG (Undo brings it back)"
+      onClick={() => b.actions.declineAsset(id)}>🗑</button>
     <button type="button" className="bld-cell-exclude" data-testid={`builder-cell-exclude-${cell.index}`}
       aria-label="Exclude this icon and refill its cell" title="Exclude and refill this cell · Shift+click: remove and leave the cell empty"
       onClick={(e) => b.actions.excludeAsset(id, e.shiftKey)}>×</button>
