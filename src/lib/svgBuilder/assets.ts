@@ -23,6 +23,7 @@ export function assetFromRow(row: BuilderRowLike, meta?: ExportMeta): BuilderIco
     id: row.id, base: row.base, suffix: row.suffix, label: title !== "" ? title : labelOf(row.base, row.suffix),
     category, tags: tagsOf(row, parts, category), svgPath: row.svgPath, svgName: row.svgName,
     version: row.version, fingerprint: row.fingerprint, metaPath: row.metaPath, approved: true,
+    ...(typeof row.aiPath === "string" && row.aiPath !== "" ? { aiPath: row.aiPath } : {}),
   };
   return meta === undefined || title === "" ? base : withMeta(base, meta, title);
 }

@@ -265,3 +265,10 @@
 .bld-preset-json-status.is-error { color: var(--v2-red, #e57373); }
 .bld-preset-json-help summary { cursor: pointer; color: var(--v2-muted); font-size: 11px; }
 .bld-preset-json-help pre { margin: 6px 0 0; padding: 8px; max-height: 220px; overflow: auto; white-space: pre-wrap; border-radius: var(--v2-radius); background: var(--v2-surface-2); color: var(--v2-muted); font-size: 10px; }
+
+/* icon-map.json line in the folder bar (2026-11-13). */
+.bld-icon-map { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 8px; border: 1px dashed var(--v2-line); border-radius: var(--v2-radius); font-size: 10px; color: var(--v2-muted); }
+.bld-icon-map.is-error { border-color: #665129; color: var(--v2-yellow); }
+.bld-icon-map-label { color: var(--v2-muted-2); font-size: 9px; font-weight: 800; letter-spacing: 0.08em; }
+.bld-icon-map code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--v2-text); }
+.bld-icon-map-count { margin-left: auto; white-space: nowrap; }

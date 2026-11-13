@@ -31,7 +31,7 @@ export function useBuilderBoot(patch: (value: Partial<BuilderModel>) => void, su
       try {
         const root = await bootBuilderRoot();
         if (!alive || root === null) return;
-        await scanBuilderRoot(scanRefs.current, root, { setRoot, setDiscovery, setBusy, say });
+        await scanBuilderRoot(scanRefs.current, root, { setRoot, setDiscovery, setBusy, say, setIconMap: (iconMap) => patch({ iconMap }) });
       } catch {
         if (alive) say("Saved folder could not be restored — open it again", true);
       }

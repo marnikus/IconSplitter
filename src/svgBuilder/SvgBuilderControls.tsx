@@ -14,7 +14,28 @@ export default function SvgBuilderControls({ b }: { b: BuilderApi }) {
       <span className="bld-audit" data-testid="builder-audit">{b.auditLine}</span>
     </div>
     <FolderPathRow root={b.root} testid="builder-folder-path" />
+    <IconMapRow b={b} />
   </section>;
+}
+
+/**
+ * Where icon-map.json is (2026-11-13): every named icon → id, folder and files,
+ * rewritten after each scan, so an AI can find an icon's folder by its name or id.
+ */
+function IconMapRow({ b }: { b: BuilderApi }) {
+  const map = b.iconMap;
+  if (map === null) return null;
+  const copy = () => {
+    void navigator.clipboard.writeText(map.path).then(() => b.actions.say("icon-map.json path copied"),
+      () => b.actions.say("The clipboard refused the path — select it and copy it by hand", true));
+  };
+  return <div className={`bld-icon-map${map.error === null ? "" : " is-error"}`} data-testid="builder-icon-map"
+    title="Every icon with an Icon Name, mapped to its id, folder, SVG, pair file, preview, export record, similarity index and usage count — rewritten after each scan">
+    <span className="bld-icon-map-label">ICON MAP</span>
+    <code data-testid="builder-icon-map-path">{map.path}</code>
+    <span className="bld-icon-map-count" data-testid="builder-icon-map-count">{map.error ?? `${map.count} named icon(s) · name → id → folder`}</span>
+    <button type="button" className="svg-btn tiny" data-testid="builder-icon-map-copy" onClick={copy}>Copy path</button>
+  </div>;
 }
 
 /**

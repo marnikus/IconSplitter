@@ -14,6 +14,7 @@ Back to the [storage map](../STORAGE.md) and [behaviour contract](../svg-builder
 | localStorage `iconSplitter.upload.gemini.v1` | shared Gemini endpoint/model/limits | read on boot and written by `setGemini`; the builder does not own a second config |
 | IndexedDB `iconSplitter/keys` | shared Gemini API key | `src/upload/keystore.ts`; key vault only, masked in UI and redacted from logs |
 | `<approved svg>.index.json` beside each SVG | icon vector index: image (512-d CLIP) + text (384-d MiniLM) vectors as base64 float32, fingerprints, model ids | `parseIndexRecord`; corrupt/foreign = not indexed; rewritten by Icons indexing ([vector index](../svg-builder-index.md)) |
+| `<root>/icon-map.json` | named icons → id, folder, files (preview, svg, svg.json, export.json, index, usage) | rewritten after each scan only when changed; `iconmapstore.ts` |
 | IndexedDB `iconSplitter-models/files` | downloaded public model files (huggingface.co), keyed by URL | indexer worker cache only; no icon data or keys |
 | IndexedDB `iconSplitter/handles["__svgBuilder__"]` | builder root handle | falls back to the older upload/SVG/selection handle; permission re-requested on restore |
 | IndexedDB `iconSplitter/rootpaths` | full path of the picked folder | shared `rootpath` identity; read-only `builder-folder-path` |

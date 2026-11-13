@@ -9,6 +9,7 @@ import { restoreKnownRoot } from "../lib/knownroots";
 import { rememberListTargets } from "../state/listtargets";
 import { ALL_EMPTY_SLOTS } from "../lib/svgBuilder/slots";
 import { builderAuditLine, discoverBuilderAssets, type BuilderDiscovery } from "./discovery";
+import { refreshIconMap, type IconMapState } from "./iconmapstore";
 
 export const BUILDER_HANDLE_KEY = "__svgBuilder__";
 
@@ -22,6 +23,8 @@ export interface BuilderScanSetters {
   setDiscovery: (found: BuilderDiscovery | null) => void;
   setBusy: (busy: string | null) => void;
   say: (message: string, error?: boolean) => void;
+  /** icon-map.json was (re)written after the scan (2026-11-13). */
+  setIconMap?: (state: IconMapState) => void;
 }
 
 export async function rememberBuilderRoot(handle: DirHandleLike): Promise<void> {
@@ -53,6 +56,11 @@ export async function scanBuilderRoot(
     setters.setRoot(root);
     setters.setDiscovery(found);
     rememberListTargets("svgBuilder", [...found.assets.map((a) => a.id), ...ALL_EMPTY_SLOTS]);
+    void refreshIconMap(root, found.assets).then((state) => {
+      if (!isCurrent(refs.seq, ticket.id)) return;
+      setters.setIconMap?.(state);
+      if (state.error !== null) setters.say(state.error, true);
+    });
     setters.say(builderAuditLine(found));
     for (const warning of warnings(found)) setters.say(warning, true);
   } catch {

@@ -17,6 +17,7 @@ import { loadBuilderListView } from "./listview";
 import { loadBuilderPrefs, type BuilderPrefs } from "./prefsstore";
 import { builderPresets, loadBuilderPrompt } from "./promptstore";
 import { loadTemplates } from "./templatestore";
+import type { IconMapState } from "./iconmapstore";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 
 export type BuilderDialog = "none" | "metadata" | "brief" | "preset";
@@ -71,6 +72,8 @@ export interface BuilderModel {
   /** Saved sheet templates (templatestore.ts) and the one opened for editing, if any. */
   templates: readonly SheetTemplate[];
   editingTemplateId: string | null;
+  /** icon-map.json in the scanned root: its path and how many named icons it maps. */
+  iconMap: IconMapState | null;
 }
 
 export interface BuilderAction { type: "patch"; patch: Partial<BuilderModel> }
@@ -85,7 +88,7 @@ export function initialBuilderModel(): BuilderModel {
     gemini: loadGeminiConfig(), key: emptyKeyInfo(),
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null,
     preview: null, dialog: "none", svgTexts: {}, indexing: null,
-    templates: loadTemplates(), editingTemplateId: null,
+    templates: loadTemplates(), editingTemplateId: null, iconMap: null,
   };
 }
 

@@ -1,7 +1,7 @@
 // actions/folder.ts — the one picker and the one honest rescan path.
 import { pickFolderFor } from "../../ui/pickroot";
 import { retryCapture } from "../../ui/rootcapture";
-import { scanBuilderRoot, rememberBuilderRoot } from "../scan";
+import { scanBuilderRoot, rememberBuilderRoot, type BuilderScanSetters } from "../scan";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
 export function folderActions(get: () => BuilderActionContext): Pick<BuilderActions, "openFolder" | "rescan"> {
@@ -32,6 +32,6 @@ async function rescan(ctx: BuilderActionContext): Promise<void> {
   await scanBuilderRoot(ctx.scanRefs, root, setters(ctx));
 }
 
-function setters(ctx: BuilderActionContext) {
-  return { setRoot: ctx.setRoot, setDiscovery: ctx.setDiscovery, setBusy: ctx.setBusy, say: ctx.say };
+function setters(ctx: BuilderActionContext): BuilderScanSetters {
+  return { setRoot: ctx.setRoot, setDiscovery: ctx.setDiscovery, setBusy: ctx.setBusy, say: ctx.say, setIconMap: (iconMap) => ctx.dispatch({ iconMap }) };
 }

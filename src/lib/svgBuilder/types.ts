@@ -31,6 +31,8 @@ export interface BuilderIconAsset {
   keywords?: readonly string[];
   /** The export metadata's one-word Icon Name (2026-11-13): what the caption under the icon shows. */
   name?: string;
+  /** The pair's AI preview image, relative to the root (icon-map.json), when known. */
+  aiPath?: string;
 }
 
 /** The searchable metadata block of an icon's export record. */
@@ -40,6 +42,8 @@ export interface ExportMeta { title: string; description: string; tags: readonly
 export interface BuilderRowLike {
   id: string; base: string; suffix: string; dirPath: string;
   svgPath: string; svgName: string; version: number; fingerprint: string; metaPath: string;
+  /** The pair's AI preview image (the upload row's `aiPath`), when known. */
+  aiPath?: string;
 }
 
 export interface BuilderProfile { id: string; label: string; tags: readonly string[] }

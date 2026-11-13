@@ -5167,3 +5167,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `src/lib/svgBuilder/presetjson.ts` (presetJsonOf, mergeConfig, resolveIcons, readPresetJson, presetSchemaText, presetBriefForAi), `actions/presetjson.ts`, `SvgBuilderPresetJson.tsx`; Export Save/Load preset now use the v2 JSON (v1 still read).
 - Measured: tsc clean; eslint 0 errors/0 warnings in changed files; quality:changed GATE PASSED (readPresetJson CC split, dialog split); svg_builder suites 102/102; full vitest: the 9 clean-tree files + quality_base (dirty tree only) + algo_efficiency (timing).
+
+## 2026-11-13 — SVG builder: icon-map.json (phase 1 of icon map / usage / final artboards)
+
+- `lib/svgBuilder/iconmap.ts`, `lib/svgBuilder/usage.ts` (pure, used by phase 2), `svgBuilder/iconmapstore.ts`; scan writes `<root>/icon-map.json`; folder bar line with the full path; assets carry the pair's `aiPath`.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder + upload_discovery suites 125/125.
