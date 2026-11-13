@@ -1,5 +1,6 @@
 // prefsstore.ts — display-only builder preferences, validated on read.
 import { isRecord } from "../lib/isrecord";
+import { clampZoom } from "../lib/zoom";
 import { readKey, writeKey } from "../state/safestorage";
 
 export const BUILDER_PREFS_KEY = "iconSplitter.svgBuilder.prefs.v1";
@@ -21,9 +22,11 @@ export interface BuilderPrefs {
   showScores: boolean;
   /** Their opacity in %, 1–100. */
   scoreOpacity: number;
+  /** Height of the saved-template pictures, the shared 48–800 px zoom (2026-11-13). */
+  templateZoom: number;
 }
 
-export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100 };
+export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140 };
 export const META_HEIGHT = { min: 160, max: 1200 } as const;
 const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "custom"];
 
@@ -37,6 +40,7 @@ export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
     metaOpen: raw.metaOpen !== false,
     showScores: raw.showScores !== false,
     scoreOpacity: Math.round(num(raw.scoreOpacity, 100, 1, 100)),
+    templateZoom: typeof raw.templateZoom === "number" ? clampZoom(raw.templateZoom) : DEFAULT_BUILDER_PREFS.templateZoom,
     metaHeight: typeof raw.metaHeight === "number" ? num(raw.metaHeight, 0, META_HEIGHT.min, META_HEIGHT.max) || null : null,
   };
 }

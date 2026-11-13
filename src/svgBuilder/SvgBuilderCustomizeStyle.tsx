@@ -5,6 +5,7 @@ import type { BannerPosition, SheetConfig, TitleFace } from "../lib/svgBuilder/t
 import type { Edit } from "./SvgBuilderCustomize";
 import { ColorChip, Field, Section, Segmented, Slider, Swatches, TextBox, Toggle, type SegOption } from "./SvgBuilderFields";
 import type { BuilderApi } from "./useSvgBuilder";
+import TextPlacement from "./SvgBuilderTextPlacement";
 
 const POSITIONS: readonly SegOption<BannerPosition>[] = [
   { value: "left", label: "← Left" }, { value: "top", label: "↑ Top" }, { value: "bottom", label: "↓ Bottom" },
@@ -65,6 +66,7 @@ function BannerControls({ b, edit }: { b: BuilderApi; edit: Edit }) {
         onChange={(subtitleSize) => edit("banner", { subtitleSize }, true)} />
     </div>
     <Segmented label="Title face" value={n.titleFace} testid="builder-title-face" options={FACES} onChange={(titleFace) => edit("banner", { titleFace })} />
+    <TextPlacement n={n} edit={edit} />
     <Toggle label="Hero glyph" checked={n.hero} testid="builder-hero" onChange={(hero) => edit("banner", { hero })} />
     {n.hero && <HeroSelect b={b} edit={edit} />}
     <Toggle label="Accent rule" checked={n.divider} testid="builder-divider" onChange={(divider) => edit("banner", { divider })} />

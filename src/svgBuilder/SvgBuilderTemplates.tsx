@@ -5,6 +5,7 @@
 // Save template writes back to it) and ✕ remove. Styles: app theme (`bld-*`).
 import { memo, useEffect, useMemo, useState } from "react";
 import { templateFacts, templatePreviewSvg, type SheetTemplate } from "../lib/svgBuilder/templates";
+import ZoomSliderBase from "../ui/ZoomSliderBase";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderTemplates({ b }: { b: BuilderApi }) {
@@ -14,6 +15,8 @@ export default function SvgBuilderTemplates({ b }: { b: BuilderApi }) {
       <h3>Saved templates <span className="bld-count">{b.templates.length}</span></h3>
       {editing !== null && <span className="bld-templates-editing" data-testid="builder-template-editing">
         Editing <b>{editing.name}</b></span>}
+      {b.templates.length > 0 && <ZoomSliderBase id="builder-template-zoom" testid="builder-template-zoom" label="PREVIEW"
+        value={b.prefs.templateZoom} onChange={b.actions.setTemplateZoom} />}
       <div className="bld-templates-actions">
         <button type="button" className="svg-btn tiny primary" data-testid="builder-template-save" onClick={b.actions.saveTemplate}
           title={editing === null ? "Save the sheet's grid, icon, banner and text style as a new template" : `Write the sheet's look back into “${editing.name}”`}>
@@ -26,13 +29,16 @@ export default function SvgBuilderTemplates({ b }: { b: BuilderApi }) {
     </div>
     {b.templates.length === 0
       ? <p className="bld-templates-empty" data-testid="builder-templates-empty">No templates yet — style the sheet, then ＋ Save template.</p>
-      : <div className="bld-templates-grid">{b.templates.map((t) => <TemplateBlock key={t.id} b={b} template={t} />)}</div>}
+      : <div className="bld-templates-grid" style={{ ["--tpl-h" as string]: `${b.prefs.templateZoom}px` }}>
+        {b.templates.map((t) => <TemplateBlock key={t.id} b={b} template={t} />)}</div>}
   </section>;
 }
 
 function TemplateBlock({ b, template }: { b: BuilderApi; template: SheetTemplate }) {
   const editing = b.editingTemplateId === template.id;
-  return <article className={`bld-template${editing ? " is-editing" : ""}`} data-testid={`builder-template-${template.id}`}>
+  const { width, height } = template.config.artboard;
+  return <article className={`bld-template${editing ? " is-editing" : ""}`} data-testid={`builder-template-${template.id}`}
+    style={{ ["--tpl-ratio" as string]: String(width / height) }}>
     <button type="button" className="bld-template-pic" data-testid={`builder-template-open-${template.id}`}
       onClick={() => b.actions.editTemplate(template.id)} title={`Open “${template.name}” on the sheet to edit it`}>
       <TemplatePreview b={b} template={template} />

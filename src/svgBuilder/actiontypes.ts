@@ -105,4 +105,6 @@ export interface BuilderActions {
   stopEditingTemplate: () => void;
   renameTemplate: (id: string, name: string) => void;
   removeTemplate: (id: string) => void;
+  /** Height of the template pictures (shared 48–800 px zoom); display-only. */
+  setTemplateZoom: (px: number) => void;
 }

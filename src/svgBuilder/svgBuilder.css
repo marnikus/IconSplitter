@@ -244,12 +244,15 @@
 .bld-templates-editing b { color: var(--v2-green); }
 .bld-templates-actions { margin-left: auto; display: flex; gap: 6px; }
 .bld-templates-empty { color: var(--v2-muted); font-size: 11px; }
-.bld-templates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-.bld-template { display: grid; gap: 6px; padding: 6px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface-2); min-width: 0; }
+/* The picture is the zoom's height at the template's own aspect; the block never gets narrower than its controls. */
+.bld-templates-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+.bld-template { display: grid; gap: 6px; padding: 6px; width: max(180px, calc(var(--tpl-h, 140px) * var(--tpl-ratio, 1.6) + 14px)); border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface-2); min-width: 0; }
 .bld-template.is-editing { border-color: var(--v2-green); box-shadow: 0 0 0 1px var(--v2-green) inset; }
-.bld-template-pic { display: block; padding: 0; border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-surface-3); cursor: pointer; overflow: hidden; aspect-ratio: 16 / 10; }
+.bld-template-pic { display: block; padding: 0; border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-surface-3); cursor: pointer; overflow: hidden; height: var(--tpl-h, 140px); }
 .bld-template-pic img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .bld-template-pic:hover, .bld-template-pic:focus-visible { border-color: var(--v2-line-strong); }
 .bld-template-name { width: 100%; min-width: 0; font-size: 11px; font-weight: 700; }
 .bld-template-foot { display: flex; align-items: center; gap: 4px; }
 .bld-template-facts { flex: 1 1 auto; min-width: 0; color: var(--v2-muted); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bld-text-placement { display: grid; gap: 6px; padding: 8px; border: 1px dashed var(--v2-line); border-radius: var(--v2-radius); }
+.bld-inline-text { position: absolute; z-index: 5; padding: 2px 6px; border: 1px solid var(--v2-green); border-radius: 4px; background: #000c; color: #fff; font-family: inherit; line-height: 1.15; resize: none; outline: none; box-shadow: 0 6px 24px #000a; }

@@ -212,3 +212,92 @@ describe("indexing controls", () => {
     expect(q("builder-header-index")!.previousElementSibling?.className).toContain("bld-title-block");
   });
 });
+
+// 2026-11-13, second request: text placement (padding + exact moves), editing the
+// banner text right on the sheet, and a zoom for the template pictures.
+import { bannerMarkup } from "../src/lib/svgBuilder/banner";
+
+describe("text placement — the pure part", () => {
+  const box = { x: 0, y: 0, width: 1080, height: 76 };
+  const draw = (patch: Partial<typeof DEFAULT_CONFIG.banner>) => bannerMarkup({
+    banner: { ...DEFAULT_CONFIG.banner, position: "top", style: "split", ...patch }, box, artboardWidth: 1080,
+    title: "GLYPH / ICON SHEET", subtitle: "Approved SVG assets", hero: () => "",
+  });
+
+  it("marks each text block and moves it by exact pixels", () => {
+    expect(draw({})).toContain('<g data-banner-text="title">');
+    const moved = draw({ titleDx: 12, titleDy: -3, subtitleDx: -40, subtitleDy: 5 });
+    expect(moved).toContain('<g data-banner-text="title" transform="translate(12 -3)">');
+    expect(moved).toContain('<g data-banner-text="subtitle" transform="translate(-40 5)">');
+  });
+
+  it("text padding pushes the text in from the banner edge, never the painted block", () => {
+    const x = (svg: string, which: string) => Number(new RegExp(`data-banner-text="${which}"[^>]*><text x="([0-9.]+)"`).exec(svg)?.[1]);
+    const plain = draw({}), padded = draw({ textPadding: 60 });
+    expect(x(padded, "subtitle") - x(plain, "subtitle")).toBe(60);
+    expect(x(padded, "title")).toBeGreaterThanOrEqual(60);
+    expect(padded.match(/data-split-block="true"/)?.index).toBeGreaterThan(0);
+    expect(padded).toContain(`<rect x="0" y="0" width="`); // the accent block still starts at the edge
+  });
+
+  it("reads old configs as no placement, clamps the rest, and a template keeps it", () => {
+    expect(parseSheetConfig({ banner: { title: "x" } }).banner).toMatchObject({ textPadding: 0, titleDx: 0, subtitleDy: 0 });
+    expect(parseSheetConfig({ banner: { titleDx: 9000, textPadding: -5 } }).banner).toMatchObject({ titleDx: 400, textPadding: 0 });
+    const placed = parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, titleDx: 7, textPadding: 20 } });
+    expect(lookOf(placed).banner).toMatchObject({ titleDx: 7, textPadding: 20 });
+  });
+});
+
+const shadowSvg = () => q("builder-artboard")!.querySelector(".bld-artboard-svg")!.shadowRoot!;
+
+describe("text placement and in-place editing — on the sheet", () => {
+  it("Move X / Y and Text padding change the drawn sheet", async () => {
+    await openLibrary();
+    await typeInto("builder-title-move-x", "15");
+    await waitUntil(() => shadowSvg().innerHTML.includes('data-banner-text="title" transform="translate(15 0)"'), "title moved");
+    expect(q("builder-text-placement-reset")?.hasAttribute("disabled")).toBe(false);
+    await click("builder-text-placement-reset");
+    await waitUntil(() => shadowSvg().innerHTML.includes('<g data-banner-text="title">'), "placement reset");
+  });
+
+  it("double-click edits the title on the sheet; clicking outside saves, Escape cancels", async () => {
+    await openLibrary();
+    const title = () => shadowSvg().querySelector('[data-banner-text="title"]')!;
+    await act(async () => { title().dispatchEvent(new MouseEvent("dblclick", { bubbles: true, composed: true })); });
+    const box = q("builder-inline-title") as HTMLTextAreaElement;
+    expect(box).not.toBeNull();
+    expect(box.value).toBe("ICON SHEET");
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    await act(async () => { setter.call(box, "Fresh food"); box.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { box.blur(); box.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    await settle(0);
+    expect(q("builder-inline-title")).toBeNull();
+    expect((q("builder-title") as HTMLInputElement).value).toBe("Fresh food");
+    expect(text("builder-sheet-title")).toBe("Fresh food");
+
+    await act(async () => { title().dispatchEvent(new MouseEvent("dblclick", { bubbles: true, composed: true })); });
+    const again = q("builder-inline-title") as HTMLTextAreaElement;
+    await act(async () => { setter.call(again, "thrown away"); again.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { again.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    await settle(0);
+    expect((q("builder-title") as HTMLInputElement).value).toBe("Fresh food");
+
+    await click("builder-undo"); // the in-place edit was one undo entry
+    expect((q("builder-title") as HTMLInputElement).value).toBe("ICON SHEET");
+  });
+});
+
+describe("template pictures zoom", () => {
+  it("sizes every picture by the shared 48–800 px zoom and remembers it", async () => {
+    await openLibrary();
+    expect(q("builder-template-zoom")).toBeNull(); // nothing to zoom yet
+    await click("builder-template-save");
+    const zoom = q("builder-template-zoom") as HTMLInputElement;
+    expect([zoom.min, zoom.max]).toEqual(["48", "800"]);
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await act(async () => { setter.call(zoom, "300"); zoom.dispatchEvent(new Event("input", { bubbles: true })); zoom.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(text("builder-template-zoom-value")).toContain("300");
+    expect((host.querySelector(".bld-templates-grid") as HTMLElement).style.getPropertyValue("--tpl-h")).toBe("300px");
+    expect(JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.prefs.v1") ?? "{}").templateZoom).toBe(300);
+  });
+});

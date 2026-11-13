@@ -8,10 +8,11 @@ import {
 } from "../../lib/svgBuilder/templates";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
+import { clampZoom } from "../../lib/zoom";
 import { commitConfig, prefs } from "./config";
 
 type TemplateActions = Pick<BuilderActions,
-  "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "stopEditingTemplate" | "renameTemplate" | "removeTemplate">;
+  "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "stopEditingTemplate" | "renameTemplate" | "removeTemplate" | "setTemplateZoom">;
 
 export function templateActions(get: () => BuilderActionContext): TemplateActions {
   return {
@@ -21,6 +22,7 @@ export function templateActions(get: () => BuilderActionContext): TemplateAction
     stopEditingTemplate: () => get().dispatch({ editingTemplateId: null }),
     renameTemplate: (id, name) => renameTemplate(get(), id, name),
     removeTemplate: (id) => removeTemplate(get(), id),
+    setTemplateZoom: (px) => prefs(get(), { templateZoom: clampZoom(px) }),
   };
 }
 

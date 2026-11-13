@@ -18,7 +18,8 @@ export const DEFAULT_CONFIG: SheetConfig = {
   banner: { position: "left", size: 242, background: "#17271F", accent: "#D9F36C",
     textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid",
     title: "ICON SHEET", subtitle: "Editable stroke width",
-    titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true },
+    titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true,
+    textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0 },
 };
 
 /** The 8 swatches shown under Canvas and Stroke colour. */
@@ -113,6 +114,18 @@ function parseBanner(raw: unknown): SheetConfig["banner"] {
     titleFace: oneOf(raw.titleFace, ["sans", "serif", "mono"], d.titleFace) as TitleFace,
     hero: bool(raw.hero, d.hero), divider: bool(raw.divider, d.divider),
     heroIconId: typeof raw.heroIconId === "string" && raw.heroIconId !== "" ? raw.heroIconId : null,
+    ...parseTextPlacement(raw),
+  };
+}
+
+type TextPlacement = Pick<SheetConfig["banner"], "textPadding" | "titleDx" | "titleDy" | "subtitleDx" | "subtitleDy">;
+
+/** Text placement: missing on older configs and presets -> 0 (the reference placement). */
+function parseTextPlacement(raw: Record<string, unknown>): TextPlacement {
+  const move = (v: unknown) => num(RANGES.textOffset, v, 0);
+  return {
+    textPadding: num(RANGES.textPadding, raw.textPadding, 0),
+    titleDx: move(raw.titleDx), titleDy: move(raw.titleDy), subtitleDx: move(raw.subtitleDx), subtitleDy: move(raw.subtitleDy),
   };
 }
 

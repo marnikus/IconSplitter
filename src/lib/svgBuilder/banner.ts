@@ -11,6 +11,14 @@ export type HeroPainter = (x: number, y: number, size: number, ink: string) => s
 
 export interface BannerArgs { banner: Banner; box: Rect; artboardWidth: number; title: string; subtitle: string; hero: HeroPainter }
 
+/** Inside the drawing: `box` is where text lays out (inset by Text padding), `frame` the painted banner. */
+interface Laid extends BannerArgs { frame: Rect }
+
+function inset(box: Rect, pad: number): Rect {
+  const p = Math.max(0, Math.min(pad, box.width / 2 - 1, box.height / 2 - 1));
+  return { x: box.x + p, y: box.y + p, width: box.width - 2 * p, height: box.height - 2 * p };
+}
+
 export function wrapLines(text: string, maxChars: number): string[] {
   const words = text.trim().split(/\s+/).filter((w) => w !== "");
   const lines: string[] = [];
@@ -25,7 +33,8 @@ export function wrapLines(text: string, maxChars: number): string[] {
 export function bannerMarkup(a: BannerArgs): string {
   const { box, banner } = a;
   const side = banner.position === "left" || banner.position === "right";
-  const body = banner.style === "split" ? (side ? splitSide(a) : splitEdge(a)) : (side ? solidSide(a) : solidEdge(a));
+  const laid: Laid = { ...a, frame: box, box: inset(box, banner.textPadding) };
+  const body = banner.style === "split" ? (side ? splitSide(laid) : splitEdge(laid)) : (side ? solidSide(laid) : solidEdge(laid));
   return `<g data-banner="true"><rect x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}" fill="${attr(banner.background)}"/>${body}</g>`;
 }
 
@@ -42,14 +51,23 @@ function subtitleLines(a: BannerArgs, side: boolean): string[] {
 
 function titleText(a: BannerArgs, lines: string[], at: { x: number; top: number; size: number; ink: string; anchor: "start" | "middle" }): string {
   const serif = a.banner.titleFace === "serif";
-  return lines.map((line, i) => textEl({ x: at.x, y: at.top + at.size * 0.83 + i * at.size * 1.03, value: line, size: at.size,
+  const body = lines.map((line, i) => textEl({ x: at.x, y: at.top + at.size * 0.83 + i * at.size * 1.03, value: line, size: at.size,
     colour: at.ink, face: a.banner.titleFace, weight: serif ? 500 : 600, anchor: at.anchor, spacing: serif ? "-0.02em" : "-0.045em" })).join("");
+  return movedText("title", a.banner.titleDx, a.banner.titleDy, body);
+}
+
+/** A text block with its Move X/Y, marked so the artboard can edit it in place (double-click). */
+function movedText(which: "title" | "subtitle", dx: number, dy: number, body: string): string {
+  if (body === "") return "";
+  const move = dx === 0 && dy === 0 ? "" : ` transform="translate(${round(dx)} ${round(dy)})"`;
+  return `<g data-banner-text="${which}"${move}>${body}</g>`;
 }
 
 function subtitleText(a: BannerArgs, lines: string[], at: { x: number; top: number; anchor: "start" | "middle" }): string {
   const s = a.banner.subtitleSize;
-  return lines.map((line, i) => textEl({ x: at.x, y: at.top + s * 0.83 + i * s * 1.55, value: line, size: s,
+  const body = lines.map((line, i) => textEl({ x: at.x, y: at.top + s * 0.83 + i * s * 1.55, value: line, size: s,
     colour: a.banner.subtitleColor, face: "sans", weight: 500, anchor: at.anchor, spacing: "0.16em" })).join("");
+  return movedText("subtitle", a.banner.subtitleDx, a.banner.subtitleDy, body);
 }
 
 /** The hero in a double ring (reference: accent ring at 30 %, inner ring inset 7 px). */
@@ -60,7 +78,7 @@ function heroRing(a: BannerArgs, c: { cx: number; cy: number; d: number; glyph: 
     + `${a.hero(c.cx - c.glyph / 2, c.cy - c.glyph / 2, c.glyph, c.ink)}</g>`;
 }
 
-function solidSide(a: BannerArgs): string {
+function solidSide(a: Laid): string {
   const { box, banner } = a;
   const col = { cx: box.x + box.width / 2, top: 0 };
   const glyph = Math.min(80, box.width * 0.35);
@@ -78,7 +96,7 @@ function solidSide(a: BannerArgs): string {
   return hero + rule + title + sub;
 }
 
-function solidEdge(a: BannerArgs): string {
+function solidEdge(a: Laid): string {
   const { box, banner } = a;
   const glyph = Math.min(30, box.height * 0.38);
   const tl = titleLines(a, false, banner.titleSize);
@@ -99,38 +117,39 @@ function solidEdge(a: BannerArgs): string {
   return hero + title + rule + sub;
 }
 
-function splitSide(a: BannerArgs): string {
-  const { box, banner } = a;
-  const blockH = Math.min(154, box.width * 0.62);
+function splitSide(a: Laid): string {
+  const { box, banner, frame } = a;
+  const blockH = Math.min(154, frame.width * 0.62);
   const ink = readableInk(banner.accent);
   const size = banner.titleSize * 0.8;
   const tl = titleLines(a, true, size);
   const heroH = banner.hero ? 40 + 12 : 0;
-  const top = box.y + (blockH - heroH - tl.length * size * 1.03) / 2;
+  const top = frame.y + Math.max(banner.textPadding, (blockH - heroH - tl.length * size * 1.03) / 2);
   const cx = box.x + box.width / 2;
   const hero = banner.hero ? heroRing(a, { cx, cy: top + 20, d: 40, glyph: 22, ink }) : "";
   const title = titleText(a, tl, { x: cx, top: top + heroH, size, ink, anchor: "middle" });
   const sl = subtitleLines(a, true);
-  const restTop = box.y + blockH + (box.height - blockH - sl.length * banner.subtitleSize * 1.55 - 18) / 2;
+  const restH = frame.height - blockH - banner.textPadding;
+  const restTop = frame.y + blockH + (restH - sl.length * banner.subtitleSize * 1.55 - 18) / 2;
   const line = `<rect x="${round(cx - 16)}" y="${round(restTop)}" width="32" height="1" fill="${attr(banner.subtitleColor)}" fill-opacity="0.4"/>`;
-  return `<rect x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(blockH)}" fill="${attr(banner.accent)}" data-split-block="true"/>`
+  return `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(frame.width)}" height="${round(blockH)}" fill="${attr(banner.accent)}" data-split-block="true"/>`
     + hero + title + line + subtitleText(a, sl, { x: cx, top: restTop + 18, anchor: "middle" });
 }
 
-function splitEdge(a: BannerArgs): string {
-  const { box, banner } = a;
-  const blockW = Math.min(box.height * 4.45, a.artboardWidth * 0.36);
+function splitEdge(a: Laid): string {
+  const { box, banner, frame } = a;
+  const blockW = Math.min(frame.height * 4.45, a.artboardWidth * 0.36);
   const ink = readableInk(banner.accent);
   const tl = titleLines(a, false, banner.titleSize);
   const titleW = Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize)));
   const heroW = banner.hero ? 36 + 14 : 0;
-  const x0 = box.x + Math.max(12, (blockW - heroW - titleW) / 2);
+  const x0 = frame.x + Math.max(12, banner.textPadding, (blockW - heroW - titleW) / 2);
   const cy = box.y + box.height / 2;
   const hero = banner.hero ? heroRing(a, { cx: x0 + 18, cy, d: 36, glyph: 20, ink }) : "";
   const title = titleText(a, tl, { x: x0 + heroW, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink, anchor: "start" });
   const sl = subtitleLines(a, false);
-  const sub = subtitleText(a, sl, { x: box.x + blockW + 24, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
-  return `<rect x="${round(box.x)}" y="${round(box.y)}" width="${round(blockW)}" height="${round(box.height)}" fill="${attr(banner.accent)}" data-split-block="true"/>`
+  const sub = subtitleText(a, sl, { x: frame.x + blockW + 24 + banner.textPadding, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
+  return `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(blockW)}" height="${round(frame.height)}" fill="${attr(banner.accent)}" data-split-block="true"/>`
     + hero + title + sub;
 }
 

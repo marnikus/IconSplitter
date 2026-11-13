@@ -64,13 +64,14 @@
 | `builder-banner-position` / `builder-banner-style` / `builder-banner-size` | Banner | `builder-banner-hidden` when None |
 | `builder-banner-bg` / `builder-accent` / `builder-title-ink` / `builder-subtitle-ink` | colour chips | |
 | `builder-title` / `builder-subtitle` / `builder-title-size` / `builder-subtitle-size` / `builder-title-face` | banner copy | |
+| `builder-text-placement` | Text placement | `builder-text-padding`, `builder-title-move-x` / `-y`, `builder-subtitle-move-x` / `-y`, `builder-text-placement-reset`; on the artboard a double-click opens `builder-inline-title` / `builder-inline-subtitle` |
 | `builder-hero` / `builder-hero-icon` / `builder-divider` | Hero glyph, Glyph select, Accent rule | |
 
 ## Saved templates (under the workspace, 2026-11-13)
 
 | Testid | Element | Notes |
 |---|---|---|
-| `builder-templates` | window after `builder-workspace` | `builder-template-save` (＋ new / ✓ write back when editing), `builder-template-save-new`, `builder-template-stop`, `builder-template-editing`, `builder-templates-empty` |
+| `builder-templates` | window after `builder-workspace` | `builder-template-save` (＋ new / ✓ write back when editing), `builder-template-save-new`, `builder-template-stop`, `builder-template-zoom` (+ `-value`, shared ZoomSliderBase), `builder-template-editing`, `builder-templates-empty` |
 | `builder-template-<id>` | one block (`is-editing`) | `builder-template-open-<id>` (picture = open to edit), `builder-template-preview-<id>` (img), `builder-template-name-<id>` (Enter/blur saves, Escape reverts), `builder-template-edit-<id>` ✎, `builder-template-remove-<id>` ✕ |
 
 ## Dialogs

@@ -76,6 +76,8 @@ export interface SheetConfig {
     textColor: string; subtitleColor: string; style: "solid" | "split";
     title: string; subtitle: string; titleSize: number; subtitleSize: number;
     titleFace: TitleFace; hero: boolean; heroIconId: string | null; divider: boolean;
+    /** Text placement (2026-11-13): an inset from the banner edge, and per-text moves in px. */
+    textPadding: number; titleDx: number; titleDy: number; subtitleDx: number; subtitleDy: number;
   };
 }
 

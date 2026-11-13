@@ -5152,3 +5152,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - New: `src/lib/svgBuilder/templates.ts` (look-only templates, generated names, validated list, preview), `src/svgBuilder/{templatestore.ts, actions/templates.ts, SvgBuilderTemplates.tsx}`; `applyCopy` shared by layout presets and templates. Indexing controls moved from the folder bar to the header row beside the sheet title (user request).
 - Measured: tsc clean; eslint 0 errors in changed files; quality:changed GATE PASSED; svg_builder_templates 8/8; full vitest 4536 passed / 28 failed — the 9 clean-tree files plus upload_ui (passes alone; timeout under full-suite load) and algo_efficiency (201.5 ms vs a 200 ms speed bound; split code not touched).
+
+## 2026-11-13 — SVG builder: text placement, in-place banner text editing, template preview zoom
+
+- Banner `textPadding` + `titleDx/Dy`, `subtitleDx/Dy` (ranges table, parser, banner.ts `Laid` frame vs inset text box, `data-banner-text` groups); Customize "Text placement"; double-click editing on the artboard (native dblclick listener — happy-dom does not retarget shadow-root events for React); template pictures sized by the shared ZoomSliderBase (prefs `templateZoom`).
+- Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; svg_builder_templates 14/14; svg_builder suites green; full vitest 4544 passed / 26 failed in the 9 clean-tree files.
