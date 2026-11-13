@@ -102,10 +102,12 @@ import { BUILDER_TEMPLATES_KEY } from "../src/svgBuilder/templatestore";
 describe("templates — the pure part", () => {
   const sheet = parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, title: "FOOD", subtitle: "Line icons", heroIconId: "x" } });
 
-  it("keeps the look and never the sheet's words or hero", () => {
+  it("keeps the look with the words as sample text (never empty), and no hero (2026-11-14)", () => {
     const look = lookOf(sheet);
-    expect(look.banner).toMatchObject({ title: "", subtitle: "", heroIconId: null, style: sheet.banner.style });
+    expect(look.banner).toMatchObject({ title: "FOOD", subtitle: "Line icons", heroIconId: null, style: sheet.banner.style });
     expect(look.grid).toEqual(sheet.grid);
+    const blank = lookOf(parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, title: " ", subtitle: "" } }));
+    expect(blank.banner).toMatchObject({ title: DEFAULT_CONFIG.banner.title, subtitle: DEFAULT_CONFIG.banner.subtitle });
   });
 
   it("applies a look to the current sheet without rewriting its words", () => {
@@ -132,10 +134,10 @@ describe("templates — the pure part", () => {
 
   it("draws a dashed outline for every cell without a loaded icon", () => {
     const template = newTemplate(sheet, [], "2026-11-13T00:00:00Z", "a");
-    const svg = templatePreviewSvg({ template, current: sheet, assets: [], placedIds: [], svgTexts: {} });
+    const svg = templatePreviewSvg({ template, assets: [], placedIds: [], svgTexts: {} });
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg.match(/stroke-dasharray="4 4"/g)?.length).toBe(32);
-    expect(svg).toContain("FOOD"); // the sheet's own title is what the block shows
+    expect(svg).toContain("FOOD"); // the template's sample title is what its block shows
   });
 });
 
@@ -299,5 +301,34 @@ describe("template pictures zoom", () => {
     expect(text("builder-template-zoom-value")).toContain("300");
     expect((host.querySelector(".bld-templates-grid") as HTMLElement).style.getPropertyValue("--tpl-h")).toBe("300px");
     expect(JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.prefs.v1") ?? "{}").templateZoom).toBe(300);
+  });
+});
+
+// 2026-11-14: a template shows sample text while it is styled; final artboards
+// replace it with their own words.
+import { artboardPreviewSvg, newArtboard } from "../src/lib/svgBuilder/artboards";
+
+describe("template sample text", () => {
+  it("a final artboard never draws the template's sample words", () => {
+    const tpl = newTemplate(parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, title: "SAMPLE HEAD" } }), [], "t", "tpl");
+    const art = { ...newArtboard(tpl, [], "t", "a1"), title: "Fresh food" };
+    const svg = artboardPreviewSvg({ template: tpl, artboard: art, assets: [], svgTexts: {} });
+    expect(svg).toContain("Fresh food");
+    expect(svg).not.toContain("SAMPLE HEAD");
+    expect(templatePreviewSvg({ template: tpl, assets: [], placedIds: [], svgTexts: {} })).toContain("SAMPLE HEAD");
+  });
+
+  it("✎ opens the template with its sample words, saving keeps edited sample words", async () => {
+    await openLibrary();
+    await typeInto("builder-title", "Sample heading");
+    await click("builder-template-save");
+    const [first] = saved();
+    await click("builder-template-stop");
+    await typeInto("builder-title", "Something else");
+    await click(`builder-template-edit-${first.id}`);
+    expect((q("builder-title") as HTMLInputElement).value).toBe("Sample heading"); // the sample, not the sheet's words
+    await typeInto("builder-title", "New sample");
+    await click("builder-template-save");
+    expect(JSON.parse(localStorage.getItem(BUILDER_TEMPLATES_KEY) ?? "[]")[0].config.banner.title).toBe("New sample");
   });
 });

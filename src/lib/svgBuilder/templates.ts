@@ -1,10 +1,11 @@
 // templates.ts — saved sheet templates of the SVG builder (2026-11-13). A
 // template is the sheet's LOOK: the icon grid, icon style, banner style and text
-// style. The banner's own words (title, subtitle) and its hero icon stay the
-// sheet's — like the layout presets, applying a template never rewrites them.
+// style — plus SAMPLE banner words (2026-11-14), so the template shows how its
+// text looks while it is styled and in its block. Final artboards never use the
+// sample: they draw their own words (artboards.ts). No hero icon is kept.
 // Pure: validation on read (RULE 13), names, apply and the block's preview.
 import { isRecord } from "../isrecord";
-import { applyCopy, copyConfig, parseSheetConfig } from "./config";
+import { DEFAULT_CONFIG, applyCopy, copyConfig, parseSheetConfig } from "./config";
 import { composeSheet } from "./compose";
 import { computeLayout } from "./layout";
 import { round } from "./markup";
@@ -13,7 +14,7 @@ import type { BuilderIconAsset, SheetConfig } from "./types";
 export interface SheetTemplate {
   id: string;
   name: string;
-  /** The look only: banner title, subtitle and hero are blanked (`lookOf`). */
+  /** The look, with sample banner words (never empty) and no hero (`lookOf`). */
   config: SheetConfig;
   created: string;
   updated: string;
@@ -26,10 +27,20 @@ const POSITION_LABEL: Readonly<Record<SheetConfig["banner"]["position"], string>
   left: "Side banner", right: "Right banner", top: "Top banner", bottom: "Bottom banner", none: "Plain grid",
 };
 
-/** The sheet's look without its words and hero: what a template keeps. */
+/**
+ * What a template keeps: the look, the banner words as SAMPLE text (an empty one
+ * falls back to the default sample, so a template always shows text), no hero.
+ */
 export function lookOf(config: SheetConfig): SheetConfig {
   const look = copyConfig(parseSheetConfig(config));
-  return { ...look, banner: { ...look.banner, title: "", subtitle: "", heroIconId: null } };
+  const title = look.banner.title.trim() === "" ? DEFAULT_CONFIG.banner.title : look.banner.title;
+  const subtitle = look.banner.subtitle.trim() === "" ? DEFAULT_CONFIG.banner.subtitle : look.banner.subtitle;
+  return { ...look, banner: { ...look.banner, title, subtitle, heroIconId: null } };
+}
+
+/** The template as its own sheet: its look with its sample words — what editing it and its block show. */
+export function templateConfig(template: SheetTemplate): SheetConfig {
+  return parseSheetConfig(template.config);
 }
 
 /** The template's look on the current sheet: its words and hero are kept. */
@@ -86,22 +97,25 @@ export function templateFacts(config: SheetConfig): string {
   return `${config.grid.columns}×${config.grid.rows} · ${config.icons.box}px · stroke ${config.icons.strokeWidth}`;
 }
 
-export interface TemplatePreviewArgs {
-  template: SheetTemplate;
-  /** The sheet the preview stands in for: its words and hero, and its placed icons. */
-  current: SheetConfig;
+export interface SheetPreviewArgs {
+  /** The sheet to draw: a template with its sample words, or an artboard with its own. */
+  config: SheetConfig;
   assets: readonly BuilderIconAsset[];
   placedIds: readonly string[];
   svgTexts: Readonly<Record<string, string>>;
 }
 
+/** A template's block picture: its own look and sample words, with the given icons. */
+export function templatePreviewSvg(args: Omit<SheetPreviewArgs, "config"> & { template: SheetTemplate }): string {
+  return sheetPreviewSvg({ ...args, config: templateConfig(args.template) });
+}
+
 /**
- * The block's picture: the template applied to the current sheet, with the
- * icons that are loaded; a cell without an icon shows a dashed outline so a
- * template reads as a grid even before a folder is open.
+ * A small sheet picture with the icons that are loaded; a cell without an icon
+ * shows a dashed outline so the grid reads even before a folder is open.
  */
-export function templatePreviewSvg(args: TemplatePreviewArgs): string {
-  const config = applyTemplate(args.current, args.template);
+export function sheetPreviewSvg(args: SheetPreviewArgs): string {
+  const config = args.config;
   const layout = computeLayout(config);
   const loaded = args.placedIds.filter((id) => typeof args.svgTexts[id] === "string" && args.svgTexts[id] !== "");
   const doc = composeSheet({ config, layout, assets: args.assets, placedIds: loaded, svgTexts: args.svgTexts });

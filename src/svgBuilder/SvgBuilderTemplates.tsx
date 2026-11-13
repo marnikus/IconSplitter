@@ -115,7 +115,7 @@ function TemplateName({ name, id, onRename }: { name: string; id: string; onRena
 /** The look on the current sheet, as an <img> (no script runs from an SVG drawn this way). */
 const TemplatePreview = memo(function TemplatePreview({ b, template }: { b: BuilderApi; template: SheetTemplate }) {
   const src = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(templatePreviewSvg({
-    template, current: b.config, assets: b.assets, placedIds: b.checked, svgTexts: b.svgTexts,
-  }))}`, [template, b.config, b.assets, b.checked, b.svgTexts]);
+    template, assets: b.assets, placedIds: b.checked, svgTexts: b.svgTexts,
+  }))}`, [template, b.assets, b.checked, b.svgTexts]);
   return <img src={src} alt={`Preview of ${template.name}`} data-testid={`builder-template-preview-${template.id}`} />;
 });

@@ -1,6 +1,6 @@
 // templatestore.ts — the saved sheet templates (2026-11-13), one validated
 // localStorage owner. Only the sheet's look is stored: no icon, key, prompt or
-// image bytes, and no banner words (lib/svgBuilder/templates.ts `lookOf`).
+// image bytes; the banner words are sample text only (lib/svgBuilder/templates.ts `lookOf`).
 import { parseTemplates, type SheetTemplate } from "../lib/svgBuilder/templates";
 import { readKey, writeKey } from "../state/safestorage";
 

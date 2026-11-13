@@ -4,7 +4,7 @@
 // rename, remove. The list is a saved library, not sheet history: it is
 // written to localStorage at once; applying a template IS undoable.
 import {
-  TEMPLATE_LIMIT, applyTemplate, cleanTemplateName, lookOf, newTemplate, type SheetTemplate,
+  TEMPLATE_LIMIT, cleanTemplateName, lookOf, newTemplate, templateConfig, type SheetTemplate,
 } from "../../lib/svgBuilder/templates";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
@@ -51,11 +51,11 @@ function saveAsNew(ctx: BuilderActionContext): void {
   ctx.say(`Saved as template “${created.name}” — rename it on its block`);
 }
 
-/** Opens a template on the sheet to edit it: one undo entry; the sheet's words and hero stay. */
+/** Opens a template on the sheet to edit its design, with its sample words (one undo entry). */
 function editTemplate(ctx: BuilderActionContext, id: string): void {
   const template = ctx.model.templates.find((t) => t.id === id);
   if (template === undefined) return ctx.say("That template is gone", true);
-  commitConfig(ctx, { config: applyTemplate(ctx.model.config, template), label: `Template “${template.name}”` });
+  commitConfig(ctx, { config: templateConfig(template), label: `Template “${template.name}”` });
   ctx.dispatch({ editingTemplateId: id, editingArtboardId: null }); // editing the blueprint, not an artboard
   prefs(ctx, { layout: "custom", fit: true });
   ctx.say(`Editing template “${template.name}” — change the sheet, then Save template`);

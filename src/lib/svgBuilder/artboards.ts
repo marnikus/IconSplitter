@@ -7,7 +7,7 @@ import { isRecord } from "../isrecord";
 import { applyCopy } from "./config";
 import { cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
 import { isEmptySlot } from "./slots";
-import { templatePreviewSvg, type SheetTemplate } from "./templates";
+import { sheetPreviewSvg, type SheetTemplate } from "./templates";
 import type { BuilderIconAsset, SheetConfig, SheetMetadata } from "./types";
 
 export const ARTBOARD_LIMIT = 400;
@@ -55,8 +55,9 @@ export function artboardConfig(template: SheetTemplate, artboard: FinalArtboard)
 export function artboardPreviewSvg(args: {
   template: SheetTemplate; artboard: FinalArtboard; assets: readonly BuilderIconAsset[]; svgTexts: Readonly<Record<string, string>>;
 }): string {
-  return templatePreviewSvg({
-    template: args.template, current: artboardConfig(args.template, args.artboard),
+  // The artboard's own words, never the template's sample text.
+  return sheetPreviewSvg({
+    config: artboardConfig(args.template, args.artboard),
     assets: args.assets, placedIds: args.artboard.placedIds, svgTexts: args.svgTexts,
   });
 }

@@ -5197,3 +5197,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `RANGES.box` 18–240; `lib/svgBuilder/guides.ts`, `SvgBuilderGuides.tsx`, stage `▦ Guides` + opacity slider, prefs `showGuides`/`guideOpacity`.
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 118/118.
+
+## 2026-11-14 — SVG builder: templates show sample text; artboards use their own words
+
+- `lookOf` keeps banner words as sample text (default when empty), `templateConfig`, `sheetPreviewSvg`; ✎ edit opens the template with its sample words; artboard previews/configs keep their own words.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 120/120.
