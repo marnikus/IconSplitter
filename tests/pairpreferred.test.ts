@@ -1,3 +1,4 @@
+// @vitest-environment node
 // pairpreferred.test.ts — the user's choice of version (I-54): it changes the
 // one field it owns, it survives a round trip through the pair file, and every
 // shape a choice might arrive in that is not a real version number falls back to

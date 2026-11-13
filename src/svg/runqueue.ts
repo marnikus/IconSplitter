@@ -10,6 +10,9 @@
 // restoring a queue from storage would send work on boot. Nothing here writes.
 
 import type { RegenPlan } from "../lib/svgregen";
+import type { PromptChoice } from "../lib/prompttasks";
+import type { RegenCode } from "./regencodes";
+import type { WebChatTarget } from "../lib/webchatprefs";
 
 export interface QueueItem {
   /** Session-only id, stable while the batch waits (a drop names it). */
@@ -24,19 +27,44 @@ export interface QueueItem {
   label: string;
   /** Regeneration plan for this batch: null = first generation (main prompt). */
   regen: RegenPlan | null;
+  /**
+   * The prompt this batch sends — the stored main prompt, or a saved preset's
+   * OWN text. Frozen at confirmation, so deleting or editing the preset later
+   * cannot change what already confirmed work sends (I-76).
+   */
+  prompt: PromptChoice;
+  /** Every icon's current SVG code, read once at confirmation (I-76). */
+  codes: ReadonlyMap<string, RegenCode>;
+  /** The chat page a LIVE WEB batch is typed into; null = the provider API. */
+  web: WebChatTarget | null;
+  /** false = text-only: the prompt and the current SVG code, no image (2026-11-05). */
+  attachImage: boolean;
+}
+
+/** One confirmed batch, described once — no seven-argument call sites. */
+export interface QueueSpec {
+  ids: readonly string[];
+  requests: number;
+  label: string;
+  regen?: RegenPlan | null;
+  prompt?: PromptChoice;
+  codes?: ReadonlyMap<string, RegenCode>;
+  web?: WebChatTarget | null;
+  attachImage?: boolean;
 }
 
 let seq = 0;
 
+const NO_CODES: ReadonlyMap<string, RegenCode> = new Map();
+
 /** One confirmed batch, ready to wait its turn. */
-export function queueItem(
-  ids: readonly string[],
-  requests: number,
-  label: string,
-  regen: RegenPlan | null = null,
-): QueueItem {
+export function queueItem(spec: QueueSpec): QueueItem {
   seq += 1;
-  return { id: `q${seq}`, ids: [...ids], count: ids.length, requests: Math.max(1, requests), label, regen };
+  return {
+    id: `q${seq}`, ids: [...spec.ids], count: spec.ids.length, requests: Math.max(1, spec.requests),
+    label: spec.label, regen: spec.regen ?? null, prompt: spec.prompt ?? { kind: "main" }, codes: spec.codes ?? NO_CODES,
+    web: spec.web ?? null, attachImage: spec.attachImage !== false,
+  };
 }
 
 /** Appends: new work never interrupts or displaces what is already waiting. */

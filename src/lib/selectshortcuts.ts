@@ -1,5 +1,5 @@
-// selectshortcuts.ts — reusable Q/E for active row only, not bulk
-// Q deselects only active row, E selects only active row, never all rows.
+// selectshortcuts.ts — reusable Q/E for the active row, with a no-active fallback.
+// E selects visible when none is active; Q then deselects all, including hidden checks.
 
 import { useEffect, useRef } from "react";
 import { isTextField } from "../selection/hotkeys";
@@ -61,7 +61,7 @@ export function useSelectShortcuts(target: SelectAllTarget, enabled = true): voi
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      handleSelectShortcut(e, ref.current);
+      if (handleSelectShortcut(e, ref.current)) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

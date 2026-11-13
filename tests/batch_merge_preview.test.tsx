@@ -10,6 +10,7 @@ import { clearKnownRoots } from "../src/lib/knownroots";
 import BatchPanel from "../src/batch/BatchPanel";
 import { BATCH_PREFS_KEY } from "../src/lib/batchprefs";
 import { clampMergeFrac } from "../src/lib/batchpreview";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -48,11 +49,7 @@ function q(sel: string): Element | null {
 function qAll(sel: string): NodeListOf<Element> {
   return host.querySelectorAll(sel);
 }
-async function settle(ms = 80) {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, ms));
-  });
-}
+const settle = (ms = 80) => quietSettle(ms);
 async function click(el: Element) {
   await act(async () => {
     (el as HTMLElement).click();
@@ -70,7 +67,6 @@ beforeEach(async () => {
     await act(async () => root.unmount());
     host.remove();
   }
-  // @ts-ignore
   delete (window as any).showDirectoryPicker;
 });
 
@@ -164,7 +160,6 @@ describe("Batch preview splits", () => {
     await settle(500);
     const counts2 = qAll("[data-testid^=batch-preview-count-]");
     if (counts2.length > 0 && counts2[0].textContent?.includes("icon")) {
-      const strips = qAll("[data-testid^=batch-preview-strip-]");
       // Strips may be 0 for fake files (fallback has no thumbs), but count should exist
       expect(counts2[0].textContent).toMatch(/icon/);
       const firstRow = rows[0];
@@ -201,7 +196,6 @@ describe("Batch preview splits", () => {
     expect(counts.length).toBeGreaterThan(0);
 
     // Thumbs per row limited to 20 (MAX_THUMBS)
-    const thumbs = qAll("[data-testid^=batch-preview-thumb-]");
     // For 50 rows, if each had 20 thumbs max, total <= 1000, but we have fallback 1 count so 0 thumbs in fake files
     // At least check that preview doesn't crash and counts exist
     expect(counts.length).toBeLessThanOrEqual(50);

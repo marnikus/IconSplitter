@@ -5,12 +5,14 @@
 // `content` mode the artwork (icon + padding) is scaled uniformly so the
 // artboard's area is N × 10⁶ px², strokes keeping their verbatim px; a pinned
 // artboard decides the megapixels itself, so the row is disabled and says so.
-// Every change is live (RULE 24) through the ONE write path in settingsfield.
+// Every change is live (RULE 24) through the ONE write path in settingsfield;
+// the custom W×H commit when their field is left (2026-10-19, ui/DraftNumberInput).
 
 import {
   ARTBOARD_MAX, ARTBOARD_MIN, ARTBOARD_PRESETS, artboardSize, clampArtboard, clampArtboardMegapixels,
   MP_MAX, MP_MIN, type Artboard, type UploadSettings,
 } from "../lib/upload/settings";
+import DraftNumberInput from "../ui/DraftNumberInput";
 import { Marker, change, type UploadSettingsDialogProps } from "./settingsfield";
 
 interface BlockProps { p: UploadSettingsDialogProps; effective: UploadSettings }
@@ -30,28 +32,33 @@ export function ArtboardSetting({ p, effective }: BlockProps) {
       <select className="svg-input" data-testid="upload-set-artboard" aria-label="Artboard size"
         value={a.mode === "preset" ? String(a.size) : a.mode}
         onChange={(e) => patch(fromChoice(e.target.value, a))}>
+        <option value="source">Default (the SVG's own)</option>
         <option value="content">Fit the artwork</option>
         {ARTBOARD_PRESETS.map((size) => <option key={size} value={String(size)}>{size}×{size}</option>)}
         <option value="custom">Custom…</option>
       </select>
       {a.mode === "custom" && <CustomSize a={a} patch={patch} />}
-      <small className="up-hint" data-testid="upload-set-artboard-note">{artboardNote(pinned)}</small>
+      <small className="up-hint" data-testid="upload-set-artboard-note">{a.mode === "source" ? SOURCE_NOTE : artboardNote(pinned)}</small>
       <MegapixelRow p={p} effective={effective} />
     </div>
   );
 }
 
-/** The custom width × height, and the ratio they spell out. */
+/** The custom width × height, and the ratio they spell out — each checked when its field is left, never per keystroke. */
 function CustomSize({ a, patch }: { a: Artboard; patch: (next: Partial<Artboard>) => void }) {
   return (
-    <div className="up-bg-row">
-      <input className="svg-input" type="number" data-testid="upload-set-artboard-w" aria-label="Artboard width in px"
-        min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={a.width}
-        onChange={(e) => patch({ width: Number(e.target.value) })} />
+    <div className="up-artboard-custom">
+      <label className="svg-field">
+        <span className="svg-label">Width px</span>
+        <DraftNumberInput testid="upload-set-artboard-w" label="Artboard width in px" min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1}
+          value={a.width} onCommit={(n) => { if (n !== null) patch({ width: n }); }} />
+      </label>
+      <label className="svg-field">
+        <span className="svg-label">Height px</span>
+        <DraftNumberInput testid="upload-set-artboard-h" label="Artboard height in px" min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1}
+          value={a.height} onCommit={(n) => { if (n !== null) patch({ height: n }); }} />
+      </label>
       <output className="svg-bg-value" data-testid="upload-set-artboard-ratio">{ratioOf(a)}</output>
-      <input className="svg-input" type="number" data-testid="upload-set-artboard-h" aria-label="Artboard height in px"
-        min={ARTBOARD_MIN} max={ARTBOARD_MAX} step={1} value={a.height}
-        onChange={(e) => patch({ height: Number(e.target.value) })} />
       <output className="svg-bg-value" data-testid="upload-set-artboard-mp">{mpOf(a)}</output>
     </div>
   );
@@ -63,10 +70,10 @@ function CustomSize({ a, patch }: { a: Artboard; patch: (next: Partial<Artboard>
  * megapixels, so there the row is disabled and the note says why.
  */
 function MegapixelRow({ p, effective }: BlockProps) {
-  const pinned = artboardSize(effective.artboard) !== null;
+  const pinned = effective.artboard.mode !== "content"; // a pinned size or the source's own decides
   const on = effective.scaleToMegapixels && !pinned;
   return (
-    <div className="up-bg-row">
+    <div className="up-bg-row up-artboard-scale">
       <label className="up-hint up-set-field">
         <input data-testid="upload-set-mp-scale" type="checkbox" aria-label="Scale the artboard to megapixels"
           checked={effective.scaleToMegapixels} disabled={pinned}
@@ -85,10 +92,12 @@ function MegapixelRow({ p, effective }: BlockProps) {
 
 /** The select's value → the artboard it means (a preset keeps its square edge). */
 function fromChoice(choice: string, a: Artboard): Partial<Artboard> {
-  if (choice === "content") return { mode: "content" };
+  if (choice === "content" || choice === "source") return { mode: choice };
   if (choice === "custom") return { mode: "custom", width: a.mode === "custom" ? a.width : 512, height: a.mode === "custom" ? a.height : 512 };
   return { mode: "preset", size: Number(choice) };
 }
+
+const SOURCE_NOTE = "default — the SVG's own viewBox size and aspect ratio";
 
 function artboardNote(pinned: { width: number; height: number } | null): string {
   if (pinned === null) return "hugs the artwork — the padding is a share of its largest side";

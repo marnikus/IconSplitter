@@ -7,10 +7,9 @@ type Props = {
   onUpload: () => void;
   onZip: () => void;
   onFolder: () => void;
-  onDownload: () => void;
 };
 
-export default function SheetsHeader({ total, onUpload, onZip, onFolder, onDownload }: Props) {
+export default function SheetsHeader({ total, onUpload, onZip, onFolder }: Props) {
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/85 backdrop-blur">
       <div className="flex w-full flex-wrap items-center gap-3 px-4 py-3">
@@ -31,8 +30,7 @@ export default function SheetsHeader({ total, onUpload, onZip, onFolder, onDownl
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button data-testid="upload-button" onClick={onUpload} className="btn-ghost">+ Upload images</button>
           <button data-testid="export-zip" disabled={!total} onClick={onZip} className="btn-primary">⬇ ZIP ({total})</button>
-          <button data-testid="export-folder" disabled={!total} onClick={onFolder} className="btn-ghost">📁 Save to folder</button>
-          <button data-testid="export-download" disabled={!total} onClick={onDownload} className="btn-ghost">Download files</button>
+          <button data-testid="export-folder" disabled={!total} onClick={onFolder} className="btn-ghost">📁 Save to folder ({total})</button>
         </div>
       </div>
     </header>

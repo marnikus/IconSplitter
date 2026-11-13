@@ -7,8 +7,9 @@
 // Tolerant on read (RULE 13: a corrupt payload costs one ignored load) and
 // bounded in size (the cache must not grow without limit on a 400-icon folder).
 
+import { metadataRights } from "../lib/upload/rights";
 import { isRecord } from "../lib/isrecord";
-import { cleanMetadata, validateMetadata, type IconMetadata } from "../lib/upload/meta";
+import { cleanMetadata, validateUploadMetadata, type IconMetadata } from "../lib/upload/meta";
 import { readKey, writeKey } from "../state/safestorage";
 import { EMPTY_META, type UploadMetaState } from "./types";
 
@@ -17,10 +18,12 @@ export const META_CACHE_VERSION = 1;
 /** Oldest entries are dropped beyond this — a folder of 400 icons fits once. */
 export const META_CACHE_LIMIT = 512;
 
-/** How far the paid answer got: the model replied, and the user had their say. */
+/** New valid responses are accepted automatically; legacy/invalid drafts are not. */
 export interface CachedMeta {
   state: "generated" | "accepted";
   meta: IconMetadata;
+  /** The provider's full answer this text came from (absent on older entries). */
+  response?: string;
 }
 
 export type MetaCache = Record<string, CachedMeta>;
@@ -41,14 +44,16 @@ function entryOf(value: unknown): CachedMeta | null {
   if (!isRecord(value)) return null;
   const state = value.state === "accepted" ? "accepted" : value.state === "generated" ? "generated" : null;
   const meta = metadataOf(value.meta);
-  return state === null || meta === null ? null : { state, meta };
+  if (state === null || meta === null) return null;
+  return typeof value.response === "string" && value.response !== "" ? { state, meta, response: value.response } : { state, meta };
 }
 
 function metadataOf(value: unknown): IconMetadata | null {
   if (!isRecord(value)) return null;
   if (typeof value.title !== "string" || typeof value.description !== "string") return null;
   if (!Array.isArray(value.tags) || !value.tags.every((t) => typeof t === "string")) return null;
-  return { title: value.title, description: value.description, tags: value.tags };
+  const name = typeof value.name === "string" && value.name !== "" ? { name: value.name } : {};
+  return { title: value.title, description: value.description, tags: value.tags, ...name, ...metadataRights(value) };
 }
 
 export function loadMetaCache(): MetaCache {
@@ -91,16 +96,17 @@ export function rememberMeta(hash: string, entry: CachedMeta): MetaCache {
   return saveMetaCache({ ...cache, [hash]: entry });
 }
 
-/** A restored answer never skips review: `accepted` was accepted, `generated` is not. */
+/** Preserve acceptance on reload; legacy drafts are not silently promoted. */
 export function restoredMeta(entry: CachedMeta | null): UploadMetaState {
   if (entry === null) return EMPTY_META;
   const meta = cleanMetadata(entry.meta); // entries older than the one-clean-phrase rule
-  const validation = validateMetadata(meta);
+  const validation = validateUploadMetadata(meta);
   const state = validation.ok ? entry.state : "invalid";
   return {
     ...EMPTY_META,
     state,
     metadata: meta,
+    ...(entry.response === undefined ? {} : { response: entry.response }),
     validation,
     detail: validation.ok ? "" : "the remembered answer no longer passes the policy — fix it or generate again",
   };

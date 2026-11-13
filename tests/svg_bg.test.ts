@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_bg.test.ts — the SVG preview background rules execute for real (RULE 8):
 // the five presets and the custom colour, hex validation on every read, the
 // stored payload the tab restores, and the contrast rule that keeps black

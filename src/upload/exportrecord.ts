@@ -57,7 +57,14 @@ export function jpegBlock(
   };
 }
 
+/** Accepted text (embedded in the files), else a saved draft (export.json only), else null. */
 export function metadataBlockOf(args: ExportRunArgs): ExportRecord["metadata"] {
-  if (args.metadata === null || args.metadataInfo === null) return null;
-  return metadataBlock(args.metadata, { ...args.metadataInfo, fingerprint: metadataFingerprint(args.metadata) });
+  if (args.metadata !== null && args.metadataInfo !== null) {
+    return metadataBlock(args.metadata, { ...args.metadataInfo, fingerprint: metadataFingerprint(args.metadata) });
+  }
+  const saved = args.savedMetadata ?? null;
+  if (saved === null) return null;
+  return metadataBlock(saved.metadata, {
+    ...saved.info, fingerprint: metadataFingerprint(saved.metadata), draftState: saved.state,
+  });
 }

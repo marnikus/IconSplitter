@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_stream_read.test.ts — the reader that decides whether a long generation
 // is still alive (RULE 8). The stream is driven by hand and the clock is fake,
 // so the prompt's verify list is decidable: a request that keeps talking may

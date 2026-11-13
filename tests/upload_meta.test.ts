@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the metadata rules run for real: the exact default prompt states
 // every enforced constraint, the labeled-text parser is deterministic, and
 // validation applies the resolved rules. The policy is a MINIMUM policy (the
@@ -16,8 +17,10 @@ import {
   dedupeTags,
   parseMetadata,
   validateMetadata,
+  validateUploadMetadata,
   type IconMetadata,
 } from "../src/lib/upload/meta";
+import { metadataBlock } from "../src/lib/upload/export";
 
 /** The ideal answer: the 7 mandatory tags + 33 concept keywords (still valid). */
 const TAGS: string[] = [
@@ -165,6 +168,107 @@ describe("parseMetadata — deterministic labeled-text parsing", () => {
   it("drops empty tag entries", () => {
     const parsed = parseMetadata(`Title: ${VALID.title}\nDescription: ${VALID.description}\nTags: icon,, pictogram,`);
     expect(parsed?.tags).toEqual(["icon", "pictogram"]);
+  });
+});
+
+describe("the icon Name — one short word from the title and description (2026-11-08)", () => {
+  const answer = (name: string) => `Title: ${VALID.title}\nDescription: ${VALID.description}\nTags: ${TAGS.join(", ")}\nName: ${name}`;
+
+  it("the default prompt asks for a Name row: one word, under 10 characters, from title and description", () => {
+    expect(DEFAULT_METADATA_PROMPT).toContain("Name: <");
+    expect(DEFAULT_METADATA_PROMPT).toContain("less than 10 characters");
+    expect(DEFAULT_METADATA_PROMPT).toContain("title and description");
+    expect(DEFAULT_METADATA_PROMPT).toContain("EXACTLY four lines");
+  });
+
+  it("parseMetadata reads the Name line", () => {
+    expect(parseMetadata(answer("growth"))?.name).toBe("growth");
+  });
+
+  it("an answer without a Name line still parses (an older saved prompt) and carries no name", () => {
+    const parsed = parseMetadata(`Title: ${VALID.title}\nDescription: ${VALID.description}\nTags: ${TAGS.join(", ")}`);
+    expect(parsed).not.toBeNull();
+    expect("name" in parsed!).toBe(false);
+  });
+
+  it.each([
+    ["Growth", "growth"],
+    ["  team  ", "team"],
+    ["growth chart", "growth"],
+    ["\"rocket\".", "rocket"],
+    ["abcdefghijkl", "abcdefghi"],
+    ["", undefined],
+  ])("cleanName %j → %j (first word, lowercase, letters/digits, at most 9 characters)", (raw, expected) => {
+    const cleaned = cleanMetadata(meta({ name: raw }));
+    expect(cleaned.name).toBe(expected);
+    expect("name" in cleaned).toBe(expected !== undefined);
+  });
+
+  it("the name is part of the fingerprint only when present, so older records keep theirs", () => {
+    expect(metadataFingerprint(meta())).toBe(metadataFingerprint(meta({ name: undefined })));
+    expect(metadataFingerprint(meta({ name: "team" }))).not.toBe(metadataFingerprint(meta()));
+    expect(metadataFingerprint(meta({ name: "team" }))).not.toBe(metadataFingerprint(meta({ name: "crowd" })));
+  });
+
+  it("a missing name is never a validation error", () => {
+    expect(validateMetadata(meta()).ok).toBe(true);
+    expect(validateMetadata(meta({ name: "team" })).ok).toBe(true);
+  });
+});
+
+describe("export.json keeps the provider's full answer next to the prompt (2026-11-08)", () => {
+  const info = { prompt: "P", provider: "Gemini", model: "m", requestId: null, usage: { input: null, output: null, total: null }, fingerprint: "f", validation: { ok: true, errors: [], warnings: [] } };
+
+  it("writes `response` verbatim right after `prompt`", () => {
+    const answer = `Title: ${VALID.title}
+Description: ${VALID.description}
+Tags: ${TAGS.join(", ")}
+Name: growth`;
+    const block = metadataBlock(VALID, { ...info, response: answer })!;
+    expect(block.response).toBe(answer);
+    const keys = Object.keys(block);
+    expect(keys.indexOf("response")).toBe(keys.indexOf("prompt") + 1);
+  });
+
+  it("has no `response` key when there was no AI answer (manual entry, older package)", () => {
+    expect("response" in metadataBlock(VALID, info)!).toBe(false);
+    expect("response" in metadataBlock(VALID, { ...info, response: "" })!).toBe(false);
+  });
+});
+
+describe("SVG to upload: every field must be filled to be accepted (2026-11-08)", () => {
+  const named = meta({ name: "team" });
+
+  it("a complete answer is valid", () => {
+    expect(validateUploadMetadata(named)).toMatchObject({ ok: true, errors: [] });
+  });
+
+  it("an empty or missing Icon Name is an error that names the field; the other rules are unchanged", () => {
+    for (const bad of [meta(), meta({ name: "" }), meta({ name: "   " }), meta({ name: "!!!" })]) {
+      const v = validateUploadMetadata(bad);
+      expect(v.ok).toBe(false);
+      expect(v.errors).toEqual(["Icon Name is empty — one word of at most 9 characters is required"]);
+    }
+  });
+
+  it.each<[string, Partial<IconMetadata>, string]>([
+    ["title", { title: "" }, "title must be at least 5 words (got 0)"],
+    ["description", { description: "" }, "description must be at least 7 words (got 0)"],
+    ["tags", { tags: [] }, "tags must be at least 10 (got 0)"],
+  ])("an empty %s is an error", (_field, over, message) => {
+    const v = validateUploadMetadata({ ...named, ...over });
+    expect(v.ok).toBe(false);
+    expect(v.errors).toContain(message);
+  });
+
+  it("everything empty reports every field", () => {
+    const v = validateUploadMetadata({ title: "", description: "", tags: [] });
+    expect(v.errors.length).toBeGreaterThanOrEqual(4);
+    expect(v.errors).toContain("Icon Name is empty — one word of at most 9 characters is required");
+  });
+
+  it("validateMetadata itself (the stock tab, which has no Icon Name field) does not require a name", () => {
+    expect(validateMetadata(meta()).ok).toBe(true);
   });
 });
 

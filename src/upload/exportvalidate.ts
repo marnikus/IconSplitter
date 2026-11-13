@@ -2,9 +2,10 @@
 // §3.2): everything is checked BEFORE anything commits, so a failed check
 // leaves the last valid package untouched. The SVG must parse (and its
 // embedded metadata must read back exactly), the JPEG must decode to the
-// recorded dimensions (and its XMP must read back exactly), and EPS must
-// verify with its XMP fields reading back exactly when metadata was accepted.
+// recorded dimensions (and its XMP/IPTC must read back), and EPS must
+// verify with both XMP and IPTC fields reading back when metadata was accepted.
 
+import { sameMetadata } from "../lib/upload/rights";
 import { readEmbeddedMetadata } from "../lib/upload/embed";
 import { verifyExportSvg } from "../lib/upload/clean";
 import { readJpegDimensions, verifyJpeg } from "../lib/upload/jpeg";
@@ -25,7 +26,7 @@ export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null)
   const epsReadback = epsMetadataCheck(art.epsText, metadata, errors);
   const epsDocument = art.epsFailure === null && epsCheck(art.epsText, errors);
   return {
-    svg: svgCheck(art.svgOut, errors),
+    svg: svgCheck(art.svgOut, errors, art.prepared?.ok === true && art.prepared.asIs),
     readback: svgReadback && epsReadback,
     jpeg: jpegCheck(art, metadata, errors),
     eps: epsDocument && epsReadback,
@@ -34,12 +35,13 @@ export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null)
   };
 }
 
-function svgCheck(svgOut: string | null, errors: string[]): boolean {
+function svgCheck(svgOut: string | null, errors: string[], asIs: boolean): boolean {
   if (svgOut === null) return true;
   const ok = svgParses(svgOut);
   if (!ok) errors.push("the export SVG does not parse");
-  // The file that ships is checked, not assumed: clean SVG 1.1 (2026-10-08).
-  const violations = verifyExportSvg(svgOut);
+  // The file that ships is checked, not assumed: clean SVG 1.1 (2026-10-08) —
+  // except "as is" (2026-10-19), which ships the approved file the user chose not to change.
+  const violations = asIs ? [] : verifyExportSvg(svgOut);
   errors.push(...violations);
   return ok && violations.length === 0;
 }
@@ -47,8 +49,7 @@ function svgCheck(svgOut: string | null, errors: string[]): boolean {
 function readbackCheck(svgOut: string | null, metadata: IconMetadata | null, errors: string[]): boolean {
   if (svgOut === null || metadata === null) return true;
   const back = readEmbeddedMetadata(svgOut);
-  const ok = back !== null && back.title === metadata.title && back.description === metadata.description
-    && back.tags.join("\u0000") === metadata.tags.join("\u0000");
+  const ok = sameMetadata(back, metadata);
   if (!ok) errors.push("the embedded SVG metadata does not read back");
   return ok;
 }
@@ -66,15 +67,16 @@ function jpegCheck(art: Artifacts, metadata: IconMetadata | null, errors: string
 
 function epsCheck(epsText: string | null, errors: string[]): boolean {
   if (epsText === null) return true;
-  const ok = verifyEpsDocument(epsText).ok; // converter-neutral (2026-10-09): Inkscape's EPS passes too
-  if (!ok) errors.push("the EPS does not verify");
+  const verdict = verifyEpsDocument(epsText);
+  const ok = verdict.ok;
+  if (!ok) errors.push(`EPS vector-only verification failed: ${verdict.errors[0]}`);
   return ok;
 }
 
 function epsMetadataCheck(epsText: string | null, metadata: IconMetadata | null, errors: string[]): boolean {
   if (epsText === null || metadata === null) return true;
   const ok = verifyEpsMetadata(epsText, metadata);
-  if (!ok) errors.push("the embedded EPS XMP metadata does not read back");
+  if (!ok) errors.push("the embedded EPS XMP/IPTC metadata does not read back");
   return ok;
 }
 

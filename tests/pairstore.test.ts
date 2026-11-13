@@ -1,3 +1,4 @@
+// @vitest-environment node
 // pairstore.test.ts — how the pair files are read and written (I-41/I-42/I-43).
 // The store is the only thing that touches disk for a decision: reading a walk's
 // pair files (plus the legacy global file as a fallback), writing ONE pair's

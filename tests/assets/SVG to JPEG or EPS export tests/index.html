@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stock file metadata · IconSplitter test</title>
+<style>
+:root{font:16px/1.55 system-ui,sans-serif;color:#202e42;background:#f3f5f8}body{max-width:900px;margin:48px auto;padding:0 24px}h1{font-size:32px;line-height:1.2;letter-spacing:-1px}small,.hint{color:#58657a}.intro,article{background:white;padding:24px;border:1px solid #dce1e8;border-radius:12px;margin:20px 0}.badge{font:600 12px/1 system-ui;letter-spacing:2px;color:#1a6a53}label{display:block;font-weight:600;margin:20px 0 8px}input{max-width:100%;padding:12px;border:1px dashed #9eabbc;border-radius:6px;box-sizing:border-box}h2{font-size:19px;overflow-wrap:anywhere}dt{font-weight:650;margin-top:14px}dd{margin:4px 0;white-space:pre-wrap;overflow-wrap:anywhere}ul{display:flex;flex-wrap:wrap;gap:7px;list-style:none;padding:0;margin:8px 0}li{background:#edf2f8;border-radius:5px;padding:3px 9px;font-size:14px}article[data-state=error]{border-color:#ce4848;color:#9c2525}details{border-top:1px solid #dce1e8;margin-top:20px;padding-top:14px}summary{cursor:pointer}.steps{padding-left:22px}code{font-size:13px}
+</style>
+</head>
+<body>
+<p class="badge">ICONSPLITTER / LOCAL FILE CHECK</p>
+<h1>Does the metadata travel with the file?</h1>
+<p class="hint">Upload an exported JPEG or EPS to inspect its embedded title, description and tags.</p>
+<section class="intro">
+<strong>No account. No server upload. No sidecar.</strong>
+<p>Files stay in your browser. This independent reader uses only the selected file's bytes; it never consults IconSplitter, export.json or a metadata cache. EPS programs are never executed.</p>
+<ol class="steps"><li>Export with accepted metadata and EPS enabled in SVG to upload.</li><li>Select the exported <code>.jpg</code> and <code>.eps</code> below (multiple files allowed).</li><li>Confirm Title, Description and Tags match. Open the IPTC compatibility copy to check legacy readers too.</li></ol>
+<label for="files">Choose exported JPEG / EPS files</label>
+<input id="files" type="file" accept=".jpg,.jpeg,.eps,image/jpeg,application/postscript" multiple>
+<p><small>50 MB per file. Full fields use XMP; legacy IPTC copies have format byte limits. Each stock website decides which metadata it imports; this is a file-readback test, not a guarantee for every site.</small></p>
+</section>
+<section id="results" aria-live="polite" aria-label="Extracted metadata results"></section>
+<noscript>This local file test needs JavaScript enabled.</noscript>
+<script type="module">import { mountReader } from './page.mjs'; mountReader();</script>
+</body>
+</html>

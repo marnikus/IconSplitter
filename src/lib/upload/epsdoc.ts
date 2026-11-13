@@ -111,17 +111,17 @@ function dscString(value: string): string {
  * subset stack checker names the first instruction PostScript would stop at.
  */
 export function verifyEps(eps: string): EpsVerification {
-  const errors = EPS10_MARKERS.filter((marker) => !eps.includes(marker)).map((marker) => `missing ${marker.replace(/:$/, "")}`);
+  const errors = EPS10_MARKERS.filter((marker) => !eps.includes(marker) && !(marker === "%%DocumentData: Clean7Bit" && eps.includes("%%DocumentData: Clean8Bit"))).map((marker) => `missing ${marker.replace(/:$/, "")}`);
   return verifyDsc(eps, [...errors, ...checkPostScript(eps)]);
 }
 
 /**
  * The converter-neutral gate every EPS passes before commit (2026-10-09):
- * the EPSF-3.0 header, a declared LanguageLevel (any), a bounding box, %%EOF.
- * Inkscape's cairo output has these and NOT the EPS 10 markers above.
+ * DSC envelope AND the closed vector program grammar, after canonical XMP
+ * validation. External converter code that cannot be audited fails closed.
  */
 export function verifyEpsDocument(eps: string): EpsVerification {
-  return verifyDsc(eps, /^%%LanguageLevel:\s*\d/m.test(eps) ? [] : ["missing %%LanguageLevel"]);
+  return verifyDsc(eps, [...(/^%%LanguageLevel:\s*\d/m.test(eps) ? [] : ["missing %%LanguageLevel"]), ...checkPostScript(eps)]);
 }
 
 function verifyDsc(eps: string, errors: string[]): EpsVerification {

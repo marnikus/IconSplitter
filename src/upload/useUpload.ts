@@ -7,12 +7,13 @@
 // actions, the boot/persist effects, the derived lists and the flat API the
 // panel reads.
 
-import { useCallback, useEffect, useMemo, useRef, type Dispatch } from "react";
+import { isSelectionSort } from "../lib/statesort";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type Dispatch } from "react";
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
 import { SCAN_IDLE } from "../lib/scanseq";
-import { useAppState } from "../state/useAppState";
-import { useHistory } from "../state/HistoryProvider";
+import { useAppSlice } from "../state/useAppState";
+import { useHistoryActions } from "../state/HistoryProvider";
 import { loadGeminiConfig, saveGeminiConfig } from "./configstore";
 import { readGeminiKey } from "./keystore";
 import { log } from "../log/logstore";
@@ -23,6 +24,8 @@ import { bootRoot, scanUpload, type UploadScanSetters } from "./scan";
 import { loadUploadPrefs, saveUploadPrefs } from "./prefsstore";
 import { assembleRows, countsOf, pruneChecked, type UploadCounts } from "./rowmodel";
 import { headerState, visibleRows } from "./rowlist";
+import { getRowBadgeState, subscribeRowBadges } from "./rowbadgestore";
+import type { RowBadgeState } from "../lib/upload/rowbadge";
 import { loadUploadSettings, saveUploadSettings } from "./settingsstore";
 import { useUploadActions, type UploadActions, type UploadCtx } from "./actions";
 import { loadPresets, loadPrompt, savePrompt } from "./promptstore";
@@ -41,36 +44,55 @@ export type UploadApi = UploadModel & UploadActions & {
   counts: UploadCounts;
   refs: UploadRefs;
   dispatch: Dispatch<UploadAction>;
+  rowBadges: RowBadgeState;
 };
 
 export function useUpload(): UploadApi {
-  const boot = useRef(loadBoot()).current;
+  const [boot] = useState(loadBoot);
   const [model, dispatch] = useUploadModel(boot);
-  const hist = useHistory();
-  const app = useAppState();
-  const refs = useRef(newRefs()).current;
+  const hist = useHistoryActions();
+  const upload = useAppSlice("upload");
+  const [refs] = useState(newRefs);
   const say = useSay(dispatch);
   const loadAll = useLoadAll(refs, dispatch, say, model);
-  const derived = useDerived(model, app.upload.checked);
+  const derived = useDerived(model, upload.checked);
   const setRootName = useCallback((name: string) => dispatch({ type: "root", name }), [dispatch]);
   const setDiscovery = useCallback((d: UploadDiscovery | null) => dispatch({ type: "discovery", discovery: d }), [dispatch]);
   const setBusy = useCallback((b: string | null) => dispatch({ type: "busy", busy: b }), [dispatch]);
-  const ctx: UploadCtx = {
-    m: model, dispatch, refs, hist,
-    rows: model.rows, visible: derived.visible, checked: app.upload.checked,
-    activeId: app.upload.activeId, header: derived.header, counts: derived.counts,
+  // D7: one context identity per input change. Every action slice reads it
+  // through a ref, so a fresh object per render only churned the memo below.
+  const ctx: UploadCtx = useUploadCtx({
+    model, dispatch, refs, hist, derived, checked: upload.checked, activeId: upload.activeId,
     say, loadAll, setRootName, setDiscovery, setBusy,
-  };
+  });
   const actions = useUploadActions(ctx);
   useBoot(refs, dispatch, loadAll);
   usePersist(model);
   useUndoBinding(dispatch);
-  return {
-    ...model, ...actions, supported: fsSupported(),
-    checked: app.upload.checked, activeId: app.upload.activeId,
+  const supported = fsSupported();
+  return useMemo(() => ({
+    ...model, ...actions, supported,
+    checked: upload.checked, activeId: upload.activeId,
     header: derived.header, visible: derived.visible, counts: derived.counts,
-    refs, dispatch,
-  };
+    refs, dispatch, rowBadges: derived.rowBadges,
+  }), [model, actions, supported, upload.checked, upload.activeId, derived, refs, dispatch]);
+}
+
+interface CtxParts {
+  model: UploadModel; dispatch: Dispatch<UploadAction>; refs: UploadRefs; hist: UploadCtx["hist"];
+  derived: ReturnType<typeof useDerived>; checked: string[]; activeId: string | null;
+  say: UploadCtx["say"]; loadAll: UploadCtx["loadAll"]; setRootName: UploadCtx["setRootName"];
+  setDiscovery: UploadCtx["setDiscovery"]; setBusy: UploadCtx["setBusy"];
+}
+
+/** The bag every action slice reads; rebuilt only when one of its inputs is. */
+function useUploadCtx(p: CtxParts): UploadCtx {
+  const { model, dispatch, refs, hist, derived, checked, activeId, say, loadAll, setRootName, setDiscovery, setBusy } = p;
+  return useMemo(() => ({
+    m: model, dispatch, refs, hist, rows: model.rows, visible: derived.visible, checked,
+    activeId, header: derived.header, counts: derived.counts,
+    say, loadAll, setRootName, setDiscovery, setBusy,
+  }), [model, dispatch, refs, hist, derived, checked, activeId, say, loadAll, setRootName, setDiscovery, setBusy]);
 }
 
 /** A toast lives for a few seconds and then clears itself (RULE 9). */
@@ -89,20 +111,20 @@ function useSay(dispatch: Dispatch<UploadAction>): (msg: string, err?: boolean) 
  */
 function useLoadAll(
   refs: UploadRefs, dispatch: Dispatch<UploadAction>, say: (m: string, e?: boolean) => void, model: UploadModel,
-): () => void {
+): (audible?: boolean) => void {
   const modelRef = useRef(model);
   modelRef.current = model;
   const setters = useMemo<UploadScanSetters>(() => ({
     setRootName: (name) => dispatch({ type: "root", name }),
-    setRows: (sources) => { void assembleAndCommit(refs, dispatch, modelRef, sources); },
+    setRows: (sources) => assembleAndCommit(refs, dispatch, modelRef, sources),
     setDiscovery: (d) => dispatch({ type: "discovery", discovery: d }),
     setBusy: (b) => dispatch({ type: "busy", busy: b }),
     say,
   }), [dispatch, refs, say]);
-  return useCallback(() => {
+  return useCallback((audible = false) => {
     const root = refs.root.current as DirHandleLike | null;
     if (root === null) return;
-    void scanUpload(refs, root, setters);
+    void scanUpload(refs, root, setters, audible);
   }, [refs, setters]);
 }
 
@@ -117,7 +139,7 @@ async function assembleAndCommit(
   const interruptedJobs = new Set(interruptedIds());
   const m = modelRef.current;
   const rows = await assembleRows(root, sources, {
-    defaults: m.defaults, overrides: m.overrides, interrupted, interruptedJobs,
+    defaults: m.defaults, overrides: m.overrides, applied: m.applied, interrupted, interruptedJobs,
   });
   dispatch({ type: "rows", rows });
   pruneChecked(rows);
@@ -160,8 +182,8 @@ function reportRestore(dispatch: Dispatch<UploadAction>): void {
 /** Settings, provider config and view prefs are remembered locally (RULE 6). */
 function usePersist(model: UploadModel): void {
   useEffect(() => {
-    saveUploadSettings({ defaults: model.defaults, overrides: model.overrides });
-  }, [model.defaults, model.overrides]);
+    saveUploadSettings({ defaults: model.defaults, overrides: model.overrides, applied: model.applied });
+  }, [model.defaults, model.overrides, model.applied]);
   useEffect(() => saveGeminiConfig(model.gemini), [model.gemini]);
   // The prompt is text the user owns: every keystroke persists (RULE 13).
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
@@ -173,18 +195,23 @@ function usePersist(model: UploadModel): void {
 /** A mounted panel claims the uploadSettings undo path; unmount releases it. */
 function useUndoBinding(dispatch: Dispatch<UploadAction>): void {
   useEffect(() => bindUploadSettingsApplier((patch) => {
-    dispatch({ type: "overrides-patch", overrides: patch.overrides });
+    dispatch({ type: "overrides-patch", overrides: patch.overrides, applied: patch.applied });
   }), [dispatch]);
 }
 
 /** The filtered/sorted view, its header state and the counts, derived only. */
 function useDerived(model: UploadModel, checked: string[]): {
-  visible: UploadRow[]; header: "none" | "some" | "all"; counts: UploadCounts;
+  visible: UploadRow[]; header: "none" | "some" | "all"; counts: UploadCounts; rowBadges: RowBadgeState;
 } {
-  const visible = useMemo(() => visibleRows(model.rows, model.filter, model.sort), [model.rows, model.filter, model.sort]);
+  const rowBadges = useSyncExternalStore(subscribeRowBadges, getRowBadgeState, getRowBadgeState);
+  const sortChecks = isSelectionSort(model.sort) ? checked : undefined;
+  const visible = useMemo(
+    () => visibleRows(model.rows, model.filter, model.sort, { assigned: rowBadges.assigned, checked: sortChecks }),
+    [model.rows, model.filter, model.sort, rowBadges.assigned, sortChecks],
+  );
   const header = useMemo(() => headerState(visible, checked), [visible, checked]);
   const counts = useMemo(() => countsOf(model.rows), [model.rows]);
-  return { visible, header, counts };
+  return useMemo(() => ({ visible, header, counts, rowBadges }), [visible, header, counts, rowBadges]);
 }
 
 /** Values the tab opens with, read once from local storage (RULE 6). */

@@ -55,11 +55,11 @@ export function withVariation(folder: string, v: number): string {
   return v <= 1 ? folder : `${folder}_v${pad2(v)}`;
 }
 
-/** `YYYY-MM/YYYY-MM-DD_HH-mm-ss` batch path from a date (spec §5). */
+/** `YYYY-MM/YYYY-MM-DD` batch path from a date (spec §5; 2026-10-16: a run is
+ *  a DAY — extra exports the same day land in the same day folder). */
 export function batchPath(d: Date): string {
   const m = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-  const s = `${m}-${pad2(d.getDate())}_${pad2(d.getHours())}-${pad2(d.getMinutes())}-${pad2(d.getSeconds())}`;
-  return `${m}/${s}`;
+  return `${m}/${m}-${pad2(d.getDate())}`;
 }
 
 export function pad2(n: number): string {

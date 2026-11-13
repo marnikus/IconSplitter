@@ -1,8 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import JSZip from "jszip";
-import { analyze, detect, type Analysis, type Box } from "./lib/detect";
-import { canvasToBlob, renderIcon, squareInfo, type ExportOpts } from "./lib/render";
-import { download, loadImage } from "./lib/dom";
+import { type ExportOpts } from "./lib/render";
+import { exportSheets, exportTotal, mergeTargets } from "./lib/sheetsel";
 import { useSheetsEdit } from "./ui/useSheetsEdit";
 import SheetsHeader from "./sheets/SheetsHeader";
 import DropzoneEmpty from "./sheets/DropzoneEmpty";
@@ -12,31 +10,17 @@ import DetectionPanel from "./sheets/DetectionPanel";
 import BoundaryPreview from "./sheets/BoundaryPreview";
 import ResultGrid from "./sheets/ResultGrid";
 import { BusyOverlay, DragOverlay, ToastOverlay } from "./sheets/Overlays";
-
-interface Sheet {
-  id: string;
-  name: string;
-  base: string;
-  url: string;
-  img: HTMLImageElement;
-  an: Analysis;
-  boxes: Box[];
-  autoFrac: number;
-  usedFrac: number;
-  manual: boolean;
-  excluded: number[];
-}
+import { useSheetsModel } from "./sheets/useSheetsModel";
+import { activeItems as itemsOf, activePreviews } from "./sheets/activeView";
+import { copyIcon, exportFolder, exportZip, saveIcon } from "./sheets/exportActions";
+import { useBusyActivity } from "./ui/useBusyActivity";
 
 const checker =
   "bg-[length:16px_16px] bg-[linear-gradient(45deg,#e5e7eb_25%,transparent_25%,transparent_75%,#e5e7eb_75%),linear-gradient(45deg,#e5e7eb_25%,#fff_25%,#fff_75%,#e5e7eb_75%)] [background-position:0_0,8px_8px]";
 
-const pad2 = (n: number) => String(n).padStart(2, "0");
-const sleep = (ms = 0) => new Promise((r) => setTimeout(r, ms));
-
 export default function App() {
-  const [sheets, setSheets] = useState<Sheet[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  useBusyActivity("sheets", busy);
   const [drag, setDrag] = useState(false);
   const [toast, setToast] = useState<{ msg: string; err?: boolean } | null>(null);
   const sheetsEdit = useSheetsEdit();
@@ -52,164 +36,15 @@ export default function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), 3200);
   }, []);
 
-  const active = sheets.find((s) => s.id === activeId) ?? null;
+  const m = useSheetsModel(say, setBusy);
+  const { sheets, active, addFiles } = m;
+  const activeItems = useMemo(() => itemsOf(active, padding), [active, padding]);
+  const previews = useMemo(() => activePreviews(active, activeItems, opts), [active, activeItems, opts]);
+  const targets = sheets.filter((s) => mergeTargets(sheets, m.sel.checked, m.sel.active).includes(s.id));
+  const total = exportTotal(sheets, m.sel.checked);
+  const ctx = { sheets: exportSheets(sheets, m.sel.checked), opts, say, busy: setBusy };
 
-  const addFiles = useCallback(
-    async (files: FileList | File[]) => {
-      const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
-      if (!list.length) return say("Please choose image files (PNG, JPG, WEBP…)", true);
-      let lastId: string | null = null;
-      for (const f of list) {
-        setBusy(`Detecting icons in ${f.name}…`);
-        await sleep(30);
-        try {
-          const url = URL.createObjectURL(f);
-          const img = await loadImage(url);
-          const an = analyze(img);
-          const det = detect(an, null);
-          const id = crypto.randomUUID();
-          const base = f.name.replace(/\.[^.]+$/, "").replace(/[^\w-]+/g, "_") || "sheet";
-          const sheet: Sheet = { id, name: f.name, base, url, img, an, boxes: det.boxes, autoFrac: det.autoFrac, usedFrac: det.usedFrac, manual: false, excluded: [] };
-          setSheets((p) => [...p, sheet]);
-          lastId = id;
-        } catch (e) {
-          say(`${f.name}: ${(e as Error).message}`, true);
-        }
-      }
-      setBusy(null);
-      if (lastId) setActiveId(lastId);
-    },
-    [say],
-  );
-
-  const redetect = useCallback(async (id: string, frac: number | null) => {
-    setSheets((prev) =>
-      prev.map((s) => {
-        if (s.id !== id) return s;
-        const d = detect(s.an, frac);
-        return { ...s, boxes: d.boxes, usedFrac: d.usedFrac, autoFrac: d.autoFrac, manual: frac != null, excluded: [] };
-      }),
-    );
-  }, []);
-
-  const toggleBox = (id: string, idx: number) =>
-    setSheets((prev) => prev.map((s) => (s.id !== id ? s : { ...s, excluded: s.excluded.includes(idx) ? s.excluded.filter((i) => i !== idx) : [...s.excluded, idx] })));
-
-  const removeSheet = (id: string) => {
-    setSheets((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      if (activeId === id) setActiveId(next[next.length - 1]?.id ?? null);
-      return next;
-    });
-  };
-
-  const activeItems = useMemo(() => {
-    if (!active) return [];
-    const inc = active.boxes.map((b, i) => ({ b, i })).filter((x) => !active.excluded.includes(x.i));
-    const sq = squareInfo(inc.map((x) => x.b), padding);
-    return inc.map((x, n) => ({ ...x, n, sq }));
-  }, [active, padding]);
-
-  const previews = useMemo(() => {
-    if (!active) return [];
-    return activeItems.map((it) => renderIcon(active.img, active.an, active.boxes, it.b, it.sq, opts, 260).toDataURL("image/png"));
-  }, [active, activeItems, opts]);
-
-  const renderBlob = async (s: Sheet, box: Box, sq: ReturnType<typeof squareInfo>) => canvasToBlob(renderIcon(s.img, s.an, s.boxes, box, sq, opts));
-  const fileName = (s: Sheet, n: number) => `${s.base}-icon-${pad2(n + 1)}.png`;
-
-  const copyIcon = async (s: Sheet, it: (typeof activeItems)[number]) => {
-    try {
-      const blob = await renderBlob(s, it.b, it.sq);
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      say(`Icon ${it.n + 1} copied to clipboard`);
-    } catch {
-      say("Clipboard is blocked by the browser – use Download instead", true);
-    }
-  };
-
-  const saveIcon = async (s: Sheet, it: (typeof activeItems)[number]) => {
-    download(await renderBlob(s, it.b, it.sq), fileName(s, it.n));
-  };
-
-  const collect = async (onProgress?: (d: number, t: number) => void) => {
-    const multi = sheets.length > 1;
-    const out: { path: string; blob: Blob }[] = [];
-    const totalIcons = sheets.reduce((a, s) => a + s.boxes.length - s.excluded.length, 0);
-    let done = 0;
-    for (const s of sheets) {
-      const inc = s.boxes.map((b, i) => ({ b, i })).filter((x) => !s.excluded.includes(x.i));
-      const sq = squareInfo(inc.map((x) => x.b), padding);
-      for (let n = 0; n < inc.length; n++) {
-        const blob = await renderBlob(s, inc[n].b, sq);
-        out.push({ path: (multi ? `${s.base}/` : "") + fileName(s, n), blob });
-        onProgress?.(++done, totalIcons);
-        await sleep();
-      }
-    }
-    return out;
-  };
-
-  const total = sheets.reduce((a, s) => a + s.boxes.length - s.excluded.length, 0);
-
-  const run = async (label: string, fn: () => Promise<void>) => {
-    if (!total) return say("No icons to export", true);
-    try {
-      setBusy(label);
-      await sleep(20);
-      await fn();
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") say((e as Error).message || "Export failed", true);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const downloadZip = () =>
-    run("Building ZIP…", async () => {
-      const files = await collect((d, t) => setBusy(`Rendering ${d}/${t}…`));
-      const zip = new JSZip();
-      files.forEach((f) => zip.file(f.path, f.blob));
-      const blob = await zip.generateAsync({ type: "blob" });
-      download(blob, sheets.length === 1 ? `${sheets[0].base}-icons.zip` : "icons.zip");
-      say(`ZIP with ${files.length} icons downloaded`);
-    });
-
-  const downloadAll = () =>
-    run("Downloading…", async () => {
-      const files = await collect();
-      for (const f of files) {
-        download(f.blob, f.path.split("/").pop()!);
-        await sleep(150);
-      }
-      say(`${files.length} icons downloaded`);
-    });
-
-  const saveFolder = () =>
-    run("Saving to folder…", async () => {
-      const w = window as never as { showDirectoryPicker?: (o: { mode: string }) => Promise<never> };
-      if (!w.showDirectoryPicker) return say("Folder saving needs Chrome/Edge. Use “ZIP” instead.", true);
-      let dir: { name: string; getDirectoryHandle: (n: string, o: { create: boolean }) => Promise<never>; getFileHandle: (n: string, o: { create: boolean }) => Promise<{ createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> }> } & { name: string };
-      try {
-        dir = (await (w.showDirectoryPicker as (o: { mode: string }) => Promise<unknown>)({ mode: "readwrite" })) as never;
-      } catch (e) {
-        if ((e as Error).name === "AbortError") return;
-        return say("Folder access isn't allowed here. Use “ZIP” instead.", true);
-      }
-      const files = await collect((d, t) => setBusy(`Saving ${d}/${t}…`));
-      for (const f of files) {
-        const parts = f.path.split("/");
-        let cur = dir as never as { getDirectoryHandle: (n: string, o: { create: boolean }) => Promise<never> };
-        for (const p of parts.slice(0, -1)) cur = (await cur.getDirectoryHandle(p, { create: true })) as never;
-        const fh = await (cur as unknown as { getFileHandle: (n: string, o: { create: boolean }) => Promise<{ createWritable: () => Promise<{ write: (b: Blob) => Promise<void>; close: () => Promise<void> }> }> }).getFileHandle(parts[parts.length - 1], { create: true });
-        const wr = await fh.createWritable();
-        await wr.write(f.blob);
-        await wr.close();
-      }
-      say(`Saved ${files.length} icons to “${(dir as { name: string }).name}”`);
-    });
-
-  const sqA = activeItems[0]?.sq ?? null;
+  const sqA = activeItems.find((x) => !x.off)?.sq ?? null;
 
   return (
     <div
@@ -227,7 +62,7 @@ export default function App() {
         if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
       }}
     >
-      <SheetsHeader total={total} onUpload={() => fileRef.current?.click()} onZip={downloadZip} onFolder={saveFolder} onDownload={downloadAll} />
+      <SheetsHeader total={total} onUpload={() => fileRef.current?.click()} onZip={() => void exportZip(ctx)} onFolder={() => void exportFolder(ctx)} />
 
       <input
         ref={fileRef}
@@ -248,15 +83,15 @@ export default function App() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
             <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
-              <SheetsList sheets={sheets as never} activeId={activeId} onSelect={setActiveId} onRemove={removeSheet} onAdd={() => fileRef.current?.click()} />
+              <SheetsList sheets={sheets} sel={m.sel} onGesture={m.gesture} onToggleCheck={m.toggleCheck} onSetCheck={m.setCheck} onRemove={m.removeSheet} onAdd={() => fileRef.current?.click()} />
               <ExportSettings padding={padding} size={size} transparent={transparent} totalPx={sqA?.total ?? null} onPad={sheetsEdit.pad} onSize={sheetsEdit.size} onTransparent={sheetsEdit.transparent} />
-              <DetectionPanel active={active as never} onRedetect={redetect} />
+              <DetectionPanel active={active} targets={targets.length} found={targets.reduce((a, t) => a + t.boxes.length, 0)} onRedetect={m.redetect} />
             </aside>
 
             {active && (
               <div className="min-w-0 space-y-6">
-                <BoundaryPreview active={active as never} activeItems={activeItems as never} padding={padding} onToggle={toggleBox} />
-                <ResultGrid active={active as never} activeItems={activeItems as never} previews={previews} checker={checker} onCopy={copyIcon as never} onSave={saveIcon as never} />
+                <BoundaryPreview active={active} activeItems={activeItems} padding={padding} onToggle={m.toggleBox} />
+                <ResultGrid items={activeItems} previews={previews} checker={checker} onToggle={(i) => m.toggleBox(active.id, i)} onCopy={(i) => void copyIcon(active, i, ctx)} onSave={(i) => void saveIcon(active, i, opts)} />
               </div>
             )}
           </div>

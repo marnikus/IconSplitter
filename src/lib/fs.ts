@@ -7,6 +7,7 @@
 // disk changes, which is exactly what a concurrent write looks like.
 
 import type { TreeNode } from "./scan";
+import { createLimiter, type Limiter } from "./limiter";
 
 export interface WritableLike {
   write(data: Blob): Promise<void>;
@@ -32,26 +33,36 @@ export interface DirHandleLike {
   isSameEntry?(other: DirHandleLike): Promise<boolean>;
 }
 
+/**
+ * How many listings / file opens one walk keeps in flight (2026-11-06). The
+ * walk used to do them one at a time — thousands of sequential round trips on
+ * a 1000-pair folder. The result is identical: same nodes, same order.
+ */
+export const WALK_CONCURRENCY = 24;
+
 /** Recursively snapshots a directory into a TreeNode (files get size/mtime). */
 export async function readDirTree(root: DirHandleLike, ignore: string[]): Promise<TreeNode> {
-  return { name: root.name, dir: true, children: await readChildren(root, ignore) };
+  const limit = createLimiter(WALK_CONCURRENCY);
+  return { name: root.name, dir: true, children: await readChildren(root, ignore, limit) };
 }
 
-async function readChildren(dir: DirHandleLike, ignore: string[]): Promise<TreeNode[]> {
-  const out: TreeNode[] = [];
-  for await (const [, handle] of dir.entries()) {
-    const node = await toNode(handle, ignore);
-    if (node) out.push(node);
-  }
-  return out;
+async function readChildren(dir: DirHandleLike, ignore: string[], limit: Limiter): Promise<TreeNode[]> {
+  // The slot is held only while listing, never while the children are walked.
+  const handles = await limit(async () => {
+    const list: (DirHandleLike | FileHandleLike)[] = [];
+    for await (const [, handle] of dir.entries()) list.push(handle);
+    return list;
+  });
+  const nodes = await Promise.all(handles.map((handle) => toNode(handle, ignore, limit)));
+  return nodes.filter((node): node is TreeNode => node !== null);
 }
 
-async function toNode(handle: DirHandleLike | FileHandleLike, ignore: string[]): Promise<TreeNode | null> {
+async function toNode(handle: DirHandleLike | FileHandleLike, ignore: string[], limit: Limiter): Promise<TreeNode | null> {
   if (handle.kind === "directory") {
     if (isIgnored(handle.name, ignore)) return null;
-    return { name: handle.name, dir: true, children: await readChildren(handle, ignore) };
+    return { name: handle.name, dir: true, children: await readChildren(handle, ignore, limit) };
   }
-  return fileNode(handle);
+  return limit(() => fileNode(handle));
 }
 
 /** Two attempts: one immediate retry covers a temp-file swap mid-write. */
@@ -172,6 +183,41 @@ async function fileAt(root: DirHandleLike, relPath: string): Promise<FileHandleL
   const at = relPath.lastIndexOf("/");
   const dir = at < 0 ? root : await probePath(root, relPath.slice(0, at));
   return dir === null ? null : tryGetFile(dir, relPath.slice(at + 1));
+}
+
+/**
+ * A directory handle that remembers the sub-directory handles it has handed out
+ * (2026-11-08, export speed). Every `readTextAt` / `fileExistsAt` / `ensureDirPath`
+ * walks its path from the root, one `getDirectoryHandle` round trip per level — a
+ * package six folders deep paid ~40 of them per icon. Behind this wrapper a
+ * folder is resolved once per batch and shared by every lane; a lookup in flight
+ * is shared too. Only SUCCESSFUL lookups are kept (a missing folder is asked
+ * again, so one created later is found), `removeEntry` forgets the name, and the
+ * wrapper is made per batch and dropped with it, so a handle never outlives the
+ * run it was cached for. Files are never cached: every read still opens the file.
+ */
+export function withDirCache(dir: DirHandleLike): DirHandleLike {
+  const children = new Map<string, Promise<DirHandleLike>>();
+  const open = (name: string, create: boolean): Promise<DirHandleLike> => {
+    const known = children.get(name);
+    if (known !== undefined) return known;
+    const pending = dir.getDirectoryHandle(name, { create }).then(withDirCache);
+    children.set(name, pending);
+    pending.catch(() => { if (children.get(name) === pending) children.delete(name); });
+    return pending;
+  };
+  return {
+    kind: "directory",
+    name: dir.name,
+    getDirectoryHandle: (name, opts) => open(name, opts?.create === true),
+    getFileHandle: (name, opts) => dir.getFileHandle(name, opts),
+    entries: () => dir.entries(),
+    removeEntry: dir.removeEntry === undefined ? undefined : (name, opts) => {
+      children.delete(name);
+      return dir.removeEntry!(name, opts);
+    },
+    isSameEntry: dir.isSameEntry === undefined ? undefined : (other) => dir.isSameEntry!(other),
+  };
 }
 
 /** Names of every child (dirs and files) of a directory. */

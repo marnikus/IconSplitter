@@ -8,14 +8,17 @@
 // operators `lib/upload/eps` emits — each pops what PostScript documents and
 // leaves what PostScript leaves. It judges only the built-in writer's output;
 // a converter's PostScript (Inkscape/cairo: procedures, dictionaries) is outside
-// its vocabulary and is NOT checked by it (`verifyEpsDocument` stays neutral).
+// its vocabulary and is refused by the vector-only delivery gate.
+
+import { checkShading } from "./epsshading";
+import { verifiedEpsArtwork } from "./epsmetadata";
 
 type Kind = "number" | "array";
 type Operand = number | number[];
 
 /** What each operator pops, in stack order (last entry = top of stack). */
 const POPS: Record<string, Kind[]> = {
-  newpath: [], closepath: [], fill: [], stroke: [], gsave: [], grestore: [],
+  newpath: [], closepath: [], fill: [], eofill: [], stroke: [], clip: [], eoclip: [], gsave: [], grestore: [],
   moveto: ["number", "number"], lineto: ["number", "number"],
   curveto: ["number", "number", "number", "number", "number", "number"],
   concat: ["array"], setrgbcolor: ["number", "number", "number"],
@@ -39,7 +42,11 @@ interface State {
  */
 export function checkPostScript(program: string): string[] {
   const st: State = { stack: [], array: null, hasPath: false, saved: [], errors: [] };
-  const lines = program.split("\n");
+  let artwork: string;
+  try { artwork = verifiedEpsArtwork(program); }
+  catch { return ["EPS metadata envelope is not verified vector-only content"]; }
+  if (/^\s*%%(?:BeginPreview|BeginBinary|BeginData|BeginPhotoshop)\b/m.test(artwork)) return ["embedded raster preview or opaque data is forbidden in EPS"];
+  const lines = artwork.split(/\r\n|\r|\n/);
   for (let i = 0; i < lines.length && st.errors.length === 0; i++) {
     if (!lines[i].startsWith("%")) runLine(lines[i], st, i + 1); // DSC comments and %%EOF are skipped
   }
@@ -47,7 +54,15 @@ export function checkPostScript(program: string): string[] {
 }
 
 function runLine(line: string, st: State, n: number): void {
-  for (const tok of tokens(line)) {
+  const code = line.split("%")[0].trim();
+  if (code.startsWith("<<")) {
+    try {
+      if (!code.endsWith(" shfill") || st.stack.length !== 0) throw new Error("invalid shading operands");
+      checkShading(code.slice(0, -7));
+    } catch { st.errors.push(`line ${n}: invalid or raster-bearing shading`); }
+    return;
+  }
+  for (const tok of tokens(code)) {
     token(tok, st, n);
     if (st.errors.length > 0) return;
   }
@@ -73,9 +88,9 @@ function tokens(line: string): string[] {
 function token(tok: string, st: State, line: number): void {
   if (tok === "[") { st.array = []; return; }
   if (tok === "]") { st.stack.push(st.array ?? []); st.array = null; return; }
-  if (/^-?(\d+\.?\d*|\.\d+)$/.test(tok)) { (st.array ?? st.stack).push(Number(tok)); return; }
+  if (/^-?(\d+\.?\d*|\.\d+)$/.test(tok) && Number.isFinite(Number(tok))) { (st.array ?? st.stack).push(Number(tok)); return; }
   const pops = POPS[tok];
-  if (pops === undefined) { st.errors.push(`line ${line}: unknown operator ${tok}`); return; }
+  if (pops === undefined) { st.errors.push(`line ${line}: unknown operator ${tok.length <= 64 ? tok : "<unsupported token>"}`); return; }
   const args = take(tok, pops, st, line);
   if (args !== null) apply(tok, args, st, line);
 }
@@ -103,6 +118,9 @@ const EFFECTS: Record<string, (st: State, args: Operand[]) => string | null> = {
   curveto: (st) => (st.hasPath ? null : "curveto has no current point"),
   fill: (st) => paint("fill", st),
   stroke: (st) => paint("stroke", st),
+  eofill: (st) => paint("eofill", st),
+  clip: (st) => (st.hasPath ? null : "clip has no current path"),
+  eoclip: (st) => (st.hasPath ? null : "eoclip has no current path"),
   gsave: (st) => { st.saved.push(st.hasPath); return null; },
   grestore: (st) => restore(st),
 };

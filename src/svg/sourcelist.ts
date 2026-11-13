@@ -15,6 +15,7 @@
 // canonical AI sources on disk, references excluded, missing sources, duplicates
 // removed, final rows.
 
+import { isImageRegenArtifact } from "../lib/imageartifact";
 import { isEligibleImage, isImageExt, isVersionArtifact } from "../lib/naming";
 import { problemsOf, type ReviewPair, type SideRef } from "../lib/pairing";
 import { pairInSplitScope } from "../lib/splitscope";
@@ -74,13 +75,14 @@ function isRaster(ext: string): boolean {
  * Counts the whole tree the list was built from. Five buckets, so no file is
  * counted twice: this app's versioned outputs and its `_AI.svg` files are
  * ignored, canonical raster AI images are sources, and every other image is a
- * reference (never a source, whatever its name).
+ * reference (never a source, whatever its name). `files` still counts everything
+ * walked, including regeneration history read directly via imageVersions.
  */
-export function fileTally(entries: readonly FileEntry[]): Pick<ScanAudit, "files" | "aiSources" | "references"> {
+export function fileTally(entries: readonly FileEntry[], rootName: string): Pick<ScanAudit, "files" | "aiSources" | "references"> {
   let aiSources = 0;
   let references = 0;
   for (const e of entries) {
-    if (isVersionArtifact(e.name) || isAiArtifact(e.name)) continue;
+    if (isVersionArtifact(e.name) || isAiArtifact(e.name) || isImageRegenArtifact(e, rootName)) continue;
     if (isCanonicalAi(e.name)) aiSources += 1;
     else if (isImageExt(ext(e.name))) references += 1;
   }

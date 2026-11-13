@@ -12,7 +12,7 @@ import {
   type FetchLike, type GeminiConfig, type GeminiFailure, type GeminiUsage,
 } from "../lib/upload/gemini";
 import {
-  DEFAULT_METADATA_PROMPT, metadataFingerprint, parseMetadata, validateMetadata,
+  DEFAULT_METADATA_PROMPT, metadataFingerprint, parseMetadata, validateUploadMetadata,
   type IconMetadata, type MetadataValidation,
 } from "../lib/upload/meta";
 import { rasterizeJpeg } from "../lib/upload/raster";
@@ -38,6 +38,8 @@ export interface MetadataResult {
   requestId: string | null;
   failure: GeminiFailure | null;
   attempts: number;
+  /** The provider's full answer text, verbatim (2026-11-08) — kept in export.json next to the prompt; absent when there was no answer. */
+  response?: string;
   /** The safe, redacted one-line cause (never a key, never a raw dump). */
   detail: string;
 }
@@ -115,7 +117,7 @@ function interpret(input: InterpretInput): MetadataResult {
       detail: "the answer did not have the three labeled lines",
     };
   }
-  const validation = validateMetadata(parsed);
+  const validation = validateUploadMetadata(parsed);
   return {
     rowId,
     outcome: validation.ok ? "generated" : "invalid",
@@ -126,6 +128,7 @@ function interpret(input: InterpretInput): MetadataResult {
     requestId: null,
     failure: null,
     attempts,
+    response: text,
     detail: validation.ok ? "" : validation.errors.join("; "),
   };
 }

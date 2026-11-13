@@ -6,8 +6,8 @@
 // retries a request whose outcome is unknown, and never guesses a mapping — an
 // unmatched or duplicate result is reported.
 
-import { planBatches, validateBatchPlan, type BatchSource } from "../lib/svgbatch";
-import { requestSizeFor } from "../lib/svgregen";
+import { planBatches, validateBatchPlan, type BatchPlan, type BatchSource } from "../lib/svgbatch";
+import { modelOf, requestSizeOf } from "./answerer";
 import { effectiveStallMs } from "../lib/effortlimits";
 import { costInfoFor } from "../lib/svgpricing";
 import { sumUsage } from "../lib/svgusage";
@@ -25,7 +25,7 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
   // The user's request size, unchanged by the reasoning level (D1): 8 images at
   // size 4 are two requests of four at every tier, however long they take. The
   // current-SVG regeneration is the one exception: each icon carries its own code.
-  const perRequest = requestSizeFor(args.config.imagesPerRequest, args.regen);
+  const perRequest = requestSizeOf(args);
   const plans = planBatches(toBatchSources(args.sources), perRequest);
   const state = newRunState(args, plans.length, perRequest);
   const problems = validateBatchPlan(plans, perRequest);
@@ -36,9 +36,25 @@ export async function runGeneration(args: RunArgs): Promise<RunSummary> {
       args.onEvent({ kind: "cancelled" });
       break;
     }
-    await runBatch(state, plan, i + 1);
+    await runRequest(state, plan, i + 1);
   }
   return summaryOf(state, args.signal.aborted);
+}
+
+/** The parent can stop a request, but skipping a request cannot stop its parent. */
+async function runRequest(state: RunState, plan: BatchPlan, index: number): Promise<void> {
+  const { args } = state;
+  const controller = new AbortController();
+  const stop = () => controller.abort(args.signal.reason);
+  args.signal.addEventListener("abort", stop, { once: true });
+  if (args.signal.aborted) stop();
+  try {
+    args.onRequestController?.(controller);
+    await runBatch(state, plan, index, controller.signal);
+  } finally {
+    args.signal.removeEventListener("abort", stop);
+    args.onRequestController?.(null);
+  }
 }
 
 function newRunState(args: RunArgs, total: number, perRequest: number): RunState {
@@ -55,7 +71,7 @@ function summaryOf(state: RunState, cancelled: boolean): RunSummary {
   return {
     perRequest: state.perRequest, batches: state.total, saved: state.saved, failed: state.failed,
     missing: state.missing, invalid: state.invalid, unknown: state.unknown, cancelled,
-    usage: sumUsage(state.usages), estimated: sumEstimated(state.args.config.model, state.usages),
+    usage: sumUsage(state.usages), estimated: sumEstimated(modelOf(state.args), state.usages),
     problems: state.problems, outcomes: state.outcomes,
   };
 }

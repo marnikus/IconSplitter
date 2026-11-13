@@ -113,8 +113,14 @@ describe("the Generate SVG prompt zone — now only main prompt (regen in popup)
 describe("Export settings — the regen window moved out", () => {
   it("the global dialog no longer carries the regen row", async () => {
     await render(
-      <UploadSettingsDialog scope={null} id={null} defaults={normalizeSettings(null)} overrides={{}}
-        onDefaults={() => undefined} onOverride={() => undefined} onResetOverride={() => undefined} onClose={() => undefined} />,
+      <UploadSettingsDialog scope={null} id={null} defaults={normalizeSettings(null)} overrides={{}} applied={{}}
+        selectedShadow={{ state: "none", width: 80, gap: 5 }} selectedCount={0}
+        onSelectedShadowToggle={() => undefined} onSelectedShadowDimensions={() => undefined}
+        selectedBadge={{ state: "none" }}
+        onSelectedBadgeToggle={() => undefined}
+        selectedSizeGuide={{ state: "none" }}
+        onSelectedSizeGuideToggle={() => undefined}
+        onApplyLocal={() => undefined} onDefaults={() => undefined} onOverride={() => undefined} onResetOverride={() => undefined} onClose={() => undefined} />,
     );
     expect(q("[data-testid=svg-regen]")).toBeNull();
     expect(q("[data-testid=upload-regen]")).toBeNull();

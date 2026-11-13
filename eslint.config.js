@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
-  { ignores: ["dist/**", "node_modules/**", "coverage/**"] },
+  { ignores: ["dist/**", "node_modules/**", "coverage/**", "src/vendor/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -51,6 +51,12 @@ export default tseslint.config(
         setTimeout: "readonly",
         clearTimeout: "readonly",
         setInterval: "readonly",
+        clearInterval: "readonly",
+        fetch: "readonly",
+        AbortSignal: "readonly",
+        WebSocket: "readonly",
+        mkdtempSync: "readonly",
+        KeyboardEvent: "readonly",
       },
     },
   },

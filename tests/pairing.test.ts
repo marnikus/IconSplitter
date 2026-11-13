@@ -1,7 +1,9 @@
+// @vitest-environment node
 // pairing.test.ts — RULE 8: discovery + pairing semantics for Selection mode.
 import { describe, expect, it } from "vitest";
 import { walkTree, type FileEntry, type TreeNode } from "../src/lib/scan";
 import { attentionInfo, identityKey, pairEntries, problemsOf, type ReviewPair } from "../src/lib/pairing";
+import { isImageRegenArtifact } from "../src/lib/imageartifact";
 
 function file(dirPath: string, name: string, size = 100, mtime = 1000): FileEntry {
   return { name, dirPath, relPath: dirPath ? `${dirPath}/${name}` : name, size, mtime, error: null };
@@ -106,6 +108,29 @@ describe("pairEntries", () => {
     expect(a.pairId).toBe(b.pairId);
     expect(a.pairId).not.toBe(c.pairId);
     expect(a.pairId).toMatch(/^pair_[0-9a-f]{8}$/);
+  });
+});
+
+describe("app-owned AI image versions", () => {
+  const parent = "icons/AI source regeneration versions";
+  it("requires a direct parent, canonical AI stem and a positive PNG version", () => {
+    expect(isImageRegenArtifact(file(parent, "fog_AI_v1.png"), "icons")).toBe(true);
+    expect(isImageRegenArtifact(file(parent.toUpperCase(), "fog_AI_9_01_v12.PNG"), "icons")).toBe(true);
+    expect(isImageRegenArtifact(file("", "fog_AI_v1.png"), "AI SOURCE REGENERATION VERSIONS")).toBe(true);
+    for (const [dir, name] of [
+      ["icons", "fog_AI_v1.png"],
+      [`${parent}/nested`, "fog_AI_v1.png"],
+      ["icons/AI source regeneration versions copy", "fog_AI_v1.png"],
+      [parent, "fog_v1.png"],
+      [parent, "fog_AI_v0.png"],
+      [parent, "fog_AI_v01.png"],
+      [parent, "fog_AI_v-1.png"],
+      [parent, "fog_AI_v1.jpg"],
+      [parent, "fog_AI_7_v1.svg"],
+    ]) {
+      expect(isImageRegenArtifact(file(dir, name), "icons"), `${dir}/${name}`).toBe(false);
+    }
+    expect(isImageRegenArtifact(file("", "fog_AI_v1.png"), "icons")).toBe(false);
   });
 });
 

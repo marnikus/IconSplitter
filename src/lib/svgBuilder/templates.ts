@@ -1,0 +1,113 @@
+// templates.ts — saved sheet templates of the SVG builder (2026-11-13). A
+// template is the sheet's LOOK: the icon grid, icon style, banner style and text
+// style. The banner's own words (title, subtitle) and its hero icon stay the
+// sheet's — like the layout presets, applying a template never rewrites them.
+// Pure: validation on read (RULE 13), names, apply and the block's preview.
+import { isRecord } from "../isrecord";
+import { applyCopy, copyConfig, parseSheetConfig } from "./config";
+import { composeSheet } from "./compose";
+import { computeLayout } from "./layout";
+import { round } from "./markup";
+import type { BuilderIconAsset, SheetConfig } from "./types";
+
+export interface SheetTemplate {
+  id: string;
+  name: string;
+  /** The look only: banner title, subtitle and hero are blanked (`lookOf`). */
+  config: SheetConfig;
+  created: string;
+  updated: string;
+}
+
+export const TEMPLATE_LIMIT = 60;
+export const TEMPLATE_NAME_MAX = 60;
+
+const POSITION_LABEL: Readonly<Record<SheetConfig["banner"]["position"], string>> = {
+  left: "Side banner", right: "Right banner", top: "Top banner", bottom: "Bottom banner", none: "Plain grid",
+};
+
+/** The sheet's look without its words and hero: what a template keeps. */
+export function lookOf(config: SheetConfig): SheetConfig {
+  const look = copyConfig(parseSheetConfig(config));
+  return { ...look, banner: { ...look.banner, title: "", subtitle: "", heroIconId: null } };
+}
+
+/** The template's look on the current sheet: its words and hero are kept. */
+export function applyTemplate(current: SheetConfig, template: SheetTemplate): SheetConfig {
+  return applyCopy(template.config, current);
+}
+
+/** "Side banner · 8×4 · Split" — a generated name, numbered when it is taken. */
+export function templateName(config: SheetConfig, taken: readonly string[]): string {
+  const banner = config.banner.position === "none" ? "" : ` · ${config.banner.style === "split" ? "Split" : "Solid"}`;
+  const base = `${POSITION_LABEL[config.banner.position]} · ${config.grid.columns}×${config.grid.rows}${banner}`;
+  const used = new Set(taken.map((name) => name.toLowerCase()));
+  if (!used.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n += 1) if (!used.has(`${base} ${n}`.toLowerCase())) return `${base} ${n}`;
+}
+
+/** A name as stored: one line, trimmed, at most TEMPLATE_NAME_MAX characters; "" = invalid. */
+export function cleanTemplateName(name: string): string {
+  return name.replace(/\s+/g, " ").trim().slice(0, TEMPLATE_NAME_MAX);
+}
+
+/** A new template from the current sheet. */
+export function newTemplate(config: SheetConfig, taken: readonly string[], now: string, id: string): SheetTemplate {
+  const look = lookOf(config);
+  return { id, name: templateName(look, taken), config: look, created: now, updated: now };
+}
+
+/** The saved list, rebuilt field by field: junk entries drop, duplicates keep the first. */
+export function parseTemplates(raw: unknown): SheetTemplate[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SheetTemplate[] = [];
+  const ids = new Set<string>();
+  for (const entry of raw) {
+    const template = parseTemplate(entry);
+    if (template === null || ids.has(template.id)) continue;
+    ids.add(template.id);
+    out.push(template);
+    if (out.length >= TEMPLATE_LIMIT) break;
+  }
+  return out;
+}
+
+function parseTemplate(raw: unknown): SheetTemplate | null {
+  if (!isRecord(raw) || typeof raw.id !== "string" || raw.id === "" || typeof raw.name !== "string") return null;
+  const name = cleanTemplateName(raw.name);
+  if (name === "" || !isRecord(raw.config)) return null;
+  const created = typeof raw.created === "string" ? raw.created : "";
+  const updated = typeof raw.updated === "string" ? raw.updated : created;
+  return { id: raw.id.slice(0, 80), name, config: lookOf(parseSheetConfig(raw.config)), created, updated };
+}
+
+/** The short facts under a block's name: grid, icon box and stroke. */
+export function templateFacts(config: SheetConfig): string {
+  return `${config.grid.columns}×${config.grid.rows} · ${config.icons.box}px · stroke ${config.icons.strokeWidth}`;
+}
+
+export interface TemplatePreviewArgs {
+  template: SheetTemplate;
+  /** The sheet the preview stands in for: its words and hero, and its placed icons. */
+  current: SheetConfig;
+  assets: readonly BuilderIconAsset[];
+  placedIds: readonly string[];
+  svgTexts: Readonly<Record<string, string>>;
+}
+
+/**
+ * The block's picture: the template applied to the current sheet, with the
+ * icons that are loaded; a cell without an icon shows a dashed outline so a
+ * template reads as a grid even before a folder is open.
+ */
+export function templatePreviewSvg(args: TemplatePreviewArgs): string {
+  const config = applyTemplate(args.current, args.template);
+  const layout = computeLayout(config);
+  const loaded = args.placedIds.filter((id) => typeof args.svgTexts[id] === "string" && args.svgTexts[id] !== "");
+  const doc = composeSheet({ config, layout, assets: args.assets, placedIds: loaded, svgTexts: args.svgTexts });
+  const stroke = Math.max(1, config.icons.strokeWidth);
+  const empty = layout.cells.slice(loaded.length).map((cell) => `<rect x="${round(cell.x)}" y="${round(cell.y)}" `
+    + `width="${round(cell.size)}" height="${round(cell.size)}" rx="${round(cell.size * 0.12)}" fill="none" `
+    + `stroke="${config.icons.color}" stroke-opacity="0.35" stroke-width="${round(stroke)}" stroke-dasharray="4 4"/>`).join("");
+  return doc.svg.replace(/<\/svg>$/, `${empty}</svg>`);
+}

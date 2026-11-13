@@ -6,6 +6,11 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { buildSvgPreview, PREVIEW_CSS } from "../lib/svgpreview";
+import type { StrokeSheet } from "./strokesheet";
+import { useAnchorOverlay, useCtrlHover } from "./anchoroverlay";
+import { usePreviewZoom } from "../ui/usePreviewZoom";
+import ZoomReset from "../ui/ZoomReset";
+import { useTailMarks, type TailMarks } from "./tailcut/tailmarks";
 
 export interface SvgPreviewProps {
   code: string | null;
@@ -15,9 +20,13 @@ export interface SvgPreviewProps {
   label: string;
   /** Recorded so a test can prove preview and Copy show the same version. */
   version: number;
+  /** The tab's preview-stroke sheet row thumbnails follow; absent = the real widths (dialogs). */
+  strokeSheet?: StrokeSheet;
+  /** Tail-cutter highlights (preview only, never written). */
+  marks?: TailMarks;
 }
 
-export default function SvgPreviewBox({ code, box, testid, label, version }: SvgPreviewProps) {
+export default function SvgPreviewBox({ code, box, testid, label, version, strokeSheet, marks }: SvgPreviewProps) {
   const preview = useMemo(() => buildSvgPreview(code), [code]);
   if (code === null || code.trim() === "") {
     return <Chip className="svg-thumb missing" box={box} testid={testid}>No SVG</Chip>;
@@ -25,7 +34,7 @@ export default function SvgPreviewBox({ code, box, testid, label, version }: Svg
   if (!preview.ok) {
     return <Chip className="svg-thumb missing error" box={box} testid={testid} error={preview.error}>Preview failed</Chip>;
   }
-  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} />;
+  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} stroke={strokeSheet} marks={marks} />;
 }
 
 interface ChipProps {
@@ -50,23 +59,35 @@ interface ShadowProps {
   testid: string;
   label: string;
   version: number;
+  stroke: StrokeSheet | undefined;
+  marks: TailMarks | undefined;
 }
 
-function ShadowSvg({ html, box, testid, label, version }: ShadowProps) {
+function ShadowSvg({ html, box, testid, label, version, stroke, marks }: ShadowProps) {
   const host = useRef<HTMLDivElement | null>(null);
-  useShadowArt(html, host);
+  const frame = useRef<HTMLDivElement | null>(null);
+  useShadowArt(html, host, stroke);
+  // Ctrl + hover: the drawing's anchor points (2026-11-05).
+  useAnchorOverlay(host, html, useCtrlHover(host));
+  useTailMarks(host, html, marks);
+  // Ctrl + scroll: zoom 10–400 % inside the same frame (2026-11-06).
+  const zoom = usePreviewZoom(frame);
   return (
-    <div ref={host} className="svg-preview" style={{ width: box.width, height: box.height }}
-      role="img" aria-label={label} data-testid={testid} data-version={version} />
+    <div ref={frame} className="svg-zoom-box" style={{ width: box.width, height: box.height }}>
+      <div ref={host} className="svg-preview" style={{ width: box.width, height: box.height, transform: zoom.transform, transformOrigin: "0 0" }}
+        role="img" aria-label={label} data-testid={testid} data-version={version} />
+      <ZoomReset testid={testid} zoom={zoom} />
+    </div>
   );
 }
 
 /** Paints the sanitized document inside its own shadow root (RULE 20). */
-function useShadowArt(html: string, host: { current: HTMLDivElement | null }): void {
+export function useShadowArt(html: string, host: { current: HTMLDivElement | null }, stroke: StrokeSheet | undefined): void {
   useEffect(() => {
     const node = host.current;
     if (node === null) return;
     const root = node.shadowRoot ?? node.attachShadow({ mode: "open" });
     root.innerHTML = `${PREVIEW_CSS}${html}`;
-  }, [html, host]);
+    stroke?.adopt(root);
+  }, [html, host, stroke]);
 }

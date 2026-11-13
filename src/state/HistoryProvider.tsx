@@ -18,12 +18,22 @@ import {
 import { log } from "../log/logstore";
 import { isTextField } from "../selection/hotkeys";
 import { applyEntry } from "./apply";
-import { loadHistory, saveHistory } from "./historystore";
+import { holdRowScroll } from "../ui/checkedrows";
+import { flushHistory, loadHistory, scheduleSaveHistory } from "./historystore";
 
 /** An action as the caller knows it; id/timestamp/version are added here. */
 export type NewEntry = Omit<HistoryEntry, "id" | "at" | "v">;
 
-export interface HistoryApi {
+/** What a panel needs to RECORD work. Stable across timeline changes. */
+export interface HistoryActions {
+  push: (entry: NewEntry) => void;
+  /** One entry per gesture: slider drags collapse while the control keeps moving. */
+  pushGesture: (entry: NewEntry) => void;
+  undo: () => void;
+  redo: () => void;
+}
+
+export interface HistoryApi extends HistoryActions {
   canUndo: boolean;
   canRedo: boolean;
   /** "Approve 14 selected pairs" — the action the next undo would reverse. */
@@ -33,37 +43,71 @@ export interface HistoryApi {
   index: number;
   /** Set when an undo/redo could not be applied; the cursor did not move. */
   error: string | null;
-  push: (entry: NewEntry) => void;
-  /** One entry per gesture: slider drags collapse while the control keeps moving. */
-  pushGesture: (entry: NewEntry) => void;
-  undo: () => void;
-  redo: () => void;
 }
 
 const APPLY_FAILED = "That change could not be reversed — nothing was modified.";
 
-const Ctx = createContext<HistoryApi | null>(null);
+// Two contexts on purpose. Recording a change must not re-render the recorder:
+// `useHistoryActions` never changes identity, so a checkbox in one tab cannot
+// wake a panel in another just because a timeline entry appeared. Only the
+// history bar/panel subscribes to the view (entries, cursor, labels, error).
+const ActionsCtx = createContext<HistoryActions | null>(null);
+const ViewCtx = createContext<HistoryView | null>(null);
 
-export function useHistory(): HistoryApi {
-  const api = useContext(Ctx);
-  if (!api) throw new Error("useHistory must be used inside <HistoryProvider>");
+export interface HistoryView {
+  canUndo: boolean;
+  canRedo: boolean;
+  undoLabel: string | null;
+  redoLabel: string | null;
+  entries: HistoryEntry[];
+  index: number;
+  error: string | null;
+}
+
+export function useHistoryActions(): HistoryActions {
+  const api = useContext(ActionsCtx);
+  if (!api) throw new Error("useHistoryActions must be used inside <HistoryProvider>");
   return api;
 }
 
-export function useOptionalHistory(): HistoryApi | null {
-  return useContext(Ctx);
+export function useHistoryView(): HistoryView {
+  const view = useContext(ViewCtx);
+  if (!view) throw new Error("useHistoryView must be used inside <HistoryProvider>");
+  return view;
+}
+
+/** The combined surface: for the history bar/panel, tests and harnesses. */
+export function useHistory(): HistoryApi {
+  const view = useHistoryView();
+  const actions = useHistoryActions();
+  return { ...view, ...actions };
+}
+
+export function useOptionalHistory(): HistoryActions | null {
+  return useContext(ActionsCtx);
+}
+
+/** The view for a tab-local Undo/Redo pair; null outside the provider (static harnesses). */
+export function useOptionalHistoryView(): HistoryView | null {
+  return useContext(ViewCtx);
 }
 
 export function HistoryProvider({ children }: { children: ReactNode }) {
   const store = useTimeline();
   const { undo, redo } = useApply(store.ref, store.commit, store.setError);
-  const api = useMemo<HistoryApi>(() => ({
+  const actions = useMemo<HistoryActions>(() => ({
+    push: store.push, pushGesture: store.pushGesture, undo, redo,
+  }), [store.push, store.pushGesture, undo, redo]);
+  const view = useMemo<HistoryView>(() => ({
     canUndo: undoable(store.timeline), canRedo: redoable(store.timeline),
     undoLabel: nextUndoLabel(store.timeline), redoLabel: nextRedoLabel(store.timeline),
     entries: store.timeline.entries, index: store.timeline.index, error: store.error,
-    push: store.push, pushGesture: store.pushGesture, undo, redo,
-  }), [store, undo, redo]);
-  return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
+  }), [store.timeline, store.error]);
+  return (
+    <ActionsCtx.Provider value={actions}>
+      <ViewCtx.Provider value={view}>{children}</ViewCtx.Provider>
+    </ActionsCtx.Provider>
+  );
 }
 
 interface TimelineStore {
@@ -82,9 +126,11 @@ function useTimeline(): TimelineStore {
   const ref = useRef(timeline);
   ref.current = timeline; // render mirror, so async callbacks read live state (RULE 24)
   const commit = useCallback((next: Timeline) => {
+    ref.current = next; // two pushes in one tick must build on each other, not on the last render
     setTimeline(next);
-    saveHistory(next);
+    scheduleSaveHistory(next); // deferred: the gesture never serializes the timeline
   }, []);
+  useFlushOnUnload();
   const record = useCallback((entry: NewEntry, gesture: boolean) => {
     setError(null);
     // Every state change is visible in the global log, one line per gesture.
@@ -101,6 +147,18 @@ function useTimeline(): TimelineStore {
   };
 }
 
+/** Leave nothing behind: pagehide flushes a pending write, and so does unmount. */
+function useFlushOnUnload(): void {
+  useEffect(() => {
+    const flush = () => flushHistory();
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flushHistory();
+    };
+  }, []);
+}
+
 /** Runs one direction; a failed apply reports and leaves the cursor alone. */
 function useApply(ref: { current: Timeline }, commit: (next: Timeline) => void, setError: (m: string | null) => void) {
   const busy = useRef(false);
@@ -109,6 +167,7 @@ function useApply(ref: { current: Timeline }, commit: (next: Timeline) => void, 
     const step = dir === "undo" ? stepBack(ref.current) : stepForward(ref.current);
     if (!step.entry) return;
     busy.current = true;
+    holdRowScroll(); // an undo / redo never moves the page to the row it puts back
     log({ feature: "history", action: dir, ids: targetIds(step.entry.ids), detail: step.entry.label, data: { type: step.entry.type } });
     const ok = await applyEntry(step.entry, dir === "undo" ? step.entry.before : step.entry.after);
     busy.current = false;
@@ -128,16 +187,28 @@ function useApply(ref: { current: Timeline }, commit: (next: Timeline) => void, 
   };
 }
 
+/**
+ * What a key asks of the timeline. A held Ctrl+Z AUTO-REPEATS: those repeats
+ * are ignored (2026-11-06) — one press is one step, like the Undo button;
+ * otherwise a slightly long press also undid the earlier selection steps and
+ * the list jumped to the rows they put back.
+ */
+export function historyKeyOf(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "repeat">): "undo" | "redo" | "ignore" | null {
+  if (!(e.ctrlKey || e.metaKey)) return null;
+  const key = e.key.toLowerCase();
+  const dir = key === "z" ? (e.shiftKey ? "redo" : "undo") : key === "y" ? "redo" : null;
+  if (dir === null) return null;
+  return e.repeat ? "ignore" : dir;
+}
+
 function useHotkeys(run: (dir: "undo" | "redo") => Promise<void>): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || isTextField(e.target)) return;
-      const key = e.key.toLowerCase();
-      const wantsUndo = key === "z" && !e.shiftKey;
-      const wantsRedo = (key === "z" && e.shiftKey) || key === "y";
-      if (!wantsUndo && !wantsRedo) return;
+      if (isTextField(e.target)) return;
+      const what = historyKeyOf(e);
+      if (what === null) return;
       e.preventDefault(); // never let the browser undo a text field we do not own
-      void run(wantsUndo ? "undo" : "redo");
+      if (what !== "ignore") void run(what);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_batch.test.ts — the batch planner's new guarantees (RULE 8): a selection
 // is split into as many requests as its size really needs, every batch is
 // valid before anything is sent, and every request's outcome is recorded with

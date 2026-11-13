@@ -38,8 +38,8 @@ export interface ChatRequest {
 export interface BuildArgs {
   model: string;
   prompt: string;
-  /** Data URL of the (composite) image sent with the request. */
-  image: string;
+  /** Data URL of the (composite) image sent with the request; null = text only. */
+  image: string | null;
   caps: ModelCaps;
   params: SamplingParams;
 }
@@ -53,7 +53,8 @@ export function buildChatRequest(args: BuildArgs): ChatRequest {
   const { model, prompt, image, caps, params } = args;
   const request: ChatRequest = {
     model,
-    messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image } }] }],
+    // No image = a text-only regeneration: the prompt and the current SVG code only.
+    messages: [{ role: "user", content: image === null ? [{ type: "text", text: prompt }] : [{ type: "text", text: prompt }, { type: "image_url", image_url: { url: image } }] }],
     // Stream, and ask for the usage chunk: without it a streamed answer reports
     // no tokens and no cost at all (docs.requesty.ai — Streaming).
     stream: true,

@@ -13,8 +13,22 @@ export function toggleChecked(checked: readonly string[], id: string): string[] 
 
 /** Adds (`on`) or removes every id in `ids` — select-all / deselect-all. */
 export function setChecked(checked: readonly string[], ids: readonly string[], on: boolean): string[] {
-  if (!on) return checked.filter((x) => !ids.includes(x));
+  if (!on) {
+    const removed = new Set(ids);
+    return checked.filter((x) => !removed.has(x));
+  }
   return [...new Set([...checked, ...ids])];
+}
+
+/**
+ * "Invert selection" (2026-11-06): every VISIBLE id flips; checks hidden by
+ * filters stay (the header checkbox's scope rule). Newly checked ids keep the
+ * visible order.
+ */
+export function invertChecked(checked: readonly string[], visibleIds: readonly string[]): string[] {
+  const visible = new Set(visibleIds);
+  const was = new Set(checked);
+  return [...checked.filter((id) => !visible.has(id)), ...visibleIds.filter((id) => !was.has(id))];
 }
 
 /** Header checkbox state for the currently visible ids (indeterminate = some). */
@@ -55,4 +69,62 @@ export function selectRange(order: readonly string[], anchor: string | null, id:
   if (to < 0 || from < 0) return selectOne(id);
   const low = Math.min(from, to);
   return order.slice(low, Math.max(from, to) + 1);
+}
+
+export interface RowSelection {
+  checked: string[];
+  active: string | null;
+  anchor: string | null;
+}
+
+export interface RowGesture {
+  id: string;
+  intent: SelectIntent;
+  visibleIds: readonly string[];
+}
+
+/** Batch-style row gestures keep the active row separate from checked rows. */
+export function applyRowGesture(before: RowSelection, gesture: RowGesture): RowSelection {
+  const { id, intent, visibleIds } = gesture;
+  if (!visibleIds.includes(id)) return before;
+  if (intent === "replace") return { ...before, active: id, anchor: id };
+  const checked = intent === "range"
+    ? selectRange(visibleIds, before.anchor, id)
+    : toggleChecked(before.checked, id);
+  return { checked, active: id, anchor: intent === "range" ? id : before.anchor };
+}
+
+/** Avoid adding a history entry when a gesture left all three values intact. */
+export function sameRowSelection(a: RowSelection, b: RowSelection): boolean {
+  return a.active === b.active && a.anchor === b.anchor
+    && a.checked.length === b.checked.length
+    && a.checked.every((id, i) => id === b.checked[i]);
+}
+
+/** A completed scan removes targets that no longer name a source. */
+export function pruneRowSelection(before: RowSelection, known: ReadonlySet<string>): RowSelection {
+  return {
+    checked: before.checked.filter((id) => known.has(id)),
+    active: before.active !== null && known.has(before.active) ? before.active : null,
+    anchor: before.anchor !== null && known.has(before.anchor) ? before.anchor : null,
+  };
+}
+
+/** Arrow navigation follows the same visible order as Shift selection. */
+export function nextVisibleId(order: readonly string[], active: string | null, step: 1 | -1): string | null {
+  if (order.length === 0) return null;
+  const at = active === null ? -1 : order.indexOf(active);
+  if (at < 0) return step === 1 ? order[0] : order[order.length - 1];
+  return order[Math.min(Math.max(at + step, 0), order.length - 1)];
+}
+
+/** First eligible pending row strictly below fromId in pre-decision visible order.
+ * Never wraps, guesses an anchor, sorts, or considers hidden rows. */
+export function nextPendingBelow<T>(rows: readonly T[], fromId: string, idOf: (row: T) => string, isPending: (row: T) => boolean): string | null {
+  const at = rows.findIndex((row) => idOf(row) === fromId);
+  if (at < 0) return null;
+  for (let i = at + 1; i < rows.length; i++) {
+    if (isPending(rows[i])) return idOf(rows[i]);
+  }
+  return null;
 }

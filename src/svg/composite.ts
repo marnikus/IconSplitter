@@ -19,21 +19,27 @@ export interface BuiltComposite {
   bytes: number;
 }
 
-/** Reads, decodes and draws the batch; throws when any image is unreadable. */
-export async function buildComposite(root: DirHandleLike, sources: readonly SvgSource[]): Promise<BuiltComposite> {
+/**
+ * Reads, decodes and draws the batch; throws when any image is unreadable.
+ * `imageOf` names the file each source is read from: its MAIN AI image
+ * (svgimgreg.mainImageOf, 2026-10-19 RC8) — the original when none was chosen.
+ */
+export async function buildComposite(
+  root: DirHandleLike, sources: readonly SvgSource[], imageOf: (s: SvgSource) => string = (s) => s.relPath,
+): Promise<BuiltComposite> {
   const layout = compositeLayout(sources.length);
-  const images = await loadImages(root, sources);
+  const images = await loadImages(root, sources.map((s) => imageOf(s)));
   const canvas = renderComposite(layout, images);
   const blob = await canvasToPng(canvas);
   const dataUrl = await blobToDataUrl(blob);
   return { dataUrl, hash: hashBytes(dataUrl), layout, bytes: blob.size };
 }
 
-async function loadImages(root: DirHandleLike, sources: readonly SvgSource[]): Promise<CompositeImage[]> {
+async function loadImages(root: DirHandleLike, paths: readonly string[]): Promise<CompositeImage[]> {
   const out: CompositeImage[] = [];
-  for (const source of sources) {
-    const fh = await resolveFile(root, source.relPath);
-    if (!fh) throw new Error(`source image gone: ${source.relPath}`);
+  for (const relPath of paths) {
+    const fh = await resolveFile(root, relPath);
+    if (!fh) throw new Error(`source image gone: ${relPath}`);
     const img = await loadImageFile(await fh.getFile());
     out.push({ src: img, w: img.naturalWidth, h: img.naturalHeight });
   }

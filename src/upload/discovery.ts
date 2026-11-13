@@ -1,9 +1,9 @@
 // discovery.ts — approved-SVG discovery for the "SVG to upload" tab
 // (design §3.2). Owns: the recursive walk (ignoring `export` so export
 // outputs never feed discovery — no export loops), the pair sidecars, split
-// scope, one row per pair with ≥1 valid approved SVG version, exclusions
-// with reasons, and audit counts. The approval lives in the pair's own
-// `.svg.json` (I-41); the export source is the NEWEST approved valid version.
+// scope, one row per approved item with ≥1 valid generated SVG version,
+// exclusions with reasons, and audit counts. The item's review lives in its
+// `.svg.json` (I-78); the export source is the accepted preferred version, else newest valid.
 // Pure orchestration over lib/scan + lib/pairmeta + lib/svgfile.
 
 import { readDirTree, type DirHandleLike } from "../lib/fs";
@@ -11,21 +11,21 @@ import { compareNames, walkTree, type FileEntry } from "../lib/scan";
 import { directoryNames, inSplitScope, scopeOf } from "../lib/splitscope";
 import { parseAiName } from "../lib/naming";
 import { pairId } from "../lib/pairing";
-import { svgStem } from "../lib/svgfile";
+import { preferredVersion, svgStem } from "../lib/svgfile";
 import type { PairMeta } from "../lib/pairmeta";
-import { loadMetaAt } from "../selection/pairstore";
+import { loadPairFiles } from "../selection/pairstore";
 import type { SvgVersion } from "../lib/svgmodel";
 
 /** The export folder is never a discovery source (no export loops). */
 export const EXPORT_IGNORE = ["export"];
 
-/** One pair with an approved, valid, on-disk SVG — one row per pair. */
+/** One approved item with a valid, on-disk SVG — one row per pair. */
 export interface UploadRowSource {
   id: string;
   base: string;
   suffix: string;
   dirPath: string;
-  /** The export source: the newest approved valid version. */
+  /** The export source: the selected version of the approved item, else newest valid. */
   version: number;
   svgPath: string;
   svgName: string;
@@ -33,7 +33,7 @@ export interface UploadRowSource {
   fingerprint: string;
   aiPath: string;
   metaPath: string;
-  /** How many versions are approved + valid + on disk. */
+  /** How many generated versions of the approved item are valid + on disk. */
   approvedValid: number;
 }
 
@@ -68,15 +68,25 @@ export interface UploadDiscovery {
   unreadable: { relPath: string; reason: string }[];
 }
 
-/** Scans the root: every pair with a valid approved SVG, in deterministic order. */
-export async function discoverUploadSources(root: DirHandleLike): Promise<UploadDiscovery> {
-  const tree = await readDirTree(root, EXPORT_IGNORE);
-  const entries = walkTree(tree, EXPORT_IGNORE);
+/** Optional scope changes for another tab; defaults preserve upload behaviour. */
+export interface DiscoveryOptions {
+  /** Extra ignored directory names, e.g. the builder's own output folder. */
+  ignoreDirs?: readonly string[];
+  /** Override the split-scope rule; `undefined` keeps the folder's own rule. */
+  hideOutside?: boolean;
+}
+
+/** Scans the root: every approved item with a valid SVG, in deterministic order. */
+export async function discoverUploadSources(root: DirHandleLike, options: DiscoveryOptions = {}): Promise<UploadDiscovery> {
+  const ignore = [...new Set([...EXPORT_IGNORE, ...(options.ignoreDirs ?? [])])];
+  const tree = await readDirTree(root, ignore);
+  const entries = walkTree(tree, ignore);
   const rule = scopeOf(directoryNames(tree), root.name);
+  const hideOutside = options.hideOutside ?? rule.hideOutside;
   const loaded = await loadSidecars(root, entries);
   const svgs = svgFilesOf(entries);
   const byStem = groupByStem(svgs);
-  const collected = collectAll(loaded, byStem, rule.hideOutside);
+  const collected = collectAll(loaded, byStem, hideOutside);
   return {
     rows: sortRows(collected.rows),
     excluded: sortExclusions(collected.excluded),
@@ -131,14 +141,10 @@ function unreadableOf(entries: readonly FileEntry[]): { relPath: string; reason:
 interface LoadedSidecar { meta: PairMeta; path: string; corrupt: boolean }
 
 /** Every `.svg.json` the walk found, read and rebased onto this root (I-49). */
+/** Every pair file, through the shared parallel + session-cached loader (2026-11-06). */
 async function loadSidecars(root: DirHandleLike, entries: readonly FileEntry[]): Promise<LoadedSidecar[]> {
-  const out: LoadedSidecar[] = [];
-  for (const e of entries) {
-    if (!e.name.toLowerCase().endsWith(".svg.json")) continue;
-    const read = await loadMetaAt(root, e.relPath);
-    out.push({ meta: read.meta as PairMeta, path: e.relPath, corrupt: read.corrupt || read.meta === null });
-  }
-  return out;
+  const reads = await loadPairFiles(root, entries);
+  return [...reads].map(([path, read]) => ({ meta: read.meta as PairMeta, path, corrupt: read.corrupt || read.meta === null }));
 }
 
 interface SvgFile {
@@ -187,23 +193,27 @@ interface PairCtx {
   excluded: UploadExclusion[];
 }
 
-/** One sidecar pair: a row when it has an approved valid on-disk SVG. */
+/** One sidecar pair: a row when the item is approved and has a valid on-disk SVG. */
 function collectPair(meta: PairMeta, path: string, ctx: PairCtx): void {
   if (ctx.hideOutside && !inSplitScope(meta.ai.relPath)) {
     ctx.excluded.push({ id: meta.id, relPath: meta.ai.relPath, kind: "outside-split", reason: "outside the split output scope" });
     return;
   }
   const group = ctx.byStem.get(`${meta.dirPath}/${svgStem(meta.ai.name)}`);
-  const valid = approvedValid(meta.versions).filter((v) => fileFor(group, v.version) !== null);
+  const valid = approvedValid(meta).filter((v) => fileFor(group, v.version) !== null);
   if (valid.length === 0) {
     excludeUnusable(meta, ctx.excluded);
     return;
   }
-  const newest = valid.reduce((a, b) => (b.version > a.version ? b : a));
-  const file = fileFor(group, newest.version) as SvgFile;
+  const selected = preferredVersion(approvedValid(meta), meta.preferred) ?? valid.reduce((a, b) => (b.version > a.version ? b : a));
+  const file = fileFor(group, selected.version);
+  if (file === null) {
+    ctx.excluded.push({ id: meta.id, relPath: meta.ai.relPath, kind: "no-valid-svg", reason: `Selected SVG v${selected.version} is missing or unreadable — no other version was substituted` });
+    return;
+  }
   ctx.rows.push({
     id: meta.id, base: meta.base, suffix: meta.suffix, dirPath: meta.dirPath,
-    version: newest.version, svgPath: file.relPath, svgName: file.name,
+    version: selected.version, svgPath: file.relPath, svgName: file.name,
     fingerprint: `${file.size}:${file.mtime}`,
     aiPath: meta.ai.relPath, metaPath: path, approvedValid: valid.length,
   });
@@ -211,13 +221,13 @@ function collectPair(meta: PairMeta, path: string, ctx: PairCtx): void {
 
 /** No approved-and-valid SVG on disk: reported with the honest reason. */
 function excludeUnusable(meta: PairMeta, excluded: UploadExclusion[]): void {
-  const reviewed = meta.versions.filter((v) => v.review === "approved").length;
+  const approved = meta.review === "approved";
   excluded.push({
     id: meta.id, relPath: meta.ai.relPath,
-    kind: reviewed === 0 ? "no-approved-svg" : "no-valid-svg",
-    reason: reviewed === 0
-      ? "no approved SVG version — approve one in Generate SVG first"
-      : "the approved SVG version is not valid or missing on disk",
+    kind: approved ? "no-valid-svg" : "no-approved-svg",
+    reason: approved
+      ? "the approved icon has no valid generated SVG on disk"
+      : "the icon's SVG is not approved — approve it in Generate SVG first",
   });
 }
 
@@ -258,9 +268,11 @@ function countOrphans(byStem: Map<string, Map<number, SvgFile>>, loaded: readonl
   return count;
 }
 
-/** Approved (review) + generated + validation-ok versions. */
-function approvedValid(versions: readonly SvgVersion[]): SvgVersion[] {
-  return versions.filter((v) => v.review === "approved" && v.status === "generated" && v.validation.ok);
+/** Item approval gates all versions; select only generated, validation-ok artwork. */
+function approvedValid(meta: PairMeta): SvgVersion[] {
+  return meta.review === "approved"
+    ? meta.versions.filter((v) => v.status === "generated" && v.validation.ok)
+    : [];
 }
 
 function fileFor(group: Map<number, SvgFile> | undefined, version: number): SvgFile | null {

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // exportopts.test.ts — RULE 13: the Sheets export settings come back from a
 // restart clamped and valid, and "Native (auto)" (size 0) stays a real choice.
 import { describe, expect, it } from "vitest";

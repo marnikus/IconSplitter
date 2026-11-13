@@ -1,3 +1,4 @@
+// @vitest-environment node
 // legacyfile.test.ts — the legacy global `review-decisions.json` is a READ-ONLY
 // fallback (I-42, design §2.2): every pair that has a file of its own speaks for
 // itself, a pair without one still gets its decision from here, and nothing —

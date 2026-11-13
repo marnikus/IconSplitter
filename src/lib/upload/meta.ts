@@ -16,6 +16,7 @@
 // punctuation and writes sentence case per sentence, so "X Y Z. Icon of Y and
 // Z." ships as "X y z. Icon of y and z".
 
+import { metadataRights, type MetadataRights } from "./rights";
 import { fnv1a32 } from "../pairing";
 
 /** The minimum number of tags an answer must carry (more is always fine). */
@@ -33,23 +34,30 @@ export const DESC_MIN_WORDS = 7;
  */
 export const DEFAULT_METADATA_PROMPT = `You write search metadata for a minimalist line icon being uploaded to a stock icon website. Study the icon image and describe the ABSTRACT IDEA it expresses — never a specific object, product, brand or place.
 
-Answer with EXACTLY three lines and nothing else:
+Answer with EXACTLY four lines and nothing else:
 
 Title: <ONE phrase of at least 5 words naming the abstract idea, sentence case, no period>
 Description: <ONE phrase of at least 7 words, sentence case, no period>
 Tags: <at least 10 unique keywords, comma-separated, all lowercase>
+Name: <use the description and the title and give exactly ONE word that is closest to their text — the one word that describes this image best, less than 10 characters>
 
 Hard rules:
 - Title: ONE phrase of at least 5 words — never a second sentence, and no "Icon of X and Y" restatement of the tags (they already carry those words). Sentence case (capitalise only the first word), with no trailing period or other end punctuation. Longer is fine.
 - Description: ONE phrase of at least 7 words — never a second sentence. Sentence case, no period or other end punctuation. More words are welcome.
 - Tags: at least 10 unique lowercase keywords, no duplicates, and the list MUST include these seven: icon, pictogram, vector, stroke, line, editable, web. More tags are welcome.
 - Intellectual property: no brand names, no trademarks, no logos, no real people, no fictional characters, no artist names, and never "in the style of" anyone. Describe only the abstract idea.
+- Name: exactly ONE word, lowercase, letters only, less than 10 characters, taken from the meaning of your title and description — no phrase, no hyphen, no spaces.
 - One line per field, no numbering, no extra commentary, no markdown.`;
 
-export interface IconMetadata {
+/** The icon Name is one word of at most this many characters ("less than 10"). */
+export const NAME_MAX_CHARS = 9;
+
+export interface IconMetadata extends MetadataRights {
   title: string;
   description: string;
   tags: string[];
+  /** One short word naming the icon (2026-11-08); absent when the answer had no Name line. */
+  name?: string;
 }
 
 export interface MetadataValidation {
@@ -70,7 +78,18 @@ export function parseMetadata(text: string): IconMetadata | null {
   const tagsRaw = labeled(text, "tags");
   if (title === null || description === null || tagsRaw === null) return null;
   const tags = dedupeTags(tagsRaw.split(",").map((t) => t.trim()).filter((t) => t !== ""));
-  return cleanMetadata({ title, description, tags });
+  // The Name line is optional on read: a prompt saved before it existed still parses.
+  return cleanMetadata({ title, description, tags, name: labeled(text, "name") ?? undefined });
+}
+
+/**
+ * The icon Name as it is stored and shown: the FIRST word only, lowercase,
+ * letters and digits only (quotes, periods and hyphens go), cut to
+ * `NAME_MAX_CHARS`. A shape rule like `cleanPhrase` — never a refusal.
+ */
+export function cleanName(text: string): string {
+  const word = text.trim().split(/\s+/u)[0] ?? "";
+  return word.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").slice(0, NAME_MAX_CHARS);
 }
 
 /** The whitespace of a sentence break: a word of 2+ letters, `.`/`!`/`?`, space, more text (`2.5`, `e.g.`, a `;` or an ellipsis are not breaks). */
@@ -104,9 +123,13 @@ function sentenceCase(sentence: string): string {
   return words.join(" ").replace(/^\p{Ll}/u, (c) => c.toUpperCase());
 }
 
-/** `cleanPhrase` over the title and the description; the tags are never touched. */
+/** `cleanPhrase` over the title and the description, `cleanName` over the name; the tags are never touched. */
 export function cleanMetadata(meta: IconMetadata): IconMetadata {
-  return { ...meta, title: cleanPhrase(meta.title), description: cleanPhrase(meta.description) };
+  const name = cleanName(meta.name ?? "");
+  return {
+    title: cleanPhrase(meta.title), description: cleanPhrase(meta.description), tags: meta.tags,
+    ...(name === "" ? {} : { name }), ...metadataRights(meta),
+  };
 }
 
 function labeled(text: string, label: string): string | null {
@@ -132,6 +155,34 @@ export function validateMetadata(meta: IconMetadata): MetadataValidation {
   checkMinWords(errors, "description", countWords(meta.description), DESC_MIN_WORDS);
   validateTags(dedupeTags(meta.tags), errors);
   return { ok: errors.length === 0, errors, warnings: restrictedWarnings(meta) };
+}
+
+/** The error (and, for an already exported row, the warning) for an empty Icon Name. */
+export const NAME_EMPTY_MESSAGE = `Icon Name is empty — one word of at most ${NAME_MAX_CHARS} characters is required`;
+
+/**
+ * The "SVG to upload" acceptance rule (2026-11-08): EVERY field must be filled —
+ * title, description, tags AND the one-word Icon Name — or the metadata is not
+ * accepted and the row says which field is missing. `validateMetadata` stays the
+ * shared minimum policy (the stock tab has no Icon Name field).
+ */
+export function validateUploadMetadata(meta: IconMetadata): MetadataValidation {
+  const base = validateMetadata(meta);
+  if (cleanName(meta.name ?? "") !== "") return base;
+  return { ...base, ok: false, errors: [...base.errors, NAME_EMPTY_MESSAGE] };
+}
+
+/**
+ * A package exported before the Icon Name existed keeps its accepted state — a
+ * re-export of a row that is NOT accepted ships without metadata, so downgrading
+ * every old row would strip the files that already carry it — but it SAYS the
+ * field is empty (a yellow warning under the fields). New answers, edits and
+ * remembered drafts are held to the full rule (`validateUploadMetadata`).
+ */
+export function warnIfNameEmpty(validation: MetadataValidation | null, name: string | undefined): MetadataValidation | null {
+  if (cleanName(name ?? "") !== "") return validation;
+  const base = validation ?? { ok: true, errors: [], warnings: [] };
+  return { ...base, warnings: [...(base.warnings ?? []), NAME_EMPTY_MESSAGE] };
 }
 
 /**
@@ -182,6 +233,11 @@ function restrictedWarnings(meta: IconMetadata): string[] {
 
 /** Stable fingerprint over the canonical field order — selective re-export keys on this. */
 export function metadataFingerprint(meta: IconMetadata): string {
-  const canonical = JSON.stringify([meta.title.trim(), meta.description.trim(), meta.tags.map(normalizeTag).join(",")]);
+  const fields = [meta.title.trim(), meta.description.trim(), meta.tags.map(normalizeTag).join(",")];
+  const rights = metadataRights(meta);
+  if (Object.keys(rights).length) fields.push(JSON.stringify(rights));
+  const name = cleanName(meta.name ?? ""); // appended only when present: older records keep their fingerprint
+  if (name !== "") fields.push(JSON.stringify({ name }));
+  const canonical = JSON.stringify(fields);
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }

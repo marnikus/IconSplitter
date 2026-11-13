@@ -8,10 +8,17 @@
 // The shipped SVG carries no px size (stock review, 2026-10-08), so the
 // renderer stamps the target px onto ITS OWN copy: the JPEG never depends on
 // a browser's intrinsic-size rules for a size-less `<img>`.
+//
+// Speed (2026-11-08): by default the encode runs in the OffscreenCanvas worker
+// pool (`jpegworker.ts`): `toBlob` encodes on one thread and dominated the batch.
+// Injected `render`/`encode` transports (the tests) and browsers without workers
+// keep the original main-thread canvas path, which is also the fallback when a
+// worker fails.
 
 import { readJpegDimensions } from "./jpeg";
 import { sha256Hex } from "./hash";
 import { normalizeHex } from "../svgbackground";
+import { bitmapOf, encodeInWorker, jpegWorkersAvailable } from "./jpegworker";
 
 export interface RasterTarget {
   width: number;
@@ -48,8 +55,7 @@ export interface RasterDeps {
 export async function rasterizeJpeg(svgText: string, target: RasterTarget, deps: RasterDeps = {}): Promise<RasterResult> {
   let jpeg: Uint8Array;
   try {
-    const canvas = await (deps.render ?? renderSvg)(withIntrinsicSize(svgText, target.width, target.height), target);
-    jpeg = await (deps.encode ?? encodeJpeg)(canvas, target.quality);
+    jpeg = await renderAndEncode(withIntrinsicSize(svgText, target.width, target.height), target, deps);
   } catch (error) {
     return { ok: false, reason: `render failed: ${error instanceof Error ? error.message : "unknown error"}` };
   }
@@ -59,6 +65,21 @@ export async function rasterizeJpeg(svgText: string, target: RasterTarget, deps:
     return { ok: false, reason: `decoded dimensions ${got} do not match the target ${target.width}x${target.height}` };
   }
   return { ok: true, jpeg, record: await recordOf(jpeg, target) };
+}
+
+/** Worker pool by default; the main-thread canvas when transports are injected, workers are missing, or one fails. */
+async function renderAndEncode(sizedSvg: string, target: RasterTarget, deps: RasterDeps): Promise<Uint8Array> {
+  if (deps.render !== undefined || deps.encode !== undefined || !jpegWorkersAvailable()) return viaCanvas(sizedSvg, target, deps);
+  try {
+    return await viaWorker(sizedSvg, target);
+  } catch {
+    return viaCanvas(sizedSvg, target, {});
+  }
+}
+
+async function viaCanvas(sizedSvg: string, target: RasterTarget, deps: RasterDeps): Promise<Uint8Array> {
+  const canvas = await (deps.render ?? renderSvg)(sizedSvg, target);
+  return (deps.encode ?? encodeJpeg)(canvas, target.quality);
 }
 
 async function recordOf(jpeg: Uint8Array, target: RasterTarget): Promise<RasterRecord> {
@@ -87,13 +108,29 @@ export function withIntrinsicSize(svgText: string, width: number, height: number
   return new XMLSerializer().serializeToString(doc);
 }
 
-/** Renders the SVG at exactly the target size onto a background-filled canvas. */
-async function renderSvg(svgText: string, target: RasterTarget): Promise<HTMLCanvasElement> {
+/** Decode on the main thread, then hand the bitmap to a worker that fills, draws and encodes. */
+async function viaWorker(sizedSvg: string, target: RasterTarget): Promise<Uint8Array> {
+  const background = normalizeHex(target.background) ?? "#ffffff";
+  const bitmap = await withDecodedSvg(sizedSvg, (img) => bitmapOf(img, target.width, target.height, background));
+  return encodeInWorker({ bitmap, width: target.width, height: target.height, quality: target.quality, background });
+}
+
+/** The SVG decoded as an image; its object URL lives exactly as long as `consume` needs the image. */
+async function withDecodedSvg<T>(svgText: string, consume: (img: HTMLImageElement) => Promise<T> | T): Promise<T> {
   const url = URL.createObjectURL(new Blob([svgText], { type: "image/svg+xml" }));
   try {
     const img = new Image();
     img.src = url;
     await img.decode();
+    return await consume(img);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Renders the SVG at exactly the target size onto a background-filled canvas. */
+function renderSvg(svgText: string, target: RasterTarget): Promise<HTMLCanvasElement> {
+  return withDecodedSvg(svgText, (img) => {
     const canvas = document.createElement("canvas");
     canvas.width = target.width;
     canvas.height = target.height;
@@ -103,9 +140,7 @@ async function renderSvg(svgText: string, target: RasterTarget): Promise<HTMLCan
     ctx.fillRect(0, 0, target.width, target.height);
     ctx.drawImage(img, 0, 0, target.width, target.height);
     return canvas;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  });
 }
 
 async function encodeJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Uint8Array> {

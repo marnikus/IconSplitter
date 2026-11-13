@@ -2,6 +2,7 @@
 // the Dublin Core packet and its readback in one place makes EPS, like JPEG,
 // carry dc:title, dc:description, and dc:subject with the same representation.
 
+import { metadataRights } from "./rights";
 import type { IconMetadata } from "./meta";
 
 const RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
@@ -17,14 +18,14 @@ export function buildXmpPacket(meta: IconMetadata): string {
   <rdf:Description rdf:about="" xmlns:dc="${DC_NS}">
    <dc:title><rdf:Alt>${li(meta.title)}</rdf:Alt></dc:title>
    <dc:description><rdf:Alt>${li(meta.description)}</rdf:Alt></dc:description>
-   <dc:subject><rdf:Bag>${tags}</rdf:Bag></dc:subject>
+   <dc:subject><rdf:Bag>${tags}</rdf:Bag></dc:subject>${rightsXmp(meta)}
   </rdf:Description>
  </rdf:RDF>
 </x:xmpmeta>
 <?xpacket end="w"?>`;
 }
 
-/** Parse a complete XMP packet and return the three accepted Dublin Core fields. */
+/** Parse accepted Dublin Core fields and any optional user identity. */
 export function readXmpPacket(xml: string): IconMetadata | null {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.querySelector("parsererror") !== null) return null;
@@ -33,7 +34,7 @@ export function readXmpPacket(xml: string): IconMetadata | null {
   if (title === null || description === null) return null;
   const tags = xmpTags(doc);
   if (tags.length === 0) return null;
-  return { title, description, tags };
+  return { title, description, tags, ...metadataRights({ creator: xmpText(doc, "creator") ?? undefined, copyright: xmpText(doc, "rights") ?? undefined }) };
 }
 
 function escapeXml(text: string): string {
@@ -65,4 +66,12 @@ function xmpTags(doc: Document): string[] {
 function localNameOf(el: Element): string {
   const at = el.nodeName.indexOf(":");
   return at >= 0 ? el.nodeName.slice(at + 1) : el.nodeName;
+}
+
+/** Shared rights representation for XMP and SVG RDF, with full Unicode text. */
+export function rightsXmp(meta: IconMetadata): string {
+  const rights = metadataRights(meta);
+  const creator = rights.creator ? `<dc:creator><rdf:Seq><rdf:li>${escapeXml(rights.creator)}</rdf:li></rdf:Seq></dc:creator>` : "";
+  const copyright = rights.copyright ? `<dc:rights><rdf:Alt><rdf:li xml:lang="x-default">${escapeXml(rights.copyright)}</rdf:li></rdf:Alt></dc:rights>` : "";
+  return creator + copyright;
 }

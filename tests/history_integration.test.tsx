@@ -19,6 +19,7 @@ import { saveSessionState } from "../src/state/sessionstore";
 import HistoryBar from "../src/ui/HistoryBar";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -65,7 +66,7 @@ const click = async (el: Element | null) => {
 };
 const q = (sel: string) => host.querySelector(sel);
 const text = (sel: string) => q(sel)?.textContent ?? "";
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
 /** Every pair file in the fake folder, as a read of the tree really sees it. */
 function pairFiles(dir: FakeDir, prefix = ""): { path: string; meta: PairMeta }[] {

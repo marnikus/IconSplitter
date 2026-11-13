@@ -20,6 +20,7 @@ import { BrokenFile, FakeDir, FakeFile } from "./helpers/fakefs";
 import { dropDb } from "./helpers/idb";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
+import { settle as quietSettle } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,7 +78,7 @@ async function makeRoot(o: { blockWrite?: boolean } = {}): Promise<FakeDir> {
 
 const q = (sel: string) => host.querySelector(sel) as HTMLElement | null;
 const text = (sel: string) => q(sel)?.textContent ?? "";
-const settle = async () => { await act(async () => { await new Promise((r) => setTimeout(r, 0)); }); };
+const settle = () => quietSettle(0);
 
 async function click(el: HTMLElement | null): Promise<void> {
   await act(async () => { el?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -149,8 +150,11 @@ describe("the versions popup", () => {
     expect(text("[data-testid=svg-history-v3]")).toContain("invalid SVG");
     // the newest version is the one in use when nobody has chosen
     expect(q("[data-testid=svg-history-v2]")?.className).toContain("shown");
-    expect((q("[data-testid=svg-history-use-2]") as HTMLButtonElement).disabled).toBe(true); // already shown
+    expect((q("[data-testid=svg-history-use-2]") as HTMLButtonElement).disabled).toBe(false); // shown, not yet chosen
     expect((q("[data-testid=svg-history-use-1]") as HTMLButtonElement).disabled).toBe(false);
+    // the control says what it does: it chooses, it does not approve
+    expect((q("[data-testid=svg-history-use-1]") as HTMLButtonElement).title).toContain("does not approve");
+    expect(text("[data-testid=svg-history-shown]")).toContain("approves nothing");
     // cost and review are still there
     expect(text("[data-testid=svg-history-cost-1]")).toContain("no cost reported");
     expect(text("[data-testid=svg-history-shown]")).toContain("v2");
@@ -164,8 +168,9 @@ describe("the versions popup", () => {
     // the main preview switches immediately, without closing the popup
     expect(previewVersion()).toBe("1");
     expect(q(`[data-testid=svg-prev-${FOG}]`)?.shadowRoot?.innerHTML).toContain("#c22f2f");
-    // the choice is in the pair's own file, beside the images
-    expect(sidecar(root).preferred).toBe(1);
+    // the choice is in the pair's own file, beside the images — and the row is
+    // still unapproved: only the row's approve button is a review decision
+    expect(sidecar(root)).toMatchObject({ preferred: 1, review: "pending" });
     // the mark moved, the OTHER version now offers the same choice
     expect(q("[data-testid=svg-history-v1]")?.className).toContain("shown");
     expect(q("[data-testid=svg-history-use-2]")).not.toBeNull();
@@ -208,6 +213,7 @@ describe("the versions popup", () => {
     expect(text("[data-testid=svg-toast]")).toContain("could not be saved");
     expect(text("[data-testid=svg-history-note]")).toContain("could not be saved");
     expect(sidecar(root).preferred).toBeNull(); // the file still says "nobody chose"
+    expect(sidecar(root).review).toBe("pending"); // failed saving cannot approve
   });
 
   it("offers the code of every generated version and nothing for a failed one", async () => {

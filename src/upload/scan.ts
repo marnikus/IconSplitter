@@ -1,3 +1,4 @@
+import { startCompletionSound } from "../ui/completionSound";
 // scan.ts — scanning the picked root for the "SVG to upload" tab (design §3.2).
 // Mirrors svg/scan.ts: one ticket per scan, discovery, ONE complete commit,
 // an unchanged snapshot commits nothing, and only the newest scan may commit
@@ -16,7 +17,7 @@ export const UPLOAD_HANDLE_KEY = "__upload__";
 
 export interface UploadScanSetters {
   setRootName: (name: string) => void;
-  setRows: (rows: UploadRowSource[]) => void;
+  setRows: (rows: UploadRowSource[]) => void | Promise<void>;
   setDiscovery: (d: UploadDiscovery | null) => void;
   setBusy: (b: string | null) => void;
   say: (msg: string, err?: boolean) => void;
@@ -36,7 +37,8 @@ export interface UploadScanRefs {
 }
 
 /** Scans the root and commits one complete snapshot (or nothing). */
-export async function scanUpload(refs: UploadScanRefs, root: DirHandleLike, setters: UploadScanSetters): Promise<void> {
+export async function scanUpload(refs: UploadScanRefs, root: DirHandleLike, setters: UploadScanSetters, audible = false): Promise<void> {
+  const finish = audible ? startCompletionSound() : () => undefined;
   const ticket = beginScan(refs.seq);
   refs.seq = ticket.seq;
   setters.setBusy("Scanning approved SVGs…");
@@ -46,16 +48,18 @@ export async function scanUpload(refs: UploadScanRefs, root: DirHandleLike, sett
     const key = scanKeyOf(root.name, found);
     if (key === refs.scanKey.current) return; // same folder, same snapshot: nothing to do
     setters.setRootName(root.name);
-    setters.setRows(found.rows);
+    const assembled = setters.setRows(found.rows);
     setters.setDiscovery(found);
     refs.scanKey.current = key;
     for (const warning of warnings(found)) setters.say(warning, true);
+    await assembled;
   } catch {
     if (isCurrent(refs.seq, ticket.id)) {
       setters.say("Rescan failed — the folder may be unreadable", true);
     }
   } finally {
     if (isCurrent(refs.seq, ticket.id)) setters.setBusy(null);
+    finish(!isCurrent(refs.seq, ticket.id));
   }
 }
 

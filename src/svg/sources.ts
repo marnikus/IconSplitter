@@ -7,6 +7,7 @@
 
 import type { BatchSource } from "../lib/svgbatch";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
+import { isImageRegenArtifact } from "../lib/imageartifact";
 import { metaPathFor, newPairMeta, withDecision, type PairMeta } from "../lib/pairmeta";
 import { compareNames, walkTree, type FileEntry } from "../lib/scan";
 import { directoryNames, scopeOf } from "../lib/splitscope";
@@ -86,13 +87,14 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
   const rule = scopeOf(directoryNames(tree), root.name);
   const entries = walkTree(tree, []);
   const load = await loadPairDecisions(root, entries);
-  const picked = selectRows(pairEntries(entries), load.records, rule.hideOutside);
+  const reviewEntries = entries.filter((e) => !isImageRegenArtifact(e, root.name));
+  const picked = selectRows(pairEntries(reviewEntries), load.records, rule.hideOutside);
   const sources = sortSources(picked.rows.map(toSource));
   return {
     sources,
     problems: flattenProblems(sources),
     excluded: picked.excluded,
-    audit: { ...fileTally(entries), missing: picked.missing, duplicates: picked.duplicates, rows: sources.length },
+    audit: { ...fileTally(entries, root.name), missing: picked.missing, duplicates: picked.duplicates, rows: sources.length },
     unreadable: unreadableFiles(entries),
     metas: load.metas,
     corruptFiles: load.corruptFiles,

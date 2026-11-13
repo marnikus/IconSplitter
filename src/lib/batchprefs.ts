@@ -33,7 +33,7 @@ export function loadBatchPrefs(): BatchPrefs {
 export function saveBatchPrefs(p: BatchPrefs): void {
   try {
     localStorage.setItem(BATCH_PREFS_KEY, JSON.stringify(p));
-  } catch {}
+  } catch { /* unreadable prefs fall back to defaults */ }
 }
 
 export function parseBatchPrefs(raw: unknown): BatchPrefs {

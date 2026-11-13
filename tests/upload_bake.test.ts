@@ -20,7 +20,7 @@ describe("bakeGeometry — shapes keep their element under an axis-aligned matri
     const root = parse(`<g transform="translate(5 0) scale(2 3)">`
       + `<rect x="1" y="2" width="4" height="3" rx="1" ry="1" fill="#000"/>`
       + `<ellipse cx="10" cy="10" rx="2" ry="1" fill="#000"/>`
-      + `<line x1="0" y1="0" x2="1" y2="1"/>` // unstroked on purpose: a stroke under scale(2 3) is refused (see below)
+      + `<line x1="0" y1="0" x2="1" y2="1"/>` // unstroked here: anisotropic stroke repair is covered separately
       + `<polyline points="0,0 1,1" fill="#000"/>`
       + `<polygon points="0,0 1,1 2,0" fill="#000"/></g>`);
     const out = bakeGeometry(root, parseTransform("translate(10 20) scale(2)"));
@@ -96,10 +96,23 @@ describe("bakeGeometry — a rounded rect turns like any shape (2026-10-08)", ()
   });
 });
 
+describe("bakeGeometry — anisotropic strokes are repaired instead of refused", () => {
+  it.each([
+    `<path d="M0 0 L1 0" stroke="#000" fill="none" transform="scale(2 1)"/>`,
+    `<rect x="0" y="0" width="1" height="1" stroke="#000" fill="none" transform="skewX(10)"/>`,
+  ])("outlines the source pen before transforming %s", (markup) => {
+    const root = parse(markup);
+    const result = bakeGeometry(root, parseTransform("scale(2)"));
+    expect(result.unsupported).toEqual([]);
+    expect(result.repaired?.expanded).toBe(1);
+    expect(noTransforms(root)).toBe(true);
+    expect(root.querySelector('path[fill="#000"]')).not.toBeNull();
+    expect(root.querySelector('g[stroke="none"]')).not.toBeNull();
+  });
+});
+
 describe("bakeGeometry — refusals, named (never guessed)", () => {
   it.each([
-    ["a stroked shape under a non-uniform scale", `<path d="M0 0 L1 0" stroke="#000" transform="scale(2 1)"/>`, "a stroked <path> under a non-uniform transform"],
-    ["a stroked shape under a skew", `<rect x="0" y="0" width="1" height="1" stroke="#000" transform="skewX(10)"/>`, "a stroked <rect> under a non-uniform transform"],
     ["a pattern", `<pattern id="p"/><rect x="0" y="0" width="1" height="1"/>`, "a <pattern>"],
     ["a userSpaceOnUse gradient", `<defs><linearGradient id="g" gradientUnits="userSpaceOnUse"/></defs><rect x="0" y="0" width="1" height="1" fill="url(#g)"/>`, "a userSpaceOnUse <linearGradient>"],
     ["a clipPath", `<defs><clipPath id="c"><rect width="1" height="1"/></clipPath></defs><rect x="0" y="0" width="1" height="1" clip-path="url(#c)"/>`, "a <clipPath>"],
