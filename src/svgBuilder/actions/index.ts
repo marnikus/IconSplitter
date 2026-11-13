@@ -7,6 +7,7 @@ import { indexingActions } from "./indexing";
 import { providerActions } from "./provider";
 import { selectionActions } from "./selection";
 import { templateActions } from "./templates";
+import { presetJsonActions } from "./presetjson";
 import { uiActions } from "./ui";
 
 export function createBuilderActions(get: () => BuilderActionContext): BuilderActions {
@@ -18,8 +19,9 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const ui = uiActions(get);
   const indexing = indexingActions(get);
   const templates = templateActions(get);
+  const presetJson = presetJsonActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson,
     presets: get().presetActions,
   };
 }

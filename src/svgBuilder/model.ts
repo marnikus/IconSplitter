@@ -19,7 +19,7 @@ import { builderPresets, loadBuilderPrompt } from "./promptstore";
 import { loadTemplates } from "./templatestore";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 
-export type BuilderDialog = "none" | "metadata" | "brief";
+export type BuilderDialog = "none" | "metadata" | "brief" | "preset";
 
 export interface BuilderKeyInfo {
   value: string | null;

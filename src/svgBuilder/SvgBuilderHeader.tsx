@@ -19,6 +19,8 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <UndoRedo b={b} />
       <button type="button" className="svg-btn" data-testid="builder-seed" title="Re-roll this seed" disabled={b.assets.length === 0}
         onClick={b.actions.reshuffle}>↻ SEED <b>{b.seed}</b></button>
+      <button type="button" className="svg-btn" data-testid="builder-open-preset-json" onClick={b.actions.openPresetJson}
+        title="The whole sheet as editable JSON — edit, paste an AI-written preset, apply">{"{ }"} Preset JSON</button>
       <button type="button" className="svg-btn" data-testid="builder-brief" onClick={b.actions.openBrief}>▤ Prompt brief</button>
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
         title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>

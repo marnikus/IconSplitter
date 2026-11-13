@@ -17,6 +17,6 @@ Back to the [storage map](../STORAGE.md) and [behaviour contract](../svg-builder
 | IndexedDB `iconSplitter-models/files` | downloaded public model files (huggingface.co), keyed by URL | indexer worker cache only; no icon data or keys |
 | IndexedDB `iconSplitter/handles["__svgBuilder__"]` | builder root handle | falls back to the older upload/SVG/selection handle; permission re-requested on restore |
 | IndexedDB `iconSplitter/rootpaths` | full path of the picked folder | shared `rootpath` identity; read-only `builder-folder-path` |
-| downloaded `{slug}-preset.json` | `version`, `generator`, `created`, config, `selection` (= `placedIds`), source fingerprints, locks, seed, recipe, accepted metadata | `parseSheetPreset` also reads the reference `{version, selection, seed}` shape; prunes stale ids; no filesystem write |
+| downloaded `{slug}-preset.json` | preset JSON v2 (2026-11-13): `format`, `version`, `name`, config, `icons` (`{name, id}` / `null`), `lockedIcons`, seed, recipe, metadata | `readPresetJson`: merged onto the sheet; also reads v1 `placedIds`/`selection` ids; unresolved icons reported; no filesystem write |
 
 The session and history are global; builder config/checked entries use the shared timeline, never a panel-local stack. The exact 768 px JPEG preview and the provider draft live in memory only, are cleared on cancel, and are never persisted.

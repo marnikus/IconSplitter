@@ -107,4 +107,11 @@ export interface BuilderActions {
   removeTemplate: (id: string) => void;
   /** Height of the template pictures (shared 48–800 px zoom); display-only. */
   setTemplateZoom: (px: number) => void;
+  /** Preset JSON (2026-11-13): open the window, the sheet as JSON, apply pasted JSON (true when read), copy, copy for AI, download. */
+  openPresetJson: () => void;
+  presetJsonText: () => string;
+  applyPresetJson: (text: string) => boolean;
+  copyPresetJson: (text: string) => void;
+  copyPresetForAi: () => void;
+  downloadPresetJson: (text: string) => void;
 }

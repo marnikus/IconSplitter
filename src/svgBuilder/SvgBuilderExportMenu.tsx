@@ -17,7 +17,8 @@ export default function SvgBuilderExportMenu({ b }: { b: BuilderApi }) {
     { id: "svg", label: "Editable SVG", hint: "Paths, strokes and text", run: b.actions.exportSvg },
     { id: "png", label: "PNG — 2×", hint: `${width * 2} × ${height * 2}px`, run: b.actions.exportPng },
     { id: "copy", label: "Copy SVG markup", hint: "Paste into your design tool", run: b.actions.copySvg },
-    { id: "preset", label: "Save preset", hint: "Settings, selection and seed", run: b.actions.savePreset },
+    { id: "preset", label: "Save preset", hint: "Settings, text, icons by name (.json)", run: b.actions.savePreset },
+    { id: "preset-json", label: "Preset JSON…", hint: "Edit or paste JSON, then apply", run: b.actions.openPresetJson },
     { id: "load", label: "Load preset", hint: "Restore a saved .json preset", run: () => file.current?.click() },
   ];
   return <div className="bld-export" ref={box} data-testid="builder-export">

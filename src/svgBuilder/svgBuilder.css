@@ -256,3 +256,12 @@
 .bld-template-facts { flex: 1 1 auto; min-width: 0; color: var(--v2-muted); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bld-text-placement { display: grid; gap: 6px; padding: 8px; border: 1px dashed var(--v2-line); border-radius: var(--v2-radius); }
 .bld-inline-text { position: absolute; z-index: 5; padding: 2px 6px; border: 1px solid var(--v2-green); border-radius: 4px; background: #000c; color: #fff; font-family: inherit; line-height: 1.15; resize: none; outline: none; box-shadow: 0 6px 24px #000a; }
+
+/* Preset JSON window (2026-11-13). */
+.bld-preset-json { width: min(980px, 94vw); display: grid; gap: 10px; }
+.bld-preset-json-text { width: 100%; min-height: 46vh; resize: vertical; padding: 10px; border: 1px solid var(--v2-line-strong); border-radius: var(--v2-radius);
+  background: var(--v2-surface-2); color: var(--v2-text); font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }
+.bld-preset-json-status { min-height: 16px; color: var(--v2-muted); font-size: 11px; }
+.bld-preset-json-status.is-error { color: var(--v2-red, #e57373); }
+.bld-preset-json-help summary { cursor: pointer; color: var(--v2-muted); font-size: 11px; }
+.bld-preset-json-help pre { margin: 6px 0 0; padding: 8px; max-height: 220px; overflow: auto; white-space: pre-wrap; border-radius: var(--v2-radius); background: var(--v2-surface-2); color: var(--v2-muted); font-size: 10px; }

@@ -1,14 +1,13 @@
 // actions/export.ts — the "Export sheet" menu: verified, atomic SVG / PNG 2× /
-// clipboard / preset delivery, and Load preset (undoable, prunes stale ids).
+// clipboard delivery. Save / Load preset moved to actions/presetjson.ts (2026-11-13).
 import { sheetCopy } from "../../lib/svgBuilder/compose";
-import { parseSheetPreset, serializeSheetPreset } from "../../lib/svgBuilder/preset";
+import { serializeSheetPreset } from "../../lib/svgBuilder/preset";
 import type { SheetPreset } from "../../lib/svgBuilder/types";
 import { placedOnly } from "../../lib/svgBuilder/slots";
-import { copySheetSvg, downloadSheetPng, downloadSheetPreset, downloadSheetSvg, verifySheetDocument } from "../exporter";
-import { commitConfig, prefs } from "./config";
+import { copySheetSvg, downloadSheetPng, downloadSheetSvg, verifySheetDocument } from "../exporter";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
-type ExportActions = Pick<BuilderActions, "exportSvg" | "exportPng" | "copySvg" | "savePreset" | "loadPreset" | "presetOfModel">;
+type ExportActions = Pick<BuilderActions, "exportSvg" | "exportPng" | "copySvg" | "presetOfModel">;
 type Kind = "svg" | "png" | "copy";
 
 export function exportActions(get: () => BuilderActionContext): ExportActions {
@@ -16,8 +15,6 @@ export function exportActions(get: () => BuilderActionContext): ExportActions {
     exportSvg: () => { void deliver(get(), "svg"); },
     exportPng: () => { void deliver(get(), "png"); },
     copySvg: () => { void deliver(get(), "copy"); },
-    savePreset: () => savePreset(get()),
-    loadPreset: (text) => loadPreset(get(), text),
     presetOfModel: () => presetOfModel(get()),
   };
 }
@@ -58,17 +55,3 @@ function presetOfModel(ctx: BuilderActionContext): SheetPreset {
   });
 }
 
-function savePreset(ctx: BuilderActionContext): void {
-  downloadSheetPreset(presetOfModel(ctx), titleOf(ctx));
-  ctx.say("Preset saved with layout settings and seed.");
-}
-
-function loadPreset(ctx: BuilderActionContext, text: string): void {
-  const { preset, droppedIds } = parseSheetPreset(text, new Set(ctx.assets.map((a) => a.id)));
-  commitConfig(ctx, { config: preset.config, label: "Load builder preset" });
-  prefs(ctx, { layout: "custom", fit: true });
-  ctx.dispatch({ recipe: preset.recipe, seed: preset.seed, lockedIds: preset.lockedIds, metadata: preset.metadata });
-  ctx.setChecked({ checked: [...preset.placedIds].slice(0, preset.config.grid.columns * preset.config.grid.rows), anchor: null,
-    active: preset.placedIds[0] ?? null }, "Load builder preset");
-  ctx.say(droppedIds.length > 0 ? `Preset loaded — ${droppedIds.length} icon(s) are no longer approved and were skipped` : "Builder preset loaded");
-}

@@ -328,7 +328,7 @@ describe("SVG builder workspace", () => {
     expect(text("builder-zoom")).toBe("90%");
     await click("builder-export-toggle");
     expect(all('[data-testid^="builder-export-"][role="menuitem"]').map((el) => el.dataset.testid))
-      .toEqual(["builder-export-svg", "builder-export-png", "builder-export-copy", "builder-export-preset", "builder-export-load"]);
+      .toEqual(["builder-export-svg", "builder-export-png", "builder-export-copy", "builder-export-preset", "builder-export-preset-json", "builder-export-load"]);
   });
 
   it("Sheet metadata unfolds the prompt + Gemini widget; the brief has Brief and Raw views", async () => {

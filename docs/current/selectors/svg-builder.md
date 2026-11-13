@@ -14,6 +14,7 @@
 | `builder-undo` / `builder-redo` | global timeline | disabled when the stack is empty; title names the action |
 | `builder-seed` | `↻ SEED ####` | re-roll (seed + 1) |
 | `builder-brief` / `builder-corrected-brief` | open `builder-brief-dialog` | header / stage bottom-right |
+| `builder-open-preset-json` / `builder-export-preset-json` | `{ } Preset JSON` | dialog `builder-preset-json`: `builder-preset-json-text`, `-apply`, `-refresh`, `-copy`, `-copy-ai`, `-download`, `-close`, `-status`, `-help` |
 | `builder-open-metadata` | Sheet metadata | unfolds `builder-meta-widget` |
 | `builder-export-toggle` | `Export ▾` | menu `builder-export-menu`: `builder-export-svg`, `-png`, `-copy`, `-preset`, `-load` (`role=menuitem`); `builder-preset-file` hidden input |
 | `builder-toast` / `builder-busy` / `builder-status-text` | toast zone | 4.2 s toast; errors stay |

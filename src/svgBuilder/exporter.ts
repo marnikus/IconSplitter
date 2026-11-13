@@ -33,6 +33,11 @@ export function downloadSheetPreset(preset: SheetPreset, title: string): void {
   downloadBlob(new Blob([stringifySheetPreset(preset)], { type: "application/json" }), presetFileName(title));
 }
 
+/** The preset JSON as typed or generated, as `{slug}-preset.json`. */
+export function downloadJsonText(text: string, title: string): void {
+  downloadBlob(new Blob([text], { type: "application/json" }), presetFileName(title));
+}
+
 export async function copySheetSvg(doc: SheetDocument): Promise<void> {
   await navigator.clipboard.writeText(doc.svg);
 }
