@@ -6,6 +6,7 @@ import { folderActions } from "./folder";
 import { indexingActions } from "./indexing";
 import { providerActions } from "./provider";
 import { selectionActions } from "./selection";
+import { templateActions } from "./templates";
 import { uiActions } from "./ui";
 
 export function createBuilderActions(get: () => BuilderActionContext): BuilderActions {
@@ -16,8 +17,9 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const exported = exportActions(get);
   const ui = uiActions(get);
   const indexing = indexingActions(get);
+  const templates = templateActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates,
     presets: get().presetActions,
   };
 }

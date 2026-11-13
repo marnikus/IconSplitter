@@ -1,5 +1,6 @@
 // SvgBuilderControls.tsx — the folder bar above the workspace (like the other
 // tabs): Open folder, Rescan, scope copy, approved count, audit line and path.
+// The indexing controls live in the header row (SvgBuilderHeader).
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 import type { BuilderApi } from "./useSvgBuilder";
 
@@ -10,15 +11,18 @@ export default function SvgBuilderControls({ b }: { b: BuilderApi }) {
       <button type="button" className="svg-btn" data-testid="builder-rescan" onClick={b.actions.rescan}>↻ Rescan</button>
       <span className="v2-chip" data-testid="builder-scope-copy">Approved SVGs only · all folders · read-only</span>
       <span className="v2-chip approved" data-testid="builder-approved-count"><strong>{b.assets.length}</strong> approved</span>
-      <IndexingControl b={b} />
       <span className="bld-audit" data-testid="builder-audit">{b.auditLine}</span>
     </div>
     <FolderPathRow root={b.root} testid="builder-folder-path" />
   </section>;
 }
 
-/** "Icons indexing": counts while idle; model download, then icon progress and Cancel while running. */
-function IndexingControl({ b }: { b: BuilderApi }) {
+/**
+ * "Icons indexing": counts while idle; model download, then icon progress and
+ * Cancel while running. Shown in the header row beside the sheet title (user,
+ * 2026-11-13), no longer in the folder bar.
+ */
+export function IndexingControl({ b }: { b: BuilderApi }) {
   const run = b.indexing;
   const { indexed, pending } = b.indexStats;
   if (run === null) return <>

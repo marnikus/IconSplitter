@@ -46,9 +46,13 @@ export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
 /** A preset resets every value of its groups to the defaults + its patch, keeping the user's banner copy and hero. */
 export function applyPresetConfig(current: SheetConfig, id: LayoutPresetId): SheetConfig {
   const preset = LAYOUT_PRESETS.find((p) => p.id === id) ?? LAYOUT_PRESETS[0];
-  const next = preset.patch(copyConfig(DEFAULT_CONFIG));
+  return applyCopy(preset.patch(copyConfig(DEFAULT_CONFIG)), current);
+}
+
+/** A look (preset or saved template) on the current sheet: its banner words and hero are kept. */
+export function applyCopy(look: SheetConfig, current: SheetConfig): SheetConfig {
   const { title, subtitle, heroIconId } = current.banner;
-  return parseSheetConfig({ ...next, banner: { ...next.banner, title, subtitle, heroIconId } });
+  return parseSheetConfig({ ...look, banner: { ...look.banner, title, subtitle, heroIconId } });
 }
 
 export function parseSheetConfig(raw: unknown): SheetConfig {

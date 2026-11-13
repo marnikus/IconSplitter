@@ -31,6 +31,7 @@
 .bld-title-block h2 { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bld-eyebrow { color: var(--v2-muted-2); font-size: 9px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }
 .bld-live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--v2-green); vertical-align: 1px; }
+.bld-header-index { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .bld-header-actions { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .bld-undo { display: flex; gap: 4px; margin-right: 4px; }
 .bld-meta-state { margin-left: 6px; color: var(--v2-muted); font-size: 9px; text-transform: uppercase; }
@@ -234,3 +235,21 @@
   .bld-stage { min-height: 520px; }
   .bld-meta-setup-grid, .builder-meta-grid, .bld-brief-grid { grid-template-columns: 1fr; }
 }
+
+/* Saved templates window (2026-11-13): its own card under the workspace; compact blocks. */
+.bld-templates { display: grid; gap: 10px; padding: 10px 12px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }
+.bld-templates-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bld-templates-head h3 { font-size: 12px; display: flex; align-items: baseline; gap: 6px; }
+.bld-templates-editing { color: var(--v2-muted); font-size: 11px; }
+.bld-templates-editing b { color: var(--v2-green); }
+.bld-templates-actions { margin-left: auto; display: flex; gap: 6px; }
+.bld-templates-empty { color: var(--v2-muted); font-size: 11px; }
+.bld-templates-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.bld-template { display: grid; gap: 6px; padding: 6px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface-2); min-width: 0; }
+.bld-template.is-editing { border-color: var(--v2-green); box-shadow: 0 0 0 1px var(--v2-green) inset; }
+.bld-template-pic { display: block; padding: 0; border: 1px solid var(--v2-line); border-radius: 5px; background: var(--v2-surface-3); cursor: pointer; overflow: hidden; aspect-ratio: 16 / 10; }
+.bld-template-pic img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.bld-template-pic:hover, .bld-template-pic:focus-visible { border-color: var(--v2-line-strong); }
+.bld-template-name { width: 100%; min-width: 0; font-size: 11px; font-weight: 700; }
+.bld-template-foot { display: flex; align-items: center; gap: 4px; }
+.bld-template-facts { flex: 1 1 auto; min-width: 0; color: var(--v2-muted); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

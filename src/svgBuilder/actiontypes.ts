@@ -98,4 +98,11 @@ export interface BuilderActions {
   say: (message: string, error?: boolean) => void;
   closeDialog: () => void;
   presetOfModel: () => SheetPreset;
+  /** Saved templates (2026-11-13): save the look (updates the one being edited), save as new, open to edit, rename, remove. */
+  saveTemplate: () => void;
+  saveTemplateAsNew: () => void;
+  editTemplate: (id: string) => void;
+  stopEditingTemplate: () => void;
+  renameTemplate: (id: string, name: string) => void;
+  removeTemplate: (id: string) => void;
 }

@@ -4,7 +4,7 @@ The seventh Workbench mode turns already-created, `.svg.json`-approved icons int
 
 ## Layout
 
-Folder bar (Open folder, Rescan, scope, approved count, **◈ Icons indexing** + indexed chip, audit, path) → **metadata widget** (prompt + Gemini, below) → header (`COLLECTION / 01 · LIVE`, sheet title, Undo/Redo on the global timeline, `SEED ####` re-roll, Prompt brief, Sheet metadata, Export ▾) → three columns: **Icon library** | **stage** | **Customize · live**. The panel uses only its own `bld-*` layout classes — never another tab's layout class (the borrowed `.svg-panel` grid caused the stray-text bug).
+Folder bar (Open folder, Rescan, scope, approved count, audit, path) → **metadata widget** (prompt + Gemini, below) → header (`COLLECTION / 01 · LIVE`, sheet title, **◈ Icons indexing** + indexed chip / progress + Cancel beside it, Undo/Redo on the global timeline, `SEED ####` re-roll, Prompt brief, Sheet metadata, Export ▾) → three columns: **Icon library** | **stage** | **Customize · live** → **Saved templates** window. The panel uses only its own `bld-*` layout classes — never another tab's layout class (the borrowed `.svg-panel` grid caused the stray-text bug).
 
 ## Behaviour
 
@@ -20,6 +20,7 @@ Folder bar (Open folder, Rescan, scope, approved count, **◈ Icons indexing** +
 - **Ranges**: one table (`ranges.ts`) drives the parser and the controls; typed values **clamp**, never revert. Number boxes commit on Enter/blur; sliders coalesce into one undo gesture.
 - **Zoom**: fit = `min((W−54)/w, (H−68)/h, 1.15)`, ≥ 0.16, recomputed on resize; −/+ step 0.1 (0.1–2); % or ⤢ → fit; 1:1. The wrapper takes the scaled size so every edge scrolls.
 - **Export ▾**: Editable SVG (`{slug}.svg`), PNG 2× (`{slug}@2x.png`), Copy SVG markup, Save preset (`{slug}-preset.json`, also readable from the reference `{version, selection, seed}` shape), Load preset (undoable; stale ids pruned and reported). Delivery is refused unless ids are approved, fingerprints match the current scan and the composed SVG validates. Placeholders and locks are never exported.
+- **Saved templates** (2026-11-13, `lib/svgBuilder/templates.ts`, `actions/templates.ts`): ＋ Save template keeps the sheet's **look** — artboard, grid, icon style, banner and text style; never the banner title/subtitle or hero (`lookOf`) — as a compact block with a generated name ("Side banner · 8×4 · Split", numbered when taken; renamed in place). The block's picture is that look on the current sheet with its loaded icons (dashed cells without one). Clicking it (or ✎) opens it on the sheet — one undo entry, the sheet's words and hero kept — and marks it *editing*: ✓ Save template writes the look back, *Save as new* copies it, *Done editing* stops. ✕ removes it at once. At most 60.
 - **Prompt / Corrected brief**: Brief | Raw prompt, Copy prompt (Raw + toast on clipboard failure), Escape/backdrop close. Static text (`briefText.ts`).
 
 ## Provider and privacy

@@ -8,9 +8,9 @@
 |---|---|---|
 | `tab-svg-builder` | top-menu button | visible text `SVG builder` |
 | `builder-shell` / `builder-panel` | wrapper / panel root | own `bld-*` classes only; `builder-unsupported` note without the folder picker |
-| `builder-folder-widget` | folder bar | `builder-open-folder`, `builder-rescan`, `builder-scope-copy`, `builder-approved-count`, `builder-index-start` (◈ Icons indexing), `builder-index-count`, while running `builder-index-progress` + `builder-index-cancel`, `builder-audit`, `builder-folder-path` |
+| `builder-folder-widget` | folder bar | `builder-open-folder`, `builder-rescan`, `builder-scope-copy`, `builder-approved-count`, `builder-audit`, `builder-folder-path` |
 | `builder-meta-widget` | metadata prompt + Gemini widget (after the folder bar) | `data-open`; `builder-meta-toggle` (Minimize/Restore), `builder-meta-body` (drag-resizable), `builder-meta-restore-height`, `builder-metadata-state`, `builder-generate-metadata`, `builder-prompt-panel` (`builder-prompt`…, `builder-prompt-note`), `builder-provider-card` (`builder-provider-toggle`, `builder-limits`, `builder-model`, `builder-endpoint`, `builder-timeout`, `builder-retries`, `builder-concurrency`, `builder-model-check`, `builder-model-state`, `builder-key-state`…, `builder-provider-note`) |
-| `builder-header` | header row | `builder-sheet-title` ("Untitled icon sheet" when empty) |
+| `builder-header` | header row | `builder-sheet-title` ("Untitled icon sheet" when empty); `builder-header-index` beside the title (2026-11-13): `builder-index-start` (◈ Icons indexing), `builder-index-count`, while running `builder-index-progress` + `builder-index-cancel` |
 | `builder-undo` / `builder-redo` | global timeline | disabled when the stack is empty; title names the action |
 | `builder-seed` | `↻ SEED ####` | re-roll (seed + 1) |
 | `builder-brief` / `builder-corrected-brief` | open `builder-brief-dialog` | header / stage bottom-right |
@@ -65,6 +65,13 @@
 | `builder-banner-bg` / `builder-accent` / `builder-title-ink` / `builder-subtitle-ink` | colour chips | |
 | `builder-title` / `builder-subtitle` / `builder-title-size` / `builder-subtitle-size` / `builder-title-face` | banner copy | |
 | `builder-hero` / `builder-hero-icon` / `builder-divider` | Hero glyph, Glyph select, Accent rule | |
+
+## Saved templates (under the workspace, 2026-11-13)
+
+| Testid | Element | Notes |
+|---|---|---|
+| `builder-templates` | window after `builder-workspace` | `builder-template-save` (＋ new / ✓ write back when editing), `builder-template-save-new`, `builder-template-stop`, `builder-template-editing`, `builder-templates-empty` |
+| `builder-template-<id>` | one block (`is-editing`) | `builder-template-open-<id>` (picture = open to edit), `builder-template-preview-<id>` (img), `builder-template-name-<id>` (Enter/blur saves, Escape reverts), `builder-template-edit-<id>` ✎, `builder-template-remove-<id>` ✕ |
 
 ## Dialogs
 

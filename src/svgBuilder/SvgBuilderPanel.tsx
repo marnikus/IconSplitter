@@ -11,6 +11,7 @@ import SvgBuilderLibrary from "./SvgBuilderLibrary";
 import SvgBuilderMetaWidget from "./SvgBuilderMetaWidget";
 import SvgBuilderStage from "./SvgBuilderStage";
 import SvgBuilderStatusBar from "./SvgBuilderStatusBar";
+import SvgBuilderTemplates from "./SvgBuilderTemplates";
 import { useSvgBuilder } from "./useSvgBuilder";
 
 export default function SvgBuilderPanel({ active }: { active: boolean }) {
@@ -27,6 +28,7 @@ export default function SvgBuilderPanel({ active }: { active: boolean }) {
       <SvgBuilderStage b={b} />
       <SvgBuilderCustomize b={b} />
     </div>
+    <SvgBuilderTemplates b={b} />
     <SvgBuilderStatusBar b={b} />
     <SvgBuilderDialogs b={b} />
   </section>;

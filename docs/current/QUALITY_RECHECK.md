@@ -5147,3 +5147,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - User report (bread-slice, export.json from 2026-11-12 with "metadata": null): two causes. (1) "Export selected" = generate then export: only ACCEPTED answers travelled with the run (RULE 24), so an answer without its Icon Name was exported from the pre-answer row state → null. Now `metabatch` carries every produced state (`fresh`). (2) An already-exported row with nothing to rebuild returned the old record and never rewrote export.json; the planner now plans a record-only commit when export.json's metadata fingerprint differs (`recordMetadataFp`), and the row reads stale while its draft is unsaved (`savedMetadataMoved`).
 - Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; vitest 4530 passed / 26 failed in 9 files, all failing on the clean tree; new tests: upload_export_draft_metadata +3, upload_ui +1 (Export selected with a Name-less answer).
+
+## 2026-11-13 — SVG builder: saved templates window; indexing controls in the header
+
+- New: `src/lib/svgBuilder/templates.ts` (look-only templates, generated names, validated list, preview), `src/svgBuilder/{templatestore.ts, actions/templates.ts, SvgBuilderTemplates.tsx}`; `applyCopy` shared by layout presets and templates. Indexing controls moved from the folder bar to the header row beside the sheet title (user request).
+- Measured: tsc clean; eslint 0 errors in changed files; quality:changed GATE PASSED; svg_builder_templates 8/8; full vitest 4536 passed / 28 failed — the 9 clean-tree files plus upload_ui (passes alone; timeout under full-suite load) and algo_efficiency (201.5 ms vs a 200 ms speed bound; split code not touched).
