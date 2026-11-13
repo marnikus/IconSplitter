@@ -23,6 +23,12 @@ function stampSrcHashPlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [stampSrcHashPlugin(), react(), tailwindcss(), viteSingleFile()],
+  // The helper builds into a staging folder and swaps the result into dist/ only
+  // when it is complete (tools/bridge/appbuild.mjs); a plain `npm run build` writes dist/.
+  build: {
+    outDir: process.env.ICONSPLITTER_OUT_DIR || "dist",
+    emptyOutDir: true,
+  },
   server: {
     // Allow any hostname so the dev server can be reached through
     // proxies/previews (e.g. remote sandboxes), not just localhost.
