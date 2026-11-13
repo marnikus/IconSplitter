@@ -11,9 +11,11 @@ import { useIconIndex, type IconIndexView } from "./useIconIndex";
 import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderModel } from "./model";
 import { visibleArtboards } from "./artboardview";
-import { artboardIcons } from "../lib/svgBuilder/artboards";
+import { artboardIcons, pendingUse as pendingOf } from "../lib/svgBuilder/artboards";
 
 export interface BuilderComputed extends IconIndexView {
+  /** Icons on artboards whose use is not saved yet, per icon (artboards.ts `pendingUse`). */
+  pendingUse: ReadonlyMap<string, number>;
   assets: readonly BuilderIconAsset[];
   visibleAssets: readonly BuilderIconAsset[];
   categories: readonly string[];
@@ -49,7 +51,8 @@ export function useBuilderComputed(
   const auditLine = useMemo(() => model.discovery === null ? "No approved assets scanned yet"
     : builderAuditLine(model.discovery), [model.discovery]);
   const indexView = useIconIndex(assets, model.discovery?.index, { placed: placedIds, locked: model.lockedIds, textWeight: model.recipe.textWeight });
-  return { assets, visibleAssets, categories, profiles, layout, repository, document, auditLine, ...indexView };
+  const pendingUse = useMemo(() => pendingOf(model.artboards), [model.artboards]);
+  return { assets, visibleAssets, categories, profiles, layout, repository, document, auditLine, pendingUse, ...indexView };
 }
 
 /** The banner's chosen hero icon is read like a placed icon. */

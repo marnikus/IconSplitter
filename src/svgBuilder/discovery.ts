@@ -1,6 +1,8 @@
 // discovery.ts — the builder's all-folder approved asset discovery. It reuses
 // the upload tab's improved parallel walk, pair cache, preferred-version gate
 // and audit, but turns OFF split-scope hiding and ignores its own output folder.
+import { readUsage } from "./usagestore";
+import type { UsageRecord } from "../lib/svgBuilder/usage";
 import { cleanName } from "../lib/upload/meta";
 import { readTextAt, type DirHandleLike } from "../lib/fs";
 import { isRecord } from "../lib/isrecord";
@@ -26,6 +28,8 @@ export interface BuilderDiscovery {
   withMetadata: number;
   /** The vector index read from each icon's `<svg>.index.json` (fresh or stale; freshness is derived). */
   index: ReadonlyMap<string, IconIndexRecord>;
+  /** Saved use from each icon's `<svg>.usage.json`: exported artboards that held it (2026-11-13). */
+  usage: ReadonlyMap<string, UsageRecord>;
 }
 
 const READ_BATCH = 24;
@@ -35,7 +39,7 @@ export async function discoverBuilderAssets(root: DirHandleLike): Promise<Builde
   const meta = await readExportMeta(root, found.rows);
   const assets = assetsFromRows(found.rows, meta);
   return {
-    assets, rows: found.rows, excluded: found.excluded, index: await readIconIndex(root, assets),
+    assets, rows: found.rows, excluded: found.excluded, index: await readIconIndex(root, assets), usage: await readUsage(root, assets),
     audit: found.audit, corruptFiles: found.corruptFiles, unreadable: found.unreadable, withMetadata: meta.size,
   };
 }

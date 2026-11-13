@@ -15,6 +15,7 @@ Back to the [storage map](../STORAGE.md) and [behaviour contract](../svg-builder
 | IndexedDB `iconSplitter/keys` | shared Gemini API key | `src/upload/keystore.ts`; key vault only, masked in UI and redacted from logs |
 | `<approved svg>.index.json` beside each SVG | icon vector index: image (512-d CLIP) + text (384-d MiniLM) vectors as base64 float32, fingerprints, model ids | `parseIndexRecord`; corrupt/foreign = not indexed; rewritten by Icons indexing ([vector index](../svg-builder-index.md)) |
 | localStorage `iconSplitter.svgBuilder.artboards.v1` | final artboards: `id`, `templateId`, `name`, `title`, `subtitle`, `heroIconId`, `placedIds` (holes kept), `lockedIds`, sheet `metadata`, `created`, `updated`, `exportedAt`, `countedIds`; ≤ 400 | `parseArtboards`; an artboard of a removed template drops; `artboardstore.ts` |
+| `<approved svg>.usage.json` beside each SVG | saved use: `id`, `svgPath`, `used`, `last`, `history` [{`at`, `artboard`}] ≤ 50 | `parseUsageRecord`; written only on export (`usagestore.ts`); foreign/corrupt = never used |
 | `<root>/icon-map.json` | named icons → id, folder, files (preview, svg, svg.json, export.json, index, usage) | rewritten after each scan only when changed; `iconmapstore.ts` |
 | IndexedDB `iconSplitter-models/files` | downloaded public model files (huggingface.co), keyed by URL | indexer worker cache only; no icon data or keys |
 | IndexedDB `iconSplitter/handles["__svgBuilder__"]` | builder root handle | falls back to the older upload/SVG/selection handle; permission re-requested on restore |

@@ -63,28 +63,50 @@ function tileFlags(b: BuilderApi, asset: BuilderIconAsset) {
 
 function IconTile({ b, asset }: { b: BuilderApi; asset: BuilderIconAsset }) {
   const { placed, score, match, unindexed, noMeta, excluded } = tileFlags(b, asset);
+  const used = b.discovery?.usage.get(asset.id)?.used ?? 0;
+  const pending = b.pendingUse.get(asset.id) ?? 0;
   return <button type="button" data-testid={`builder-asset-${asset.id}`} data-asset-id={asset.id} data-selected={placed}
     data-unindexed={unindexed} data-nometa={noMeta} data-excluded={excluded} aria-pressed={placed}
     className={`bld-tile${placed ? " is-on" : ""}${noMeta ? " is-nometa" : ""}${excluded ? " is-excluded" : ""}`}
-    title={tileTitle({ asset, score, placed, unindexed, noMeta })} onClick={() => b.actions.toggleAsset(asset.id)}>
+    title={tileTitle({ asset, score, placed, unindexed, noMeta, used, pending })} onClick={() => b.actions.toggleAsset(asset.id)}>
     <SvgBuilderAssetThumb asset={asset} repository={b.repository} />
-    {placed && <span className="bld-tile-check" aria-hidden="true">✓</span>}
-    {match && <span className="bld-tile-dot" data-testid={`builder-match-${asset.id}`} aria-hidden="true" />}
-    {excluded && <span className="bld-tile-excluded" aria-hidden="true">⊘</span>}
-    {unindexed && <span className="bld-tile-warn" data-testid={`builder-unindexed-${asset.id}`} aria-hidden="true">⚠</span>}
+    <TileBadges id={asset.id} flags={{ placed, match, excluded, unindexed }} />
+    <UseBadge id={asset.id} used={used} pending={pending} />
   </button>;
 }
 
-interface TileInfo { asset: BuilderIconAsset; score: number | null; placed: boolean; unindexed: boolean; noMeta: boolean }
+function TileBadges({ id, flags }: { id: string; flags: { placed: boolean; match: boolean; excluded: boolean; unindexed: boolean } }) {
+  return <>
+    {flags.placed && <span className="bld-tile-check" aria-hidden="true">✓</span>}
+    {flags.match && <span className="bld-tile-dot" data-testid={`builder-match-${id}`} aria-hidden="true" />}
+    {flags.excluded && <span className="bld-tile-excluded" aria-hidden="true">⊘</span>}
+    {flags.unindexed && <span className="bld-tile-warn" data-testid={`builder-unindexed-${id}`} aria-hidden="true">⚠</span>}
+  </>;
+}
+
+/** ×N saved use (exported artboards) · +M on artboards whose use is not saved yet (2026-11-13). */
+function UseBadge({ id, used, pending }: { id: string; used: number; pending: number }) {
+  if (used === 0 && pending === 0) return null;
+  return <span className="bld-tile-used" data-testid={`builder-used-${id}`} aria-hidden="true">×{used}{pending > 0 ? ` +${pending}` : ""}</span>;
+}
+
+interface TileInfo { asset: BuilderIconAsset; score: number | null; placed: boolean; unindexed: boolean; noMeta: boolean; used: number; pending: number }
 
 /** Tooltip: name · similarity · in sheet, the metadata, and why a tile is marked. */
 function tileTitle(t: TileInfo): string {
   const lines = [`${t.asset.label}${t.score === null ? "" : ` · ${t.score}% similar`}${t.placed ? " · in sheet" : ""}`];
   if (t.asset.description) lines.push(t.asset.description);
   if (t.asset.keywords && t.asset.keywords.length > 0) lines.push(`#${t.asset.keywords.join(" #")}`);
+  const use = usageLine(t.used, t.pending);
+  if (use !== null) lines.push(use);
   if (t.unindexed) lines.push("⚠ Not indexed yet — run Icons indexing");
   if (t.noMeta) lines.push("No name / metadata — only its image can be indexed (export it from SVG to upload for title, description and tags)");
   return lines.join("\n");
+}
+
+function usageLine(used: number, pending: number): string | null {
+  if (used === 0 && pending === 0) return null;
+  return `Used in ${used} exported artboard(s)${pending > 0 ? ` · on ${pending} more not exported yet` : ""}`;
 }
 
 function ExcludedPill({ b }: { b: BuilderApi }) {

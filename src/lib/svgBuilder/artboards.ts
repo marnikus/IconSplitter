@@ -66,12 +66,16 @@ export function artboardIcons(artboard: FinalArtboard): string[] {
   return artboard.placedIds.filter((id) => !isEmptySlot(id));
 }
 
-/** Icons on artboards not exported yet, counted per icon — the "pending" use. */
+/**
+ * Icons on artboards whose use is not saved yet — not exported, or added after
+ * the last export — counted per icon: the "pending" use. Removing an icon from an
+ * artboard takes it off; exporting the artboard turns it into saved use.
+ */
 export function pendingUse(artboards: readonly FinalArtboard[]): Map<string, number> {
   const out = new Map<string, number>();
   for (const a of artboards) {
-    if (a.exportedAt !== null) continue;
-    for (const id of new Set(artboardIcons(a))) out.set(id, (out.get(id) ?? 0) + 1);
+    const counted = new Set(a.countedIds);
+    for (const id of new Set(artboardIcons(a))) if (!counted.has(id)) out.set(id, (out.get(id) ?? 0) + 1);
   }
   return out;
 }

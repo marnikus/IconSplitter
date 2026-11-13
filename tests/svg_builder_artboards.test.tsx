@@ -50,6 +50,7 @@ function library(): FakeDir {
 }
 
 let host: HTMLDivElement;
+let scanned: FakeDir;
 let ui: Root;
 const q = (id: string) => host.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 const all = (sel: string) => [...host.querySelectorAll(sel)] as HTMLElement[];
@@ -74,6 +75,7 @@ beforeEach(() => {
   stored.clear();
   resetAppStore();
   const dir = library();
+  scanned = dir;
   (window as unknown as { showDirectoryPicker: () => Promise<FakeDir> }).showDirectoryPicker = async () => dir;
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -118,8 +120,9 @@ describe("final artboards — the pure part", () => {
   it("counts icons on artboards not exported yet as pending use", () => {
     const a = { ...newArtboard(tpl, [], "t", "a"), placedIds: ["p1", "~empty:0", "p2"] };
     const b = { ...newArtboard(tpl, [a], "t", "b"), placedIds: ["p1"] };
-    const done = { ...newArtboard(tpl, [a, b], "t", "c"), placedIds: ["p2"], exportedAt: "2026-11-13" };
-    expect(Object.fromEntries(pendingUse([a, b, done]))).toEqual({ p1: 2, p2: 1 });
+    const done = { ...newArtboard(tpl, [a, b], "t", "c"), placedIds: ["p2", "p3"], exportedAt: "2026-11-13", countedIds: ["p2"] };
+    // p2 was counted when "c" was exported; p3 was added to it afterwards, so it is pending until the next export
+    expect(Object.fromEntries(pendingUse([a, b, done]))).toEqual({ p1: 2, p2: 1, p3: 1 });
   });
 
   it("reads the saved list field by field and drops artboards of removed templates", () => {
@@ -200,6 +203,35 @@ describe("final artboards — the list under the templates", () => {
 
     await click(`builder-template-check-${t2.id}`); // only t1 checked now → its group alone
     expect(q(`builder-artboard-group-${t2.id}`)).toBeNull();
+  });
+
+  it("an export saves each icon's use once per artboard, beside its SVG; icons not exported yet show as pending", async () => {
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:x", revokeObjectURL: () => undefined }));
+    await openLibrary();
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    const tile = tiles()[0];
+    const id = tile.dataset.assetId!;
+    await act(async () => { tile.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await settle(0);
+    await waitUntil(() => text(`builder-used-${id}`).includes("+1"), "pending use shown");
+    expect(text(`builder-used-${id}`)).toBe("×0 +1");
+
+    await click("builder-export-toggle");
+    await click("builder-export-svg");
+    await waitUntil(() => text(`builder-used-${id}`) === "×1", "saved use shown");
+    const usageFile = () => ["food icons", "interface"]
+      .flatMap((dir) => [...((scanned.children.get(dir) as FakeDir | undefined)?.children.values() ?? [])])
+      .find((f) => f.name.endsWith(".usage.json")) as FakeFile | undefined;
+    expect(usageFile()).toBeDefined();
+    expect(JSON.parse(usageFile()!.text)).toMatchObject({ id, used: 1 });
+    expect(savedArtboards()[0]).toMatchObject({ countedIds: [id] });
+
+    await click("builder-export-toggle");
+    await click("builder-export-svg"); // the same artboard again: not counted twice
+    await settle(0);
+    expect(JSON.parse(usageFile()!.text).used).toBe(1);
   });
 
   it("asks for the key before any artboard metadata request", async () => {

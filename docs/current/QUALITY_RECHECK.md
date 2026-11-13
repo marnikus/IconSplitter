@@ -5177,3 +5177,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - Templates checkable (RULE 25); `lib/svgBuilder/artboards.ts`, `artboardstore.ts`, `artboardview.ts`, `actions/artboards.ts`, `actions/artboardmeta.ts`, `useArtboardSync.ts`, `SvgBuilderArtboards.tsx`, `SvgBuilderArtboardMeta.tsx`; row previews load the shown artboards' icons. bridge_update_gate timeouts widened (passes alone; timed out under full-suite load).
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites incl. artboards 7/7; full vitest 4564 passed / 27 failed: the 9 clean-tree files + bridge_update_gate (load timing, widened).
+
+## 2026-11-13 — SVG builder: icon use counts (phase 2)
+
+- `<svg>.usage.json` beside each SVG (`usagestore.ts`, read with the scan), counted on SVG/PNG export once per artboard (`actions/usage.ts`), pending use from artboards (`pendingUse` by `countedIds`), library tile `×N +M`. Selectors split into `selectors/svg-builder-presets.md` (the page had passed 9 KB).
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 113/113; full vitest: the 9 clean-tree files + quality_base (dirty tree only).

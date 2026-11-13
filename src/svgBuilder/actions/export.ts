@@ -6,6 +6,7 @@ import type { SheetPreset } from "../../lib/svgBuilder/types";
 import { placedOnly } from "../../lib/svgBuilder/slots";
 import { copySheetSvg, downloadSheetPng, downloadSheetSvg, verifySheetDocument } from "../exporter";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
+import { countExportedUse } from "./usage";
 
 type ExportActions = Pick<BuilderActions, "exportSvg" | "exportPng" | "copySvg" | "presetOfModel">;
 type Kind = "svg" | "png" | "copy";
@@ -34,6 +35,7 @@ async function deliver(ctx: BuilderActionContext, kind: Kind): Promise<void> {
     else if (kind === "png") await downloadSheetPng(doc, titleOf(ctx));
     else await copySheetSvg(doc);
     ctx.say(DONE[kind]);
+    if (kind !== "copy") await countExportedUse(ctx); // saved use, once per artboard (actions/usage.ts)
   } catch {
     ctx.say(kind === "copy" ? "Clipboard refused the SVG — use Editable SVG instead" : "Export could not be completed. Try again.", true);
   } finally {

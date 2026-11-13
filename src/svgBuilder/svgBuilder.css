@@ -298,3 +298,4 @@
 .bld-artboard-meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 50vh; overflow: auto; }
 .bld-artboard-meta-grid figure { margin: 0; display: grid; gap: 4px; font-size: 10px; color: var(--v2-muted); }
 .bld-artboard-meta-grid img { width: 100%; border-radius: 4px; background: #fff; }
+.bld-tile-used { position: absolute; left: 3px; bottom: 3px; padding: 0 3px; border-radius: 3px; background: #000a; color: var(--v2-muted); font-size: 8px; line-height: 12px; pointer-events: none; }
