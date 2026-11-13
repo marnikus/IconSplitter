@@ -26,9 +26,12 @@ export interface BuilderPrefs {
   templateZoom: number;
   /** The small "used N times" index on each icon of the artboard (2026-11-13). */
   showUsage: boolean;
+  /** Red layout guides over the artboard, and their opacity 1–100 (2026-11-13). */
+  showGuides: boolean;
+  guideOpacity: number;
 }
 
-export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true };
+export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true, showGuides: false, guideOpacity: 70 };
 export const META_HEIGHT = { min: 160, max: 1200 } as const;
 const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "custom"];
 
@@ -44,6 +47,8 @@ export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
     scoreOpacity: Math.round(num(raw.scoreOpacity, 100, 1, 100)),
     templateZoom: typeof raw.templateZoom === "number" ? clampZoom(raw.templateZoom) : DEFAULT_BUILDER_PREFS.templateZoom,
     showUsage: raw.showUsage !== false,
+    showGuides: raw.showGuides === true,
+    guideOpacity: Math.round(num(raw.guideOpacity, 70, 1, 100)),
     metaHeight: typeof raw.metaHeight === "number" ? num(raw.metaHeight, 0, META_HEIGHT.min, META_HEIGHT.max) || null : null,
   };
 }

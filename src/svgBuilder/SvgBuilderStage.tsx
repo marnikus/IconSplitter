@@ -58,6 +58,7 @@ function StageToolbar({ b, zoom }: { b: BuilderApi; zoom: number }) {
     <button type="button" className={`svg-btn tiny${b.prefs.showUsage ? " primary" : " ghost"}`} data-testid="builder-toggle-usage"
       aria-pressed={b.prefs.showUsage} title={b.prefs.showUsage ? "Hide how often each icon was already used" : "Show how often each icon was already used in exported artboards"}
       onClick={() => b.actions.toggleUsage(!b.prefs.showUsage)}># Used</button>
+    <GuideControls b={b} />
     <div className="bld-zoom" aria-label="Artboard zoom">
       <button type="button" className="svg-btn tiny" data-testid="builder-zoom-out" onClick={() => b.actions.setZoom(zoom - 0.1)}>−</button>
       <button type="button" className="svg-btn ghost tiny bld-zoom-value" data-testid="builder-zoom" title="Fit to stage"
@@ -103,4 +104,17 @@ function StageStatus({ b }: { b: BuilderApi }) {
     <span className="bld-status-dot" data-warn={b.layout.overflow} aria-hidden="true" />{line}
     <span className="bld-status-right">LIVE VECTOR PREVIEW · {b.config.artboard.width} × {b.config.artboard.height} px</span>
   </div>;
+}
+
+/** "▦ Guides" (2026-11-13): the red grid guides over the artboard, and their opacity. */
+function GuideControls({ b }: { b: BuilderApi }) {
+  const on = b.prefs.showGuides;
+  return <>
+    <button type="button" className={`svg-btn tiny${on ? " primary" : " ghost"}`} data-testid="builder-toggle-guides" aria-pressed={on}
+      title={on ? "Hide the layout guides" : "Show the grid that is working now: cell boxes, icon areas, gaps, padding and banner edge"}
+      onClick={() => b.actions.toggleGuides(!on)}>▦ Guides</button>
+    {on && <input type="range" className="bld-range bld-guide-opacity" data-testid="builder-guide-opacity" aria-label="Guide opacity in percent"
+      min={1} max={100} step={1} value={b.prefs.guideOpacity} title={`Guides ${b.prefs.guideOpacity}%`}
+      onChange={(e) => b.actions.setGuideOpacity(Number(e.target.value))} />}
+  </>;
 }

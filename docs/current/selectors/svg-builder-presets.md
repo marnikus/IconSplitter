@@ -21,6 +21,7 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 
 | Testid | Element | Notes |
 |---|---|---|
+| `builder-toggle-guides` / `builder-guide-opacity` / `builder-guides` | ▦ Guides, opacity slider, overlay svg | `data-guide` = column, row, padding, banner, cell, icon |
 | `builder-cell-decline-<cell>` | 🗑 on an artboard icon | declines the item in Generate SVG; undoable |
 | `builder-cell-use-<cell>` / `builder-toggle-usage` | artboard use index / # Used toggle | preview-only; `data-used`; pref `showUsage` |
 | `builder-used-<assetId>` | tile badge (always, `is-zero` when unused) | `×N` saved use (exported artboards), `+M` on artboards whose use is not saved yet; the tooltip says both |

@@ -13,7 +13,7 @@ import { isBuilderDefaultPrompt, saveBuilderPrompt } from "../promptstore";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
 type ConfigActions = Pick<BuilderActions,
-  "setConfig" | "applyLayoutPreset" | "resetConfig" | "setZoom" | "fitZoom" | "toggleProvider" | "toggleMeta" | "setMetaHeight" | "toggleScores" | "setScoreOpacity" | "toggleUsage"
+  "setConfig" | "applyLayoutPreset" | "resetConfig" | "setZoom" | "fitZoom" | "toggleProvider" | "toggleMeta" | "setMetaHeight" | "toggleScores" | "setScoreOpacity" | "toggleUsage" | "toggleGuides" | "setGuideOpacity"
   | "setPrompt" | "resetPrompt" | "setSearch" | "undo" | "redo">;
 
 export function configActions(get: () => BuilderActionContext): ConfigActions {
@@ -27,6 +27,8 @@ export function configActions(get: () => BuilderActionContext): ConfigActions {
     toggleMeta: (metaOpen) => prefs(get(), { metaOpen }),
     toggleScores: (showScores) => prefs(get(), { showScores }),
     toggleUsage: (showUsage) => prefs(get(), { showUsage }),
+    toggleGuides: (showGuides) => prefs(get(), { showGuides }),
+    setGuideOpacity: (p) => prefs(get(), { guideOpacity: Math.round(Math.min(100, Math.max(1, p))) }),
     setScoreOpacity: (p) => prefs(get(), { scoreOpacity: Math.round(Math.min(100, Math.max(1, p))) }),
     setMetaHeight: (h) => prefs(get(), { metaHeight: h === null ? null : Math.round(Math.min(META_HEIGHT.max, Math.max(META_HEIGHT.min, h))) }),
     setPrompt: (text) => prompt(get(), text),

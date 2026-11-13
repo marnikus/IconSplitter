@@ -7,6 +7,7 @@ import type { CellFrame, SheetDocument } from "../lib/svgBuilder/types";
 import type { BuilderApi } from "./useSvgBuilder";
 import { isEmptySlot } from "../lib/svgBuilder/slots";
 import { useInlineText } from "./SvgBuilderInlineText";
+import SvgBuilderGuides from "./SvgBuilderGuides";
 
 export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; doc: SheetDocument; zoom: number }) {
   const host = useRef<HTMLDivElement | null>(null);
@@ -23,6 +24,7 @@ export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; do
     <div className="bld-artboard" data-testid="builder-artboard" data-zoom={zoom} aria-label="Editable SVG sheet artboard — double-click the banner text to edit it"
       ref={board} style={{ width, height, transform: `scale(${zoom})` }}>
       <div className="bld-artboard-svg" ref={host} />
+      <SvgBuilderGuides b={b} zoom={zoom} />
       <CellOverlays b={b} placed={b.checked} />
       {inline.editor}
     </div>

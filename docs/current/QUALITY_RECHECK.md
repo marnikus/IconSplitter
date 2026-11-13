@@ -5192,3 +5192,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `declineasset.ts` (reuses `svg/declineitems` + `svgReview` history), `actions/decline.ts`, follower on `onSvgReviewsWritten`, trash button on artboard cells; boot remembers a borrowed root under `__svgBuilder__` (`borrowedRoot`).
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 115/115; full vitest 4568 passed / 26 failed in the 9 clean-tree files.
+
+## 2026-11-13 — SVG builder: icon box up to 240 px; red layout guides with toggle and opacity
+
+- `RANGES.box` 18–240; `lib/svgBuilder/guides.ts`, `SvgBuilderGuides.tsx`, stage `▦ Guides` + opacity slider, prefs `showGuides`/`guideOpacity`.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 118/118.

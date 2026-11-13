@@ -65,6 +65,9 @@ export interface BuilderActions {
   dropAssets: (ids: readonly string[]) => void;
   /** Show / hide the "used N times" index on the artboard's icons (display-only). */
   toggleUsage: (show: boolean) => void;
+  /** Show / hide the red layout guides, and their opacity 1–100 (display-only). */
+  toggleGuides: (show: boolean) => void;
+  setGuideOpacity: (percent: number) => void;
   clearSelection: () => void;
   setSearch: (query: string) => void;
   setCategory: (category: string) => void;
