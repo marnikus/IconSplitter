@@ -196,9 +196,9 @@ function recordAt(raw: Record<string, unknown>, path: string): Record<string, un
 }
 
 // --- the stage planner lives in exportplan.ts (design §4.4; moved 2026-10-09, RULE 18) ---
-export { planStages, recordConverter, type PlanInput, type Stage, type StagePlan } from "./exportplan";
+export { embeddedMetadataFp, planStages, recordConverter, type PlanInput, type Stage, type StagePlan } from "./exportplan";
 
-/** The metadata block for a record (null until metadata is accepted). */
+/** The metadata block for a record: accepted text, or a saved draft with its validation. */
 export function metadataBlock(meta: IconMetadata, args: {
   prompt: string;
   response?: string;
@@ -208,9 +208,10 @@ export function metadataBlock(meta: IconMetadata, args: {
   usage: GeminiUsage;
   fingerprint: string;
   validation: MetadataValidation;
+  draftState?: "generated" | "invalid"; // a draft never accepted keeps its own state
 }): ExportRecord["metadata"] {
   return {
-    state: args.validation.ok ? "accepted" : "invalid",
+    state: args.draftState ?? (args.validation.ok ? "accepted" : "invalid"),
     title: meta.title,
     description: meta.description,
     tags: meta.tags,

@@ -73,7 +73,9 @@ function makePairedGettyWorkspace(): FakeDir {
   const meta = {
     title: "Minimal Compass Navigation Vector Icon",
     description: "Clean minimalist compass symbol on plain light background",
-    tags: ["icon", "vector", "compass", "navigation", "direction", "travel", "map"],
+    // A valid, accepted answer (10 tags incl. the mandatory ones): the Upload tab
+    // only sends rows whose metadata is accepted (2026-11-13).
+    tags: ["icon", "vector", "compass", "navigation", "pictogram", "stroke", "line", "editable", "web", "map"],
   };
   rec.metadata = metadataBlock(meta, {
     prompt: "",

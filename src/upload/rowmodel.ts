@@ -9,7 +9,7 @@ import { metadataRights } from "../lib/upload/rights";
 import type { DirHandleLike } from "../lib/fs";
 import { mapLimited } from "../lib/limiter";
 import { createRowReader, flushSourceHashes, type RowReader } from "./rowreads";
-import type { ExportRecord } from "../lib/upload/export";
+import { embeddedMetadataFp, type ExportRecord } from "../lib/upload/export";
 import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
 import { settingsFingerprint, type SettingsOverrides, type UploadSettings } from "../lib/upload/settings";
 import { cleanMetadata, metadataFingerprint, warnIfNameEmpty } from "../lib/upload/meta";
@@ -17,6 +17,7 @@ import { getAppState, patchUpload } from "../state/appstore";
 import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import { cachedMeta, restoredMeta } from "./metacache";
+import { draftFromRecord } from "./recorddraft";
 import type { UploadRowSource } from "./discovery";
 import {
   EMPTY_META,
@@ -114,7 +115,7 @@ function settingsMoved(record: ExportRecord, effective: UploadSettings): boolean
 /** The accepted text differs from what the record carries (null = none). */
 function metadataMoved(record: ExportRecord, meta: UploadMetaState): boolean {
   const acceptedFp = meta.state === "accepted" && meta.metadata !== null ? metadataFingerprint(meta.metadata) : "";
-  return (record.metadata?.fingerprint ?? "") !== acceptedFp;
+  return embeddedMetadataFp(record) !== acceptedFp;
 }
 
 /**
@@ -251,7 +252,9 @@ async function assembleOne(
 function restoredRowMeta(record: ExportRecord | null, sourceHash: string | null, interrupted: boolean): UploadMetaState {
   const committed = metaFromRecord(record, interrupted);
   if (interrupted || committed.state !== "empty") return committed;
-  return restoredMeta(cachedMeta(sourceHash));
+  // A remembered answer first; else the draft export.json saved (2026-11-13).
+  const cached = restoredMeta(cachedMeta(sourceHash));
+  return cached.state !== "empty" ? cached : draftFromRecord(record);
 }
 
 // --- list filter / sort ---------------------------------------------------------

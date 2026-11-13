@@ -29,6 +29,7 @@ import {
 
 import { commitExport, type CommitExportInput, type CommitValidation } from "./exportcommit";
 import { converterDeps, fillToolBlocks, jpegBlock, metadataBlockOf } from "./exportrecord";
+import type { SavedMetadata } from "./recorddraft";
 import { metadataOutputsAt } from "./exportmetadata";
 import type { UploadRowSource } from "./discovery";
 
@@ -68,6 +69,8 @@ export interface ExportRunArgs {
     prompt: string; response?: string; provider: string; model: string; requestId: string | null;
     usage: GeminiUsage; validation: MetadataValidation;
   } | null;
+  /** Text NOT accepted: saved in export.json only, never embedded (recorddraft.ts). */
+  savedMetadata?: SavedMetadata | null;
   /** The previous export.json, parsed (null = none/corrupt). */
   record: ExportRecord | null;
   signal?: AbortSignal;

@@ -46,6 +46,16 @@ export interface StagePlan {
  * touches the SVG and the JPEG's XMP/IPTC on a metadata change, but
  * repairing an SVG/EPS readback never rewrites an intact JPEG.
  */
+/**
+ * The fingerprint of the metadata the record's FILES carry: only an accepted
+ * block is embedded. A saved draft (state "invalid"/"generated", 2026-11-13)
+ * lives in export.json alone, so it counts as "nothing embedded" ("").
+ */
+export function embeddedMetadataFp(record: Pick<ExportRecord, "metadata">): string {
+  const block = record.metadata;
+  return block !== null && block.state === "accepted" ? block.fingerprint : "";
+}
+
 export function planStages(record: ExportRecord | null, input: PlanInput): StagePlan {
   const need = new Set<Stage>();
   const rebuild = { svg: false, jpg: false, eps: false };
@@ -91,7 +101,7 @@ function planDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, re
 
 function planMetadataDelta(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
   const metadataFp = input.hasMetadata ? input.metadataFp : "";
-  if ((record.metadata?.fingerprint ?? "") === metadataFp) return;
+  if (embeddedMetadataFp(record) === metadataFp) return;
   need.add("embed");
   rebuild.svg = input.includeSvg !== false;
   rebuild.jpg = input.includeJpeg !== false;

@@ -5131,3 +5131,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - Not-ready cards get the app's metadata typed into their drawer again before each re-save and after a re-upload; a card that stays not ready is reported `notReady` (also on a failed batch answer), outranks its thumbnail in `fateOf`, is queued for a later batch, and is dropped from the finish step's expected names.
 - Upload tab: rows without title/description/keyword are left out (`metadatagate.ts`); all-blank selection refuses to start.
 - Measured: tsc clean; eslint 0 errors (changed files 0 warnings); quality:changed GATE PASSED; vitest 4511 passed / 27 failed in 10 files — the same 10 files fail on the clean tree (Windows file modes, missing-browser and runner tests, oversized docs pages); new tests: getty_web_refill (7), getty_web_batch +2, getty_web_wait_info +2, stockupload_getty_web +1, stockupload_metadata_gate (4), stockupload_ui +1.
+
+## 2026-11-13 — Upload: unaccepted metadata is saved in export.json
+
+- An answer with title/description/keywords but no Icon Name (state `invalid`) exported as `"metadata": null` because only `accepted` text reached the export. It is now saved as a draft block (`state: "invalid"`/`"generated"`, with validation errors), never embedded; reload restores it (`src/upload/recorddraft.ts`); planner/stale checks use `embeddedMetadataFp` (accepted only); the stock Upload gate requires accepted metadata.
+- Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; vitest 4516 passed / 27 failed in the same 10 files that fail on the clean tree; new tests upload_export_draft_metadata (4), stockupload_metadata_gate +1; stockupload_getty_ui fixture given valid metadata (it was always `invalid`).

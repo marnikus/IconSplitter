@@ -15,10 +15,11 @@ import { copyFolderText } from "../lib/copypath";
 import { log } from "../log/logstore";
 import { withDirCache, type DirHandleLike } from "../lib/fs";
 import { publishedJpegPath } from "../lib/upload/export";
-import type { IconMetadata } from "../lib/upload/meta";
+import { validateUploadMetadata, type IconMetadata } from "../lib/upload/meta";
 import { rowSettings } from "../lib/upload/decorations";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
+import type { SavedMetadata } from "./recorddraft";
 import { poolSize } from "../lib/upload/jpegworker";
 import { rememberJob } from "./jobstore";
 import { loadBridgeConfig } from "./configstore";
@@ -216,6 +217,7 @@ async function exportOne(args: ExportOneArgs): Promise<{ fixed: number; failed: 
     defaults: c.m.defaults, overrides,
     metadata: meta === null ? null : meta.metadata,
     metadataInfo: metadataInfoOf(c, meta),
+    savedMetadata: meta === null ? savedDraftOf(c, args.freshMeta.get(args.id) ?? row.meta) : null,
     record: row.record, signal: args.signal,
     deps: { converter: browserConverterDeps() },
   });
@@ -226,6 +228,23 @@ async function exportOne(args: ExportOneArgs): Promise<{ fixed: number; failed: 
 /** The accepted state an export may carry, or null when there is nothing to embed. */
 function acceptedOf(meta: UploadMetaState): (UploadMetaState & { metadata: IconMetadata }) | null {
   return meta.state === "accepted" && meta.metadata !== null ? meta as UploadMetaState & { metadata: IconMetadata } : null;
+}
+
+/**
+ * Text the user has not accepted — a missing Icon Name, a failed policy check —
+ * is still saved in export.json (2026-11-13), re-validated so the record says
+ * what is missing. It is never embedded into the files.
+ */
+function savedDraftOf(c: UploadCtx, meta: UploadMetaState): SavedMetadata | null {
+  if (meta.metadata === null) return null;
+  const validation = validateUploadMetadata(meta.metadata);
+  return {
+    metadata: meta.metadata, state: validation.ok ? "generated" : "invalid",
+    info: {
+      prompt: c.m.prompt, response: meta.response, provider: PROVIDER_NAME, model: c.m.gemini.model,
+      requestId: null, usage: meta.usage, validation,
+    },
+  };
 }
 
 /** The metadata block's provenance, when the run carries accepted metadata. */

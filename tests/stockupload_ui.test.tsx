@@ -446,7 +446,7 @@ describe("Upload (stockUpload) tab UI", () => {
     await clickEl(q("stock-check-item-star")!);
     await clickEl(q("stock-upload-start")!);
     expect(q("stock-upload-confirm-dialog")).toBeNull();
-    expect(host.textContent).toContain("None of the selected rows has metadata");
+    expect(host.textContent).toContain("None of the selected rows has accepted metadata");
   });
 
   it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats with a history note", async () => {

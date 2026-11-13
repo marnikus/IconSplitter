@@ -14,7 +14,7 @@ const META = { title: "Star icon", description: "A five-point star.", tags: ["st
 function item(id: string, metadata: Partial<typeof META> | null): ExportedItem {
   return {
     id, stem: id, exportDir: "export", recordPath: "export/export.json",
-    record: { metadata: metadata === null ? null : { ...META, ...metadata } },
+    record: { metadata: metadata === null ? null : { state: "accepted", ...META, ...metadata } },
     files: { raster, svg: null, eps: null, zip: null }, missingRecorded: [],
   } as unknown as ExportedItem;
 }
@@ -26,6 +26,10 @@ describe("which rows may be uploaded", () => {
     expect(hasUploadMetadata(item("no-title", { title: "  " }))).toBe(false);
     expect(hasUploadMetadata(item("no-desc", { description: "" }))).toBe(false);
     expect(hasUploadMetadata(item("no-tags", { tags: [" ", ""] }))).toBe(false);
+  });
+
+  it("needs it accepted: text saved without its Icon Name is not in the files (2026-11-13)", () => {
+    expect(hasUploadMetadata(item("draft", { state: "invalid" } as never))).toBe(false);
   });
 
   it("splits the checked rows: the blank ones are named, the rest go on", () => {

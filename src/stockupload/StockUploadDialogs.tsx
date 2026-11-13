@@ -188,7 +188,7 @@ function SkippedNoMetadataNote({ plan }: { plan: StockUploadPlan }) {
   if (count === 0) return null;
   return (
     <p className="svg-warning" data-testid="stock-upload-skipped-no-metadata">
-      ⚠ {count} selected row(s) have empty metadata (title, description or keywords) and will not be uploaded.
+      ⚠ {count} selected row(s) have no accepted metadata (title, description and keywords) and will not be uploaded.
     </p>
   );
 }

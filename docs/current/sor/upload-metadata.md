@@ -69,6 +69,9 @@ and the checked-only Accept action for old drafts/edited fields.
 * **Provider answer (2026-11-08).** The `export.json` metadata block keeps the
   provider's full last answer verbatim as `response`, right after `prompt`; the
   cache keeps it too. User edits never change it; regeneration replaces it.
+* **Drafts are saved (2026-11-13).** Unaccepted text (e.g. no Name) goes to
+  `export.json` as `state: "invalid"`/`"generated"`, never into files; reload
+  restores it (`recorddraft.ts`); only accepted fingerprints count as embedded.
 * **Creator/Copyright inputs were removed (2026-11-08).** No UI edits them any
   more. The lib carriers (`lib/upload/rights.ts`, XMP/IIM) are unchanged: values
   already stored in a cache or record are still read, kept and embedded.

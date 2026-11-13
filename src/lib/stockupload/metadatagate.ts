@@ -13,14 +13,18 @@ export interface SkippedNoMetadata {
 }
 
 export const NO_METADATA_ERROR =
-  "None of the selected rows has metadata (title, description and keywords) — fill it in before uploading.";
+  "None of the selected rows has accepted metadata (title, description and keywords) — fill it in, accept it and export before uploading.";
 
 const filled = (value: unknown) => typeof value === "string" && value.trim() !== "";
 
-/** True when the row carries a title, a description and at least one keyword. */
+/**
+ * True when the row carries ACCEPTED metadata with a title, a description and at
+ * least one keyword. A saved draft (no Icon Name, never accepted — 2026-11-13)
+ * lives in export.json only; the files carry no metadata, so it is not sent.
+ */
 export function hasUploadMetadata(item: ExportedItem): boolean {
   const meta = item.record?.metadata ?? null;
-  if (meta === null) return false;
+  if (meta === null || meta.state !== "accepted") return false;
   const tags = Array.isArray(meta.tags) ? meta.tags.filter(filled) : [];
   return filled(meta.title) && filled(meta.description) && tags.length > 0;
 }
