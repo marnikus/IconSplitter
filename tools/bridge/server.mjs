@@ -24,9 +24,11 @@ import { createServer, request as httpRequest } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { appWatchPaths, computeSrcFingerprint, isDistStale, rebuildDistAsync, servedBundle } from "./distfresh.mjs";
+import { appWatchPaths, servedBundle } from "./distfresh.mjs";
+import { buildAppStaged } from "./appbuild.mjs";
+import { watchAppSources, watchOwnCode } from "./autoupdate.mjs";
 import { installCrashGuards } from "./guards.mjs";
-import { RESTART_CODE, helperCodeStamp, readCommit, restartNote, shouldRestart } from "./updatewatch.mjs";
+import { readCommit } from "./updatewatch.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
 import { connectBrowser, findBrowser, resetProfile, resolveProfileDir } from "./gettyweb/browser.mjs";
 import { openCdp } from "./gettyweb/cdp.mjs";
@@ -81,6 +83,12 @@ function applyAichatFlags(parsed) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+// `--self-test` (2026-11-13): every module above has loaded — the running helper
+// asks this of NEW code before it hands over, so a broken commit never crash-loops.
+if (args["self-test"] === true) {
+  console.log("helper self-test: all modules load");
+  process.exit(0);
+}
 applyGettyFlags(args);
 const config = {
   port: Number(args.port ?? process.env.BRIDGE_PORT ?? DEFAULT_PORT),
@@ -98,6 +106,9 @@ const config = {
   // helper watches its own files and asks the launcher for a restart in place.
   updateWatch: args["no-update-watch"] === undefined && process.env.BRIDGE_NO_UPDATE_WATCH !== "1",
   updateCheckMs: Math.max(200, Number(args["update-check-ms"] ?? process.env.BRIDGE_UPDATE_CHECK_MS ?? 10_000) || 10_000),
+  // An update waits until the watched files stayed the same this long (an edit or a pull in progress).
+  updateQuietMs: Math.max(0, Number(args["update-quiet-ms"] ?? process.env.BRIDGE_UPDATE_QUIET_MS ?? 20_000) || 0),
+  selfTestScript: typeof args["self-test-script"] === "string" ? path.resolve(args["self-test-script"]) : path.join(HERE, "server.mjs"),
   watchDirs: typeof args["watch-dir"] === "string" ? [path.resolve(args["watch-dir"])] : [HERE],
   // A pull that changes only the APP cannot wait for someone to press F5: the
   // helper rebuilds the bundle in place so the open page reloads onto it. The
@@ -211,12 +222,13 @@ function enqueue(job) {
 async function serveDist(url, res) {
   const rel = url === "/" ? "index.html" : decodeURIComponent(url.slice(1));
   const file = path.resolve(config.dist, rel);
-  if (rel === "index.html" && config.autoBuildDist) {
-    if (isDistStale(file, config.appDirs)) {
-      console.log(`Source files are newer than dist/index.html — rebuilding the app (${config.buildCmd})...`);
-      const built = await rebuildDistAsync(REPO_ROOT, { cmd: config.buildCmd, cwd: config.buildCwd });
-      if (!built.ok) console.error(`Auto-build failed: ${built.reason}`);
-    }
+  // Only a MISSING bundle is built on request (2026-11-13). A stale one is served
+  // as it is: the app watcher rebuilds it once the change is committed and quiet —
+  // a page load must never build a half-written edit.
+  if (rel === "index.html" && config.autoBuildDist && !existsSync(file)) {
+    console.log(`no built app yet — building it (${config.buildCmd})...`);
+    const built = await buildAppStaged({ cmd: config.buildCmd, cwd: config.buildCwd, dist: config.dist, appDirs: config.appDirs });
+    if (!built.ok) console.error(`Auto-build failed: ${built.reason}`);
   }
   if (!file.startsWith(config.dist + path.sep) || !existsSync(file) || !statSync(file).isFile()) {
     const hint = rel === "index.html" ? `no built app at ${config.dist} — run "npm run build" (or run_app_inkscape.bat) first` : "not found";
@@ -282,73 +294,14 @@ function busyWithUpload() {
   return inFlight > 0 || gettyWebBusy() || aichatBusy();
 }
 
-/**
- * The helper's own watchdog. It compares the bytes of its code with what it booted
- * from; when a `git pull` changed them it exits with RESTART_CODE so the launcher
- * (supervise.mjs) starts the new code at once — but only with nothing in flight,
- * and it says why in this window instead of dying silently.
- */
-function watchOwnCode() {
-  if (!config.updateWatch) return;
-  const started = helperCodeStamp(config.watchDirs);
-  const commit = readCommit(REPO_ROOT);
-  let waiting = false;
-  const timer = setInterval(() => {
-    const current = helperCodeStamp(config.watchDirs);
-    if (current !== started && busyWithUpload()) {
-      if (!waiting) console.log(`helper code changed${commit === null ? "" : ` (commit ${commit})`} — restarting when this run finishes`);
-      waiting = true;
-      return;
-    }
-    if (!shouldRestart(started, current, { busy: false })) return;
-    console.log(restartNote({ commit: readCommit(REPO_ROOT) ?? commit, restarts: config.restarts + 1 }));
-    console.log("the launcher rebuilds the app bundle and starts a fresh helper with this window's flags");
-    clearInterval(timer);
-    // An idle Getty browser would be orphaned by the exit: hand it back first.
-    const released = releaseIdleSessions();
-    if (released > 0) console.log(`closed ${released} idle Getty browser session(s) before the restart`);
-    setTimeout(() => process.exit(RESTART_CODE), 50);
-  }, config.updateCheckMs);
-  timer.unref();
-}
-
-/**
- * The APP's own watchdog (2026-11-02). A `git pull` that changes only `src/` used
- * to leave the open window serving the previous build until it was closed by hand:
- * the helper watches its own code (a restart), and the bundle was only rebuilt when
- * a page happened to ask for `index.html` again. Now a changed app stamp rebuilds
- * `dist/` in place — the helper keeps running (an upload keeps its window), and the
- * page's own `/health` poll sees the new `served` stamp and reloads itself.
- *
- * One build at a time; the same bytes never fail twice in a row, so a broken pull
- * says why once and the previous bundle stays served.
- */
-function watchAppSources() {
-  if (!config.updateWatch || !config.appWatch || config.appDirs.length === 0) return;
-  const distIndex = path.join(config.dist, "index.html");
-  let failedStamp = null;
-  let building = false;
-  const timer = setInterval(() => { void checkApp(); }, config.updateCheckMs);
-  timer.unref();
-
-  const checkApp = async () => {
-    if (building) return;
-    const current = computeSrcFingerprint(config.appDirs);
-    if (current === failedStamp || !isDistStale(distIndex, config.appDirs)) return;
-    building = true;
-    console.log(`app source changed (${readCommit(REPO_ROOT) ?? "local changes"}) — rebuilding the bundle so the open page picks it up`);
-    const startedAt = Date.now();
-    const built = await rebuildDistAsync(REPO_ROOT, { cmd: config.buildCmd, cwd: config.buildCwd });
-    building = false;
-    const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
-    if (built.ok && !isDistStale(distIndex, config.appDirs)) {
-      console.log(`app bundle rebuilt in ${seconds}s — the open page reloads itself onto it`);
-      return;
-    }
-    failedStamp = current;
-    const why = built.ok ? "the build did not refresh dist/index.html" : built.reason;
-    console.error(`App rebuild failed (${why}) — serving the previous bundle; fix it and reload the page`);
-  };
+/** The update watchers (autoupdate.mjs): committed + quiet code only, self-tested, staged builds. */
+function startUpdateWatchers() {
+  const log = (line) => console.log(line);
+  const error = (line) => console.error(line);
+  watchOwnCode({
+    config, repoRoot: REPO_ROOT, busy: busyWithUpload, release: releaseIdleSessions, exit: (code) => process.exit(code), log, error,
+  });
+  watchAppSources({ config, repoRoot: REPO_ROOT, log, error });
 }
 
 function logLine(req, res, started, bytes) {
@@ -397,12 +350,11 @@ function startListening() {
     const chat = aichatHealth();
     console.log(`ChatGPT web generation: ${chat.headed ? "visible" : "hidden"} browser, sign-in kept in ${chat.profile}`);
     console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
-    watchOwnCode();
-    watchAppSources();
+    startUpdateWatchers();
     if (config.updateWatch) {
       const commit = readCommit(REPO_ROOT);
       const app = config.appWatch ? "new app code is rebuilt here and the open page reloads itself onto it" : "app code is not watched";
-      console.log(`Update watch: ON — a git pull that changes the helper's code restarts it here; ${app}${commit === null ? "" : ` (now at ${commit})`}`);
+      console.log(`Update watch: ON — committed changes only: new helper code restarts it here after a self-test; ${app}${commit === null ? "" : ` (now at ${commit})`}`);
     }
   });
 }

@@ -11,11 +11,12 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { computeSrcFingerprint } from "../tools/bridge/distfresh.mjs";
 
 const SERVER = path.resolve("tools/bridge/server.mjs");
-const DISTFRESH = path.resolve("tools/bridge/distfresh.mjs");
+const DISTFRESH = pathToFileURL(path.resolve("tools/bridge/distfresh.mjs")).href;
 
 const temps: string[] = [];
 const children: ChildProcess[] = [];
@@ -61,7 +62,8 @@ function sandbox(): Sandbox {
     `import { computeSrcFingerprint } from ${JSON.stringify(DISTFRESH)};`,
     `if (existsSync(${JSON.stringify(failFlag)})) { console.error("stand-in build failed"); process.exit(1); }`,
     `const stamp = computeSrcFingerprint([${JSON.stringify(app)}]);`,
-    `writeFileSync(${JSON.stringify(path.join(dist, "index.html"))},`,
+    // Like vite.config: the helper builds into ICONSPLITTER_OUT_DIR, then swaps it in.
+    `writeFileSync((process.env.ICONSPLITTER_OUT_DIR || ${JSON.stringify(dist)}) + "/index.html",`,
     `  '<html><head><meta name="iconsplitter-src-hash" content="' + stamp + '"></head><body>app</body></html>');`,
     `console.log("stand-in build wrote the bundle");`,
   ].join("\n"));
@@ -104,7 +106,7 @@ function startHelper(box: Sandbox, log: string[]): ChildProcess {
     "--app-dir", box.app,
     "--build-cmd", `node ${JSON.stringify(path.join(box.root, "build.mjs"))}`,
     "--build-cwd", box.root,
-    "--update-check-ms", "120",
+    "--update-check-ms", "120", "--update-quiet-ms", "200",
   ], {
     env: { ...process.env, BRIDGE_TMP: tempDir("app-rebuild-tmp-"), BRIDGE_NO_UPDATE_WATCH: "" },
     stdio: ["ignore", "pipe", "pipe"],

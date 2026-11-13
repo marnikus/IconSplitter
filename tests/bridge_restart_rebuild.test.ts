@@ -7,6 +7,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 const SUPERVISE = path.resolve("tools/bridge/supervise.mjs");
@@ -47,9 +48,16 @@ function fakeHelper(dir: string, name = "helper"): string {
 function fakeBuild(dir: string): { command: string; log: string } {
   const script = path.join(dir, "build.mjs");
   const log = path.join(dir, "builds.txt");
+  // Like vite.config (2026-11-13): a stamped index.html into ICONSPLITTER_OUT_DIR, the staging folder.
+  const distfresh = pathToFileURL(path.resolve("tools/bridge/distfresh.mjs")).href;
   writeFileSync(script, [
-    "import { appendFileSync } from 'node:fs';",
+    "import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';",
+    "import path from 'node:path';",
+    `import { computeSrcFingerprint } from ${JSON.stringify(distfresh)};`,
     `appendFileSync(${JSON.stringify(log)}, 'built\\n');`,
+    "const out = process.env.ICONSPLITTER_OUT_DIR;",
+    "mkdirSync(out, { recursive: true });",
+    "writeFileSync(path.join(out, 'index.html'), `<meta name=\"iconsplitter-src-hash\" content=\"${computeSrcFingerprint([])}\">`);",
     "console.log('vite build (fake)');",
   ].join("\n"));
   return { command: `${JSON.stringify(process.execPath)} ${JSON.stringify(script)}`, log };
@@ -60,7 +68,8 @@ function buildCount(log: string): number {
 }
 
 async function runSupervisor(args: string[]): Promise<{ code: number | null; out: string }> {
-  const sup = spawn(process.execPath, [SUPERVISE, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+  // Its own build folder: a staged build swaps into <build-cwd>/dist — never the repo's real dist/.
+  const sup = spawn(process.execPath, [SUPERVISE, "--build-cwd", tempDir("sup-cwd-"), ...args], { stdio: ["ignore", "pipe", "pipe"] });
   children.push(sup);
   let out = "";
   sup.stdout?.on("data", (c) => { out += c.toString(); });

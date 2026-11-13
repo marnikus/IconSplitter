@@ -131,7 +131,8 @@ describe("the helper restarts itself when its code changes", () => {
     const watchedFile = path.join(watch, "routes.mjs");
     writeFileSync(watchedFile, "export const version = 1;\n");
     const child = spawn(process.execPath, [SERVER, "--port", "0", "--watch-dir", watch], {
-      env: { ...process.env, BRIDGE_UPDATE_CHECK_MS: "120", BRIDGE_TMP: tempDir("helper-tmp-") },
+      // A short quiet window (2026-11-13): an update waits until the code stops changing.
+      env: { ...process.env, BRIDGE_UPDATE_CHECK_MS: "120", BRIDGE_UPDATE_QUIET_MS: "200", BRIDGE_UPDATE_ON: "", BRIDGE_TMP: tempDir("helper-tmp-") },
       stdio: ["ignore", "pipe", "pipe"],
     });
     children.push(child);
@@ -144,6 +145,7 @@ describe("the helper restarts itself when its code changes", () => {
     const code = await new Promise<number | null>((r) => child.once("exit", r));
     expect(code).toBe(RESTART_CODE);
     expect(log.join("")).toMatch(/helper code changed.*restarting/i);
+    expect(log.join("")).toMatch(/passed its self-test/i);
   }, 20_000);
 
   it("keeps running when the option is off", async () => {

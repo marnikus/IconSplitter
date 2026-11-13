@@ -5136,3 +5136,9 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - An answer with title/description/keywords but no Icon Name (state `invalid`) exported as `"metadata": null` because only `accepted` text reached the export. It is now saved as a draft block (`state: "invalid"`/`"generated"`, with validation errors), never embedded; reload restores it (`src/upload/recorddraft.ts`); planner/stale checks use `embeddedMetadataFp` (accepted only); the stock Upload gate requires accepted metadata.
 - Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; vitest 4516 passed / 27 failed in the same 10 files that fail on the clean tree; new tests upload_export_draft_metadata (4), stockupload_metadata_gate +1; stockupload_getty_ui fixture given valid metadata (it was always `invalid`).
+
+## 2026-11-13 — Helper self-update from committed, settled, self-tested code
+
+- Review of the update path found: watchers acted on raw working-tree bytes every 10 s (half-written edits got built/restarted), `serveDist` rebuilt on page load ungated, new helper code was never load-tested before the old one exited (crash loop → supervisor gave up), builds wrote straight into `dist/` (partial/mismatched bundles, two builders racing), no retry of transient failures, supervisor crash count never reset.
+- Fix: `updategate.mjs` (quiet window + no git op + committed via `git status`), `autoupdate.mjs` (helper `--self-test` before handover, back-off retry, never during upload/build), `appbuild.mjs` (staging folder via `ICONSPLITTER_OUT_DIR`, stamp-verified swap), page load builds only a missing bundle, supervisor staged build + crash-count reset.
+- Measured: tsc clean; eslint 0 errors; update-path suites 37/37 (bridge_app_rebuild was failing on Windows before: ESM path fixture); full vitest 4526 passed / 26 failed in 9 files, all failing on the clean tree.

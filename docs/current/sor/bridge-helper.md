@@ -34,7 +34,8 @@ code used to leave the old code in memory until the window was closed by hand.
 - At boot the helper hashes the bytes of its own files (`helperCodeStamp`,
   `tools/bridge/updatewatch.mjs`, over `tools/bridge/`, `--watch-dir` to change) and
   re-hashes every `BRIDGE_UPDATE_CHECK_MS` (10 s; `--update-check-ms`). A different
-  stamp logs `helper code changed (commit <sha>) — restarting with the new build`
+  stamp — once **committed, quiet and self-tested** ([self-update](bridge-autoupdate.md)) —
+  logs `helper code changed (commit <sha>) — restarting with the new build`
   and exits `RESTART_CODE = 75`; the supervisor starts the new code.
 - **It never restarts mid-run.** A request in flight, or a Getty batch whose
   metadata is being typed (`gettyWebBusy`), defers the restart; the window says

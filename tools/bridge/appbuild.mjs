@@ -7,7 +7,7 @@
 // was built from. A failure leaves the previous bundle served, untouched.
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import { computeSrcFingerprint } from "./distfresh.mjs";
 
@@ -66,6 +66,7 @@ function stagedVerdict(staging, expected) {
 
 async function buildOnce({ cmd, cwd, dist, appDirs, inherit = false }) {
   const expected = computeSrcFingerprint(appDirs);
+  mkdirSync(path.resolve(dist), { recursive: true });
   const staging = mkdtempSync(path.join(path.dirname(path.resolve(dist)), ".dist-staging-"));
   try {
     const run = await runBuild(cmd, cwd, staging, inherit);

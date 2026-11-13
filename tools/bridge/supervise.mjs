@@ -10,12 +10,13 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { RESTART_CODE } from "./updatewatch.mjs";
+import { buildAppStaged } from "./appbuild.mjs";
+import { appWatchPaths } from "./distfresh.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const QUICK_MS = 60_000;
 
 const REPO_ROOT = path.resolve(HERE, "..", "..");
-const BUILD_TIMEOUT_MS = 5 * 60_000;
 
 /** Split the loop's own flags from the helper's arguments. */
 function parseArgs(argv) {
@@ -54,20 +55,21 @@ function parseArgs(argv) {
 async function rebuildApp(own) {
   const startedAt = Date.now();
   console.log(`supervisor: rebuilding the app bundle (${own.buildCmd}) …`);
-  const result = await new Promise((resolve) => {
-    // A command line, not an argv: quoted paths survive on both platforms.
-    const build = spawn(own.buildCmd, { cwd: own.cwd, shell: true, stdio: "inherit" });
-    const timer = setTimeout(() => { build.kill(); }, BUILD_TIMEOUT_MS);
-    build.on("error", (err) => { clearTimeout(timer); resolve({ ok: false, reason: err.message }); });
-    build.on("close", (code) => {
-      clearTimeout(timer);
-      resolve(code === 0 ? { ok: true } : { ok: false, reason: `the build exited ${code}` });
-    });
+  // Staged (2026-11-13): built beside dist/ and swapped in only when complete and
+  // stamped for these sources — a failed build never leaves a broken bundle.
+  const result = await buildAppStaged({
+    cmd: own.buildCmd, cwd: own.cwd, dist: distOf(own), appDirs: appWatchPaths(own.cwd), inherit: true,
   });
   const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
   if (result.ok) console.log(`supervisor: app bundle rebuilt in ${seconds}s — the open page reloads itself onto it`);
   else console.error(`supervisor: rebuild failed (${result.reason}) — serving the previous bundle`);
   return result;
+}
+
+/** The dist the helper serves: its own `--dist`, else the checkout's dist/. */
+function distOf(own) {
+  const at = rest.indexOf("--dist");
+  return at >= 0 && rest[at + 1] !== undefined ? path.resolve(rest[at + 1]) : path.join(own.cwd, "dist");
 }
 
 /** What to do after one exit: run it again, or let the window close. */
@@ -110,6 +112,7 @@ async function startAfterRebuild() {
 }
 
 function run() {
+  const startedAt = Date.now();
   child = spawn(process.execPath, [own.child, ...rest], {
     stdio: "inherit",
     env: { ...process.env, BRIDGE_RESTARTS: String(state.restarts) },
@@ -117,6 +120,8 @@ function run() {
   child.on("exit", (code, signal) => {
     child = null;
     if (stopping) return;
+    // A helper that ran for a while before it stopped is not a crash loop: count afresh.
+    if (Date.now() - startedAt >= QUICK_MS) state.crashes = 0;
     const plan = planAfterClose(code, signal, state);
     if (plan.reason === "restart" && tooManyRestarts(state.restartWindow, state.maxRestarts)) {
       console.error(`supervisor: ${state.restartWindow.length} restarts in under a minute — stopping so a broken build is visible`);
