@@ -174,7 +174,7 @@ describe("templates — the window under the builder", () => {
     await click("builder-template-stop");
     await click("builder-columns-inc"); // the sheet moves away from the template
     expect(text("builder-cells")).toContain("of 36 cells");
-    await click(`builder-template-open-${first.id}`); // open it again: the look comes back
+    await click(`builder-template-edit-${first.id}`); // ✎ opens its design again: the look comes back
     expect(text("builder-cells")).toContain("of 32 cells");
     expect(q(`builder-template-${first.id}`)?.className).toContain("is-editing");
 
@@ -197,7 +197,7 @@ describe("templates — the window under the builder", () => {
     const [first] = saved();
     await click("builder-template-stop");
     await click("builder-columns-inc");
-    await click(`builder-template-open-${first.id}`);
+    await click(`builder-template-edit-${first.id}`);
     expect(text("builder-cells")).toContain("of 32 cells");
     await click("builder-undo");
     expect(text("builder-cells")).toContain("of 36 cells");

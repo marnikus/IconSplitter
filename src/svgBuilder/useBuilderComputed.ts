@@ -10,6 +10,8 @@ import { createAssetRepository, type AssetRepository } from "./repository";
 import { useIconIndex, type IconIndexView } from "./useIconIndex";
 import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderModel } from "./model";
+import { visibleArtboards } from "./artboardview";
+import { artboardIcons } from "../lib/svgBuilder/artboards";
 
 export interface BuilderComputed extends IconIndexView {
   assets: readonly BuilderIconAsset[];
@@ -34,7 +36,10 @@ export function useBuilderComputed(
   const repository = useMemo(() => model.root === null ? null : createAssetRepository(model.root, assets),
     [model.root, assets]);
   const realIds = useMemo(() => placedOnly(placedIds), [placedIds]);
-  const needed = useMemo(() => withHero(realIds, model.config.banner.heroIconId), [realIds, model.config.banner.heroIconId]);
+  // The icons the stage needs, plus those of the artboards the list shows (their row previews).
+  const shownIcons = useMemo(() => visibleArtboards(model).flatMap(artboardIcons), [model.templates, model.templateSel, model.artboards]); // eslint-disable-line react-hooks/exhaustive-deps
+  const needed = useMemo(() => [...new Set([...withHero(realIds, model.config.banner.heroIconId), ...shownIcons])],
+    [realIds, model.config.banner.heroIconId, shownIcons]);
   useLoadSvgTexts(repository, needed, model.svgTexts, patch);
   const ready = useMemo(() => realIds.every((id) => model.svgTexts[id] !== undefined),
     [realIds, model.svgTexts]);

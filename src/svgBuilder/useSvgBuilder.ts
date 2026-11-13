@@ -10,6 +10,7 @@ import { useBuilderPersistence } from "./useBuilderPersistence";
 import { useBuilderComputed, type BuilderComputed } from "./useBuilderComputed";
 import { useBuilderActions } from "./useBuilderActions";
 import type { BuilderActions } from "./actiontypes";
+import { useArtboardSync } from "./useArtboardSync";
 
 export interface BuilderApi extends BuilderModel, BuilderComputed {
   checked: readonly string[];
@@ -28,6 +29,7 @@ export function useSvgBuilder(): BuilderApi {
   const computed = useBuilderComputed(model, slice.checked, patch);
   const actions = useBuilderActions({ model, computed, boot, slice, hist, patch });
   useAutoPlacement(actions, computed.assets, computed.layout.capacity);
+  useArtboardSync(model, slice.checked, patch);
   return {
     ...model, ...computed,
     checked: slice.checked, activeId: slice.activeId, anchorId: slice.anchorId, actions,

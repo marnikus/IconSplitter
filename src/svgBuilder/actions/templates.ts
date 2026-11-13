@@ -10,6 +10,7 @@ import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
 import { clampZoom } from "../../lib/zoom";
 import { commitConfig, prefs } from "./config";
+import { saveArtboards } from "../artboardstore";
 
 type TemplateActions = Pick<BuilderActions,
   "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "stopEditingTemplate" | "renameTemplate" | "removeTemplate" | "setTemplateZoom">;
@@ -55,7 +56,7 @@ function editTemplate(ctx: BuilderActionContext, id: string): void {
   const template = ctx.model.templates.find((t) => t.id === id);
   if (template === undefined) return ctx.say("That template is gone", true);
   commitConfig(ctx, { config: applyTemplate(ctx.model.config, template), label: `Template “${template.name}”` });
-  ctx.dispatch({ editingTemplateId: id });
+  ctx.dispatch({ editingTemplateId: id, editingArtboardId: null }); // editing the blueprint, not an artboard
   prefs(ctx, { layout: "custom", fit: true });
   ctx.say(`Editing template “${template.name}” — change the sheet, then Save template`);
 }
@@ -68,10 +69,23 @@ function renameTemplate(ctx: BuilderActionContext, id: string, name: string): vo
   store(ctx, ctx.model.templates.map((t) => (t.id === id ? { ...t, name: clean } : t)));
 }
 
+/** A removed template takes its final artboards with it. */
+function dropArtboardsOf(ctx: BuilderActionContext, templateId: string): void {
+  const kept = ctx.model.artboards.filter((a) => a.templateId !== templateId);
+  const sel = ctx.model.templateSel;
+  const open = ctx.model.artboards.find((a) => a.id === ctx.model.editingArtboardId);
+  ctx.dispatch({
+    artboards: kept, templateSel: { checked: sel.checked.filter((x) => x !== templateId), active: sel.active === templateId ? null : sel.active, anchor: null },
+    ...(open?.templateId === templateId ? { editingArtboardId: null } : {}),
+  });
+  saveArtboards(kept);
+}
+
 function removeTemplate(ctx: BuilderActionContext, id: string): void {
   const template = ctx.model.templates.find((t) => t.id === id);
   if (template === undefined) return;
   const editing = ctx.model.editingTemplateId === id ? null : undefined;
   store(ctx, ctx.model.templates.filter((t) => t.id !== id), editing);
+  dropArtboardsOf(ctx, id);
   ctx.say(`Template “${template.name}” removed`);
 }

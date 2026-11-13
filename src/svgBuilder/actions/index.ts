@@ -8,6 +8,8 @@ import { providerActions } from "./provider";
 import { selectionActions } from "./selection";
 import { templateActions } from "./templates";
 import { presetJsonActions } from "./presetjson";
+import { artboardActions } from "./artboards";
+import { artboardMetaActions } from "./artboardmeta";
 import { uiActions } from "./ui";
 
 export function createBuilderActions(get: () => BuilderActionContext): BuilderActions {
@@ -20,8 +22,10 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const indexing = indexingActions(get);
   const templates = templateActions(get);
   const presetJson = presetJsonActions(get);
+  const artboards = artboardActions(get);
+  const artboardMeta = artboardMetaActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta,
     presets: get().presetActions,
   };
 }

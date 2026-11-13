@@ -148,7 +148,7 @@ describe("the staged app build", () => {
 });
 
 /** Resolves once the log shows `pattern`; rejects when it never does. */
-function waitFor(log: string[], pattern: RegExp, limit = 20_000): Promise<void> {
+function waitFor(log: string[], pattern: RegExp, limit = 60_000): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const started = Date.now();
     const tick = () => {
@@ -207,7 +207,7 @@ describe("the running helper", () => {
     await waitFor(log, /app bundle rebuilt/);
     expect(readFileSync(path.join(box.dist, "index.html"), "utf8")).toContain(computeSrcFingerprint([box.app]));
     expect(child.exitCode).toBeNull();
-  }, 40_000);
+  }, 120_000);
 
   it("never hands over to helper code that does not load; restarts once it does", async () => {
     const box = repoBox();
@@ -222,7 +222,7 @@ describe("the running helper", () => {
     commitAll(box.root);
     const code = await new Promise((r) => child.once("exit", r));
     expect(code).toBe(RESTART_CODE);
-  }, 40_000);
+  }, 120_000);
 
   it("does not build a stale bundle just because a page asked for it", async () => {
     const box = repoBox();
@@ -235,5 +235,5 @@ describe("the running helper", () => {
     expect(res.status).toBe(200);
     expect(log.join("")).not.toMatch(/Auto-build|rebuilding the app/);
     expect(existsSync(path.join(box.dist, "index.html"))).toBe(true);
-  }, 30_000);
+  }, 90_000);
 });

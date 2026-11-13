@@ -114,4 +114,19 @@ export interface BuilderActions {
   copyPresetJson: (text: string) => void;
   copyPresetForAi: () => void;
   downloadPresetJson: (text: string) => void;
+  /** Templates as checkable blueprints, and their final artboards (2026-11-13), RULE 25 gestures. */
+  templateGesture: (id: string, intent: import("../lib/reviewselect").SelectIntent) => void;
+  toggleTemplateCheck: (id: string) => void;
+  setTemplateChecks: (ids: readonly string[], on: boolean) => void;
+  addArtboard: (templateId: string) => void;
+  artboardGesture: (id: string, intent: import("../lib/reviewselect").SelectIntent) => void;
+  toggleArtboardCheck: (id: string) => void;
+  setArtboardChecks: (ids: readonly string[], on: boolean) => void;
+  renameArtboard: (id: string, name: string) => void;
+  removeArtboards: (ids: readonly string[]) => void;
+  closeArtboard: () => void;
+  /** Sheet metadata for the given artboards: prepare the exact requests (confirmation), send them, or cancel. */
+  generateArtboardsMetadata: (ids: readonly string[]) => void;
+  confirmArtboardsMetadata: () => void;
+  cancelArtboardsMetadata: () => void;
 }

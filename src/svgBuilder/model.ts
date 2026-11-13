@@ -18,9 +18,18 @@ import { loadBuilderPrefs, type BuilderPrefs } from "./prefsstore";
 import { builderPresets, loadBuilderPrompt } from "./promptstore";
 import { loadTemplates } from "./templatestore";
 import type { IconMapState } from "./iconmapstore";
+import { loadArtboards } from "./artboardstore";
+import type { FinalArtboard } from "../lib/svgBuilder/artboards";
+import type { RowSelection } from "../lib/reviewselect";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 
-export type BuilderDialog = "none" | "metadata" | "brief" | "preset";
+export type BuilderDialog = "none" | "metadata" | "brief" | "preset" | "artboards-metadata";
+
+/** One artboard's exact metadata request: the 768 px JPEG that will be sent. */
+export interface ArtboardMetaRequest { id: string; name: string; preview: string }
+
+/** The checked artboards' requests awaiting confirmation (and their progress once sent). */
+export interface ArtboardMetaPlan { requests: ArtboardMetaRequest[]; skipped: string[]; done: number; running: boolean }
 
 export interface BuilderKeyInfo {
   value: string | null;
@@ -74,6 +83,12 @@ export interface BuilderModel {
   editingTemplateId: string | null;
   /** icon-map.json in the scanned root: its path and how many named icons it maps. */
   iconMap: IconMapState | null;
+  /** Final artboards (artboardstore.ts), the one on the stage, and the two RULE 25 selections. */
+  artboards: readonly FinalArtboard[];
+  editingArtboardId: string | null;
+  templateSel: RowSelection;
+  artboardSel: RowSelection;
+  artboardMeta: ArtboardMetaPlan | null;
 }
 
 export interface BuilderAction { type: "patch"; patch: Partial<BuilderModel> }
@@ -88,8 +103,17 @@ export function initialBuilderModel(): BuilderModel {
     gemini: loadGeminiConfig(), key: emptyKeyInfo(),
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null,
     preview: null, dialog: "none", svgTexts: {}, indexing: null,
-    templates: loadTemplates(), editingTemplateId: null, iconMap: null,
+    ...savedLists(), editingTemplateId: null, iconMap: null,
+    editingArtboardId: null, templateSel: EMPTY_SEL, artboardSel: EMPTY_SEL, artboardMeta: null,
   };
+}
+
+const EMPTY_SEL: RowSelection = { checked: [], active: null, anchor: null };
+
+/** Templates, then their artboards (an artboard of a removed template is dropped). */
+function savedLists(): Pick<BuilderModel, "templates" | "artboards"> {
+  const templates = loadTemplates();
+  return { templates, artboards: loadArtboards(new Set(templates.map((t) => t.id))) };
 }
 
 export function builderReducer(state: BuilderModel, action: BuilderAction): BuilderModel {

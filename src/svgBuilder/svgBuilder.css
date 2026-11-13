@@ -272,3 +272,29 @@
 .bld-icon-map-label { color: var(--v2-muted-2); font-size: 9px; font-weight: 800; letter-spacing: 0.08em; }
 .bld-icon-map code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--v2-text); }
 .bld-icon-map-count { margin-left: auto; white-space: nowrap; }
+
+/* Templates as checkable blueprints (2026-11-13, RULE 25). */
+.bld-template { cursor: pointer; }
+.bld-template.is-active { border-color: var(--v2-accent, #7c83ff); box-shadow: 0 0 0 1px var(--v2-accent, #7c83ff) inset; }
+.bld-template.is-editing { border-color: var(--v2-green); }
+.bld-template-top { display: flex; align-items: center; gap: 6px; }
+.bld-template-count { flex: 1 1 auto; color: var(--v2-muted); font-size: 10px; }
+
+/* Final artboards list and its metadata confirmation (2026-11-13). */
+.bld-artboards { display: grid; gap: 10px; padding: 10px 12px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }
+.bld-artboard-list { display: grid; gap: 10px; outline: none; }
+.bld-artboard-group { display: grid; gap: 6px; }
+.bld-artboard-group-head { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--v2-muted); }
+.bld-artboard-group-head b { color: var(--v2-text); }
+.bld-artboard-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface-2); cursor: pointer; user-select: none; }
+.bld-artboard-row.is-active { border-color: var(--v2-accent, #7c83ff); box-shadow: 0 0 0 1px var(--v2-accent, #7c83ff) inset; }
+.bld-artboard-row.is-open { background: var(--v2-surface-3); }
+.bld-artboard-pic { height: 56px; width: auto; border-radius: 4px; background: var(--v2-surface-3); }
+.bld-artboard-main { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.bld-artboard-name { font-size: 11px; font-weight: 700; max-width: 360px; }
+.bld-artboard-facts { color: var(--v2-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bld-artboard-facts code { color: var(--v2-muted-2); }
+.bld-artboard-meta { width: min(1100px, 94vw); display: grid; gap: 10px; }
+.bld-artboard-meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; max-height: 50vh; overflow: auto; }
+.bld-artboard-meta-grid figure { margin: 0; display: grid; gap: 4px; font-size: 10px; color: var(--v2-muted); }
+.bld-artboard-meta-grid img { width: 100%; border-radius: 4px; background: #fff; }

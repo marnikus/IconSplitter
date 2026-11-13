@@ -5172,3 +5172,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `lib/svgBuilder/iconmap.ts`, `lib/svgBuilder/usage.ts` (pure, used by phase 2), `svgBuilder/iconmapstore.ts`; scan writes `<root>/icon-map.json`; folder bar line with the full path; assets carry the pair's `aiPath`.
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder + upload_discovery suites 125/125.
+
+## 2026-11-13 — SVG builder: final artboards (phase 3)
+
+- Templates checkable (RULE 25); `lib/svgBuilder/artboards.ts`, `artboardstore.ts`, `artboardview.ts`, `actions/artboards.ts`, `actions/artboardmeta.ts`, `useArtboardSync.ts`, `SvgBuilderArtboards.tsx`, `SvgBuilderArtboardMeta.tsx`; row previews load the shown artboards' icons. bridge_update_gate timeouts widened (passes alone; timed out under full-suite load).
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites incl. artboards 7/7; full vitest 4564 passed / 27 failed: the 9 clean-tree files + bridge_update_gate (load timing, widened).
