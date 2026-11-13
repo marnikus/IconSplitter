@@ -7,6 +7,7 @@ import { bannerMarkup, type HeroPainter } from "./banner";
 import { attr, escapeText, round, textEl } from "./markup";
 import { cellGroupOf } from "./svgAsset";
 import { isEmptySlot } from "./slots";
+import { captionOf } from "./assets";
 import type { BuilderIconAsset, CellFrame, SheetConfig, SheetDocument, SheetLayout, SheetMetadata } from "./types";
 
 export interface ComposeSheetArgs {
@@ -103,7 +104,8 @@ function captionsOf(args: ComposeSheetArgs, placed: readonly Placed[]): string {
   if (!grid.captions) return "";
   const texts = placed.flatMap(({ asset, frame }) => {
     if (asset === undefined) return [];
-    const label = grid.captionCase === "upper" ? asset.label.toUpperCase() : asset.label;
+    const caption = captionOf(asset);
+    const label = grid.captionCase === "upper" ? caption.toUpperCase() : caption;
     const base = frame.captionSize;
     const size = Math.max(3.2, base * Math.min(1, (frame.size * 0.96) / Math.max(1, label.length * base * 0.67)));
     return [textEl({ x: frame.x + frame.size / 2, y: frame.captionY, value: label, size, colour: grid.captionColor,

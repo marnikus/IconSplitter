@@ -1,6 +1,7 @@
 // discovery.ts — the builder's all-folder approved asset discovery. It reuses
 // the upload tab's improved parallel walk, pair cache, preferred-version gate
 // and audit, but turns OFF split-scope hiding and ignores its own output folder.
+import { cleanName } from "../lib/upload/meta";
 import { readTextAt, type DirHandleLike } from "../lib/fs";
 import { isRecord } from "../lib/isrecord";
 import { assetsFromRows } from "../lib/svgBuilder/assets";
@@ -67,8 +68,10 @@ async function exportMetaOf(root: DirHandleLike, row: UploadRowSource): Promise<
 /** The record's metadata block, validated field by field (RULE 13); no title → none. */
 function cleanExportMeta(m: unknown): ExportMeta | null {
   if (!isRecord(m) || typeof m.title !== "string" || m.title.trim() === "") return null;
+  const name = typeof m.name === "string" ? cleanName(m.name) : "";
   return { title: m.title, description: typeof m.description === "string" ? m.description : "",
-    tags: Array.isArray(m.tags) ? m.tags.filter((t): t is string => typeof t === "string") : [] };
+    tags: Array.isArray(m.tags) ? m.tags.filter((t): t is string => typeof t === "string") : [],
+    ...(name !== "" ? { name } : {}) };
 }
 
 export function builderAuditLine(found: BuilderDiscovery): string {

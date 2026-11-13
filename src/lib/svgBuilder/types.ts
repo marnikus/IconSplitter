@@ -29,10 +29,12 @@ export interface BuilderIconAsset {
   description?: string;
   /** The export metadata tags, as written. Also folded into `tags` for search and scoring. */
   keywords?: readonly string[];
+  /** The export metadata's one-word Icon Name (2026-11-13): what the caption under the icon shows. */
+  name?: string;
 }
 
 /** The searchable metadata block of an icon's export record. */
-export interface ExportMeta { title: string; description: string; tags: readonly string[] }
+export interface ExportMeta { title: string; description: string; tags: readonly string[]; name?: string }
 
 /** The approved-row fields the builder needs; structurally supplied by discovery. */
 export interface BuilderRowLike {

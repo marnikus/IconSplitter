@@ -32,7 +32,12 @@ function withMeta(asset: BuilderIconAsset, meta: ExportMeta, title: string): Bui
   const words = [title, meta.description, ...keywords].flatMap(tokens);
   const phrases = keywords.map((k) => k.toLowerCase());
   return { ...asset, title, description: meta.description.trim(), keywords,
-    tags: [...new Set([...asset.tags, ...phrases, ...words])] };
+    tags: [...new Set([...asset.tags, ...phrases, ...words])], ...(meta.name ? { name: meta.name } : {}) };
+}
+
+/** The caption under an icon: its one-word Icon Name, else its label (title or file name). */
+export function captionOf(asset: BuilderIconAsset): string {
+  return asset.name !== undefined && asset.name !== "" ? asset.name : asset.label;
 }
 
 export function assetsFromRows(rows: readonly BuilderRowLike[], metaById?: ReadonlyMap<string, ExportMeta>): BuilderIconAsset[] {

@@ -5157,3 +5157,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - Banner `textPadding` + `titleDx/Dy`, `subtitleDx/Dy` (ranges table, parser, banner.ts `Laid` frame vs inset text box, `data-banner-text` groups); Customize "Text placement"; double-click editing on the artboard (native dblclick listener — happy-dom does not retarget shadow-root events for React); template pictures sized by the shared ZoomSliderBase (prefs `templateZoom`).
 - Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; svg_builder_templates 14/14; svg_builder suites green; full vitest 4544 passed / 26 failed in the 9 clean-tree files.
+
+## 2026-11-13 — SVG builder: captions use the one-word Icon Name
+
+- `discovery.ts` reads `metadata.name` (cleanName), `BuilderIconAsset.name`, `captionOf` (name → label fallback) used by `compose.ts` captions; the library keeps the title.
+- Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; svg_builder suites 94/94; full vitest 4547 passed / 26 failed in the 9 clean-tree files.

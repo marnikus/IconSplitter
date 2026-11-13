@@ -97,6 +97,21 @@ describe("approved-SVG discovery options", () => {
     expect(fog.label).toMatch(/fog/i); // no export.json → file-name fallback
   });
 
+  it("reads the one-word Icon Name from export.json for the captions (2026-11-13)", async () => {
+    const r = root();
+    const first = await discoverBuilderAssets(r);
+    const star = first.assets.find((a) => a.base === "star")!;
+    const exportDir = new FakeDir("export");
+    const record = exportRecord(star.id, { title: "Shining favourite rating star", description: "A bright star", tags: ["star"], name: " Star, bright " });
+    exportDir.children.set("export.json", new FakeFile("export.json", record.length, 3600, record));
+    ((r.children.get("icons") as FakeDir).children.get("ui") as FakeDir).children.set("export", exportDir);
+    const found = await discoverBuilderAssets(r);
+    const named = found.assets.find((a) => a.id === star.id)!;
+    expect(named.name).toBe("star"); // the stored Icon Name rule: first word, lowercase, letters/digits only
+    expect(named.label).toBe("Shining favourite rating star"); // the library keeps the title
+    expect(found.assets.find((a) => a.base === "fog")!.name).toBeUndefined();
+  });
+
   it("ignores an export.json written for a different pair", async () => {
     const r = root();
     const exportDir = new FakeDir("export");
@@ -118,7 +133,7 @@ describe("approved-SVG discovery options", () => {
 });
 
 /** The minimum export.json `parseExportRecord` accepts, with a metadata block. */
-function exportRecord(pairId: string, meta: { title: string; description: string; tags: string[] }): string {
+function exportRecord(pairId: string, meta: { title: string; description: string; tags: string[]; name?: string }): string {
   return JSON.stringify({
     v: 1, pair: { id: pairId, base: "star", suffix: "", dir: OUTSIDE }, source: { svgPath: "", version: 1, approval: "approved", fingerprint: "f" },
     settings: { fingerprint: "s" }, tools: { svgo: {}, eps: {} }, outputs: { svg: null, jpg: null, eps: null }, timestamps: { preparedAt: "" },
