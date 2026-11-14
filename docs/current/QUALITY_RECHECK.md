@@ -5237,3 +5237,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-14 SVG builder: Gap X / Gap Y max 60 → 200 px. Builder suites 153/153 (one earlier run had 15 transient failures that passed alone and on rerun).
 - 2026-11-14 SVG builder: gap strips on the artboard (guides on), shared trackdrag helper. Builder suites 154/154, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: artboard size grips moved just outside the artboard. Builder suites 154/154, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: open artboard/template survives reload (session slice), open artboard always selected. Builder + session suites 172/172, tsc/eslint/quality PASS.

@@ -67,6 +67,9 @@ export interface SessionBuilder {
   /** Artboard locks and × exclusions — restored with the sheet after a reload. */
   lockedIds?: string[];
   excludedIds?: string[];
+  /** The final artboard / template open on the stage (2026-11-14): a reload reopens it, so edits keep saving into it. */
+  editingArtboardId?: string | null;
+  editingTemplateId?: string | null;
 }
 
 /** What only the Upload (stock FTPS) tab adds: its own selection and active row. */
@@ -106,7 +109,7 @@ export const DEFAULT_SVG: SessionSvg = { checked: [], activeId: null, anchorId: 
 
 export const DEFAULT_UPLOAD: SessionUpload = { checked: [], activeId: null, anchorId: null };
 
-export const DEFAULT_BUILDER: SessionBuilder = { checked: [], activeId: null, anchorId: null, lockedIds: [], excludedIds: [] };
+export const DEFAULT_BUILDER: SessionBuilder = { checked: [], activeId: null, anchorId: null, lockedIds: [], excludedIds: [], editingArtboardId: null, editingTemplateId: null };
 
 export const DEFAULT_STOCK_UPLOAD: SessionStockUpload = { checked: [], activeId: null, anchorId: null };
 
@@ -198,6 +201,8 @@ function parseBuilderSlice(raw: unknown): SessionBuilder {
     anchorId: typeof raw.anchorId === "string" ? raw.anchorId : null,
     lockedIds: stringIds(raw.lockedIds),
     excludedIds: stringIds(raw.excludedIds),
+    editingArtboardId: typeof raw.editingArtboardId === "string" ? raw.editingArtboardId : null,
+    editingTemplateId: typeof raw.editingTemplateId === "string" ? raw.editingTemplateId : null,
   };
 }
 

@@ -178,6 +178,29 @@ describe("final artboards — the list under the templates", () => {
     expect(realIcons(savedArtboards()[1].placedIds)).toHaveLength(0); // the second never got the first's icons
   });
 
+  it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    const second = savedArtboards()[1];
+    await typeIn("builder-title", "Before reload");
+    await waitUntil(() => savedArtboards()[1].title === "Before reload", "written back");
+    await settle(50); // the session autosave
+
+    act(() => ui.unmount()); // reload: a fresh app on the same saved state
+    ui = createRoot(host);
+    act(() => { ui.render(<Workbench />); });
+    await click("tab-svg-builder");
+    expect(q(`builder-artboard-${second.id}`)?.className).toContain("is-open");
+    expect(q(`builder-artboard-${second.id}`)?.className).toContain("is-active");
+    expect(q(`builder-template-${tpl.id}`)?.className).toContain("is-active"); // its template is selected above
+    await typeIn("builder-title", "After reload");
+    await waitUntil(() => savedArtboards()[1].title === "After reload", "edit after reload saved into the same artboard");
+    expect(savedArtboards()[0].title).toBe("");
+  });
+
   it("checked templates show their artboards together; rows check with the RULE 25 gestures; bulk remove", async () => {
     await openLibrary();
     await click("builder-template-save");

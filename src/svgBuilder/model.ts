@@ -109,7 +109,25 @@ export function initialBuilderModel(): BuilderModel {
     preview: null, dialog: "none", svgTexts: {}, indexing: null,
     ...savedLists(), editingTemplateId: null, iconMap: null,
     editingArtboardId: null, templateSel: EMPTY_SEL, artboardSel: EMPTY_SEL, artboardMeta: null, leaveTo: null,
+    ...reopened(savedLists()),
   };
+}
+
+/**
+ * What was open on the stage before a reload (2026-11-14): the artboard (its
+ * template and row selected, its metadata back) or the template being edited.
+ * Ids that no longer exist are ignored.
+ */
+export function reopened(lists: Pick<BuilderModel, "templates" | "artboards">): Partial<BuilderModel> {
+  const { editingArtboardId, editingTemplateId } = getAppState().builder;
+  const artboard = lists.artboards.find((a) => a.id === editingArtboardId);
+  if (artboard !== undefined) {
+    return { editingArtboardId: artboard.id, metadata: artboard.metadata,
+      templateSel: { ...EMPTY_SEL, active: artboard.templateId, anchor: artboard.templateId },
+      artboardSel: { ...EMPTY_SEL, active: artboard.id, anchor: artboard.id } };
+  }
+  const template = lists.templates.find((t) => t.id === editingTemplateId);
+  return template === undefined ? {} : { editingTemplateId: template.id, templateSel: { ...EMPTY_SEL, active: template.id, anchor: template.id } };
 }
 
 const EMPTY_SEL: RowSelection = { checked: [], active: null, anchor: null };

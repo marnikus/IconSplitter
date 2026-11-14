@@ -85,6 +85,12 @@ function artboardGesture(ctx: BuilderActionContext, id: string, intent: SelectIn
   if (opens) openArtboard(ctx, artboard);
 }
 
+/** Its template selected; with checked templates, it joins them so its artboard stays in the list. */
+function showing(sel: RowSelection, templateId: string): RowSelection {
+  const checked = sel.checked.length > 0 && !sel.checked.includes(templateId) ? [...sel.checked, templateId] : sel.checked;
+  return { ...sel, active: templateId, anchor: templateId, checked };
+}
+
 /** After the leave question: the artboard becomes the active row and opens. */
 export function openArtboardRow(ctx: BuilderActionContext, id: string): void {
   const artboard = ctx.model.artboards.find((a) => a.id === id);
@@ -104,7 +110,9 @@ function openArtboard(ctx: BuilderActionContext, artboard: FinalArtboard): void 
   const capacity = config.grid.columns * config.grid.rows;
   const ids = artboard.placedIds.slice(0, capacity);
   while (ids.length < capacity) ids.push(emptySlotFor(ids));
-  ctx.dispatch({ config, lockedIds: artboard.lockedIds, metadata: artboard.metadata, editingArtboardId: artboard.id, editingTemplateId: null });
+  ctx.dispatch({ config, lockedIds: artboard.lockedIds, metadata: artboard.metadata, editingArtboardId: artboard.id, editingTemplateId: null,
+    // the open artboard is always listed under a selected template (2026-11-14); callers make it the active row
+    templateSel: showing(ctx.model.templateSel, artboard.templateId) });
   saveSheetConfig(config);
   ctx.setCheckedQuiet(ids);
   prefs(ctx, { layout: "custom", fit: true });
