@@ -353,5 +353,3 @@
 .bld-quick-move-badge { position: absolute; left: 4px; bottom: -22px; padding: 1px 6px; border-radius: 3px; background: #37334D; color: #fff; font-size: 9px; white-space: nowrap; pointer-events: none; }
 .bld-quick-move-apply { position: absolute; right: -6px; top: -30px; }
 
-/* Anchored inside a big area: the toolbar's right edge sits on the anchor (2026-11-14). */
-.bld-quick.is-inside { transform: translateX(-100%); justify-items: end; }

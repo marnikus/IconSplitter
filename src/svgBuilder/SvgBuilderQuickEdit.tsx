@@ -11,48 +11,14 @@ import type { TitleFace } from "../lib/svgBuilder/types";
 import { QUICK_SPECS, quickTargetOf, slotValue, withSlot, type ColorSlot, type QuickKind, type SizeSlot } from "./quickedit";
 import type { BuilderApi } from "./useSvgBuilder";
 import SvgBuilderTextMove from "./SvgBuilderTextMove";
+import { anchorOf } from "./quickplace";
 
 type Panel = "color" | "stroke" | "text" | "move" | null;
 interface Hover { kind: QuickKind; el: Element }
-interface Anchor { x: number; y: number; inside: boolean }
 
 const FACES: ReadonlyArray<{ value: TitleFace; label: string }> = [
   { value: "sans", label: "Grotesk (sans)" }, { value: "serif", label: "Editorial (serif)" }, { value: "mono", label: "Mono" },
 ];
-/**
- * The toolbar's ONE place for an element (2026-11-14), from the artboard's own
- * geometry — never the pointer: the background at the top-right of the grid
- * area, the banner at its top-right, the split block at its top-right (all
- * inside, the toolbar's right edge there), an icon / text / banner icon beside
- * it. It moves only when the layout moves (grid, banner size, padding, text).
- */
-export function anchorOf(hover: Hover, b: BuilderApi, nodes: { board: HTMLElement | null; wrap: HTMLElement }): Anchor | null {
-  const { kind, el } = hover;
-  const { board, wrap } = nodes;
-  const w = wrap.getBoundingClientRect();
-  const zoom = w.width > 0 ? w.width / b.config.artboard.width : 1;
-  const inside = (r: { x: number; y: number; width: number }) => ({ x: (r.x + r.width) * zoom - 8, y: r.y * zoom + 8, inside: true });
-  if (kind === "canvas") return inside(b.layout.content);
-  if (kind === "banner") return b.layout.banner === null ? null : inside(b.layout.banner);
-  const live = liveElement(kind, el, board);
-  if (live === null) return null;
-  const r = live.getBoundingClientRect();
-  if (kind === "block") return { x: r.right - w.left - 8, y: r.top - w.top + 8, inside: true };
-  return { x: r.right - w.left + 6, y: r.top - w.top, inside: false };
-}
-
-/** The element as the sheet shows it now: a redraw replaces the shadow SVG, so marked parts are looked up again. */
-function liveElement(kind: QuickKind, el: Element, board: HTMLElement | null): Element | null {
-  if (el.isConnected) return el;
-  const root = board?.querySelector(".bld-artboard-svg")?.shadowRoot ?? null;
-  const selector = LIVE_SELECTOR[kind];
-  return selector === undefined || root === null ? null : root.querySelector(selector);
-}
-
-const LIVE_SELECTOR: Partial<Record<QuickKind, string>> = {
-  title: '[data-banner-text="title"]', subtitle: '[data-banner-text="subtitle"]', hero: "[data-banner-hero]", block: "[data-split-block]",
-};
-
 function useQuickHover(board: RefObject<HTMLDivElement | null>, pinned: boolean) {
   const [hover, setHover] = useState<Hover | null>(null);
   const hide = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -106,7 +72,7 @@ export default function SvgBuilderQuickEdit({ b, board, wrap }: { b: BuilderApi;
   useEffect(() => { if (hover === null && panel !== null) setPanel(null); }, [hover, panel]); // a panel never outlives its toolbar
   const at = hover === null || wrap.current === null ? null : anchorOf(hover, b, { board: board.current, wrap: wrap.current });
   if (hover === null || at === null) return null;
-  return <div className={`bld-quick${at.inside ? " is-inside" : ""}`} data-testid="builder-quick" data-kind={hover.kind}
+  return <div className="bld-quick" data-testid="builder-quick" data-kind={hover.kind}
     style={{ left: at.x, top: at.y }} onMouseEnter={keep} onMouseMove={keep} onMouseLeave={() => { if (panel === null) later(); }}>
     <QuickBar b={b} kind={hover.kind} panel={panel} toggle={(next) => setPanel(panel === next ? null : next)} />
     <QuickPanel b={b} kind={hover.kind} panel={panel} done={done} move={{ board, wrap, anchor: at }} />

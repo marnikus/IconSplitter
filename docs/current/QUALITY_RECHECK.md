@@ -5222,3 +5222,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `anchorOf` (layout-based anchors), hide timer never hides an open panel + panel reset when the toolbar goes; `SvgBuilderTextMove.tsx` (✥ frame, handles, guide, badge, nudge, Apply); `NumBox` applies in-range values while typing.
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 132/132 (new: stuck-panel regression, fixed anchor, move frame, live number boxes).
+
+## 2026-11-14 — SVG builder: quick toolbar stays inside its own element, background toolbar on free space
+
+- `lib/svgBuilder/freespot.ts` (pure), `svgBuilder/quickplace.ts` (areas + obstacles per element kind); QuickEdit uses it.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites green (quickedit 13/13).

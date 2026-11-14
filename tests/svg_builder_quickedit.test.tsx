@@ -90,9 +90,31 @@ afterEach(() => {
 
 import { cleanHex, smartSwatches } from "../src/lib/svgBuilder/swatches";
 import { quickTargetOf } from "../src/svgBuilder/quickedit";
+import { toolbarSize } from "../src/svgBuilder/quickplace";
+import { freeSpot } from "../src/lib/svgBuilder/freespot";
 
 // Quick editing on the artboard (2026-11-14): hover → toolbar → colour, stroke,
 // font and size panels; smart swatches near the current colour.
+
+describe("free spot for a toolbar", () => {
+  const area = { x: 0, y: 0, width: 300, height: 200 };
+  const size = { width: 60, height: 30 };
+  it("takes the top-right corner inside when it is free", () => {
+    expect(freeSpot(area, size, [])).toEqual({ x: 234, y: 6 });
+  });
+  it("avoids every obstacle and stays inside the area", () => {
+    const icons = [{ x: 200, y: 0, width: 100, height: 100 }, { x: 0, y: 0, width: 120, height: 60 }];
+    const p = freeSpot(area, size, icons)!;
+    const t = { ...p, ...size };
+    for (const o of icons) expect(t.x < o.x + o.width + 4 && o.x < t.x + t.width + 4 && t.y < o.y + o.height + 4 && o.y < t.y + t.height + 4).toBe(false);
+    expect(t.x).toBeGreaterThanOrEqual(0);
+    expect(t.y + t.height).toBeLessThanOrEqual(200);
+  });
+  it("answers null when nothing fits", () => {
+    expect(freeSpot({ x: 0, y: 0, width: 40, height: 20 }, size, [])).toBeNull();
+    expect(freeSpot(area, size, [area])).toBeNull();
+  });
+});
 
 describe("quick edit — the pure part", () => {
   it("suggests six distinct colours near the current one, never the current itself", () => {
@@ -209,7 +231,7 @@ describe("quick toolbar regressions (2026-11-14)", () => {
     expect(q("builder-quick")?.dataset.kind).toBe("icon"); // the editor did not stop working
   });
 
-  it("has one place per element: big areas anchor inside their top-right corner, never at the pointer", async () => {
+  it("has one place per element, never at the pointer", async () => {
     await openLibrary();
     const bg = shadow().querySelector('[data-artboard="true"]')!;
     await hover(bg, 30, 30);
@@ -218,7 +240,25 @@ describe("quick toolbar regressions (2026-11-14)", () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 500)); });
     await hover(bg, 400, 300); // a later visit from another spot: the same place
     expect(`${q("builder-quick")!.style.left}|${q("builder-quick")!.style.top}`).toBe(one);
-    expect(q("builder-quick")!.className).toContain("is-inside");
+  });
+
+  it("puts the background toolbar on free background: inside the artboard, clear of the banner and every icon cell", async () => {
+    await openLibrary();
+    await hover(shadow().querySelector('[data-artboard="true"]')!, 30, 30);
+    const bar = q("builder-quick")!;
+    const t = { x: parseFloat(bar.style.left), y: parseFloat(bar.style.top), width: toolbarSize("canvas").width, height: toolbarSize("canvas").height };
+    const config = JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.config.v1") ?? "{}");
+    expect(t.x).toBeGreaterThanOrEqual(0);
+    expect(t.y).toBeGreaterThanOrEqual(0);
+    expect(t.x + t.width).toBeLessThanOrEqual(config.artboard.width);
+    const hit = (r: { x: number; y: number; width: number; height: number }) =>
+      t.x < r.x + r.width && r.x < t.x + t.width && t.y < r.y + r.height && r.y < t.y + t.height;
+    const cells = [...host.querySelectorAll<HTMLElement>(".bld-cell, .bld-cell-empty")].map((c) => ({
+      x: parseFloat(c.style.left), y: parseFloat(c.style.top), width: parseFloat(c.style.width), height: parseFloat(c.style.height),
+    }));
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells.some(hit)).toBe(false);
+    expect(t.x).toBeGreaterThanOrEqual(config.banner.size); // the left banner is not free background
   });
 });
 
