@@ -11,9 +11,10 @@ import { saveTemplates } from "../templatestore";
 import { clampZoom } from "../../lib/zoom";
 import { commitConfig, prefs } from "./config";
 import { saveArtboards } from "../artboardstore";
+import { blockLeave, editedTemplate } from "./leaveguard";
 
 type TemplateActions = Pick<BuilderActions,
-  "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "renameTemplate" | "removeTemplate" | "setTemplateZoom">;
+  "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "renameTemplate" | "removeTemplate" | "setTemplateZoom" | "resetTemplate">;
 
 export function templateActions(get: () => BuilderActionContext): TemplateActions {
   return {
@@ -23,6 +24,7 @@ export function templateActions(get: () => BuilderActionContext): TemplateAction
     renameTemplate: (id, name) => renameTemplate(get(), id, name),
     removeTemplate: (id) => removeTemplate(get(), id),
     setTemplateZoom: (px) => prefs(get(), { templateZoom: clampZoom(px) }),
+    resetTemplate: () => resetTemplate(get()),
   };
 }
 
@@ -34,7 +36,7 @@ function store(ctx: BuilderActionContext, templates: readonly SheetTemplate[], e
 const templateId = () => `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 /** "Save template": the one being edited gets the current look, and editing ends (2026-11-14); otherwise a new one. */
-function saveTemplate(ctx: BuilderActionContext): void {
+export function saveTemplate(ctx: BuilderActionContext): void {
   const editing = ctx.model.templates.find((t) => t.id === ctx.model.editingTemplateId);
   if (editing === undefined) return saveAsNew(ctx);
   const updated: SheetTemplate = { ...editing, config: lookOf(ctx.model.config), updated: new Date().toISOString() };
@@ -51,13 +53,23 @@ function saveAsNew(ctx: BuilderActionContext): void {
 }
 
 /** Opens a template on the sheet to edit its design, with its sample words (one undo entry). */
-function editTemplate(ctx: BuilderActionContext, id: string): void {
+/** ✎: opens the template's design; a changed template first asks Save / Discard (`guard` false = already answered). */
+export function editTemplate(ctx: BuilderActionContext, id: string, guard = true): void {
   const template = ctx.model.templates.find((t) => t.id === id);
   if (template === undefined) return ctx.say("That template is gone", true);
+  if (guard && blockLeave(ctx, { kind: "template", id })) return;
   commitConfig(ctx, { config: templateConfig(template), label: `Template “${template.name}”` });
   ctx.dispatch({ editingTemplateId: id, editingArtboardId: null }); // editing the blueprint, not an artboard
   prefs(ctx, { layout: "custom", fit: true });
   ctx.say(`Editing template “${template.name}” — change the sheet, then Save template`);
+}
+
+/** Reset (2026-11-14): the sheet back to the edited template's saved look — one undo step. */
+function resetTemplate(ctx: BuilderActionContext): void {
+  const template = editedTemplate(ctx.model);
+  if (template === null) return;
+  commitConfig(ctx, { config: templateConfig(template), label: `Reset “${template.name}”` });
+  ctx.say(`Template “${template.name}” reset to its saved look`);
 }
 
 function renameTemplate(ctx: BuilderActionContext, id: string, name: string): void {

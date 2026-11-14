@@ -43,6 +43,11 @@ export function templateConfig(template: SheetTemplate): SheetConfig {
   return parseSheetConfig(template.config);
 }
 
+/** True when the sheet's look differs from the template's saved look (unsaved edits, 2026-11-14). */
+export function templateChanged(template: SheetTemplate, config: SheetConfig): boolean {
+  return JSON.stringify(lookOf(config)) !== JSON.stringify(lookOf(templateConfig(template)));
+}
+
 /** The template's look on the current sheet: its words and hero are kept. */
 export function applyTemplate(current: SheetConfig, template: SheetTemplate): SheetConfig {
   return applyCopy(template.config, current);

@@ -10,6 +10,7 @@ import { cleanTemplateName } from "../../lib/svgBuilder/templates";
 import { emptySlotFor, placedOnly } from "../../lib/svgBuilder/slots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
+import { blockLeave } from "./leaveguard";
 import { saveSheetConfig } from "../configstore";
 import { visibleArtboards } from "../artboardview";
 import { prefs } from "./config";
@@ -50,9 +51,10 @@ function templateGesture(ctx: BuilderActionContext, id: string, intent: SelectIn
 const artboardId = () => `art-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 /** "+ Artboard": a new, empty final artboard of the template, opened on the stage to pick icons. */
-function addArtboard(ctx: BuilderActionContext, templateId: string): void {
+export function addArtboard(ctx: BuilderActionContext, templateId: string, guard = true): void {
   const template = ctx.model.templates.find((t) => t.id === templateId);
   if (template === undefined) return ctx.say("That template is gone", true);
+  if (guard && blockLeave(ctx, { kind: "add-artboard", id: templateId })) return;
   if (ctx.model.artboards.length >= ARTBOARD_LIMIT) return ctx.say(`At most ${ARTBOARD_LIMIT} artboards — remove some first`, true);
   const created = newArtboard(template, ctx.model.artboards, new Date().toISOString(), artboardId());
   storeArtboards(ctx, [...ctx.model.artboards, created]);
@@ -66,9 +68,19 @@ function addArtboard(ctx: BuilderActionContext, templateId: string): void {
 function artboardGesture(ctx: BuilderActionContext, id: string, intent: SelectIntent): void {
   const visibleIds = visibleArtboards(ctx.model).map((a) => a.id);
   const next = applyRowGesture(ctx.model.artboardSel, { id, intent, visibleIds });
-  ctx.dispatch({ artboardSel: next });
   const artboard = ctx.model.artboards.find((a) => a.id === next.active);
-  if (artboard !== undefined && next.active !== ctx.model.editingArtboardId) openArtboard(ctx, artboard);
+  const opens = artboard !== undefined && next.active !== ctx.model.editingArtboardId;
+  if (opens && blockLeave(ctx, { kind: "artboard", id: artboard.id })) return; // a changed template asks first
+  ctx.dispatch({ artboardSel: next });
+  if (opens) openArtboard(ctx, artboard);
+}
+
+/** After the leave question: the artboard becomes the active row and opens. */
+export function openArtboardRow(ctx: BuilderActionContext, id: string): void {
+  const artboard = ctx.model.artboards.find((a) => a.id === id);
+  if (artboard === undefined) return;
+  ctx.dispatch({ artboardSel: { ...ctx.model.artboardSel, active: id, anchor: id } });
+  openArtboard(ctx, artboard);
 }
 
 /**

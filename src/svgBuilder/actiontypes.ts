@@ -106,6 +106,11 @@ export interface BuilderActions {
   /** One honest toast line (status). */
   say: (message: string, error?: boolean) => void;
   closeDialog: () => void;
+  /** Unsaved template edits (2026-11-14): back to the saved look (undoable); the leave question's three answers. */
+  resetTemplate: () => void;
+  leaveSave: () => void;
+  leaveDiscard: () => void;
+  leaveCancel: () => void;
   presetOfModel: () => SheetPreset;
   /** Saved templates (2026-11-13): save the look (updates the one being edited), save as new, open to edit, rename, remove. */
   saveTemplate: () => void;

@@ -96,6 +96,7 @@ import {
   applyTemplate, lookOf, newTemplate, parseTemplates, templateName, templatePreviewSvg,
 } from "../src/lib/svgBuilder/templates";
 import { BUILDER_TEMPLATES_KEY } from "../src/svgBuilder/templatestore";
+import { BUILDER_ARTBOARDS_KEY } from "../src/svgBuilder/artboardstore";
 
 // Saved sheet templates (2026-11-13): the look (grid, icon, banner and text style)
 // saved as compact blocks under the builder — removable, editable, renamable.
@@ -208,6 +209,61 @@ describe("templates — the window under the builder", () => {
     expect(text("builder-cells")).toContain("of 32 cells");
     await click("builder-undo");
     expect(text("builder-cells")).toContain("of 36 cells");
+  });
+});
+
+describe("unsaved template changes (2026-11-14)", () => {
+  it("shows Save template + Reset on the stage after the first change; Reset is undoable", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    const [first] = saved();
+    await click(`builder-template-edit-${first.id}`);
+    expect(q("builder-stage-template-save")).toBeNull(); // nothing changed yet
+    await click("builder-rows-dec");
+    expect(text("builder-cells")).toContain("of 24 cells");
+    expect(q("builder-stage-template-save")).not.toBeNull();
+    await click("builder-stage-template-reset");
+    expect(text("builder-cells")).toContain("of 32 cells");
+    expect(q("builder-stage-template-save")).toBeNull();
+    await click("builder-undo"); // the reset is one undo step
+    expect(text("builder-cells")).toContain("of 24 cells");
+    await click("builder-stage-template-save");
+    expect(saved()[0].config.grid.rows).toBe(3);
+    expect(q("builder-template-editing")).toBeNull(); // saved: editing ends
+    expect(q("builder-stage-template-save")).toBeNull();
+  });
+
+  it("asks Save / Discard / Cancel before leaving a changed template", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    await click("builder-template-save");
+    const [t1, t2] = saved();
+    await click(`builder-template-edit-${t1.id}`);
+    await click(`builder-template-edit-${t2.id}`); // unchanged: no question
+    expect(q("builder-leave-dialog")).toBeNull();
+    expect(q(`builder-template-${t2.id}`)?.className).toContain("is-editing");
+
+    await click("builder-rows-dec");
+    await click(`builder-template-edit-${t1.id}`);
+    expect(q("builder-leave-dialog")).not.toBeNull();
+    await click("builder-leave-cancel"); // stays, changes kept
+    expect(q("builder-leave-dialog")).toBeNull();
+    expect(q(`builder-template-${t2.id}`)?.className).toContain("is-editing");
+    expect(text("builder-cells")).toContain("of 24 cells");
+
+    await click(`builder-template-edit-${t1.id}`);
+    await click("builder-leave-discard"); // goes on, the template keeps its saved look
+    expect(q(`builder-template-${t1.id}`)?.className).toContain("is-editing");
+    expect(saved()[1].config.grid.rows).toBe(4);
+
+    await click("builder-rows-dec");
+    await click(`builder-template-add-artboard-${t2.id}`);
+    expect(q("builder-leave-dialog")).not.toBeNull();
+    await click("builder-leave-save"); // saves, then goes on to the new artboard
+    expect(saved()[0].config.grid.rows).toBe(3);
+    expect(q("builder-leave-dialog")).toBeNull();
+    expect(q("builder-template-editing")).toBeNull();
+    expect(JSON.parse(localStorage.getItem(BUILDER_ARTBOARDS_KEY) ?? "[]")).toHaveLength(1);
   });
 });
 

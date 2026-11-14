@@ -23,7 +23,10 @@ import type { FinalArtboard } from "../lib/svgBuilder/artboards";
 import type { RowSelection } from "../lib/reviewselect";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 
-export type BuilderDialog = "none" | "metadata" | "brief" | "preset" | "artboards-metadata";
+export type BuilderDialog = "none" | "metadata" | "brief" | "preset" | "artboards-metadata" | "leave-template";
+
+/** Where the user was going when a changed template asked Save / Discard (2026-11-14). */
+export interface LeaveTarget { kind: "template" | "artboard" | "add-artboard"; id: string }
 
 /** One artboard's exact metadata request: the 768 px JPEG that will be sent. */
 export interface ArtboardMetaRequest { id: string; name: string; preview: string }
@@ -89,6 +92,7 @@ export interface BuilderModel {
   templateSel: RowSelection;
   artboardSel: RowSelection;
   artboardMeta: ArtboardMetaPlan | null;
+  leaveTo: LeaveTarget | null;
 }
 
 export interface BuilderAction { type: "patch"; patch: Partial<BuilderModel> }
@@ -104,7 +108,7 @@ export function initialBuilderModel(): BuilderModel {
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null,
     preview: null, dialog: "none", svgTexts: {}, indexing: null,
     ...savedLists(), editingTemplateId: null, iconMap: null,
-    editingArtboardId: null, templateSel: EMPTY_SEL, artboardSel: EMPTY_SEL, artboardMeta: null,
+    editingArtboardId: null, templateSel: EMPTY_SEL, artboardSel: EMPTY_SEL, artboardMeta: null, leaveTo: null,
   };
 }
 

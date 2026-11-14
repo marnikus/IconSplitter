@@ -12,6 +12,7 @@ import { artboardActions } from "./artboards";
 import { artboardMetaActions } from "./artboardmeta";
 import { declineActions } from "./decline";
 import { uiActions } from "./ui";
+import { leaveActions } from "./leave";
 
 export function createBuilderActions(get: () => BuilderActionContext): BuilderActions {
   const folder = folderActions(get);
@@ -26,8 +27,9 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const artboards = artboardActions(get);
   const artboardMeta = artboardMetaActions(get);
   const decline = declineActions(get);
+  const leave = leaveActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave,
     presets: get().presetActions,
   };
 }

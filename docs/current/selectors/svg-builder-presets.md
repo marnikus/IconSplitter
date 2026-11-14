@@ -27,3 +27,5 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 | `builder-cell-decline-<cell>` | 🗑 on an artboard icon | declines the item in Generate SVG; undoable |
 | `builder-cell-use-<cell>` / `builder-toggle-usage` | artboard use index / # Used toggle | preview-only; `data-used`; pref `showUsage` |
 | `builder-used-<assetId>` | tile badge (always, `is-zero` when unused) | `×N` saved use (exported artboards), `+M` on artboards whose use is not saved yet; the tooltip says both |
+| `builder-stage-actions` | stage top-right | `builder-stage-template-reset`, `builder-stage-template-save` (only with unsaved template edits), `builder-reshuffle-stage` |
+| `builder-leave-dialog` | Save changes to the template? | `builder-leave-save`, `builder-leave-discard`, `builder-leave-cancel` |
