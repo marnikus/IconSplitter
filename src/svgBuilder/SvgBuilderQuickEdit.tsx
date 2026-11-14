@@ -7,13 +7,15 @@
 // The toolbar sits outside the scaled artboard, so it never scales with zoom.
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { cleanHex, smartSwatches } from "../lib/svgBuilder/swatches";
+import { bothScale, withBothScale } from "../lib/svgBuilder/herosize";
+import { RANGES } from "../lib/svgBuilder/ranges";
 import type { TitleFace } from "../lib/svgBuilder/types";
 import { QUICK_SPECS, quickTargetOf, slotValue, withSlot, type ColorSlot, type QuickKind, type SizeSlot } from "./quickedit";
 import type { BuilderApi } from "./useSvgBuilder";
 import SvgBuilderTextMove from "./SvgBuilderTextMove";
 import { anchorOf } from "./quickplace";
 
-type Panel = "color" | "stroke" | "text" | "move" | null;
+type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | null;
 interface Hover { kind: QuickKind; el: Element }
 
 const FACES: ReadonlyArray<{ value: TitleFace; label: string }> = [
@@ -64,13 +66,26 @@ function useDismissPanel(panel: Panel, close: () => void): void {
 
 const isText = (kind: QuickKind): kind is "title" | "subtitle" => kind === "title" || kind === "subtitle";
 
+/**
+ * While a panel is open the toolbar stays exactly where it opened (2026-11-14):
+ * editing a value resizes the element, and a toolbar that followed it jumped
+ * away from the pointer mid-edit. It moves again only after the panel closes.
+ */
+function usePinnedAnchor<T>(live: T | null, pinned: boolean): T | null {
+  const [frozen, setFrozen] = useState<T | null>(null);
+  if (pinned && frozen === null && live !== null) setFrozen(live);
+  if (!pinned && frozen !== null) setFrozen(null);
+  return pinned && frozen !== null ? frozen : live;
+}
+
 export default function SvgBuilderQuickEdit({ b, board, wrap }: { b: BuilderApi; board: RefObject<HTMLDivElement | null>; wrap: RefObject<HTMLDivElement | null> }) {
   const [panel, setPanel] = useState<Panel>(null);
   const { hover, keep, later, clear } = useQuickHover(board, panel !== null);
   const done = useCallback(() => { setPanel(null); clear(); }, [clear]);
   useDismissPanel(panel, done);
   useEffect(() => { if (hover === null && panel !== null) setPanel(null); }, [hover, panel]); // a panel never outlives its toolbar
-  const at = hover === null || wrap.current === null ? null : anchorOf(hover, b, { board: board.current, wrap: wrap.current });
+  const live = hover === null || wrap.current === null ? null : anchorOf(hover, b, { board: board.current, wrap: wrap.current });
+  const at = usePinnedAnchor(live, panel !== null);
   if (hover === null || at === null) return null;
   return <div className="bld-quick" data-testid="builder-quick" data-kind={hover.kind}
     style={{ left: at.x, top: at.y }} onMouseEnter={keep} onMouseMove={keep} onMouseLeave={() => { if (panel === null) later(); }}>
@@ -91,6 +106,7 @@ function QuickBar({ b, kind, panel, toggle }: { b: BuilderApi; kind: QuickKind; 
     {isText(kind) && <button type="button" className={`bld-quick-btn${panel === "move" ? " is-on" : ""}`}
       data-testid="builder-quick-move" title="Move this text right on the artboard" aria-label="Move this text"
       onClick={() => toggle("move")}>✥</button>}
+    {kind === "hero" && <HeroButtons toggle={toggle} />}
   </div>;
 }
 
@@ -101,8 +117,49 @@ function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: Quick
   if (panel === "color") return <ColorPanel b={b} slot={spec.color} onDone={done} />;
   if (panel === "stroke" && spec.stroke) return <SizePanel b={b} slot={spec.stroke} testid="builder-quick-stroke-range" />;
   if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} />;
+  return <KindPanel b={b} kind={kind} panel={panel} done={done} move={move} />;
+}
+
+/** Panels only some elements have: a text's move frame, the banner icon's circle and sizes. */
+function KindPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: QuickKind; panel: Panel; done: () => void; move: MoveCtx }) {
+  if (kind === "hero" && (panel === "ring" || panel === "scale")) return <HeroPanel b={b} panel={panel} />;
   if (panel === "move" && isText(kind)) return <MovePortal b={b} board={move.board} wrap={move.wrap} which={kind} anchor={move.anchor} onDone={done} />;
   return null;
+}
+
+/** The banner icon's own extra buttons (2026-11-14): its circle, and the size of both. */
+function HeroButtons({ toggle }: { toggle: (p: Exclude<Panel, null>) => void }) {
+  return <>
+    <button type="button" className="bld-quick-btn" data-testid="builder-quick-ring" title="Circle: stroke and size" aria-label="Circle stroke and size"
+      onClick={() => toggle("ring")}>◯</button>
+    <button type="button" className="bld-quick-btn" data-testid="builder-quick-scale" title="Size: icon, circle, or both at once" aria-label="Icon and circle size"
+      onClick={() => toggle("scale")}>⤢</button>
+  </>;
+}
+
+const RING_STROKE = { label: "Circle stroke", group: "banner" as const, key: "ringStroke", range: RANGES.ringStroke, unit: "px" };
+const RING_SIZE = { label: "Circle size", group: "banner" as const, key: "ringScale", range: RANGES.ringScale, unit: "%" };
+const HERO_SIZE = { label: "Icon size", group: "banner" as const, key: "heroScale", range: RANGES.heroScale, unit: "%" };
+
+/** ◯: the circle's stroke and size. ⤢: icon size, circle size, and both together (their ratio kept). */
+function HeroPanel({ b, panel }: { b: BuilderApi; panel: "ring" | "scale" }) {
+  if (panel === "ring") {
+    return <div className="bld-quick-stack" data-testid="builder-quick-ring-panel">
+      <SizePanel b={b} slot={RING_STROKE} testid="builder-quick-ring-stroke" />
+      <SizePanel b={b} slot={RING_SIZE} testid="builder-quick-ring-size" />
+    </div>;
+  }
+  const banner = b.config.banner;
+  return <div className="bld-quick-stack" data-testid="builder-quick-scale-panel">
+    <div className="bld-quick-panel">
+      <div className="bld-quick-row"><b className="bld-quick-title">Icon + circle</b><span className="bld-quick-value">{bothScale(banner)} %</span></div>
+      <input type="range" className="bld-range" data-testid="builder-quick-both" aria-label="Icon and circle size together"
+        min={RANGES.heroScale.min} max={RANGES.heroScale.max} step={RANGES.heroScale.step} value={bothScale(banner)}
+        onChange={(e) => b.actions.setConfig({ ...b.config, banner: { ...banner, ...withBothScale(banner, Number(e.target.value)) } }, "Icon and circle size", true)} />
+    </div>
+    <SizePanel b={b} slot={HERO_SIZE} testid="builder-quick-hero-size" />
+    <SizePanel b={b} slot={RING_SIZE} testid="builder-quick-ring-size" />
+  </div>;
 }
 
 function ColorPanel({ b, slot, onDone }: { b: BuilderApi; slot: ColorSlot; onDone: () => void }) {

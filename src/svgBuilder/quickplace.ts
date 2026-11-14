@@ -22,7 +22,7 @@ const LIVE_SELECTOR: Partial<Record<QuickKind, string>> = {
 /** The toolbar's size: a 20 px dot, then 26 px buttons, 6 px gaps, padding and border. */
 export function toolbarSize(kind: QuickKind): Size {
   const s = QUICK_SPECS[kind];
-  const buttons = (s.stroke ? 1 : 0) + (s.text ? 1 : 0) + (kind === "title" || kind === "subtitle" ? 1 : 0);
+  const buttons = (s.stroke ? 1 : 0) + (s.text ? 1 : 0) + (kind === "title" || kind === "subtitle" ? 1 : 0) + (kind === "hero" ? 2 : 0);
   return { width: 12 + 20 + buttons * 32, height: 38 };
 }
 

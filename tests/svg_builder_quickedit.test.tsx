@@ -315,4 +315,46 @@ describe("number boxes apply as you type", () => {
     await act(async () => { (q("builder-width") as HTMLInputElement).blur(); q("builder-width")!.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
     expect(config().artboard.width).toBe(3000); // left the box: clamped
   });
+
+  it("the banner icon's toolbar controls its circle stroke and size, the icon's size, and both at once (2026-11-14)", async () => {
+    await openLibrary();
+    const hero = shadow().querySelector("[data-banner-hero]");
+    expect(hero).not.toBeNull();
+    await hover(hero!);
+    expect(q("builder-quick")?.dataset.kind).toBe("hero");
+    await click("builder-quick-stroke");
+    await slide("builder-quick-stroke-range", "2.2");
+    expect(config().banner.heroStroke).toBe(2.2);
+    await click("builder-quick-ring");
+    await slide("builder-quick-ring-stroke", "3");
+    await slide("builder-quick-ring-size", "120");
+    expect(config().banner).toMatchObject({ ringStroke: 3, ringScale: 120, heroStroke: 2.2 });
+    await click("builder-quick-scale");
+    await slide("builder-quick-hero-size", "100");
+    await slide("builder-quick-both", "150");
+    expect(config().banner).toMatchObject({ heroScale: 150, ringScale: 180 }); // the circle keeps its 1.2× ratio
+    expect(shadow().querySelector("[data-banner-ring]")?.getAttribute("stroke-width")).toBe("3");
+  });
+
+  it("keeps the toolbar where it opened while its panel is open, even when the element moves (2026-11-14)", async () => {
+    await openLibrary();
+    let shift = 0;
+    const real = Element.prototype.getBoundingClientRect;
+    const spy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this.getAttribute("data-banner-text") !== "subtitle") return real.call(this);
+      return { left: 100 + shift, top: 50 + shift, right: 400 + shift, bottom: 110 + shift, width: 300, height: 60, x: 100 + shift, y: 50 + shift, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      await hover(shadow().querySelector('[data-banner-text="subtitle"]')!);
+      const at = () => `${q("builder-quick")!.style.left}|${q("builder-quick")!.style.top}`;
+      const opened = at();
+      await click("builder-quick-text");
+      shift = 40; // editing the size moves the text
+      await slide("builder-quick-size", "20");
+      expect(at()).toBe(opened);
+      await act(async () => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+      await hover(shadow().querySelector('[data-banner-text="subtitle"]')!);
+      expect(at()).not.toBe(opened); // closed and reopened: it goes to the element's new place
+    } finally { spy.mockRestore(); }
+  });
 });

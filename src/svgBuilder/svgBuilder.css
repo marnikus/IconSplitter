@@ -353,3 +353,6 @@
 .bld-quick-move-badge { position: absolute; left: 4px; bottom: -22px; padding: 1px 6px; border-radius: 3px; background: #37334D; color: #fff; font-size: 9px; white-space: nowrap; pointer-events: none; }
 .bld-quick-move-apply { position: absolute; right: -6px; top: -30px; }
 
+
+/* Banner icon panels: several sliders stacked (2026-11-14). */
+.bld-quick-stack { display: grid; gap: 6px; }

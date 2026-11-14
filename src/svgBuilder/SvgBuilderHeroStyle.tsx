@@ -5,9 +5,12 @@ import { RANGES } from "../lib/svgBuilder/ranges";
 import type { SheetConfig } from "../lib/svgBuilder/types";
 import type { Edit } from "./SvgBuilderCustomize";
 import { Slider } from "./SvgBuilderFields";
+import { bothScale, withBothScale } from "../lib/svgBuilder/herosize";
 
 export default function HeroStyle({ n, edit }: { n: SheetConfig["banner"]; edit: Edit }) {
   return <div className="bld-text-placement" data-testid="builder-hero-style">
+    <Slider label="Icon + circle size" value={bothScale(n)} range={RANGES.heroScale} unit="%" testid="builder-hero-both"
+      onChange={(v) => edit("banner", withBothScale(n, v), true)} />
     <div className="bld-two">
       <Slider label="Icon size" value={n.heroScale} range={RANGES.heroScale} unit="%" testid="builder-hero-scale"
         onChange={(heroScale) => edit("banner", { heroScale }, true)} />

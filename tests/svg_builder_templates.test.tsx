@@ -2,6 +2,7 @@
 // svg_builder_templates.test.tsx — saved templates on a REAL scanned library
 // (fake folder of approved pairs → real discovery, selection, layout, compose
 // and UI). Covers FIXES A1–A7, B1–B8 and the reference controls in §C.
+import { withBothScale } from "../src/lib/svgBuilder/herosize";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -376,6 +377,13 @@ describe("hero style", () => {
 
   it("shows the four controls under Hero glyph", async () => {
     await openLibrary();
-    for (const id of ["builder-hero-scale", "builder-hero-stroke", "builder-ring-scale", "builder-ring-stroke"]) expect(q(id), id).not.toBeNull();
+    for (const id of ["builder-hero-both", "builder-hero-scale", "builder-hero-stroke", "builder-ring-scale", "builder-ring-stroke"]) expect(q(id), id).not.toBeNull();
+  });
+
+  it("Icon + circle size resizes both, keeping their ratio and each range (2026-11-14)", () => {
+    const banner = { ...DEFAULT_CONFIG.banner, heroScale: 80, ringScale: 120 };
+    expect(withBothScale(banner, 160)).toEqual({ heroScale: 160, ringScale: 240 });
+    expect(withBothScale(banner, 240)).toEqual({ heroScale: 240, ringScale: RANGES.ringScale.max });
+    expect(withBothScale(banner, 1)).toEqual({ heroScale: RANGES.heroScale.min, ringScale: 60 });
   });
 });
