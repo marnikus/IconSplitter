@@ -6,6 +6,7 @@ import { useState, type PointerEvent as ReactPointerEvent } from "react";
 import { artboardSizeAfter, bannerSizeAfter, edgeHandles, paddingAfter, type EdgeHandle } from "../lib/svgBuilder/edgedrag";
 import type { SheetConfig } from "../lib/svgBuilder/types";
 import type { BuilderApi } from "./useSvgBuilder";
+import { dragGesture, trackDrag } from "./trackdrag";
 
 /** The sheet after a drag of (dx, dy) artboard pixels from the start config. */
 function dragged(start: SheetConfig, h: EdgeHandle, d: { dx: number; dy: number }): SheetConfig {
@@ -30,20 +31,11 @@ function badgeOf(c: SheetConfig, h: EdgeHandle): string {
 
 function useEdgeDrag(b: BuilderApi, zoom: number, setActive: (id: string | null) => void) {
   return (e: ReactPointerEvent, h: EdgeHandle) => {
-    e.preventDefault();
-    e.stopPropagation();
     const start = b.config;
-    const from = { x: e.clientX, y: e.clientY };
     const label = LABEL[h.kind](h.side);
-    const gesture = `edge-${h.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; // this drag = one undo step
+    const gesture = dragGesture(`edge-${h.id}`); // this drag = one undo step
     setActive(h.id);
-    const onMove = (ev: PointerEvent) => {
-      const d = { dx: (ev.clientX - from.x) / zoom, dy: (ev.clientY - from.y) / zoom };
-      b.actions.setConfig(dragged(start, h, d), label, gesture);
-    };
-    const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); setActive(null); };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    trackDrag(e, zoom, (d) => b.actions.setConfig(dragged(start, h, d), label, gesture), () => setActive(null));
   };
 }
 

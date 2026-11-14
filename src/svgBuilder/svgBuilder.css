@@ -379,3 +379,15 @@
 .bld-edge-handle.is-c { width: 16px; height: 16px; border-radius: 4px; cursor: nwse-resize; }
 .bld-edge-handle.is-size { background: #2F9E8F; }
 .bld-edge-handle.is-size:hover, .bld-edge-handle.is-size.is-on { background: #3CC2AF; }
+
+/* Gap strips (2026-11-14, guides on): invisible until the pointer is near a gap; the whole strip drags. */
+.bld-gaps { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.bld-gap-zone { position: absolute; pointer-events: auto; touch-action: none; }
+.bld-gap-zone.is-x { cursor: ew-resize; }
+.bld-gap-zone.is-y { cursor: ns-resize; }
+.bld-gap-zone:hover, .bld-gap-zone.is-on { background: #5B5BD61F; outline: 1px dashed #5B5BD6; }
+.bld-gap-grip { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(var(--edge-z, 1));
+  border: 2px solid #5B5BD6; border-radius: 2px; opacity: 0; transition: opacity .12s; pointer-events: none; }
+.bld-gap-zone.is-x .bld-gap-grip { width: 4px; height: 18px; border-top: 0; border-bottom: 0; }
+.bld-gap-zone.is-y .bld-gap-grip { width: 18px; height: 4px; border-left: 0; border-right: 0; }
+.bld-gap-zone:hover .bld-gap-grip, .bld-gap-zone.is-on .bld-gap-grip { opacity: 1; }

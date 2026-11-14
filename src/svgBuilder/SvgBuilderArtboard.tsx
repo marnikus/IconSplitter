@@ -10,6 +10,7 @@ import { useInlineText } from "./SvgBuilderInlineText";
 import SvgBuilderGuides from "./SvgBuilderGuides";
 import SvgBuilderQuickEdit from "./SvgBuilderQuickEdit";
 import SvgBuilderEdgeHandles from "./SvgBuilderEdgeHandles";
+import SvgBuilderGapHandles from "./SvgBuilderGapHandles";
 import { addHeroHitAreas } from "./herohit";
 
 export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; doc: SheetDocument; zoom: number }) {
@@ -32,6 +33,7 @@ export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; do
       <SvgBuilderGuides b={b} zoom={zoom} />
       <CellOverlays b={b} placed={b.checked} />
       {inline.editor}
+      <SvgBuilderGapHandles b={b} zoom={zoom} />
       <SvgBuilderEdgeHandles b={b} zoom={zoom} />
     </div>
     <span className="bld-artboard-caption">ARTBOARD 01 · {width} × {height}</span>

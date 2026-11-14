@@ -422,4 +422,28 @@ describe("number boxes apply as you type", () => {
     await click("builder-undo");
     expect(config().artboard).toMatchObject({ width: a.width + 100, height: a.height - 20 });
   });
+
+  it("with guides on, the gaps between icons drag right on the artboard: Gap X and Gap Y, one undo step each (2026-11-14)", async () => {
+    await openLibrary();
+    expect(host.querySelector(".bld-gap-zone")).toBeNull(); // guides off: no gap strips
+    await click("builder-toggle-guides");
+    const drag = async (id: string, dx: number, dy: number) => {
+      const zone = q(id)!;
+      await act(async () => { zone.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 200, clientY: 200 })); });
+      await act(async () => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 200 + dx, clientY: 200 + dy })); });
+      expect(q("builder-gap-badge")?.textContent).toMatch(/^Gap [XY] \d+ px$/);
+      await act(async () => { window.dispatchEvent(new PointerEvent("pointerup", {})); });
+    };
+    const g = config().grid;
+    expect(q("builder-gap-x-0")).not.toBeNull(); // between the first two icons of row 1
+    expect(q(`builder-gap-x-${g.columns - 1}`)).toBeNull(); // the last column has no right neighbour
+    await drag("builder-gap-x-0", 30, 999);
+    expect(config().grid.gapX).toBeGreaterThan(g.gapX);
+    expect(config().grid.gapY).toBe(g.gapY);
+    await drag("builder-gap-y-0", 999, -99999); // clamped at 0
+    expect(config().grid.gapY).toBe(0);
+    await click("builder-undo");
+    expect(config().grid.gapY).toBe(g.gapY);
+    expect(config().grid.gapX).toBeGreaterThan(g.gapX);
+  });
 });
