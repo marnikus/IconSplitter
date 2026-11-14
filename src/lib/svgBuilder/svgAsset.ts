@@ -7,6 +7,7 @@ import { fnv1a32 } from "../pairing";
 import type { BuilderIconAsset, CellFrame, SheetConfig } from "./types";
 
 const DRAWABLE = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "use"]);
+const OPACITY = ["opacity", "fill-opacity", "stroke-opacity"];
 const UNSAFE = new Set(["script", "foreignobject", "handler", "listener", "iframe", "object", "embed"]);
 
 export interface CellSvgArgs {
@@ -59,6 +60,7 @@ function recolor(root: Element): void {
   for (const el of [root, ...Array.from(root.getElementsByTagName("*"))]) {
     if (UNSAFE.has(name(el))) continue;
     el.removeAttribute("style");
+    for (const a of OPACITY) el.removeAttribute(a); // the artwork is never transparent (2026-11-14)
     if (!DRAWABLE.has(name(el))) continue;
     el.setAttribute("fill", "none");
     el.setAttribute("stroke", "currentColor");

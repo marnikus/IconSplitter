@@ -9,6 +9,7 @@ import { isEmptySlot } from "../lib/svgBuilder/slots";
 import { useInlineText } from "./SvgBuilderInlineText";
 import SvgBuilderGuides from "./SvgBuilderGuides";
 import SvgBuilderQuickEdit from "./SvgBuilderQuickEdit";
+import { addHeroHitAreas } from "./herohit";
 
 export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; doc: SheetDocument; zoom: number }) {
   const host = useRef<HTMLDivElement | null>(null);
@@ -21,6 +22,7 @@ export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; do
     if (node === null) return;
     const root = node.shadowRoot ?? node.attachShadow({ mode: "open" });
     root.innerHTML = `<style>:host{display:block}svg{display:block;width:100%;height:100%}[data-banner-text]{cursor:text}[data-banner-text]:hover{outline:1px dashed currentColor;outline-offset:3px}</style>${doc.svg}`;
+    addHeroHitAreas(root); // the banner icon reacts over its whole icon + circle area (preview only)
   }, [doc.svg]);
   return <div className="bld-artboard-wrap" ref={wrap} style={{ width: width * zoom, height: height * zoom }}>
     <div className="bld-artboard" data-testid="builder-artboard" data-zoom={zoom} aria-label="Editable SVG sheet artboard — double-click the banner text to edit it"

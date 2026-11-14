@@ -2,6 +2,7 @@
 // edge (row). Title is never upper-cased; the subtitle always is, letter-spaced.
 // Wrapping follows the reference formulas, at most three lines.
 import { readableInk } from "./config";
+import { solidMix } from "./solidcolor";
 import { attr, round, textEl, textWidth } from "./markup";
 import type { Rect, SheetConfig } from "./types";
 
@@ -87,11 +88,14 @@ function heroSize(banner: Banner, d: number, glyph: number): { d: number; glyph:
   return { d: d * banner.ringScale / 100, glyph: glyph * banner.heroScale / 100 };
 }
 
-/** The hero in a double ring (reference: accent ring at 30 %, inner ring inset 7 px); Circle stroke 0 = no rings. */
-function heroRing(a: BannerArgs, c: { cx: number; cy: number; d: number; glyph: number; ink: string }): string {
+/**
+ * The hero in a double ring (reference: accent ring at 30 %, inner ring inset 7 px); Circle stroke 0 = no rings.
+ * The rings are SOLID: the accent mixed onto the surface `bg` they sit on (no transparency in the artwork).
+ */
+function heroRing(a: BannerArgs, c: { cx: number; cy: number; d: number; glyph: number; ink: string; bg: string }): string {
   const r = c.d / 2;
   const w = a.banner.ringStroke;
-  const ring = (radius: number, opacity: number) => `<circle cx="${round(c.cx)}" cy="${round(c.cy)}" r="${round(radius)}" fill="none" stroke="${attr(a.banner.accent)}" stroke-opacity="${opacity}" stroke-width="${round(w)}" data-banner-ring="true"/>`;
+  const ring = (radius: number, opacity: number) => `<circle cx="${round(c.cx)}" cy="${round(c.cy)}" r="${round(radius)}" fill="none" stroke="${attr(solidMix(a.banner.accent, c.bg, opacity))}" stroke-width="${round(w)}" data-banner-ring="true"/>`;
   const rings = w > 0 ? ring(r, 0.3) + ring(Math.max(1, r - 7), 0.2) : "";
   return `<g data-banner-hero="true">${rings}${a.hero(c.cx - c.glyph / 2, c.cy - c.glyph / 2, c.glyph, c.ink)}</g>`;
 }
@@ -106,7 +110,7 @@ function solidSide(a: Laid): string {
   const sl = subtitleLines(a, true);
   const parts = [banner.hero ? ring + 22 : 0, banner.divider ? 24 : 0, tl.length * banner.titleSize * 1.03, sl.length > 0 ? 14 + sl.length * banner.subtitleSize * 1.55 : 0];
   col.top = box.y + (box.height - parts.reduce((x, y) => x + y, 0)) / 2;
-  const hero = banner.hero ? heroRing(a, { cx: col.cx, cy: col.top + ring / 2, d: ring, glyph, ink: banner.accent }) : "";
+  const hero = banner.hero ? heroRing(a, { cx: col.cx, cy: col.top + ring / 2, d: ring, glyph, ink: banner.accent, bg: banner.background }) : "";
   const ruleTop = col.top + parts[0];
   const rule = banner.divider ? `<rect x="${round(col.cx - 17)}" y="${round(ruleTop)}" width="34" height="2" fill="${attr(banner.accent)}" data-accent-rule="true"/>` : "";
   const titleTop = ruleTop + parts[1];
@@ -130,7 +134,7 @@ function solidEdge(a: Laid): string {
   x += widths[0];
   const title = titleText(a, tl, { x, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink: banner.textColor, anchor: "start" });
   x += widths[1];
-  const rule = ruleOn ? `<rect x="${round(x + 16)}" y="${round(cy - 13)}" width="1" height="26" fill="${attr(banner.textColor)}" fill-opacity="0.24" data-accent-rule="true"/>` : "";
+  const rule = ruleOn ? `<rect x="${round(x + 16)}" y="${round(cy - 13)}" width="1" height="26" fill="${attr(solidMix(banner.textColor, banner.background, 0.24))}" data-accent-rule="true"/>` : "";
   x += widths[2];
   const sub = subtitleText(a, sl, { x, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
   return hero + title + rule + sub;
@@ -146,12 +150,12 @@ function splitSide(a: Laid): string {
   const heroH = banner.hero ? sh.d + 12 : 0;
   const top = frame.y + (blockH - heroH - tl.length * size * 1.03) / 2;
   const cx = box.x + box.width / 2;
-  const hero = banner.hero ? heroRing(a, { cx, cy: top + sh.d / 2, d: sh.d, glyph: sh.glyph, ink }) : "";
+  const hero = banner.hero ? heroRing(a, { cx, cy: top + sh.d / 2, d: sh.d, glyph: sh.glyph, ink, bg: banner.accent }) : "";
   const title = titleText(a, tl, { x: cx, top: top + heroH, size, ink, anchor: "middle" });
   const sl = subtitleLines(a, true);
   const restH = frame.height - blockH;
   const restTop = frame.y + blockH + (restH - sl.length * banner.subtitleSize * 1.55 - 18) / 2;
-  const line = `<rect x="${round(cx - 16)}" y="${round(restTop)}" width="32" height="1" fill="${attr(banner.subtitleColor)}" fill-opacity="0.4"/>`;
+  const line = `<rect x="${round(cx - 16)}" y="${round(restTop)}" width="32" height="1" fill="${attr(solidMix(banner.subtitleColor, banner.background, 0.4))}"/>`;
   return `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(frame.width)}" height="${round(blockH)}" fill="${attr(banner.accent)}" data-split-block="true"/>`
     + hero + title + line + subtitleText(a, sl, { x: cx, top: restTop + 18, anchor: "middle" });
 }
@@ -166,7 +170,7 @@ function splitEdge(a: Laid): string {
   const heroW = banner.hero ? se.d + 14 : 0;
   const x0 = frame.x + Math.max(12, (blockW - heroW - titleW) / 2);
   const cy = box.y + box.height / 2;
-  const hero = banner.hero ? heroRing(a, { cx: x0 + se.d / 2, cy, d: se.d, glyph: se.glyph, ink }) : "";
+  const hero = banner.hero ? heroRing(a, { cx: x0 + se.d / 2, cy, d: se.d, glyph: se.glyph, ink, bg: banner.accent }) : "";
   const title = titleText(a, tl, { x: x0 + heroW, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink, anchor: "start" });
   const sl = subtitleLines(a, false);
   const sub = subtitleText(a, sl, { x: frame.x + blockW + 24, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });

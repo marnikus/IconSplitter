@@ -357,4 +357,20 @@ describe("number boxes apply as you type", () => {
       expect(at()).not.toBe(opened); // closed and reopened: it goes to the element's new place
     } finally { spy.mockRestore(); }
   });
+
+  it("the banner icon reacts over its whole icon + circle area, not only on its lines; the area is preview-only (2026-11-14)", async () => {
+    const proto = SVGGraphicsElement.prototype as unknown as { getBBox?: () => DOMRect };
+    const had = Object.prototype.hasOwnProperty.call(proto, "getBBox");
+    const old = proto.getBBox;
+    proto.getBBox = () => ({ x: 40, y: 60, width: 90, height: 90 }) as DOMRect;
+    try {
+      await openLibrary();
+      const hit = shadow().querySelector("[data-banner-hero] > [data-hero-hit]");
+      expect(hit).not.toBeNull();
+      expect(hit!.getAttribute("width")).toBe("98"); // the box plus 4 px around
+      expect(hit!.getAttribute("pointer-events")).toBe("all"); // catches the pointer with no fill, so nothing transparent is drawn
+      await hover(hit!);
+      expect(q("builder-quick")?.dataset.kind).toBe("hero");
+    } finally { if (had) proto.getBBox = old; else delete proto.getBBox; }
+  });
 });

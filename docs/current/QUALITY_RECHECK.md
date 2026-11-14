@@ -5227,3 +5227,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `lib/svgBuilder/freespot.ts` (pure), `svgBuilder/quickplace.ts` (areas + obstacles per element kind); QuickEdit uses it.
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites green (quickedit 13/13).
+- 2026-11-14 SVG builder: banner icon hover area (preview-only hit box) and no transparency in composed artwork (solid ring/rule colours, icon opacity stripped). Builder suites 146/146, tsc clean, quality:changed GATE PASSED.
