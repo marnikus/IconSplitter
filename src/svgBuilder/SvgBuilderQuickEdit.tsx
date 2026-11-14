@@ -14,8 +14,9 @@ import { QUICK_SPECS, quickTargetOf, slotValue, withSlot, type ColorSlot, type Q
 import type { BuilderApi } from "./useSvgBuilder";
 import SvgBuilderTextMove from "./SvgBuilderTextMove";
 import { anchorOf } from "./quickplace";
+import SvgBuilderTextWidth from "./SvgBuilderTextWidth";
 
-type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | null;
+type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | null;
 interface Hover { kind: QuickKind; el: Element }
 
 const FACES: ReadonlyArray<{ value: TitleFace; label: string }> = [
@@ -54,7 +55,7 @@ function useDismissPanel(panel: Panel, close: () => void): void {
   useEffect(() => {
     if (panel === null) return undefined;
     const onDown = (e: MouseEvent) => {
-      const inside = e.target instanceof Element && e.target.closest(".bld-quick, .bld-quick-move") !== null;
+      const inside = e.target instanceof Element && e.target.closest(".bld-quick, .bld-quick-move, .bld-text-width") !== null;
       if (!inside) close();
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
@@ -87,11 +88,16 @@ export default function SvgBuilderQuickEdit({ b, board, wrap }: { b: BuilderApi;
   const live = hover === null || wrap.current === null ? null : anchorOf(hover, b, { board: board.current, wrap: wrap.current });
   const at = usePinnedAnchor(live, panel !== null);
   if (hover === null || at === null) return null;
-  return <div className="bld-quick" data-testid="builder-quick" data-kind={hover.kind}
-    style={{ left: at.x, top: at.y }} onMouseEnter={keep} onMouseMove={keep} onMouseLeave={() => { if (panel === null) later(); }}>
-    <QuickBar b={b} kind={hover.kind} panel={panel} toggle={(next) => setPanel(panel === next ? null : next)} />
-    <QuickPanel b={b} kind={hover.kind} panel={panel} done={done} move={{ board, wrap, anchor: at }} />
-  </div>;
+  const kind = hover.kind;
+  return <>
+    <div className="bld-quick" data-testid="builder-quick" data-kind={kind}
+      style={{ left: at.x, top: at.y }} onMouseEnter={keep} onMouseMove={keep} onMouseLeave={() => { if (panel === null) later(); }}>
+      <QuickBar b={b} kind={kind} panel={panel} toggle={(next) => setPanel(panel === next ? null : next)} />
+      <QuickPanel b={b} kind={kind} panel={panel} done={done} move={{ board, wrap, anchor: at }} />
+    </div>
+    {isText(kind) && (panel === null || panel === "width") && <SvgBuilderTextWidth b={b} which={kind} el={hover.el} board={board} wrap={wrap}
+      onDrag={(on) => setPanel(on ? "width" : null)} onEnter={keep} />}
+  </>;
 }
 
 function QuickBar({ b, kind, panel, toggle }: { b: BuilderApi; kind: QuickKind; panel: Panel; toggle: (p: Exclude<Panel, null>) => void }) {

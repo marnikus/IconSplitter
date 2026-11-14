@@ -93,6 +93,8 @@ export interface SheetConfig {
      * artboard like its title — never the icon's metadata; a missing id shows the icon's name.
      */
     captionTexts: Record<string, string>;
+    /** Text box widths in px (2026-11-14): 0 = automatic (the reference character limits). */
+    titleWidth: number; subtitleWidth: number;
   };
 }
 

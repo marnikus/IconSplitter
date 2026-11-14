@@ -411,3 +411,10 @@
 /* Category drop-down (2026-11-14). */
 .bld-category { display: grid; gap: 4px; }
 .bld-category-select { width: 100%; }
+
+/* Title / subtitle width grip (2026-11-14), at the hovered text's right edge on the wrap. */
+.bld-text-width { position: absolute; z-index: 6; width: 10px; height: 34px; transform: translate(-50%, -50%); cursor: ew-resize; touch-action: none;
+  background: #5B5BD6; border: 2px solid #fff; border-radius: 99px; box-shadow: 0 1px 4px #0008; }
+.bld-text-width:hover, .bld-text-width.is-on { background: #7C7CF0; }
+/* The inline text editor can be widened by hand (its width is kept as the text width). */
+.bld-inline-text { resize: horizontal; max-width: none; }

@@ -5248,3 +5248,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-14 SVG builder: artboard edits are drafts with Save/Reset and the Save/Discard/Cancel leave question; autosync removed. Builder suites 168/168, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: library/recipe category chips → drop-down. Builder suites 169/169, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: metadata = upload tab system (Title/Description/Tags), stock prompt with Title-Artboard, icons-only PNG <=1MP, Title-Artboard fills the banner title, upload editor reused. Builder+upload suites pass except pre-existing upload_flag_viewport; builder fast lane fails only in the pre-existing dark-shell check; tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: title/subtitle box width (grip + inline editor). Builder suites 178/178 (the decline test timed out once under full load, passed 3x alone and on the rerun); tsc/eslint/quality PASS.

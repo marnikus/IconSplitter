@@ -67,6 +67,13 @@ function obstaclesOf(ctx: Ctx): Rect[] {
   return [];
 }
 
+/** The hovered element's box on the wrap (screen px), as the sheet shows it now. */
+export function hoverRectOf(hover: { kind: QuickKind; el: Element }, b: BuilderApi, nodes: { board: HTMLElement | null; wrap: HTMLElement }): Rect | null {
+  const origin = nodes.wrap.getBoundingClientRect();
+  const zoom = origin.width > 0 ? origin.width / b.config.artboard.width : 1;
+  return liveRect({ ...hover, b, ...nodes, zoom, origin });
+}
+
 export function anchorOf(hover: { kind: QuickKind; el: Element }, b: BuilderApi, nodes: { board: HTMLElement | null; wrap: HTMLElement }): Anchor | null {
   const origin = nodes.wrap.getBoundingClientRect();
   const zoom = origin.width > 0 ? origin.width / b.config.artboard.width : 1;

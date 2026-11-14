@@ -20,7 +20,7 @@ export const DEFAULT_CONFIG: SheetConfig = {
     title: "ICON SHEET", subtitle: "Editable stroke width",
     titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true,
     textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0,
-    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1, captionTexts: {} },
+    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1, captionTexts: {}, titleWidth: 0, subtitleWidth: 0 },
 };
 
 /** The 8 swatches shown under Canvas and Stroke colour. */
@@ -119,6 +119,7 @@ function parseBanner(raw: unknown): SheetConfig["banner"] {
     ...parseTextPlacement(raw),
     ...parseHeroStyle(raw),
     captionTexts: parseCaptionTexts(raw.captionTexts),
+    titleWidth: num(RANGES.textWidth, raw.titleWidth, d.titleWidth), subtitleWidth: num(RANGES.textWidth, raw.subtitleWidth, d.subtitleWidth),
   };
 }
 

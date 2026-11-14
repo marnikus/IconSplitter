@@ -512,4 +512,23 @@ describe("number boxes apply as you type", () => {
     expect(tilesNow()).toBeLessThan(all);
     expect((q("builder-recipe-category") as HTMLSelectElement | null)?.tagName ?? "SELECT").toBe("SELECT");
   });
+
+  it("hovering the title shows a width handle at its right edge; dragging it sets the title box width (2026-11-14)", async () => {
+    await openLibrary();
+    await hover(shadow().querySelector('[data-banner-text="title"]')!);
+    const grip = q("builder-text-width-title");
+    expect(grip).not.toBeNull();
+    expect(q("builder-text-width-subtitle")).toBeNull(); // only the hovered text's handle
+    const before = config().banner.titleWidth;
+    expect(before).toBe(0);
+    await act(async () => { grip!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 })); });
+    await act(async () => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 260, clientY: 100 })); });
+    expect(q("builder-text-width-badge")?.textContent).toMatch(/^\d+ px$/);
+    await act(async () => { window.dispatchEvent(new PointerEvent("pointerup", {})); });
+    expect(config().banner.titleWidth).toBeGreaterThan(0);
+    await click("builder-undo");
+    expect(config().banner.titleWidth).toBe(0);
+    await hover(shadow().querySelector('[data-banner-text="subtitle"]')!);
+    expect(q("builder-text-width-subtitle")).not.toBeNull();
+  });
 });

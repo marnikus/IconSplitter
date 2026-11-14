@@ -41,11 +41,18 @@ function currentOf(b: BuilderApi, e: Editing): string {
   return e.which === "caption" ? b.config.banner.captionTexts[e.id] ?? e.shown : b.config.banner[e.which];
 }
 
-/** Writes the words back: one undo entry; an emptied caption is dropped (the icon's name shows again). */
-function commitText(b: BuilderApi, e: Editing, text: string): void {
+const WIDTH_KEY = { title: "titleWidth", subtitle: "subtitleWidth" } as const;
+
+/**
+ * Writes the words back: one undo entry; an emptied caption is dropped (the
+ * icon's name shows again). `boxWidth`: the editor's width when the user
+ * widened it by hand — kept as the text's width (2026-11-14).
+ */
+function commitText(b: BuilderApi, e: Editing, text: string, boxWidth: number | null = null): void {
   const banner = b.config.banner;
   if (e.which !== "caption") {
-    b.actions.setConfig({ ...b.config, banner: { ...banner, [e.which]: text } }, e.which === "title" ? "Edit banner title" : "Edit banner subtitle");
+    const width = boxWidth === null ? {} : { [WIDTH_KEY[e.which]]: Math.max(40, Math.round(boxWidth)) };
+    b.actions.setConfig({ ...b.config, banner: { ...banner, [e.which]: text, ...width } }, e.which === "title" ? "Edit banner title" : "Edit banner subtitle");
     return;
   }
   const captionTexts = { ...banner.captionTexts };
@@ -79,17 +86,21 @@ export function useInlineText(b: BuilderApi, zoom: number, board: RefObject<HTML
 function InlineTextEditor({ b, editing, onDone }: { b: BuilderApi; editing: Editing; onDone: () => void }) {
   const banner = b.config.banner;
   const [text, setText] = useState(() => currentOf(b, editing));
+  const setWidth = editing.which === "caption" ? 0 : banner[WIDTH_KEY[editing.which]];
+  const startWidth = Math.max(120, editing.width + 24, setWidth + 24);
   const cancelled = useRef(false);
   const input = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => { input.current?.focus(); input.current?.select(); }, []);
   const finish = () => {
-    if (!cancelled.current && text !== currentOf(b, editing)) commitText(b, editing, text);
+    const shown = input.current?.offsetWidth ?? 0; // 0 where nothing is laid out (tests)
+    const widened = editing.which !== "caption" && shown > 0 && Math.abs(shown - startWidth) > 4 ? shown - 24 : null;
+    if (!cancelled.current && (text !== currentOf(b, editing) || widened !== null)) commitText(b, editing, text, widened);
     onDone();
   };
   const size = editing.which === "title" ? banner.titleSize : editing.which === "subtitle" ? banner.subtitleSize : Math.max(8, editing.height * 0.9);
   return <textarea ref={input} className="bld-inline-text" data-testid={`builder-inline-${editing.which}`} value={text}
     aria-label={LABEL[editing.which]}
-    style={{ left: editing.x - 6, top: editing.y - 4, width: Math.max(120, editing.width + 24), height: Math.max(size * 1.6, editing.height + 8), fontSize: size }}
+    style={{ left: editing.x - 6, top: editing.y - 4, width: startWidth, height: Math.max(size * 1.6, editing.height + 8), fontSize: size }}
     onChange={(e) => setText(e.target.value)} onBlur={finish}
     onKeyDown={(e) => {
       if (e.key === "Escape") { cancelled.current = true; e.currentTarget.blur(); }

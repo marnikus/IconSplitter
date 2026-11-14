@@ -39,15 +39,20 @@ export function bannerMarkup(a: BannerArgs): string {
   return `<g data-banner="true"><rect x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}" fill="${attr(banner.background)}"/>${body}</g>`;
 }
 
+/** Characters per line: a width the user set wins (2026-11-14); else the reference limits. */
+function perLine(width: number, charWidth: number, auto: number): number {
+  return width > 0 ? Math.max(1, Math.floor(width / Math.max(1, charWidth))) : auto;
+}
+
 function titleLines(a: BannerArgs, side: boolean, size: number): string[] {
-  const max = side ? Math.max(7, Math.floor((a.box.width - 56) / Math.max(9, size * 0.64))) : 25;
-  return wrapLines(a.title, max);
+  const auto = side ? Math.max(7, Math.floor((a.box.width - 56) / Math.max(9, size * 0.64))) : 25;
+  return wrapLines(a.title, perLine(a.banner.titleWidth, size * 0.6, auto));
 }
 
 function subtitleLines(a: BannerArgs, side: boolean): string[] {
   const s = a.banner.subtitleSize;
-  const max = side ? Math.max(9, Math.floor((a.box.width - 62) / Math.max(7, s * 0.72))) : 28;
-  return wrapLines(a.subtitle.toUpperCase(), max);
+  const auto = side ? Math.max(9, Math.floor((a.box.width - 62) / Math.max(7, s * 0.72))) : 28;
+  return wrapLines(a.subtitle.toUpperCase(), perLine(a.banner.subtitleWidth, s * 0.72, auto));
 }
 
 function titleText(a: BannerArgs, lines: string[], at: { x: number; top: number; size: number; ink: string; anchor: "start" | "middle" }): string {
