@@ -126,10 +126,14 @@ describe("🗑 remove an icon from approved", () => {
     await click("builder-template-save");
     const [tpl] = tpls();
     await click(`builder-template-add-artboard-${tpl.id}`);
-    await click(`builder-template-add-artboard-${tpl.id}`); // both start with the stage's icons
     const [first] = arts();
-    const gone = first.placedIds[0];
-    expect(arts()[1].placedIds[0]).toBe(gone);
+    const gone = first.placedIds[0]; // the first artboard's one icon
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await click("builder-clear"); // the second artboard (open) gets the same icon in its first cell
+    const tile = host.querySelector(`[data-testid^="builder-asset-"][data-asset-id="${gone}"]`) as HTMLElement;
+    await act(async () => { tile.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await settle(0);
+    await waitUntil(() => arts()[1].placedIds[0] === gone, "the second artboard holds it too");
 
     await click("builder-cell-decline-0"); // on the open (second) artboard
     await waitUntil(() => arts().every((a) => !a.placedIds.includes(gone)), "the icon left every saved artboard");

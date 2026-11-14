@@ -189,12 +189,9 @@ async function typeIn(id: string, value: string): Promise<void> {
 }
 
 describe("final artboards — the list under the templates", () => {
-  it("a new artboard starts with the stage's icons plus a random fill and the template's sample words; each keeps its own (2026-11-14)", async () => {
+  it("a new artboard starts with the template's sample words and ONE random library icon, the other cells empty (2026-11-14)", async () => {
     await openLibrary();
-    await click("builder-clear");
-    for (const tile of tiles().slice(0, 2)) { await act(async () => { tile.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); await settle(0); }
-    expect(text("builder-cells")).toContain("2 of 32 cells");
-    const chosen = tiles().slice(0, 2).map((t) => t.dataset.assetId!);
+    const library = tiles().map((t) => t.dataset.assetId!);
     await click("builder-template-save");
     const [tpl] = savedTemplates();
     expect(q("builder-artboards-hint")).not.toBeNull(); // nothing selected yet
@@ -203,17 +200,17 @@ describe("final artboards — the list under the templates", () => {
     const [first] = savedArtboards();
     expect(rows()).toHaveLength(1);
     expect(q(`builder-artboard-${first.id}`)?.className).toContain("is-open");
-    expect(realIcons(first.placedIds).slice(0, 2)).toEqual(chosen); // the icons on the stage, in their cells
-    expect(realIcons(first.placedIds)).toHaveLength(12); // the rest drawn at random (the library has 12)
-    expect(new Set(first.placedIds).size).toBe(first.placedIds.length);
-    expect(text("builder-cells")).toContain("12 of 32 cells");
+    expect(realIcons(first.placedIds)).toHaveLength(1); // one icon…
+    expect(first.placedIds[0]).toBe(realIcons(first.placedIds)[0]); // …in the first cell
+    expect(library).toContain(first.placedIds[0]); // picked from the whole library
+    expect(text("builder-cells")).toContain("1 of 32 cells");
     expect(first.title).not.toBe(""); // the template's sample words, not blank
     expect((q("builder-title") as HTMLInputElement).value).toBe(first.title);
     expect((q("builder-subtitle") as HTMLInputElement).value).not.toBe("");
 
     await typeIn("builder-title", "Food Icon Assets");
     await waitUntil(() => savedArtboards()[0].title === "Food Icon Assets", "artboard written back");
-    expect(text(`builder-artboard-${first.id}`)).toContain("12/32 icons");
+    expect(text(`builder-artboard-${first.id}`)).toContain("1/32 icons");
 
     await click(`builder-artboard-add-${tpl.id}`); // a second one: sample words again, not the first's title
     expect((q("builder-title") as HTMLInputElement).value).toBe(first.title);
