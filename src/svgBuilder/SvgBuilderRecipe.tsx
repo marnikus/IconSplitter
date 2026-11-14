@@ -74,10 +74,14 @@ function FilteredPane({ b }: { b: BuilderApi }) {
 }
 
 /** All + every category; shared by the Filtered recipe and the library filter. */
+/** The category: one drop-down list (2026-11-14; was a wall of chips, unusable with many folders). */
 export function CategoryChips({ b, testid }: { b: BuilderApi; testid: string }) {
   const current = b.listView.category;
-  return <div className="bld-chips" data-testid={testid} role="radiogroup" aria-label="Category">
-    {b.categories.map((c) => <button type="button" key={c} role="radio" aria-checked={c === current}
-      className={`bld-chip${c === current ? " is-on" : ""}`} data-testid={`${testid}-${c}`} onClick={() => b.actions.setCategory(c)}>{c}</button>)}
-  </div>;
+  return <label className="bld-category">
+    <span className="bld-eyebrow">CATEGORY</span>
+    <select className="svg-input bld-category-select" data-testid={testid} aria-label="Category" value={current}
+      onChange={(e) => b.actions.setCategory(e.target.value)}>
+      {b.categories.map((c) => <option key={c} value={c}>{c}</option>)}
+    </select>
+  </label>;
 }

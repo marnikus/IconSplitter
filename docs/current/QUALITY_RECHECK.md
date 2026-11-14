@@ -5246,3 +5246,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-14 SVG builder: new artboard = sample words + one random library icon, other cells empty. Builder suites 162/162, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: caption size up to 100, caption gap, typed captions per template/artboard (never metadata); flaky usage test fixed. Builder suites 167/167, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: artboard edits are drafts with Save/Reset and the Save/Discard/Cancel leave question; autosync removed. Builder suites 168/168, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: library/recipe category chips → drop-down. Builder suites 169/169, tsc/eslint/quality PASS.

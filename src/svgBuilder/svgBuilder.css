@@ -407,3 +407,7 @@
 .bld-editing.is-artboard .bld-editing-kind { color: #3CC2AF; }
 .bld-editing.is-template .bld-editing-kind { color: #9EA2FF; }
 .bld-editing-of { color: var(--v2-muted, #9aa3b5); font-size: 11px; }
+
+/* Category drop-down (2026-11-14). */
+.bld-category { display: grid; gap: 4px; }
+.bld-category-select { width: 100%; }

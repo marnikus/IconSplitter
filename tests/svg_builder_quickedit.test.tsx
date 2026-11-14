@@ -497,4 +497,19 @@ describe("number boxes apply as you type", () => {
     await slide("builder-quick-size", "40");
     expect(config().grid.captionSize).toBe(40);
   });
+
+  it("the library category is a drop-down list, not a wall of chips (2026-11-14)", async () => {
+    await openLibrary();
+    const select = q("builder-category") as HTMLSelectElement;
+    expect(select.tagName).toBe("SELECT");
+    const options = [...select.options].map((o) => o.value);
+    expect(options[0]).toBe("All");
+    expect(options.length).toBeGreaterThan(1);
+    const tilesNow = () => host.querySelectorAll('[data-testid^="builder-asset-"][data-asset-id]').length;
+    const all = tilesNow();
+    await act(async () => { select.value = options[1]; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(select.value).toBe(options[1]);
+    expect(tilesNow()).toBeLessThan(all);
+    expect((q("builder-recipe-category") as HTMLSelectElement | null)?.tagName ?? "SELECT").toBe("SELECT");
+  });
 });

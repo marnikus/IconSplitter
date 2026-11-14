@@ -27,11 +27,11 @@
 | `builder-library` | column | `builder-library-count`; footer `builder-library-footer` |
 | `builder-recipe` | Selection recipe card | `builder-recipe-mode` (segmented; `-similar`, `-random`, `-filtered`) |
 | `builder-reference` / `builder-threshold` / `builder-similar-unindexed` | Similar pane | reference line; Similarity slider `≥ N%` 0–100 (`builder-threshold-value`); `builder-weight` Look alike ◀▶ Mean alike: `builder-text-weight` slider + split bar, `builder-weight-image`, `builder-weight-text`; not-indexed warning |
-| `builder-recipe-category-{c}` | Filtered pane chips | shared category with the library chips |
+| `builder-recipe-category` | Filtered pane category drop-down (2026-11-14) | shared category with the library |
 | `builder-random-note` | Random pane | "A seeded draw from all N glyphs…" |
 | `builder-reshuffle-recipe` / `builder-recipe-caption` | `Reshuffle N icons` + caption | |
 | `builder-search` / `builder-search-clear` | "Search name or #tag" | leading `#` stripped |
-| `builder-category-{c}` | category chips | All + categories |
+| `builder-category` | library category drop-down (`<select>`, 2026-11-14; was chips) | All + categories |
 | `builder-icon-grid` / `builder-asset-{id}` | 6-column tiles | `data-asset-id`, `data-selected`, `aria-pressed`; `builder-match-{id}` Similar dot; `builder-unindexed-{id}` ⚠ + `data-unindexed`; `data-nometa` dashed amber tile; `builder-prev-{id}` stroke-only preview |
 | `builder-library-empty` / `builder-library-nomatch` / `builder-library-more` | empty states | |
 | `builder-cells` / `builder-locked-count` / `builder-clear` | footer | "N of C cells", "N locked", CLEAR |
