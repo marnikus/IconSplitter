@@ -6,7 +6,7 @@
 import { isRecord } from "../isrecord";
 import { applyCopy } from "./config";
 import { cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
-import { isEmptySlot } from "./slots";
+import { emptySlotFor, isEmptySlot } from "./slots";
 import { lookOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
 import { parseOverrides, withOverrides, type LookOverrides } from "./lookoverrides";
 import type { BuilderIconAsset, SheetConfig, SheetMetadata } from "./types";
@@ -54,6 +54,23 @@ export function newArtboard(template: SheetTemplate, artboards: readonly FinalAr
     id: at.id, templateId: template.id, name: artboardName(template, artboards), title, subtitle, heroIconId: null,
     placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [], overrides: {},
   };
+}
+
+/** One artboard without the icons `known` does not have; the same object when nothing changes. */
+function artboardWithout(a: FinalArtboard, known: ReadonlySet<string>): FinalArtboard {
+  const gone = (id: string) => !isEmptySlot(id) && !known.has(id);
+  if (!a.placedIds.some(gone) && !a.lockedIds.some(gone) && !(a.heroIconId !== null && gone(a.heroIconId))) return a;
+  const placedIds: string[] = [];
+  for (const id of a.placedIds) placedIds.push(gone(id) ? emptySlotFor([...a.placedIds, ...placedIds]) : id);
+  return { ...a, placedIds, lockedIds: a.lockedIds.filter((id) => !gone(id)), heroIconId: a.heroIconId !== null && gone(a.heroIconId) ? null : a.heroIconId };
+}
+
+/**
+ * Icons the library no longer has (declined, removed, no longer approved) leave
+ * every artboard (2026-11-14): their cells stay, empty, so nothing shifts.
+ */
+export function artboardsWithout(artboards: readonly FinalArtboard[], known: ReadonlySet<string>): FinalArtboard[] {
+  return artboards.map((a) => artboardWithout(a, known));
 }
 
 /** The sheet an artboard draws: its template's look, its own look changes on top, its own words and hero. */

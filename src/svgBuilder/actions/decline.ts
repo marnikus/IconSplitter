@@ -3,6 +3,7 @@
 // cells empty quietly; the "svgReview" history entry is what Undo reverses.
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { declineBuilderAsset, withoutAssets } from "../declineasset";
+import { pruneArtboards } from "./artboards";
 
 export function declineActions(get: () => BuilderActionContext): Pick<BuilderActions, "declineAsset" | "dropAssets"> {
   return {
@@ -20,4 +21,5 @@ function dropAssets(ctx: BuilderActionContext, ids: readonly string[]): void {
   });
   ctx.dispatch({ lockedIds: ctx.model.lockedIds.filter((id) => !drop.has(id)), excludedIds: ctx.model.excludedIds.filter((id) => !drop.has(id)) });
   if (ctx.placedIds.some((id) => drop.has(id))) ctx.setCheckedQuiet(withoutAssets(ctx.placedIds, drop));
+  pruneArtboards(ctx, new Set(discovery.assets.map((a) => a.id).filter((id) => !drop.has(id)))); // and from every saved artboard (2026-11-14)
 }

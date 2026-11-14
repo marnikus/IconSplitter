@@ -6,7 +6,7 @@
 // it (useArtboardSync). A new artboard starts with the stage's icons plus a
 // random fill and the template's sample words (startpick.ts, 2026-11-14).
 import { applyRowGesture, setChecked as setCheckedIds, toggleChecked, type RowSelection, type SelectIntent } from "../../lib/reviewselect";
-import { ARTBOARD_LIMIT, artboardConfig, newArtboard, type FinalArtboard } from "../../lib/svgBuilder/artboards";
+import { ARTBOARD_LIMIT, artboardConfig, artboardsWithout, newArtboard, type FinalArtboard } from "../../lib/svgBuilder/artboards";
 import { cleanTemplateName } from "../../lib/svgBuilder/templates";
 import { emptySlotFor, placedOnly } from "../../lib/svgBuilder/slots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
@@ -111,6 +111,12 @@ function resetArtboardLook(ctx: BuilderActionContext, id: string): void {
   ctx.say(`“${artboard.name}” follows its template again`);
 }
 
+/** Saved artboards lose icons the library no longer has (scan, 🗑 decline); written at once. */
+export function pruneArtboards(ctx: BuilderActionContext, known: ReadonlySet<string>): void {
+  const next = artboardsWithout(ctx.model.artboards, known);
+  if (next.some((a, i) => a !== ctx.model.artboards[i])) storeArtboards(ctx, next);
+}
+
 /** After the leave question: the artboard becomes the active row and opens. */
 export function openArtboardRow(ctx: BuilderActionContext, id: string): void {
   const artboard = ctx.model.artboards.find((a) => a.id === id);
@@ -128,7 +134,8 @@ function openArtboard(ctx: BuilderActionContext, artboard: FinalArtboard): void 
   if (template === undefined) return ctx.say("This artboard's template is gone", true);
   const config = artboardConfig(template, artboard);
   const capacity = config.grid.columns * config.grid.rows;
-  const ids = artboard.placedIds.slice(0, capacity);
+  const known = ctx.assets.length > 0 ? new Set(ctx.assets.map((a) => a.id)) : null;
+  const ids = (known === null ? artboard : artboardsWithout([artboard], known)[0]).placedIds.slice(0, capacity);
   while (ids.length < capacity) ids.push(emptySlotFor(ids));
   ctx.dispatch({ config, lockedIds: artboard.lockedIds, metadata: artboard.metadata, editingArtboardId: artboard.id, editingTemplateId: null,
     // the open artboard is always listed under a selected template (2026-11-14); callers make it the active row

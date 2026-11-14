@@ -93,7 +93,9 @@ afterEach(() => {
 
 import { DEFAULT_CONFIG, parseSheetConfig } from "../src/lib/svgBuilder/config";
 import { newTemplate } from "../src/lib/svgBuilder/templates";
-import { artboardConfig, artboardName, newArtboard, parseArtboards, pendingUse } from "../src/lib/svgBuilder/artboards";
+import { artboardConfig, artboardName, artboardsWithout, newArtboard, parseArtboards, pendingUse } from "../src/lib/svgBuilder/artboards";
+import { composeSheet } from "../src/lib/svgBuilder/compose";
+import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { overrideCount, overridesOf } from "../src/lib/svgBuilder/lookoverrides";
 import { BUILDER_ARTBOARDS_KEY } from "../src/svgBuilder/artboardstore";
 
@@ -117,6 +119,25 @@ describe("final artboards — the pure part", () => {
     const parsed = parseArtboards([{ ...art, overrides: { banner: { background: "#112233", bogus: 1 }, nope: { x: 1 }, grid: "junk" } }]);
     expect(parsed[0].overrides).toEqual({ banner: { background: "#112233" } });
     expect(parseArtboards([{ ...art, overrides: undefined }])[0].overrides).toEqual({}); // older saves
+  });
+
+  it("drops icons the library no longer has from every artboard, keeping their cells (2026-11-14)", () => {
+    const a = { ...newArtboard(tpl, [], { now: "t", id: "a", placedIds: ["p1", "gone", "p2"] }), lockedIds: ["gone", "p1"], heroIconId: "gone" };
+    const b = newArtboard(tpl, [a], { now: "t", id: "b", placedIds: ["p1"] });
+    const next = artboardsWithout([a, b], new Set(["p1", "p2"]));
+    expect(next[0].placedIds[0]).toBe("p1");
+    expect(next[0].placedIds[1]).toMatch(/^~empty:/);
+    expect(next[0].placedIds[2]).toBe("p2");
+    expect(next[0]).toMatchObject({ lockedIds: ["p1"], heroIconId: null });
+    expect(next[1]).toBe(b); // untouched artboards stay the same object
+    expect(artboardsWithout([b], new Set(["p1"]))).toEqual([b]);
+  });
+
+  it("an icon the library does not have is never drawn as Unavailable", () => {
+    const config = parseSheetConfig(DEFAULT_CONFIG);
+    const doc = composeSheet({ config, layout: computeLayout(config), assets: [], placedIds: ["gone"], svgTexts: {} });
+    expect(doc.svg).not.toContain("Unavailable");
+    expect(doc.brokenIds).toEqual([]);
   });
 
   it("names artboards after the template with the next free number", () => {

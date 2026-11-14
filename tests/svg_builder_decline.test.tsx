@@ -118,4 +118,28 @@ describe("🗑 remove an icon from approved", () => {
     await click("builder-redo");
     await waitUntil(() => libraryCount() === before - 1, "declined again by Redo");
   });
+
+  it("a declined icon leaves every saved artboard too, so no artboard ever shows it as Unavailable (2026-11-14)", async () => {
+    await openLibrary();
+    const arts = () => JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.artboards.v1") ?? "[]") as Array<{ id: string; placedIds: string[] }>;
+    const tpls = () => JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.templates.v1") ?? "[]") as Array<{ id: string }>;
+    await click("builder-template-save");
+    const [tpl] = tpls();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await click(`builder-template-add-artboard-${tpl.id}`); // both start with the stage's icons
+    const [first] = arts();
+    const gone = first.placedIds[0];
+    expect(arts()[1].placedIds[0]).toBe(gone);
+
+    await click("builder-cell-decline-0"); // on the open (second) artboard
+    await waitUntil(() => arts().every((a) => !a.placedIds.includes(gone)), "the icon left every saved artboard");
+    expect(arts()[0].placedIds[0]).toMatch(/^~empty:/); // its cell stays, empty; nothing shifts
+
+    const row = q(`builder-artboard-${first.id}`)!;
+    await act(async () => { row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); });
+    await settle(0);
+    const svg = q("builder-artboard")!.querySelector(".bld-artboard-svg")!.shadowRoot!.innerHTML;
+    expect(svg).not.toContain("Unavailable");
+    expect(svg).not.toContain(`data-asset-id="${gone}"`);
+  });
 });

@@ -5,6 +5,7 @@ import { recipeCaption, refillOne, reshuffleSheet, resizeSheet, shortfallMessage
 import { emptySlotFor, isEmptySlot, placedOnly, trimTrailingEmpty } from "../../lib/svgBuilder/slots";
 import type { SelectionRecipe } from "../../lib/svgBuilder/types";
 import { saveBuilderListView } from "../listview";
+import { pruneArtboards } from "./artboards";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
 type SelectionActions = Pick<BuilderActions,
@@ -110,6 +111,7 @@ function autoPlace(ctx: BuilderActionContext): void {
   if (ctx.assets.length === 0) return;
   const known = new Set(ctx.assets.map((a) => a.id));
   pruneMarks(ctx, known);
+  pruneArtboards(ctx, known); // saved artboards never keep an icon the library no longer has
   const kept = ctx.placedIds.filter((id) => known.has(id) || isEmptySlot(id));
   if (kept.length !== ctx.placedIds.length) return ctx.setCheckedQuiet(kept.length > 0 ? kept : reshuffleSheet(pickOf(ctx, ctx.model.recipe, ctx.model.seed)).ids);
   if (ctx.placedIds.length > 0) return;

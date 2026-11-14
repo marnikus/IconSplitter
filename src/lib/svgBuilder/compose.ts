@@ -51,12 +51,13 @@ export function sheetCopy(metadata: SheetMetadata | null, banner: SheetConfig["b
 }
 
 function cellMarkup(args: ComposeSheetArgs, p: Placed, brokenIds: string[]): string {
+  if (p.asset === undefined) return ""; // not in the library (declined / removed): never drawn, never "Unavailable" (2026-11-14)
   const code = args.svgTexts[p.id];
   const cell = p.asset !== undefined && typeof code === "string" && code !== ""
     ? cellGroupOf({ code, asset: p.asset, frame: p.frame, style: args.config.icons }) : null;
   if (cell !== null && cell.ok) return cell.html;
   brokenIds.push(p.id);
-  return brokenMarkup(p.frame, p.id, cell?.ok === false ? cell.error : "approved SVG is unavailable");
+  return brokenMarkup(p.frame, p.id, cell?.ok === false ? cell.error : "approved SVG is still loading or unreadable");
 }
 
 function rootOpen(config: SheetConfig, fingerprint: string): string {
