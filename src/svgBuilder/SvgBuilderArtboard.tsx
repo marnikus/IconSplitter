@@ -8,10 +8,12 @@ import type { BuilderApi } from "./useSvgBuilder";
 import { isEmptySlot } from "../lib/svgBuilder/slots";
 import { useInlineText } from "./SvgBuilderInlineText";
 import SvgBuilderGuides from "./SvgBuilderGuides";
+import SvgBuilderQuickEdit from "./SvgBuilderQuickEdit";
 
 export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; doc: SheetDocument; zoom: number }) {
   const host = useRef<HTMLDivElement | null>(null);
   const board = useRef<HTMLDivElement | null>(null);
+  const wrap = useRef<HTMLDivElement | null>(null);
   const { width, height } = b.config.artboard;
   const inline = useInlineText(b, zoom, board);
   useEffect(() => {
@@ -20,7 +22,7 @@ export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; do
     const root = node.shadowRoot ?? node.attachShadow({ mode: "open" });
     root.innerHTML = `<style>:host{display:block}svg{display:block;width:100%;height:100%}[data-banner-text]{cursor:text}[data-banner-text]:hover{outline:1px dashed currentColor;outline-offset:3px}</style>${doc.svg}`;
   }, [doc.svg]);
-  return <div className="bld-artboard-wrap" style={{ width: width * zoom, height: height * zoom }}>
+  return <div className="bld-artboard-wrap" ref={wrap} style={{ width: width * zoom, height: height * zoom }}>
     <div className="bld-artboard" data-testid="builder-artboard" data-zoom={zoom} aria-label="Editable SVG sheet artboard — double-click the banner text to edit it"
       ref={board} style={{ width, height, transform: `scale(${zoom})` }}>
       <div className="bld-artboard-svg" ref={host} />
@@ -29,6 +31,7 @@ export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; do
       {inline.editor}
     </div>
     <span className="bld-artboard-caption">ARTBOARD 01 · {width} × {height}</span>
+    <SvgBuilderQuickEdit b={b} board={board} wrap={wrap} />
   </div>;
 }
 

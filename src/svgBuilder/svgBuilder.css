@@ -316,3 +316,21 @@
 /* Red layout guides over the artboard (2026-11-13): above the art, below the cell controls; never catches the pointer. */
 .bld-guides { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 .bld-guide-opacity { width: 80px; }
+
+/* Quick editing on the artboard (2026-11-14): a toolbar beside the hovered element, a small panel under it. */
+.bld-quick { position: absolute; z-index: 20; display: grid; gap: 6px; justify-items: start; }
+.bld-quick-bar { display: flex; align-items: center; gap: 6px; padding: 5px; border: 1px solid var(--v2-line-strong); border-radius: 8px; background: #121521; box-shadow: 0 8px 24px #000a; }
+.bld-quick-dot { width: 20px; height: 20px; padding: 0; border: 2px solid #fff; border-radius: 50%; cursor: pointer; flex: 0 0 auto; }
+.bld-quick-btn { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border: 1px solid var(--v2-line-strong); border-radius: 6px; background: #121521; color: var(--v2-text); font-size: 14px; cursor: pointer; }
+.bld-quick-btn:hover { background: var(--v2-surface-3); }
+.bld-quick-a { font-weight: 800; font-family: Inter, system-ui, sans-serif; }
+.bld-quick-panel { display: grid; gap: 10px; min-width: 224px; padding: 12px; border: 1px solid var(--v2-line-strong); border-radius: 10px; background: #121521; box-shadow: 0 12px 32px #000b; }
+.bld-quick-title { font-size: 12px; color: var(--v2-text); }
+.bld-quick-value { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--v2-text); }
+.bld-quick-row { display: flex; align-items: center; gap: 8px; }
+.bld-quick-ends { justify-content: space-between; font-size: 9px; color: var(--v2-muted); }
+.bld-quick-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bld-quick-custom { position: relative; overflow: hidden; background: linear-gradient(#EDC232, #1C8781 45%, #273FB8); }
+.bld-quick-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.bld-quick-hex { flex: 1 1 auto; min-width: 0; font-family: ui-monospace, monospace; }
+.bld-quick-face { flex: 1 1 auto; }

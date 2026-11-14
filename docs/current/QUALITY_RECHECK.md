@@ -5212,3 +5212,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - banner `heroScale`, `heroStroke`, `ringScale`, `ringStroke` (ranges, parser, banner.ts `heroSize`, ring stroke-width / 0 hides, compose hero stroke, preset JSON guide), `SvgBuilderHeroStyle.tsx`.
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 123/123.
+
+## 2026-11-14 — SVG builder: quick editing on the artboard (hover toolbar, smart swatches)
+
+- `lib/svgBuilder/swatches.ts`, `svgBuilder/quickedit.ts`, `SvgBuilderQuickEdit.tsx`, mounted in the artboard wrap.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder_quickedit 4/4; full vitest 4580 passed / 26 failed in the 9 clean-tree files.

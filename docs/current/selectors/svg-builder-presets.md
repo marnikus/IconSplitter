@@ -21,6 +21,7 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 
 | Testid | Element | Notes |
 |---|---|---|
+| `builder-quick` (`data-kind`) | hover toolbar on the artboard | `builder-quick-color`, `-stroke`, `-text`; panels `builder-quick-color-panel` (`builder-quick-swatch-<hex>`, `builder-quick-custom`, `builder-quick-hex`, `builder-quick-done`), `builder-quick-stroke-range(-panel)`, `builder-quick-text-panel` (`builder-quick-face`, `builder-quick-size`) |
 | `builder-hero-style` | hero style (under Hero glyph) | `builder-hero-scale`, `builder-hero-stroke`, `builder-ring-scale`, `builder-ring-stroke` |
 | `builder-toggle-guides` / `builder-guide-opacity` / `builder-guides` | ▦ Guides, opacity slider, overlay svg | `data-guide` = column, row, padding, banner, cell, icon |
 | `builder-cell-decline-<cell>` | 🗑 on an artboard icon | declines the item in Generate SVG; undoable |
