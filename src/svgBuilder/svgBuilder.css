@@ -374,3 +374,8 @@
 .bld-edge-handle:hover, .bld-edge-handle.is-on { background: #7C7CF0; }
 .bld-edge-badge { position: absolute; left: 50%; top: -26px; transform: translateX(-50%); white-space: nowrap;
   background: #11131c; color: #fff; font: 600 11px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 6px; pointer-events: none; }
+
+/* Artboard size grips (2026-11-14): on the outer right / bottom border and the corner. */
+.bld-edge-handle.is-c { width: 16px; height: 16px; border-radius: 4px; cursor: nwse-resize; }
+.bld-edge-handle.is-size { background: #2F9E8F; }
+.bld-edge-handle.is-size:hover, .bld-edge-handle.is-size.is-on { background: #3CC2AF; }

@@ -5,7 +5,8 @@ import { RANGES, bannerRange, clampTo } from "./ranges";
 import type { Rect, SheetConfig } from "./types";
 
 export type Side = "left" | "right" | "top" | "bottom";
-export interface EdgeHandle { id: string; kind: "banner" | "pad"; side: Side; x: number; y: number }
+/** "size" grips sit on the artboard's right / bottom border and its corner ("corner" = both). */
+export interface EdgeHandle { id: string; kind: "banner" | "pad" | "size"; side: Side | "corner"; x: number; y: number }
 
 const SIDES: readonly Side[] = ["left", "right", "top", "bottom"];
 const OPPOSITE: Record<Side, Side> = { left: "right", right: "left", top: "bottom", bottom: "top" };
@@ -24,6 +25,11 @@ export function edgeHandles(config: SheetConfig, layout: { banner: Rect | null; 
   const out: EdgeHandle[] = [];
   if (layout.banner !== null && pos !== "none") out.push({ id: "banner", kind: "banner", side: OPPOSITE[pos], ...midOf(layout.banner, OPPOSITE[pos]) });
   for (const side of SIDES) if (side !== pos) out.push({ id: `pad-${side}`, kind: "pad", side, ...midOf(layout.content, side) });
+  const { width, height } = config.artboard;
+  const board: Rect = { x: 0, y: 0, width, height };
+  out.push({ id: "size-right", kind: "size", side: "right", ...midOf(board, "right") },
+    { id: "size-bottom", kind: "size", side: "bottom", ...midOf(board, "bottom") },
+    { id: "size-corner", kind: "size", side: "corner", x: width, y: height });
   return out;
 }
 
@@ -42,4 +48,11 @@ export function bannerSizeAfter(config: SheetConfig, start: number, d: { dx: num
 export function paddingAfter(side: Side, start: number, d: { dx: number; dy: number }): number {
   const inward = side === "left" || side === "top" ? 1 : -1;
   return Math.round(clampTo(RANGES.padding, start + inward * along(side, d.dx, d.dy)));
+}
+
+/** The artboard after dragging its right edge (width), bottom edge (height) or corner (both); clamped. */
+export function artboardSizeAfter(start: { width: number; height: number }, side: Side | "corner", d: { dx: number; dy: number }): { width: number; height: number } {
+  const w = side === "right" || side === "corner" ? d.dx : 0;
+  const h = side === "bottom" || side === "corner" ? d.dy : 0;
+  return { width: Math.round(clampTo(RANGES.width, start.width + w)), height: Math.round(clampTo(RANGES.height, start.height + h)) };
 }

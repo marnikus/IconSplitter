@@ -399,4 +399,27 @@ describe("number boxes apply as you type", () => {
     expect(config().artboard.padding).toBe(start.artboard.padding);
     expect(config().banner.size).toBe(start.banner.size + 40);
   });
+
+  it("drags the artboard's right / bottom edge and corner to change its width, height or both (2026-11-14)", async () => {
+    await openLibrary();
+    const drag = async (id: string, dx: number, dy: number) => {
+      const handle = q(id)!;
+      await act(async () => { handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 300, clientY: 300 })); });
+      await act(async () => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 300 + dx, clientY: 300 + dy })); });
+      expect(q("builder-edge-badge")?.textContent).toMatch(/^\d+ × \d+$/);
+      await act(async () => { window.dispatchEvent(new PointerEvent("pointerup", {})); });
+    };
+    const zoom = Number(q("builder-artboard")!.dataset.zoom);
+    const a = config().artboard;
+    await drag("builder-edge-size-right", 120 * zoom, 999);
+    expect(config().artboard).toMatchObject({ width: a.width + 120, height: a.height });
+    await drag("builder-edge-size-bottom", 999, -60 * zoom);
+    expect(config().artboard).toMatchObject({ width: a.width + 120, height: a.height - 60 });
+    await drag("builder-edge-size-corner", -20 * zoom, 40 * zoom);
+    expect(config().artboard).toMatchObject({ width: a.width + 100, height: a.height - 20 });
+    await drag("builder-edge-size-corner", -99999, -99999); // clamped to the artboard ranges
+    expect(config().artboard).toMatchObject({ width: 320, height: 240 });
+    await click("builder-undo");
+    expect(config().artboard).toMatchObject({ width: a.width + 100, height: a.height - 20 });
+  });
 });

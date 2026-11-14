@@ -29,4 +29,4 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 | `builder-used-<assetId>` | tile badge (always, `is-zero` when unused) | `×N` saved use (exported artboards), `+M` on artboards whose use is not saved yet; the tooltip says both |
 | `builder-stage-actions` | stage top-right | `builder-stage-template-reset`, `builder-stage-template-save` (only with unsaved template edits), `builder-reshuffle-stage` |
 | `builder-leave-dialog` | Save changes to the template? | `builder-leave-save`, `builder-leave-discard`, `builder-leave-cancel` |
-| `builder-edge-banner`, `builder-edge-pad-{left,right,top,bottom}` | artboard edge grips | `builder-edge-badge` while dragging |
+| `builder-edge-banner`, `builder-edge-pad-{left,right,top,bottom}`, `builder-edge-size-{right,bottom,corner}` | artboard edge grips | `builder-edge-badge` while dragging |
