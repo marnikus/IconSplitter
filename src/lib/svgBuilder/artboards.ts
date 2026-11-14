@@ -4,7 +4,7 @@
 // always draws with its template's CURRENT look, so editing a template restyles
 // its artboards. Pure: validation on read (RULE 13), names, config and preview.
 import { isRecord } from "../isrecord";
-import { applyCopy } from "./config";
+import { applyCopy, parseCaptionTexts } from "./config";
 import { cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
 import { emptySlotFor, isEmptySlot } from "./slots";
 import { lookOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
@@ -32,6 +32,8 @@ export interface FinalArtboard {
   countedIds: string[];
   /** Look settings changed on this artboard (2026-11-14): they win over the template; the rest is inherited. */
   overrides: LookOverrides;
+  /** Captions typed on this artboard, by icon id (2026-11-14); never the template's, never the icon's metadata. */
+  captionTexts: Record<string, string>;
 }
 
 /** "Side banner · 8×4 · Solid — #3": the template's name and the next free number. */
@@ -52,7 +54,7 @@ export function newArtboard(template: SheetTemplate, artboards: readonly FinalAr
   const { title, subtitle } = lookOf(template.config).banner;
   return {
     id: at.id, templateId: template.id, name: artboardName(template, artboards), title, subtitle, heroIconId: null,
-    placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [], overrides: {},
+    placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [], overrides: {}, captionTexts: {},
   };
 }
 
@@ -76,7 +78,7 @@ export function artboardsWithout(artboards: readonly FinalArtboard[], known: Rea
 /** The sheet an artboard draws: its template's look, its own look changes on top, its own words and hero. */
 export function artboardConfig(template: SheetTemplate, artboard: FinalArtboard): SheetConfig {
   const look = withOverrides(template.config, artboard.overrides);
-  return applyCopy(look, { ...look, banner: { ...look.banner, title: artboard.title, subtitle: artboard.subtitle, heroIconId: artboard.heroIconId } });
+  return applyCopy(look, { ...look, banner: { ...look.banner, title: artboard.title, subtitle: artboard.subtitle, heroIconId: artboard.heroIconId, captionTexts: artboard.captionTexts } });
 }
 
 export function artboardPreviewSvg(args: {
@@ -137,7 +139,7 @@ function parseArtboard(input: unknown, templateIds: ReadonlySet<string> | null):
     placedIds: strings(raw.placedIds, 192), lockedIds: strings(raw.lockedIds, 192), metadata: parseMetadata(raw.metadata),
     created: text(raw.created, 40), updated: text(raw.updated, 40),
     exportedAt: typeof raw.exportedAt === "string" ? raw.exportedAt : null, countedIds: strings(raw.countedIds, 192),
-    overrides: parseOverrides(raw.overrides),
+    overrides: parseOverrides(raw.overrides), captionTexts: parseCaptionTexts(raw.captionTexts),
   };
 }
 

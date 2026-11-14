@@ -105,12 +105,13 @@ function captionsOf(args: ComposeSheetArgs, placed: readonly Placed[]): string {
   if (!grid.captions) return "";
   const texts = placed.flatMap(({ asset, frame }) => {
     if (asset === undefined) return [];
+    const typed = args.config.banner.captionTexts[asset.id]; // typed by hand: shown exactly as typed (2026-11-14)
     const caption = captionOf(asset);
-    const label = grid.captionCase === "upper" ? caption.toUpperCase() : caption;
+    const label = typed ?? (grid.captionCase === "upper" ? caption.toUpperCase() : caption);
     const base = frame.captionSize;
     const size = Math.max(3.2, base * Math.min(1, (frame.size * 0.96) / Math.max(1, label.length * base * 0.67)));
     // Each caption is marked (2026-11-14) so the quick editor can target it.
-    return [`<g data-caption="${frame.index}">${textEl({ x: frame.x + frame.size / 2, y: frame.captionY, value: label, size, colour: grid.captionColor,
+    return [`<g data-caption="${frame.index}" data-caption-id="${attr(asset.id)}">${textEl({ x: frame.x + frame.size / 2, y: frame.captionY, value: label, size, colour: grid.captionColor,
       face: "sans", weight: 500, anchor: "middle", spacing: "0.075em" })}</g>`];
   });
   return `<g data-export="captions">${texts.join("")}</g>`;

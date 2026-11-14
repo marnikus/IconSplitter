@@ -116,7 +116,7 @@ function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: Quick
   const spec = QUICK_SPECS[kind];
   if (panel === "color") return <ColorPanel b={b} slot={spec.color} onDone={done} />;
   if (panel === "stroke" && spec.stroke) return <SizePanel b={b} slot={spec.stroke} testid="builder-quick-stroke-range" />;
-  if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} />;
+  if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} gap={spec.gap} />;
   return <KindPanel b={b} kind={kind} panel={panel} done={done} move={move} />;
 }
 
@@ -196,7 +196,7 @@ function SizePanel({ b, slot, testid }: { b: BuilderApi; slot: SizeSlot; testid:
   </div>;
 }
 
-function TextPanel({ b, slot, face }: { b: BuilderApi; slot: SizeSlot; face: boolean }) {
+function TextPanel({ b, slot, face, gap }: { b: BuilderApi; slot: SizeSlot; face: boolean; gap?: SizeSlot }) {
   return <div className="bld-quick-panel" data-testid="builder-quick-text-panel">
     {face && <label className="bld-quick-row"><b className="bld-quick-title">Font</b>
       <select className="svg-input bld-quick-face" data-testid="builder-quick-face" value={b.config.banner.titleFace} aria-label="Title font"
@@ -204,6 +204,7 @@ function TextPanel({ b, slot, face }: { b: BuilderApi; slot: SizeSlot; face: boo
         {FACES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
       </select></label>}
     <SizePanel b={b} slot={slot} testid="builder-quick-size" />
+    {gap !== undefined && <SizePanel b={b} slot={gap} testid="builder-quick-gap" />}
   </div>;
 }
 

@@ -41,7 +41,8 @@ export interface ColorSlot { label: string; group: Group; key: string }
 export interface SizeSlot { label: string; group: Group; key: string; range: NumRange; unit: string }
 
 /** What each element offers: one colour, and maybe a stroke or text size (+ font for the title). */
-export interface QuickSpec { name: string; color: ColorSlot; stroke?: SizeSlot; text?: SizeSlot; face?: boolean }
+/** `gap`: a second slider in the text panel (captions: the icon–caption gap). */
+export interface QuickSpec { name: string; color: ColorSlot; stroke?: SizeSlot; text?: SizeSlot; face?: boolean; gap?: SizeSlot }
 
 export const QUICK_SPECS: Readonly<Record<QuickKind, QuickSpec>> = {
   icon: {
@@ -55,6 +56,7 @@ export const QUICK_SPECS: Readonly<Record<QuickKind, QuickSpec>> = {
   caption: {
     name: "Caption", color: { label: "Caption color", group: "grid", key: "captionColor" },
     text: { label: "Caption size", group: "grid", key: "captionSize", range: RANGES.captionSize, unit: "px" },
+    gap: { label: "Gap to icon", group: "grid", key: "captionGap", range: RANGES.captionGap, unit: "px" },
   },
   title: {
     name: "Title", color: { label: "Title color", group: "banner", key: "textColor" },

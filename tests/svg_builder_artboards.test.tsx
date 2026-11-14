@@ -372,6 +372,7 @@ describe("final artboards — the list under the templates", () => {
     await click("builder-template-save");
     const [tpl] = savedTemplates();
     await click(`builder-template-add-artboard-${tpl.id}`);
+    await click("builder-clear"); // the new artboard's random start icon could be this very tile
     await act(async () => { tiles()[0].dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     await settle(0);
     await waitUntil(() => q("builder-cell-use-0")?.textContent === "×0+1", "artboard index shows pending use");

@@ -17,9 +17,9 @@ export function computeLayout(config: SheetConfig): SheetLayout {
     overflow: fit.scale < 0.999, capacity: columns * rows };
 }
 
-/** Caption row height at scale 1: `max(captionSize × 1.65, 10) + 7` when captions are on. */
+/** Caption row height at scale 1: `max(captionSize × 1.65, 10) + 7` plus the caption gap, when captions are on. */
 export function captionRow(config: SheetConfig): number {
-  return config.grid.captions ? Math.max(config.grid.captionSize * 1.65, 10) + 7 : 0;
+  return config.grid.captions ? Math.max(config.grid.captionSize * 1.65, 10) + 7 + config.grid.captionGap : 0;
 }
 
 function bannerRect(config: SheetConfig): Rect | null {
@@ -60,7 +60,7 @@ function cellsOf(config: SheetConfig, grid: Rect, fit: GridBox): CellFrame[] {
   const { columns, rows, captionSize } = config.grid;
   const glyph = Math.max(4, fit.box - config.icons.strokeWidth * 2.2);
   const fontSize = Math.max(3.4, captionSize * fit.scale);
-  const captionTop = Math.max(3, captionSize * 0.86 * fit.scale);
+  const captionTop = Math.max(3, captionSize * 0.86 * fit.scale) + config.grid.captionGap * fit.scale; // + the icon–caption gap
   return Array.from({ length: columns * rows }, (_, index) => {
     const x = grid.x + (index % columns) * (fit.box + fit.gapX);
     const y = grid.y + Math.floor(index / columns) * (fit.box + fit.caption + fit.gapY);

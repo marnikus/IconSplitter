@@ -73,6 +73,8 @@ export interface SheetConfig {
   grid: {
     columns: number; rows: number; gapX: number; gapY: number; captions: boolean;
     captionColor: string; captionSize: number; captionCase: CaptionCase;
+    /** Extra space between an icon and its caption, px (2026-11-14). */
+    captionGap: number;
   };
   icons: {
     box: number; strokeWidth: number; color: string; linecap: "round" | "square";
@@ -86,6 +88,11 @@ export interface SheetConfig {
     textPadding: number; titleDx: number; titleDy: number; subtitleDx: number; subtitleDy: number;
     /** Hero style (2026-11-14): icon size % and stroke px, circle size % and stroke px (0 hides the circles). */
     heroScale: number; heroStroke: number; ringScale: number; ringStroke: number;
+    /**
+     * Captions typed by hand, by icon id (2026-11-14): words of THIS template /
+     * artboard like its title — never the icon's metadata; a missing id shows the icon's name.
+     */
+    captionTexts: Record<string, string>;
   };
 }
 

@@ -68,6 +68,8 @@ function CaptionControls({ c, edit }: { c: SheetConfig; edit: Edit }) {
     <ColorChip label="Caption ink" value={g.captionColor} testid="builder-caption-ink" onChange={(captionColor) => edit("grid", { captionColor })} />
     <Slider label="Caption size" value={g.captionSize} range={RANGES.captionSize} unit="px" testid="builder-caption-size"
       onChange={(captionSize) => edit("grid", { captionSize }, true)} />
+    <Slider label="Caption gap" value={g.captionGap} range={RANGES.captionGap} unit="px" testid="builder-caption-gap"
+      onChange={(captionGap) => edit("grid", { captionGap }, true)} />
     <Segmented label="Caption case" value={g.captionCase} testid="builder-caption-case"
       options={[{ value: "upper", label: "UPPERCASE" }, { value: "normal", label: "Capitalized" }]}
       onChange={(captionCase) => edit("grid", { captionCase })} />

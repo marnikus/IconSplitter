@@ -13,14 +13,14 @@ const MODES: readonly SelectionMode[] = ["similar", "random", "filtered"];
 export const DEFAULT_CONFIG: SheetConfig = {
   artboard: { width: 1080, height: 660, background: "#F4F0E7", padding: 34, radius: 0 },
   grid: { columns: 8, rows: 4, gapX: 22, gapY: 18, captions: true,
-    captionColor: "#787A6C", captionSize: 9, captionCase: "upper" },
+    captionColor: "#787A6C", captionSize: 9, captionCase: "upper", captionGap: 0 },
   icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round" },
   banner: { position: "left", size: 242, background: "#17271F", accent: "#D9F36C",
     textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid",
     title: "ICON SHEET", subtitle: "Editable stroke width",
     titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true,
     textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0,
-    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1 },
+    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1, captionTexts: {} },
 };
 
 /** The 8 swatches shown under Canvas and Stroke colour. */
@@ -53,8 +53,8 @@ export function applyPresetConfig(current: SheetConfig, id: LayoutPresetId): She
 
 /** A look (preset or saved template) on the current sheet: its banner words and hero are kept. */
 export function applyCopy(look: SheetConfig, current: SheetConfig): SheetConfig {
-  const { title, subtitle, heroIconId } = current.banner;
-  return parseSheetConfig({ ...look, banner: { ...look.banner, title, subtitle, heroIconId } });
+  const { title, subtitle, heroIconId, captionTexts } = current.banner;
+  return parseSheetConfig({ ...look, banner: { ...look.banner, title, subtitle, heroIconId, captionTexts } });
 }
 
 export function parseSheetConfig(raw: unknown): SheetConfig {
@@ -63,7 +63,7 @@ export function parseSheetConfig(raw: unknown): SheetConfig {
 }
 
 export function copyConfig(c: SheetConfig): SheetConfig {
-  return { artboard: { ...c.artboard }, grid: { ...c.grid }, icons: { ...c.icons }, banner: { ...c.banner } };
+  return { artboard: { ...c.artboard }, grid: { ...c.grid }, icons: { ...c.icons }, banner: { ...c.banner, captionTexts: { ...c.banner.captionTexts } } };
 }
 
 export function configFingerprint(config: SheetConfig): string {
@@ -92,7 +92,8 @@ function parseGrid(raw: unknown): SheetConfig["grid"] {
     gapX: num(RANGES.gapX, raw.gapX, d.gapX), gapY: num(RANGES.gapY, raw.gapY, d.gapY),
     captions: bool(raw.captions, d.captions), captionColor: hex(raw.captionColor, d.captionColor),
     captionSize: num(RANGES.captionSize, raw.captionSize, d.captionSize),
-    captionCase: oneOf(raw.captionCase, ["upper", "normal"], d.captionCase) as CaptionCase };
+    captionCase: oneOf(raw.captionCase, ["upper", "normal"], d.captionCase) as CaptionCase,
+    captionGap: num(RANGES.captionGap, raw.captionGap, d.captionGap) };
 }
 
 function parseIcons(raw: unknown): SheetConfig["icons"] {
@@ -117,7 +118,15 @@ function parseBanner(raw: unknown): SheetConfig["banner"] {
     heroIconId: typeof raw.heroIconId === "string" && raw.heroIconId !== "" ? raw.heroIconId : null,
     ...parseTextPlacement(raw),
     ...parseHeroStyle(raw),
+    captionTexts: parseCaptionTexts(raw.captionTexts),
   };
+}
+
+/** Typed captions: icon id → non-empty words (at most 400, 60 characters each); junk drops. */
+export function parseCaptionTexts(raw: unknown): Record<string, string> {
+  if (!isRecord(raw)) return {};
+  const entries = Object.entries(raw).filter((e): e is [string, string] => typeof e[1] === "string" && e[1].trim() !== "");
+  return Object.fromEntries(entries.slice(0, 400).map(([id, words]) => [id.slice(0, 120), words.slice(0, 60)]));
 }
 
 type HeroStyle = Pick<SheetConfig["banner"], "heroScale" | "heroStroke" | "ringScale" | "ringStroke">;

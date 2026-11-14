@@ -2,27 +2,55 @@
 // artboard (2026-11-13): double-click the text, type, and clicking outside (or
 // Enter) saves it as one undo entry; Escape leaves it as it was. Shift+Enter
 // starts a new line. The side fields stay too. The text is found through the
-// `data-banner-text` mark banner.ts puts on each text block.
+// `data-banner-text` mark banner.ts puts on each text block. Captions (2026-11-14,
+// `data-caption-id`) edit the same way; their words are kept on this template /
+// artboard only (banner.captionTexts) — the icon's metadata never changes, and
+// an emptied caption shows the icon's name again.
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { BuilderApi } from "./useSvgBuilder";
 
-type Which = "title" | "subtitle";
-interface Editing { which: Which; x: number; y: number; width: number; height: number }
+type Which = "title" | "subtitle" | "caption";
+/** `id` = the captioned icon (captions only); `shown` = the words the sheet shows now. */
+interface Editing { which: Which; id: string; shown: string; x: number; y: number; width: number; height: number }
 
-/** The banner text block a double-click landed on (the SVG lives in a shadow root). */
+/** The banner text block or caption a double-click landed on (the SVG lives in a shadow root). */
 function textBlockOf(e: Event): Element | null {
   for (const node of e.composedPath()) {
-    if (node instanceof Element && node.hasAttribute("data-banner-text")) return node;
+    if (node instanceof Element && (node.hasAttribute("data-banner-text") || node.hasAttribute("data-caption-id"))) return node;
   }
   return null;
 }
 
+function whichOf(block: Element): Which {
+  if (block.hasAttribute("data-caption-id")) return "caption";
+  return block.getAttribute("data-banner-text") === "subtitle" ? "subtitle" : "title";
+}
+
 /** Where the block sits on the unscaled artboard. */
 function editingOf(block: Element, board: HTMLElement, zoom: number): Editing {
-  const which: Which = block.getAttribute("data-banner-text") === "subtitle" ? "subtitle" : "title";
   const r = block.getBoundingClientRect();
   const o = board.getBoundingClientRect();
-  return { which, x: (r.left - o.left) / zoom, y: (r.top - o.top) / zoom, width: r.width / zoom, height: r.height / zoom };
+  return { which: whichOf(block), id: block.getAttribute("data-caption-id") ?? "", shown: block.textContent ?? "",
+    x: (r.left - o.left) / zoom, y: (r.top - o.top) / zoom, width: r.width / zoom, height: r.height / zoom };
+}
+
+const LABEL: Record<Which, string> = { title: "Edit the banner title", subtitle: "Edit the banner subtitle", caption: "Edit this caption" };
+
+/** The words being edited as stored now (a caption not typed yet starts from what the sheet shows). */
+function currentOf(b: BuilderApi, e: Editing): string {
+  return e.which === "caption" ? b.config.banner.captionTexts[e.id] ?? e.shown : b.config.banner[e.which];
+}
+
+/** Writes the words back: one undo entry; an emptied caption is dropped (the icon's name shows again). */
+function commitText(b: BuilderApi, e: Editing, text: string): void {
+  const banner = b.config.banner;
+  if (e.which !== "caption") {
+    b.actions.setConfig({ ...b.config, banner: { ...banner, [e.which]: text } }, e.which === "title" ? "Edit banner title" : "Edit banner subtitle");
+    return;
+  }
+  const captionTexts = { ...banner.captionTexts };
+  if (text.trim() === "") delete captionTexts[e.id]; else captionTexts[e.id] = text.trim();
+  b.actions.setConfig({ ...b.config, banner: { ...banner, captionTexts } }, "Edit caption");
 }
 
 /**
@@ -50,19 +78,17 @@ export function useInlineText(b: BuilderApi, zoom: number, board: RefObject<HTML
 
 function InlineTextEditor({ b, editing, onDone }: { b: BuilderApi; editing: Editing; onDone: () => void }) {
   const banner = b.config.banner;
-  const [text, setText] = useState(banner[editing.which]);
+  const [text, setText] = useState(() => currentOf(b, editing));
   const cancelled = useRef(false);
   const input = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => { input.current?.focus(); input.current?.select(); }, []);
   const finish = () => {
-    if (!cancelled.current && text !== banner[editing.which]) {
-      b.actions.setConfig({ ...b.config, banner: { ...banner, [editing.which]: text } }, editing.which === "title" ? "Edit banner title" : "Edit banner subtitle");
-    }
+    if (!cancelled.current && text !== currentOf(b, editing)) commitText(b, editing, text);
     onDone();
   };
-  const size = editing.which === "title" ? banner.titleSize : banner.subtitleSize;
+  const size = editing.which === "title" ? banner.titleSize : editing.which === "subtitle" ? banner.subtitleSize : Math.max(8, editing.height * 0.9);
   return <textarea ref={input} className="bld-inline-text" data-testid={`builder-inline-${editing.which}`} value={text}
-    aria-label={editing.which === "title" ? "Edit the banner title" : "Edit the banner subtitle"}
+    aria-label={LABEL[editing.which]}
     style={{ left: editing.x - 6, top: editing.y - 4, width: Math.max(120, editing.width + 24), height: Math.max(size * 1.6, editing.height + 8), fontSize: size }}
     onChange={(e) => setText(e.target.value)} onBlur={finish}
     onKeyDown={(e) => {

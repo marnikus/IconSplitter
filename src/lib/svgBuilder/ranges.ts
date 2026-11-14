@@ -10,7 +10,7 @@ const r = (min: number, max: number, step = 1): NumRange => ({ min, max, step })
 /** Reference "Glyph" ranges (FIXES §C4). */
 export const RANGES = {
   width: r(320, 3000), height: r(240, 3000), padding: r(0, 160), radius: r(0, 64),
-  columns: r(1, 16), rows: r(1, 12), gapX: r(0, 200), gapY: r(0, 200), captionSize: r(5, 13),
+  columns: r(1, 16), rows: r(1, 12), gapX: r(0, 200), gapY: r(0, 200), captionSize: r(5, 100), captionGap: r(0, 120),
   box: r(18, 240), strokeWidth: r(0.5, 5, 0.1),
   bannerSide: r(120, 420), bannerEdge: r(50, 180), bannerAny: r(50, 420),
   titleSize: r(10, 48), subtitleSize: r(5, 26), threshold: r(0, 100), textWeight: r(0, 100, 5),

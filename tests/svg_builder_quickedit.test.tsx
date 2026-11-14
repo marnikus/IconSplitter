@@ -470,4 +470,31 @@ describe("number boxes apply as you type", () => {
     await act(async () => { swatch.click(); });
     expect(config().grid.captionColor).toBe(picked);
   });
+
+  it("double-click a caption to type its own words; the caption toolbar also sets the gap to the icon (2026-11-14)", async () => {
+    await openLibrary();
+    const caption = shadow().querySelector('[data-caption="0"]')!;
+    const id = caption.getAttribute("data-caption-id")!;
+    await act(async () => { caption.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, composed: true })); });
+    const box = q("builder-inline-caption") as HTMLTextAreaElement;
+    expect(box).not.toBeNull();
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+    await act(async () => { setter.call(box, "Crispy"); box.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { box.blur(); box.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(config().banner.captionTexts[id]).toBe("Crispy");
+    expect(shadow().querySelector('[data-caption="0"]')!.textContent).toBe("Crispy");
+
+    await act(async () => { shadow().querySelector('[data-caption="0"]')!.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, composed: true })); });
+    const again = q("builder-inline-caption") as HTMLTextAreaElement;
+    await act(async () => { setter.call(again, "   "); again.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { again.blur(); again.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(config().banner.captionTexts[id]).toBeUndefined(); // emptied: back to the icon's name
+
+    await hover(shadow().querySelector('[data-caption="0"]')!);
+    await click("builder-quick-text");
+    await slide("builder-quick-gap", "14");
+    expect(config().grid.captionGap).toBe(14);
+    await slide("builder-quick-size", "40");
+    expect(config().grid.captionSize).toBe(40);
+  });
 });

@@ -5244,3 +5244,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-14 SVG builder: declined/removed icons pruned from saved artboards, never drawn as Unavailable. Builder suites 161/161, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: caption quick edit (colour, size). Builder suites 162/162, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: new artboard = sample words + one random library icon, other cells empty. Builder suites 162/162, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: caption size up to 100, caption gap, typed captions per template/artboard (never metadata); flaky usage test fixed. Builder suites 167/167, tsc/eslint/quality PASS.

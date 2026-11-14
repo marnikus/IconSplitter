@@ -10,7 +10,7 @@ import type { SheetConfig } from "./types";
 export type LookOverrides = { [G in keyof SheetConfig]?: Partial<SheetConfig[G]> };
 
 const GROUPS = Object.keys(DEFAULT_CONFIG) as (keyof SheetConfig)[];
-const OWN_WORDS = new Set(["title", "subtitle", "heroIconId"]);
+const OWN_WORDS = new Set(["title", "subtitle", "heroIconId", "captionTexts"]);
 
 const isOwnWord = (group: keyof SheetConfig, key: string) => group === "banner" && OWN_WORDS.has(key);
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);

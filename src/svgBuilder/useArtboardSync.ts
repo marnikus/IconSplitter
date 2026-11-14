@@ -19,7 +19,7 @@ export function artboardFromStage(a: FinalArtboard, m: BuilderModel, placedIds: 
   const template = m.templates.find((t) => t.id === a.templateId);
   return {
     ...a, title: banner.title, subtitle: banner.subtitle, heroIconId: banner.heroIconId,
-    placedIds: [...placedIds], lockedIds: [...m.lockedIds], metadata: m.metadata,
+    placedIds: [...placedIds], lockedIds: [...m.lockedIds], metadata: m.metadata, captionTexts: { ...banner.captionTexts },
     overrides: template === undefined ? a.overrides : overridesOf(template, m.config),
   };
 }
