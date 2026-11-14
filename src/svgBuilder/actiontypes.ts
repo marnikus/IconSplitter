@@ -110,6 +110,9 @@ export interface BuilderActions {
   resetArtboardLook: (id: string) => void;
   /** Double-click on a row (2026-11-14): open that artboard on the stage (a changed template asks first). */
   openArtboard: (id: string) => void;
+  /** The open artboard's draft (2026-11-14): ✓ Save writes it; ↺ Reset goes back to what is saved. */
+  saveArtboard: () => void;
+  resetArtboard: () => void;
   /** Unsaved template edits (2026-11-14): back to the saved look (undoable); the leave question's three answers. */
   resetTemplate: () => void;
   leaveSave: () => void;

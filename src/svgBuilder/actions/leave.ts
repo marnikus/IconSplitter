@@ -1,15 +1,15 @@
-// actions/leave.ts — the answers to "Save changes to the template?" (2026-11-14):
-// Save writes the look back, Discard drops it; both then go where the user was
-// going. Cancel stays on the template with its edits.
+// actions/leave.ts — the answers to "Save changes?" (2026-11-14) for the edited
+// template or the open artboard: Save writes it, Discard drops the edits; both
+// then go where the user was going. Cancel stays, edits kept.
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { editTemplate, saveTemplate } from "./templates";
-import { addArtboard, openArtboardRow } from "./artboards";
+import { addArtboard, openArtboardRow, saveArtboard } from "./artboards";
 
 type LeaveActions = Pick<BuilderActions, "leaveSave" | "leaveDiscard" | "leaveCancel">;
 
 export function leaveActions(get: () => BuilderActionContext): LeaveActions {
   return {
-    leaveSave: () => { const c = get(); saveTemplate(c); goOn(c); },
+    leaveSave: () => { const c = get(); if (c.model.editingArtboardId !== null) saveArtboard(c); else saveTemplate(c); goOn(c); },
     leaveDiscard: () => goOn(get()),
     leaveCancel: () => get().dispatch({ dialog: "none", leaveTo: null }),
   };

@@ -3,8 +3,8 @@
 // of the active one) form one list with the same gestures. Activating an
 // artboard opens it on the stage: its template's look, its own words, hero,
 // icons, locks and metadata — and every edit on the stage is written back to
-// it (useArtboardSync). A new artboard starts with the stage's icons plus a
-// random fill and the template's sample words (startpick.ts, 2026-11-14).
+// it on ✓ Save artboard (artboarddraft.ts, 2026-11-14). A new artboard starts with
+// one random icon and the template's sample words (startpick.ts).
 import { applyRowGesture, setChecked as setCheckedIds, toggleChecked, type RowSelection, type SelectIntent } from "../../lib/reviewselect";
 import { ARTBOARD_LIMIT, artboardConfig, artboardsWithout, newArtboard, type FinalArtboard } from "../../lib/svgBuilder/artboards";
 import { cleanTemplateName } from "../../lib/svgBuilder/templates";
@@ -17,10 +17,11 @@ import { saveSheetConfig } from "../configstore";
 import { visibleArtboards } from "../artboardview";
 import { commitConfig, prefs } from "./config";
 import { startIcons } from "./startpick";
+import { artboardFromStage, openArtboardOf } from "../artboarddraft";
 
 type ArtboardActions = Pick<BuilderActions,
   "templateGesture" | "toggleTemplateCheck" | "setTemplateChecks" | "addArtboard" | "artboardGesture" | "toggleArtboardCheck"
-  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard" | "resetArtboardLook" | "openArtboard">;
+  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard" | "resetArtboardLook" | "openArtboard" | "saveArtboard" | "resetArtboard">;
 
 export function artboardActions(get: () => BuilderActionContext): ArtboardActions {
   return {
@@ -35,6 +36,8 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
     removeArtboards: (ids) => removeArtboards(get(), ids),
     closeArtboard: () => get().dispatch({ editingArtboardId: null }),
     resetArtboardLook: (id) => resetArtboardLook(get(), id),
+    saveArtboard: () => saveArtboard(get()),
+    resetArtboard: () => resetArtboard(get()),
     openArtboard: (id) => { const c = get(); if (c.model.editingArtboardId !== id && !blockLeave(c, { kind: "artboard", id })) openArtboardRow(c, id); },
   };
 }
@@ -117,6 +120,25 @@ export function pruneArtboards(ctx: BuilderActionContext, known: ReadonlySet<str
   if (next.some((a, i) => a !== ctx.model.artboards[i])) storeArtboards(ctx, next);
 }
 
+/** ✓ Save artboard: the stage's words, icons, locks, metadata, captions and own look changes become the artboard. */
+export function saveArtboard(ctx: BuilderActionContext): void {
+  const open = openArtboardOf(ctx.model);
+  if (open === null) return;
+  const saved = { ...artboardFromStage(open, ctx.model, ctx.placedIds), updated: new Date().toISOString() };
+  storeArtboards(ctx, ctx.model.artboards.map((a) => (a.id === open.id ? saved : a)));
+  ctx.say(`Artboard “${open.name}” saved`);
+}
+
+/** ↺ Reset: the stage goes back to the saved artboard (its look as one undo step). */
+function resetArtboard(ctx: BuilderActionContext): void {
+  const open = openArtboardOf(ctx.model);
+  const template = ctx.model.templates.find((t) => t.id === open?.templateId);
+  if (open === null || template === undefined) return;
+  commitConfig(ctx, { config: artboardConfig(template, open), label: `Reset “${open.name}”` });
+  openArtboard(ctx, open);
+  ctx.say(`Artboard “${open.name}” back to what is saved`);
+}
+
 /** After the leave question: the artboard becomes the active row and opens. */
 export function openArtboardRow(ctx: BuilderActionContext, id: string): void {
   const artboard = ctx.model.artboards.find((a) => a.id === id);
@@ -127,7 +149,7 @@ export function openArtboardRow(ctx: BuilderActionContext, id: string): void {
 
 /**
  * Puts the artboard on the stage. Opening is navigation, not an edit: no undo
- * entry; the sync starts with the next render (useArtboardSync).
+ * entry; edits stay a draft until ✓ Save artboard (artboarddraft.ts).
  */
 function openArtboard(ctx: BuilderActionContext, artboard: FinalArtboard): void {
   const template = ctx.model.templates.find((t) => t.id === artboard.templateId);

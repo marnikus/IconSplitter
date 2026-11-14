@@ -209,7 +209,8 @@ describe("final artboards — the list under the templates", () => {
     expect((q("builder-subtitle") as HTMLInputElement).value).not.toBe("");
 
     await typeIn("builder-title", "Food Icon Assets");
-    await waitUntil(() => savedArtboards()[0].title === "Food Icon Assets", "artboard written back");
+    await click("builder-stage-artboard-save"); // artboard edits are saved explicitly, like a template's (2026-11-14)
+    await waitUntil(() => savedArtboards()[0].title === "Food Icon Assets", "artboard saved");
     expect(text(`builder-artboard-${first.id}`)).toContain("1/32 icons");
 
     await click(`builder-artboard-add-${tpl.id}`); // a second one: sample words again, not the first's title
@@ -230,6 +231,7 @@ describe("final artboards — the list under the templates", () => {
     expect(q(`builder-artboard-reset-${a2.id}`)).toBeNull(); // nothing of its own yet
     if (q("builder-padding") === null) await act(async () => { q("builder-section-artboard")!.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     await typeIn("builder-padding", "50"); // a2 is open: its own padding
+    await click("builder-stage-artboard-save");
     await waitUntil(() => JSON.stringify(savedArtboards()[1].overrides) === JSON.stringify({ artboard: { padding: 50 } }), "a2 keeps its own padding");
     expect(savedArtboards()[0].overrides).toEqual({});
     expect(q(`builder-artboard-reset-${a2.id}`)).not.toBeNull();
@@ -285,6 +287,49 @@ describe("final artboards — the list under the templates", () => {
     expect(q("builder-editing")?.dataset.kind).toBe("template");
   });
 
+  it("leaving a changed artboard asks Save / Discard / Cancel, like a template; Reset and Save sit on the stage (2026-11-14)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    const [a1, a2] = savedArtboards();
+    const dbl = async (id: string) => { const el = q(id)!; await act(async () => { el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); }); await settle(0); };
+    const title = () => (q("builder-title") as HTMLInputElement).value;
+    expect(q("builder-stage-artboard-save")).toBeNull(); // nothing changed yet
+    await dbl(`builder-artboard-${a1.id}`); // unchanged: no question
+    expect(q("builder-leave-dialog")).toBeNull();
+    await dbl(`builder-artboard-${a2.id}`);
+
+    await typeIn("builder-title", "Draft");
+    expect(q("builder-stage-artboard-save")).not.toBeNull();
+    expect(savedArtboards()[1].title).toBe(a2.title); // not saved by itself any more
+    await dbl(`builder-artboard-${a1.id}`);
+    expect(q("builder-leave-dialog")).not.toBeNull();
+    expect(text("builder-leave-dialog")).toContain(a2.name);
+    await click("builder-leave-cancel");
+    expect(title()).toBe("Draft");
+
+    await dbl(`builder-artboard-${a1.id}`);
+    await click("builder-leave-discard");
+    expect(q(`builder-artboard-${a1.id}`)?.className).toContain("is-open");
+    expect(savedArtboards()[1].title).toBe(a2.title);
+    await dbl(`builder-artboard-${a2.id}`);
+    expect(title()).toBe(a2.title); // the draft was discarded
+
+    await typeIn("builder-title", "Kept");
+    await click(`builder-template-open-${tpl.id}`); // leaving for the template asks too
+    await click("builder-leave-save");
+    expect(savedArtboards()[1].title).toBe("Kept");
+    expect(q("builder-editing")?.dataset.kind).toBe("template");
+
+    await dbl(`builder-artboard-${a1.id}`);
+    await typeIn("builder-title", "Oops");
+    await click("builder-stage-artboard-reset");
+    expect(title()).toBe(a1.title);
+    expect(q("builder-stage-artboard-save")).toBeNull();
+  });
+
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
     await openLibrary();
     await click("builder-template-save");
@@ -293,7 +338,8 @@ describe("final artboards — the list under the templates", () => {
     await click(`builder-template-add-artboard-${tpl.id}`);
     const second = savedArtboards()[1];
     await typeIn("builder-title", "Before reload");
-    await waitUntil(() => savedArtboards()[1].title === "Before reload", "written back");
+    await click("builder-stage-artboard-save");
+    await waitUntil(() => savedArtboards()[1].title === "Before reload", "saved");
     await settle(50); // the session autosave
 
     act(() => ui.unmount()); // reload: a fresh app on the same saved state
@@ -304,6 +350,7 @@ describe("final artboards — the list under the templates", () => {
     expect(q(`builder-artboard-${second.id}`)?.className).toContain("is-active");
     expect(q(`builder-template-${tpl.id}`)?.className).toContain("is-active"); // its template is selected above
     await typeIn("builder-title", "After reload");
+    await click("builder-stage-artboard-save");
     await waitUntil(() => savedArtboards()[1].title === "After reload", "edit after reload saved into the same artboard");
     expect(savedArtboards()[0].title).not.toBe("After reload");
   });

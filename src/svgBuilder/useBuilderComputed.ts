@@ -51,7 +51,9 @@ export function useBuilderComputed(
   const auditLine = useMemo(() => model.discovery === null ? "No approved assets scanned yet"
     : builderAuditLine(model.discovery), [model.discovery]);
   const indexView = useIconIndex(assets, model.discovery?.index, { placed: placedIds, locked: model.lockedIds, textWeight: model.recipe.textWeight });
-  const pendingUse = useMemo(() => pendingOf(model.artboards), [model.artboards]);
+  // The open artboard counts with what its stage shows now, saved or not (2026-11-14: edits are a draft until saved).
+  const pendingUse = useMemo(() => pendingOf(model.artboards.map((a) => (a.id === model.editingArtboardId ? { ...a, placedIds: [...placedIds] } : a))),
+    [model.artboards, model.editingArtboardId, placedIds]);
   return { assets, visibleAssets, categories, profiles, layout, repository, document, auditLine, pendingUse, ...indexView };
 }
 
