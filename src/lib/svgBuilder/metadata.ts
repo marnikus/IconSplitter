@@ -1,90 +1,103 @@
-// metadata.ts — the sheet-metadata answer contract. Generated answers stay
-// drafts until explicitly accepted; editing the prompt never relaxes this
-// validator (RULE 20). No key, image bytes or provider text is persisted.
-import { fnv1a32 } from "../pairing";
+// metadata.ts — the sheet / artboard metadata contract (2026-11-14: the SAME
+// system as the SVG to upload tab — Title, Description, Tags, parsed from the
+// labeled answer lines and validated by lib/upload/meta.ts). The answer also
+// carries "Title-Artboard": 2–5 words for the artboard's VISIBLE banner title
+// (it is not metadata). Generated answers stay drafts until accepted; editing
+// the prompt never relaxes the validator (RULE 20). No key or image is kept.
 import { isRecord } from "../isrecord";
+import { cleanMetadata, dedupeTags, metadataFingerprint, parseMetadata, validateMetadata } from "../upload/meta";
 import type { SheetMetadata, SheetMetadataFields, SheetMetadataValidation } from "./types";
 
-export const DEFAULT_SHEET_PROMPT = [
-  "Describe this icon sheet for a stock-ready vector collection.",
-  "Return only one JSON object with exactly these fields:",
-  '{"title":"5-12 words, specific and neutral","subtitle":"one short neutral phrase","keywords":["10-16 single-word or two-word tags"]}.',
-  "Rules: no brand names, no URLs, no API keys, no claims about people, and no markdown after the JSON.",
-  "The title, subtitle and keywords must describe the visible approved icons only.",
-].join(" ");
+export const DEFAULT_SHEET_PROMPT = `You write search metadata for Describe this icon sheet  being uploaded to a stock icon website. Study the icons sheet and each icon separately.
+Generate exactly two titles:
+Title 1 — Abstract: Describe the ABSTRACT IDEA the all icons expresses — never a specific object, product, brand or place. Use at list 5 words, sentence case, no period.
+Title 2 — Concrete: Do the opposite. Split the image into its exact visible icons. Identify up to several  major icons meanings and pick the single most descriptive one-word name for each. Combine these up to 7 words into the shortest possible sentence describing the scene.
+Answer with EXACTLY two lines and nothing else:
+Title 1: <abstract idea phrase>
+Title 2: <short concrete objects phrase>
 
-const FORBIDDEN = /\b(shutterstock|adobe stock|getty|istock)\b/i;
+
+Title: <ONE phrase of 5-7 words, sentence case, no period>
+
+Description: <Title 1 - abstract idea phrase. at least 5 words naming the abstract idea>>. <Title 2 - short concrete objects phrase. at least 5 words naming the objects in scene>
+Tags: <at least 15 unique lowercase keywords, comma-separated, combining abstract idea tags and visible object tags>
+
+Title-Artboard: <use description and title and give 2-5 words that describe this icons sheet in the closest way. examples: (“food and drinks asset”, ”travel and holidays icons”)>
+
+Output one comma-separated list only, all lowercase, no hashtags, no numbering, no markdown
+Include at least 10 unique abstract idea keywords describing the concept, feeling, action, purpose, relationship, or meaning of the icon, not the objects themselves
+Then split the image into exact visible objects and describe each object with 1–3 word tags
+Add up to 30 object-description tags total
+Combine the abstract idea tags and object-description tags into one final tag list
+Remove duplicates and near-duplicates, including singular/plural duplicates
+The final tag list must include these seven required metadata tags: icon, pictogram, vector, stroke, line, editable, web
+Use only generic searchable words, no brand names, trademarks, logos, real people, fictional characters, artist names, or copyrighted terms
+Do not include colors unless color is important to the icon meaning
+Do not include style names connected to artists, brands, or platforms
+In tags do not use two or more words: in final all words should be splitted to one word as one tag.
+Keep tags useful for stock icon search buyers, with the most important tags first
+overall tag words up must be between 35 and up to 45 words. Make sure it not less then 35 word if so add some more.
+Make sure you sent all 4:Title, Description, Tags,Title-Artboard`;
+
+/** The artboard's visible subtitle after a generated answer (2026-11-14). */
+export const DEFAULT_ARTBOARD_SUBTITLE = "Editable stroke width";
 
 export function isDefaultSheetPrompt(text: string): boolean {
   return text.trim() === DEFAULT_SHEET_PROMPT.trim();
 }
 
+/** The JSON prompt used before 2026-11-14 (title / subtitle / keywords); a saved copy of it is replaced. */
+export function isLegacySheetPrompt(text: string): boolean {
+  return /"subtitle"/.test(text) && /"keywords"/.test(text);
+}
+
 export function emptySheetMetadata(): SheetMetadata {
-  return { title: "", subtitle: "", keywords: [], state: "empty", validation: null, fingerprint: null };
+  return { title: "", description: "", tags: [], state: "empty", validation: null, fingerprint: null };
 }
 
-export function parseSheetMetadata(answer: string): SheetMetadataFields {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(answer);
-  const source = fenced?.[1] ?? answer;
-  const start = source.indexOf("{");
-  const end = source.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("no JSON metadata object in the provider answer");
-  const parsed: unknown = JSON.parse(source.slice(start, end + 1));
-  if (!isRecord(parsed)) throw new Error("the provider answer is not a JSON object");
-  return cleanSheetMetadata(parsed);
+export interface SheetAnswer { fields: SheetMetadataFields; artboardTitle: string }
+
+/** The provider answer: Title / Description / Tags (as the upload tab reads them) and Title-Artboard. */
+export function parseSheetAnswer(answer: string): SheetAnswer {
+  const parsed = parseMetadata(answer);
+  if (parsed === null) throw new Error("the answer has no Title, Description and Tags lines");
+  const line = /^\s*title[\s-]*artboard\s*:\s*(.*)$/im.exec(answer)?.[1] ?? "";
+  return { fields: cleanSheetMetadata(parsed), artboardTitle: cleanArtboardTitle(line) };
 }
 
+/** 2–5 plain words for the banner: quotes, brackets and end punctuation go; at most 60 characters. */
+export function cleanArtboardTitle(text: string): string {
+  return text.replace(/[“”"«»()<>]/g, "").replace(/\s+/g, " ").replace(/[\s.!,;:…]+$/u, "").trim().slice(0, 60);
+}
+
+/** Stored or answered fields, the upload tab's cleaning (sentence case, no end period, tags deduped). Older saves map subtitle → description, keywords → tags. */
 export function cleanSheetMetadata(raw: unknown): SheetMetadataFields {
   const source = isRecord(raw) ? raw : {};
-  return {
-    title: boundedText(source.title, 90),
-    subtitle: boundedText(source.subtitle, 140),
-    keywords: cleanKeywords(source.keywords),
-  };
+  const text = (v: unknown) => (typeof v === "string" ? v : "");
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((t): t is string => typeof t === "string").map((t) => t.trim()).filter((t) => t !== "") : []);
+  const tags = dedupeTags(list(source.tags ?? source.keywords)).slice(0, 80);
+  const clean = cleanMetadata({ title: text(source.title).slice(0, 200), description: text(source.description ?? source.subtitle).slice(0, 400), tags });
+  return { title: clean.title, description: clean.description, tags: clean.tags };
 }
 
 export function validateSheetMetadata(fields: SheetMetadataFields): SheetMetadataValidation {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  if (fields.title.trim().length < 3 || fields.title.length > 90) errors.push("title must be 3–90 characters");
-  if (fields.subtitle.length > 140) errors.push("subtitle must be at most 140 characters");
-  if (fields.keywords.length > 20) errors.push("at most 20 keywords are allowed");
-  for (const keyword of fields.keywords) {
-    if (keyword.length < 2 || keyword.length > 32 || /[:/@]|\s{2,}/.test(keyword)) {
-      errors.push(`keyword “${keyword}” must be 2–32 plain characters with no URL or e-mail`);
-    }
-  }
-  const prose = `${fields.title} ${fields.subtitle} ${fields.keywords.join(" ")}`;
-  if (FORBIDDEN.test(prose)) warnings.push("a stock-site brand name was removed from the accepted copy");
-  return { ok: errors.length === 0, errors, warnings };
+  return validateMetadata({ title: fields.title, description: fields.description, tags: [...fields.tags] });
 }
 
 export function sheetMetadataFingerprint(fields: SheetMetadataFields): string {
-  return fnv1a32(JSON.stringify(cleanSheetMetadata(fields))).toString(16);
+  return metadataFingerprint({ title: fields.title, description: fields.description, tags: [...fields.tags] });
 }
 
+/** A generated or edited answer waiting for Accept: "draft", or "invalid" with the rule violations. */
 export function draftSheetMetadata(fields: SheetMetadataFields): SheetMetadata {
   const clean = cleanSheetMetadata(fields);
   const validation = validateSheetMetadata(clean);
-  return { ...clean, state: validation.ok ? "draft" : "invalid", validation,
-    fingerprint: sheetMetadataFingerprint(clean) };
+  return { ...clean, state: validation.ok ? "draft" : "invalid", validation, fingerprint: sheetMetadataFingerprint(clean) };
 }
 
+/** Accept: re-validated; "accepted", or "invalid" with the exact rule violations. */
 export function acceptSheetMetadata(fields: SheetMetadataFields): SheetMetadata {
   const clean = cleanSheetMetadata(fields);
   const validation = validateSheetMetadata(clean);
-  return { ...clean, state: validation.ok ? "accepted" : "invalid", validation,
-    fingerprint: sheetMetadataFingerprint(clean) };
-}
-
-function boundedText(value: unknown, limit: number): string {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, limit) : "";
-}
-
-function cleanKeywords(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const words = raw.filter((word): word is string => typeof word === "string")
-    .map((word) => word.trim().replace(/\s+/g, " ").slice(0, 32))
-    .filter((word) => word !== "");
-  return [...new Set(words)].slice(0, 20);
+  return { ...clean, state: validation.ok ? "accepted" : "invalid", validation, fingerprint: sheetMetadataFingerprint(clean) };
 }

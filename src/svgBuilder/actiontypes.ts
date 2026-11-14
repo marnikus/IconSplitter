@@ -13,6 +13,7 @@ import type { BuilderDiscovery } from "./discovery";
 import type { AssetRepository } from "./repository";
 import type { BuilderModel } from "./model";
 import type { BuilderScanRefs } from "./scan";
+import type { SheetMetadataFields } from "../lib/svgBuilder/types";
 import type { DirHandleLike } from "../lib/fs";
 
 export interface BuilderActionContext {
@@ -93,6 +94,9 @@ export interface BuilderActions {
   confirmMetadata: () => void;
   cancelMetadata: () => void;
   acceptMetadataDraft: () => void;
+  /** The current sheet's metadata fields (2026-11-14, the upload tab's editor): edit, then ✓ Accept re-validates. */
+  editMetadata: (patch: Partial<SheetMetadataFields>) => void;
+  acceptMetadata: () => void;
   exportSvg: () => void;
   exportPng: () => void;
   copySvg: () => void;

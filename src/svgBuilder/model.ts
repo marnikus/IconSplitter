@@ -77,6 +77,8 @@ export interface BuilderModel {
   modelCheck: BuilderModelCheck;
   metadata: SheetMetadata | null;
   draft: SheetMetadata | null;
+  /** The answer's Title-Artboard while its draft waits for Accept (2026-11-14). */
+  draftTitle: string;
   preview: string | null;
   dialog: BuilderDialog;
   svgTexts: Readonly<Record<string, string>>;
@@ -105,7 +107,7 @@ export function initialBuilderModel(): BuilderModel {
     lockedIds: getAppState().builder.lockedIds ?? [], excludedIds: getAppState().builder.excludedIds ?? [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
     prompt: loadBuilderPrompt(), presets: builderPresets.load(), presetPick: "",
     gemini: loadGeminiConfig(), key: emptyKeyInfo(),
-    modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null,
+    modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null, draftTitle: "",
     preview: null, dialog: "none", svgTexts: {}, indexing: null,
     ...savedLists(), editingTemplateId: null, iconMap: null,
     editingArtboardId: null, templateSel: EMPTY_SEL, artboardSel: EMPTY_SEL, artboardMeta: null, leaveTo: null,

@@ -5,7 +5,7 @@
 // its artboards. Pure: validation on read (RULE 13), names, config and preview.
 import { isRecord } from "../isrecord";
 import { applyCopy, parseCaptionTexts } from "./config";
-import { cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
+import { DEFAULT_ARTBOARD_SUBTITLE, cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
 import { emptySlotFor, isEmptySlot } from "./slots";
 import { lookOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
 import { parseOverrides, withOverrides, type LookOverrides } from "./lookoverrides";
@@ -56,6 +56,15 @@ export function newArtboard(template: SheetTemplate, artboards: readonly FinalAr
     id: at.id, templateId: template.id, name: artboardName(template, artboards), title, subtitle, heroIconId: null,
     placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [], overrides: {}, captionTexts: {},
   };
+}
+
+/**
+ * A generated metadata answer on an artboard (2026-11-14): its metadata, and
+ * its VISIBLE words — Title-Artboard as the banner title (kept when the answer
+ * had none) and the default subtitle phrase.
+ */
+export function withSheetAnswer(artboard: FinalArtboard, answer: { metadata: SheetMetadata; artboardTitle: string }): FinalArtboard {
+  return { ...artboard, metadata: answer.metadata, ...(answer.artboardTitle === "" ? {} : { title: answer.artboardTitle, subtitle: DEFAULT_ARTBOARD_SUBTITLE }) };
 }
 
 /** One artboard without the icons `known` does not have; the same object when nothing changes. */

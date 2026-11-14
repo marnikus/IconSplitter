@@ -213,4 +213,30 @@ describe("preset JSON — the window", () => {
     await click("builder-preset-json-close");
     expect(q("builder-preset-json")).toBeNull();
   });
+
+  it("the sheet's metadata shows in the upload tab's editor: Title, Description, Tags (no Icon Name); Accept re-validates (2026-11-14)", async () => {
+    await openLibrary();
+    await click("builder-open-preset-json");
+    await setBox(JSON.stringify({ metadata: { title: "Short", description: "Too short", tags: ["icon"] } }));
+    await click("builder-preset-json-apply");
+    await click("builder-preset-json-close");
+    if (q("builder-meta-fields") === null) await click("builder-meta-toggle");
+    expect(q("upload-meta-fields-builder")).not.toBeNull();
+    expect(q("upload-meta-name-builder")).toBeNull();
+    expect((q("upload-meta-title-builder") as HTMLInputElement).value).toBe("Short");
+    await click("upload-meta-accept-builder");
+    expect(text("upload-meta-validation-builder")).toMatch(/title must be at least 5 words/);
+    const type = async (id: string, value: string) => {
+      const el = q(id) as HTMLInputElement | HTMLTextAreaElement;
+      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      await act(async () => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value); el.dispatchEvent(new Event("input", { bubbles: true })); });
+    };
+    await type("upload-meta-title-builder", "Domestic household routines and grocery shopping");
+    await type("upload-meta-description-builder", "Domestic household routines and grocery shopping concepts today");
+    await type("upload-meta-tags-builder", "icon, pictogram, vector, stroke, line, editable, web, food, home, kitchen");
+    await click("upload-meta-accept-builder");
+    expect(text("upload-meta-state-builder")).toBe("accepted");
+    await click("builder-open-preset-json");
+    expect(JSON.parse(box().value).metadata).toMatchObject({ title: "Domestic household routines and grocery shopping", tags: expect.arrayContaining(["kitchen"]) });
+  });
 });

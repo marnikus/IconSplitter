@@ -35,7 +35,7 @@ const { DEFAULT_CONFIG, LAYOUT_PRESETS, parseSheetConfig, configFingerprint } = 
 const { computeLayout } = layoutMod;
 const { categoriesOf, filterAssets, profilesOf, assetsFromRows } = assetsMod;
 const { reshuffleSheet, DEFAULT_SELECTION_RECIPE } = selectionMod;
-const { DEFAULT_SHEET_PROMPT, parseSheetMetadata, validateSheetMetadata } = metadataMod;
+const { DEFAULT_SHEET_PROMPT, parseSheetAnswer, validateSheetMetadata } = metadataMod;
 const { parseSheetPreset, serializeSheetPreset } = presetMod;
 const { parseBuilderUndoPatch } = undoMod;
 const { TAB_IDS, DEFAULT_BUILDER } = sessionMod;
@@ -54,7 +54,7 @@ const test = (name: string, fn: Case["fn"]): void => { cases.push({ name, fn });
 
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>';
 const SHEET = '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="660" viewBox="0 0 1080 660"><rect width="1080" height="660" fill="#fff"/></svg>';
-const ANSWER = JSON.stringify({ title: "Quiet line icons", subtitle: "Approved vector set", keywords: ["icon", "vector", "line"] });
+const ANSWER = "Title: Domestic household routines and grocery shopping concepts\nDescription: Domestic household routines and grocery shopping concepts. Pot bag ice cream seasoning.\nTags: icon, pictogram, vector, stroke, line, editable, web, domestic, household, routine, icon\nTitle-Artboard: household and food icons";
 
 const assets: BuilderIconAsset[] = [
   { id: "a", base: "star", suffix: "", label: "Star", category: "UI", tags: ["ui", "star", "favorite"],
@@ -107,13 +107,14 @@ test("selection is seeded, locked and honest about the top-up", () => {
   assert.deepEqual(short.shortfall, { pool: 1, cells: 3 });
 });
 
-test("metadata prompt, fenced answer and validation", () => {
-  assert.match(DEFAULT_SHEET_PROMPT, /title/);
-  assert.match(DEFAULT_SHEET_PROMPT, /keywords/);
-  const parsed = parseSheetMetadata('```json\n{"title":" Quiet line icons ","subtitle":"Approved vector set","keywords":["icon","icon","vector"]}\n```');
-  assert.equal(parsed.title, "Quiet line icons");
-  assert.deepEqual(parsed.keywords, ["icon", "vector"]);
-  assert.equal(validateSheetMetadata(parsed).ok, true);
+test("metadata prompt, labeled answer and validation (upload tab rules, 2026-11-14)", () => {
+  assert.match(DEFAULT_SHEET_PROMPT, /Title-Artboard:/);
+  assert.match(DEFAULT_SHEET_PROMPT, /Tags:/);
+  const parsed = parseSheetAnswer(ANSWER);
+  assert.equal(parsed.fields.title, "Domestic household routines and grocery shopping concepts");
+  assert.equal(parsed.fields.tags.filter((t: string) => t === "icon").length, 1);
+  assert.equal(parsed.artboardTitle, "household and food icons");
+  assert.equal(validateSheetMetadata(parsed.fields).ok, true);
 });
 
 test("builder preset round-trips and prunes stale approved ids", () => {

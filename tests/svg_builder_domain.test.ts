@@ -11,7 +11,7 @@ import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { categoriesOf, filterAssets, profilesOf } from "../src/lib/svgBuilder/assets";
 import { reshuffleSheet } from "../src/lib/svgBuilder/selection";
 import {
-  DEFAULT_SHEET_PROMPT, cleanSheetMetadata, parseSheetMetadata, validateSheetMetadata,
+  DEFAULT_SHEET_PROMPT, cleanSheetMetadata, isLegacySheetPrompt, parseSheetAnswer, validateSheetMetadata,
 } from "../src/lib/svgBuilder/metadata";
 import { cellGroupOf } from "../src/lib/svgBuilder/svgAsset";
 import { composeSheet } from "../src/lib/svgBuilder/compose";
@@ -39,7 +39,7 @@ function recipe(over: Partial<SelectionRecipe> = {}): SelectionRecipe {
 const FRAME = { index: 0, x: 10, y: 20, size: 48, glyph: 44, captionY: 76, captionSize: 9 };
 
 function acceptedMetadata(): SheetMetadata {
-  return { title: "Quiet line icons", subtitle: "Approved vector set", keywords: ["icon", "vector", "line"],
+  return { title: "Quiet line icons", description: "Approved vector set", tags: ["icon", "vector", "line"],
     state: "accepted", validation: { ok: true, errors: [], warnings: [] }, fingerprint: "meta-1" };
 }
 
@@ -108,26 +108,40 @@ describe("deterministic asset selection", () => {
   });
 });
 
-describe("sheet metadata", () => {
-  it("parses a fenced JSON answer, cleans it and validates it", () => {
-    const answer = '```json\n{"title":" Quiet line icons ","subtitle":"Approved vector set","keywords":["icon","icon","vector"]}\n```';
-    const parsed = parseSheetMetadata(answer);
-    expect(parsed.title).toBe("Quiet line icons");
-    expect(parsed.keywords).toEqual(["icon", "vector"]);
-    expect(validateSheetMetadata(parsed).ok).toBe(true);
+describe("sheet metadata (2026-11-14: the upload tab's Title / Description / Tags)", () => {
+  const EXAMPLE = `Title 1: Domestic household routines and grocery shopping concepts
+Title 2: Pot bag ice cream seasoning
+Title: Domestic household routines and grocery shopping concepts
+Description: Domestic household routines and grocery shopping concepts. Pot bag ice cream seasoning.
+Tags: icon, pictogram, vector, stroke, line, editable, web, domestic, household, routine, shopping, cooking, convenience, lifestyle, nourishment, task, utility, daily, pot, bag, ice, cream, seasoning, bottle, food, preparation, kitchen, store, purchase, dessert, salt, container
+Title-Artboard: household and food icons`;
+
+  it("reads Title, Description, Tags and Title-Artboard from the labeled answer — not Title 1 / Title 2", () => {
+    const { fields, artboardTitle } = parseSheetAnswer(EXAMPLE);
+    expect(fields.title).toBe("Domestic household routines and grocery shopping concepts");
+    expect(fields.description).toBe("Domestic household routines and grocery shopping concepts. Pot bag ice cream seasoning"); // no end period, as the upload tab stores it
+    expect(fields.tags.slice(0, 7)).toEqual(["icon", "pictogram", "vector", "stroke", "line", "editable", "web"]);
+    expect(fields.tags).toHaveLength(32);
+    expect(artboardTitle).toBe("household and food icons");
+    expect(validateSheetMetadata(fields).ok).toBe(true);
   });
 
-  it("refuses prose, an empty title and forbidden-looking keywords", () => {
-    expect(() => parseSheetMetadata("I cannot answer")).toThrow();
-    const invalid = validateSheetMetadata(cleanSheetMetadata({ title: "", subtitle: "", keywords: ["https://example.com"] }));
+  it("refuses an answer without the labeled lines, and validates with the upload tab's rules", () => {
+    expect(() => parseSheetAnswer("I cannot answer")).toThrow();
+    const invalid = validateSheetMetadata(cleanSheetMetadata({ title: "Too short", description: "Also short", tags: ["icon"] }));
     expect(invalid.ok).toBe(false);
-    expect(invalid.errors.join(" ")).toMatch(/title|keyword/i);
+    expect(invalid.errors.join(" ")).toMatch(/title must be at least 5 words/);
+    expect(invalid.errors.join(" ")).toMatch(/missing mandatory tags/);
   });
 
-  it("has a default prompt that names the exact output contract", () => {
-    expect(DEFAULT_SHEET_PROMPT).toContain("title");
-    expect(DEFAULT_SHEET_PROMPT).toContain("keywords");
-    expect(DEFAULT_SHEET_PROMPT).toContain("JSON");
+  it("reads older saved metadata (subtitle → description, keywords → tags)", () => {
+    expect(cleanSheetMetadata({ title: "Old title here", subtitle: "Old line", keywords: ["a", "b"] })).toEqual({ title: "Old title here", description: "Old line", tags: ["a", "b"] });
+  });
+
+  it("the default prompt is the stock prompt asking for all four lines", () => {
+    for (const label of ["Title 1:", "Title 2:", "Title:", "Description:", "Tags:", "Title-Artboard:"]) expect(DEFAULT_SHEET_PROMPT).toContain(label);
+    expect(isLegacySheetPrompt('{"title":"x","subtitle":"y","keywords":[]}')).toBe(true);
+    expect(isLegacySheetPrompt(DEFAULT_SHEET_PROMPT)).toBe(false);
   });
 });
 
@@ -155,7 +169,8 @@ describe("approved SVG embedding and composition", () => {
     });
     expect(doc.placedIds).toEqual(["a", "b"]);
     expect(doc.brokenIds).toEqual([]);
-    expect(doc.svg).toContain("<title>Quiet line icons — icon sheet</title>");
+    expect(doc.svg).toContain("<title>Quiet line icons — icon sheet</title>"); // the embedded title is the accepted metadata title
+    expect(doc.svg).toContain("<desc>Approved vector set. Tags: icon, vector, line</desc>");
     expect(doc.svg).toContain('data-asset-id="a"');
     expect(doc.svg).toContain('data-config-fingerprint="' + doc.configFingerprint + '"');
     expect(doc.svg).toContain("\"id\":\"a\"");

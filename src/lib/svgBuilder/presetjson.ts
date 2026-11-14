@@ -48,7 +48,7 @@ export function presetJsonOf(input: PresetJsonInput): Record<string, unknown> {
   return {
     format: PRESET_FORMAT, version: PRESET_VERSION, name: input.name, config: input.config,
     icons: trimNulls(icons), lockedIcons: locked, seed: input.seed, recipe: input.recipe,
-    ...(input.metadata === null ? {} : { metadata: { title: input.metadata.title, subtitle: input.metadata.subtitle, keywords: input.metadata.keywords } }),
+    ...(input.metadata === null ? {} : { metadata: { title: input.metadata.title, description: input.metadata.description, tags: input.metadata.tags } }),
   };
 }
 

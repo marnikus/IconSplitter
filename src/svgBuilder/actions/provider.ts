@@ -3,17 +3,20 @@
 import { parseGeminiConfig, type GeminiConfig } from "../../lib/upload/gemini";
 import { listGeminiModels } from "../../lib/upload/geminimodels";
 import { redact } from "../../lib/svgsecret";
-import { acceptSheetMetadata } from "../../lib/svgBuilder/metadata";
+import { DEFAULT_ARTBOARD_SUBTITLE, acceptSheetMetadata } from "../../lib/svgBuilder/metadata";
+import { iconsImageFor } from "../metaimagefor";
 import { saveGeminiConfig } from "../../upload/configstore";
 import { clearGeminiKey, readGeminiKey, saveGeminiKey } from "../../upload/keystore";
 import { emptyKeyInfo, keyInfoOf } from "../model";
-import { sheetPreviewFor } from "../preview";
 import { generateSheetMetadata } from "../runSheetMetadata";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
+import { emptySheetMetadata } from "../../lib/svgBuilder/metadata";
+import type { SheetMetadataFields } from "../../lib/svgBuilder/types";
+import { commitConfig } from "./config";
 
 type ProviderActions = Pick<BuilderActions,
   "setGemini" | "checkModel" | "saveKey" | "forgetKey" | "generateMetadata"
-  | "confirmMetadata" | "cancelMetadata" | "acceptMetadataDraft">;
+  | "confirmMetadata" | "cancelMetadata" | "acceptMetadataDraft" | "editMetadata" | "acceptMetadata">;
 
 export function providerActions(get: () => BuilderActionContext): ProviderActions {
   return {
@@ -25,6 +28,8 @@ export function providerActions(get: () => BuilderActionContext): ProviderAction
     confirmMetadata: () => { void confirmMetadata(get()); },
     cancelMetadata: () => cancelMetadata(get()),
     acceptMetadataDraft: () => acceptDraft(get()),
+    editMetadata: (patch) => editMetadata(get(), patch),
+    acceptMetadata: () => acceptMetadata(get()),
   };
 }
 
@@ -61,14 +66,14 @@ async function forgetKey(ctx: BuilderActionContext): Promise<void> {
   ctx.say("Gemini API key removed from this device");
 }
 
+/** The exact request: the icons of the current sheet (no banner) as one PNG of at most 1 MP (2026-11-14). */
 async function prepareMetadata(ctx: BuilderActionContext): Promise<void> {
-  const doc = ctx.document;
-  if (doc === null) return ctx.say("Compose a sheet before generating metadata", true);
+  if (ctx.document === null) return ctx.say("Compose a sheet before generating metadata", true);
   if (ctx.model.key.value === null) return ctx.say("Save the Gemini API key before generating metadata", true);
-  const preview = await sheetPreviewFor(doc.svg);
-  if (!preview.ok) return ctx.say(`Sheet preview failed — ${preview.reason}`, true);
-  ctx.dispatch({ preview: preview.dataUrl, dialog: "metadata", draft: null,
-    status: "Confirm the exact sheet preview and prompt before sending" });
+  const preview = await iconsImageFor({ config: ctx.model.config, assets: ctx.assets, placedIds: ctx.placedIds, svgTexts: ctx.model.svgTexts });
+  if (!preview.ok) return ctx.say(`Sheet image failed — ${preview.reason}`, true);
+  ctx.dispatch({ preview: preview.dataUrl, dialog: "metadata", draft: null, draftTitle: "",
+    status: "Confirm the exact icons image and prompt before sending" });
 }
 
 async function confirmMetadata(ctx: BuilderActionContext): Promise<void> {
@@ -80,7 +85,7 @@ async function confirmMetadata(ctx: BuilderActionContext): Promise<void> {
     const out = await generateSheetMetadata({ config: ctx.model.gemini, apiKey: key,
       prompt: ctx.model.prompt, preview });
     if (!out.ok) return ctx.say(`Sheet metadata failed — ${out.reason}`, true);
-    ctx.dispatch({ draft: out.draft, status: out.truncated ? "The provider answer was truncated — review it carefully"
+    ctx.dispatch({ draft: out.draft, draftTitle: out.artboardTitle, status: out.truncated ? "The provider answer was truncated — review it carefully"
       : "Sheet metadata draft ready — accept it before it enters an export" });
   } finally {
     ctx.setBusy(null);
@@ -94,6 +99,31 @@ function acceptDraft(ctx: BuilderActionContext): void {
   if (accepted.state !== "accepted") return ctx.say(`Draft is invalid — ${accepted.validation?.errors.join(" ")}`, true);
   ctx.dispatch({ metadata: accepted, draft: null, preview: null, dialog: "none",
     status: "Sheet metadata accepted — it will be embedded in exports" });
+  applyArtboardTitle(ctx, ctx.model.draftTitle);
+}
+
+/** The answer's Title-Artboard becomes the visible banner title, the subtitle the default phrase (one undo step). */
+function applyArtboardTitle(ctx: BuilderActionContext, title: string): void {
+  ctx.dispatch({ draftTitle: "" });
+  if (title === "") return;
+  const config = ctx.model.config;
+  commitConfig(ctx, { config: { ...config, banner: { ...config.banner, title, subtitle: DEFAULT_ARTBOARD_SUBTITLE } }, label: "Title from metadata" });
+}
+
+/** Editing the fields (the upload tab's way): an accepted answer turns "edited" until Accept re-validates it. */
+function editMetadata(ctx: BuilderActionContext, patch: Partial<SheetMetadataFields>): void {
+  const current = ctx.model.metadata ?? emptySheetMetadata();
+  const state = current.state === "accepted" || current.state === "edited" ? "edited" : current.state === "empty" ? "draft" : current.state;
+  ctx.dispatch({ metadata: { ...current, ...patch, state } });
+}
+
+/** ✓ Accept: re-validated with the upload tab's rules; refused with the exact violations. */
+function acceptMetadata(ctx: BuilderActionContext): void {
+  const current = ctx.model.metadata;
+  if (current === null) return ctx.say("No metadata to accept", true);
+  const accepted = acceptSheetMetadata(current);
+  ctx.dispatch({ metadata: accepted });
+  ctx.say(accepted.state === "accepted" ? "Metadata accepted" : `Metadata is invalid — ${accepted.validation?.errors.join("; ")}`, accepted.state !== "accepted");
 }
 
 function cancelMetadata(ctx: BuilderActionContext): void {

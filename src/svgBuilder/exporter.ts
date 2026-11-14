@@ -45,8 +45,13 @@ export async function copySheetSvg(doc: SheetDocument): Promise<void> {
 export async function downloadSheetPng(doc: SheetDocument, title: string, scale = 2): Promise<void> {
   const width = Math.round(artboardSize(doc.svg, "width", 1080) * scale);
   const height = Math.round(artboardSize(doc.svg, "height", 660) * scale);
+  downloadBlob(await sheetPngBlob(doc.svg, width, height), sheetFileName(title, `@${scale}x.png`));
+}
+
+/** The sheet SVG drawn at width × height as one PNG — the PNG export's renderer, shared with the metadata image. */
+export async function sheetPngBlob(svg: string, width: number, height: number): Promise<Blob> {
   const image = new Image();
-  image.src = svgDataUrl(withIntrinsicSize(doc.svg, width, height));
+  image.src = svgDataUrl(withIntrinsicSize(svg, width, height));
   await image.decode();
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -54,8 +59,7 @@ export async function downloadSheetPng(doc: SheetDocument, title: string, scale 
   const ctx = canvas.getContext("2d");
   if (ctx === null) throw new Error("No canvas context for PNG export");
   ctx.drawImage(image, 0, 0, width, height);
-  const blob = await canvasBlob(canvas);
-  downloadBlob(blob, sheetFileName(title, `@${scale}x.png`));
+  return canvasBlob(canvas);
 }
 
 function artboardSize(svg: string, name: "width" | "height", fallback: number): number {

@@ -4,6 +4,7 @@ import SvgBuilderBrief from "./SvgBuilderBrief";
 import SvgBuilderPresetJson from "./SvgBuilderPresetJson";
 import SvgBuilderArtboardMeta from "./SvgBuilderArtboardMeta";
 import SvgBuilderLeaveDialog from "./SvgBuilderLeaveDialog";
+import { DEFAULT_ARTBOARD_SUBTITLE } from "../lib/svgBuilder/metadata";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderDialogs({ b }: { b: BuilderApi }) {
@@ -68,8 +69,9 @@ function MetadataDraft({ b }: { b: BuilderApi }) {
   return <div className="builder-meta-draft" data-testid="builder-meta-draft">
     <span className="bld-eyebrow">PROVIDER DRAFT · REVIEW BEFORE ACCEPTING</span>
     <h4 data-testid="builder-meta-title">{draft.title}</h4>
-    <p data-testid="builder-meta-subtitle">{draft.subtitle}</p>
-    <p data-testid="builder-meta-keywords">{draft.keywords.join(" · ")}</p>
+    <p data-testid="builder-meta-description">{draft.description}</p>
+    <p data-testid="builder-meta-tags">{draft.tags.join(", ")}</p>
+    {b.draftTitle !== "" && <p data-testid="builder-meta-artboard-title">Artboard title: <b>{b.draftTitle}</b> · subtitle: {DEFAULT_ARTBOARD_SUBTITLE}</p>}
     {draft.validation !== null && !draft.validation.ok && <p className="builder-warning">{draft.validation.errors.join(" · ")}</p>}
   </div>;
 }

@@ -108,10 +108,11 @@ export interface SheetLayout {
 
 export interface SheetMetadataValidation { ok: boolean; errors: readonly string[]; warnings: readonly string[] }
 
+/** The upload tab's metadata fields (2026-11-14; were title / subtitle / keywords). */
 export interface SheetMetadataFields {
   title: string;
-  subtitle: string;
-  keywords: readonly string[];
+  description: string;
+  tags: readonly string[];
 }
 
 export interface SheetMetadata extends SheetMetadataFields {

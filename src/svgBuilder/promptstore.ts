@@ -1,7 +1,7 @@
 // promptstore.ts — the builder's own sheet-metadata prompt and preset list.
 // The Gemini key is NOT here: it stays in the shared IndexedDB key vault.
 import { isRecord } from "../lib/isrecord";
-import { DEFAULT_SHEET_PROMPT, isDefaultSheetPrompt } from "../lib/svgBuilder/metadata";
+import { DEFAULT_SHEET_PROMPT, isDefaultSheetPrompt, isLegacySheetPrompt } from "../lib/svgBuilder/metadata";
 import { presetStore } from "../state/presetstore";
 import { readKey, writeKey } from "../state/safestorage";
 
@@ -21,7 +21,8 @@ export function saveBuilderPrompt(prompt: string): void {
 
 export function parseBuilderPrompt(raw: unknown): string {
   if (!isRecord(raw) || raw.v !== PROMPT_VERSION || typeof raw.prompt !== "string") return DEFAULT_SHEET_PROMPT;
-  return raw.prompt.trim() === "" ? DEFAULT_SHEET_PROMPT : raw.prompt;
+  // The old JSON prompt (title / subtitle / keywords) no longer fits the answer contract (2026-11-14): the new default replaces it.
+  return raw.prompt.trim() === "" || isLegacySheetPrompt(raw.prompt) ? DEFAULT_SHEET_PROMPT : raw.prompt;
 }
 
 export function isBuilderDefaultPrompt(prompt: string): boolean {

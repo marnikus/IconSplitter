@@ -34,20 +34,20 @@ export function composeSheet(args: ComposeSheetArgs): SheetDocument {
   const sources = placed.flatMap((p) => (p.asset === undefined ? [] : [{ id: p.id, fingerprint: p.asset.fingerprint }]));
   const copy = sheetCopy(metadata, args.config.banner);
   const svg = [
-    rootOpen(args.config, fingerprint), headOf(copy.title, metadata, { ids, sources, fingerprint }),
+    rootOpen(args.config, fingerprint), headOf(metadata?.state === "accepted" && metadata.title !== "" ? metadata.title : copy.title, metadata, { ids, sources, fingerprint }),
     backgroundOf(args.config), bannerOf(args, copy, ids), `<g data-export="icons">${cells.join("")}</g>`,
     captionsOf(args, placed), "</svg>",
   ].join("");
   return { svg, placedIds: ids, brokenIds: [...new Set(brokenIds)], sourceFingerprints: sources, configFingerprint: fingerprint, metadata };
 }
 
-/** Accepted provider metadata overrides the typed banner copy. */
-export function sheetCopy(metadata: SheetMetadata | null, banner: SheetConfig["banner"]): { title: string; subtitle: string } {
-  const accepted = metadata?.state === "accepted";
-  return {
-    title: accepted && metadata.title !== "" ? metadata.title : banner.title,
-    subtitle: accepted && metadata.subtitle !== "" ? metadata.subtitle : banner.subtitle,
-  };
+/**
+ * The banner words. Since 2026-11-14 metadata never replaces them: a generated
+ * answer writes its Title-Artboard into the banner title instead (the metadata
+ * title stays search metadata). `metadata` is kept for the callers' shape.
+ */
+export function sheetCopy(_metadata: SheetMetadata | null, banner: SheetConfig["banner"]): { title: string; subtitle: string } {
+  return { title: banner.title, subtitle: banner.subtitle };
 }
 
 function cellMarkup(args: ComposeSheetArgs, p: Placed, brokenIds: string[]): string {
@@ -69,7 +69,7 @@ function rootOpen(config: SheetConfig, fingerprint: string): string {
 function headOf(title: string, metadata: SheetMetadata | null, trace: { ids: string[]; sources: { id: string; fingerprint: string }[]; fingerprint: string }): string {
   const accepted = metadata?.state === "accepted" ? metadata : null;
   const desc = accepted === null ? "Generated with the SVG builder. Editable stroke-only icon sheet."
-    : `${accepted.subtitle} Keywords: ${accepted.keywords.join(", ")}`;
+    : `${accepted.description}. Tags: ${accepted.tags.join(", ")}`;
   const payload = JSON.stringify({ v: 1, approvedOnly: true, title, placedIds: trace.ids, sources: trace.sources, configFingerprint: trace.fingerprint });
   return `<title>${escapeText(`${title.trim() || "Icon sheet"} — icon sheet`)}</title><desc>${escapeText(desc)}</desc><metadata>${escapeText(payload)}</metadata>`;
 }

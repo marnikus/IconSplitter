@@ -15,9 +15,11 @@ export interface UploadMetaFieldsProps {
   onAccept: () => void;
   onCopy: (field: "title" | "description" | "tags") => void;
   onRegenerate: () => void;
+  /** The one-word Icon Name field (default on); the SVG builder's sheet metadata has none (2026-11-14). */
+  showName?: boolean;
 }
 
-export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, onRegenerate }: UploadMetaFieldsProps) {
+export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, onRegenerate, showName = true }: UploadMetaFieldsProps) {
   if (meta.metadata === null) {
     return (
       <div className="up-meta" data-testid={`upload-meta-empty-${id}`}>
@@ -37,7 +39,7 @@ export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, o
   const m = meta.metadata;
   return (
     <div className="up-meta" data-testid={`upload-meta-fields-${id}`}>
-      <MetaFieldsGrid id={id} m={m} onEdit={onEdit} onCopy={onCopy} />
+      <MetaFieldsGrid id={id} m={m} onEdit={onEdit} onCopy={onCopy} showName={showName} />
       <ValidationLine id={id} validation={meta.validation} />
       <MetaActions id={id} meta={meta} onAccept={onAccept} onRegenerate={onRegenerate} />
     </div>
@@ -45,9 +47,9 @@ export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, o
 }
 
 /** The three editable fields, each with its live count and copy button. */
-function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
+function MetaFieldsGrid({ id, m, onEdit, onCopy, showName }: {
   id: string; m: IconMetadata; onEdit: (patch: Partial<IconMetadata>) => void;
-  onCopy: (field: "title" | "description" | "tags") => void;
+  onCopy: (field: "title" | "description" | "tags") => void; showName: boolean;
 }) {
   return (
     <>
@@ -61,9 +63,9 @@ function MetaFieldsGrid({ id, m, onEdit, onCopy }: {
         hint="at least 10 unique, comma-separated, including icon, pictogram, vector, stroke, line, editable, web"
         multiline onEdit={(v) => onEdit({ tags: dedupeTags(v.split(",").map((t) => t.trim()).filter((t) => t !== "")) })}
         onCopy={() => onCopy("tags")} />
-      <Field id={id} label="Icon Name" testid="name" value={m.name ?? ""} count={(m.name ?? "").length}
+      {showName && <Field id={id} label="Icon Name" testid="name" value={m.name ?? ""} count={(m.name ?? "").length}
         hint="ONE word, less than 10 characters, lowercase — cut to the first word at Accept"
-        onEdit={(v) => onEdit({ name: v })} />
+        onEdit={(v) => onEdit({ name: v })} />}
     </>
   );
 }

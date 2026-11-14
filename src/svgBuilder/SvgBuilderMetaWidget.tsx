@@ -8,6 +8,7 @@ import type { PointerEvent } from "react";
 import PromptWindow from "../ui/PromptWindow";
 import { isBuilderDefaultPrompt } from "./promptstore";
 import SvgBuilderProviderCard from "./SvgBuilderProviderCard";
+import SvgBuilderMetaFields from "./SvgBuilderMetaFields";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderMetaWidget({ b }: { b: BuilderApi }) {
@@ -27,11 +28,12 @@ export default function SvgBuilderMetaWidget({ b }: { b: BuilderApi }) {
           onReset={b.actions.resetPrompt} onPick={b.actions.presets.pickPreset} onQuickLoad={b.actions.presets.quickLoadPreset}
           onDelete={b.actions.presets.deletePreset} onSaveAs={b.actions.presets.savePresetAs} />
         <p className="svg-note" data-testid="builder-prompt-note">
-          Stored on this device only; it travels nowhere except inside the one request you confirm. The sheet metadata
-          validator still enforces title, subtitle and keyword rules, so an answer that breaks them is refused.
+          Stored on this device only; it travels nowhere except inside the one request you confirm, with the sheet's icons
+          (no banner) as one PNG of at most 1 MP. The answer is checked with the upload tab's Title, Description and Tags rules.
         </p>
       </section>
       <SvgBuilderProviderCard b={b} />
+      <SvgBuilderMetaFields b={b} />
     </div>}
   </section>;
 }

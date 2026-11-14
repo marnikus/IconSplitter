@@ -1,17 +1,17 @@
 // actions/artboardmeta.ts — sheet metadata for final artboards (2026-11-13).
 // Each artboard gets its OWN metadata (a template has none). For the checked
-// artboards the app composes each one, renders the exact 768 px JPEG, and shows
+// artboards the app composes each one's icons (no banner) as one PNG of at most
+// 1 MP (2026-11-14, metaimagefor.ts), and shows
 // every request in one confirmation (RULE 20): nothing is sent before "Send N
 // exact requests". Then one request per artboard, in order, no retry; a valid
 // answer is accepted on its artboard, an invalid one is kept and marked invalid.
 import { acceptSheetMetadata } from "../../lib/svgBuilder/metadata";
-import { artboardConfig, artboardIcons, type FinalArtboard } from "../../lib/svgBuilder/artboards";
-import { composeSheet } from "../../lib/svgBuilder/compose";
-import { computeLayout } from "../../lib/svgBuilder/layout";
+import { artboardConfig, artboardIcons, withSheetAnswer, type FinalArtboard } from "../../lib/svgBuilder/artboards";
+import type { SheetMetadata } from "../../lib/svgBuilder/types";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
 import type { ArtboardMetaRequest } from "../model";
-import { sheetPreviewFor } from "../preview";
+import { iconsImageFor } from "../metaimagefor";
 import { generateSheetMetadata } from "../runSheetMetadata";
 
 type ArtboardMetaActions = Pick<BuilderActions, "generateArtboardsMetadata" | "confirmArtboardsMetadata" | "cancelArtboardsMetadata">;
@@ -38,10 +38,8 @@ async function requestFor(ctx: BuilderActionContext, artboard: FinalArtboard, sv
   const template = ctx.model.templates.find((t) => t.id === artboard.templateId);
   if (template === undefined) return `${artboard.name}: its template is gone`;
   if (artboardIcons(artboard).length === 0) return `${artboard.name}: no icons yet`;
-  const config = artboardConfig(template, artboard);
-  const doc = composeSheet({ config, layout: computeLayout(config), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts });
-  const preview = await sheetPreviewFor(doc.svg);
-  return preview.ok ? { id: artboard.id, name: artboard.name, preview: preview.dataUrl } : `${artboard.name}: preview failed (${preview.reason})`;
+  const preview = await iconsImageFor({ config: artboardConfig(template, artboard), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts });
+  return preview.ok ? { id: artboard.id, name: artboard.name, preview: preview.dataUrl } : `${artboard.name}: image failed (${preview.reason})`;
 }
 
 async function prepare(ctx: BuilderActionContext, ids: readonly string[]): Promise<void> {
@@ -71,7 +69,7 @@ async function send(get: () => BuilderActionContext): Promise<void> {
   const failed: string[] = [];
   for (const [i, req] of plan.requests.entries()) {
     const out = await generateSheetMetadata({ config: get().model.gemini, apiKey: key, prompt: get().model.prompt, preview: req.preview });
-    if (out.ok) store(get(), req.id, out.draft);
+    if (out.ok) store(get(), req.id, { metadata: acceptSheetMetadata(out.draft), artboardTitle: out.artboardTitle });
     else failed.push(`${req.name}: ${out.reason}`);
     const now = get().model.artboardMeta;
     if (now !== null) get().dispatch({ artboardMeta: { ...now, done: i + 1 } });
@@ -80,9 +78,16 @@ async function send(get: () => BuilderActionContext): Promise<void> {
   get().say(failed.length === 0 ? `Metadata generated for ${plan.requests.length} artboard(s)` : `Metadata: ${failed.length} request(s) failed — ${failed.join("; ")}`, failed.length > 0);
 }
 
-function store(ctx: BuilderActionContext, id: string, draft: Parameters<typeof acceptSheetMetadata>[0]): void {
-  const metadata = acceptSheetMetadata(draft);
-  const artboards = ctx.model.artboards.map((a) => (a.id === id ? { ...a, metadata, updated: new Date().toISOString() } : a));
-  ctx.dispatch({ artboards, ...(ctx.model.editingArtboardId === id ? { metadata } : {}) });
+/**
+ * The answer on its artboard: the metadata (accepted when valid, else kept as
+ * invalid) and its visible title / subtitle. An artboard open on the stage gets
+ * the same words and metadata on the stage, so it shows no unsaved change.
+ */
+function store(ctx: BuilderActionContext, id: string, answer: { metadata: SheetMetadata; artboardTitle: string }): void {
+  const artboards = ctx.model.artboards.map((a) => (a.id === id ? { ...withSheetAnswer(a, answer), updated: new Date().toISOString() } : a));
+  const saved = artboards.find((a) => a.id === id);
+  const open = ctx.model.editingArtboardId === id && saved !== undefined;
+  const config = ctx.model.config;
+  ctx.dispatch({ artboards, ...(open ? { metadata: answer.metadata, config: { ...config, banner: { ...config.banner, title: saved.title, subtitle: saved.subtitle } } } : {}) });
   saveArtboards(artboards);
 }

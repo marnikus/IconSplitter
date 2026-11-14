@@ -93,7 +93,8 @@ afterEach(() => {
 
 import { DEFAULT_CONFIG, parseSheetConfig } from "../src/lib/svgBuilder/config";
 import { newTemplate } from "../src/lib/svgBuilder/templates";
-import { artboardConfig, artboardName, artboardsWithout, newArtboard, parseArtboards, pendingUse } from "../src/lib/svgBuilder/artboards";
+import { artboardConfig, artboardName, artboardsWithout, newArtboard, parseArtboards, pendingUse, withSheetAnswer } from "../src/lib/svgBuilder/artboards";
+import { acceptSheetMetadata } from "../src/lib/svgBuilder/metadata";
 import { composeSheet } from "../src/lib/svgBuilder/compose";
 import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { overrideCount, overridesOf } from "../src/lib/svgBuilder/lookoverrides";
@@ -138,6 +139,14 @@ describe("final artboards — the pure part", () => {
     const doc = composeSheet({ config, layout: computeLayout(config), assets: [], placedIds: ["gone"], svgTexts: {} });
     expect(doc.svg).not.toContain("Unavailable");
     expect(doc.brokenIds).toEqual([]);
+  });
+
+  it("a generated answer fills the artboard's metadata and its visible title; the subtitle is the default phrase (2026-11-14)", () => {
+    const art = newArtboard(tpl, [], { now: "t", id: "a" });
+    const metadata = acceptSheetMetadata({ title: "Domestic household routines and grocery shopping", description: "Domestic household routines and grocery shopping concepts today", tags: ["icon", "pictogram", "vector", "stroke", "line", "editable", "web", "food", "home", "kitchen"] });
+    const next = withSheetAnswer(art, { metadata, artboardTitle: "household and food icons" });
+    expect(next).toMatchObject({ title: "household and food icons", subtitle: "Editable stroke width", metadata: { state: "accepted" } });
+    expect(withSheetAnswer(art, { metadata, artboardTitle: "" }).title).toBe(art.title); // no Title-Artboard: the title stays
   });
 
   it("names artboards after the template with the next free number", () => {
