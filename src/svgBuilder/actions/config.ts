@@ -39,14 +39,16 @@ export function configActions(get: () => BuilderActionContext): ConfigActions {
   };
 }
 
-interface Commit { config: SheetConfig; label: string; gesture?: boolean }
+/** `gesture`: true coalesces quick repeats (sliders); a string groups exactly one drag (2026-11-14). */
+interface Commit { config: SheetConfig; label: string; gesture?: boolean | string }
 
 /** One history entry (or one coalesced gesture) carrying the absolute before/after config. */
 export function commitConfig(ctx: BuilderActionContext, c: Commit): void {
   const before = configUndoPatchOf(ctx.model);
   const after = builderUndoPatchOf({ ...before, config: parseSheetConfig(c.config) });
   if (JSON.stringify(before.config) === JSON.stringify(after.config)) return;
-  const entry = { type: "builderConfig", label: c.label, origin: "svgBuilder", ids: ["config"], before, after };
+  const entry = { type: "builderConfig", label: c.label, origin: "svgBuilder", ids: ["config"], before, after,
+    ...(typeof c.gesture === "string" ? { gesture: c.gesture } : {}) };
   if (c.gesture) ctx.hist?.pushGesture(entry);
   else ctx.hist?.push(entry);
   ctx.dispatch({ config: after.config });

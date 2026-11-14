@@ -361,3 +361,16 @@
 
 /* Banner icon panels: several sliders stacked (2026-11-14). */
 .bld-quick-stack { display: grid; gap: 6px; }
+
+/* Edge grips on the artboard (2026-11-14): banner inner edge = banner size, icon-area edges = padding.
+   Sized in screen pixels whatever the zoom (--edge-z = 1 / zoom); shown while the pointer is on the artboard. */
+.bld-edges { position: absolute; inset: 0; pointer-events: none; z-index: 4; }
+.bld-edge-handle { position: absolute; pointer-events: auto; transform: translate(-50%, -50%) scale(var(--edge-z, 1));
+  background: #5B5BD6; border: 2px solid #fff; border-radius: 99px; box-shadow: 0 1px 4px #0008;
+  opacity: 0; transition: opacity .12s; touch-action: none; }
+.bld-edge-handle.is-v { width: 10px; height: 40px; cursor: ew-resize; }
+.bld-edge-handle.is-h { width: 40px; height: 10px; cursor: ns-resize; }
+.bld-artboard:hover .bld-edge-handle, .bld-edges.is-dragging .bld-edge-handle { opacity: 1; }
+.bld-edge-handle:hover, .bld-edge-handle.is-on { background: #7C7CF0; }
+.bld-edge-badge { position: absolute; left: 50%; top: -26px; transform: translateX(-50%); white-space: nowrap;
+  background: #11131c; color: #fff; font: 600 11px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 6px; pointer-events: none; }

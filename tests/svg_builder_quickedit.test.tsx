@@ -373,4 +373,30 @@ describe("number boxes apply as you type", () => {
       expect(q("builder-quick")?.dataset.kind).toBe("hero");
     } finally { if (had) proto.getBBox = old; else delete proto.getBBox; }
   });
+
+  it("drags the banner edge to resize the banner and a padding edge to change the icon padding; each drag is one undo step (2026-11-14)", async () => {
+    await openLibrary();
+    const drag = async (id: string, dx: number, dy: number) => {
+      const handle = q(id)!;
+      await act(async () => { handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 })); });
+      await act(async () => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 100 + dx / 2, clientY: 100 + dy / 2 })); });
+      await act(async () => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 100 + dx, clientY: 100 + dy })); });
+      await act(async () => { window.dispatchEvent(new PointerEvent("pointerup", {})); });
+    };
+    const zoom = Number(q("builder-artboard")!.dataset.zoom);
+    const start = config();
+    expect(start.banner.position).toBe("left");
+    await drag("builder-edge-banner", 40 * zoom, 0); // the inner (right) edge of a left banner, 40 px outward
+    expect(config().banner.size).toBe(start.banner.size + 40);
+    expect(q("builder-edge-pad-left")).toBeNull(); // the side next to the banner has no padding handle
+    await drag("builder-edge-pad-right", -12 * zoom, 0); // inward from the right
+    expect(config().artboard.padding).toBe(start.artboard.padding + 12);
+    await drag("builder-edge-pad-top", 0, 400 * zoom); // clamped to the padding range
+    expect(config().artboard.padding).toBe(160);
+    await click("builder-undo");
+    expect(config().artboard.padding).toBe(start.artboard.padding + 12);
+    await click("builder-undo");
+    expect(config().artboard.padding).toBe(start.artboard.padding);
+    expect(config().banner.size).toBe(start.banner.size + 40);
+  });
 });

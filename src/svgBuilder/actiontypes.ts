@@ -46,7 +46,7 @@ export interface BuilderActions {
   openFolder: () => void;
   rescan: () => void;
   /** `gesture` coalesces a slider drag into one undo entry. */
-  setConfig: (config: SheetConfig, label?: string, gesture?: boolean) => void;
+  setConfig: (config: SheetConfig, label?: string, gesture?: boolean | string) => void;
   applyLayoutPreset: (id: LayoutPresetId) => void;
   resetConfig: () => void;
   setRecipe: (patch: Partial<SelectionRecipe>) => void;
