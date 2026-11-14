@@ -72,14 +72,12 @@ function TemplateBlock({ b, template }: { b: BuilderApi; template: SheetTemplate
     style={{ ["--tpl-ratio" as string]: String(width / height) }}>
     <TemplateTop b={b} template={template} checked={checked} count={count} />
     <div className="bld-template-pic" data-testid={`builder-template-open-${template.id}`}
-      title={`Select “${template.name}” to see its final artboards · ✎ edits its design`}>
+      title={`Open “${template.name}” on the stage to edit it and see its final artboards`}>
       <TemplatePreview b={b} template={template} />
     </div>
     <TemplateName name={template.name} id={template.id} onRename={b.actions.renameTemplate} />
     <div className="bld-template-foot">
       <span className="bld-template-facts">{templateFacts(template.config)}</span>
-      <button type="button" className="svg-btn tiny" data-testid={`builder-template-edit-${template.id}`}
-        onClick={() => b.actions.editTemplate(template.id)} aria-label={`Edit ${template.name}`}>✎</button>
       <button type="button" className="svg-btn tiny" data-testid={`builder-template-remove-${template.id}`}
         onClick={() => b.actions.removeTemplate(template.id)} aria-label={`Remove ${template.name}`} title="Remove this template">✕</button>
     </div>

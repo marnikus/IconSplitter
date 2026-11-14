@@ -7,7 +7,7 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 | Testid | Element | Notes |
 |---|---|---|
 | `builder-templates` | window after `builder-workspace` | `builder-template-save` (＋ new / ✓ write back and finish when editing), `builder-template-save-new` (only while editing), `builder-template-zoom` (+ `-value`, shared ZoomSliderBase), `builder-template-editing`, `builder-templates-empty` |
-| `builder-template-<id>` | one block (`is-active`, `is-checked`, `is-editing`) | `builder-templates-check-all`, `builder-templates-grid` (keys), `builder-template-check-<id>`, `builder-template-artboards-<id>`, `builder-template-add-artboard-<id>`, `builder-template-open-<id>` (picture = activate), `builder-template-preview-<id>` (img), `builder-template-name-<id>` (Enter/blur saves, Escape reverts), `builder-template-edit-<id>` ✎, `builder-template-remove-<id>` ✕ |
+| `builder-template-<id>` | one block (`is-active`, `is-checked`, `is-editing`) | `builder-templates-check-all`, `builder-templates-grid` (keys), `builder-template-check-<id>`, `builder-template-artboards-<id>`, `builder-template-add-artboard-<id>`, `builder-template-open-<id>` (picture = select and open for editing), `builder-template-preview-<id>` (img), `builder-template-name-<id>` (Enter/blur saves, Escape reverts) ✎, `builder-template-remove-<id>` ✕ |
 
 ## Final artboards (under the templates, 2026-11-13)
 

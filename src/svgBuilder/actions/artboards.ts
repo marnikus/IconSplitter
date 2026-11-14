@@ -11,6 +11,7 @@ import { emptySlotFor, placedOnly } from "../../lib/svgBuilder/slots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
 import { blockLeave } from "./leaveguard";
+import { editTemplate } from "./templates";
 import { saveSheetConfig } from "../configstore";
 import { visibleArtboards } from "../artboardview";
 import { prefs } from "./config";
@@ -43,9 +44,18 @@ function setTemplateSel(ctx: BuilderActionContext, templateSel: RowSelection): v
   ctx.dispatch({ templateSel });
 }
 
+/**
+ * A plain click / arrow key on a template SELECTS AND OPENS it for editing (2026-11-14; no ✎ step):
+ * its design goes on the stage, and the first change is already an edit of it.
+ * Ctrl/Shift only check rows. A changed template asks Save / Discard first.
+ */
 function templateGesture(ctx: BuilderActionContext, id: string, intent: SelectIntent): void {
   const visibleIds = ctx.model.templates.map((t) => t.id);
-  setTemplateSel(ctx, applyRowGesture(ctx.model.templateSel, { id, intent, visibleIds }));
+  const next = applyRowGesture(ctx.model.templateSel, { id, intent, visibleIds });
+  const opens = intent === "replace" && next.active !== null && next.active !== ctx.model.editingTemplateId;
+  if (opens && blockLeave(ctx, { kind: "template", id: next.active! })) return;
+  setTemplateSel(ctx, next);
+  if (opens) editTemplate(ctx, next.active!, false);
 }
 
 const artboardId = () => `art-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
