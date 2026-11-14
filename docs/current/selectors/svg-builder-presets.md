@@ -32,3 +32,4 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 | `builder-edge-banner`, `builder-edge-pad-{left,right,top,bottom}`, `builder-edge-size-{right,bottom,corner}` | artboard edge grips | `builder-edge-badge` while dragging |
 | `builder-gap-x-<cell>`, `builder-gap-y-<cell>` | gap strips (guides on) right of / below that cell | `builder-gap-badge` while dragging |
 | `builder-artboard-reset-<id>` | artboard row, only with own look changes | ↺ Template N: inherit the whole template look again |
+| `builder-editing` (`data-kind` artboard / template) | stage top-left label | `builder-edit-main-template` (while an artboard is open) |

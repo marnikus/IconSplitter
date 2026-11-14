@@ -16,7 +16,11 @@ export default function SvgBuilderStageActions({ b }: { b: BuilderApi }) {
     window.addEventListener("beforeunload", ask);
     return () => window.removeEventListener("beforeunload", ask);
   }, [dirty]);
+  const artboard = b.artboards.find((a) => a.id === b.editingArtboardId) ?? null;
   return <div className="bld-float-actions" data-testid="builder-stage-actions">
+    {artboard !== null && <button type="button" className="svg-btn" data-testid="builder-edit-main-template"
+      title="Edit the template this artboard comes from (the artboard's own changes are already saved)"
+      onClick={() => b.actions.editTemplate(artboard.templateId)}>✎ Edit main template</button>}
     {dirty && <>
       <button type="button" className="svg-btn" data-testid="builder-stage-template-reset" onClick={b.actions.resetTemplate}
         title={`Back to the saved look of “${template.name}” (Undo brings the changes back)`}>↺ Reset</button>

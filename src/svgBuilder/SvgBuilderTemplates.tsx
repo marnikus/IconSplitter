@@ -71,7 +71,7 @@ function TemplateBlock({ b, template }: { b: BuilderApi; template: SheetTemplate
     data-testid={`builder-template-${template.id}`} aria-selected={active} onClick={onClick}
     style={{ ["--tpl-ratio" as string]: String(width / height) }}>
     <TemplateTop b={b} template={template} checked={checked} count={count} />
-    <div className="bld-template-pic" data-testid={`builder-template-open-${template.id}`}
+    <div className="bld-template-pic" data-testid={`builder-template-open-${template.id}`} onDoubleClick={() => b.actions.editTemplate(template.id)}
       title={`Open “${template.name}” on the stage to edit it and see its final artboards`}>
       <TemplatePreview b={b} template={template} />
     </div>

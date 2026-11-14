@@ -151,7 +151,7 @@ describe("final artboards — the pure part", () => {
 
 const rows = () => all('[data-testid^="builder-artboard-art-"]').filter((el) => el.classList.contains("bld-artboard-row"));
 const savedArtboards = () => JSON.parse(localStorage.getItem(BUILDER_ARTBOARDS_KEY) ?? "[]") as Array<{ id: string; name: string; title: string; placedIds: string[]; templateId: string; overrides: unknown }>;
-const savedTemplates = () => JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.templates.v1") ?? "[]") as Array<{ id: string }>;
+const savedTemplates = () => JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.templates.v1") ?? "[]") as Array<{ id: string; name?: string }>;
 const realIcons = (ids: string[]) => ids.filter((id) => !id.startsWith("~empty:"));
 const tiles = () => all('[data-testid^="builder-asset-"]').filter((el) => el.dataset.assetId !== undefined);
 async function clickWith(id: string, init: MouseEventInit): Promise<void> {
@@ -235,6 +235,36 @@ describe("final artboards — the list under the templates", () => {
     expect(sheet().artboard.padding).toBe(20);
     await waitUntil(() => JSON.stringify(savedArtboards()[1].overrides) === "{}", "a2 inherits everything again");
     expect(q(`builder-artboard-reset-${a2.id}`)).toBeNull();
+  });
+
+  it("the stage says what is being edited; Edit main template and double-clicks switch between the artboard and its template (2026-11-14)", async () => {
+    await openLibrary();
+    expect(q("builder-editing")).toBeNull(); // a free sheet: nothing to name
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    const [art] = savedArtboards();
+    expect(q("builder-editing")?.dataset.kind).toBe("artboard");
+    expect(text("builder-editing")).toContain(art.name);
+    expect(text("builder-editing")).toContain(tpl.name ?? "");
+
+    await click("builder-edit-main-template"); // switch to the template
+    expect(q("builder-editing")?.dataset.kind).toBe("template");
+    expect(q(`builder-template-${tpl.id}`)?.className).toContain("is-editing");
+    expect(q(`builder-artboard-${art.id}`)?.className).not.toContain("is-open");
+    expect(q(`builder-artboard-${art.id}`)?.className).not.toContain("is-active"); // no row looks edited now
+    expect(q("builder-edit-main-template")).toBeNull();
+
+    const row = q(`builder-artboard-${art.id}`)!;
+    await act(async () => { row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); });
+    await settle(0);
+    expect(q("builder-editing")?.dataset.kind).toBe("artboard");
+    expect(row.className).toContain("is-open");
+
+    const pic = q(`builder-template-open-${tpl.id}`)!;
+    await act(async () => { pic.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })); });
+    await settle(0);
+    expect(q("builder-editing")?.dataset.kind).toBe("template");
   });
 
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {

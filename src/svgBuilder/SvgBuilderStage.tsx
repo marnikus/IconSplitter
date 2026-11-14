@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { LAYOUT_PRESETS, type LayoutPresetId } from "../lib/svgBuilder/config";
 import SvgBuilderArtboard from "./SvgBuilderArtboard";
 import SvgBuilderStageActions from "./SvgBuilderStageActions";
+import SvgBuilderEditingLabel from "./SvgBuilderEditingLabel";
 import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderApi } from "./useSvgBuilder";
 
@@ -16,6 +17,7 @@ export default function SvgBuilderStage({ b }: { b: BuilderApi }) {
     <StageToolbar b={b} zoom={zoom} />
     <div className="bld-canvas" ref={box} data-testid="builder-canvas">
       {b.document === null ? <StageEmpty b={b} /> : <SvgBuilderArtboard b={b} doc={b.document} zoom={zoom} />}
+      <SvgBuilderEditingLabel b={b} />
       <SvgBuilderStageActions b={b} />
       <button type="button" className="svg-btn ghost bld-float-brief" data-testid="builder-corrected-brief" onClick={b.actions.openBrief}>✦ Corrected brief</button>
     </div>

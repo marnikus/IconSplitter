@@ -60,7 +60,8 @@ export function editTemplate(ctx: BuilderActionContext, id: string, guard = true
   if (guard && blockLeave(ctx, { kind: "template", id })) return;
   commitConfig(ctx, { config: templateConfig(template), label: `Template “${template.name}”` });
   ctx.dispatch({ editingTemplateId: id, editingArtboardId: null, // editing the blueprint, not an artboard
-    templateSel: { ...ctx.model.templateSel, active: id, anchor: id } }); // and it is the selected template
+    templateSel: { ...ctx.model.templateSel, active: id, anchor: id }, // and it is the selected template
+    artboardSel: { ...ctx.model.artboardSel, active: null } }); // no artboard row looks edited (2026-11-14)
   prefs(ctx, { layout: "custom", fit: true });
   ctx.say(`Editing template “${template.name}” — change the sheet, then ✓ Save template`);
 }

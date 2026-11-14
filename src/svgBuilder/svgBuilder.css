@@ -398,3 +398,12 @@
 .bld-gap-zone.is-x .bld-gap-grip { width: 4px; height: 18px; border-top: 0; border-bottom: 0; }
 .bld-gap-zone.is-y .bld-gap-grip { width: 18px; height: 4px; border-left: 0; border-right: 0; }
 .bld-gap-zone:hover .bld-gap-grip, .bld-gap-zone.is-on .bld-gap-grip { opacity: 1; }
+
+/* What the stage edits now (2026-11-14): pinned to the stage's top-left. */
+.bld-editing { position: absolute; top: 10px; left: 10px; z-index: 3; display: flex; align-items: baseline; gap: 8px; white-space: nowrap;
+  max-width: calc(100% - 520px); overflow: hidden; text-overflow: ellipsis; padding: 9px 14px; border-radius: 8px; font-size: 12px;
+  background: var(--v2-surface-2, #151826); border: 1px solid var(--v2-line-strong, #2a2f45); }
+.bld-editing-kind { font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.bld-editing.is-artboard .bld-editing-kind { color: #3CC2AF; }
+.bld-editing.is-template .bld-editing-kind { color: #9EA2FF; }
+.bld-editing-of { color: var(--v2-muted, #9aa3b5); font-size: 11px; }

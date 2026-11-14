@@ -79,7 +79,7 @@ function ArtboardRow({ b, template, artboard }: { b: BuilderApi; template: Sheet
   const own = overrideCount(artboard.overrides);
   const onClick = (e: MouseEvent<HTMLDivElement>) => { if (isRowGestureClick(e)) b.actions.artboardGesture(artboard.id, selectIntent(e)); };
   return <div className={`bld-artboard-row${active ? " is-active" : ""}${open ? " is-open" : ""}`} data-testid={`builder-artboard-${artboard.id}`}
-    aria-selected={active} onClick={onClick}>
+    aria-selected={active} onClick={onClick} onDoubleClick={(e) => { if (isRowGestureClick(e)) b.actions.openArtboard(artboard.id); }}>
     <input type="checkbox" data-testid={`builder-artboard-check-${artboard.id}`} aria-label={`Select ${artboard.name}`}
       checked={checked} onChange={() => b.actions.toggleArtboardCheck(artboard.id)} />
     <ArtboardPreview b={b} template={template} artboard={artboard} />

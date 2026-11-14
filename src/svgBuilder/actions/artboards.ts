@@ -20,7 +20,7 @@ import { startIcons } from "./startpick";
 
 type ArtboardActions = Pick<BuilderActions,
   "templateGesture" | "toggleTemplateCheck" | "setTemplateChecks" | "addArtboard" | "artboardGesture" | "toggleArtboardCheck"
-  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard" | "resetArtboardLook">;
+  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard" | "resetArtboardLook" | "openArtboard">;
 
 export function artboardActions(get: () => BuilderActionContext): ArtboardActions {
   return {
@@ -35,6 +35,7 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
     removeArtboards: (ids) => removeArtboards(get(), ids),
     closeArtboard: () => get().dispatch({ editingArtboardId: null }),
     resetArtboardLook: (id) => resetArtboardLook(get(), id),
+    openArtboard: (id) => { const c = get(); if (c.model.editingArtboardId !== id && !blockLeave(c, { kind: "artboard", id })) openArtboardRow(c, id); },
   };
 }
 
