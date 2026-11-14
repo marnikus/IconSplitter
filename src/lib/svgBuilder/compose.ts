@@ -85,7 +85,7 @@ function bannerOf(args: ComposeSheetArgs, copy: { title: string; subtitle: strin
     title: copy.title, subtitle: copy.subtitle, hero: heroPainter(args, ids) });
 }
 
-/** The hero glyph: the chosen library icon, else the first placed icon; stroke 1.1 in the given ink. */
+/** The hero glyph: the chosen library icon, else the first placed icon; the banner's Icon stroke in the given ink. */
 function heroPainter(args: ComposeSheetArgs, ids: readonly string[]): HeroPainter {
   const id = args.config.banner.heroIconId ?? ids[0];
   const asset = args.assets.find((a) => a.id === id);
@@ -93,7 +93,7 @@ function heroPainter(args: ComposeSheetArgs, ids: readonly string[]): HeroPainte
   return (x, y, size, ink) => {
     if (asset === undefined || typeof code !== "string" || code === "") return "";
     const frame: CellFrame = { index: -1, x, y, size, glyph: size, captionY: 0, captionSize: 0 };
-    const cell = cellGroupOf({ code, asset, frame, style: { ...args.config.icons, color: ink, strokeWidth: 1.1 } });
+    const cell = cellGroupOf({ code, asset, frame, style: { ...args.config.icons, color: ink, strokeWidth: args.config.banner.heroStroke } });
     return cell.ok ? cell.html : "";
   };
 }

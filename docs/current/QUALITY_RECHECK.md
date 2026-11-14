@@ -5207,3 +5207,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - banner.ts `paddingShift`: one shift for title and subtitle (right on edge banners, down on side banners), replacing per-style max() uses that left a centred title in place; label "Text padding · title + subtitle".
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 120/120.
+
+## 2026-11-14 — SVG builder: hero icon and circle size/stroke controls
+
+- banner `heroScale`, `heroStroke`, `ringScale`, `ringStroke` (ranges, parser, banner.ts `heroSize`, ring stroke-width / 0 hides, compose hero stroke, preset JSON guide), `SvgBuilderHeroStyle.tsx`.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 123/123.

@@ -19,7 +19,8 @@ export const DEFAULT_CONFIG: SheetConfig = {
     textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid",
     title: "ICON SHEET", subtitle: "Editable stroke width",
     titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true,
-    textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0 },
+    textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0,
+    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1 },
 };
 
 /** The 8 swatches shown under Canvas and Stroke colour. */
@@ -115,6 +116,18 @@ function parseBanner(raw: unknown): SheetConfig["banner"] {
     hero: bool(raw.hero, d.hero), divider: bool(raw.divider, d.divider),
     heroIconId: typeof raw.heroIconId === "string" && raw.heroIconId !== "" ? raw.heroIconId : null,
     ...parseTextPlacement(raw),
+    ...parseHeroStyle(raw),
+  };
+}
+
+type HeroStyle = Pick<SheetConfig["banner"], "heroScale" | "heroStroke" | "ringScale" | "ringStroke">;
+
+/** Hero style: missing on older configs → the reference look (100 %, 1.1 px, 100 %, 1 px). */
+function parseHeroStyle(raw: Record<string, unknown>): HeroStyle {
+  const d = DEFAULT_CONFIG.banner;
+  return {
+    heroScale: num(RANGES.heroScale, raw.heroScale, d.heroScale), heroStroke: num(RANGES.heroStroke, raw.heroStroke, d.heroStroke),
+    ringScale: num(RANGES.ringScale, raw.ringScale, d.ringScale), ringStroke: num(RANGES.ringStroke, raw.ringStroke, d.ringStroke),
   };
 }
 

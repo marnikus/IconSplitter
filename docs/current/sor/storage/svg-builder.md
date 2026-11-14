@@ -5,7 +5,7 @@ Back to the [storage map](../STORAGE.md) and [behaviour contract](../svg-builder
 | Where | What | Rules |
 |---|---|---|
 | `SESSION_KEY` builder slice | `checked` (positional, `~empty:N` holes), `activeId`, `anchorId`, `lockedIds`, `excludedIds` | parsed by `parseBuilderSlice`; unknown tab/slice → default; locks/exclusions are mirrored from the builder model so a reload keeps them |
-| localStorage `iconSplitter.svgBuilder.config.v1` | full `SheetConfig` (banner text placement: `textPadding`, `titleDx/Dy`, `subtitleDx/Dy`; absent = 0) | `parseSheetConfig` clamps every field; one owner in `configstore.ts` |
+| localStorage `iconSplitter.svgBuilder.config.v1` | full `SheetConfig` (banner text placement: `textPadding`, `titleDx/Dy`, `subtitleDx/Dy`; absent = 0; hero style `heroScale`, `heroStroke`, `ringScale`, `ringStroke`; absent = 100/1.1/100/1) | `parseSheetConfig` clamps every field; one owner in `configstore.ts` |
 | localStorage `iconSplitter.svgBuilder.prefs.v1` | zoom, fit, provider-card open state, layout choice (`editorial`/`masthead`/`plain`/`custom`), metadata widget `metaOpen` and dragged `metaHeight` (160–1200 px or null), artboard `showScores` and `scoreOpacity` (1–100), template picture height `templateZoom` (48–800 px), artboard use index `showUsage`, layout guides `showGuides` / `guideOpacity` (1–100) | `parseBuilderPrefs`; display-only, not undoable |
 | localStorage `iconSplitter.svgBuilder.prompt.v1` | sheet metadata prompt | `parseBuilderPrompt`; default restored on junk, key never stored here |
 | localStorage `iconSplitter.svgBuilder.prompts.v1` | prompt preset list | shared `presetStore`; validated on read |

@@ -339,3 +339,43 @@ describe("template sample text", () => {
     expect(JSON.parse(localStorage.getItem(BUILDER_TEMPLATES_KEY) ?? "[]")[0].config.banner.title).toBe("New sample");
   });
 });
+
+// 2026-11-14: the banner hero's own style — icon size and stroke, circle size and stroke.
+import { composeSheet } from "../src/lib/svgBuilder/compose";
+import { computeLayout } from "../src/lib/svgBuilder/layout";
+import { RANGES } from "../src/lib/svgBuilder/ranges";
+
+describe("hero style", () => {
+  const side = (patch: Partial<typeof DEFAULT_CONFIG.banner>) => bannerMarkup({
+    banner: { ...DEFAULT_CONFIG.banner, position: "left", style: "solid", ...patch }, box: { x: 0, y: 0, width: 242, height: 660 },
+    artboardWidth: 1080, title: "Food", subtitle: "Icons", hero: (_x, _y, size) => `<rect data-hero-icon="true" width="${size}"/>`,
+  });
+  const radius = (svg: string) => Number(/data-banner-hero="true"><circle [^>]*r="([0-9.]+)"/.exec(svg)?.[1]);
+  const iconSize = (svg: string) => Number(/data-hero-icon="true" width="([0-9.]+)"/.exec(svg)?.[1]);
+
+  it("scales the circle and the icon separately, and strokes the circle as set", () => {
+    const base = side({});
+    expect(radius(side({ ringScale: 200 }))).toBeCloseTo(radius(base) * 2, 1);
+    expect(iconSize(side({ heroScale: 150 }))).toBeCloseTo(iconSize(base) * 1.5, 1);
+    expect(radius(side({ heroScale: 150 }))).toBeCloseTo(radius(base), 1); // icon size never moves the circle
+    expect(side({ ringStroke: 3 })).toContain('stroke-width="3" data-banner-ring="true"');
+    expect(side({ ringStroke: 0 })).not.toContain("data-banner-ring"); // 0 hides the circles, the icon stays
+    expect(side({ ringStroke: 0 })).toContain("data-hero-icon");
+  });
+
+  it("draws the hero icon with its own stroke; old configs read the reference look; ranges clamp", () => {
+    expect(parseSheetConfig({ banner: { title: "x" } }).banner).toMatchObject({ heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1 });
+    expect(parseSheetConfig({ banner: { heroScale: 999, ringStroke: -1 } }).banner).toMatchObject({ heroScale: RANGES.heroScale.max, ringStroke: 0 });
+    const config = parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, heroStroke: 2.5 } });
+    const asset = { id: "a", base: "x", suffix: "", label: "x", category: "c", tags: [], svgPath: "x.svg", svgName: "x.svg", version: 1, fingerprint: "f", metaPath: "x.json", approved: true as const };
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg>';
+    const doc = composeSheet({ config, layout: computeLayout(config), assets: [asset], placedIds: ["a"], svgTexts: { a: svg } });
+    const hero = /data-banner-hero="true">[\s\S]*?<\/g><\/g>/.exec(doc.svg)?.[0] ?? doc.svg;
+    expect(hero).toContain('stroke-width="2.5"');
+  });
+
+  it("shows the four controls under Hero glyph", async () => {
+    await openLibrary();
+    for (const id of ["builder-hero-scale", "builder-hero-stroke", "builder-ring-scale", "builder-ring-stroke"]) expect(q(id), id).not.toBeNull();
+  });
+});

@@ -82,19 +82,26 @@ function subtitleText(a: BannerArgs, lines: string[], at: { x: number; top: numb
   return movedText("subtitle", a.banner.subtitleDx + pad.dx, a.banner.subtitleDy + pad.dy, body);
 }
 
-/** The hero in a double ring (reference: accent ring at 30 %, inner ring inset 7 px). */
+/** The circle and icon sizes after the hero style's Circle size % and Icon size % (2026-11-14). */
+function heroSize(banner: Banner, d: number, glyph: number): { d: number; glyph: number } {
+  return { d: d * banner.ringScale / 100, glyph: glyph * banner.heroScale / 100 };
+}
+
+/** The hero in a double ring (reference: accent ring at 30 %, inner ring inset 7 px); Circle stroke 0 = no rings. */
 function heroRing(a: BannerArgs, c: { cx: number; cy: number; d: number; glyph: number; ink: string }): string {
   const r = c.d / 2;
-  return `<g data-banner-hero="true"><circle cx="${round(c.cx)}" cy="${round(c.cy)}" r="${round(r)}" fill="none" stroke="${attr(a.banner.accent)}" stroke-opacity="0.3"/>`
-    + `<circle cx="${round(c.cx)}" cy="${round(c.cy)}" r="${round(Math.max(1, r - 7))}" fill="none" stroke="${attr(a.banner.accent)}" stroke-opacity="0.2"/>`
-    + `${a.hero(c.cx - c.glyph / 2, c.cy - c.glyph / 2, c.glyph, c.ink)}</g>`;
+  const w = a.banner.ringStroke;
+  const ring = (radius: number, opacity: number) => `<circle cx="${round(c.cx)}" cy="${round(c.cy)}" r="${round(radius)}" fill="none" stroke="${attr(a.banner.accent)}" stroke-opacity="${opacity}" stroke-width="${round(w)}" data-banner-ring="true"/>`;
+  const rings = w > 0 ? ring(r, 0.3) + ring(Math.max(1, r - 7), 0.2) : "";
+  return `<g data-banner-hero="true">${rings}${a.hero(c.cx - c.glyph / 2, c.cy - c.glyph / 2, c.glyph, c.ink)}</g>`;
 }
 
 function solidSide(a: Laid): string {
   const { box, banner } = a;
   const col = { cx: box.x + box.width / 2, top: 0 };
-  const glyph = Math.min(80, box.width * 0.35);
-  const ring = Math.max(60, glyph + 38);
+  const sized = heroSize(banner, Math.max(60, Math.min(80, box.width * 0.35) + 38), Math.min(80, box.width * 0.35));
+  const glyph = sized.glyph;
+  const ring = sized.d;
   const tl = titleLines(a, true, banner.titleSize);
   const sl = subtitleLines(a, true);
   const parts = [banner.hero ? ring + 22 : 0, banner.divider ? 24 : 0, tl.length * banner.titleSize * 1.03, sl.length > 0 ? 14 + sl.length * banner.subtitleSize * 1.55 : 0];
@@ -110,7 +117,7 @@ function solidSide(a: Laid): string {
 
 function solidEdge(a: Laid): string {
   const { box, banner } = a;
-  const glyph = Math.min(30, box.height * 0.38);
+  const glyph = heroSize(banner, 0, Math.min(30, box.height * 0.38)).glyph;
   const tl = titleLines(a, false, banner.titleSize);
   const sl = subtitleLines(a, false);
   const titleW = Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize)));
@@ -135,10 +142,11 @@ function splitSide(a: Laid): string {
   const ink = readableInk(banner.accent);
   const size = banner.titleSize * 0.8;
   const tl = titleLines(a, true, size);
-  const heroH = banner.hero ? 40 + 12 : 0;
+  const sh = heroSize(banner, 40, 22);
+  const heroH = banner.hero ? sh.d + 12 : 0;
   const top = frame.y + (blockH - heroH - tl.length * size * 1.03) / 2;
   const cx = box.x + box.width / 2;
-  const hero = banner.hero ? heroRing(a, { cx, cy: top + 20, d: 40, glyph: 22, ink }) : "";
+  const hero = banner.hero ? heroRing(a, { cx, cy: top + sh.d / 2, d: sh.d, glyph: sh.glyph, ink }) : "";
   const title = titleText(a, tl, { x: cx, top: top + heroH, size, ink, anchor: "middle" });
   const sl = subtitleLines(a, true);
   const restH = frame.height - blockH;
@@ -154,10 +162,11 @@ function splitEdge(a: Laid): string {
   const ink = readableInk(banner.accent);
   const tl = titleLines(a, false, banner.titleSize);
   const titleW = Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize)));
-  const heroW = banner.hero ? 36 + 14 : 0;
+  const se = heroSize(banner, 36, 20);
+  const heroW = banner.hero ? se.d + 14 : 0;
   const x0 = frame.x + Math.max(12, (blockW - heroW - titleW) / 2);
   const cy = box.y + box.height / 2;
-  const hero = banner.hero ? heroRing(a, { cx: x0 + 18, cy, d: 36, glyph: 20, ink }) : "";
+  const hero = banner.hero ? heroRing(a, { cx: x0 + se.d / 2, cy, d: se.d, glyph: se.glyph, ink }) : "";
   const title = titleText(a, tl, { x: x0 + heroW, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink, anchor: "start" });
   const sl = subtitleLines(a, false);
   const sub = subtitleText(a, sl, { x: frame.x + blockW + 24, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });

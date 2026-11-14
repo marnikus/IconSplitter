@@ -6,6 +6,7 @@ import type { Edit } from "./SvgBuilderCustomize";
 import { ColorChip, Field, Section, Segmented, Slider, Swatches, TextBox, Toggle, type SegOption } from "./SvgBuilderFields";
 import type { BuilderApi } from "./useSvgBuilder";
 import TextPlacement from "./SvgBuilderTextPlacement";
+import HeroStyle from "./SvgBuilderHeroStyle";
 
 const POSITIONS: readonly SegOption<BannerPosition>[] = [
   { value: "left", label: "← Left" }, { value: "top", label: "↑ Top" }, { value: "bottom", label: "↓ Bottom" },
@@ -69,6 +70,7 @@ function BannerControls({ b, edit }: { b: BuilderApi; edit: Edit }) {
     <TextPlacement n={n} edit={edit} />
     <Toggle label="Hero glyph" checked={n.hero} testid="builder-hero" onChange={(hero) => edit("banner", { hero })} />
     {n.hero && <HeroSelect b={b} edit={edit} />}
+    {n.hero && <HeroStyle n={n} edit={edit} />}
     <Toggle label="Accent rule" checked={n.divider} testid="builder-divider" onChange={(divider) => edit("banner", { divider })} />
   </>;
 }

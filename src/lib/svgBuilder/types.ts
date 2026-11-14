@@ -84,6 +84,8 @@ export interface SheetConfig {
     titleFace: TitleFace; hero: boolean; heroIconId: string | null; divider: boolean;
     /** Text placement (2026-11-13): an inset from the banner edge, and per-text moves in px. */
     textPadding: number; titleDx: number; titleDy: number; subtitleDx: number; subtitleDy: number;
+    /** Hero style (2026-11-14): icon size % and stroke px, circle size % and stroke px (0 hides the circles). */
+    heroScale: number; heroStroke: number; ringScale: number; ringStroke: number;
   };
 }
 
