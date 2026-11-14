@@ -452,4 +452,22 @@ describe("number boxes apply as you type", () => {
     expect(config().grid.gapY).toBe(g.gapY);
     expect(config().grid.gapX).toBeGreaterThan(g.gapX);
   });
+
+  it("hovering a caption under an icon offers its colour and size, like the other texts (2026-11-14)", async () => {
+    await openLibrary();
+    const caption = shadow().querySelector('[data-caption="0"]');
+    expect(caption).not.toBeNull();
+    await hover(caption!);
+    expect(q("builder-quick")?.dataset.kind).toBe("caption");
+    expect(q("builder-quick-stroke")).toBeNull();
+    await click("builder-quick-text");
+    expect(q("builder-quick-face")).toBeNull(); // captions keep their face; size only
+    await slide("builder-quick-size", "11");
+    expect(config().grid.captionSize).toBe(11);
+    await click("builder-quick-color");
+    const swatch = host.querySelector('[data-testid^="builder-quick-swatch-"]') as HTMLElement;
+    const picked = `#${swatch.dataset.testid!.replace("builder-quick-swatch-", "")}`;
+    await act(async () => { swatch.click(); });
+    expect(config().grid.captionColor).toBe(picked);
+  });
 });

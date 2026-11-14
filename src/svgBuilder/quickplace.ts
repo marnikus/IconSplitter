@@ -5,7 +5,8 @@
 //   banner → free banner (not its texts, its icon or the split block);
 //   split block → free block (not the texts or icon on it);
 //   icon → inside its cell, clear of its ×, 🗑 and ○ buttons;
-//   text / banner icon → inside its own box.
+//   text / banner icon → inside its own box;
+//   caption → just under it, overlapping its lower edge (a caption is narrower than the toolbar).
 // Positions come from the layout and the drawn elements, never the pointer.
 import { freeSpot, type Size } from "../lib/svgBuilder/freespot";
 import type { Rect } from "../lib/svgBuilder/types";
@@ -41,7 +42,7 @@ function shadowRect(ctx: Ctx, selector: string): Rect | null {
 /** The element as the sheet shows it now: a redraw replaces the shadow SVG, so it is looked up again. */
 function liveRect(ctx: Ctx): Rect | null {
   if (ctx.el.isConnected) return rectOn(ctx.el, ctx.origin);
-  const selector = LIVE_SELECTOR[ctx.kind];
+  const selector = ctx.kind === "caption" ? `[data-caption="${ctx.el.getAttribute("data-caption") ?? ""}"]` : LIVE_SELECTOR[ctx.kind];
   return selector === undefined ? null : shadowRect(ctx, selector);
 }
 
@@ -72,6 +73,7 @@ export function anchorOf(hover: { kind: QuickKind; el: Element }, b: BuilderApi,
   const ctx: Ctx = { ...hover, b, ...nodes, zoom, origin };
   const area = areaOf(ctx);
   if (area === null) return null;
+  if (hover.kind === "caption") return { x: area.x + area.width / 2 - toolbarSize("caption").width / 2, y: area.y + area.height - 4 };
   const spot = freeSpot(area, toolbarSize(hover.kind), obstaclesOf(ctx), { inset: hover.kind === "icon" ? 2 : 6 });
   // Too small for the toolbar: it stays on the element's own top edge (below an icon's buttons), still reachable directly.
   return spot ?? { x: area.x, y: area.y + (hover.kind === "icon" ? 12 : 0) };

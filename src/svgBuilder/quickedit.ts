@@ -6,9 +6,14 @@ import type { NumRange } from "../lib/svgBuilder/ranges";
 import { RANGES } from "../lib/svgBuilder/ranges";
 import type { SheetConfig } from "../lib/svgBuilder/types";
 
-export type QuickKind = "icon" | "hero" | "title" | "subtitle" | "block" | "banner" | "canvas";
+export type QuickKind = "icon" | "hero" | "title" | "subtitle" | "caption" | "block" | "banner" | "canvas";
 
 export interface QuickTarget { kind: QuickKind; el: Element }
+
+/** Plain marks, in priority order (after the cell and banner-text checks). */
+const MARKS: readonly [string, QuickKind][] = [
+  ["data-caption", "caption"], ["data-split-block", "block"], ["data-banner", "banner"], ["data-artboard", "canvas"],
+];
 
 /** The innermost marked element on the path decides; the hero's own icon belongs to the hero. */
 function kindOf(el: Element): QuickKind | null {
@@ -16,11 +21,9 @@ function kindOf(el: Element): QuickKind | null {
   const text = el.getAttribute("data-banner-text");
   if (text === "title" || text === "subtitle") return text;
   if (el.hasAttribute("data-banner-hero")) return "hero";
-  if (el.hasAttribute("data-cell-index") && el.getAttribute("data-cell-index") !== "-1") return "icon";
-  if (el.hasAttribute("data-split-block")) return "block";
-  if (el.hasAttribute("data-banner")) return "banner";
-  if (el.hasAttribute("data-artboard")) return "canvas";
-  return null;
+  const cell = el.getAttribute("data-cell-index");
+  if (cell !== null && cell !== "-1") return "icon";
+  return MARKS.find(([attr]) => el.hasAttribute(attr))?.[1] ?? null;
 }
 
 export function quickTargetOf(path: readonly EventTarget[]): QuickTarget | null {
@@ -48,6 +51,10 @@ export const QUICK_SPECS: Readonly<Record<QuickKind, QuickSpec>> = {
   hero: {
     name: "Banner icon", color: { label: "Accent color (icon and circle)", group: "banner", key: "accent" },
     stroke: { label: "Icon stroke", group: "banner", key: "heroStroke", range: RANGES.heroStroke, unit: "px" },
+  },
+  caption: {
+    name: "Caption", color: { label: "Caption color", group: "grid", key: "captionColor" },
+    text: { label: "Caption size", group: "grid", key: "captionSize", range: RANGES.captionSize, unit: "px" },
   },
   title: {
     name: "Title", color: { label: "Title color", group: "banner", key: "textColor" },

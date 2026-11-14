@@ -29,7 +29,7 @@ describe("captions", () => {
     const doc = composeSheet({
       config, layout: computeLayout(config), assets: [named, titled], placedIds: ["a", "b"], svgTexts: { a: SVG, b: SVG },
     });
-    const captions = /<g data-export="captions">([\s\S]*?)<\/g>/.exec(doc.svg)?.[1] ?? "";
+    const captions = /<g data-export="captions">([\s\S]*)<\/g><\/svg>/.exec(doc.svg)?.[1] ?? ""; // each caption in its own <g data-caption>
     expect(captions).toContain(">TOAST<");
     expect(captions).not.toContain("MINIMALIST");
     expect(captions).toContain(">APPLE IN A BOX ICON<");
