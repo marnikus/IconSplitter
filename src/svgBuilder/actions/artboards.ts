@@ -3,7 +3,8 @@
 // of the active one) form one list with the same gestures. Activating an
 // artboard opens it on the stage: its template's look, its own words, hero,
 // icons, locks and metadata — and every edit on the stage is written back to
-// it (useArtboardSync). A new artboard opens empty, asking for icons.
+// it (useArtboardSync). A new artboard starts with the stage's icons plus a
+// random fill and the template's sample words (startpick.ts, 2026-11-14).
 import { applyRowGesture, setChecked as setCheckedIds, toggleChecked, type RowSelection, type SelectIntent } from "../../lib/reviewselect";
 import { ARTBOARD_LIMIT, artboardConfig, newArtboard, type FinalArtboard } from "../../lib/svgBuilder/artboards";
 import { cleanTemplateName } from "../../lib/svgBuilder/templates";
@@ -15,6 +16,7 @@ import { editTemplate } from "./templates";
 import { saveSheetConfig } from "../configstore";
 import { visibleArtboards } from "../artboardview";
 import { prefs } from "./config";
+import { startIcons } from "./startpick";
 
 type ArtboardActions = Pick<BuilderActions,
   "templateGesture" | "toggleTemplateCheck" | "setTemplateChecks" | "addArtboard" | "artboardGesture" | "toggleArtboardCheck"
@@ -66,13 +68,14 @@ export function addArtboard(ctx: BuilderActionContext, templateId: string, guard
   if (template === undefined) return ctx.say("That template is gone", true);
   if (guard && blockLeave(ctx, { kind: "add-artboard", id: templateId })) return;
   if (ctx.model.artboards.length >= ARTBOARD_LIMIT) return ctx.say(`At most ${ARTBOARD_LIMIT} artboards — remove some first`, true);
-  const created = newArtboard(template, ctx.model.artboards, new Date().toISOString(), artboardId());
+  const capacity = template.config.grid.columns * template.config.grid.rows;
+  const created = newArtboard(template, ctx.model.artboards, { now: new Date().toISOString(), id: artboardId(), placedIds: startIcons(ctx, capacity) });
   storeArtboards(ctx, [...ctx.model.artboards, created]);
   const checked = ctx.model.templateSel.checked;
   ctx.dispatch({ templateSel: { ...ctx.model.templateSel, active: templateId, checked: checked.length > 0 && !checked.includes(templateId) ? [...checked, templateId] : checked } });
   openArtboard(ctx, created);
   ctx.dispatch({ artboardSel: { ...ctx.model.artboardSel, active: created.id, anchor: created.id } });
-  ctx.say(`Artboard “${created.name}” added — pick its icons in the library, or Reshuffle`);
+  ctx.say(`Artboard “${created.name}” added — ${placedOnly(created.placedIds).length} icons and sample words to start; change any of them`);
 }
 
 function artboardGesture(ctx: BuilderActionContext, id: string, intent: SelectIntent): void {

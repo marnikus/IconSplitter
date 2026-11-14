@@ -104,29 +104,30 @@ describe("final artboards — the pure part", () => {
   const tpl = newTemplate(parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, title: "kept out" } }), [], "t0", "tpl-1");
 
   it("names artboards after the template with the next free number", () => {
-    const a1 = newArtboard(tpl, [], "t1", "a1");
+    const a1 = newArtboard(tpl, [], { now: "t1", id: "a1" });
     expect(a1.name).toBe(`${tpl.name} — #1`);
     expect(artboardName(tpl, [a1])).toBe(`${tpl.name} — #2`);
-    expect(a1).toMatchObject({ templateId: "tpl-1", title: "", placedIds: [], metadata: null, exportedAt: null });
+    expect(a1).toMatchObject({ templateId: "tpl-1", title: "kept out", placedIds: [], metadata: null, exportedAt: null }); // the template's sample words
+    expect(newArtboard(tpl, [], { now: "t", id: "a", placedIds: ["p1", "p2"] }).placedIds).toEqual(["p1", "p2"]);
   });
 
   it("draws with the template's look and its own words", () => {
-    const a = { ...newArtboard(tpl, [], "t1", "a1"), title: "Food Icon Assets", subtitle: "Editable stroke" };
+    const a = { ...newArtboard(tpl, [], { now: "t1", id: "a1" }), title: "Food Icon Assets", subtitle: "Editable stroke" };
     const config = artboardConfig(tpl, a);
     expect(config.banner).toMatchObject({ title: "Food Icon Assets", subtitle: "Editable stroke", background: tpl.config.banner.background });
     expect(config.grid).toEqual(tpl.config.grid);
   });
 
   it("counts icons on artboards not exported yet as pending use", () => {
-    const a = { ...newArtboard(tpl, [], "t", "a"), placedIds: ["p1", "~empty:0", "p2"] };
-    const b = { ...newArtboard(tpl, [a], "t", "b"), placedIds: ["p1"] };
-    const done = { ...newArtboard(tpl, [a, b], "t", "c"), placedIds: ["p2", "p3"], exportedAt: "2026-11-13", countedIds: ["p2"] };
+    const a = { ...newArtboard(tpl, [], { now: "t", id: "a" }), placedIds: ["p1", "~empty:0", "p2"] };
+    const b = { ...newArtboard(tpl, [a], { now: "t", id: "b" }), placedIds: ["p1"] };
+    const done = { ...newArtboard(tpl, [a, b], { now: "t", id: "c" }), placedIds: ["p2", "p3"], exportedAt: "2026-11-13", countedIds: ["p2"] };
     // p2 was counted when "c" was exported; p3 was added to it afterwards, so it is pending until the next export
     expect(Object.fromEntries(pendingUse([a, b, done]))).toEqual({ p1: 2, p2: 1, p3: 1 });
   });
 
   it("reads the saved list field by field and drops artboards of removed templates", () => {
-    const a = newArtboard(tpl, [], "t", "a");
+    const a = newArtboard(tpl, [], { now: "t", id: "a" });
     expect(parseArtboards([a, { ...a }, { id: "x", templateId: "gone", name: "x" }, 5], new Set(["tpl-1"])).map((x) => x.id)).toEqual(["a"]);
     expect(parseArtboards("junk")).toEqual([]);
   });
@@ -151,8 +152,12 @@ async function typeIn(id: string, value: string): Promise<void> {
 }
 
 describe("final artboards — the list under the templates", () => {
-  it("adds an empty artboard from a template, fills it on the stage and keeps each artboard's own icons and words", async () => {
+  it("a new artboard starts with the stage's icons plus a random fill and the template's sample words; each keeps its own (2026-11-14)", async () => {
     await openLibrary();
+    await click("builder-clear");
+    for (const tile of tiles().slice(0, 2)) { await act(async () => { tile.dispatchEvent(new MouseEvent("click", { bubbles: true })); }); await settle(0); }
+    expect(text("builder-cells")).toContain("2 of 32 cells");
+    const chosen = tiles().slice(0, 2).map((t) => t.dataset.assetId!);
     await click("builder-template-save");
     const [tpl] = savedTemplates();
     expect(q("builder-artboards-hint")).not.toBeNull(); // nothing selected yet
@@ -160,22 +165,24 @@ describe("final artboards — the list under the templates", () => {
     await click(`builder-template-add-artboard-${tpl.id}`);
     const [first] = savedArtboards();
     expect(rows()).toHaveLength(1);
-    expect(text("builder-cells")).toContain("0 of 32 cells"); // a new artboard asks for icons
     expect(q(`builder-artboard-${first.id}`)?.className).toContain("is-open");
+    expect(realIcons(first.placedIds).slice(0, 2)).toEqual(chosen); // the icons on the stage, in their cells
+    expect(realIcons(first.placedIds)).toHaveLength(12); // the rest drawn at random (the library has 12)
+    expect(new Set(first.placedIds).size).toBe(first.placedIds.length);
+    expect(text("builder-cells")).toContain("12 of 32 cells");
+    expect(first.title).not.toBe(""); // the template's sample words, not blank
+    expect((q("builder-title") as HTMLInputElement).value).toBe(first.title);
+    expect((q("builder-subtitle") as HTMLInputElement).value).not.toBe("");
 
-    await act(async () => { tiles()[0].dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-    await settle(0);
     await typeIn("builder-title", "Food Icon Assets");
-    await waitUntil(() => realIcons(savedArtboards()[0].placedIds).length === 1 && savedArtboards()[0].title === "Food Icon Assets", "artboard written back");
-    expect(text(`builder-artboard-${first.id}`)).toContain("1/32 icons");
+    await waitUntil(() => savedArtboards()[0].title === "Food Icon Assets", "artboard written back");
+    expect(text(`builder-artboard-${first.id}`)).toContain("12/32 icons");
 
-    await click(`builder-artboard-add-${tpl.id}`); // a second one opens empty
-    expect(text("builder-cells")).toContain("0 of 32 cells");
-    expect((q("builder-title") as HTMLInputElement).value).toBe("");
-    await clickWith(`builder-artboard-${first.id}`, {}); // back to the first: its icon and title return
-    expect(text("builder-cells")).toContain("1 of 32 cells");
+    await click(`builder-artboard-add-${tpl.id}`); // a second one: sample words again, not the first's title
+    expect((q("builder-title") as HTMLInputElement).value).toBe(first.title);
+    await clickWith(`builder-artboard-${first.id}`, {}); // back to the first: its own title returns
     expect((q("builder-title") as HTMLInputElement).value).toBe("Food Icon Assets");
-    expect(realIcons(savedArtboards()[1].placedIds)).toHaveLength(0); // the second never got the first's icons
+    expect(savedArtboards()[1].title).toBe(first.title);
   });
 
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
@@ -198,7 +205,7 @@ describe("final artboards — the list under the templates", () => {
     expect(q(`builder-template-${tpl.id}`)?.className).toContain("is-active"); // its template is selected above
     await typeIn("builder-title", "After reload");
     await waitUntil(() => savedArtboards()[1].title === "After reload", "edit after reload saved into the same artboard");
-    expect(savedArtboards()[0].title).toBe("");
+    expect(savedArtboards()[0].title).not.toBe("After reload");
   });
 
   it("checked templates show their artboards together; rows check with the RULE 25 gestures; bulk remove", async () => {
@@ -234,6 +241,7 @@ describe("final artboards — the list under the templates", () => {
     await click("builder-template-save");
     const [tpl] = savedTemplates();
     await click(`builder-template-add-artboard-${tpl.id}`);
+    await click("builder-clear"); // a new artboard starts filled: empty it to place one icon
     const tile = tiles()[0];
     const id = tile.dataset.assetId!;
     await act(async () => { tile.dispatchEvent(new MouseEvent("click", { bubbles: true })); });

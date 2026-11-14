@@ -7,7 +7,7 @@ import { isRecord } from "../isrecord";
 import { applyCopy } from "./config";
 import { cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
 import { isEmptySlot } from "./slots";
-import { sheetPreviewSvg, type SheetTemplate } from "./templates";
+import { lookOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
 import type { BuilderIconAsset, SheetConfig, SheetMetadata } from "./types";
 
 export const ARTBOARD_LIMIT = 400;
@@ -40,10 +40,16 @@ export function artboardName(template: SheetTemplate, artboards: readonly FinalA
   }
 }
 
-export function newArtboard(template: SheetTemplate, artboards: readonly FinalArtboard[], now: string, id: string): FinalArtboard {
+/**
+ * A new final artboard (2026-11-14): it starts with the template's SAMPLE words
+ * (never blank) and the given start icons (the caller's pick), so it is a real
+ * sheet at once — every word and icon stays editable.
+ */
+export function newArtboard(template: SheetTemplate, artboards: readonly FinalArtboard[], at: { now: string; id: string; placedIds?: readonly string[] }): FinalArtboard {
+  const { title, subtitle } = lookOf(template.config).banner;
   return {
-    id, templateId: template.id, name: artboardName(template, artboards), title: "", subtitle: "", heroIconId: null,
-    placedIds: [], lockedIds: [], metadata: null, created: now, updated: now, exportedAt: null, countedIds: [],
+    id: at.id, templateId: template.id, name: artboardName(template, artboards), title, subtitle, heroIconId: null,
+    placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [],
   };
 }
 

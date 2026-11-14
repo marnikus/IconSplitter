@@ -395,7 +395,7 @@ import { artboardPreviewSvg, newArtboard } from "../src/lib/svgBuilder/artboards
 describe("template sample text", () => {
   it("a final artboard never draws the template's sample words", () => {
     const tpl = newTemplate(parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, title: "SAMPLE HEAD" } }), [], "t", "tpl");
-    const art = { ...newArtboard(tpl, [], "t", "a1"), title: "Fresh food" };
+    const art = { ...newArtboard(tpl, [], { now: "t", id: "a1" }), title: "Fresh food" };
     const svg = artboardPreviewSvg({ template: tpl, artboard: art, assets: [], svgTexts: {} });
     expect(svg).toContain("Fresh food");
     expect(svg).not.toContain("SAMPLE HEAD");
