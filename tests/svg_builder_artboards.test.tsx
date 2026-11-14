@@ -339,6 +339,33 @@ describe("final artboards — the list under the templates", () => {
     expect(q("builder-stage-artboard-save")).toBeNull();
   });
 
+  it("Export all selected writes each checked artboard under _artboard_sheets/<month>/<day>/<sheet>/artboard_variant_N/export (2026-11-14)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    const [a1, a2] = savedArtboards();
+    expect(q("builder-export-selected")?.textContent).toContain("(1)"); // nothing checked: the open artboard
+    await clickWith(`builder-artboard-check-${a1.id}`, {});
+    await clickWith(`builder-artboard-check-${a2.id}`, {});
+    await click("builder-export-selected");
+    const dir = (node: FakeDir | undefined, name: string) => node?.children.get(name) as FakeDir | undefined;
+    await waitUntil(() => savedArtboards().every((a) => typeof (a as { folder?: string | null }).folder === "string"), "both exported");
+    const f1 = (savedArtboards()[0] as unknown as { folder: string }).folder;
+    const f2 = (savedArtboards()[1] as unknown as { folder: string }).folder;
+    expect(f1).toMatch(/^_artboard_sheets\/\d{4}-\d{2}\/\d{4}-\d{2}-\d{2}\/[a-z0-9-]+_sheet_\d+_icons_[a-z_]+_palette_id\d{5}\/artboard_variant_1$/);
+    expect(f2).toBe(f1.replace(/artboard_variant_1$/, "artboard_variant_2")); // one template = one sheet folder
+    let node: FakeDir | undefined = scanned;
+    for (const part of `${f1}/export`.split("/")) node = dir(node, part);
+    const names = [...(node?.children.keys() ?? [])];
+    expect(names).toContain("export.json");
+    expect(names.some((n) => n.endsWith("_v1.svg"))).toBe(true);
+    const record = JSON.parse((node!.children.get("export.json") as FakeFile).text);
+    expect(record.outputs.svg.path).toMatch(/_v1\.svg$/);
+    expect(text("builder-toast")).toMatch(/exported/i); // canvas-only parts (JPG / PNG) and the EPS report their problem here
+  });
+
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
     await openLibrary();
     await click("builder-template-save");

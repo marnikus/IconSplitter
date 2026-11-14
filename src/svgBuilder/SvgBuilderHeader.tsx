@@ -25,8 +25,17 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
         title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>
       <SvgBuilderExportMenu b={b} />
+      <ExportSelected b={b} />
     </div>
   </header>;
+}
+
+/** Export all selected (2026-11-14): the checked artboards (else the open one) into `_artboard_sheets` in the folder. */
+function ExportSelected({ b }: { b: BuilderApi }) {
+  const count = b.artboardSel.checked.length > 0 ? b.artboardSel.checked.length : b.editingArtboardId !== null ? 1 : 0;
+  return <button type="button" className="svg-btn primary" data-testid="builder-export-selected" disabled={count === 0 || b.root === null || b.busy !== null}
+    title="Save each checked artboard (else the open one) as SVG + JPG + EPS + PNG + export.json under _artboard_sheets in the folder"
+    onClick={b.actions.exportSelectedArtboards}>⇪ Export all selected{count > 0 ? ` (${count})` : ""}</button>;
 }
 
 function UndoRedo({ b }: { b: BuilderApi }) {

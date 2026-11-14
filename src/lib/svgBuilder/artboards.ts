@@ -34,6 +34,8 @@ export interface FinalArtboard {
   overrides: LookOverrides;
   /** Captions typed on this artboard, by icon id (2026-11-14); never the template's, never the icon's metadata. */
   captionTexts: Record<string, string>;
+  /** Its `artboard_variant_N` folder under `_artboard_sheets` once saved there (2026-11-14, sheetfolders.ts); null before. */
+  folder: string | null;
 }
 
 /** "Side banner · 8×4 · Solid — #3": the template's name and the next free number. */
@@ -54,7 +56,7 @@ export function newArtboard(template: SheetTemplate, artboards: readonly FinalAr
   const { title, subtitle } = lookOf(template.config).banner;
   return {
     id: at.id, templateId: template.id, name: artboardName(template, artboards), title, subtitle, heroIconId: null,
-    placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [], overrides: {}, captionTexts: {},
+    placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [], overrides: {}, captionTexts: {}, folder: null,
   };
 }
 
@@ -149,6 +151,7 @@ function parseArtboard(input: unknown, templateIds: ReadonlySet<string> | null):
     created: text(raw.created, 40), updated: text(raw.updated, 40),
     exportedAt: typeof raw.exportedAt === "string" ? raw.exportedAt : null, countedIds: strings(raw.countedIds, 192),
     overrides: parseOverrides(raw.overrides), captionTexts: parseCaptionTexts(raw.captionTexts),
+    folder: typeof raw.folder === "string" && /^_artboard_sheets\/[^.][^]*$/.test(raw.folder) && !raw.folder.includes("..") ? raw.folder.slice(0, 400) : null,
   };
 }
 

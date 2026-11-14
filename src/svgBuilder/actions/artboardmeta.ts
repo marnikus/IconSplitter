@@ -13,6 +13,7 @@ import { saveArtboards } from "../artboardstore";
 import type { ArtboardMetaRequest } from "../model";
 import { iconsImageFor } from "../metaimagefor";
 import { generateSheetMetadata } from "../runSheetMetadata";
+import { saveSheetMetadataFiles } from "./sheetexport";
 
 type ArtboardMetaActions = Pick<BuilderActions, "generateArtboardsMetadata" | "confirmArtboardsMetadata" | "cancelArtboardsMetadata">;
 
@@ -25,7 +26,7 @@ export function artboardMetaActions(get: () => BuilderActionContext): ArtboardMe
 }
 
 /** Every icon's SVG text the artboards need, read once from the scanned folder. */
-async function svgTextsFor(ctx: BuilderActionContext, artboards: readonly FinalArtboard[]): Promise<Record<string, string>> {
+export async function svgTextsFor(ctx: BuilderActionContext, artboards: readonly FinalArtboard[]): Promise<Record<string, string>> {
   const texts: Record<string, string> = { ...ctx.model.svgTexts };
   const repo = ctx.repository;
   if (repo === null) return texts;
@@ -69,8 +70,13 @@ async function send(get: () => BuilderActionContext): Promise<void> {
   const failed: string[] = [];
   for (const [i, req] of plan.requests.entries()) {
     const out = await generateSheetMetadata({ config: get().model.gemini, apiKey: key, prompt: get().model.prompt, preview: req.preview });
-    if (out.ok) store(get(), req.id, { metadata: acceptSheetMetadata(out.draft), artboardTitle: out.artboardTitle });
-    else failed.push(`${req.name}: ${out.reason}`);
+    if (out.ok) {
+      const metadata = acceptSheetMetadata(out.draft);
+      store(get(), req.id, { metadata, artboardTitle: out.artboardTitle });
+      // its folder under _artboard_sheets is created now: metadata.json + the exact image sent (2026-11-14)
+      const problem = await saveSheetMetadataFiles(get, req.id, { metadata, artboardTitle: out.artboardTitle, prompt: get().model.prompt, model: get().model.gemini.model, preview: req.preview });
+      if (problem !== null) failed.push(problem);
+    } else failed.push(`${req.name}: ${out.reason}`);
     const now = get().model.artboardMeta;
     if (now !== null) get().dispatch({ artboardMeta: { ...now, done: i + 1 } });
   }

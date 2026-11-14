@@ -153,4 +153,6 @@ export interface BuilderActions {
   generateArtboardsMetadata: (ids: readonly string[]) => void;
   confirmArtboardsMetadata: () => void;
   cancelArtboardsMetadata: () => void;
+  /** Export all selected (2026-11-14): the checked artboards (else the open one) as stock packages under `_artboard_sheets`. */
+  exportSelectedArtboards: () => void;
 }

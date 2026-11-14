@@ -26,7 +26,8 @@
 .bld-meta-body .up-prompt-panel, .bld-meta-body .svg-provider { min-height: 0; }
 
 /* header ───────────────────────────────────────────────────────────────── */
-.bld-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }
+/* Pinned to the top while scrolling (2026-11-14). */
+.bld-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }
 .bld-title-block { display: grid; gap: 2px; min-width: 0; }
 .bld-title-block h2 { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bld-eyebrow { color: var(--v2-muted-2); font-size: 9px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }

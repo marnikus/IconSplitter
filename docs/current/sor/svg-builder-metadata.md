@@ -23,3 +23,25 @@ Since 2026-11-14 the builder's metadata is the **same system as the SVG to uploa
   - **✓ Accept** re-validates and refuses with the exact rule violations.
   - **↻ Regenerate** opens the exact request.
   - On an open artboard the edits are part of its draft (✓ Save artboard).
+
+## Saving sheets in the folder (2026-11-14)
+
+The tree mirrors single icons' `_split_output`, but under **`_artboard_sheets`** (`lib/svgBuilder/sheetfolders.ts`):
+
+`<root>/_artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<title-artboard>_sheet_<icons>_icons_<colour>_<colour>_palette_id<template code>/artboard_variant_<N>/`
+
+- **Sheet folder**: the slug of the artboard's title (its Title-Artboard after generation), the number of icons, the banner background and accent named as colour words (`colorWord`), and a 5-digit template code.
+  - All artboards of one template share their template's sheet folder; the first one saved names it.
+  - Each artboard is `artboard_variant_<N>`, where N is its own "#N".
+  - The artboard remembers its folder (`FinalArtboard.folder`, validated on read: inside `_artboard_sheets` only), so later saves land in the same place, even on a later day.
+- **When metadata is generated** (✦ Generate metadata): the variant folder is created with `metadata.json` (Title, Description, Tags, Title-Artboard, validation, prompt, model) and `preview.png`, the exact icons-only image that was sent (`sheetwriter.ts`).
+- **⇪ Export all selected** (header, `builder-export-selected`): exports the checked artboards (else the open one), from their **saved** state. Each one goes into `…/artboard_variant_<N>/export/` (`actions/sheetexport.ts`, `sheetpackage.ts`):
+  - `<stem>.svg` with the metadata embedded, where `<stem>` is the sheet folder name + `_v<N>`;
+  - `<stem>.jpg` at the Upload settings' megapixels, with XMP metadata;
+  - `<stem>.eps` from the Upload settings' EPS converter, with `currentColor` resolved first. The built-in writer may refuse text; the Inkscape helper converts it;
+  - `<stem>.png` at full size, 2×;
+  - `export.json`: the Upload tab's export record (status `processed`, or `partial` when a part failed), so the stock upload tab discovers the package.
+  - Every failed part is reported in the toast and the rest still ships.
+  - The export counts the icons' use once per artboard, and the artboard remembers its folder and `exportedAt`.
+- The builder header is pinned to the top while the page scrolls.
+

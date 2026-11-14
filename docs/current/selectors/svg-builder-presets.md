@@ -33,3 +33,4 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 | `builder-gap-x-<cell>`, `builder-gap-y-<cell>` | gap strips (guides on) right of / below that cell | `builder-gap-badge` while dragging |
 | `builder-artboard-reset-<id>` | artboard row, only with own look changes | ↺ Template N: inherit the whole template look again |
 | `builder-editing` (`data-kind` artboard / template) | stage top-left label | `builder-edit-main-template` (while an artboard is open) |
+| `builder-export-selected` | header, beside Export | ⇪ Export all selected (checked artboards, else the open one) into `_artboard_sheets` |
