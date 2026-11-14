@@ -450,6 +450,12 @@ describe("hero style", () => {
     expect(hero).toContain('stroke-width="2.5"');
   });
 
+  it("gaps go up to 200 px (2026-11-14; was 60)", () => {
+    expect(RANGES.gapX.max).toBe(200);
+    expect(RANGES.gapY.max).toBe(200);
+    expect(parseSheetConfig({ grid: { gapX: 180, gapY: 999 } }).grid).toMatchObject({ gapX: 180, gapY: 200 });
+  });
+
   it("shows the four controls under Hero glyph", async () => {
     await openLibrary();
     for (const id of ["builder-hero-both", "builder-hero-scale", "builder-hero-stroke", "builder-ring-scale", "builder-ring-stroke"]) expect(q(id), id).not.toBeNull();
