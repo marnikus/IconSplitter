@@ -31,8 +31,17 @@ describe("no transparency in the final artwork", () => {
     }
   }
 
-  it("the circle is the accent mixed onto the banner, fully solid", () => {
-    const svg = sheet({ style: "solid", position: "left", accent: "#FFFFFF", background: "#000000" });
-    expect(svg).toContain('stroke="#4D4D4D"');
+  it("both circle rings are the FULL accent colour, never faded (2026-11-14)", () => {
+    const svg = sheet({ style: "solid", position: "left", accent: "#C8641E", background: "#A8EEE6" });
+    const rings = [...svg.matchAll(/<circle[^>]*data-banner-ring="true"[^>]*>/g)].map((m) => m[0]);
+    expect(rings).toHaveLength(2);
+    for (const ring of rings) expect(ring).toContain('stroke="#C8641E"');
+  });
+
+  it("on the split block (filled with the accent) the rings take the icon's ink, so they stay visible", () => {
+    const svg = sheet({ style: "split", position: "left", accent: "#C8641E", background: "#A8EEE6" });
+    const rings = [...svg.matchAll(/<circle[^>]*data-banner-ring="true"[^>]*>/g)].map((m) => m[0]);
+    expect(rings.length).toBeGreaterThan(0);
+    for (const ring of rings) expect(ring).not.toContain('stroke="#C8641E"');
   });
 });

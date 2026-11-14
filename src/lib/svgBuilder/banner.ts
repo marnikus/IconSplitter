@@ -90,13 +90,15 @@ function heroSize(banner: Banner, d: number, glyph: number): { d: number; glyph:
 
 /**
  * The hero in a double ring (reference: accent ring at 30 %, inner ring inset 7 px); Circle stroke 0 = no rings.
- * The rings are SOLID: the accent mixed onto the surface `bg` they sit on (no transparency in the artwork).
+ * The rings are SOLID, full colour (no transparency or fading in the artwork).
  */
 function heroRing(a: BannerArgs, c: { cx: number; cy: number; d: number; glyph: number; ink: string; bg: string }): string {
   const r = c.d / 2;
   const w = a.banner.ringStroke;
-  const ring = (radius: number, opacity: number) => `<circle cx="${round(c.cx)}" cy="${round(c.cy)}" r="${round(radius)}" fill="none" stroke="${attr(solidMix(a.banner.accent, c.bg, opacity))}" stroke-width="${round(w)}" data-banner-ring="true"/>`;
-  const rings = w > 0 ? ring(r, 0.3) + ring(Math.max(1, r - 7), 0.2) : "";
+  // Full colour, never faded (2026-11-14): the accent; on the accent-filled split block, the icon's ink.
+  const colour = c.bg.toUpperCase() === a.banner.accent.toUpperCase() ? c.ink : a.banner.accent;
+  const ring = (radius: number) => `<circle cx="${round(c.cx)}" cy="${round(c.cy)}" r="${round(radius)}" fill="none" stroke="${attr(colour)}" stroke-width="${round(w)}" data-banner-ring="true"/>`;
+  const rings = w > 0 ? ring(r) + ring(Math.max(1, r - 7)) : "";
   return `<g data-banner-hero="true">${rings}${a.hero(c.cx - c.glyph / 2, c.cy - c.glyph / 2, c.glyph, c.ink)}</g>`;
 }
 

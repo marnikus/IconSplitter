@@ -5232,3 +5232,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-14 SVG builder: unsaved template edits — stage Reset/Save template, Save/Discard/Cancel before leaving, beforeunload. Builder suites 148/148, tsc/eslint/quality PASS; verify:fast fails only in pre-existing fs_case_collisions + getty_web_browser tests (fail identically without this change).
 - 2026-11-14 SVG builder: artboard edge grips (banner size, icon padding), one undo step per drag. Builder suites 149/149, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: selecting a template opens it for editing; ✎ removed. Builder suites 150/150, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: banner circle rings drawn in the full accent colour (no faded mix). Builder suites 151/151, tsc/eslint PASS.
