@@ -5202,3 +5202,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `lookOf` keeps banner words as sample text (default when empty), `templateConfig`, `sheetPreviewSvg`; ✎ edit opens the template with its sample words; artboard previews/configs keep their own words.
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 120/120.
+
+## 2026-11-14 — SVG builder: Text padding moves the title too
+
+- banner.ts `paddingShift`: one shift for title and subtitle (right on edge banners, down on side banners), replacing per-style max() uses that left a centred title in place; label "Text padding · title + subtitle".
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 120/120.

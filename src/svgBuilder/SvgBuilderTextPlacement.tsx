@@ -1,5 +1,6 @@
 // SvgBuilderTextPlacement.tsx — "Text placement" in the Banner section
-// (2026-11-13): Text padding insets the banner's text from its edge; Move X / Y
+// (2026-11-13): Text padding moves the title and the subtitle together in from
+// the banner's starting edge (2026-11-14: the title too, in every style); Move X / Y
 // shift the title and the subtitle by exact pixels (type a value, or step it
 // with the arrow keys). Part of the sheet's look, so a saved template keeps it.
 import { RANGES } from "../lib/svgBuilder/ranges";
@@ -14,7 +15,7 @@ export default function TextPlacement({ n, edit }: { n: Banner; edit: Edit }) {
   const moved = n.textPadding !== 0 || n.titleDx !== 0 || n.titleDy !== 0 || n.subtitleDx !== 0 || n.subtitleDy !== 0;
   const reset = () => edit("banner", { textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0 });
   return <div className="bld-text-placement" data-testid="builder-text-placement">
-    <Slider label="Text padding" value={n.textPadding} range={RANGES.textPadding} unit="px" testid="builder-text-padding"
+    <Slider label="Text padding · title + subtitle" value={n.textPadding} range={RANGES.textPadding} unit="px" testid="builder-text-padding"
       onChange={(textPadding) => edit("banner", { textPadding }, true)} />
     <MoveRow label="Move title" n={n} x="titleDx" y="titleDy" testid="builder-title-move" edit={edit} />
     <MoveRow label="Move subtitle" n={n} x="subtitleDx" y="subtitleDy" testid="builder-subtitle-move" edit={edit} />

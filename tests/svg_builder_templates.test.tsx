@@ -233,13 +233,20 @@ describe("text placement — the pure part", () => {
     expect(moved).toContain('<g data-banner-text="subtitle" transform="translate(-40 5)">');
   });
 
-  it("text padding pushes the text in from the banner edge, never the painted block", () => {
-    const x = (svg: string, which: string) => Number(new RegExp(`data-banner-text="${which}"[^>]*><text x="([0-9.]+)"`).exec(svg)?.[1]);
-    const plain = draw({}), padded = draw({ textPadding: 60 });
-    expect(x(padded, "subtitle") - x(plain, "subtitle")).toBe(60);
-    expect(x(padded, "title")).toBeGreaterThanOrEqual(60);
-    expect(padded.match(/data-split-block="true"/)?.index).toBeGreaterThan(0);
+  it("text padding moves the title AND the subtitle together, never the painted block (2026-11-14)", () => {
+    const padded = draw({ textPadding: 60 }); // Top split: in from the left edge
+    expect(padded).toContain('<g data-banner-text="title" transform="translate(60 0)">');
+    expect(padded).toContain('<g data-banner-text="subtitle" transform="translate(60 0)">');
     expect(padded).toContain(`<rect x="0" y="0" width="`); // the accent block still starts at the edge
+    const moved = draw({ textPadding: 20, titleDx: 5, subtitleDy: -3 }); // padding adds to the moves
+    expect(moved).toContain('<g data-banner-text="title" transform="translate(25 0)">');
+    expect(moved).toContain('<g data-banner-text="subtitle" transform="translate(20 -3)">');
+    const side = bannerMarkup({
+      banner: { ...DEFAULT_CONFIG.banner, position: "left", style: "solid", textPadding: 30 }, box: { x: 0, y: 0, width: 242, height: 660 },
+      artboardWidth: 1080, title: "Food Icon Assets", subtitle: "Editable stroke", hero: () => "",
+    });
+    expect(side).toContain('<g data-banner-text="title" transform="translate(0 30)">'); // a side banner: down
+    expect(side).toContain('<g data-banner-text="subtitle" transform="translate(0 30)">');
   });
 
   it("reads old configs as no placement, clamps the rest, and a template keeps it", () => {

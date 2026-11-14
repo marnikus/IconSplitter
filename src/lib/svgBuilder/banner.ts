@@ -53,7 +53,18 @@ function titleText(a: BannerArgs, lines: string[], at: { x: number; top: number;
   const serif = a.banner.titleFace === "serif";
   const body = lines.map((line, i) => textEl({ x: at.x, y: at.top + at.size * 0.83 + i * at.size * 1.03, value: line, size: at.size,
     colour: at.ink, face: a.banner.titleFace, weight: serif ? 500 : 600, anchor: at.anchor, spacing: serif ? "-0.02em" : "-0.045em" })).join("");
-  return movedText("title", a.banner.titleDx, a.banner.titleDy, body);
+  const pad = paddingShift(a.banner);
+  return movedText("title", a.banner.titleDx + pad.dx, a.banner.titleDy + pad.dy, body);
+}
+
+/**
+ * Text padding moves the title AND the subtitle together, the same amount, in
+ * from the banner's starting edge (2026-11-14): to the right on a top/bottom
+ * banner, down on a left/right one (where it also narrows the wrap width).
+ */
+function paddingShift(banner: Banner): { dx: number; dy: number } {
+  const side = banner.position === "left" || banner.position === "right";
+  return side ? { dx: 0, dy: banner.textPadding } : { dx: banner.textPadding, dy: 0 };
 }
 
 /** A text block with its Move X/Y, marked so the artboard can edit it in place (double-click). */
@@ -67,7 +78,8 @@ function subtitleText(a: BannerArgs, lines: string[], at: { x: number; top: numb
   const s = a.banner.subtitleSize;
   const body = lines.map((line, i) => textEl({ x: at.x, y: at.top + s * 0.83 + i * s * 1.55, value: line, size: s,
     colour: a.banner.subtitleColor, face: "sans", weight: 500, anchor: at.anchor, spacing: "0.16em" })).join("");
-  return movedText("subtitle", a.banner.subtitleDx, a.banner.subtitleDy, body);
+  const pad = paddingShift(a.banner);
+  return movedText("subtitle", a.banner.subtitleDx + pad.dx, a.banner.subtitleDy + pad.dy, body);
 }
 
 /** The hero in a double ring (reference: accent ring at 30 %, inner ring inset 7 px). */
@@ -124,12 +136,12 @@ function splitSide(a: Laid): string {
   const size = banner.titleSize * 0.8;
   const tl = titleLines(a, true, size);
   const heroH = banner.hero ? 40 + 12 : 0;
-  const top = frame.y + Math.max(banner.textPadding, (blockH - heroH - tl.length * size * 1.03) / 2);
+  const top = frame.y + (blockH - heroH - tl.length * size * 1.03) / 2;
   const cx = box.x + box.width / 2;
   const hero = banner.hero ? heroRing(a, { cx, cy: top + 20, d: 40, glyph: 22, ink }) : "";
   const title = titleText(a, tl, { x: cx, top: top + heroH, size, ink, anchor: "middle" });
   const sl = subtitleLines(a, true);
-  const restH = frame.height - blockH - banner.textPadding;
+  const restH = frame.height - blockH;
   const restTop = frame.y + blockH + (restH - sl.length * banner.subtitleSize * 1.55 - 18) / 2;
   const line = `<rect x="${round(cx - 16)}" y="${round(restTop)}" width="32" height="1" fill="${attr(banner.subtitleColor)}" fill-opacity="0.4"/>`;
   return `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(frame.width)}" height="${round(blockH)}" fill="${attr(banner.accent)}" data-split-block="true"/>`
@@ -143,12 +155,12 @@ function splitEdge(a: Laid): string {
   const tl = titleLines(a, false, banner.titleSize);
   const titleW = Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize)));
   const heroW = banner.hero ? 36 + 14 : 0;
-  const x0 = frame.x + Math.max(12, banner.textPadding, (blockW - heroW - titleW) / 2);
+  const x0 = frame.x + Math.max(12, (blockW - heroW - titleW) / 2);
   const cy = box.y + box.height / 2;
   const hero = banner.hero ? heroRing(a, { cx: x0 + 18, cy, d: 36, glyph: 20, ink }) : "";
   const title = titleText(a, tl, { x: x0 + heroW, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink, anchor: "start" });
   const sl = subtitleLines(a, false);
-  const sub = subtitleText(a, sl, { x: frame.x + blockW + 24 + banner.textPadding, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
+  const sub = subtitleText(a, sl, { x: frame.x + blockW + 24, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
   return `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(blockW)}" height="${round(frame.height)}" fill="${attr(banner.accent)}" data-split-block="true"/>`
     + hero + title + sub;
 }
