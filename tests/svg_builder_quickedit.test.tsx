@@ -194,3 +194,85 @@ describe("quick edit on the artboard", () => {
     expect(config().banner.background).toBe("#17271F");
   });
 });
+
+// 2026-11-14: move the text right on the artboard; number boxes apply as you type.
+describe("quick toolbar regressions (2026-11-14)", () => {
+  it("an open panel survives the pointer leaving the artboard, and hovering works again after it closes", async () => {
+    await openLibrary();
+    await hover(shadow().querySelector('[data-artboard="true"]')!, 120, 80);
+    await click("builder-quick-color");
+    await act(async () => { q("builder-artboard")!.dispatchEvent(new MouseEvent("mouseleave", { bubbles: false })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 500)); }); // the hide timer runs out
+    expect(q("builder-quick-color-panel")).not.toBeNull(); // still open, toolbar still there
+    await click("builder-quick-done");
+    await hover(host.querySelector(".bld-cell")!);
+    expect(q("builder-quick")?.dataset.kind).toBe("icon"); // the editor did not stop working
+  });
+
+  it("has one place per element: big areas anchor inside their top-right corner, never at the pointer", async () => {
+    await openLibrary();
+    const bg = shadow().querySelector('[data-artboard="true"]')!;
+    await hover(bg, 30, 30);
+    const one = `${q("builder-quick")!.style.left}|${q("builder-quick")!.style.top}`;
+    await act(async () => { q("builder-artboard")!.dispatchEvent(new MouseEvent("mouseleave", { bubbles: false })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 500)); });
+    await hover(bg, 400, 300); // a later visit from another spot: the same place
+    expect(`${q("builder-quick")!.style.left}|${q("builder-quick")!.style.top}`).toBe(one);
+    expect(q("builder-quick")!.className).toContain("is-inside");
+  });
+});
+
+describe("move text on the artboard", () => {
+  const ptr = (type: string, x: number, y: number) => new MouseEvent(type, { bubbles: true, clientX: x, clientY: y });
+  async function drag(id: string, from: [number, number], to: [number, number]): Promise<void> {
+    await act(async () => { q(id)!.dispatchEvent(ptr("pointerdown", ...from)); });
+    await act(async () => { window.dispatchEvent(ptr("pointermove", ...to)); });
+    await act(async () => { window.dispatchEvent(ptr("pointerup", ...to)); });
+  }
+
+  it("✥ opens a frame: side handles move the title on one axis, at once, with a badge; arrows nudge; Apply closes", async () => {
+    await openLibrary();
+    await hover(shadow().querySelector('[data-banner-text="title"]')!);
+    await click("builder-quick-move");
+    expect(q("builder-quick-move-frame")?.dataset.which).toBe("title");
+
+    await drag("builder-quick-move-right", [100, 100], [112, 140]); // a left/right handle: only X moves
+    expect(config().banner).toMatchObject({ titleDx: 12, titleDy: 0 });
+    expect(text("builder-quick-move-badge")).toBe("X +12 px");
+    await drag("builder-quick-move-top", [50, 50], [90, 42]); // a top/bottom handle: only Y moves
+    expect(config().banner).toMatchObject({ titleDx: 12, titleDy: -8 });
+    await drag("builder-quick-move-body", [0, 0], [3, 4]); // the text itself: both
+    expect(config().banner).toMatchObject({ titleDx: 15, titleDy: -4 });
+
+    const frame = q("builder-quick-move-frame")!;
+    await act(async () => { frame.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", shiftKey: true, bubbles: true })); });
+    expect(config().banner.titleDx).toBe(5);
+    expect((q("builder-title-move-x") as HTMLInputElement).value).toBe("5"); // the side widget follows
+
+    await click("builder-quick-move-apply");
+    expect(q("builder-quick-move-frame")).toBeNull();
+  });
+});
+
+describe("number boxes apply as you type", () => {
+  async function type(id: string, value: string): Promise<void> {
+    const input = q(id) as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await act(async () => { setter.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  }
+
+  it("applies a value in range without Enter or leaving the box; an out-of-range one waits, then clamps", async () => {
+    await openLibrary();
+    await type("builder-title-move-x", "15");
+    expect(config().banner.titleDx).toBe(15); // no blur, no Enter
+    if (q("builder-width") === null) await act(async () => { q("builder-section-artboard")!.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await type("builder-width", "1"); // on the way to 1080: below the 320 minimum, not applied yet
+    expect(config().artboard.width).toBe(1080);
+    await type("builder-width", "1200");
+    expect(config().artboard.width).toBe(1200);
+    await type("builder-width", "99999");
+    expect(config().artboard.width).toBe(1200);
+    await act(async () => { (q("builder-width") as HTMLInputElement).blur(); q("builder-width")!.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    expect(config().artboard.width).toBe(3000); // left the box: clamped
+  });
+});

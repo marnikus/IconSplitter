@@ -4,7 +4,6 @@
 import { useState, type ReactNode } from "react";
 import { clampTo, type NumRange } from "../lib/svgBuilder/ranges";
 import { SWATCHES } from "../lib/svgBuilder/config";
-import DraftNumberInput from "../ui/DraftNumberInput";
 
 export function Section({ title, badge, initiallyOpen = true, testid, children }: {
   title: string; badge?: string; initiallyOpen?: boolean; testid: string; children: ReactNode;
@@ -24,12 +23,32 @@ export function Field({ label, aside, children }: { label: string; aside?: React
   return <div className="bld-field"><div className="svg-field-label"><span>{label}</span>{aside}</div>{children}</div>;
 }
 
+/**
+ * A px number box that applies AS YOU TYPE (2026-11-14): every keystroke or
+ * arrow step that is a value inside the range is applied at once (one coalesced
+ * undo gesture). A value outside the range — "1" on the way to "1080" in a
+ * 320–3000 box — waits until the box is left (or Enter), then clamps.
+ */
 export function NumBox({ label, unit, value, range, testid, onCommit }: {
-  label: string; unit?: string; value: number; range: NumRange; testid: string; onCommit: (v: number) => void;
+  label: string; unit?: string; value: number; range: NumRange; testid: string; onCommit: (v: number, gesture?: boolean) => void;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const parse = (text: string) => (text.trim() === "" ? Number.NaN : Number(text));
+  const change = (text: string) => {
+    setDraft(text);
+    const n = parse(text);
+    if (Number.isFinite(n) && n >= range.min && n <= range.max && clampTo(range, n) !== value) onCommit(clampTo(range, n), true);
+  };
+  const commit = () => {
+    if (draft === null) return;
+    const n = parse(draft);
+    setDraft(null);
+    if (Number.isFinite(n) && clampTo(range, n) !== value) onCommit(clampTo(range, n));
+  };
   return <label className="bld-numbox"><span className="bld-numbox-label">{label}</span>
-    <DraftNumberInput testid={testid} label={label} value={value} min={range.min} max={range.max} step={range.step}
-      onCommit={(v) => { if (v !== null) onCommit(clampTo(range, v)); }} />
+    <input className="svg-input" type="number" data-testid={testid} aria-label={label} min={range.min} max={range.max} step={range.step}
+      value={draft ?? String(value)} onChange={(e) => change(e.target.value)} onBlur={commit}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); if (e.key === "Escape") setDraft(null); }} />
     {unit !== undefined && <span className="bld-unit">{unit}</span>}</label>;
 }
 

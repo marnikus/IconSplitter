@@ -5217,3 +5217,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 
 - `lib/svgBuilder/swatches.ts`, `svgBuilder/quickedit.ts`, `SvgBuilderQuickEdit.tsx`, mounted in the artboard wrap.
 - Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder_quickedit 4/4; full vitest 4580 passed / 26 failed in the 9 clean-tree files.
+
+## 2026-11-14 — SVG builder: quick toolbar fixed anchors + stuck-panel fix; move text on the artboard; live number boxes
+
+- `anchorOf` (layout-based anchors), hide timer never hides an open panel + panel reset when the toolbar goes; `SvgBuilderTextMove.tsx` (✥ frame, handles, guide, badge, nudge, Apply); `NumBox` applies in-range values while typing.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 132/132 (new: stuck-panel regression, fixed anchor, move frame, live number boxes).

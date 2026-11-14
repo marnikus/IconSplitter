@@ -32,13 +32,13 @@ function ArtboardSection({ c, edit }: { c: SheetConfig; edit: Edit }) {
   const a = c.artboard;
   return <Section title="Artboard" badge={`${a.width}×${a.height}`} initiallyOpen={false} testid="builder-section-artboard">
     <div className="bld-two">
-      <NumBox label="W" unit="px" value={a.width} range={RANGES.width} testid="builder-width" onCommit={(width) => edit("artboard", { width })} />
-      <NumBox label="H" unit="px" value={a.height} range={RANGES.height} testid="builder-height" onCommit={(height) => edit("artboard", { height })} />
+      <NumBox label="W" unit="px" value={a.width} range={RANGES.width} testid="builder-width" onCommit={(width, g) => edit("artboard", { width }, g)} />
+      <NumBox label="H" unit="px" value={a.height} range={RANGES.height} testid="builder-height" onCommit={(height, g) => edit("artboard", { height }, g)} />
     </div>
     <Swatches label="Canvas" value={a.background} testid="builder-canvas" onChange={(background) => edit("artboard", { background })} />
     <div className="bld-two">
-      <NumBox label="Pad" unit="px" value={a.padding} range={RANGES.padding} testid="builder-padding" onCommit={(padding) => edit("artboard", { padding })} />
-      <NumBox label="Radius" unit="px" value={a.radius} range={RANGES.radius} testid="builder-radius" onCommit={(radius) => edit("artboard", { radius })} />
+      <NumBox label="Pad" unit="px" value={a.padding} range={RANGES.padding} testid="builder-padding" onCommit={(padding, g) => edit("artboard", { padding }, g)} />
+      <NumBox label="Radius" unit="px" value={a.radius} range={RANGES.radius} testid="builder-radius" onCommit={(radius, g) => edit("artboard", { radius }, g)} />
     </div>
   </Section>;
 }

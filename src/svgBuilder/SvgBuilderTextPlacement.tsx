@@ -29,8 +29,8 @@ function MoveRow({ label, n, x, y, testid, edit }: {
 }) {
   return <Field label={label}>
     <div className="bld-two">
-      <NumBox label="X" unit="px" value={n[x]} range={RANGES.textOffset} testid={`${testid}-x`} onCommit={(v) => edit("banner", { [x]: v })} />
-      <NumBox label="Y" unit="px" value={n[y]} range={RANGES.textOffset} testid={`${testid}-y`} onCommit={(v) => edit("banner", { [y]: v })} />
+      <NumBox label="X" unit="px" value={n[x]} range={RANGES.textOffset} testid={`${testid}-x`} onCommit={(v, g) => edit("banner", { [x]: v }, g)} />
+      <NumBox label="Y" unit="px" value={n[y]} range={RANGES.textOffset} testid={`${testid}-y`} onCommit={(v, g) => edit("banner", { [y]: v }, g)} />
     </div>
   </Field>;
 }

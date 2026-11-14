@@ -334,3 +334,24 @@
 .bld-quick-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .bld-quick-hex { flex: 1 1 auto; min-width: 0; font-family: ui-monospace, monospace; }
 .bld-quick-face { flex: 1 1 auto; }
+
+/* Move text on the artboard (2026-11-14): dashed frame, side handles, red guide, value badge, Apply. */
+.bld-quick-btn.is-on { background: #5548BE; border-color: #5548BE; color: #fff; }
+.bld-quick-move-layer { position: absolute; width: 0; height: 0; }
+.bld-quick-move { position: absolute; border: 1px dashed #887FC4; border-radius: 2px; outline: none; }
+.bld-quick-move:focus-visible { border-color: #C5BEFF; }
+.bld-quick-move-body { position: absolute; inset: 0; cursor: move; }
+.bld-quick-move-h, .bld-quick-move-v { position: absolute; border-radius: 3px; background: #5548BE; box-shadow: 0 0 0 2px #fff6; }
+.bld-quick-move-h { top: 50%; width: 7px; height: 18px; margin-top: -9px; cursor: ew-resize; }
+.bld-quick-move-h.is-left { left: -4px; } .bld-quick-move-h.is-right { right: -4px; }
+.bld-quick-move-v { left: 50%; width: 32px; height: 7px; margin-left: -16px; cursor: ns-resize; }
+.bld-quick-move-v.is-top { top: -4px; } .bld-quick-move-v.is-bottom { bottom: -4px; }
+.bld-quick-move-h:active, .bld-quick-move-v:active { background: #2189FF; }
+.bld-quick-move-guide { position: absolute; pointer-events: none; background: #FDA6A6; }
+.bld-quick-move-guide.is-x { left: -60px; right: -60px; top: 50%; height: 1px; }
+.bld-quick-move-guide.is-y { top: -60px; bottom: -60px; left: 50%; width: 1px; }
+.bld-quick-move-badge { position: absolute; left: 4px; bottom: -22px; padding: 1px 6px; border-radius: 3px; background: #37334D; color: #fff; font-size: 9px; white-space: nowrap; pointer-events: none; }
+.bld-quick-move-apply { position: absolute; right: -6px; top: -30px; }
+
+/* Anchored inside a big area: the toolbar's right edge sits on the anchor (2026-11-14). */
+.bld-quick.is-inside { transform: translateX(-100%); justify-items: end; }
