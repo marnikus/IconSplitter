@@ -11,6 +11,7 @@ import SvgBuilderGuides from "./SvgBuilderGuides";
 import SvgBuilderQuickEdit from "./SvgBuilderQuickEdit";
 import SvgBuilderEdgeHandles from "./SvgBuilderEdgeHandles";
 import SvgBuilderGapHandles from "./SvgBuilderGapHandles";
+import SvgBuilderSizeHandles from "./SvgBuilderSizeHandles";
 import { addHeroHitAreas } from "./herohit";
 
 export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; doc: SheetDocument; zoom: number }) {
@@ -36,6 +37,7 @@ export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; do
       <SvgBuilderGapHandles b={b} zoom={zoom} />
       <SvgBuilderEdgeHandles b={b} zoom={zoom} />
     </div>
+    <SvgBuilderSizeHandles b={b} zoom={zoom} />
     <span className="bld-artboard-caption">ARTBOARD 01 · {width} × {height}</span>
     <SvgBuilderQuickEdit b={b} board={board} wrap={wrap} />
   </div>;

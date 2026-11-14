@@ -110,6 +110,8 @@
 .bld-canvas { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; padding: 28px;
   background-color: var(--v2-bg); background-image: radial-gradient(var(--v2-line) 1px, transparent 1px); background-size: 18px 18px; }
 .bld-artboard-wrap { position: relative; flex: 0 0 auto; margin: auto; }
+/* Hover reaches the size grips just outside the artboard (2026-11-14). */
+.bld-artboard-wrap::before { content: ""; position: absolute; inset: 0 -26px -26px 0; }
 .bld-artboard { position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; box-shadow: 0 18px 50px #000a, 0 0 0 1px var(--v2-line-strong); }
 .bld-artboard-svg { position: absolute; inset: 0; }
 .bld-artboard-caption { position: absolute; left: 0; top: calc(100% + 6px); color: var(--v2-muted-2); font-size: 9px; letter-spacing: 0.08em; opacity: 0; transition: opacity .15s; white-space: nowrap; }
@@ -375,10 +377,15 @@
 .bld-edge-badge { position: absolute; left: 50%; top: -26px; transform: translateX(-50%); white-space: nowrap;
   background: #11131c; color: #fff; font: 600 11px/1 system-ui, sans-serif; padding: 4px 7px; border-radius: 6px; pointer-events: none; }
 
-/* Artboard size grips (2026-11-14): on the outer right / bottom border and the corner. */
-.bld-edge-handle.is-c { width: 16px; height: 16px; border-radius: 4px; cursor: nwse-resize; }
-.bld-edge-handle.is-size { background: #2F9E8F; }
-.bld-edge-handle.is-size:hover, .bld-edge-handle.is-size.is-on { background: #3CC2AF; }
+/* Artboard size grips (2026-11-14): just OUTSIDE the right / bottom edge and the corner, on the unscaled wrap. */
+.bld-size-grips { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.bld-size-grip { position: absolute; pointer-events: auto; transform: translate(-50%, -50%); touch-action: none;
+  background: #2F9E8F; border: 2px solid #fff; border-radius: 99px; box-shadow: 0 1px 4px #0008; opacity: 0; transition: opacity .12s; }
+.bld-size-grip.is-right { width: 10px; height: 40px; cursor: ew-resize; }
+.bld-size-grip.is-bottom { width: 40px; height: 10px; cursor: ns-resize; }
+.bld-size-grip.is-corner { width: 16px; height: 16px; border-radius: 4px; cursor: nwse-resize; }
+.bld-artboard-wrap:hover .bld-size-grip, .bld-size-grips.is-dragging .bld-size-grip { opacity: 1; }
+.bld-size-grip:hover, .bld-size-grip.is-on { background: #3CC2AF; }
 
 /* Gap strips (2026-11-14, guides on): invisible until the pointer is near a gap; the whole strip drags. */
 .bld-gaps { position: absolute; inset: 0; pointer-events: none; z-index: 3; }

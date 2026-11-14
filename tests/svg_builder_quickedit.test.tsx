@@ -411,6 +411,12 @@ describe("number boxes apply as you type", () => {
     };
     const zoom = Number(q("builder-artboard")!.dataset.zoom);
     const a = config().artboard;
+    // just OUTSIDE the artboard: on the unscaled wrap, not inside the clipped artboard (2026-11-14)
+    for (const id of ["builder-edge-size-right", "builder-edge-size-bottom", "builder-edge-size-corner"]) {
+      expect(q("builder-artboard")!.contains(q(id))).toBe(false);
+    }
+    expect(parseFloat(q("builder-edge-size-right")!.style.left)).toBeGreaterThan(a.width * zoom);
+    expect(parseFloat(q("builder-edge-size-bottom")!.style.top)).toBeGreaterThan(a.height * zoom);
     await drag("builder-edge-size-right", 120 * zoom, 999);
     expect(config().artboard).toMatchObject({ width: a.width + 120, height: a.height });
     await drag("builder-edge-size-bottom", 999, -60 * zoom);
