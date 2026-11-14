@@ -5,7 +5,8 @@
 // check rows, Up/Down move, E/Q check; the bulk bar acts on the checked rows.
 import { memo, useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { checkState, checkedInView, nextVisibleId, selectIntent } from "../lib/reviewselect";
-import { artboardIcons, artboardPreviewSvg, type FinalArtboard } from "../lib/svgBuilder/artboards";
+import { artboardConfig, artboardIcons, artboardPreviewSvg, type FinalArtboard } from "../lib/svgBuilder/artboards";
+import { overrideCount } from "../lib/svgBuilder/lookoverrides";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 import { isNativeListKeyTarget, isRowGestureClick } from "../ui/rowgesture";
 import { artboardGroups, visibleArtboards } from "./artboardview";
@@ -73,7 +74,9 @@ function ArtboardRow({ b, template, artboard }: { b: BuilderApi; template: Sheet
   const active = b.artboardSel.active === artboard.id;
   const checked = b.artboardSel.checked.includes(artboard.id);
   const open = b.editingArtboardId === artboard.id;
-  const cells = template.config.grid.columns * template.config.grid.rows;
+  const look = artboardConfig(template, artboard);
+  const cells = look.grid.columns * look.grid.rows;
+  const own = overrideCount(artboard.overrides);
   const onClick = (e: MouseEvent<HTMLDivElement>) => { if (isRowGestureClick(e)) b.actions.artboardGesture(artboard.id, selectIntent(e)); };
   return <div className={`bld-artboard-row${active ? " is-active" : ""}${open ? " is-open" : ""}`} data-testid={`builder-artboard-${artboard.id}`}
     aria-selected={active} onClick={onClick}>
@@ -90,6 +93,9 @@ function ArtboardRow({ b, template, artboard }: { b: BuilderApi; template: Sheet
     <span className="bld-meta-state" data-state={artboard.metadata?.state ?? "empty"} data-testid={`builder-artboard-meta-${artboard.id}`}>
       {artboard.metadata === null ? "no metadata" : `metadata ${artboard.metadata.state}`}</span>
     {artboard.exportedAt !== null && <span className="v2-chip approved" data-testid={`builder-artboard-exported-${artboard.id}`}>exported</span>}
+    {own > 0 && <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-reset-${artboard.id}`}
+      title={`${own} setting${own === 1 ? "" : "s"} changed on this artboard. Reset: follow the template in everything again`}
+      onClick={() => b.actions.resetArtboardLook(artboard.id)}>↺ Template <small>{own}</small></button>}
     <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-remove-${artboard.id}`} aria-label={`Remove ${artboard.name}`}
       onClick={() => b.actions.removeArtboards([artboard.id])}>✕</button>
   </div>;

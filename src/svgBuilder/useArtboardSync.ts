@@ -5,6 +5,7 @@
 // overwrite the artboard just opened.
 import { useEffect, useRef } from "react";
 import type { FinalArtboard } from "../lib/svgBuilder/artboards";
+import { overridesOf } from "../lib/svgBuilder/lookoverrides";
 import { saveArtboards } from "./artboardstore";
 import type { BuilderModel } from "./model";
 
@@ -12,12 +13,14 @@ function same(a: FinalArtboard, b: FinalArtboard): boolean {
   return JSON.stringify({ ...a, updated: "" }) === JSON.stringify({ ...b, updated: "" });
 }
 
-/** The artboard as the stage shows it now. */
+/** The artboard as the stage shows it now; look settings that differ from its template become its own (2026-11-14). */
 export function artboardFromStage(a: FinalArtboard, m: BuilderModel, placedIds: readonly string[]): FinalArtboard {
   const banner = m.config.banner;
+  const template = m.templates.find((t) => t.id === a.templateId);
   return {
     ...a, title: banner.title, subtitle: banner.subtitle, heroIconId: banner.heroIconId,
     placedIds: [...placedIds], lockedIds: [...m.lockedIds], metadata: m.metadata,
+    overrides: template === undefined ? a.overrides : overridesOf(template, m.config),
   };
 }
 

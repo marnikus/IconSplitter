@@ -94,6 +94,7 @@ afterEach(() => {
 import { DEFAULT_CONFIG, parseSheetConfig } from "../src/lib/svgBuilder/config";
 import { newTemplate } from "../src/lib/svgBuilder/templates";
 import { artboardConfig, artboardName, newArtboard, parseArtboards, pendingUse } from "../src/lib/svgBuilder/artboards";
+import { overrideCount, overridesOf } from "../src/lib/svgBuilder/lookoverrides";
 import { BUILDER_ARTBOARDS_KEY } from "../src/svgBuilder/artboardstore";
 
 // Final artboards (2026-11-13): a template is the blueprint; each artboard is one
@@ -102,6 +103,21 @@ import { BUILDER_ARTBOARDS_KEY } from "../src/svgBuilder/artboardstore";
 
 describe("final artboards — the pure part", () => {
   const tpl = newTemplate(parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, title: "kept out" } }), [], "t0", "tpl-1");
+
+  it("an artboard keeps only the look parts it changed; everything else follows its template (2026-11-14)", () => {
+    const stage = { ...tpl.config, banner: { ...tpl.config.banner, background: "#112233", title: "Own words" }, artboard: { ...tpl.config.artboard, padding: 77 } };
+    expect(overridesOf(tpl, stage)).toEqual({ banner: { background: "#112233" }, artboard: { padding: 77 } }); // words are never overrides
+    expect(overridesOf(tpl, parseSheetConfig(tpl.config))).toEqual({});
+    const art = { ...newArtboard(tpl, [], { now: "t", id: "a" }), overrides: { banner: { background: "#112233" } } };
+    const changed = { ...tpl, config: { ...tpl.config, banner: { ...tpl.config.banner, background: "#FFFFFF" }, icons: { ...tpl.config.icons, color: "#AA0000" } } };
+    const drawn = artboardConfig(changed, art);
+    expect(drawn.banner.background).toBe("#112233"); // its own change wins
+    expect(drawn.icons.color).toBe("#AA0000"); // not changed on it: inherited from the template
+    expect(overrideCount(art.overrides)).toBe(1);
+    const parsed = parseArtboards([{ ...art, overrides: { banner: { background: "#112233", bogus: 1 }, nope: { x: 1 }, grid: "junk" } }]);
+    expect(parsed[0].overrides).toEqual({ banner: { background: "#112233" } });
+    expect(parseArtboards([{ ...art, overrides: undefined }])[0].overrides).toEqual({}); // older saves
+  });
 
   it("names artboards after the template with the next free number", () => {
     const a1 = newArtboard(tpl, [], { now: "t1", id: "a1" });
@@ -134,7 +150,7 @@ describe("final artboards — the pure part", () => {
 });
 
 const rows = () => all('[data-testid^="builder-artboard-art-"]').filter((el) => el.classList.contains("bld-artboard-row"));
-const savedArtboards = () => JSON.parse(localStorage.getItem(BUILDER_ARTBOARDS_KEY) ?? "[]") as Array<{ id: string; name: string; title: string; placedIds: string[]; templateId: string }>;
+const savedArtboards = () => JSON.parse(localStorage.getItem(BUILDER_ARTBOARDS_KEY) ?? "[]") as Array<{ id: string; name: string; title: string; placedIds: string[]; templateId: string; overrides: unknown }>;
 const savedTemplates = () => JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.templates.v1") ?? "[]") as Array<{ id: string }>;
 const realIcons = (ids: string[]) => ids.filter((id) => !id.startsWith("~empty:"));
 const tiles = () => all('[data-testid^="builder-asset-"]').filter((el) => el.dataset.assetId !== undefined);
@@ -183,6 +199,42 @@ describe("final artboards — the list under the templates", () => {
     await clickWith(`builder-artboard-${first.id}`, {}); // back to the first: its own title returns
     expect((q("builder-title") as HTMLInputElement).value).toBe("Food Icon Assets");
     expect(savedArtboards()[1].title).toBe(first.title);
+  });
+
+  it("changes on an artboard are its own; the rest follows the template; ↺ Template restores inheritance (2026-11-14)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    const [a1, a2] = savedArtboards();
+    const sheet = () => JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.config.v1") ?? "{}");
+    expect(q(`builder-artboard-reset-${a2.id}`)).toBeNull(); // nothing of its own yet
+    if (q("builder-padding") === null) await act(async () => { q("builder-section-artboard")!.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await typeIn("builder-padding", "50"); // a2 is open: its own padding
+    await waitUntil(() => JSON.stringify(savedArtboards()[1].overrides) === JSON.stringify({ artboard: { padding: 50 } }), "a2 keeps its own padding");
+    expect(savedArtboards()[0].overrides).toEqual({});
+    expect(q(`builder-artboard-reset-${a2.id}`)).not.toBeNull();
+    expect(q(`builder-artboard-reset-${a1.id}`)).toBeNull();
+
+    await click(`builder-template-open-${tpl.id}`); // edit the template: padding and columns
+    await typeIn("builder-padding", "20");
+    await click("builder-columns-inc");
+    const columns = sheet().grid.columns;
+    await click("builder-stage-template-save");
+
+    await clickWith(`builder-artboard-${a2.id}`, {});
+    expect(sheet().artboard.padding).toBe(50); // its own change stays
+    expect(sheet().grid.columns).toBe(columns); // never changed on it: follows the template
+    await clickWith(`builder-artboard-${a1.id}`, {});
+    expect(sheet().artboard.padding).toBe(20); // a1 follows the template in everything
+    expect(sheet().grid.columns).toBe(columns);
+
+    await clickWith(`builder-artboard-${a2.id}`, {});
+    await click(`builder-artboard-reset-${a2.id}`);
+    expect(sheet().artboard.padding).toBe(20);
+    await waitUntil(() => JSON.stringify(savedArtboards()[1].overrides) === "{}", "a2 inherits everything again");
+    expect(q(`builder-artboard-reset-${a2.id}`)).toBeNull();
   });
 
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {

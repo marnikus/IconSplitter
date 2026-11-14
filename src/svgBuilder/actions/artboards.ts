@@ -15,12 +15,12 @@ import { blockLeave } from "./leaveguard";
 import { editTemplate } from "./templates";
 import { saveSheetConfig } from "../configstore";
 import { visibleArtboards } from "../artboardview";
-import { prefs } from "./config";
+import { commitConfig, prefs } from "./config";
 import { startIcons } from "./startpick";
 
 type ArtboardActions = Pick<BuilderActions,
   "templateGesture" | "toggleTemplateCheck" | "setTemplateChecks" | "addArtboard" | "artboardGesture" | "toggleArtboardCheck"
-  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard">;
+  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard" | "resetArtboardLook">;
 
 export function artboardActions(get: () => BuilderActionContext): ArtboardActions {
   return {
@@ -34,6 +34,7 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
     renameArtboard: (id, name) => renameArtboard(get(), id, name),
     removeArtboards: (ids) => removeArtboards(get(), ids),
     closeArtboard: () => get().dispatch({ editingArtboardId: null }),
+    resetArtboardLook: (id) => resetArtboardLook(get(), id),
   };
 }
 
@@ -92,6 +93,21 @@ function artboardGesture(ctx: BuilderActionContext, id: string, intent: SelectIn
 function showing(sel: RowSelection, templateId: string): RowSelection {
   const checked = sel.checked.length > 0 && !sel.checked.includes(templateId) ? [...sel.checked, templateId] : sel.checked;
   return { ...sel, active: templateId, anchor: templateId, checked };
+}
+
+/**
+ * ↺ Template: the artboard inherits its template's whole look again. Open on
+ * the stage, the sheet goes back to the template look as one undo step (and
+ * the sync writes the empty override list); closed, the stored list empties.
+ */
+function resetArtboardLook(ctx: BuilderActionContext, id: string): void {
+  const artboard = ctx.model.artboards.find((a) => a.id === id);
+  const template = ctx.model.templates.find((t) => t.id === artboard?.templateId);
+  if (artboard === undefined || template === undefined) return;
+  const reset = { ...artboard, overrides: {}, updated: new Date().toISOString() };
+  storeArtboards(ctx, ctx.model.artboards.map((a) => (a.id === id ? reset : a)));
+  if (ctx.model.editingArtboardId === id) commitConfig(ctx, { config: artboardConfig(template, reset), label: `“${artboard.name}” follows its template again` });
+  ctx.say(`“${artboard.name}” follows its template again`);
 }
 
 /** After the leave question: the artboard becomes the active row and opens. */

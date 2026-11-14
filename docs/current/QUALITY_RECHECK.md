@@ -5239,3 +5239,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-14 SVG builder: artboard size grips moved just outside the artboard. Builder suites 154/154, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: open artboard/template survives reload (session slice), open artboard always selected. Builder + session suites 172/172, tsc/eslint/quality PASS.
 - 2026-11-14 SVG builder: new artboard starts with stage icons + recipe fill and the template sample words. Builder suites 155/155, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: per-artboard look overrides with template inheritance + ↺ Template reset. Builder + session suites 174/174, tsc/eslint/quality PASS.

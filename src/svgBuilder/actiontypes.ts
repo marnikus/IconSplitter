@@ -106,6 +106,8 @@ export interface BuilderActions {
   /** One honest toast line (status). */
   say: (message: string, error?: boolean) => void;
   closeDialog: () => void;
+  /** ↺ Template (2026-11-14): the artboard drops its own look changes and inherits everything again. */
+  resetArtboardLook: (id: string) => void;
   /** Unsaved template edits (2026-11-14): back to the saved look (undoable); the leave question's three answers. */
   resetTemplate: () => void;
   leaveSave: () => void;

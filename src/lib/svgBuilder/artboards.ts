@@ -8,6 +8,7 @@ import { applyCopy } from "./config";
 import { cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
 import { isEmptySlot } from "./slots";
 import { lookOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
+import { parseOverrides, withOverrides, type LookOverrides } from "./lookoverrides";
 import type { BuilderIconAsset, SheetConfig, SheetMetadata } from "./types";
 
 export const ARTBOARD_LIMIT = 400;
@@ -29,6 +30,8 @@ export interface FinalArtboard {
   exportedAt: string | null;
   /** Icons whose usage this artboard already added (counted once, on its first export). */
   countedIds: string[];
+  /** Look settings changed on this artboard (2026-11-14): they win over the template; the rest is inherited. */
+  overrides: LookOverrides;
 }
 
 /** "Side banner · 8×4 · Solid — #3": the template's name and the next free number. */
@@ -49,13 +52,14 @@ export function newArtboard(template: SheetTemplate, artboards: readonly FinalAr
   const { title, subtitle } = lookOf(template.config).banner;
   return {
     id: at.id, templateId: template.id, name: artboardName(template, artboards), title, subtitle, heroIconId: null,
-    placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [],
+    placedIds: [...(at.placedIds ?? [])], lockedIds: [], metadata: null, created: at.now, updated: at.now, exportedAt: null, countedIds: [], overrides: {},
   };
 }
 
-/** The sheet an artboard draws: its template's look with the artboard's own words and hero. */
+/** The sheet an artboard draws: its template's look, its own look changes on top, its own words and hero. */
 export function artboardConfig(template: SheetTemplate, artboard: FinalArtboard): SheetConfig {
-  return applyCopy(template.config, { ...template.config, banner: { ...template.config.banner, title: artboard.title, subtitle: artboard.subtitle, heroIconId: artboard.heroIconId } });
+  const look = withOverrides(template.config, artboard.overrides);
+  return applyCopy(look, { ...look, banner: { ...look.banner, title: artboard.title, subtitle: artboard.subtitle, heroIconId: artboard.heroIconId } });
 }
 
 export function artboardPreviewSvg(args: {
@@ -116,6 +120,7 @@ function parseArtboard(input: unknown, templateIds: ReadonlySet<string> | null):
     placedIds: strings(raw.placedIds, 192), lockedIds: strings(raw.lockedIds, 192), metadata: parseMetadata(raw.metadata),
     created: text(raw.created, 40), updated: text(raw.updated, 40),
     exportedAt: typeof raw.exportedAt === "string" ? raw.exportedAt : null, countedIds: strings(raw.countedIds, 192),
+    overrides: parseOverrides(raw.overrides),
   };
 }
 
