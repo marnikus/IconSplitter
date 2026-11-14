@@ -12,7 +12,7 @@ import { QUICK_SPECS, quickTargetOf, slotValue, withSlot, type ColorSlot, type Q
 import type { BuilderApi } from "./useSvgBuilder";
 
 type Panel = "color" | "stroke" | "text" | null;
-interface Hover { kind: QuickKind; x: number; y: number }
+interface Hover { kind: QuickKind; el: Element; x: number; y: number }
 
 const FACES: ReadonlyArray<{ value: TitleFace; label: string }> = [
   { value: "sans", label: "Grotesk (sans)" }, { value: "serif", label: "Editorial (serif)" }, { value: "mono", label: "Mono" },
@@ -40,7 +40,9 @@ function useQuickHover(board: RefObject<HTMLDivElement | null>, wrap: RefObject<
       const t = quickTargetOf(e.composedPath());
       if (t === null || wrap.current === null) return;
       keep();
-      setHover((h) => (h?.kind === t.kind && !BIG.has(t.kind) ? h : { kind: t.kind, ...placeOf(t.kind, t.el, e, wrap.current as HTMLElement) }));
+      // Fixed while the pointer stays on the same element (2026-11-14): over a big
+      // area it is placed once, where the pointer entered — never chasing it.
+      setHover((h) => (h !== null && h.kind === t.kind && h.el === t.el ? h : { kind: t.kind, el: t.el, ...placeOf(t.kind, t.el, e, wrap.current as HTMLElement) }));
     };
     node.addEventListener("mousemove", onMove);
     node.addEventListener("mouseleave", later);

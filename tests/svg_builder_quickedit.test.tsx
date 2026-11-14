@@ -124,8 +124,8 @@ describe("quick edit — the pure part", () => {
 });
 
 const shadow = () => q("builder-artboard")!.querySelector(".bld-artboard-svg")!.shadowRoot!;
-async function hover(target: Element): Promise<void> {
-  await act(async () => { target.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, composed: true, clientX: 10, clientY: 10 })); });
+async function hover(target: Element, clientX = 10, clientY = 10): Promise<void> {
+  await act(async () => { target.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, composed: true, clientX, clientY })); });
 }
 async function slide(id: string, value: string): Promise<void> {
   const input = q(id) as HTMLInputElement;
@@ -135,6 +135,18 @@ async function slide(id: string, value: string): Promise<void> {
 const config = () => JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.config.v1") ?? "{}");
 
 describe("quick edit on the artboard", () => {
+  it("stays put while the pointer moves over the same big area, so it can be clicked (2026-11-14)", async () => {
+    await openLibrary();
+    const bg = shadow().querySelector('[data-artboard="true"]')!;
+    await hover(bg, 100, 100);
+    const at = () => `${q("builder-quick")!.style.left}|${q("builder-quick")!.style.top}`;
+    const first = at();
+    await hover(bg, 300, 250); // the pointer moves on: the toolbar does not follow
+    expect(at()).toBe(first);
+    await hover(shadow().querySelector('[data-banner="true"] > rect')!, 50, 50); // another element: it moves there
+    expect(q("builder-quick")?.dataset.kind).toBe("banner");
+  });
+
   it("hovering an icon offers its colour (smart swatches, hex, Done) and its stroke", async () => {
     await openLibrary();
     await hover(host.querySelector(".bld-cell")!);
