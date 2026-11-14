@@ -95,6 +95,13 @@ export function draftSheetMetadata(fields: SheetMetadataFields): SheetMetadata {
   return { ...clean, state: validation.ok ? "draft" : "invalid", validation, fingerprint: sheetMetadataFingerprint(clean) };
 }
 
+/** Editing the fields (the upload tab's way): an accepted answer turns "edited" until Accept re-validates it. */
+export function editSheetMetadata(current: SheetMetadata | null, patch: Partial<SheetMetadataFields>): SheetMetadata {
+  const base = current ?? emptySheetMetadata();
+  const state = base.state === "accepted" || base.state === "edited" ? "edited" : base.state === "empty" ? "draft" : base.state;
+  return { ...base, ...patch, state };
+}
+
 /** Accept: re-validated; "accepted", or "invalid" with the exact rule violations. */
 export function acceptSheetMetadata(fields: SheetMetadataFields): SheetMetadata {
   const clean = cleanSheetMetadata(fields);

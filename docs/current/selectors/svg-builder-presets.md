@@ -34,3 +34,4 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 | `builder-artboard-reset-<id>` | artboard row, only with own look changes | ↺ Template N: inherit the whole template look again |
 | `builder-editing` (`data-kind` artboard / template) | stage top-left label | `builder-edit-main-template` (while an artboard is open) |
 | `builder-export-selected` | header, beside Export | ⇪ Export all selected (checked artboards, else the open one) into `_artboard_sheets` |
+| `builder-artboard-meta-fields-<id>` | under the active artboard row | the upload editor `upload-meta-{title,description,tags,accept,regen,state}-<id>`; row button `builder-artboard-regen-<id>` |

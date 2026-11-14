@@ -366,6 +366,43 @@ describe("final artboards — the list under the templates", () => {
     expect(text("builder-toast")).toMatch(/exported/i); // canvas-only parts (JPG / PNG) and the EPS report their problem here
   });
 
+  it("clicking a row shows its metadata in the upload tab's editor; edits and Accept save into that artboard; each row can regenerate (2026-11-15)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    const [a1, a2] = savedArtboards();
+    expect(q(`builder-artboard-regen-${a1.id}`)).not.toBeNull(); // every row
+    expect(q(`builder-artboard-regen-${a2.id}`)).not.toBeNull();
+    const stored = JSON.parse(localStorage.getItem(BUILDER_ARTBOARDS_KEY) ?? "[]");
+    stored[0].metadata = { title: "Short", description: "Too short", tags: ["icon"], state: "draft" };
+    localStorage.setItem(BUILDER_ARTBOARDS_KEY, JSON.stringify(stored));
+    act(() => ui.unmount()); // reload with that metadata
+    ui = createRoot(host);
+    act(() => { ui.render(<Workbench />); });
+    await openLibrary();
+    await clickWith(`builder-artboard-${a1.id}`, {});
+    expect(q(`upload-meta-fields-${a1.id}`)).not.toBeNull(); // the active row's editor
+    expect(q(`upload-meta-name-${a1.id}`)).toBeNull();
+    expect(q(`upload-meta-fields-${a2.id}`)).toBeNull();
+    expect((q(`upload-meta-title-${a1.id}`) as HTMLInputElement).value).toBe("Short");
+    const type = async (id: string, value: string) => {
+      const el = q(id) as HTMLInputElement | HTMLTextAreaElement;
+      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      await act(async () => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value); el.dispatchEvent(new Event("input", { bubbles: true })); });
+    };
+    await type(`upload-meta-title-${a1.id}`, "Domestic household routines and grocery shopping");
+    await type(`upload-meta-description-${a1.id}`, "Domestic household routines and grocery shopping concepts today");
+    await type(`upload-meta-tags-${a1.id}`, "icon, pictogram, vector, stroke, line, editable, web, food, home, kitchen");
+    await click(`upload-meta-accept-${a1.id}`);
+    const saved = JSON.parse(localStorage.getItem(BUILDER_ARTBOARDS_KEY) ?? "[]")[0].metadata;
+    expect(saved).toMatchObject({ state: "accepted", title: "Domestic household routines and grocery shopping" });
+    expect(q("builder-stage-artboard-save")).toBeNull(); // the open artboard shows no unsaved change
+    await click(`builder-artboard-regen-${a2.id}`);
+    expect(text("builder-toast")).toMatch(/Gemini API key/); // the one-artboard request (asks for the key first)
+  });
+
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
     await openLibrary();
     await click("builder-template-save");

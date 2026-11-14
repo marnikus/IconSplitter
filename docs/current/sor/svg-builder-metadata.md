@@ -23,6 +23,10 @@ Since 2026-11-14 the builder's metadata is the **same system as the SVG to uploa
   - **✓ Accept** re-validates and refuses with the exact rule violations.
   - **↻ Regenerate** opens the exact request.
   - On an open artboard the edits are part of its draft (✓ Save artboard).
+- **Per artboard row** (2026-11-15, `SvgBuilderRowMeta.tsx`, `actions/artboardmetaedit.ts`):
+  - Clicking a row (making it the active row) opens the same upload-tab editor under it (`upload-meta-*-<artboard id>`).
+  - Edits and ✓ Accept are written into that artboard at once. An artboard open on the stage gets the same metadata there, so it shows no unsaved change.
+  - Every row has **↻ Metadata** (`builder-artboard-regen-<id>`), which opens the exact-request confirmation for that one artboard.
 
 ## Saving sheets in the folder (2026-11-14)
 

@@ -10,7 +10,7 @@ import { clearGeminiKey, readGeminiKey, saveGeminiKey } from "../../upload/keyst
 import { emptyKeyInfo, keyInfoOf } from "../model";
 import { generateSheetMetadata } from "../runSheetMetadata";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
-import { emptySheetMetadata } from "../../lib/svgBuilder/metadata";
+import { editSheetMetadata } from "../../lib/svgBuilder/metadata";
 import type { SheetMetadataFields } from "../../lib/svgBuilder/types";
 import { commitConfig } from "./config";
 
@@ -112,9 +112,7 @@ function applyArtboardTitle(ctx: BuilderActionContext, title: string): void {
 
 /** Editing the fields (the upload tab's way): an accepted answer turns "edited" until Accept re-validates it. */
 function editMetadata(ctx: BuilderActionContext, patch: Partial<SheetMetadataFields>): void {
-  const current = ctx.model.metadata ?? emptySheetMetadata();
-  const state = current.state === "accepted" || current.state === "edited" ? "edited" : current.state === "empty" ? "draft" : current.state;
-  ctx.dispatch({ metadata: { ...current, ...patch, state } });
+  ctx.dispatch({ metadata: editSheetMetadata(ctx.model.metadata, patch) });
 }
 
 /** ✓ Accept: re-validated with the upload tab's rules; refused with the exact violations. */

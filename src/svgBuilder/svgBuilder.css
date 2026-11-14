@@ -419,3 +419,6 @@
 .bld-text-width:hover, .bld-text-width.is-on { background: #7C7CF0; }
 /* The inline text editor can be widened by hand (its width is kept as the text width). */
 .bld-inline-text { resize: horizontal; max-width: none; }
+
+/* The active artboard row's metadata editor (2026-11-15). */
+.bld-row-meta { margin: -4px 0 6px 28px; padding: 10px 12px; border: 1px solid var(--v2-line); border-top: 0; border-radius: 0 0 var(--v2-radius) var(--v2-radius); background: var(--v2-surface-2); }

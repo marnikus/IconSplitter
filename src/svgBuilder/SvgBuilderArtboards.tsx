@@ -3,13 +3,14 @@
 // one), grouped by template. RULE 25 gestures, as in every other list: a plain
 // click activates a row — and opens it on the stage — the checkbox / Ctrl / Shift
 // check rows, Up/Down move, E/Q check; the bulk bar acts on the checked rows.
-import { memo, useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { Fragment, memo, useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { checkState, checkedInView, nextVisibleId, selectIntent } from "../lib/reviewselect";
 import { artboardConfig, artboardIcons, artboardPreviewSvg, type FinalArtboard } from "../lib/svgBuilder/artboards";
 import { overrideCount } from "../lib/svgBuilder/lookoverrides";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 import { isNativeListKeyTarget, isRowGestureClick } from "../ui/rowgesture";
 import { artboardGroups, visibleArtboards } from "./artboardview";
+import SvgBuilderRowMeta from "./SvgBuilderRowMeta";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderArtboards({ b }: { b: BuilderApi }) {
@@ -66,7 +67,10 @@ function ArtboardGroupView({ b, template, artboards }: { b: BuilderApi; template
       <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-add-${template.id}`} onClick={() => b.actions.addArtboard(template.id)}>＋ Add artboard</button>
     </div>
     {artboards.length === 0 && <p className="bld-templates-empty">No artboards yet — ＋ Add artboard, then pick its icons.</p>}
-    {artboards.map((a) => <ArtboardRow key={a.id} b={b} template={template} artboard={a} />)}
+    {artboards.map((a) => <Fragment key={a.id}>
+      <ArtboardRow b={b} template={template} artboard={a} />
+      {b.artboardSel.active === a.id && <SvgBuilderRowMeta b={b} artboard={a} />}
+    </Fragment>)}
   </div>;
 }
 
@@ -92,13 +96,22 @@ function ArtboardRow({ b, template, artboard }: { b: BuilderApi; template: Sheet
     </div>
     <span className="bld-meta-state" data-state={artboard.metadata?.state ?? "empty"} data-testid={`builder-artboard-meta-${artboard.id}`}>
       {artboard.metadata === null ? "no metadata" : `metadata ${artboard.metadata.state}`}</span>
+    <RowActions b={b} artboard={artboard} own={own} />
+  </div>;
+}
+
+/** The row's end: exported chip, ↺ Template (own look changes), ↻ Metadata, ✕. */
+function RowActions({ b, artboard, own }: { b: BuilderApi; artboard: FinalArtboard; own: number }) {
+  return <>
     {artboard.exportedAt !== null && <span className="v2-chip approved" data-testid={`builder-artboard-exported-${artboard.id}`}>exported</span>}
     {own > 0 && <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-reset-${artboard.id}`}
       title={`${own} setting${own === 1 ? "" : "s"} changed on this artboard. Reset: follow the template in everything again`}
       onClick={() => b.actions.resetArtboardLook(artboard.id)}>↺ Template <small>{own}</small></button>}
+    <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-regen-${artboard.id}`} title="Generate this artboard's metadata again (the exact request is shown first)"
+      onClick={() => b.actions.generateArtboardsMetadata([artboard.id])}>↻ Metadata</button>
     <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-remove-${artboard.id}`} aria-label={`Remove ${artboard.name}`}
       onClick={() => b.actions.removeArtboards([artboard.id])}>✕</button>
-  </div>;
+  </>;
 }
 
 function ArtboardName({ artboard, onRename }: { artboard: FinalArtboard; onRename: (id: string, name: string) => void }) {
