@@ -111,7 +111,6 @@ export interface BuilderActions {
   saveTemplate: () => void;
   saveTemplateAsNew: () => void;
   editTemplate: (id: string) => void;
-  stopEditingTemplate: () => void;
   renameTemplate: (id: string, name: string) => void;
   removeTemplate: (id: string) => void;
   /** Height of the template pictures (shared 48–800 px zoom); display-only. */

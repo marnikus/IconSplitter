@@ -181,7 +181,7 @@ describe("final artboards — the list under the templates", () => {
   it("checked templates show their artboards together; rows check with the RULE 25 gestures; bulk remove", async () => {
     await openLibrary();
     await click("builder-template-save");
-    await click("builder-template-save-new");
+    await click("builder-template-save"); // not editing after a save: a second new template
     const [t1, t2] = savedTemplates();
     await click(`builder-template-add-artboard-${t1.id}`);
     await click(`builder-template-add-artboard-${t2.id}`);

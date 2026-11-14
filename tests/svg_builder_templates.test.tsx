@@ -169,25 +169,30 @@ describe("templates — the window under the builder", () => {
     expect(first.name).toBe("Side banner · 8×4 · Solid");
     expect((q(`builder-template-name-${first.id}`) as HTMLInputElement).value).toBe(first.name);
     expect(q(`builder-template-preview-${first.id}`)?.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
-    expect(text("builder-template-editing")).toContain(first.name); // a new template is the one being edited
+    expect(q("builder-template-editing")).toBeNull(); // saving ends editing (2026-11-14): no "Done editing" step
+    expect(q("builder-template-stop")).toBeNull();
 
     await typeInto(`builder-template-name-${first.id}`, "  Food   catalogue  ");
     expect(saved()[0].name).toBe("Food catalogue");
 
-    await click("builder-template-stop");
     await click("builder-columns-inc"); // the sheet moves away from the template
     expect(text("builder-cells")).toContain("of 36 cells");
     await click(`builder-template-edit-${first.id}`); // ✎ opens its design again: the look comes back
     expect(text("builder-cells")).toContain("of 32 cells");
     expect(q(`builder-template-${first.id}`)?.className).toContain("is-editing");
+    expect(q("builder-template-stop")).toBeNull(); // only ✓ Save template and Save as new
 
     await click("builder-rows-dec");
     await click("builder-template-save"); // writes back into the one being edited
     expect(saved()).toHaveLength(1);
     expect(saved()[0].config.grid.rows).toBe(3);
     expect(saved()[0].name).toBe("Food catalogue");
+    expect(q("builder-template-editing")).toBeNull(); // ✓ Save template also finishes editing
+    expect(q(`builder-template-${first.id}`)?.className).not.toContain("is-editing");
 
+    await click(`builder-template-edit-${first.id}`);
     await click("builder-template-save-new");
+    expect(q("builder-template-editing")).toBeNull();
     expect(saved()).toHaveLength(2);
     await click(`builder-template-remove-${first.id}`);
     expect(saved().map((t) => t.id)).not.toContain(first.id);
@@ -198,7 +203,6 @@ describe("templates — the window under the builder", () => {
     await openLibrary();
     await click("builder-template-save");
     const [first] = saved();
-    await click("builder-template-stop");
     await click("builder-columns-inc");
     await click(`builder-template-edit-${first.id}`);
     expect(text("builder-cells")).toContain("of 32 cells");
@@ -331,7 +335,6 @@ describe("template sample text", () => {
     await typeInto("builder-title", "Sample heading");
     await click("builder-template-save");
     const [first] = saved();
-    await click("builder-template-stop");
     await typeInto("builder-title", "Something else");
     await click(`builder-template-edit-${first.id}`);
     expect((q("builder-title") as HTMLInputElement).value).toBe("Sample heading"); // the sample, not the sheet's words

@@ -22,12 +22,10 @@ export default function SvgBuilderTemplates({ b }: { b: BuilderApi }) {
         value={b.prefs.templateZoom} onChange={b.actions.setTemplateZoom} />}
       <div className="bld-templates-actions">
         <button type="button" className="svg-btn tiny primary" data-testid="builder-template-save" onClick={b.actions.saveTemplate}
-          title={editing === null ? "Save the sheet's grid, icon, banner and text style as a new template" : `Write the sheet's look back into “${editing.name}”`}>
+          title={editing === null ? "Save the sheet's grid, icon, banner and text style as a new template" : `Write the sheet's look back into “${editing.name}” and finish editing`}>
           {editing === null ? "＋ Save template" : "✓ Save template"}</button>
-        {editing !== null && <>
-          <button type="button" className="svg-btn tiny" data-testid="builder-template-save-new" onClick={b.actions.saveTemplateAsNew}>Save as new</button>
-          <button type="button" className="svg-btn tiny" data-testid="builder-template-stop" onClick={b.actions.stopEditingTemplate}>Done editing</button>
-        </>}
+        {editing !== null && <button type="button" className="svg-btn tiny" data-testid="builder-template-save-new" onClick={b.actions.saveTemplateAsNew}
+          title="Keep the edited template as it was and save this look as a new one">Save as new</button>}
       </div>
     </div>
     {b.templates.length === 0

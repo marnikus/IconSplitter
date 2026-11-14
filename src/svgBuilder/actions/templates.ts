@@ -13,14 +13,13 @@ import { commitConfig, prefs } from "./config";
 import { saveArtboards } from "../artboardstore";
 
 type TemplateActions = Pick<BuilderActions,
-  "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "stopEditingTemplate" | "renameTemplate" | "removeTemplate" | "setTemplateZoom">;
+  "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "renameTemplate" | "removeTemplate" | "setTemplateZoom">;
 
 export function templateActions(get: () => BuilderActionContext): TemplateActions {
   return {
     saveTemplate: () => saveTemplate(get()),
     saveTemplateAsNew: () => saveAsNew(get()),
     editTemplate: (id) => editTemplate(get(), id),
-    stopEditingTemplate: () => get().dispatch({ editingTemplateId: null }),
     renameTemplate: (id, name) => renameTemplate(get(), id, name),
     removeTemplate: (id) => removeTemplate(get(), id),
     setTemplateZoom: (px) => prefs(get(), { templateZoom: clampZoom(px) }),
@@ -34,12 +33,12 @@ function store(ctx: BuilderActionContext, templates: readonly SheetTemplate[], e
 
 const templateId = () => `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
-/** "Save template": the one being edited gets the current look; otherwise a new one. */
+/** "Save template": the one being edited gets the current look, and editing ends (2026-11-14); otherwise a new one. */
 function saveTemplate(ctx: BuilderActionContext): void {
   const editing = ctx.model.templates.find((t) => t.id === ctx.model.editingTemplateId);
   if (editing === undefined) return saveAsNew(ctx);
   const updated: SheetTemplate = { ...editing, config: lookOf(ctx.model.config), updated: new Date().toISOString() };
-  store(ctx, ctx.model.templates.map((t) => (t.id === editing.id ? updated : t)));
+  store(ctx, ctx.model.templates.map((t) => (t.id === editing.id ? updated : t)), null);
   ctx.say(`Template “${editing.name}” saved`);
 }
 
@@ -47,7 +46,7 @@ function saveAsNew(ctx: BuilderActionContext): void {
   const list = ctx.model.templates;
   if (list.length >= TEMPLATE_LIMIT) return ctx.say(`At most ${TEMPLATE_LIMIT} templates — remove one first`, true);
   const created = newTemplate(ctx.model.config, list.map((t) => t.name), new Date().toISOString(), templateId());
-  store(ctx, [...list, created], created.id);
+  store(ctx, [...list, created], null); // saved: nothing left to edit
   ctx.say(`Saved as template “${created.name}” — rename it on its block`);
 }
 
