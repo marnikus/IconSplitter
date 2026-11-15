@@ -603,7 +603,7 @@ describe("number boxes apply as you type", () => {
     expect(config().banner.autoRebalance).toBe(true);
   });
 
-  it("Show text boxes (dev) beside Auto rebalance draws the measured boxes over the artboard (2026-11-15)", async () => {
+  it("▦ Guides also draws the rebalance's measured text boxes and gaps, with the guides' opacity; no separate checkbox (2026-11-15)", async () => {
     await openLibrary();
     const top = { ...config(), banner: { ...config().banner, position: "top", style: "solid", size: 90, edgeSpread: true } };
     localStorage.setItem("iconSplitter.svgBuilder.config.v1", JSON.stringify(top));
@@ -612,13 +612,16 @@ describe("number boxes apply as you type", () => {
     act(() => { ui.render(<Workbench />); });
     await openLibrary();
     expect(q("builder-text-boxes")).toBeNull();
-    await hover(shadow().querySelector('[data-banner="true"] > rect')!);
-    await click("builder-quick-rebalance");
-    await act(async () => { (q("builder-quick-text-boxes") as HTMLInputElement).click(); });
+    await click("builder-toggle-guides");
     expect(q("builder-text-boxes")).not.toBeNull();
     expect(host.querySelectorAll('[data-testid="builder-text-boxes"] [data-ink]')).toHaveLength(2);
     expect(host.querySelectorAll('[data-testid="builder-text-boxes"] [data-gap]')).toHaveLength(3);
-    expect(JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.prefs.v1") ?? "{}").showTextBoxes).toBe(true);
+    await slide("builder-guide-opacity", "40");
+    expect(q("builder-text-boxes")!.getAttribute("style")).toContain("opacity: 0.4"); // one transparency for both
+    await hover(shadow().querySelector('[data-banner="true"] > rect')!);
+    await click("builder-quick-rebalance");
+    expect(q("builder-quick-text-boxes")).toBeNull(); // the separate checkbox is gone
+    expect(q("builder-banner-text-boxes")).toBeNull();
     await slide("builder-quick-row-gap", "15"); // the gap % beside them
     expect(config().banner.rowGapPct).toBe(15);
     await slide("builder-quick-title-fill", "40");

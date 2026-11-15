@@ -13,8 +13,7 @@ import RowProportions from "./SvgBuilderRowProportions";
 type Banner = SheetConfig["banner"];
 type MoveKey = "titleDx" | "titleDy" | "subtitleDx" | "subtitleDy";
 
-/** `dev`: the "Show text boxes" dev-mode checkbox (2026-11-15). */
-export default function TextPlacement({ n, edit, rowWidth, dev }: { n: Banner; edit: Edit; rowWidth: number; dev: { on: boolean; set: (on: boolean) => void } }) {
+export default function TextPlacement({ n, edit, rowWidth }: { n: Banner; edit: Edit; rowWidth: number }) {
   const moved = n.textPadding !== 0 || n.titleDx !== 0 || n.titleDy !== 0 || n.subtitleDx !== 0 || n.subtitleDy !== 0;
   const reset = () => edit("banner", { textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0 });
   return <div className="bld-text-placement" data-testid="builder-text-placement">
@@ -30,8 +29,6 @@ export default function TextPlacement({ n, edit, rowWidth, dev }: { n: Banner; e
     {canRebalance(n) && <label className="bld-check" title="Rebalance the row again whenever the texts or sizes change">
       <input type="checkbox" data-testid="builder-banner-auto-rebalance" checked={n.autoRebalance}
         onChange={(e) => edit("banner", e.target.checked ? { autoRebalance: true, ...rebalancedBanner(n, rowWidth) } : { autoRebalance: false })} /> Auto rebalance</label>}
-    {canRebalance(n) && <label className="bld-check" title="Dev mode: the measured text boxes and gaps the rebalance uses">
-      <input type="checkbox" data-testid="builder-banner-text-boxes" checked={dev.on} onChange={(e) => dev.set(e.target.checked)} /> Show text boxes (dev)</label>}
     {canRebalance(n) && <RowProportions banner={n} prefix="builder-banner" onChange={(patch) => edit("banner", patch, true)} />}
     {n.edgeSpread && <button type="button" className="svg-btn tiny" data-testid="builder-banner-rebalance-off"
       onClick={() => edit("banner", { edgeSpread: false })} title="Back to the centred group with fixed gaps">Centred row</button>}

@@ -28,12 +28,10 @@ export interface BuilderPrefs {
   showUsage: boolean;
   /** Red layout guides over the artboard, and their opacity 1–100 (2026-11-13). */
   showGuides: boolean;
-  /** Dev mode (2026-11-15): the rebalance's measured text boxes over the artboard. */
-  showTextBoxes: boolean;
   guideOpacity: number;
 }
 
-export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true, showGuides: false, guideOpacity: 70, showTextBoxes: false };
+export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true, showGuides: false, guideOpacity: 70 };
 export const META_HEIGHT = { min: 160, max: 1200 } as const;
 const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "custom"];
 
@@ -50,7 +48,6 @@ export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
     templateZoom: typeof raw.templateZoom === "number" ? clampZoom(raw.templateZoom) : DEFAULT_BUILDER_PREFS.templateZoom,
     showUsage: raw.showUsage !== false,
     showGuides: raw.showGuides === true,
-    showTextBoxes: raw.showTextBoxes === true,
     guideOpacity: Math.round(num(raw.guideOpacity, 70, 1, 100)),
     metaHeight: typeof raw.metaHeight === "number" ? num(raw.metaHeight, 0, META_HEIGHT.min, META_HEIGHT.max) || null : null,
   };

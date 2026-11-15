@@ -113,7 +113,7 @@ function GuideControls({ b }: { b: BuilderApi }) {
   const on = b.prefs.showGuides;
   return <>
     <button type="button" className={`svg-btn tiny${on ? " primary" : " ghost"}`} data-testid="builder-toggle-guides" aria-pressed={on}
-      title={on ? "Hide the layout guides" : "Show the grid that is working now: cell boxes, icon areas, gaps, padding and banner edge"}
+      title={on ? "Hide the layout guides" : "Show the grid that is working now: cell boxes, icon areas, gaps, padding, banner edge — and a rebalanced banner's measured text boxes and gaps"}
       onClick={() => b.actions.toggleGuides(!on)}>▦ Guides</button>
     {on && <input type="range" className="bld-range bld-guide-opacity" data-testid="builder-guide-opacity" aria-label="Guide opacity in percent"
       min={1} max={100} step={1} value={b.prefs.guideOpacity} title={`Guides ${b.prefs.guideOpacity}%`}
