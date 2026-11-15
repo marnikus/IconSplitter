@@ -4,7 +4,7 @@
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { RANGES, clampTo, type NumRange } from "./ranges";
-import type { BannerPosition, CaptionCase, SelectionMode, SheetConfig, TitleFace } from "./types";
+import type { BannerPosition, CaptionCase, SelectionMode, SheetConfig, TitleFace , TextCase } from "./types";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const MODES: readonly SelectionMode[] = ["similar", "random", "filtered"];
@@ -20,7 +20,7 @@ export const DEFAULT_CONFIG: SheetConfig = {
     title: "ICON SHEET", subtitle: "Editable stroke width",
     titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true,
     textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0,
-    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1, captionTexts: {}, titleWidth: 0, subtitleWidth: 0, edgeSpread: false },
+    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1, captionTexts: {}, titleWidth: 0, subtitleWidth: 0, edgeSpread: false, titleCase: "normal", subtitleCase: "upper" },
 };
 
 /** The 8 swatches shown under Canvas and Stroke colour. */
@@ -103,6 +103,8 @@ function parseIcons(raw: unknown): SheetConfig["icons"] {
     color: hex(raw.color, d.color), linecap: oneOf(raw.linecap, ["round", "square"], d.linecap) as "round" | "square" };
 }
 
+const CASES = ["normal", "capitalized", "upper"];
+
 function parseBanner(raw: unknown): SheetConfig["banner"] {
   const d = DEFAULT_CONFIG.banner;
   if (!isRecord(raw)) return { ...d };
@@ -121,6 +123,7 @@ function parseBanner(raw: unknown): SheetConfig["banner"] {
     captionTexts: parseCaptionTexts(raw.captionTexts),
     titleWidth: num(RANGES.textWidth, raw.titleWidth, d.titleWidth), subtitleWidth: num(RANGES.textWidth, raw.subtitleWidth, d.subtitleWidth),
     edgeSpread: bool(raw.edgeSpread, d.edgeSpread),
+    titleCase: oneOf(raw.titleCase, CASES, d.titleCase) as TextCase, subtitleCase: oneOf(raw.subtitleCase, CASES, d.subtitleCase) as TextCase,
   };
 }
 

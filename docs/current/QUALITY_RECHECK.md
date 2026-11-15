@@ -5254,3 +5254,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-15 SVG builder: Rebalance row (edge banner equal gaps, one-line texts). Builder suites 193/193, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: sheet metadata answer applied automatically (no draft step). Builder suites 194/194, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: artboard icon editor (Generate SVG editor reused, builderSvgEdit undo). Builder+state+history suites 264/264, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: title/subtitle case (normal/Capitalized/UPPER), sizes up to 200. Builder suites 201/201, tsc/eslint/quality PASS.

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { cleanHex, smartSwatches } from "../lib/svgBuilder/swatches";
 import { bothScale, withBothScale } from "../lib/svgBuilder/herosize";
 import { RANGES } from "../lib/svgBuilder/ranges";
-import type { TitleFace } from "../lib/svgBuilder/types";
+import type { TitleFace , TextCase } from "../lib/svgBuilder/types";
 import { QUICK_SPECS, quickTargetOf, slotValue, withSlot, type ColorSlot, type QuickKind, type SizeSlot } from "./quickedit";
 import type { BuilderApi } from "./useSvgBuilder";
 import SvgBuilderTextMove from "./SvgBuilderTextMove";
@@ -131,7 +131,7 @@ function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: Quick
   const spec = QUICK_SPECS[kind];
   if (panel === "color") return <ColorPanel b={b} slot={spec.color} onDone={done} />;
   if (panel === "stroke" && spec.stroke) return <SizePanel b={b} slot={spec.stroke} testid="builder-quick-stroke-range" />;
-  if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} gap={spec.gap} />;
+  if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} gap={spec.gap} textCase={spec.textCase} />;
   return <KindPanel b={b} kind={kind} panel={panel} done={done} move={move} />;
 }
 
@@ -211,15 +211,28 @@ function SizePanel({ b, slot, testid }: { b: BuilderApi; slot: SizeSlot; testid:
   </div>;
 }
 
-function TextPanel({ b, slot, face, gap }: { b: BuilderApi; slot: SizeSlot; face: boolean; gap?: SizeSlot }) {
+function TextPanel({ b, slot, face, gap, textCase }: { b: BuilderApi; slot: SizeSlot; face: boolean; gap?: SizeSlot; textCase?: "titleCase" | "subtitleCase" }) {
   return <div className="bld-quick-panel" data-testid="builder-quick-text-panel">
     {face && <label className="bld-quick-row"><b className="bld-quick-title">Font</b>
       <select className="svg-input bld-quick-face" data-testid="builder-quick-face" value={b.config.banner.titleFace} aria-label="Title font"
         onChange={(e) => b.actions.setConfig({ ...b.config, banner: { ...b.config.banner, titleFace: e.target.value as TitleFace } }, "Title font")}>
         {FACES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
       </select></label>}
+    {textCase !== undefined && <CaseRow b={b} field={textCase} />}
     <SizePanel b={b} slot={slot} testid="builder-quick-size" />
     {gap !== undefined && <SizePanel b={b} slot={gap} testid="builder-quick-gap" />}
+  </div>;
+}
+
+const CASES: readonly [TextCase, string][] = [["normal", "Aa"], ["capitalized", "Ab Cd"], ["upper", "AB"]];
+
+/** normal / Capitalized / UPPER for the title or the subtitle (2026-11-15). */
+function CaseRow({ b, field }: { b: BuilderApi; field: "titleCase" | "subtitleCase" }) {
+  const current = b.config.banner[field];
+  return <div className="bld-quick-row" role="radiogroup" aria-label="Text case"><b className="bld-quick-title">Case</b>
+    <span className="bld-quick-cases">{CASES.map(([value, label]) => <button type="button" key={value} role="radio" aria-checked={current === value}
+      className={`bld-quick-case${current === value ? " is-on" : ""}`} data-testid={`builder-quick-case-${value}`}
+      onClick={() => b.actions.setConfig({ ...b.config, banner: { ...b.config.banner, [field]: value } }, "Text case")}>{label}</button>)}</span>
   </div>;
 }
 

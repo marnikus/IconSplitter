@@ -561,4 +561,14 @@ describe("number boxes apply as you type", () => {
     await click(`builder-icon-edit-${id}-cancel`);
     expect(q("builder-icon-editor")).toBeNull();
   });
+
+  it("the A panel of the title / subtitle switches its case: normal, Capitalized, UPPER (2026-11-15)", async () => {
+    await openLibrary();
+    await hover(shadow().querySelector('[data-banner-text="subtitle"]')!);
+    await click("builder-quick-text");
+    expect(q("builder-quick-case-upper")?.getAttribute("aria-checked")).toBe("true");
+    await click("builder-quick-case-capitalized");
+    expect(config().banner.subtitleCase).toBe("capitalized");
+    expect(config().banner.titleCase).toBe("normal");
+  });
 });

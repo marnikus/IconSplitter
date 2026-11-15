@@ -5,6 +5,8 @@ export type BannerPosition = "left" | "right" | "top" | "bottom" | "none";
 export type SelectionMode = "similar" | "random" | "filtered";
 export type CaptionCase = "upper" | "normal";
 export type TitleFace = "sans" | "serif" | "mono";
+/** Banner text case (2026-11-15): as typed, Capitalized Words, or UPPER. */
+export type TextCase = "normal" | "capitalized" | "upper";
 export type MetadataState = "empty" | "draft" | "invalid" | "accepted" | "edited";
 
 export interface Rect { x: number; y: number; width: number; height: number }
@@ -97,6 +99,7 @@ export interface SheetConfig {
     titleWidth: number; subtitleWidth: number;
     /** Edge banner row with equal gaps between its parts and both edges (2026-11-15, ⇔ Rebalance row). */
     edgeSpread: boolean;
+    titleCase: TextCase; subtitleCase: TextCase;
   };
 }
 

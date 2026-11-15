@@ -422,3 +422,8 @@
 
 /* The active artboard row's metadata editor (2026-11-15). */
 .bld-row-meta { margin: -4px 0 6px 28px; padding: 10px 12px; border: 1px solid var(--v2-line); border-top: 0; border-radius: 0 0 var(--v2-radius) var(--v2-radius); background: var(--v2-surface-2); }
+
+/* Text case buttons in the quick text panel (2026-11-15). */
+.bld-quick-cases { display: inline-flex; gap: 4px; }
+.bld-quick-case { padding: 2px 8px; border: 1px solid var(--v2-line-strong, #2a2f45); border-radius: 6px; background: transparent; color: inherit; font-size: 11px; cursor: pointer; }
+.bld-quick-case.is-on { background: #5B5BD6; border-color: #5B5BD6; color: #fff; }

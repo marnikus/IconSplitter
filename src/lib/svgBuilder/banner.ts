@@ -4,7 +4,7 @@
 import { readableInk } from "./config";
 import { solidMix } from "./solidcolor";
 import { attr, round, textEl, textWidth } from "./markup";
-import type { Rect, SheetConfig } from "./types";
+import type { Rect, SheetConfig, TextCase } from "./types";
 
 type Banner = SheetConfig["banner"];
 /** Draws the hero icon centred in a square; returns "" when no hero artwork is available. */
@@ -44,15 +44,22 @@ function perLine(width: number, charWidth: number, auto: number): number {
   return width > 0 ? Math.max(1, Math.floor(width / Math.max(1, charWidth))) : auto;
 }
 
+/** Banner text case (2026-11-15): as typed, Capitalized Words, or UPPER. */
+export function applyCase(text: string, mode: TextCase): string {
+  if (mode === "upper") return text.toUpperCase();
+  if (mode === "capitalized") return text.toLowerCase().replace(/(^|\s)(\S)/gu, (_m, space: string, c: string) => space + c.toUpperCase());
+  return text;
+}
+
 function titleLines(a: BannerArgs, side: boolean, size: number): string[] {
   const auto = side ? Math.max(7, Math.floor((a.box.width - 56) / Math.max(9, size * 0.64))) : 25;
-  return wrapLines(a.title, perLine(a.banner.titleWidth, size * 0.6, auto));
+  return wrapLines(applyCase(a.title, a.banner.titleCase), perLine(a.banner.titleWidth, size * 0.6, auto));
 }
 
 function subtitleLines(a: BannerArgs, side: boolean): string[] {
   const s = a.banner.subtitleSize;
   const auto = side ? Math.max(9, Math.floor((a.box.width - 62) / Math.max(7, s * 0.72))) : 28;
-  return wrapLines(a.subtitle.toUpperCase(), perLine(a.banner.subtitleWidth, s * 0.72, auto));
+  return wrapLines(applyCase(a.subtitle, a.banner.subtitleCase), perLine(a.banner.subtitleWidth, s * 0.72, auto));
 }
 
 function titleText(a: BannerArgs, lines: string[], at: { x: number; top: number; size: number; ink: string; anchor: "start" | "middle" }): string {

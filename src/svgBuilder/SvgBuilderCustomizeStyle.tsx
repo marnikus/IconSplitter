@@ -6,6 +6,9 @@ import type { Edit } from "./SvgBuilderCustomize";
 import { ColorChip, Field, Section, Segmented, Slider, Swatches, TextBox, Toggle, type SegOption } from "./SvgBuilderFields";
 import type { BuilderApi } from "./useSvgBuilder";
 import TextPlacement from "./SvgBuilderTextPlacement";
+
+/** Banner text case (2026-11-15). */
+const CASE_OPTIONS = [{ value: "normal" as const, label: "Aa normal" }, { value: "capitalized" as const, label: "Capitalized" }, { value: "upper" as const, label: "UPPER" }];
 import HeroStyle from "./SvgBuilderHeroStyle";
 
 const POSITIONS: readonly SegOption<BannerPosition>[] = [
@@ -66,7 +69,7 @@ function BannerControls({ b, edit }: { b: BuilderApi; edit: Edit }) {
       <Slider label="Subtitle" value={n.subtitleSize} range={RANGES.subtitleSize} testid="builder-subtitle-size"
         onChange={(subtitleSize) => edit("banner", { subtitleSize }, true)} />
     </div>
-    <Segmented label="Title face" value={n.titleFace} testid="builder-title-face" options={FACES} onChange={(titleFace) => edit("banner", { titleFace })} />
+    <TextStyle n={n} edit={edit} />
     <TextPlacement n={n} edit={edit} />
     <Toggle label="Hero glyph" checked={n.hero} testid="builder-hero" onChange={(hero) => edit("banner", { hero })} />
     {n.hero && <HeroSelect b={b} edit={edit} />}
@@ -92,4 +95,15 @@ function HeroSelect({ b, edit }: { b: BuilderApi; edit: Edit }) {
       {b.assets.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
     </select>
   </Field>;
+}
+
+/** The title's face, and each text's case (2026-11-15: normal / Capitalized / UPPER). */
+function TextStyle({ n, edit }: { n: SheetConfig["banner"]; edit: Edit }) {
+  return <>
+    <Segmented label="Title face" value={n.titleFace} testid="builder-title-face" options={FACES} onChange={(titleFace) => edit("banner", { titleFace })} />
+    <div className="bld-two">
+      <Segmented label="Title case" value={n.titleCase} testid="builder-title-case" options={CASE_OPTIONS} onChange={(titleCase) => edit("banner", { titleCase })} />
+      <Segmented label="Subtitle case" value={n.subtitleCase} testid="builder-subtitle-case" options={CASE_OPTIONS} onChange={(subtitleCase) => edit("banner", { subtitleCase })} />
+    </div>
+  </>;
 }
