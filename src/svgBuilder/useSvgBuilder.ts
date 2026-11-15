@@ -10,6 +10,7 @@ import { useBuilderPersistence } from "./useBuilderPersistence";
 import { useBuilderComputed, type BuilderComputed } from "./useBuilderComputed";
 import { useBuilderActions } from "./useBuilderActions";
 import { bindBuilderSvgEdit } from "./iconedit";
+import { useArtboardUndo } from "./useArtboardUndo";
 import type { BuilderActions } from "./actiontypes";
 
 export interface BuilderApi extends BuilderModel, BuilderComputed {
@@ -30,6 +31,7 @@ export function useSvgBuilder(): BuilderApi {
   const actions = useBuilderActions({ model, computed, boot, slice, hist, patch });
   useAutoPlacement(actions, computed.assets, computed.layout.capacity);
   useIconEditBinding(model, computed, patch);
+  useArtboardUndo(model, actions, patch);
   return {
     ...model, ...computed,
     checked: slice.checked, activeId: slice.activeId, anchorId: slice.anchorId, actions,

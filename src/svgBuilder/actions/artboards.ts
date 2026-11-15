@@ -21,7 +21,7 @@ import { artboardFromStage, openArtboardOf } from "../artboarddraft";
 
 type ArtboardActions = Pick<BuilderActions,
   "templateGesture" | "toggleTemplateCheck" | "setTemplateChecks" | "addArtboard" | "artboardGesture" | "toggleArtboardCheck"
-  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard" | "resetArtboardLook" | "openArtboard" | "saveArtboard" | "resetArtboard">;
+  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard" | "resetArtboardLook" | "openArtboard" | "saveArtboard" | "resetArtboard" | "showArtboard">;
 
 export function artboardActions(get: () => BuilderActionContext): ArtboardActions {
   return {
@@ -37,6 +37,7 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
     closeArtboard: () => get().dispatch({ editingArtboardId: null }),
     resetArtboardLook: (id) => resetArtboardLook(get(), id),
     saveArtboard: () => saveArtboard(get()),
+    showArtboard: (id, templateId) => showArtboard(get(), id, templateId),
     resetArtboard: () => resetArtboard(get()),
     openArtboard: (id) => { const c = get(); if (c.model.editingArtboardId !== id && !blockLeave(c, { kind: "artboard", id })) openArtboardRow(c, id); },
   };
@@ -145,6 +146,13 @@ function resetArtboard(ctx: BuilderActionContext): void {
   ctx.say(`Artboard “${open.name}” back to what is saved`);
 }
 
+/** After undo / redo took the open artboard away: that artboard (no leave question — the gone one cannot be saved), else its template. */
+function showArtboard(ctx: BuilderActionContext, id: string | null, templateId: string | null): void {
+  if (id !== null) return openArtboardRow(ctx, id);
+  if (templateId !== null && ctx.model.templates.some((t) => t.id === templateId)) return editTemplate(ctx, templateId, false);
+  ctx.dispatch({ editingArtboardId: null });
+}
+
 /** After the leave question: the artboard becomes the active row and opens. */
 export function openArtboardRow(ctx: BuilderActionContext, id: string): void {
   const artboard = ctx.model.artboards.find((a) => a.id === id);
@@ -188,10 +196,26 @@ function removeArtboards(ctx: BuilderActionContext, ids: readonly string[]): voi
   if (gone.length === 0) return ctx.say("No artboard selected", true);
   storeArtboards(ctx, ctx.model.artboards.filter((a) => !drop.has(a.id)));
   recordArtboards(ctx, ctx.model.artboards, ctx.model.artboards.filter((a) => !drop.has(a.id)), gone.length === 1 ? `Remove artboard “${gone[0].name}”` : `Remove ${gone.length} artboards`);
-  const sel = ctx.model.artboardSel;
-  ctx.dispatch({
-    artboardSel: { checked: sel.checked.filter((id) => !drop.has(id)), active: sel.active !== null && drop.has(sel.active) ? null : sel.active, anchor: null },
-    ...(ctx.model.editingArtboardId !== null && drop.has(ctx.model.editingArtboardId) ? { editingArtboardId: null } : {}),
-  });
+  ctx.dispatch(selectionWithout(ctx, drop));
   ctx.say(gone.length === 1 ? `Artboard “${gone[0].name}” removed` : `${gone.length} artboards removed`);
+  const open = ctx.model.editingArtboardId;
+  if (open !== null && drop.has(open)) showArtboard(ctx, neighbourOf(ctx.model.artboards, open, drop), gone.find((a) => a.id === open)?.templateId ?? null);
+}
+
+/** The selection (and the open artboard) without the removed artboards. */
+function selectionWithout(ctx: BuilderActionContext, drop: ReadonlySet<string>): Partial<BuilderActionContext["model"]> {
+  const sel = ctx.model.artboardSel, open = ctx.model.editingArtboardId;
+  return {
+    artboardSel: { checked: sel.checked.filter((id) => !drop.has(id)), active: sel.active !== null && drop.has(sel.active) ? null : sel.active, anchor: null },
+    ...(open !== null && drop.has(open) ? { editingArtboardId: null } : {}),
+  };
+}
+
+/** The artboard to show after the open one is removed: the one before it of its template, else the next (2026-11-16). */
+function neighbourOf(all: readonly FinalArtboard[], open: string, drop: ReadonlySet<string>): string | null {
+  const templateId = all.find((a) => a.id === open)?.templateId;
+  const mine = all.filter((a) => a.templateId === templateId);
+  const at = mine.findIndex((a) => a.id === open);
+  const before = mine.slice(0, at).reverse().find((a) => !drop.has(a.id));
+  return (before ?? mine.slice(at + 1).find((a) => !drop.has(a.id)))?.id ?? null;
 }

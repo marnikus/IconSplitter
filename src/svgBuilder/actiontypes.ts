@@ -114,6 +114,8 @@ export interface BuilderActions {
   resetArtboardLook: (id: string) => void;
   /** Double-click on a row (2026-11-14): open that artboard on the stage (a changed template asks first). */
   openArtboard: (id: string) => void;
+  /** After undo / redo took the open artboard away (2026-11-16): show this one, else edit its template. */
+  showArtboard: (id: string | null, templateId: string | null) => void;
   /** The open artboard's draft (2026-11-14): ✓ Save writes it; ↺ Reset goes back to what is saved. */
   saveArtboard: () => void;
   resetArtboard: () => void;

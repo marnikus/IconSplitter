@@ -457,7 +457,7 @@ describe("final artboards — the list under the templates", () => {
     expect(savedArtboards()).toHaveLength(2);
     await click("builder-editing-remove-artboard"); // the open one (a2)
     expect(savedArtboards().map((a) => a.id)).toEqual([a1.id]);
-    expect(q("builder-editing")?.dataset.kind).not.toBe("artboard");
+    expect(q("builder-editing")?.textContent).toContain(a1.name); // the stage moves to a1 — no dead view
     await click("builder-undo"); // the removal comes back, whole
     await waitUntil(() => savedArtboards().length === 2, "removal undone");
     expect(savedArtboards()[1]).toMatchObject({ id: a2.id, name: a2.name });
@@ -468,6 +468,25 @@ describe("final artboards — the list under the templates", () => {
     await click("builder-undo"); // the second add, undone
     await waitUntil(() => savedArtboards().length === 1, "add undone");
     expect(savedArtboards()[0].id).toBe(a1.id);
+  });
+
+  it("undoing a new artboard shows the artboard viewed before it — never a dead stage (2026-11-16)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    await click("builder-editing-add-artboard");
+    await click("builder-editing-add-artboard");
+    const [a1, a2] = savedArtboards();
+    await clickWith(`builder-artboard-${a1.id}`, {}); // viewing a1
+    await typeIn("builder-title", "First one");
+    await click("builder-stage-artboard-save");
+    await click("builder-editing-add-artboard"); // a3, open
+    expect(savedArtboards()).toHaveLength(3);
+    await click("builder-undo"); // a3 is gone…
+    await waitUntil(() => savedArtboards().length === 2, "add undone");
+    expect(q("builder-editing")?.textContent).toContain(a1.name); // …and the stage shows a1 again, not a3
+    expect((q("builder-title") as HTMLInputElement).value).toBe("First one");
+    expect(q(`builder-artboard-${a1.id}`)?.className).toContain("is-open");
+    expect(a2.id).not.toBe(a1.id);
   });
 
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
