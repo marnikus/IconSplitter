@@ -16,7 +16,7 @@ Since 2026-11-14 the builder's metadata is the **same system as the SVG to uploa
   - shown in the confirmation and sent unchanged.
 - **Answer** (`parseSheetAnswer`): Title, Description and Tags become the metadata. **Title-Artboard** (2–5 words) is not metadata: it becomes the artboard's **visible banner title**, and the subtitle becomes the default phrase "Editable stroke width".
   - On artboards (✦ Generate metadata, `withSheetAnswer`) this happens at once. An artboard open on the stage gets the same words and metadata there, so it shows no unsaved change.
-  - For the current sheet it happens at **Accept** of the draft, as one undo step.
+  - For the current sheet the answer is **applied at once** (2026-11-15: no draft step, no Accept draft button). It is accepted when it passes the upload rules, else kept as invalid with its errors in the editor. The Title-Artboard goes onto the banner as one undo step, and the confirmation closes.
 - **Banner text**: metadata never replaces the banner words any more (`sheetCopy`). The SVG's hidden `<title>` uses the accepted metadata title, and `<desc>` holds the description and tags.
 - **Editing** (`SvgBuilderMetaFields.tsx`, in the metadata widget): the upload tab's `UploadMetaFields` (Title, Description, Tags, each with Copy, without the Icon Name field: `showName={false}`).
   - Editing an accepted answer marks it `edited`.

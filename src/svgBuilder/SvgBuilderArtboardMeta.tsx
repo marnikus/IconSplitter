@@ -16,7 +16,7 @@ export default function SvgBuilderArtboardMeta({ b }: { b: BuilderApi }) {
       </div>
       <div className="bld-artboard-meta-grid">
         {plan.requests.map((r) => <figure key={r.id} data-testid={`builder-artboards-meta-preview-${r.id}`}>
-          <img src={r.preview} alt={`Exact 768 px JPEG of ${r.name}`} /><figcaption>{r.name}</figcaption></figure>)}
+          <img src={r.preview} alt={`Exact icons-only PNG of ${r.name}`} /><figcaption>{r.name}</figcaption></figure>)}
       </div>
       {plan.skipped.length > 0 && <p className="builder-warning" data-testid="builder-artboards-meta-skipped">Not sent: {plan.skipped.join("; ")}</p>}
       <label className="builder-field"><span>PROMPT SENT WITH EACH IMAGE</span>

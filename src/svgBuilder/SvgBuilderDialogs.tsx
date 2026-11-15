@@ -39,9 +39,9 @@ function MetadataHead({ onClose }: { onClose: () => void }) {
 function MetadataPreview({ src }: { src: string | null }) {
   return <figure className="builder-meta-preview-wrap">
     {src !== null
-      ? <img className="builder-meta-preview" data-testid="builder-meta-preview" src={src} alt="Exact 768 px sheet JPEG to be sent" />
+      ? <img className="builder-meta-preview" data-testid="builder-meta-preview" src={src} alt="The exact icons-only PNG to be sent" />
       : <div className="builder-meta-preview is-empty" data-testid="builder-meta-preview">No preview</div>}
-    <figcaption>ONE 768 px JPEG of this exact sheet · no other files or folder contents are sent</figcaption>
+    <figcaption>ONE PNG (at most 1 MP) of this sheet's icons, without the banner · no other files or folder contents are sent</figcaption>
   </figure>;
 }
 
@@ -80,8 +80,6 @@ function MetadataActions({ b }: { b: BuilderApi }) {
   return <div className="bld-modal-actions">
     <button type="button" className="svg-btn primary" data-testid="builder-meta-confirm"
       disabled={b.busy !== null} onClick={b.actions.confirmMetadata}>{b.busy !== null ? "Sending…" : "Send this exact request"}</button>
-    <button type="button" className="svg-btn" data-testid="builder-meta-accept" disabled={b.draft === null}
-      onClick={b.actions.acceptMetadataDraft}>Accept draft</button>
     <button type="button" className="svg-btn ghost tiny" data-testid="builder-meta-cancel" onClick={b.actions.cancelMetadata}>Cancel</button>
   </div>;
 }

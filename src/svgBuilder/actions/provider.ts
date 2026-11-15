@@ -11,7 +11,7 @@ import { emptyKeyInfo, keyInfoOf } from "../model";
 import { generateSheetMetadata } from "../runSheetMetadata";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { editSheetMetadata } from "../../lib/svgBuilder/metadata";
-import type { SheetMetadataFields } from "../../lib/svgBuilder/types";
+import type { SheetMetadata, SheetMetadataFields } from "../../lib/svgBuilder/types";
 import { commitConfig } from "./config";
 
 type ProviderActions = Pick<BuilderActions,
@@ -85,11 +85,23 @@ async function confirmMetadata(ctx: BuilderActionContext): Promise<void> {
     const out = await generateSheetMetadata({ config: ctx.model.gemini, apiKey: key,
       prompt: ctx.model.prompt, preview });
     if (!out.ok) return ctx.say(`Sheet metadata failed — ${out.reason}`, true);
-    ctx.dispatch({ draft: out.draft, draftTitle: out.artboardTitle, status: out.truncated ? "The provider answer was truncated — review it carefully"
-      : "Sheet metadata draft ready — accept it before it enters an export" });
+    applyAnswer(ctx, out.draft, out.artboardTitle, out.truncated);
   } finally {
     ctx.setBusy(null);
   }
+}
+
+/**
+ * The answer is applied at once (2026-11-15: no draft step): accepted when it
+ * passes the upload rules, else kept as invalid with its errors in the editor;
+ * its Title-Artboard goes onto the banner; the confirmation closes.
+ */
+function applyAnswer(ctx: BuilderActionContext, draft: SheetMetadata, artboardTitle: string, truncated: boolean): void {
+  const metadata = acceptSheetMetadata(draft);
+  ctx.dispatch({ metadata, draft: null, preview: null, dialog: "none" });
+  applyArtboardTitle(ctx, artboardTitle);
+  const note = truncated ? " (the answer was truncated — check it)" : "";
+  ctx.say(metadata.state === "accepted" ? `Sheet metadata applied${note}` : `Sheet metadata saved but invalid — ${metadata.validation?.errors.join("; ")}${note}`, metadata.state !== "accepted");
 }
 
 function acceptDraft(ctx: BuilderActionContext): void {
