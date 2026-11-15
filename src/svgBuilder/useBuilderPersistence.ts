@@ -1,6 +1,6 @@
 // useBuilderPersistence.ts — one owner per persisted value and the global
 // history applier. Undo restores config without recording a second history step.
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { parseBuilderUndoPatch } from "../lib/svgBuilder/undo";
 import { patchOfConfigUndo, type BuilderModel } from "./model";
 import { saveSheetConfig } from "./configstore";
@@ -8,6 +8,8 @@ import { saveBuilderPrefs } from "./prefsstore";
 import { saveBuilderPrompt } from "./promptstore";
 import { useSaveBuilderListView } from "./listview";
 import { bindBuilderConfigApplier } from "./undoBinding";
+import { bindArtboardsApplier } from "./artboardsundo";
+import { saveArtboards } from "./artboardstore";
 import { getAppState, patchBuilder } from "../state/appstore";
 
 export function useBuilderPersistence(model: BuilderModel, patch: (value: Partial<BuilderModel>) => void): void {
@@ -19,6 +21,15 @@ export function useBuilderPersistence(model: BuilderModel, patch: (value: Partia
   useEffect(() => { syncBuilderMarks(model.lockedIds, model.excludedIds); }, [model.lockedIds, model.excludedIds]);
   // What is open on the stage survives a reload (2026-11-14).
   useEffect(() => { syncOpenOnStage(model.editingArtboardId, model.editingTemplateId); }, [model.editingArtboardId, model.editingTemplateId]);
+  // Undo / redo of adding / removing artboards (2026-11-16): the list comes back; an open artboard that is gone closes.
+  const openId = useRef(model.editingArtboardId);
+  openId.current = model.editingArtboardId;
+  useEffect(() => bindArtboardsApplier((artboards) => {
+    const stillOpen = openId.current !== null && artboards.some((a) => a.id === openId.current);
+    patch({ artboards, ...(stillOpen ? {} : { editingArtboardId: null }) });
+    saveArtboards(artboards);
+    return true;
+  }), [patch]);
   useEffect(() => bindBuilderConfigApplier((value) => {
     const parsed = parseBuilderUndoPatch(value);
     if (parsed === null) return false;

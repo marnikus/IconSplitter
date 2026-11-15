@@ -447,6 +447,29 @@ describe("final artboards — the list under the templates", () => {
     expect(tpl.id).toBe(arts[1].templateId);
   });
 
+  it("✕ Remove artboard beside ＋ Artboard; adding and removing are undo steps (2026-11-16)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    expect(q("builder-editing-remove-artboard")).toBeNull(); // only while an artboard is open
+    await click("builder-editing-add-artboard");
+    await click("builder-editing-add-artboard");
+    const [a1, a2] = savedArtboards();
+    expect(savedArtboards()).toHaveLength(2);
+    await click("builder-editing-remove-artboard"); // the open one (a2)
+    expect(savedArtboards().map((a) => a.id)).toEqual([a1.id]);
+    expect(q("builder-editing")?.dataset.kind).not.toBe("artboard");
+    await click("builder-undo"); // the removal comes back, whole
+    await waitUntil(() => savedArtboards().length === 2, "removal undone");
+    expect(savedArtboards()[1]).toMatchObject({ id: a2.id, name: a2.name });
+    await click("builder-redo");
+    await waitUntil(() => savedArtboards().length === 1, "removal redone");
+    await click("builder-undo");
+    await waitUntil(() => savedArtboards().length === 2, "back again");
+    await click("builder-undo"); // the second add, undone
+    await waitUntil(() => savedArtboards().length === 1, "add undone");
+    expect(savedArtboards()[0].id).toBe(a1.id);
+  });
+
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
     await openLibrary();
     await click("builder-template-save");

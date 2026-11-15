@@ -13,6 +13,8 @@ export default function SvgBuilderEditingLabel({ b }: { b: BuilderApi }) {
         {template !== undefined && <span className="bld-editing-of">of template {template.name}</span>}
       </div>
       {template !== undefined && <AddArtboard b={b} templateId={template.id} />}
+      <button type="button" className="svg-btn bld-editing-add" data-testid="builder-editing-remove-artboard"
+        title="Remove this artboard (Undo brings it back)" onClick={() => b.actions.removeArtboards([artboard.id])}>✕ Remove artboard</button>
     </div>;
   }
   if (template === undefined) return null;

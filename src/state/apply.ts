@@ -22,6 +22,7 @@ import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploa
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
 import { applyBuilderConfig } from "../svgBuilder/undoBinding";
 import { applyBuilderSvgEdit } from "../svgBuilder/iconedit";
+import { applyBuilderArtboards } from "../svgBuilder/artboardsundo";
 import { getAppState, patchBatch, patchBuilder, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
@@ -29,7 +30,7 @@ import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 export const ENTRY_TYPES = [
   "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
   "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit",
-  "builderChecked", "builderConfig", "builderSvgEdit",
+  "builderChecked", "builderConfig", "builderSvgEdit", "builderArtboards",
 ] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
@@ -43,6 +44,7 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
 function applyBuilderEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> | null {
   if (entry.type === "builderConfig") return applyBuilderConfig(value);
   if (entry.type === "builderSvgEdit") return applyBuilderSvgEdit(value);
+  if (entry.type === "builderArtboards") return applyBuilderArtboards(value);
   return null;
 }
 

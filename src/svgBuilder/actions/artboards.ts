@@ -42,6 +42,11 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
   };
 }
 
+/** Add / remove as ONE undo step (2026-11-16): the whole list before and after. */
+function recordArtboards(ctx: BuilderActionContext, before: readonly FinalArtboard[], after: readonly FinalArtboard[], label: string): void {
+  ctx.hist?.push({ type: "builderArtboards", label, origin: "svgBuilder", ids: ["artboards"], before: { artboards: before }, after: { artboards: after } });
+}
+
 function storeArtboards(ctx: BuilderActionContext, artboards: readonly FinalArtboard[]): void {
   ctx.dispatch({ artboards });
   saveArtboards(artboards);
@@ -76,6 +81,7 @@ export function addArtboard(ctx: BuilderActionContext, templateId: string, guard
   const capacity = template.config.grid.columns * template.config.grid.rows;
   const created = newArtboard(template, ctx.model.artboards, { now: new Date().toISOString(), id: artboardId(), placedIds: startIcons(ctx, capacity) });
   storeArtboards(ctx, [...ctx.model.artboards, created]);
+  recordArtboards(ctx, ctx.model.artboards, [...ctx.model.artboards, created], `Add artboard “${created.name}”`);
   const checked = ctx.model.templateSel.checked;
   ctx.dispatch({ templateSel: { ...ctx.model.templateSel, active: templateId, checked: checked.length > 0 && !checked.includes(templateId) ? [...checked, templateId] : checked } });
   openArtboard(ctx, created);
@@ -181,6 +187,7 @@ function removeArtboards(ctx: BuilderActionContext, ids: readonly string[]): voi
   const gone = ctx.model.artboards.filter((a) => drop.has(a.id));
   if (gone.length === 0) return ctx.say("No artboard selected", true);
   storeArtboards(ctx, ctx.model.artboards.filter((a) => !drop.has(a.id)));
+  recordArtboards(ctx, ctx.model.artboards, ctx.model.artboards.filter((a) => !drop.has(a.id)), gone.length === 1 ? `Remove artboard “${gone[0].name}”` : `Remove ${gone.length} artboards`);
   const sel = ctx.model.artboardSel;
   ctx.dispatch({
     artboardSel: { checked: sel.checked.filter((id) => !drop.has(id)), active: sel.active !== null && drop.has(sel.active) ? null : sel.active, anchor: null },
