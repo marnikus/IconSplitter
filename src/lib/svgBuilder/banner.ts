@@ -198,6 +198,23 @@ function splitSide(a: Laid): string {
     + hero + title + line + subtitleText(a, sl, { x: cx, top: restTop + 18, anchor: "middle" });
 }
 
+/**
+ * A split edge row: the reference (hero + title centred in the block, the
+ * subtitle 24 px after it), or spread (⇔ Rebalance row): hero + title with
+ * equal gaps inside the block, the subtitle centred in the rest of the banner.
+ */
+function splitXs(a: Laid, p: { blockW: number; heroD: number; titleW: number; subW: number }): { hero: number; title: number; sub: number } {
+  const { frame } = a;
+  if (!a.banner.edgeSpread) {
+    const heroW = p.heroD > 0 ? p.heroD + 14 : 0;
+    const x0 = frame.x + Math.max(12, (p.blockW - heroW - p.titleW) / 2);
+    return { hero: x0, title: x0 + heroW, sub: frame.x + p.blockW + 24 };
+  }
+  const inBlock = edgeXs({ ...frame, width: p.blockW }, { hero: p.heroD, title: p.titleW, rule: false, sub: 0 }, true);
+  const rest = frame.width - p.blockW;
+  return { hero: inBlock.hero, title: inBlock.title, sub: frame.x + p.blockW + Math.max(0, (rest - p.subW) / 2) };
+}
+
 function splitEdge(a: Laid): string {
   const { box, banner, frame } = a;
   const blockW = Math.min(frame.height * 4.45, a.artboardWidth * 0.36);
@@ -205,13 +222,13 @@ function splitEdge(a: Laid): string {
   const tl = titleLines(a, false, banner.titleSize);
   const titleW = Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize)));
   const se = heroSize(banner, 36, 20);
-  const heroW = banner.hero ? se.d + 14 : 0;
-  const x0 = frame.x + Math.max(12, (blockW - heroW - titleW) / 2);
   const cy = box.y + box.height / 2;
-  const hero = banner.hero ? heroRing(a, { cx: x0 + se.d / 2, cy, d: se.d, glyph: se.glyph, ink, bg: banner.accent }) : "";
-  const title = titleText(a, tl, { x: x0 + heroW, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink, anchor: "start" });
   const sl = subtitleLines(a, false);
-  const sub = subtitleText(a, sl, { x: frame.x + blockW + 24, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
+  const subW = Math.max(0, ...sl.map((l) => textWidth(l, banner.subtitleSize, 0.72)));
+  const at = splitXs(a, { blockW, heroD: banner.hero ? se.d : 0, titleW, subW });
+  const hero = banner.hero ? heroRing(a, { cx: at.hero + se.d / 2, cy, d: se.d, glyph: se.glyph, ink, bg: banner.accent }) : "";
+  const title = titleText(a, tl, { x: at.title, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink, anchor: "start" });
+  const sub = subtitleText(a, sl, { x: at.sub, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
   return `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(blockW)}" height="${round(frame.height)}" fill="${attr(banner.accent)}" data-split-block="true"/>`
     + hero + title + sub;
 }

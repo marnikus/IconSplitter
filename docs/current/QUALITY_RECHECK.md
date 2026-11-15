@@ -5257,3 +5257,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-15 SVG builder: title/subtitle case (normal/Capitalized/UPPER), sizes up to 200. Builder suites 201/201, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: icon box size in the icon quick bar. Builder suites 202/202, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: Auto rebalance checkbox + banner quick-bar Rebalance. Builder suites 204/204, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: Rebalance row for split edge banners too. Builder suites 205/205, tsc/eslint/quality PASS.

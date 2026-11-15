@@ -1,6 +1,8 @@
-// rebalance.ts — ⇔ Rebalance row (2026-11-15): an edge (top / bottom) solid
-// banner's row laid out with EQUAL gaps between the hero glyph, the title, the
-// divider, the subtitle and both banner edges (banner.ts `edgeXs`, spread on).
+// rebalance.ts — ⇔ Rebalance row (2026-11-15): an edge (top / bottom) banner's
+// row laid out with EQUAL gaps (banner.ts `edgeXs`, spread on). Solid: between
+// the hero glyph, the title, the divider, the subtitle and both banner edges.
+// Split: the hero + title evenly inside the accent block, the subtitle centred
+// in the rest.
 // Each text gets the width of its own one line, and the manual moves and the
 // text padding are cleared so the gaps are the only spacing. Pure.
 import { RANGES, clampTo } from "./ranges";
@@ -8,9 +10,9 @@ import type { SheetConfig } from "./types";
 
 type Banner = SheetConfig["banner"];
 
-/** Only an edge banner in the solid style has one row of parts. */
+/** An edge (top / bottom) banner has one row of parts, solid or split (2026-11-15: split too). */
 export function canRebalance(banner: Pick<Banner, "position" | "style">): boolean {
-  return (banner.position === "top" || banner.position === "bottom") && banner.style === "solid";
+  return banner.position === "top" || banner.position === "bottom";
 }
 
 /** A box width that keeps `text` on one line (banner.ts wraps at width ÷ charWidth characters). */

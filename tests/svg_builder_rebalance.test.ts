@@ -52,4 +52,19 @@ describe("rebalance an edge banner row", () => {
     expect(((new RegExp(`data-banner-text="title"[\\s\\S]*?</g>`).exec(off)?.[0] ?? "").match(/<text/g) ?? []).length).toBeGreaterThan(1);
     expect(parseSheetConfig({ banner: {} }).banner.autoRebalance).toBe(false);
   });
+
+  it("a split top banner rebalances too: icon + title evenly in the block, the subtitle centred in the rest (2026-11-15)", () => {
+    expect(canRebalance({ position: "top", style: "split" })).toBe(true);
+    const banner = { ...DEFAULT_CONFIG.banner, position: "top" as const, style: "split" as const, size: 90, hero: false, titleSize: 22, title: "bakery and dessert icons", subtitle: "Editable stroke width" };
+    const config = parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...banner, ...rebalancedBanner(banner) } });
+    const svg = composeSheet({ config, layout: computeLayout(config), assets: [], placedIds: [], svgTexts: {} }).svg;
+    const block = /<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"[^>]*data-split-block/.exec(svg)!;
+    const [bx, bw] = [Number(block[1]), Number(block[2])];
+    const titleX = Number(/data-banner-text="title"[\s\S]*?<text x="([\d.]+)"/.exec(svg)![1]);
+    const subX = Number(/data-banner-text="subtitle"[\s\S]*?<text x="([\d.]+)"/.exec(svg)![1]);
+    const titleW = config.banner.title.length * config.banner.titleSize * 0.56;
+    expect(titleX - bx).toBeCloseTo(bx + bw - (titleX + titleW), 0); // equal space both sides inside the block
+    const subW = config.banner.subtitle.toUpperCase().length * config.banner.subtitleSize * 0.72;
+    expect(subX - (bx + bw)).toBeCloseTo(config.artboard.width - (subX + subW), 0); // centred in the rest
+  });
 });
