@@ -94,4 +94,29 @@ describe("rebalance a top / bottom banner row", () => {
     expect(ratio.subtitleSize / ratio.titleSize).toBeCloseTo(0.8, 1);
     expect(parseSheetConfig({ banner: { rowGapPct: 99, titleFillPct: 1, subRatioPct: 500 } }).banner).toMatchObject({ rowGapPct: 30, titleFillPct: 20, subRatioPct: 100 });
   });
+
+  it("centres each text's ink box on the banner's middle line (Y) (2026-11-15)", () => {
+    setTextMeasurer(ink);
+    const { config } = sheet({ title: "MUSHROOM ICONS", subtitle: "Editable stroke width", edgeSpread: true, subtitleCase: "upper" });
+    const layout = computeLayout(config);
+    const boxes = spreadInkBoxes(config, layout)!;
+    const mid = layout.banner!.y + layout.banner!.height / 2;
+    expect(boxes.title.y + boxes.title.height / 2).toBeCloseTo(mid, 1);
+    expect(boxes.sub.y + boxes.sub.height / 2).toBeCloseTo(mid, 1);
+  });
+
+  it("split banners too: measured ink boxes, centred, and the dev boxes show (2026-11-15)", () => {
+    setTextMeasurer(ink);
+    const { config } = sheet({ style: "split", titleSize: 20, title: "MUSHROOM ICONS", subtitle: "Editable stroke width", edgeSpread: true, subtitleCase: "upper" });
+    const layout = computeLayout(config);
+    const boxes = spreadInkBoxes(config, layout)!;
+    expect(boxes).not.toBeNull();
+    const mid = layout.banner!.y + layout.banner!.height / 2;
+    expect(boxes.title.y + boxes.title.height / 2).toBeCloseTo(mid, 1);
+    expect(boxes.sub.y + boxes.sub.height / 2).toBeCloseTo(mid, 1);
+    const [left, , right] = boxes.gaps; // block edge → title ink → block end; subtitle centred in the rest
+    expect(boxes.gaps).toHaveLength(4);
+    expect(left.width).toBeCloseTo(boxes.gaps[1].width, 1);
+    expect(right.width).toBeCloseTo(boxes.gaps[3].width, 1);
+  });
 });
