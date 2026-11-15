@@ -637,4 +637,20 @@ describe("number boxes apply as you type", () => {
     expect(config().banner.titleTracking).toBe(12);
     expect(shadow().querySelector('[data-banner-text="title"] text')?.getAttribute("letter-spacing")).toBe("0.075em");
   });
+
+  it("split banners: the coloured block's quick bar has ⇔ too, with the same panel (2026-11-16)", async () => {
+    await openLibrary();
+    const split = { ...config(), banner: { ...config().banner, position: "top", style: "split", size: 90 } };
+    localStorage.setItem("iconSplitter.svgBuilder.config.v1", JSON.stringify(split));
+    act(() => ui.unmount());
+    ui = createRoot(host);
+    act(() => { ui.render(<Workbench />); });
+    await openLibrary();
+    await hover(shadow().querySelector("[data-split-block]")!);
+    expect(q("builder-quick")?.dataset.kind).toBe("block");
+    await click("builder-quick-rebalance");
+    await click("builder-quick-rebalance-now");
+    expect(config().banner.edgeSpread).toBe(true);
+    expect(q("builder-quick-rebalance-auto")).not.toBeNull();
+  });
 });

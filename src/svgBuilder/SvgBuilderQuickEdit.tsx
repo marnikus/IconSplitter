@@ -67,6 +67,9 @@ function useDismissPanel(panel: Panel, close: () => void): void {
   }, [panel, close]);
 }
 
+/** ⇔ on the banner and on a split banner's coloured block, for top / bottom banners (2026-11-16). */
+const offersRebalance = (b: BuilderApi, kind: QuickKind) => (kind === "banner" || kind === "block") && canRebalance(b.config.banner);
+
 const isText = (kind: QuickKind): kind is "title" | "subtitle" => kind === "title" || kind === "subtitle";
 
 /**
@@ -138,7 +141,7 @@ function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKi
     {spec.box && <button type="button" className="bld-quick-btn" data-testid="builder-quick-box" title={spec.box.label}
       aria-label={spec.box.label} onClick={() => toggle("box")}>⬚</button>}
     {kind === "icon" && <IconEditButton b={b} el={el} />}
-    {kind === "banner" && canRebalance(b.config.banner) && <button type="button" className="bld-quick-btn" data-testid="builder-quick-rebalance"
+    {offersRebalance(b, kind) && <button type="button" className="bld-quick-btn" data-testid="builder-quick-rebalance"
       title="Rebalance the row: one line each, equal gaps" aria-label="Rebalance the banner row" onClick={() => toggle("rebalance")}>⇔</button>}
   </div>;
 }
@@ -150,7 +153,7 @@ function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: Quick
   if (panel === "color") return <ColorPanel b={b} slot={spec.color} onDone={done} />;
   if (panel === "stroke" && spec.stroke) return <SizePanel b={b} slot={spec.stroke} testid="builder-quick-stroke-range" />;
   if (panel === "box" && spec.box) return <SizePanel b={b} slot={spec.box} testid="builder-quick-box-range" />;
-  if (panel === "rebalance" && kind === "banner") return <RebalancePanel b={b} />;
+  if (panel === "rebalance" && offersRebalance(b, kind)) return <RebalancePanel b={b} />;
   if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} gap={spec.gap} textCase={spec.textCase} />;
   return <KindPanel b={b} kind={kind} panel={panel} done={done} move={move} />;
 }
