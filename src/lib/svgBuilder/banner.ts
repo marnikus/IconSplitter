@@ -144,8 +144,9 @@ function spreadGeometry(a: Laid) {
   const banner = { ...base, titleSize: fit.titleSize, subtitleSize: fit.subtitleSize, titleWidth: 2000, subtitleWidth: 2000 };
   const b: Laid = { ...a, banner };
   const tl = titleLines(b, false, banner.titleSize), sl = subtitleLines(b, false);
-  const inkStart = a.box.x + fit.gap, inkEnd = inkStart + fit.title.width, mid = inkEnd + fit.gap / 2;
-  const cy = a.box.y + a.box.height / 2, titleX = inkStart - fit.title.left, subX = inkEnd + fit.gap - fit.sub.left;
+  // the middle gap is twice the edge gap (2026-11-15): the hero / divider / seam sits at its middle
+  const inkStart = a.box.x + fit.gap, inkEnd = inkStart + fit.title.width, mid = inkEnd + fit.gap;
+  const cy = a.box.y + a.box.height / 2, titleX = inkStart - fit.title.left, subX = inkEnd + 2 * fit.gap - fit.sub.left;
   const titleTop = inkCentredTop(cy, fit.title, banner.titleSize), subTop = inkCentredTop(cy, fit.sub, banner.subtitleSize);
   return { glyph, fit, banner, b, tl, sl, inkStart, inkEnd, mid, cy, titleX, subX, titleTop, subTop };
 }
@@ -182,7 +183,7 @@ export function spreadInkBoxes(config: SheetConfig, layout: { banner: Rect | nul
   const laid: Laid = { banner, box: inset(layout.banner, banner.textPadding), frame: layout.banner, artboardWidth: config.artboard.width, title: banner.title, subtitle: banner.subtitle, hero: () => "" };
   const g = spreadGeometry(laid);
   const title = inkRect(g.inkStart, g.titleTop, g.banner.titleSize, g.fit.title);
-  const sub = inkRect(g.inkEnd + g.fit.gap, g.subTop, g.banner.subtitleSize, g.fit.sub);
+  const sub = inkRect(g.inkEnd + 2 * g.fit.gap, g.subTop, g.banner.subtitleSize, g.fit.sub);
   const end = laid.box.x + laid.box.width;
   return { title, sub, gaps: g.sl.length > 0 ? [...gapBars(g.cy, [laid.box.x, title.x]), ...gapBars(g.cy, [title.x + title.width, sub.x]), ...gapBars(g.cy, [sub.x + sub.width, end])]
     : gapBars(g.cy, [laid.box.x, title.x, title.x + title.width, end]).filter((_, i) => i !== 1) };

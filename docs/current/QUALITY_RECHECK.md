@@ -5267,3 +5267,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-15 SVG builder: Generate metadata button in the pinned header. Builder suites pass, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: split rebalance reuses the solid row; the colour seam sits between the texts. Builder suites 214/214, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: saving a template keeps it in edit, so later changes ask again; artboard re-tracking covered by a test. Builder suites 214/214, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: rebalance middle gap = 2 × edge gaps (texts centred in their halves). Builder suites 214/214, tsc/eslint/quality PASS.

@@ -24,13 +24,13 @@ const attrOf = (svg: string, which: string, name: string) => Number(new RegExp(`
 const lines = (svg: string, which: string) => ((new RegExp(`data-banner-text="${which}"[\\s\\S]*?</g>`).exec(svg)?.[0] ?? "").match(/<text/g) ?? []).length;
 
 describe("rebalance a top / bottom banner row", () => {
-  it("measures the real ink edges: three equal gaps between them and the banner edges", () => {
+  it("measures the real ink edges: the gap between the texts is twice the edge gaps, so each text is centred in its half (2026-11-15)", () => {
     setTextMeasurer(ink);
     const { svg } = sheet({ title: "MUSHROOM NATURE ICONS SHEET", subtitle: "Editable stroke width", edgeSpread: true, titleCase: "upper", subtitleCase: "upper" });
     const ts = attrOf(svg, "title", "size"), ss = attrOf(svg, "subtitle", "size");
     const t0 = attrOf(svg, "title", "x") + ts * 0.05, t1 = t0 + 27 * ts * 0.5; // the title's ink
     const s0 = attrOf(svg, "subtitle", "x") + ss * 0.05, s1 = s0 + 21 * ss * 0.5;
-    expect(s0 - t1).toBeCloseTo(t0, 0);
+    expect(s0 - t1).toBeCloseTo(2 * t0, 0); // the middle gap is double
     expect(1080 - s1).toBeCloseTo(t0, 0);
     expect(t0).toBeGreaterThanOrEqual(1080 * ROW_MIN_GAP - 0.5);
     expect(lines(svg, "title")).toBe(1);
@@ -77,7 +77,8 @@ describe("rebalance a top / bottom banner row", () => {
     expect(boxes.title.x).toBeCloseTo(attrOf(svg, "title", "x") + ts * 0.05, 1);
     expect(boxes.title.width).toBeCloseTo(14 * ts * 0.5, 1);
     expect(boxes.gaps).toHaveLength(3);
-    for (const g of boxes.gaps) expect(g.width).toBeCloseTo(boxes.gaps[0].width, 1); // equal
+    expect(boxes.gaps[1].width).toBeCloseTo(2 * boxes.gaps[0].width, 1); // edge · double · edge
+    expect(boxes.gaps[2].width).toBeCloseTo(boxes.gaps[0].width, 1);
     expect(spreadInkBoxes(parseSheetConfig({ ...config, banner: { ...config.banner, edgeSpread: false } }), computeLayout(config))).toBeNull();
   });
 
@@ -114,7 +115,11 @@ describe("rebalance a top / bottom banner row", () => {
     expect(boxes.title.y + boxes.title.height / 2).toBeCloseTo(mid, 1);
     expect(boxes.sub.y + boxes.sub.height / 2).toBeCloseTo(mid, 1);
     expect(boxes.gaps).toHaveLength(3);
-    for (const g of boxes.gaps) expect(g.width).toBeCloseTo(boxes.gaps[0].width, 1);
+    expect(boxes.gaps[1].width).toBeCloseTo(2 * boxes.gaps[0].width, 1);
+    expect(boxes.gaps[2].width).toBeCloseTo(boxes.gaps[0].width, 1);
+    const seamAt = (boxes.title.x + boxes.title.width + boxes.sub.x) / 2;
+    expect(boxes.title.x + boxes.title.width / 2).toBeCloseTo((layout.banner!.x + seamAt) / 2, 0); // the title centred on its colour
+    expect(boxes.sub.x + boxes.sub.width / 2).toBeCloseTo((seamAt + layout.banner!.x + layout.banner!.width) / 2, 0); // the subtitle on its own
     const block = /<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"[^>]*data-split-block/.exec(svg)!;
     const seam = Number(block[1]) + Number(block[2]);
     expect(seam).toBeCloseTo((boxes.title.x + boxes.title.width + boxes.sub.x) / 2, 0); // the seam in the middle of the middle gap
