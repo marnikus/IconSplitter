@@ -433,3 +433,14 @@
 /* The stage label is green while a template is edited (2026-11-15). */
 .bld-editing.is-template { background: #1f8f4e; border-color: #2fb565; color: #eafff1; }
 .bld-editing.is-template .bld-editing-kind { color: #b9f5cf; }
+
+/* The stage's artboard strip (2026-11-16): right side, under the top buttons, scrolls with the wheel. */
+.bld-strip { position: absolute; right: 10px; top: 60px; bottom: 56px; z-index: 3; width: 132px; display: flex; flex-direction: column; gap: 6px; }
+.bld-strip-list { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 2px; scrollbar-width: thin; }
+.bld-strip-item { display: grid; gap: 3px; padding: 4px; border: 2px solid transparent; border-radius: 8px; background: var(--v2-surface-2, #151826); cursor: pointer; color: inherit; }
+.bld-strip-item:hover { border-color: var(--v2-line-strong, #2a2f45); }
+.bld-strip-item.is-on { border-color: #3CC2AF; box-shadow: 0 0 0 2px #3cc2af55; }
+.bld-strip-item .bld-artboard-pic { width: 100%; height: auto; }
+.bld-strip-name { font-size: 10px; font-weight: 700; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bld-strip-arrow { align-self: center; width: 100%; }
+.bld-editing-add { margin-left: 8px; }

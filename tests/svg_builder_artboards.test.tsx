@@ -425,6 +425,28 @@ describe("final artboards — the list under the templates", () => {
     expect(text("builder-toast")).toMatch(/Gemini API key/); // the same exact-request path (asks for the key first)
   });
 
+  it("the stage's right strip lists the template's artboards: click switches to one, the open one is marked; ＋ Artboard beside the label (2026-11-16)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    expect(q("builder-artboard-strip")).toBeNull(); // no artboards yet
+    await click("builder-editing-add-artboard"); // ＋ Artboard beside "Editing template"
+    expect(savedArtboards()).toHaveLength(1);
+    for (let i = 0; i < 5; i++) await click("builder-editing-add-artboard");
+    const arts = savedArtboards();
+    expect(arts).toHaveLength(6);
+    expect(q("builder-artboard-strip")).not.toBeNull();
+    expect(host.querySelectorAll('[data-testid^="builder-strip-art-"]')).toHaveLength(6);
+    expect(q(`builder-strip-${arts[5].id}`)?.getAttribute("aria-current")).toBe("true"); // the open one is marked
+    await click(`builder-strip-${arts[1].id}`); // switch at once
+    expect(q("builder-editing")?.textContent).toContain(arts[1].name);
+    expect(q(`builder-strip-${arts[1].id}`)?.getAttribute("aria-current")).toBe("true");
+    expect(q(`builder-strip-${arts[5].id}`)?.getAttribute("aria-current")).toBe("false");
+    expect(q("builder-strip-up")).not.toBeNull(); // more than four: arrows (the wheel scrolls too)
+    expect(q("builder-strip-down")).not.toBeNull();
+    expect(tpl.id).toBe(arts[1].templateId);
+  });
+
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
     await openLibrary();
     await click("builder-template-save");

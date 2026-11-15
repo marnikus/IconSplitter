@@ -12,6 +12,7 @@ import { isNativeListKeyTarget, isRowGestureClick } from "../ui/rowgesture";
 import { artboardGroups, visibleArtboards } from "./artboardview";
 import SvgBuilderRowMeta from "./SvgBuilderRowMeta";
 import { pictureReady, useTextSubset } from "./textsubset";
+import type { BuilderIconAsset } from "../lib/svgBuilder/types";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderArtboards({ b }: { b: BuilderApi }) {
@@ -126,12 +127,28 @@ function ArtboardName({ artboard, onRename }: { artboard: FinalArtboard; onRenam
     }} />;
 }
 
-const ArtboardPreview = memo(function ArtboardPreview({ b, template, artboard }: { b: BuilderApi; template: SheetTemplate; artboard: FinalArtboard }) {
+interface PictureArgs { template: SheetTemplate; artboard: FinalArtboard; assets: readonly BuilderIconAsset[]; texts: Readonly<Record<string, string>> }
+const PICTURES = new WeakMap<FinalArtboard, PictureArgs & { src: string }>();
+
+const sameTexts = (x: Readonly<Record<string, string>>, y: Readonly<Record<string, string>>) => {
+  const keys = Object.keys(x);
+  return keys.length === Object.keys(y).length && keys.every((k) => x[k] === y[k]);
+};
+
+/** One composed picture per artboard state, shared by the list and the stage strip (2026-11-16): never composed twice. */
+function artboardPicture(p: PictureArgs): string {
+  const hit = PICTURES.get(p.artboard);
+  if (hit !== undefined && hit.template === p.template && hit.assets === p.assets && sameTexts(hit.texts, p.texts)) return hit.src;
+  const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(artboardPreviewSvg({ template: p.template, artboard: p.artboard, assets: p.assets, svgTexts: p.texts }))}`;
+  PICTURES.set(p.artboard, { ...p, src });
+  return src;
+}
+
+/** An artboard's picture (also the stage strip's thumbnails, 2026-11-16). */
+export const ArtboardPreview = memo(function ArtboardPreview({ b, template, artboard }: { b: BuilderApi; template: SheetTemplate; artboard: FinalArtboard }) {
   const texts = useTextSubset(artboard.placedIds, b.svgTexts); // recomposed only when its own icons change (2026-11-15)
   const ready = pictureReady({ root: b.root, scanned: b.discovery !== null, known: b.knownIds, booting: b.booting }, artboard.placedIds, texts);
-  const src = useMemo(() => (!ready ? null : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(artboardPreviewSvg({
-    template, artboard, assets: b.assets, svgTexts: texts,
-  }))}`), [ready, template, artboard, b.assets, texts]);
+  const src = useMemo(() => (!ready ? null : artboardPicture({ template, artboard, assets: b.assets, texts })), [ready, template, artboard, b.assets, texts]);
   if (src === null) return <span className="bld-artboard-pic bld-pic-loading" data-testid={`builder-artboard-preview-${artboard.id}`} aria-label="Loading the preview" />;
   return <img className="bld-artboard-pic" src={src} alt={`Preview of ${artboard.name}`} data-testid={`builder-artboard-preview-${artboard.id}`}
     style={{ aspectRatio: String(template.config.artboard.width / template.config.artboard.height) }} />;

@@ -5270,3 +5270,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-15 SVG builder: rebalance middle gap = 2 × edge gaps (texts centred in their halves). Builder suites 214/214, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: text boxes merged into ▦ Guides (one toggle + opacity); dev checkboxes removed. Builder suites 214/214, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder performance: icon sanitize cache, per-picture text subsets, stable template sample, compose-once at start. Toggle 13->1 composes, start 97->33, warm compose 18% of cold. Builder suites 216/216, tsc/eslint/quality PASS; builder fast lane dark-shell check fails identically before the change.
+- 2026-11-16 SVG builder: stage artboard strip + ＋ Artboard by the label; shared artboard pictures (start stays at 33 compositions). Builder suites 217/217, tsc/eslint/quality PASS.

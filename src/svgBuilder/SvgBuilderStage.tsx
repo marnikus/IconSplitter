@@ -6,18 +6,25 @@ import { LAYOUT_PRESETS, type LayoutPresetId } from "../lib/svgBuilder/config";
 import SvgBuilderArtboard from "./SvgBuilderArtboard";
 import SvgBuilderStageActions from "./SvgBuilderStageActions";
 import SvgBuilderEditingLabel from "./SvgBuilderEditingLabel";
+import SvgBuilderArtboardStrip, { stageTemplateId } from "./SvgBuilderArtboardStrip";
+
+/** The screen px the right artboard strip needs beside the artboard. */
+const STRIP_ROOM = 150;
 import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderStage({ b }: { b: BuilderApi }) {
   const box = useRef<HTMLDivElement | null>(null);
-  const fit = useFitScale(box, b.config.artboard.width, b.config.artboard.height);
+  // the artboard strip takes the stage's right side: the fit leaves room for it (2026-11-16)
+  const strip = b.artboards.some((a) => a.templateId === stageTemplateId(b)) ? STRIP_ROOM : 0;
+  const fit = useFitScale(box, { w: b.config.artboard.width, h: b.config.artboard.height }, strip);
   const zoom = b.prefs.fit ? fit : b.prefs.zoom;
   return <main className="bld-stage" data-testid="builder-stage" aria-label="Sheet stage">
     <StageToolbar b={b} zoom={zoom} />
-    <div className="bld-canvas" ref={box} data-testid="builder-canvas">
+    <div className="bld-canvas" ref={box} data-testid="builder-canvas" style={strip > 0 ? { paddingRight: strip } : undefined}>
       {b.document === null ? <StageEmpty b={b} /> : <SvgBuilderArtboard b={b} doc={b.document} zoom={zoom} />}
       <SvgBuilderEditingLabel b={b} />
+      <SvgBuilderArtboardStrip b={b} />
       <SvgBuilderStageActions b={b} />
       <button type="button" className="svg-btn ghost bld-float-brief" data-testid="builder-corrected-brief" onClick={b.actions.openBrief}>✦ Corrected brief</button>
     </div>
@@ -31,7 +38,8 @@ export function fitScaleOf(stageW: number, stageH: number, w: number, h: number)
   return Math.max(0.16, Math.min((stageW - 54) / w, (stageH - 68) / h, 1.15));
 }
 
-function useFitScale(ref: { current: HTMLElement | null }, w: number, h: number): number {
+/** The fit for the stage's size, minus `reserve` screen px on the right (the artboard strip). */
+function useFitScale(ref: { current: HTMLElement | null }, { w, h }: { w: number; h: number }, reserve = 0): number {
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
     const node = ref.current;
@@ -43,7 +51,7 @@ function useFitScale(ref: { current: HTMLElement | null }, w: number, h: number)
     ro.observe(node);
     return () => ro.disconnect();
   }, [ref]);
-  return fitScaleOf(size.w, size.h, w, h);
+  return fitScaleOf(size.w - reserve, size.h, w, h);
 }
 
 function StageToolbar({ b, zoom }: { b: BuilderApi; zoom: number }) {

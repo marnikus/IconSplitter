@@ -10,10 +10,18 @@ export default function SvgBuilderEditingLabel({ b }: { b: BuilderApi }) {
     return <div className="bld-editing is-artboard" data-testid="builder-editing" data-kind="artboard" role="status">
       <span className="bld-editing-kind">EDITING ARTBOARD</span><b>{artboard.name}</b>
       {template !== undefined && <span className="bld-editing-of">of template {template.name}</span>}
+      {template !== undefined && <AddArtboard b={b} templateId={template.id} />}
     </div>;
   }
   if (template === undefined) return null;
   return <div className="bld-editing is-template" data-testid="builder-editing" data-kind="template" role="status">
     <span className="bld-editing-kind">EDITING TEMPLATE</span><b>{template.name}</b>
+    <AddArtboard b={b} templateId={template.id} />
   </div>;
+}
+
+/** ＋ Artboard beside the label (2026-11-16): a new artboard of the template being worked on. */
+function AddArtboard({ b, templateId }: { b: BuilderApi; templateId: string }) {
+  return <button type="button" className="svg-btn tiny bld-editing-add" data-testid="builder-editing-add-artboard"
+    title="Add a new artboard of this template and open it" onClick={() => b.actions.addArtboard(templateId)}>＋ Artboard</button>;
 }
