@@ -3,6 +3,7 @@
 // Wrapping follows the reference formulas, at most three lines.
 import { readableInk } from "./config";
 import { solidMix } from "./solidcolor";
+import { canRebalance, rebalancedBanner } from "./rebalance";
 import { attr, round, textEl, textWidth } from "./markup";
 import type { Rect, SheetConfig, TextCase } from "./types";
 
@@ -31,7 +32,9 @@ export function wrapLines(text: string, maxChars: number): string[] {
   return lines.slice(0, 3);
 }
 
-export function bannerMarkup(a: BannerArgs): string {
+export function bannerMarkup(input: BannerArgs): string {
+  // Auto rebalance (2026-11-15): the row is rebalanced for the texts as they are now, on every draw.
+  const a = input.banner.autoRebalance && canRebalance(input.banner) ? { ...input, banner: { ...input.banner, ...rebalancedBanner(input.banner) } } : input;
   const { box, banner } = a;
   const side = banner.position === "left" || banner.position === "right";
   const laid: Laid = { ...a, frame: box, box: inset(box, banner.textPadding) };

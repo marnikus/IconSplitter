@@ -41,4 +41,15 @@ describe("rebalance an edge banner row", () => {
     expect(canRebalance({ ...banner, position: "left", style: "solid" })).toBe(false);
     expect(parseSheetConfig({ banner: {} }).banner.edgeSpread).toBe(false);
   });
+
+  it("Auto rebalance keeps the row balanced whatever the texts become: one line each, spread, no moves (2026-11-15)", () => {
+    const banner = { ...DEFAULT_CONFIG.banner, position: "top" as const, style: "solid" as const, title: "a much longer title than before for this sheet", titleWidth: 120, titleDx: 40, autoRebalance: true };
+    const config = parseSheetConfig({ ...DEFAULT_CONFIG, banner });
+    const svg = composeSheet({ config, layout: computeLayout(config), assets: [], placedIds: [], svgTexts: {} }).svg;
+    const block = new RegExp(`data-banner-text="title"[\\s\\S]*?</g>`).exec(svg)?.[0] ?? "";
+    expect((block.match(/<text/g) ?? []).length).toBe(1); // the stored 120 px width is ignored: one line
+    const off = composeSheet({ config: parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...banner, autoRebalance: false } }), layout: computeLayout(config), assets: [], placedIds: [], svgTexts: {} }).svg;
+    expect(((new RegExp(`data-banner-text="title"[\\s\\S]*?</g>`).exec(off)?.[0] ?? "").match(/<text/g) ?? []).length).toBeGreaterThan(1);
+    expect(parseSheetConfig({ banner: {} }).banner.autoRebalance).toBe(false);
+  });
 });

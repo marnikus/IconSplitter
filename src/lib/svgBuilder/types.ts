@@ -100,6 +100,8 @@ export interface SheetConfig {
     /** Edge banner row with equal gaps between its parts and both edges (2026-11-15, ⇔ Rebalance row). */
     edgeSpread: boolean;
     titleCase: TextCase; subtitleCase: TextCase;
+    /** Rebalance the edge row on every draw (2026-11-15): texts / sizes may change, the balance stays. */
+    autoRebalance: boolean;
   };
 }
 

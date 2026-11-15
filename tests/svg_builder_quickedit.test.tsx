@@ -582,4 +582,24 @@ describe("number boxes apply as you type", () => {
     await click("builder-undo");
     expect(config().icons.box).toBe(before);
   });
+
+  it("the banner's quick bar has ⇔: Rebalance now and an Auto rebalance checkbox (top banner) (2026-11-15)", async () => {
+    await openLibrary();
+    await hover(shadow().querySelector('[data-banner="true"] > rect')!);
+    expect(q("builder-quick-rebalance")).toBeNull(); // a side banner has no row
+    const top = { ...config(), banner: { ...config().banner, position: "top", style: "solid", size: 90 } };
+    localStorage.setItem("iconSplitter.svgBuilder.config.v1", JSON.stringify(top));
+    act(() => ui.unmount());
+    ui = createRoot(host);
+    act(() => { ui.render(<Workbench />); });
+    await openLibrary();
+    await hover(shadow().querySelector('[data-banner="true"] > rect')!);
+    await click("builder-quick-rebalance");
+    await click("builder-quick-rebalance-now");
+    expect(config().banner.edgeSpread).toBe(true);
+    const box = q("builder-quick-rebalance-auto") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    await act(async () => { box.click(); });
+    expect(config().banner.autoRebalance).toBe(true);
+  });
 });

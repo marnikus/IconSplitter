@@ -14,9 +14,10 @@ import { QUICK_SPECS, quickTargetOf, slotValue, withSlot, type ColorSlot, type Q
 import type { BuilderApi } from "./useSvgBuilder";
 import SvgBuilderTextMove from "./SvgBuilderTextMove";
 import { anchorOf } from "./quickplace";
+import { canRebalance, rebalancedBanner } from "../lib/svgBuilder/rebalance";
 import SvgBuilderTextWidth from "./SvgBuilderTextWidth";
 
-type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | "box" | null;
+type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | "box" | "rebalance" | null;
 interface Hover { kind: QuickKind; el: Element }
 
 const FACES: ReadonlyArray<{ value: TitleFace; label: string }> = [
@@ -100,6 +101,17 @@ export default function SvgBuilderQuickEdit({ b, board, wrap }: { b: BuilderApi;
   </>;
 }
 
+/** ⇔ on an edge banner (2026-11-15): rebalance the row now, or keep it balanced automatically. */
+function RebalancePanel({ b }: { b: BuilderApi }) {
+  const banner = b.config.banner;
+  const set = (patch: Partial<typeof banner>, label: string) => b.actions.setConfig({ ...b.config, banner: { ...banner, ...patch } }, label);
+  return <div className="bld-quick-panel" data-testid="builder-quick-rebalance-panel">
+    <button type="button" className="svg-btn tiny primary" data-testid="builder-quick-rebalance-now" onClick={() => set(rebalancedBanner(banner), "Rebalance row")}>⇔ Rebalance now</button>
+    <label className="bld-quick-row"><input type="checkbox" data-testid="builder-quick-rebalance-auto" checked={banner.autoRebalance}
+      onChange={(e) => set(e.target.checked ? { autoRebalance: true, ...rebalancedBanner(banner) } : { autoRebalance: false }, "Auto rebalance")} /> Auto rebalance</label>
+  </div>;
+}
+
 /** ✎ on an icon (2026-11-15): Generate SVG's editor on this icon, right from the artboard. */
 function IconEditButton({ b, el }: { b: BuilderApi; el: Element }) {
   const id = el.getAttribute("data-asset-id") ?? el.closest("[data-asset-id]")?.getAttribute("data-asset-id") ?? null;
@@ -124,6 +136,8 @@ function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKi
     {spec.box && <button type="button" className="bld-quick-btn" data-testid="builder-quick-box" title={spec.box.label}
       aria-label={spec.box.label} onClick={() => toggle("box")}>⬚</button>}
     {kind === "icon" && <IconEditButton b={b} el={el} />}
+    {kind === "banner" && canRebalance(b.config.banner) && <button type="button" className="bld-quick-btn" data-testid="builder-quick-rebalance"
+      title="Rebalance the row: one line each, equal gaps" aria-label="Rebalance the banner row" onClick={() => toggle("rebalance")}>⇔</button>}
   </div>;
 }
 
@@ -134,6 +148,7 @@ function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: Quick
   if (panel === "color") return <ColorPanel b={b} slot={spec.color} onDone={done} />;
   if (panel === "stroke" && spec.stroke) return <SizePanel b={b} slot={spec.stroke} testid="builder-quick-stroke-range" />;
   if (panel === "box" && spec.box) return <SizePanel b={b} slot={spec.box} testid="builder-quick-box-range" />;
+  if (panel === "rebalance" && kind === "banner") return <RebalancePanel b={b} />;
   if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} gap={spec.gap} textCase={spec.textCase} />;
   return <KindPanel b={b} kind={kind} panel={panel} done={done} move={move} />;
 }

@@ -25,6 +25,9 @@ export default function TextPlacement({ n, edit }: { n: Banner; edit: Edit }) {
     {canRebalance(n) && <button type="button" className="svg-btn tiny primary" data-testid="builder-banner-rebalance"
       onClick={() => edit("banner", rebalancedBanner(n))}
       title="Every text on one line, and equal space between the banner edges, the icon, the title, the divider and the subtitle">⇔ Rebalance row</button>}
+    {canRebalance(n) && <label className="bld-check" title="Rebalance the row again whenever the texts or sizes change">
+      <input type="checkbox" data-testid="builder-banner-auto-rebalance" checked={n.autoRebalance}
+        onChange={(e) => edit("banner", e.target.checked ? { autoRebalance: true, ...rebalancedBanner(n) } : { autoRebalance: false })} /> Auto rebalance</label>}
     {n.edgeSpread && <button type="button" className="svg-btn tiny" data-testid="builder-banner-rebalance-off"
       onClick={() => edit("banner", { edgeSpread: false })} title="Back to the centred group with fixed gaps">Centred row</button>}
   </div>;
