@@ -11,7 +11,7 @@ import { applyCase } from "./textcase";
 import { edgeXs, wrapLines, type EdgeParts } from "./bannerrow";
 
 export { edgeXs, wrapLines };
-import { inkBox, type InkBox } from "./measure";
+import type { InkBox } from "./measure";
 
 export { applyCase };
 import { attr, round, textEl, textWidth } from "./markup";
@@ -159,37 +159,19 @@ const inkRect = (x: number, top: number, size: number, ink: InkBox): Rect => ({ 
 const gapBars = (cy: number, xs: readonly number[]): Rect[] => xs.slice(0, -1).map((from, i) => ({ x: from, y: cy - 1, width: xs[i + 1] - from, height: 2 }));
 
 /**
- * A rebalanced SPLIT edge row (2026-11-15): measured ink boxes; the hero and the
- * title's ink with equal gaps inside the accent block, the subtitle's ink centred
- * in the rest; every text's ink centred on the middle line.
+ * A rebalanced SPLIT edge row (2026-11-15) reuses the solid row exactly
+ * (`spreadGeometry`: optimal sizes, three equal gaps between the ink edges,
+ * every ink box centred in Y); the seam between the two colours takes the
+ * divider's place — exactly in the middle of the gap between the texts — and
+ * the hero glyph, when on, sits centred on that seam.
  */
-function splitSpreadGeometry(a: Laid) {
-  const { frame, box } = a;
-  const banner = { ...a.banner, titleWidth: 2000, subtitleWidth: 2000 };
-  const b: Laid = { ...a, banner };
-  const blockW = Math.min(frame.height * 4.45, a.artboardWidth * 0.36), se = heroSize(banner, 36, 20), heroD = banner.hero ? se.d : 0;
-  const tl = titleLines(b, false, banner.titleSize), sl = subtitleLines(b, false);
-  const t = inkBox(tl[0] ?? "", banner.titleSize, titleStyle(banner)), s = inkBox(sl[0] ?? "", banner.subtitleSize, subtitleStyle(banner));
-  const gapIn = (blockW - heroD - t.width) / (heroD > 0 ? 3 : 2), heroX = frame.x + gapIn;
-  const titleInk = heroD > 0 ? heroX + heroD + gapIn : frame.x + gapIn;
-  const subInk = frame.x + blockW + Math.max(0, (frame.width - blockW - s.width) / 2), cy = box.y + box.height / 2;
-  return { b, banner, blockW, se, tl, sl, t, s, heroX, titleInk, subInk, cy, titleTop: inkCentredTop(cy, t, banner.titleSize), subTop: inkCentredTop(cy, s, banner.subtitleSize) };
-}
-
 function splitSpreadEdge(a: Laid): string {
-  const g = splitSpreadGeometry(a), { frame } = a, ink = readableInk(g.banner.accent);
-  const hero = g.banner.hero ? heroRing(g.b, { cx: g.heroX + g.se.d / 2, cy: g.cy, d: g.se.d, glyph: g.se.glyph, ink, bg: g.banner.accent }) : "";
-  const title = titleText(g.b, g.tl, { x: g.titleInk - g.t.left, top: g.titleTop, size: g.banner.titleSize, ink, anchor: "start" });
-  const sub = subtitleText(g.b, g.sl, { x: g.subInk - g.s.left, top: g.subTop, anchor: "start" });
-  return `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(g.blockW)}" height="${round(frame.height)}" fill="${attr(g.banner.accent)}" data-split-block="true"/>`
-    + hero + title + sub;
-}
-
-function splitInkBoxes(laid: Laid): { title: Rect; sub: Rect; gaps: Rect[] } {
-  const g = splitSpreadGeometry(laid), { frame } = laid, blockEnd = frame.x + g.blockW;
-  const title = inkRect(g.titleInk, g.titleTop, g.banner.titleSize, g.t), sub = inkRect(g.subInk, g.subTop, g.banner.subtitleSize, g.s);
-  const inBlock = g.banner.hero ? [frame.x, g.heroX, g.heroX + g.se.d] : [frame.x];
-  return { title, sub, gaps: [...gapBars(g.cy, [...inBlock, title.x]), ...gapBars(g.cy, [title.x + title.width, blockEnd]), ...gapBars(g.cy, [blockEnd, sub.x]), ...gapBars(g.cy, [sub.x + sub.width, frame.x + frame.width])] };
+  const { glyph, banner, b, tl, sl, mid, cy, titleX, subX, titleTop, subTop } = spreadGeometry(a);
+  const { frame } = a, ink = readableInk(banner.accent);
+  const block = `<rect x="${round(frame.x)}" y="${round(frame.y)}" width="${round(Math.max(0, mid - frame.x))}" height="${round(frame.height)}" fill="${attr(banner.accent)}" data-split-block="true"/>`;
+  const hero = banner.hero && sl.length > 0 ? `<g data-banner-hero="true">${b.hero(mid - glyph / 2, cy - glyph / 2, glyph, ink)}</g>` : "";
+  const title = titleText(b, tl, { x: titleX, top: titleTop, size: banner.titleSize, ink, anchor: "start" });
+  return block + hero + title + subtitleText(b, sl, { x: subX, top: subTop, anchor: "start" });
 }
 
 /** Dev mode (2026-11-15): the ink boxes the rebalance used and its three gaps, in artboard px; null when the row is not spread. */
@@ -198,7 +180,6 @@ export function spreadInkBoxes(config: SheetConfig, layout: { banner: Rect | nul
   if (layout.banner === null || !canRebalance(raw) || !(raw.edgeSpread || raw.autoRebalance)) return null;
   const banner = raw.autoRebalance ? { ...raw, ...rebalancedBanner(raw) } : raw;
   const laid: Laid = { banner, box: inset(layout.banner, banner.textPadding), frame: layout.banner, artboardWidth: config.artboard.width, title: banner.title, subtitle: banner.subtitle, hero: () => "" };
-  if (banner.style === "split") return splitInkBoxes(laid);
   const g = spreadGeometry(laid);
   const title = inkRect(g.inkStart, g.titleTop, g.banner.titleSize, g.fit.title);
   const sub = inkRect(g.inkEnd + g.fit.gap, g.subTop, g.banner.subtitleSize, g.fit.sub);

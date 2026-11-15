@@ -105,18 +105,20 @@ describe("rebalance a top / bottom banner row", () => {
     expect(boxes.sub.y + boxes.sub.height / 2).toBeCloseTo(mid, 1);
   });
 
-  it("split banners too: measured ink boxes, centred, and the dev boxes show (2026-11-15)", () => {
+  it("split banners reuse the same rebalance: three equal gaps, and the colour seam sits exactly between the texts (2026-11-15)", () => {
     setTextMeasurer(ink);
-    const { config } = sheet({ style: "split", titleSize: 20, title: "MUSHROOM ICONS", subtitle: "Editable stroke width", edgeSpread: true, subtitleCase: "upper" });
+    const { config, svg } = sheet({ style: "split", title: "BAKERY AND DESSERT ICONS", subtitle: "Editable stroke width", edgeSpread: true, subtitleCase: "upper" });
     const layout = computeLayout(config);
     const boxes = spreadInkBoxes(config, layout)!;
-    expect(boxes).not.toBeNull();
     const mid = layout.banner!.y + layout.banner!.height / 2;
     expect(boxes.title.y + boxes.title.height / 2).toBeCloseTo(mid, 1);
     expect(boxes.sub.y + boxes.sub.height / 2).toBeCloseTo(mid, 1);
-    const [left, , right] = boxes.gaps; // block edge → title ink → block end; subtitle centred in the rest
-    expect(boxes.gaps).toHaveLength(4);
-    expect(left.width).toBeCloseTo(boxes.gaps[1].width, 1);
-    expect(right.width).toBeCloseTo(boxes.gaps[3].width, 1);
+    expect(boxes.gaps).toHaveLength(3);
+    for (const g of boxes.gaps) expect(g.width).toBeCloseTo(boxes.gaps[0].width, 1);
+    const block = /<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"[^>]*data-split-block/.exec(svg)!;
+    const seam = Number(block[1]) + Number(block[2]);
+    expect(seam).toBeCloseTo((boxes.title.x + boxes.title.width + boxes.sub.x) / 2, 0); // the seam in the middle of the middle gap
+    expect(seam).toBeGreaterThan(boxes.title.x + boxes.title.width); // the title stays on its colour
   });
+
 });
