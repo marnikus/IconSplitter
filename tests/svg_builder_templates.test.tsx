@@ -170,15 +170,15 @@ describe("templates — the window under the builder", () => {
     expect(first.name).toBe("Side banner · 8×4 · Solid");
     expect((q(`builder-template-name-${first.id}`) as HTMLInputElement).value).toBe(first.name);
     expect(q(`builder-template-preview-${first.id}`)?.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
-    expect(q("builder-template-editing")).toBeNull(); // saving ends editing (2026-11-14): no "Done editing" step
+    expect(text("builder-template-editing")).toContain(first.name); // saved and still being edited (2026-11-15)
     expect(q("builder-template-stop")).toBeNull();
 
     await typeInto(`builder-template-name-${first.id}`, "  Food   catalogue  ");
     expect(saved()[0].name).toBe("Food catalogue");
 
-    await click("builder-columns-inc"); // the sheet moves away from the template
+    await click("builder-columns-inc"); // an edit of the template being edited
     expect(text("builder-cells")).toContain("of 36 cells");
-    await click(`builder-template-open-${first.id}`); // ✎ opens its design again: the look comes back
+    await click("builder-stage-template-reset"); // back to its saved look
     expect(text("builder-cells")).toContain("of 32 cells");
     expect(q(`builder-template-${first.id}`)?.className).toContain("is-editing");
     expect(q("builder-template-stop")).toBeNull(); // only ✓ Save template and Save as new
@@ -188,13 +188,11 @@ describe("templates — the window under the builder", () => {
     expect(saved()).toHaveLength(1);
     expect(saved()[0].config.grid.rows).toBe(3);
     expect(saved()[0].name).toBe("Food catalogue");
-    expect(q("builder-template-editing")).toBeNull(); // ✓ Save template also finishes editing
-    expect(q(`builder-template-${first.id}`)?.className).not.toContain("is-editing");
+    expect(q(`builder-template-${first.id}`)?.className).toContain("is-editing"); // ✓ Save keeps editing it (2026-11-15)
 
-    await click(`builder-template-open-${first.id}`);
     await click("builder-template-save-new");
-    expect(q("builder-template-editing")).toBeNull();
     expect(saved()).toHaveLength(2);
+    expect(text("builder-template-editing")).toContain(saved()[1].name); // now editing the new copy
     await click(`builder-template-remove-${first.id}`);
     expect(saved().map((t) => t.id)).not.toContain(first.id);
     expect(blocks()).toHaveLength(1);
@@ -203,9 +201,11 @@ describe("templates — the window under the builder", () => {
   it("opening a template is one undo step", async () => {
     await openLibrary();
     await click("builder-template-save");
+    await click("builder-template-save-new"); // now editing the copy
     const [first] = saved();
     await click("builder-columns-inc");
     await click(`builder-template-open-${first.id}`);
+    await click("builder-leave-discard"); // the copy's change is dropped; the first opens
     expect(text("builder-cells")).toContain("of 32 cells");
     await click("builder-undo");
     expect(text("builder-cells")).toContain("of 36 cells");
@@ -216,11 +216,12 @@ describe("unsaved template changes (2026-11-14)", () => {
   it("selecting a template opens it for editing — no ✎ button; Ctrl+click only checks it", async () => {
     await openLibrary();
     await click("builder-template-save");
-    await click("builder-template-save");
+    await click("builder-template-save-new");
     const [t1, t2] = saved();
     expect(q(`builder-template-edit-${t1.id}`)).toBeNull();
-    await click("builder-columns-inc");
-    await click(`builder-template-open-${t1.id}`); // a plain click: on the stage and being edited
+    await click("builder-columns-inc"); // an unsaved change on the copy (t2, being edited)
+    await click(`builder-template-open-${t1.id}`); // a plain click: on the stage and being edited…
+    await click("builder-leave-discard"); // …after the leave question
     expect(q(`builder-template-${t1.id}`)?.className).toContain("is-editing");
     expect(text("builder-cells")).toContain("of 32 cells");
     const pic = q(`builder-template-open-${t2.id}`)!;
@@ -245,14 +246,18 @@ describe("unsaved template changes (2026-11-14)", () => {
     expect(text("builder-cells")).toContain("of 24 cells");
     await click("builder-stage-template-save");
     expect(saved()[0].config.grid.rows).toBe(3);
-    expect(q("builder-template-editing")).toBeNull(); // saved: editing ends
-    expect(q("builder-stage-template-save")).toBeNull();
+    expect(q("builder-stage-template-save")).toBeNull(); // saved: nothing unsaved
+    expect(q(`builder-template-${first.id}`)?.className).toContain("is-editing"); // …and still being edited
+    await click("builder-columns-inc"); // a change after the save is tracked again (2026-11-15)
+    expect(q("builder-stage-template-save")).not.toBeNull();
+    await click(`builder-template-add-artboard-${first.id}`);
+    expect(q("builder-leave-dialog")).not.toBeNull(); // and leaving asks again
   });
 
   it("asks Save / Discard / Cancel before leaving a changed template", async () => {
     await openLibrary();
     await click("builder-template-save");
-    await click("builder-template-save");
+    await click("builder-template-save-new");
     const [t1, t2] = saved();
     await click(`builder-template-open-${t1.id}`);
     await click(`builder-template-open-${t2.id}`); // unchanged: no question
@@ -407,9 +412,11 @@ describe("template sample text", () => {
     await typeInto("builder-title", "Sample heading");
     await click("builder-template-save");
     const [first] = saved();
-    await typeInto("builder-title", "Something else");
-    await click(`builder-template-open-${first.id}`);
-    expect((q("builder-title") as HTMLInputElement).value).toBe("Sample heading"); // the sample, not the sheet's words
+    await typeInto("builder-title", "Something else"); // still editing it after the save (2026-11-15)
+    expect(JSON.parse(localStorage.getItem(BUILDER_TEMPLATES_KEY) ?? "[]")[0].config.banner.title).toBe("Sample heading");
+    await click("builder-stage-template-reset");
+    expect((q("builder-title") as HTMLInputElement).value).toBe("Sample heading"); // its saved sample words
+    expect(q(`builder-template-${first.id}`)?.className).toContain("is-editing");
     await typeInto("builder-title", "New sample");
     await click("builder-template-save");
     expect(JSON.parse(localStorage.getItem(BUILDER_TEMPLATES_KEY) ?? "[]")[0].config.banner.title).toBe("New sample");

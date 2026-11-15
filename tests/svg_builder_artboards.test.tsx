@@ -326,6 +326,11 @@ describe("final artboards — the list under the templates", () => {
     await dbl(`builder-artboard-${a2.id}`);
     expect(title()).toBe(a2.title); // the draft was discarded
 
+    await typeIn("builder-title", "Saved once");
+    await click("builder-stage-artboard-save");
+    expect(q("builder-stage-artboard-save")).toBeNull();
+    await typeIn("builder-title", "Changed after saving"); // tracked again after a save (2026-11-15)
+    expect(q("builder-stage-artboard-save")).not.toBeNull();
     await typeIn("builder-title", "Kept");
     await click(`builder-template-open-${tpl.id}`); // leaving for the template asks too
     await click("builder-leave-save");
@@ -448,7 +453,7 @@ describe("final artboards — the list under the templates", () => {
   it("checked templates show their artboards together; rows check with the RULE 25 gestures; bulk remove", async () => {
     await openLibrary();
     await click("builder-template-save");
-    await click("builder-template-save"); // not editing after a save: a second new template
+    await click("builder-template-save-new"); // a second template (Save would write into the one being edited)
     const [t1, t2] = savedTemplates();
     await click(`builder-template-add-artboard-${t1.id}`);
     await click(`builder-template-add-artboard-${t2.id}`);
