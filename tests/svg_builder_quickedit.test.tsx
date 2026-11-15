@@ -602,4 +602,22 @@ describe("number boxes apply as you type", () => {
     await act(async () => { box.click(); });
     expect(config().banner.autoRebalance).toBe(true);
   });
+
+  it("Show text boxes (dev) beside Auto rebalance draws the measured boxes over the artboard (2026-11-15)", async () => {
+    await openLibrary();
+    const top = { ...config(), banner: { ...config().banner, position: "top", style: "solid", size: 90, edgeSpread: true } };
+    localStorage.setItem("iconSplitter.svgBuilder.config.v1", JSON.stringify(top));
+    act(() => ui.unmount());
+    ui = createRoot(host);
+    act(() => { ui.render(<Workbench />); });
+    await openLibrary();
+    expect(q("builder-text-boxes")).toBeNull();
+    await hover(shadow().querySelector('[data-banner="true"] > rect')!);
+    await click("builder-quick-rebalance");
+    await act(async () => { (q("builder-quick-text-boxes") as HTMLInputElement).click(); });
+    expect(q("builder-text-boxes")).not.toBeNull();
+    expect(host.querySelectorAll('[data-testid="builder-text-boxes"] [data-ink]')).toHaveLength(2);
+    expect(host.querySelectorAll('[data-testid="builder-text-boxes"] [data-gap]')).toHaveLength(3);
+    expect(JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.prefs.v1") ?? "{}").showTextBoxes).toBe(true);
+  });
 });

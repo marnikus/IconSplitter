@@ -11,6 +11,7 @@ import SvgBuilderGuides from "./SvgBuilderGuides";
 import SvgBuilderQuickEdit from "./SvgBuilderQuickEdit";
 import SvgBuilderEdgeHandles from "./SvgBuilderEdgeHandles";
 import SvgBuilderGapHandles from "./SvgBuilderGapHandles";
+import SvgBuilderTextBoxes from "./SvgBuilderTextBoxes";
 import SvgBuilderSizeHandles from "./SvgBuilderSizeHandles";
 import { addHeroHitAreas } from "./herohit";
 
@@ -32,6 +33,7 @@ export default function SvgBuilderArtboard({ b, doc, zoom }: { b: BuilderApi; do
       ref={board} style={{ width, height, transform: `scale(${zoom})` }}>
       <div className="bld-artboard-svg" ref={host} />
       <SvgBuilderGuides b={b} zoom={zoom} />
+      <SvgBuilderTextBoxes b={b} zoom={zoom} />
       <CellOverlays b={b} placed={b.checked} />
       {inline.editor}
       <SvgBuilderGapHandles b={b} zoom={zoom} />

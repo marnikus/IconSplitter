@@ -70,7 +70,7 @@ function BannerControls({ b, edit }: { b: BuilderApi; edit: Edit }) {
         onChange={(subtitleSize) => edit("banner", { subtitleSize }, true)} />
     </div>
     <TextStyle n={n} edit={edit} />
-    <TextPlacement n={n} edit={edit} rowWidth={b.config.artboard.width} />
+    <TextPlacement n={n} edit={edit} rowWidth={b.config.artboard.width} dev={{ on: b.prefs.showTextBoxes, set: b.actions.toggleTextBoxes }} />
     <Toggle label="Hero glyph" checked={n.hero} testid="builder-hero" onChange={(hero) => edit("banner", { hero })} />
     {n.hero && <HeroSelect b={b} edit={edit} />}
     {n.hero && <HeroStyle n={n} edit={edit} />}

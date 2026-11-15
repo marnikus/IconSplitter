@@ -35,7 +35,7 @@ export const SUBTITLE_STYLE: InkStyle = { face: "sans", weight: 500, spacingEm: 
 
 export interface BannerFit { titleSize: number; subtitleSize: number; gap: number; title: InkBox; sub: InkBox }
 
-const scaled = (b: InkBox, k: number): InkBox => ({ width: b.width * k, left: b.left * k });
+const scaled = (b: InkBox, k: number): InkBox => ({ width: b.width * k, left: b.left * k, ascent: b.ascent * k, descent: b.descent * k });
 
 /**
  * The optimal title / subtitle sizes and the equal gap for a row `width` wide
@@ -45,7 +45,7 @@ export function fitBanner(banner: Banner, width: number, heroWidth = 0): BannerF
   const title = applyCase(banner.title.trim(), banner.titleCase);
   const sub = applyCase(banner.subtitle.trim(), banner.subtitleCase);
   const t100 = inkBox(title, 100, titleStyle(banner));
-  const s100 = sub === "" ? { width: 0, left: 0 } : inkBox(sub, 100, SUBTITLE_STYLE);
+  const s100 = sub === "" ? { width: 0, left: 0, ascent: 0, descent: 0 } : inkBox(sub, 100, SUBTITLE_STYLE);
   const titleMax = banner.size * TITLE_OF_HEIGHT, subMax = titleMax * SUB_OF_TITLE;
   const min = Math.max(12, width * ROW_MIN_GAP), gaps = sub === "" ? 2 : 3;
   const needed = heroWidth > 0 && sub !== "" ? heroWidth + min : min;

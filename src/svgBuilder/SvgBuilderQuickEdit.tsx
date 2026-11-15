@@ -109,6 +109,8 @@ function RebalancePanel({ b }: { b: BuilderApi }) {
     <button type="button" className="svg-btn tiny primary" data-testid="builder-quick-rebalance-now" onClick={() => set(rebalancedBanner(banner, b.config.artboard.width), "Rebalance row")}>⇔ Rebalance now</button>
     <label className="bld-quick-row"><input type="checkbox" data-testid="builder-quick-rebalance-auto" checked={banner.autoRebalance}
       onChange={(e) => set(e.target.checked ? { autoRebalance: true, ...rebalancedBanner(banner, b.config.artboard.width) } : { autoRebalance: false }, "Auto rebalance")} /> Auto rebalance</label>
+    <label className="bld-quick-row" title="Dev mode: the measured text boxes and gaps the rebalance uses"><input type="checkbox" data-testid="builder-quick-text-boxes"
+      checked={b.prefs.showTextBoxes} onChange={(e) => b.actions.toggleTextBoxes(e.target.checked)} /> Show text boxes (dev)</label>
   </div>;
 }
 

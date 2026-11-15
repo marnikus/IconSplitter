@@ -164,7 +164,7 @@ export function edgeXs(box: Rect, p: EdgeParts, spread: boolean): EdgeXs {
  * the banner edges (rebalance.ts `fitBanner`, measure.ts); one line each; the
  * hero glyph — else the divider — exactly in the middle between the texts' ink.
  */
-function spreadEdge(a: Laid): string {
+function spreadGeometry(a: Laid) {
   const base = a.banner;
   const glyph = heroSize(base, 0, Math.min(30, a.box.height * 0.38)).glyph;
   const fit = fitBanner({ ...base, size: a.box.height }, a.box.width, base.hero ? glyph : 0);
@@ -173,11 +173,32 @@ function spreadEdge(a: Laid): string {
   const tl = titleLines(b, false, banner.titleSize), sl = subtitleLines(b, false);
   const inkStart = a.box.x + fit.gap, inkEnd = inkStart + fit.title.width, mid = inkEnd + fit.gap / 2;
   const cy = a.box.y + a.box.height / 2, titleX = inkStart - fit.title.left, subX = inkEnd + fit.gap - fit.sub.left;
+  const titleTop = cy - (tl.length * banner.titleSize * 1.03) / 2, subTop = cy - (sl.length * banner.subtitleSize * 1.55) / 2;
+  return { glyph, fit, banner, b, tl, sl, inkStart, inkEnd, mid, cy, titleX, subX, titleTop, subTop };
+}
+
+/** Dev mode (2026-11-15): the ink boxes the rebalance used and its three gaps, in artboard px; null when the row is not spread. */
+export function spreadInkBoxes(config: SheetConfig, layout: { banner: Rect | null }): { title: Rect; sub: Rect; gaps: Rect[] } | null {
+  const raw = config.banner;
+  if (layout.banner === null || raw.style !== "solid" || !canRebalance(raw) || !(raw.edgeSpread || raw.autoRebalance)) return null;
+  const banner = raw.autoRebalance ? { ...raw, ...rebalancedBanner(raw) } : raw;
+  const laid: Laid = { banner, box: inset(layout.banner, banner.textPadding), frame: layout.banner, artboardWidth: config.artboard.width, title: banner.title, subtitle: banner.subtitle, hero: () => "" };
+  const g = spreadGeometry(laid);
+  const tBase = g.titleTop + g.banner.titleSize * 0.83, sBase = g.subTop + g.banner.subtitleSize * 0.83;
+  const title = { x: g.inkStart, y: tBase - g.fit.title.ascent, width: g.fit.title.width, height: g.fit.title.ascent + g.fit.title.descent };
+  const sub = { x: g.inkEnd + g.fit.gap, y: sBase - g.fit.sub.ascent, width: g.fit.sub.width, height: g.fit.sub.ascent + g.fit.sub.descent };
+  const bar = (from: number, to: number) => ({ x: from, y: g.cy - 1, width: to - from, height: 2 });
+  const end = laid.box.x + laid.box.width;
+  return { title, sub, gaps: g.sl.length > 0 ? [bar(laid.box.x, title.x), bar(title.x + title.width, sub.x), bar(sub.x + sub.width, end)] : [bar(laid.box.x, title.x), bar(title.x + title.width, end)] };
+}
+
+function spreadEdge(a: Laid): string {
+  const { glyph, banner, b, tl, sl, mid, cy, titleX, subX, titleTop, subTop } = spreadGeometry(a);
   const hero = banner.hero && sl.length > 0 ? `<g data-banner-hero="true">${b.hero(mid - glyph / 2, cy - glyph / 2, glyph, banner.accent)}</g>` : "";
   const rule = !banner.hero && banner.divider && sl.length > 0
     ? `<rect x="${round(mid)}" y="${round(cy - 13)}" width="1" height="26" fill="${attr(solidMix(banner.textColor, banner.background, 0.24))}" data-accent-rule="true"/>` : "";
-  const title = titleText(b, tl, { x: titleX, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink: banner.textColor, anchor: "start" });
-  const sub = subtitleText(b, sl, { x: subX, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
+  const title = titleText(b, tl, { x: titleX, top: titleTop, size: banner.titleSize, ink: banner.textColor, anchor: "start" });
+  const sub = subtitleText(b, sl, { x: subX, top: subTop, anchor: "start" });
   return hero + title + rule + sub;
 }
 

@@ -10,9 +10,10 @@ import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { composeSheet } from "../src/lib/svgBuilder/compose";
 import { setTextMeasurer } from "../src/lib/svgBuilder/measure";
 import { canRebalance, fitBanner, rebalancedBanner, ROW_MIN_GAP } from "../src/lib/svgBuilder/rebalance";
+import { spreadInkBoxes } from "../src/lib/svgBuilder/banner";
 
 // A fake measurer: ink 0.5 × size per character, starting 0.05 × size right of the text's x.
-const ink = (text: string, size: number) => ({ width: text.length * size * 0.5, left: size * 0.05 });
+const ink = (text: string, size: number) => ({ width: text.length * size * 0.5, left: size * 0.05, ascent: size * 0.7, descent: size * 0.02 });
 afterEach(() => setTextMeasurer(null));
 
 const sheet = (banner: Partial<typeof DEFAULT_CONFIG.banner>) => {
@@ -66,5 +67,17 @@ describe("rebalance a top / bottom banner row", () => {
     expect(canRebalance({ position: "top", style: "solid" })).toBe(true);
     expect(canRebalance({ position: "left", style: "solid" })).toBe(false);
     expect(parseSheetConfig({ banner: {} }).banner).toMatchObject({ edgeSpread: false, autoRebalance: false });
+  });
+
+  it("dev mode: the algorithm's ink boxes and gaps, exactly where it put the texts (2026-11-15)", () => {
+    setTextMeasurer((text, size) => ({ width: text.length * size * 0.5, left: size * 0.05, ascent: size * 0.7, descent: size * 0.02 }));
+    const { config, svg } = sheet({ title: "MUSHROOM ICONS", subtitle: "Editable stroke width", edgeSpread: true, subtitleCase: "upper" });
+    const boxes = spreadInkBoxes(config, computeLayout(config))!;
+    const ts = attrOf(svg, "title", "size");
+    expect(boxes.title.x).toBeCloseTo(attrOf(svg, "title", "x") + ts * 0.05, 1);
+    expect(boxes.title.width).toBeCloseTo(14 * ts * 0.5, 1);
+    expect(boxes.gaps).toHaveLength(3);
+    for (const g of boxes.gaps) expect(g.width).toBeCloseTo(boxes.gaps[0].width, 1); // equal
+    expect(spreadInkBoxes(parseSheetConfig({ ...config, banner: { ...config.banner, edgeSpread: false } }), computeLayout(config))).toBeNull();
   });
 });

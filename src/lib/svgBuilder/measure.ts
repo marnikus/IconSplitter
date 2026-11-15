@@ -6,7 +6,8 @@
 import { fontFamily } from "./markup";
 import type { TitleFace } from "./types";
 
-export interface InkBox { width: number; left: number }
+/** Ink width and its start from the text x; ascent / descent from the baseline (2026-11-15). */
+export interface InkBox { width: number; left: number; ascent: number; descent: number }
 export interface InkStyle { face: TitleFace; weight: number; spacingEm: number; perChar: number }
 export type TextMeasurer = (text: string, size: number, style: InkStyle) => InkBox | null;
 
@@ -31,11 +32,12 @@ function canvasInk(text: string, size: number, style: InkStyle): InkBox | null {
   const m = c.measureText(text);
   if (!Number.isFinite(m.actualBoundingBoxRight) || m.actualBoundingBoxRight <= 0) return null;
   const spacing = style.spacingEm * size * Math.max(0, text.length - 1); // canvas draws no letter-spacing here
-  return { width: m.actualBoundingBoxLeft + m.actualBoundingBoxRight + spacing, left: -m.actualBoundingBoxLeft };
+  return { width: m.actualBoundingBoxLeft + m.actualBoundingBoxRight + spacing, left: -m.actualBoundingBoxLeft,
+    ascent: m.actualBoundingBoxAscent || size * 0.72, descent: m.actualBoundingBoxDescent || 0 };
 }
 
 /** The ink box of `text` at `size`: measured when possible, else estimated. */
 export function inkBox(text: string, size: number, style: InkStyle): InkBox {
   const measured = (custom ?? canvasInk)(text, size, style);
-  return measured ?? { width: text.length * size * style.perChar, left: 0 };
+  return measured ?? { width: text.length * size * style.perChar, left: 0, ascent: size * 0.72, descent: 0 };
 }
