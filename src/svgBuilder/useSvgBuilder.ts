@@ -9,6 +9,7 @@ import { useBuilderBoot } from "./useBuilderBoot";
 import { useBuilderPersistence } from "./useBuilderPersistence";
 import { useBuilderComputed, type BuilderComputed } from "./useBuilderComputed";
 import { useBuilderActions } from "./useBuilderActions";
+import { bindBuilderSvgEdit } from "./iconedit";
 import type { BuilderActions } from "./actiontypes";
 
 export interface BuilderApi extends BuilderModel, BuilderComputed {
@@ -28,6 +29,7 @@ export function useSvgBuilder(): BuilderApi {
   const computed = useBuilderComputed(model, slice.checked, patch);
   const actions = useBuilderActions({ model, computed, boot, slice, hist, patch });
   useAutoPlacement(actions, computed.assets, computed.layout.capacity);
+  useIconEditBinding(model, computed, patch);
   return {
     ...model, ...computed,
     checked: slice.checked, activeId: slice.activeId, anchorId: slice.anchorId, actions,
@@ -46,3 +48,17 @@ function useAutoPlacement(actions: BuilderActions, assets: readonly BuilderIconA
 }
 
 export type { BuilderIconAsset, BuilderListView, SelectionRecipe, SheetConfig, SheetDocument, SheetLayout };
+
+/** The artboard icon editor writes into this folder; a written icon redraws at once (2026-11-15). */
+function useIconEditBinding(model: BuilderModel, computed: { assets: readonly BuilderIconAsset[]; repository: { invalidate(): void } | null }, patch: (value: Partial<BuilderModel>) => void): void {
+  const live = useRef({ model, computed });
+  live.current = { model, computed };
+  useEffect(() => bindBuilderSvgEdit({
+    root: () => live.current.model.root,
+    written: (svgPath, markup) => {
+      const id = live.current.computed.assets.find((a) => a.svgPath === svgPath)?.id;
+      live.current.computed.repository?.invalidate();
+      if (id !== undefined) patch({ svgTexts: { ...live.current.model.svgTexts, [id]: markup } });
+    },
+  }), [patch]);
+}

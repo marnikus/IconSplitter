@@ -21,6 +21,7 @@ import { applySvgEdit } from "../svg/svgedit";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
 import { applyBuilderConfig } from "../svgBuilder/undoBinding";
+import { applyBuilderSvgEdit } from "../svgBuilder/iconedit";
 import { getAppState, patchBatch, patchBuilder, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
@@ -28,7 +29,7 @@ import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 export const ENTRY_TYPES = [
   "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
   "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit",
-  "builderChecked", "builderConfig",
+  "builderChecked", "builderConfig", "builderSvgEdit",
 ] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
@@ -38,7 +39,16 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
   return applyDomainEntry(entry, value);
 }
 
+/** The SVG builder's own entries: its sheet config and its artboard icon edits (2026-11-15). */
+function applyBuilderEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> | null {
+  if (entry.type === "builderConfig") return applyBuilderConfig(value);
+  if (entry.type === "builderSvgEdit") return applyBuilderSvgEdit(value);
+  return null;
+}
+
 function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> {
+  const builder = applyBuilderEntry(entry, value);
+  if (builder !== null) return builder;
   switch (entry.type) {
     case "decisions": return applyDecisions(entry.ids, value);
     case "view": return applyView(value);
@@ -48,7 +58,6 @@ function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promis
     case "svgEdit": return applySvgEdit(value);
     case "uploadSettings": return applyUploadSettings(value);
     case "uploadRowBadges": return applyRowBadgeState(value);
-    case "builderConfig": return applyBuilderConfig(value);
     default: return false; // an entry from a future schema: refuse, do not guess
   }
 }

@@ -547,4 +547,18 @@ describe("number boxes apply as you type", () => {
     await click("builder-undo");
     expect(config().banner.edgeSpread).toBe(false);
   });
+
+  it("the icon's toolbar has ✎: Generate SVG's editor opens on that icon; ← / → walk the placed icons; Cancel closes (2026-11-15)", async () => {
+    await openLibrary();
+    const cell = host.querySelector(".bld-cell") as HTMLElement;
+    const id = cell.dataset.assetId!;
+    await hover(cell);
+    await click("builder-quick-edit-icon");
+    expect(q("builder-icon-editor")).not.toBeNull();
+    await waitUntil(() => q(`builder-icon-edit-${id}-editor`) !== null, "the editor shows the icon");
+    expect(q("builder-icon-edit-ai")).not.toBeNull(); // the AI source panel beside it
+    expect(text(`builder-icon-edit-${id}-position`)).toMatch(/^1 \/ \d+/);
+    await click(`builder-icon-edit-${id}-cancel`);
+    expect(q("builder-icon-editor")).toBeNull();
+  });
 });

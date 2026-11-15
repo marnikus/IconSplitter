@@ -92,7 +92,7 @@ export default function SvgBuilderQuickEdit({ b, board, wrap }: { b: BuilderApi;
   return <>
     <div className="bld-quick" data-testid="builder-quick" data-kind={kind}
       style={{ left: at.x, top: at.y }} onMouseEnter={keep} onMouseMove={keep} onMouseLeave={() => { if (panel === null) later(); }}>
-      <QuickBar b={b} kind={kind} panel={panel} toggle={(next) => setPanel(panel === next ? null : next)} />
+      <QuickBar b={b} kind={kind} panel={panel} el={hover.el} toggle={(next) => setPanel(panel === next ? null : next)} />
       <QuickPanel b={b} kind={kind} panel={panel} done={done} move={{ board, wrap, anchor: at }} />
     </div>
     {isText(kind) && (panel === null || panel === "width") && <SvgBuilderTextWidth b={b} which={kind} el={hover.el} board={board} wrap={wrap}
@@ -100,7 +100,15 @@ export default function SvgBuilderQuickEdit({ b, board, wrap }: { b: BuilderApi;
   </>;
 }
 
-function QuickBar({ b, kind, panel, toggle }: { b: BuilderApi; kind: QuickKind; panel: Panel; toggle: (p: Exclude<Panel, null>) => void }) {
+/** ✎ on an icon (2026-11-15): Generate SVG's editor on this icon, right from the artboard. */
+function IconEditButton({ b, el }: { b: BuilderApi; el: Element }) {
+  const id = el.getAttribute("data-asset-id") ?? el.closest("[data-asset-id]")?.getAttribute("data-asset-id") ?? null;
+  if (id === null) return null;
+  return <button type="button" className="bld-quick-btn" data-testid="builder-quick-edit-icon" title="Edit this icon's shapes (Generate SVG's editor)"
+    aria-label="Edit this icon" onClick={() => b.actions.openIconEditor(id)}>✎</button>;
+}
+
+function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKind; panel: Panel; el: Element; toggle: (p: Exclude<Panel, null>) => void }) {
   const spec = QUICK_SPECS[kind];
   return <div className="bld-quick-bar" role="toolbar" aria-label={`Quick edit: ${spec.name}`}>
     <button type="button" className="bld-quick-dot" data-testid="builder-quick-color" title={spec.color.label} aria-label={spec.color.label}
@@ -113,6 +121,7 @@ function QuickBar({ b, kind, panel, toggle }: { b: BuilderApi; kind: QuickKind; 
       data-testid="builder-quick-move" title="Move this text right on the artboard" aria-label="Move this text"
       onClick={() => toggle("move")}>✥</button>}
     {kind === "hero" && <HeroButtons toggle={toggle} />}
+    {kind === "icon" && <IconEditButton b={b} el={el} />}
   </div>;
 }
 

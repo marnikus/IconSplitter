@@ -63,7 +63,7 @@ function PlacedCell({ b, cell, id }: { b: BuilderApi; cell: CellFrame; id: strin
   const locked = b.lockedIds.includes(id);
   const label = locked ? "Unlock this icon" : "Lock this icon while reshuffling";
   const small = Math.max(7, Math.min(13, cell.size * 0.22));
-  return <span className={`bld-cell${locked ? " is-locked" : ""}`} style={{ left: cell.x, top: cell.y, width: cell.size, height: cell.size }}>
+  return <span className={`bld-cell${locked ? " is-locked" : ""}`} data-asset-id={id} style={{ left: cell.x, top: cell.y, width: cell.size, height: cell.size }}>
     <button type="button" className="bld-cell-lock" data-testid={`builder-cell-lock-${cell.index}`} aria-pressed={locked}
       aria-label={label} title={label} onClick={() => b.actions.toggleLock(id)}>{locked ? "🔒" : "○"}</button>
     <button type="button" className="bld-cell-decline" data-testid={`builder-cell-decline-${cell.index}`}

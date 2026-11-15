@@ -6,6 +6,7 @@ import "./svgBuilder.css";
 import SvgBuilderControls from "./SvgBuilderControls";
 import SvgBuilderCustomize from "./SvgBuilderCustomize";
 import SvgBuilderDialogs from "./SvgBuilderDialogs";
+import SvgBuilderIconEditor from "./SvgBuilderIconEditor";
 import SvgBuilderHeader from "./SvgBuilderHeader";
 import SvgBuilderLibrary from "./SvgBuilderLibrary";
 import SvgBuilderMetaWidget from "./SvgBuilderMetaWidget";
@@ -35,5 +36,6 @@ export default function SvgBuilderPanel({ active }: { active: boolean }) {
     <SvgBuilderArtboards b={b} />
     <SvgBuilderStatusBar b={b} />
     <SvgBuilderDialogs b={b} />
+    <SvgBuilderIconEditor b={b} />
   </section>;
 }
