@@ -5258,3 +5258,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-15 SVG builder: icon box size in the icon quick bar. Builder suites 202/202, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: Auto rebalance checkbox + banner quick-bar Rebalance. Builder suites 204/204, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: Rebalance row for split edge banners too. Builder suites 205/205, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: new Rebalance rules (3 equal gaps, shrink-to-fit at 5 % min gap, hero/divider centred between texts). Builder suites 205/205, tsc/eslint/quality PASS.

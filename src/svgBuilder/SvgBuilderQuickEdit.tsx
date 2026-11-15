@@ -106,9 +106,9 @@ function RebalancePanel({ b }: { b: BuilderApi }) {
   const banner = b.config.banner;
   const set = (patch: Partial<typeof banner>, label: string) => b.actions.setConfig({ ...b.config, banner: { ...banner, ...patch } }, label);
   return <div className="bld-quick-panel" data-testid="builder-quick-rebalance-panel">
-    <button type="button" className="svg-btn tiny primary" data-testid="builder-quick-rebalance-now" onClick={() => set(rebalancedBanner(banner), "Rebalance row")}>⇔ Rebalance now</button>
+    <button type="button" className="svg-btn tiny primary" data-testid="builder-quick-rebalance-now" onClick={() => set(rebalancedBanner(banner, b.config.artboard.width), "Rebalance row")}>⇔ Rebalance now</button>
     <label className="bld-quick-row"><input type="checkbox" data-testid="builder-quick-rebalance-auto" checked={banner.autoRebalance}
-      onChange={(e) => set(e.target.checked ? { autoRebalance: true, ...rebalancedBanner(banner) } : { autoRebalance: false }, "Auto rebalance")} /> Auto rebalance</label>
+      onChange={(e) => set(e.target.checked ? { autoRebalance: true, ...rebalancedBanner(banner, b.config.artboard.width) } : { autoRebalance: false }, "Auto rebalance")} /> Auto rebalance</label>
   </div>;
 }
 

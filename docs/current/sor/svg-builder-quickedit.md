@@ -15,3 +15,10 @@ Parent: [templates & presets](svg-builder-presets.md) · selectors: [templates &
 - **Text case and size** (2026-11-15, `banner.titleCase` / `subtitleCase`, `applyCase`): the title and the subtitle each read **normal / Capitalized / UPPER**. The default keeps the old look: title as typed, subtitle upper. They are set in Customize → Banner (`builder-title-case`, `builder-subtitle-case`) and in the text's quick **A** panel (`builder-quick-case-{normal,capitalized,upper}`). The title and subtitle sizes go up to 200 px.
 - **Icon box** (2026-11-15): the icon's quick bar also has **⬚** (`builder-quick-box`). It opens the Icon box slider (`icons.box`, 18–240 px, `builder-quick-box-range`): the size every icon cell uses, so all icons change; one coalesced undo step.
 - **Auto rebalance** (2026-11-15, `banner.autoRebalance`): a checkbox beside ⇔ Rebalance row (`builder-banner-auto-rebalance`). Also in the banner's quick bar: **⇔** (`builder-quick-rebalance`) with **Rebalance now** and **Auto rebalance** (`builder-quick-rebalance-now` / `-auto`). While on, `bannerMarkup` applies the rebalance on every draw, for the texts and sizes as they are then, so editing them never breaks the balance; stored widths and moves are ignored meanwhile. Turning it on also applies the rebalance once (one undo step).
+- **Rebalance rules** (2026-11-15, replacing the per-part spread on solid edge banners; `rebalance.ts` `fitRow`, `banner.ts` `spreadEdge`):
+  1. Title and subtitle each on one line.
+  2. Three equal gaps: edge → title → subtitle → edge. Without a subtitle, the title is centred between two equal gaps.
+  3. Texts too long: both sizes shrink by the same factor until every gap is at least 5 % of the row (`ROW_MIN_GAP`), and the middle gap also holds the hero. The button writes the fitted sizes (rounded down); drawing fits again whenever the texts change.
+  4. The hero glyph, else the divider, sits exactly in the middle of the gap between the texts and follows automatically.
+
+  Split edge banners keep the block layout (hero + title evenly in the block, the subtitle centred in the rest).

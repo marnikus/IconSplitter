@@ -3,9 +3,12 @@
 // Wrapping follows the reference formulas, at most three lines.
 import { readableInk } from "./config";
 import { solidMix } from "./solidcolor";
-import { canRebalance, rebalancedBanner } from "./rebalance";
+import { canRebalance, fitRow, rebalancedBanner, rowWidths } from "./rebalance";
+import { applyCase } from "./textcase";
+
+export { applyCase };
 import { attr, round, textEl, textWidth } from "./markup";
-import type { Rect, SheetConfig, TextCase } from "./types";
+import type { Rect, SheetConfig } from "./types";
 
 type Banner = SheetConfig["banner"];
 /** Draws the hero icon centred in a square; returns "" when no hero artwork is available. */
@@ -47,12 +50,6 @@ function perLine(width: number, charWidth: number, auto: number): number {
   return width > 0 ? Math.max(1, Math.floor(width / Math.max(1, charWidth))) : auto;
 }
 
-/** Banner text case (2026-11-15): as typed, Capitalized Words, or UPPER. */
-export function applyCase(text: string, mode: TextCase): string {
-  if (mode === "upper") return text.toUpperCase();
-  if (mode === "capitalized") return text.toLowerCase().replace(/(^|\s)(\S)/gu, (_m, space: string, c: string) => space + c.toUpperCase());
-  return text;
-}
 
 function titleLines(a: BannerArgs, side: boolean, size: number): string[] {
   const auto = side ? Math.max(7, Math.floor((a.box.width - 56) / Math.max(9, size * 0.64))) : 25;
@@ -161,7 +158,31 @@ export function edgeXs(box: Rect, p: EdgeParts, spread: boolean): EdgeXs {
   return out;
 }
 
+/**
+ * ⇔ Rebalance row on a solid edge banner (2026-11-15): one line each, three
+ * equal gaps (edge → title → subtitle → edge), both sizes shrunk together when
+ * the texts do not fit (rebalance.ts `fitRow`), the hero glyph — else the
+ * divider — exactly in the middle of the gap between the texts.
+ */
+function spreadEdge(a: Laid): string {
+  const base = a.banner;
+  const glyph = heroSize(base, 0, Math.min(30, a.box.height * 0.38)).glyph;
+  const fit = fitRow({ width: a.box.width, ...rowWidths(base), hero: base.hero ? glyph : 0 });
+  const banner = { ...base, titleSize: base.titleSize * fit.scale, subtitleSize: base.subtitleSize * fit.scale, titleWidth: 2000, subtitleWidth: 2000 };
+  const b: Laid = { ...a, banner };
+  const tl = titleLines(b, false, banner.titleSize), sl = subtitleLines(b, false);
+  const titleW = Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize)));
+  const cy = a.box.y + a.box.height / 2, titleX = a.box.x + fit.gap, mid = titleX + titleW + fit.gap / 2;
+  const hero = banner.hero && sl.length > 0 ? `<g data-banner-hero="true">${b.hero(mid - glyph / 2, cy - glyph / 2, glyph, banner.accent)}</g>` : "";
+  const rule = !banner.hero && banner.divider && sl.length > 0
+    ? `<rect x="${round(mid)}" y="${round(cy - 13)}" width="1" height="26" fill="${attr(solidMix(banner.textColor, banner.background, 0.24))}" data-accent-rule="true"/>` : "";
+  const title = titleText(b, tl, { x: titleX, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink: banner.textColor, anchor: "start" });
+  const sub = subtitleText(b, sl, { x: titleX + titleW + fit.gap, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
+  return hero + title + rule + sub;
+}
+
 function solidEdge(a: Laid): string {
+  if (a.banner.edgeSpread) return spreadEdge(a);
   const { box, banner } = a;
   const glyph = heroSize(banner, 0, Math.min(30, box.height * 0.38)).glyph;
   const tl = titleLines(a, false, banner.titleSize);
