@@ -403,6 +403,23 @@ describe("final artboards — the list under the templates", () => {
     expect(text("builder-toast")).toMatch(/Gemini API key/); // the one-artboard request (asks for the key first)
   });
 
+  it("the pinned header has ✦ Generate metadata beside Export all selected: checked artboards, else the open one (2026-11-15)", async () => {
+    await openLibrary();
+    expect(q("builder-header-generate-metadata")?.textContent).toContain("Generate metadata"); // a free sheet: the sheet itself
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    const [a1, a2] = savedArtboards();
+    expect(q("builder-header-generate-metadata")?.textContent).toContain("(1)"); // the open artboard
+    await clickWith(`builder-artboard-check-${a1.id}`, {});
+    await clickWith(`builder-artboard-check-${a2.id}`, {});
+    expect(q("builder-header-generate-metadata")?.textContent).toContain("(2)");
+    expect(q("builder-header")!.contains(q("builder-export-selected"))).toBe(true);
+    await click("builder-header-generate-metadata");
+    expect(text("builder-toast")).toMatch(/Gemini API key/); // the same exact-request path (asks for the key first)
+  });
+
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
     await openLibrary();
     await click("builder-template-save");

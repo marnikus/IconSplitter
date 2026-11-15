@@ -48,4 +48,4 @@ The tree mirrors single icons' `_split_output`, but under **`_artboard_sheets`**
   - Every failed part is reported in the toast and the rest still ships.
   - The export counts the icons' use once per artboard, and the artboard remembers its folder and `exportedAt`.
 - The builder header is pinned to the top while the page scrolls.
-
+- **✦ Generate metadata in the pinned header** (2026-11-15, `builder-header-generate-metadata`, beside ⇪ Export all selected): it generates for the checked artboards, else the open artboard, else the current sheet. The exact-request confirmation is shown first, as everywhere else.

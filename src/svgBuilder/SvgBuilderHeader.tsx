@@ -25,9 +25,19 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
         title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>
       <SvgBuilderExportMenu b={b} />
+      <GenerateSelected b={b} />
       <ExportSelected b={b} />
     </div>
   </header>;
+}
+
+/** ✦ Generate metadata (2026-11-15): the checked artboards, else the open one, else the current sheet — the exact-request confirmation first. */
+function GenerateSelected({ b }: { b: BuilderApi }) {
+  const ids = b.artboardSel.checked.length > 0 ? b.artboardSel.checked : b.editingArtboardId !== null ? [b.editingArtboardId] : [];
+  const run = () => (ids.length > 0 ? b.actions.generateArtboardsMetadata(ids) : b.actions.generateMetadata());
+  return <button type="button" className="svg-btn" data-testid="builder-header-generate-metadata" disabled={b.busy !== null}
+    title={ids.length > 0 ? "Generate metadata for the checked artboards (else the open one); the exact requests are shown first" : "Generate this sheet's metadata; the exact request is shown first"}
+    onClick={run}>✦ Generate metadata{ids.length > 0 ? ` (${ids.length})` : ""}</button>;
 }
 
 /** Export all selected (2026-11-14): the checked artboards (else the open one) into `_artboard_sheets` in the folder. */
