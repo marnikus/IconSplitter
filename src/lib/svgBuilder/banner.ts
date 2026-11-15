@@ -3,7 +3,7 @@
 // Wrapping follows the reference formulas, at most three lines.
 import { readableInk } from "./config";
 import { solidMix } from "./solidcolor";
-import { canRebalance, fitRow, rebalancedBanner, rowWidths } from "./rebalance";
+import { canRebalance, fitBanner, rebalancedBanner } from "./rebalance";
 import { applyCase } from "./textcase";
 
 export { applyCase };
@@ -159,25 +159,25 @@ export function edgeXs(box: Rect, p: EdgeParts, spread: boolean): EdgeXs {
 }
 
 /**
- * ⇔ Rebalance row on a solid edge banner (2026-11-15): one line each, three
- * equal gaps (edge → title → subtitle → edge), both sizes shrunk together when
- * the texts do not fit (rebalance.ts `fitRow`), the hero glyph — else the
- * divider — exactly in the middle of the gap between the texts.
+ * ⇔ Rebalance row on a solid edge banner (2026-11-15, v3): the optimal sizes for
+ * the banner's space and three equal gaps between the texts' REAL ink edges and
+ * the banner edges (rebalance.ts `fitBanner`, measure.ts); one line each; the
+ * hero glyph — else the divider — exactly in the middle between the texts' ink.
  */
 function spreadEdge(a: Laid): string {
   const base = a.banner;
   const glyph = heroSize(base, 0, Math.min(30, a.box.height * 0.38)).glyph;
-  const fit = fitRow({ width: a.box.width, ...rowWidths(base), hero: base.hero ? glyph : 0 });
-  const banner = { ...base, titleSize: base.titleSize * fit.scale, subtitleSize: base.subtitleSize * fit.scale, titleWidth: 2000, subtitleWidth: 2000 };
+  const fit = fitBanner({ ...base, size: a.box.height }, a.box.width, base.hero ? glyph : 0);
+  const banner = { ...base, titleSize: fit.titleSize, subtitleSize: fit.subtitleSize, titleWidth: 2000, subtitleWidth: 2000 };
   const b: Laid = { ...a, banner };
   const tl = titleLines(b, false, banner.titleSize), sl = subtitleLines(b, false);
-  const titleW = Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize)));
-  const cy = a.box.y + a.box.height / 2, titleX = a.box.x + fit.gap, mid = titleX + titleW + fit.gap / 2;
+  const inkStart = a.box.x + fit.gap, inkEnd = inkStart + fit.title.width, mid = inkEnd + fit.gap / 2;
+  const cy = a.box.y + a.box.height / 2, titleX = inkStart - fit.title.left, subX = inkEnd + fit.gap - fit.sub.left;
   const hero = banner.hero && sl.length > 0 ? `<g data-banner-hero="true">${b.hero(mid - glyph / 2, cy - glyph / 2, glyph, banner.accent)}</g>` : "";
   const rule = !banner.hero && banner.divider && sl.length > 0
     ? `<rect x="${round(mid)}" y="${round(cy - 13)}" width="1" height="26" fill="${attr(solidMix(banner.textColor, banner.background, 0.24))}" data-accent-rule="true"/>` : "";
   const title = titleText(b, tl, { x: titleX, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink: banner.textColor, anchor: "start" });
-  const sub = subtitleText(b, sl, { x: titleX + titleW + fit.gap, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
+  const sub = subtitleText(b, sl, { x: subX, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
   return hero + title + rule + sub;
 }
 

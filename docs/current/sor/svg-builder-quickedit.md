@@ -22,3 +22,7 @@ Parent: [templates & presets](svg-builder-presets.md) · selectors: [templates &
   4. The hero glyph, else the divider, sits exactly in the middle of the gap between the texts and follows automatically.
 
   Split edge banners keep the block layout (hero + title evenly in the block, the subtitle centred in the rest).
+- **Rebalance v3** (2026-11-15, `measure.ts`, `rebalance.ts` `fitBanner`):
+  - **Real ink edges.** The texts' real ink boxes are measured with the browser canvas, in the same font, weight and letter spacing the sheet draws; where there is no canvas (Node, tests), a per-character estimate is used. The three equal gaps are measured between those ink edges and the banner edges.
+  - **Optimal sizes.** They come from the banner's space. The title starts at 55 % of the banner height (`TITLE_OF_HEIGHT`) and the subtitle at 42 % of the title (`SUB_OF_TITLE`). Both shrink by one factor only as far as the gaps need (at least 5 %). So a tiny subtitle grows and an oversized title shrinks, rounded down to whole pixels.
+  - While spread is on, these sizes replace the size sliders; ⇔ writes them into the sliders.
