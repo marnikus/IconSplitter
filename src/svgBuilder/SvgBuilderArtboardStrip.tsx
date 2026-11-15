@@ -1,4 +1,4 @@
-// SvgBuilderArtboardStrip.tsx — the stage's right strip (2026-11-16): the
+// SvgBuilderArtboardStrip.tsx — the stage's left strip (2026-11-16): the
 // artboards made from the template being worked on (the edited template, or
 // the open artboard's). A click opens one for editing at once (a changed
 // template / artboard asks Save / Discard first); the open one is marked. The

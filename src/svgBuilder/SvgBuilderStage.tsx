@@ -15,13 +15,13 @@ import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderStage({ b }: { b: BuilderApi }) {
   const box = useRef<HTMLDivElement | null>(null);
-  // the artboard strip takes the stage's right side: the fit leaves room for it (2026-11-16)
+  // the artboard strip takes the stage's left side: the fit leaves room for it (2026-11-16)
   const strip = b.artboards.some((a) => a.templateId === stageTemplateId(b)) ? STRIP_ROOM : 0;
   const fit = useFitScale(box, { w: b.config.artboard.width, h: b.config.artboard.height }, strip);
   const zoom = b.prefs.fit ? fit : b.prefs.zoom;
   return <main className="bld-stage" data-testid="builder-stage" aria-label="Sheet stage">
     <StageToolbar b={b} zoom={zoom} />
-    <div className="bld-canvas" ref={box} data-testid="builder-canvas" style={strip > 0 ? { paddingRight: strip } : undefined}>
+    <div className="bld-canvas" ref={box} data-testid="builder-canvas" style={strip > 0 ? { paddingLeft: strip } : undefined}>
       {b.document === null ? <StageEmpty b={b} /> : <SvgBuilderArtboard b={b} doc={b.document} zoom={zoom} />}
       <SvgBuilderEditingLabel b={b} />
       <SvgBuilderArtboardStrip b={b} />
