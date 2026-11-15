@@ -97,6 +97,8 @@ export interface BuilderModel {
   leaveTo: LeaveTarget | null;
   /** The icon open in the artboard icon editor (2026-11-15), or null. */
   editingIconId: string | null;
+  /** True until the remembered folder is restored (or there is none, 2026-11-15): pictures wait instead of composing twice. */
+  booting: boolean;
 }
 
 export interface BuilderAction { type: "patch"; patch: Partial<BuilderModel> }
@@ -112,7 +114,7 @@ export function initialBuilderModel(): BuilderModel {
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null, draftTitle: "",
     preview: null, dialog: "none", svgTexts: {}, indexing: null,
     ...savedLists(), editingTemplateId: null, iconMap: null,
-    editingArtboardId: null, templateSel: EMPTY_SEL, artboardSel: EMPTY_SEL, artboardMeta: null, leaveTo: null, editingIconId: null,
+    editingArtboardId: null, templateSel: EMPTY_SEL, artboardSel: EMPTY_SEL, artboardMeta: null, leaveTo: null, editingIconId: null, booting: hasFolderPicker(),
     ...reopened(savedLists()),
   };
 }

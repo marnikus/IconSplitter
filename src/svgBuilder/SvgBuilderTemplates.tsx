@@ -8,6 +8,7 @@ import { checkState, nextVisibleId, selectIntent } from "../lib/reviewselect";
 import { isNativeListKeyTarget, isRowGestureClick } from "../ui/rowgesture";
 import { templateFacts, templatePreviewSvg, type SheetTemplate } from "../lib/svgBuilder/templates";
 import ZoomSliderBase from "../ui/ZoomSliderBase";
+import { pictureReady, useTextSubset } from "./textsubset";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderTemplates({ b }: { b: BuilderApi }) {
@@ -109,9 +110,14 @@ function TemplateName({ name, id, onRename }: { name: string; id: string; onRena
 }
 
 /** The look on the current sheet, as an <img> (no script runs from an SVG drawn this way). */
+/** A template's picture: its look on a stable library sample (2026-11-15); recomposed only when its own icons change. */
 const TemplatePreview = memo(function TemplatePreview({ b, template }: { b: BuilderApi; template: SheetTemplate }) {
-  const src = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(templatePreviewSvg({
-    template, assets: b.assets, placedIds: b.checked, svgTexts: b.svgTexts,
-  }))}`, [template, b.assets, b.checked, b.svgTexts]);
+  const ids = b.templateSampleIds;
+  const texts = useTextSubset(ids, b.svgTexts);
+  const ready = pictureReady({ root: b.root, scanned: b.discovery !== null, known: b.knownIds, booting: b.booting }, ids, texts);
+  const src = useMemo(() => (!ready ? null : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(templatePreviewSvg({
+    template, assets: b.assets, placedIds: ids, svgTexts: texts,
+  }))}`), [ready, template, b.assets, ids, texts]);
+  if (src === null) return <span className="bld-pic-loading" data-testid={`builder-template-preview-${template.id}`} aria-label="Loading the preview" />;
   return <img src={src} alt={`Preview of ${template.name}`} data-testid={`builder-template-preview-${template.id}`} />;
 });

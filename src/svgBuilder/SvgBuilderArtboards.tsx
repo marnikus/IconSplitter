@@ -11,6 +11,7 @@ import type { SheetTemplate } from "../lib/svgBuilder/templates";
 import { isNativeListKeyTarget, isRowGestureClick } from "../ui/rowgesture";
 import { artboardGroups, visibleArtboards } from "./artboardview";
 import SvgBuilderRowMeta from "./SvgBuilderRowMeta";
+import { pictureReady, useTextSubset } from "./textsubset";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderArtboards({ b }: { b: BuilderApi }) {
@@ -126,9 +127,12 @@ function ArtboardName({ artboard, onRename }: { artboard: FinalArtboard; onRenam
 }
 
 const ArtboardPreview = memo(function ArtboardPreview({ b, template, artboard }: { b: BuilderApi; template: SheetTemplate; artboard: FinalArtboard }) {
-  const src = useMemo(() => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(artboardPreviewSvg({
-    template, artboard, assets: b.assets, svgTexts: b.svgTexts,
-  }))}`, [template, artboard, b.assets, b.svgTexts]);
+  const texts = useTextSubset(artboard.placedIds, b.svgTexts); // recomposed only when its own icons change (2026-11-15)
+  const ready = pictureReady({ root: b.root, scanned: b.discovery !== null, known: b.knownIds, booting: b.booting }, artboard.placedIds, texts);
+  const src = useMemo(() => (!ready ? null : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(artboardPreviewSvg({
+    template, artboard, assets: b.assets, svgTexts: texts,
+  }))}`), [ready, template, artboard, b.assets, texts]);
+  if (src === null) return <span className="bld-artboard-pic bld-pic-loading" data-testid={`builder-artboard-preview-${artboard.id}`} aria-label="Loading the preview" />;
   return <img className="bld-artboard-pic" src={src} alt={`Preview of ${artboard.name}`} data-testid={`builder-artboard-preview-${artboard.id}`}
     style={{ aspectRatio: String(template.config.artboard.width / template.config.artboard.height) }} />;
 });

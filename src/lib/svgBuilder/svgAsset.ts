@@ -19,10 +19,37 @@ export interface CellSvgArgs {
 
 export type CellSvgResult = { ok: true; html: string } | { ok: false; error: string };
 
-export function cellGroupOf(args: CellSvgArgs): CellSvgResult {
-  const check = validateSvg(args.code);
+type Sanitized = { ok: true; children: string; box: [number, number, number, number] } | { ok: false; error: string };
+
+/**
+ * Sanitised icons, by icon + cell + exact SVG text (2026-11-15, performance):
+ * validating, parsing, id-scoping and recolouring an icon is the costly part of
+ * composing a sheet, and the same icon is composed again and again (stage,
+ * template and artboard pictures, every edit). Only the cheap wrapper (cell
+ * transform, colour, stroke) is rebuilt each time. Bounded, oldest first out.
+ */
+const SANITIZED = new Map<string, Sanitized>();
+const SANITIZED_MAX = 4000;
+
+/** Tests / measurements: forget every sanitised icon. */
+export function clearSanitizedIcons(): void {
+  SANITIZED.clear();
+}
+
+function sanitizedOf(code: string, assetId: string, index: number): Sanitized {
+  const key = `${assetId}\u0000${index}\u0000${code.length}\u0000${fnv1a32(code)}`;
+  const hit = SANITIZED.get(key);
+  if (hit !== undefined) return hit;
+  const made = sanitize(code, assetId, index);
+  if (SANITIZED.size >= SANITIZED_MAX) SANITIZED.delete(SANITIZED.keys().next().value as string);
+  SANITIZED.set(key, made);
+  return made;
+}
+
+function sanitize(code: string, assetId: string, index: number): Sanitized {
+  const check = validateSvg(code);
   if (!check.ok) return { ok: false, error: check.errors[0] ?? "invalid approved SVG" };
-  const preview = buildSvgPreview(args.code);
+  const preview = buildSvgPreview(code);
   if (!preview.ok) return { ok: false, error: preview.error ?? "cannot fit approved SVG" };
   const doc = new DOMParser().parseFromString(preview.html, "image/svg+xml");
   if (doc.getElementsByTagName("parsererror").length > 0 || name(doc.documentElement) !== "svg") {
@@ -31,13 +58,18 @@ export function cellGroupOf(args: CellSvgArgs): CellSvgResult {
   const root = doc.documentElement;
   const box = viewBoxOf(preview.viewBox);
   if (box === null) return { ok: false, error: "approved SVG has no usable viewBox" };
-  const prefix = `b${fnv1a32(`${args.asset.id}:${args.frame.index}`).toString(16)}`;
-  scopeLocalIds(root, prefix);
+  scopeLocalIds(root, `b${fnv1a32(`${assetId}:${index}`).toString(16)}`);
   recolor(root);
-  return { ok: true, html: groupOf(args, root, box, transformOf(args.frame, box)) };
+  return { ok: true, children: childrenOf(root), box };
 }
 
-function groupOf(args: CellSvgArgs, root: Element, box: readonly number[], transform: string): string {
+export function cellGroupOf(args: CellSvgArgs): CellSvgResult {
+  const s = sanitizedOf(args.code, args.asset.id, args.frame.index);
+  if (!s.ok) return s;
+  return { ok: true, html: groupOf(args, s.children, s.box, transformOf(args.frame, s.box)) };
+}
+
+function groupOf(args: CellSvgArgs, children: string, box: readonly number[], transform: string): string {
   const style = args.style;
   const attrs = [
     `data-asset-id="${attr(args.asset.id)}"`, 'data-approved="true"',
@@ -46,7 +78,7 @@ function groupOf(args: CellSvgArgs, root: Element, box: readonly number[], trans
     `stroke-width="${style.strokeWidth}"`, `stroke-linecap="${style.linecap}"`,
     `stroke-linejoin="${style.linecap === "square" ? "miter" : "round"}"`, `data-view-box="${attr(box.join(" "))}"`,
   ];
-  return `<g ${attrs.join(" ")}>${childrenOf(root)}</g>`;
+  return `<g ${attrs.join(" ")}>${children}</g>`;
 }
 
 function childrenOf(root: Element): string {

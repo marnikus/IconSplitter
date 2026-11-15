@@ -18,27 +18,41 @@ export interface BuilderBoot {
   say: (message: string, error?: boolean) => void;
 }
 
+interface RestoreArgs {
+  scanRefs: { current: BuilderScanRefs };
+  setters: Pick<BuilderBoot, "setRoot" | "setDiscovery" | "setBusy" | "say">;
+  patch: (value: Partial<BuilderModel>) => void;
+  supported: boolean;
+}
+
+/** The remembered folder, rescanned at start; `booting` ends either way (2026-11-15: pictures wait for it). */
+function useRestoredRoot({ scanRefs, setters, patch, supported }: RestoreArgs): void {
+  useEffect(() => {
+    if (!supported) { patch({ booting: false }); return; }
+    let alive = true;
+    void (async () => {
+      try {
+        const root = await bootBuilderRoot();
+        if (!alive || root === null) return;
+        await scanBuilderRoot(scanRefs.current, root, { ...setters, setIconMap: (iconMap) => patch({ iconMap }) });
+      } catch {
+        if (alive) setters.say("Saved folder could not be restored — open it again", true);
+      } finally {
+        if (alive) patch({ booting: false });
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supported]);
+}
+
 export function useBuilderBoot(patch: (value: Partial<BuilderModel>) => void, supported: boolean): BuilderBoot {
   const scanRefs = useRef<BuilderScanRefs>({ seq: { ...SCAN_IDLE } as ScanSeq, scanKey: { current: null } });
   const setRoot = (root: DirHandleLike | null) => patch({ root, svgTexts: {} });
   const setDiscovery = (discovery: BuilderDiscovery | null) => patch({ discovery, svgTexts: {} });
   const setBusy = (busy: string | null) => patch({ busy });
   const say = (status: string, error = false) => patch({ status, error });
-  useEffect(() => {
-    if (!supported) return;
-    let alive = true;
-    void (async () => {
-      try {
-        const root = await bootBuilderRoot();
-        if (!alive || root === null) return;
-        await scanBuilderRoot(scanRefs.current, root, { setRoot, setDiscovery, setBusy, say, setIconMap: (iconMap) => patch({ iconMap }) });
-      } catch {
-        if (alive) say("Saved folder could not be restored — open it again", true);
-      }
-    })();
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supported]);
+  useRestoredRoot({ scanRefs, setters: { setRoot, setDiscovery, setBusy, say }, patch, supported });
   useEffect(() => {
     let alive = true;
     void readGeminiKey().then((read: KeyRead) => { if (alive) patch({ key: keyInfoOf(read) }); })
