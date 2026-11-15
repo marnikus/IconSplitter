@@ -133,7 +133,8 @@ describe("🗑 remove an icon from approved", () => {
     const tile = host.querySelector(`[data-testid^="builder-asset-"][data-asset-id="${gone}"]`) as HTMLElement;
     await act(async () => { tile.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
     await settle(0);
-    await click("builder-stage-artboard-save");
+    // its random start icon may already be that very icon: then nothing is unsaved and there is no Save
+    if (q("builder-stage-artboard-save") !== null) await click("builder-stage-artboard-save");
     await waitUntil(() => arts()[1].placedIds[0] === gone, "the second artboard holds it too");
 
     await click("builder-cell-decline-0"); // on the open (second) artboard

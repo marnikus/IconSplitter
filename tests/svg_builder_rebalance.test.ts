@@ -80,4 +80,18 @@ describe("rebalance a top / bottom banner row", () => {
     for (const g of boxes.gaps) expect(g.width).toBeCloseTo(boxes.gaps[0].width, 1); // equal
     expect(spreadInkBoxes(parseSheetConfig({ ...config, banner: { ...config.banner, edgeSpread: false } }), computeLayout(config))).toBeNull();
   });
+
+  it("the user sets the gap %, the title % of the banner height and the subtitle % of the title (2026-11-15)", () => {
+    setTextMeasurer(ink);
+    const base = { ...DEFAULT_CONFIG.banner, position: "top" as const, size: 300, title: "MUSHROOM NATURE ICONS SHEET", subtitle: "Editable stroke width" };
+    expect(parseSheetConfig({ banner: {} }).banner).toMatchObject({ rowGapPct: 5, titleFillPct: 55, subRatioPct: 42 });
+    const small = fitBanner({ ...base, rowGapPct: 5 }, 1080), wide = fitBanner({ ...base, rowGapPct: 20 }, 1080);
+    expect(wide.gap).toBeGreaterThanOrEqual(1080 * 0.2); // bigger gaps…
+    expect(wide.titleSize).toBeLessThan(small.titleSize); // …smaller texts
+    const low = fitBanner({ ...base, size: 100, titleFillPct: 30 }, 1080);
+    expect(low.titleSize).toBeLessThanOrEqual(30);
+    const ratio = fitBanner({ ...base, size: 100, subRatioPct: 80 }, 1080);
+    expect(ratio.subtitleSize / ratio.titleSize).toBeCloseTo(0.8, 1);
+    expect(parseSheetConfig({ banner: { rowGapPct: 99, titleFillPct: 1, subRatioPct: 500 } }).banner).toMatchObject({ rowGapPct: 30, titleFillPct: 20, subRatioPct: 100 });
+  });
 });

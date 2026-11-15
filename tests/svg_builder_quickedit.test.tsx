@@ -619,5 +619,10 @@ describe("number boxes apply as you type", () => {
     expect(host.querySelectorAll('[data-testid="builder-text-boxes"] [data-ink]')).toHaveLength(2);
     expect(host.querySelectorAll('[data-testid="builder-text-boxes"] [data-gap]')).toHaveLength(3);
     expect(JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.prefs.v1") ?? "{}").showTextBoxes).toBe(true);
+    await slide("builder-quick-row-gap", "15"); // the gap % beside them
+    expect(config().banner.rowGapPct).toBe(15);
+    await slide("builder-quick-title-fill", "40");
+    await slide("builder-quick-sub-ratio", "60");
+    expect(config().banner).toMatchObject({ titleFillPct: 40, subRatioPct: 60 });
   });
 });

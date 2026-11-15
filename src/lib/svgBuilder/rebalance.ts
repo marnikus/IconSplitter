@@ -15,9 +15,8 @@ import type { SheetConfig } from "./types";
 
 type Banner = SheetConfig["banner"];
 
-/** The smallest gap, as a share of the row width. */
+/** The defaults of the user's proportions (banner.rowGapPct / titleFillPct / subRatioPct, 2026-11-15). */
 export const ROW_MIN_GAP = 0.05;
-/** The title's starting size as a share of the banner height; the subtitle's as a share of the title. */
 export const TITLE_OF_HEIGHT = 0.55;
 export const SUB_OF_TITLE = 0.42;
 
@@ -46,8 +45,9 @@ export function fitBanner(banner: Banner, width: number, heroWidth = 0): BannerF
   const sub = applyCase(banner.subtitle.trim(), banner.subtitleCase);
   const t100 = inkBox(title, 100, titleStyle(banner));
   const s100 = sub === "" ? { width: 0, left: 0, ascent: 0, descent: 0 } : inkBox(sub, 100, SUBTITLE_STYLE);
-  const titleMax = banner.size * TITLE_OF_HEIGHT, subMax = titleMax * SUB_OF_TITLE;
-  const min = Math.max(12, width * ROW_MIN_GAP), gaps = sub === "" ? 2 : 3;
+  const titleMax = banner.size * (banner.titleFillPct ?? TITLE_OF_HEIGHT * 100) / 100;
+  const subMax = titleMax * (banner.subRatioPct ?? SUB_OF_TITLE * 100) / 100;
+  const min = Math.max(12, width * (banner.rowGapPct ?? ROW_MIN_GAP * 100) / 100), gaps = sub === "" ? 2 : 3;
   const needed = heroWidth > 0 && sub !== "" ? heroWidth + min : min;
   const atMax = (t100.width * titleMax + s100.width * subMax) / 100;
   const k = atMax <= 0 ? 1 : Math.min(1, (width - gaps * needed) / atMax);

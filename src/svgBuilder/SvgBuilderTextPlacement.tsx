@@ -8,6 +8,7 @@ import type { SheetConfig } from "../lib/svgBuilder/types";
 import type { Edit } from "./SvgBuilderCustomize";
 import { Field, NumBox, Slider } from "./SvgBuilderFields";
 import { canRebalance, rebalancedBanner } from "../lib/svgBuilder/rebalance";
+import RowProportions from "./SvgBuilderRowProportions";
 
 type Banner = SheetConfig["banner"];
 type MoveKey = "titleDx" | "titleDy" | "subtitleDx" | "subtitleDy";
@@ -31,6 +32,7 @@ export default function TextPlacement({ n, edit, rowWidth, dev }: { n: Banner; e
         onChange={(e) => edit("banner", e.target.checked ? { autoRebalance: true, ...rebalancedBanner(n, rowWidth) } : { autoRebalance: false })} /> Auto rebalance</label>}
     {canRebalance(n) && <label className="bld-check" title="Dev mode: the measured text boxes and gaps the rebalance uses">
       <input type="checkbox" data-testid="builder-banner-text-boxes" checked={dev.on} onChange={(e) => dev.set(e.target.checked)} /> Show text boxes (dev)</label>}
+    {canRebalance(n) && <RowProportions banner={n} prefix="builder-banner" onChange={(patch) => edit("banner", patch, true)} />}
     {n.edgeSpread && <button type="button" className="svg-btn tiny" data-testid="builder-banner-rebalance-off"
       onClick={() => edit("banner", { edgeSpread: false })} title="Back to the centred group with fixed gaps">Centred row</button>}
   </div>;

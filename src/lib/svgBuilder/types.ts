@@ -102,6 +102,8 @@ export interface SheetConfig {
     titleCase: TextCase; subtitleCase: TextCase;
     /** Rebalance the edge row on every draw (2026-11-15): texts / sizes may change, the balance stays. */
     autoRebalance: boolean;
+    /** Rebalance proportions (2026-11-15): smallest gap % of the row, title % of the banner height, subtitle % of the title. */
+    rowGapPct: number; titleFillPct: number; subRatioPct: number;
   };
 }
 

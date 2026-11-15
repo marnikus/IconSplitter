@@ -5261,3 +5261,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-15 SVG builder: new Rebalance rules (3 equal gaps, shrink-to-fit at 5 % min gap, hero/divider centred between texts). Builder suites 205/205, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: Rebalance v3 — measured ink boxes, optimal sizes from the banner space. Builder suites 204/204, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: dev-mode text boxes for the rebalance. Builder suites 206/206, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: rebalance proportions (gap %, title % of height, subtitle % of title); decline test collision fixed. Builder suites 207/207, tsc/eslint/quality PASS.

@@ -15,6 +15,7 @@ import type { BuilderApi } from "./useSvgBuilder";
 import SvgBuilderTextMove from "./SvgBuilderTextMove";
 import { anchorOf } from "./quickplace";
 import { canRebalance, rebalancedBanner } from "../lib/svgBuilder/rebalance";
+import RowProportions from "./SvgBuilderRowProportions";
 import SvgBuilderTextWidth from "./SvgBuilderTextWidth";
 
 type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | "box" | "rebalance" | null;
@@ -111,6 +112,7 @@ function RebalancePanel({ b }: { b: BuilderApi }) {
       onChange={(e) => set(e.target.checked ? { autoRebalance: true, ...rebalancedBanner(banner, b.config.artboard.width) } : { autoRebalance: false }, "Auto rebalance")} /> Auto rebalance</label>
     <label className="bld-quick-row" title="Dev mode: the measured text boxes and gaps the rebalance uses"><input type="checkbox" data-testid="builder-quick-text-boxes"
       checked={b.prefs.showTextBoxes} onChange={(e) => b.actions.toggleTextBoxes(e.target.checked)} /> Show text boxes (dev)</label>
+    <RowProportions banner={banner} prefix="builder-quick" onChange={(patch) => b.actions.setConfig({ ...b.config, banner: { ...banner, ...patch } }, "Rebalance proportions", true)} />
   </div>;
 }
 
