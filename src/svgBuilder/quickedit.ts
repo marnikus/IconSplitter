@@ -43,12 +43,14 @@ export interface SizeSlot { label: string; group: Group; key: string; range: Num
 /** What each element offers: one colour, and maybe a stroke or text size (+ font for the title). */
 /** `gap`: a second slider in the text panel (captions: the icon–caption gap). */
 /** `textCase`: which banner case field the text panel switches (2026-11-15). */
-export interface QuickSpec { name: string; color: ColorSlot; stroke?: SizeSlot; text?: SizeSlot; face?: boolean; gap?: SizeSlot; textCase?: "titleCase" | "subtitleCase" }
+/** `box`: the icon box size slider (2026-11-15). */
+export interface QuickSpec { name: string; color: ColorSlot; stroke?: SizeSlot; text?: SizeSlot; face?: boolean; gap?: SizeSlot; textCase?: "titleCase" | "subtitleCase"; box?: SizeSlot }
 
 export const QUICK_SPECS: Readonly<Record<QuickKind, QuickSpec>> = {
   icon: {
     name: "Outlined icon", color: { label: "Icon color", group: "icons", key: "color" },
     stroke: { label: "Stroke width", group: "icons", key: "strokeWidth", range: RANGES.strokeWidth, unit: "px" },
+    box: { label: "Icon box (all icons)", group: "icons", key: "box", range: RANGES.box, unit: "px" },
   },
   hero: {
     name: "Banner icon", color: { label: "Accent color (icon and circle)", group: "banner", key: "accent" },

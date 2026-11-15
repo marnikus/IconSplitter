@@ -16,7 +16,7 @@ import SvgBuilderTextMove from "./SvgBuilderTextMove";
 import { anchorOf } from "./quickplace";
 import SvgBuilderTextWidth from "./SvgBuilderTextWidth";
 
-type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | null;
+type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | "box" | null;
 interface Hover { kind: QuickKind; el: Element }
 
 const FACES: ReadonlyArray<{ value: TitleFace; label: string }> = [
@@ -121,6 +121,8 @@ function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKi
       data-testid="builder-quick-move" title="Move this text right on the artboard" aria-label="Move this text"
       onClick={() => toggle("move")}>✥</button>}
     {kind === "hero" && <HeroButtons toggle={toggle} />}
+    {spec.box && <button type="button" className="bld-quick-btn" data-testid="builder-quick-box" title={spec.box.label}
+      aria-label={spec.box.label} onClick={() => toggle("box")}>⬚</button>}
     {kind === "icon" && <IconEditButton b={b} el={el} />}
   </div>;
 }
@@ -131,6 +133,7 @@ function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: Quick
   const spec = QUICK_SPECS[kind];
   if (panel === "color") return <ColorPanel b={b} slot={spec.color} onDone={done} />;
   if (panel === "stroke" && spec.stroke) return <SizePanel b={b} slot={spec.stroke} testid="builder-quick-stroke-range" />;
+  if (panel === "box" && spec.box) return <SizePanel b={b} slot={spec.box} testid="builder-quick-box-range" />;
   if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} gap={spec.gap} textCase={spec.textCase} />;
   return <KindPanel b={b} kind={kind} panel={panel} done={done} move={move} />;
 }

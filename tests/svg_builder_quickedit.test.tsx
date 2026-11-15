@@ -571,4 +571,15 @@ describe("number boxes apply as you type", () => {
     expect(config().banner.subtitleCase).toBe("capitalized");
     expect(config().banner.titleCase).toBe("normal");
   });
+
+  it("the icon's toolbar sets the icon box size (all icons), one coalesced undo step (2026-11-15)", async () => {
+    await openLibrary();
+    const before = config().icons.box;
+    await hover(host.querySelector(".bld-cell")!);
+    await click("builder-quick-box");
+    await slide("builder-quick-box-range", "120");
+    expect(config().icons.box).toBe(120);
+    await click("builder-undo");
+    expect(config().icons.box).toBe(before);
+  });
 });
