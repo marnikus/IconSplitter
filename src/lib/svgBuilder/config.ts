@@ -20,7 +20,7 @@ export const DEFAULT_CONFIG: SheetConfig = {
     title: "ICON SHEET", subtitle: "Editable stroke width",
     titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true,
     textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0,
-    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1, captionTexts: {}, titleWidth: 0, subtitleWidth: 0, edgeSpread: false, titleCase: "normal", subtitleCase: "upper", autoRebalance: false, rowGapPct: 5, titleFillPct: 55, subRatioPct: 42 },
+    heroScale: 100, heroStroke: 1.1, ringScale: 100, ringStroke: 1, captionTexts: {}, titleWidth: 0, subtitleWidth: 0, edgeSpread: false, titleCase: "normal", subtitleCase: "upper", autoRebalance: false, rowGapPct: 5, titleFillPct: 55, subRatioPct: 42, titleTracking: 0, subtitleTracking: 0 },
 };
 
 /** The 8 swatches shown under Canvas and Stroke colour. */
@@ -126,6 +126,7 @@ function parseBanner(raw: unknown): SheetConfig["banner"] {
     autoRebalance: bool(raw.autoRebalance, d.autoRebalance),
     rowGapPct: num(RANGES.rowGapPct, raw.rowGapPct, d.rowGapPct), titleFillPct: num(RANGES.titleFillPct, raw.titleFillPct, d.titleFillPct),
     subRatioPct: num(RANGES.subRatioPct, raw.subRatioPct, d.subRatioPct),
+    titleTracking: num(RANGES.tracking, raw.titleTracking, d.titleTracking), subtitleTracking: num(RANGES.tracking, raw.subtitleTracking, d.subtitleTracking),
     titleCase: oneOf(raw.titleCase, CASES, d.titleCase) as TextCase, subtitleCase: oneOf(raw.subtitleCase, CASES, d.subtitleCase) as TextCase,
   };
 }

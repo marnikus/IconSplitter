@@ -625,4 +625,13 @@ describe("number boxes apply as you type", () => {
     await slide("builder-quick-sub-ratio", "60");
     expect(config().banner).toMatchObject({ titleFillPct: 40, subRatioPct: 60 });
   });
+
+  it("the A panel of the title and the subtitle sets its letter spacing (2026-11-15)", async () => {
+    await openLibrary();
+    await hover(shadow().querySelector('[data-banner-text="title"]')!);
+    await click("builder-quick-text");
+    await slide("builder-quick-gap", "12");
+    expect(config().banner.titleTracking).toBe(12);
+    expect(shadow().querySelector('[data-banner-text="title"] text')?.getAttribute("letter-spacing")).toBe("0.075em");
+  });
 });

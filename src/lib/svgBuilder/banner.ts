@@ -3,7 +3,10 @@
 // Wrapping follows the reference formulas, at most three lines.
 import { readableInk } from "./config";
 import { solidMix } from "./solidcolor";
-import { canRebalance, fitBanner, rebalancedBanner } from "./rebalance";
+import { canRebalance, fitBanner, rebalancedBanner, subtitleStyle, titleStyle } from "./rebalance";
+
+/** An em length for letter-spacing, without float noise: 0.055em. */
+const em = (n: number) => `${Number(n.toFixed(4))}em`;
 import { applyCase } from "./textcase";
 
 export { applyCase };
@@ -65,7 +68,7 @@ function subtitleLines(a: BannerArgs, side: boolean): string[] {
 function titleText(a: BannerArgs, lines: string[], at: { x: number; top: number; size: number; ink: string; anchor: "start" | "middle" }): string {
   const serif = a.banner.titleFace === "serif";
   const body = lines.map((line, i) => textEl({ x: at.x, y: at.top + at.size * 0.83 + i * at.size * 1.03, value: line, size: at.size,
-    colour: at.ink, face: a.banner.titleFace, weight: serif ? 500 : 600, anchor: at.anchor, spacing: serif ? "-0.02em" : "-0.045em" })).join("");
+    colour: at.ink, face: a.banner.titleFace, weight: serif ? 500 : 600, anchor: at.anchor, spacing: em(titleStyle(a.banner).spacingEm) })).join("");
   const pad = paddingShift(a.banner);
   return movedText("title", a.banner.titleDx + pad.dx, a.banner.titleDy + pad.dy, body);
 }
@@ -90,7 +93,7 @@ function movedText(which: "title" | "subtitle", dx: number, dy: number, body: st
 function subtitleText(a: BannerArgs, lines: string[], at: { x: number; top: number; anchor: "start" | "middle" }): string {
   const s = a.banner.subtitleSize;
   const body = lines.map((line, i) => textEl({ x: at.x, y: at.top + s * 0.83 + i * s * 1.55, value: line, size: s,
-    colour: a.banner.subtitleColor, face: "sans", weight: 500, anchor: at.anchor, spacing: "0.16em" })).join("");
+    colour: a.banner.subtitleColor, face: "sans", weight: 500, anchor: at.anchor, spacing: em(subtitleStyle(a.banner).spacingEm) })).join("");
   const pad = paddingShift(a.banner);
   return movedText("subtitle", a.banner.subtitleDx + pad.dx, a.banner.subtitleDy + pad.dy, body);
 }

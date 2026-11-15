@@ -26,11 +26,13 @@ export function canRebalance(banner: Pick<Banner, "position" | "style">): boolea
 }
 
 /** How the banner draws its title and subtitle (banner.ts titleText / subtitleText). */
-export function titleStyle(banner: Pick<Banner, "titleFace">): InkStyle {
+export function titleStyle(banner: Pick<Banner, "titleFace" | "titleTracking">): InkStyle {
   const serif = banner.titleFace === "serif";
-  return { face: banner.titleFace, weight: serif ? 500 : 600, spacingEm: serif ? -0.02 : -0.045, perChar: 0.56 };
+  return { face: banner.titleFace, weight: serif ? 500 : 600, spacingEm: (serif ? -0.02 : -0.045) + (banner.titleTracking ?? 0) / 100, perChar: 0.56 };
 }
-export const SUBTITLE_STYLE: InkStyle = { face: "sans", weight: 500, spacingEm: 0.16, perChar: 0.72 };
+export function subtitleStyle(banner: Pick<Banner, "subtitleTracking">): InkStyle {
+  return { face: "sans", weight: 500, spacingEm: 0.16 + (banner.subtitleTracking ?? 0) / 100, perChar: 0.72 };
+}
 
 export interface BannerFit { titleSize: number; subtitleSize: number; gap: number; title: InkBox; sub: InkBox }
 
@@ -44,7 +46,7 @@ export function fitBanner(banner: Banner, width: number, heroWidth = 0): BannerF
   const title = applyCase(banner.title.trim(), banner.titleCase);
   const sub = applyCase(banner.subtitle.trim(), banner.subtitleCase);
   const t100 = inkBox(title, 100, titleStyle(banner));
-  const s100 = sub === "" ? { width: 0, left: 0, ascent: 0, descent: 0 } : inkBox(sub, 100, SUBTITLE_STYLE);
+  const s100 = sub === "" ? { width: 0, left: 0, ascent: 0, descent: 0 } : inkBox(sub, 100, subtitleStyle(banner));
   const titleMax = banner.size * (banner.titleFillPct ?? TITLE_OF_HEIGHT * 100) / 100;
   const subMax = titleMax * (banner.subRatioPct ?? SUB_OF_TITLE * 100) / 100;
   const min = Math.max(12, width * (banner.rowGapPct ?? ROW_MIN_GAP * 100) / 100), gaps = sub === "" ? 2 : 3;

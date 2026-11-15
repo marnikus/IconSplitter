@@ -64,10 +64,12 @@ export const QUICK_SPECS: Readonly<Record<QuickKind, QuickSpec>> = {
   title: {
     name: "Title", color: { label: "Title color", group: "banner", key: "textColor" },
     text: { label: "Title size", group: "banner", key: "titleSize", range: RANGES.titleSize, unit: "px" }, face: true, textCase: "titleCase",
+    gap: { label: "Letter spacing", group: "banner", key: "titleTracking", range: RANGES.tracking, unit: "/100 em" },
   },
   subtitle: {
     name: "Subtitle", color: { label: "Subtitle color", group: "banner", key: "subtitleColor" },
     text: { label: "Subtitle size", group: "banner", key: "subtitleSize", range: RANGES.subtitleSize, unit: "px" }, textCase: "subtitleCase",
+    gap: { label: "Letter spacing", group: "banner", key: "subtitleTracking", range: RANGES.tracking, unit: "/100 em" },
   },
   block: { name: "Banner block", color: { label: "Block color", group: "banner", key: "accent" } },
   banner: { name: "Banner", color: { label: "Banner background", group: "banner", key: "background" } },

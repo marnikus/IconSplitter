@@ -104,6 +104,8 @@ export interface SheetConfig {
     autoRebalance: boolean;
     /** Rebalance proportions (2026-11-15): smallest gap % of the row, title % of the banner height, subtitle % of the title. */
     rowGapPct: number; titleFillPct: number; subRatioPct: number;
+    /** Letter spacing offsets in 1/100 em (2026-11-15), added to each text's own spacing; 0 = the reference. */
+    titleTracking: number; subtitleTracking: number;
   };
 }
 

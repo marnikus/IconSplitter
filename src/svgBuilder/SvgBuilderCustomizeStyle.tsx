@@ -105,5 +105,11 @@ function TextStyle({ n, edit }: { n: SheetConfig["banner"]; edit: Edit }) {
       <Segmented label="Title case" value={n.titleCase} testid="builder-title-case" options={CASE_OPTIONS} onChange={(titleCase) => edit("banner", { titleCase })} />
       <Segmented label="Subtitle case" value={n.subtitleCase} testid="builder-subtitle-case" options={CASE_OPTIONS} onChange={(subtitleCase) => edit("banner", { subtitleCase })} />
     </div>
+    <div className="bld-two">
+      <Slider label="Title spacing" value={n.titleTracking} range={RANGES.tracking} unit="/100 em" testid="builder-title-tracking"
+        onChange={(titleTracking) => edit("banner", { titleTracking }, true)} />
+      <Slider label="Subtitle spacing" value={n.subtitleTracking} range={RANGES.tracking} unit="/100 em" testid="builder-subtitle-tracking"
+        onChange={(subtitleTracking) => edit("banner", { subtitleTracking }, true)} />
+    </div>
   </>;
 }
