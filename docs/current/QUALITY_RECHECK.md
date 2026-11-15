@@ -5251,3 +5251,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-14 SVG builder: title/subtitle box width (grip + inline editor). Builder suites 178/178 (the decline test timed out once under full load, passed 3x alone and on the rerun); tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: _artboard_sheets tree (metadata.json + preview.png on generate; Export all selected writes SVG/JPG/EPS/PNG + export.json), sticky header. Builder suites 188/188, tsc/eslint/quality PASS.
 - 2026-11-15 SVG builder: active artboard row shows the upload metadata editor; ↻ Metadata per row. Builder suites 189/189, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: Rebalance row (edge banner equal gaps, one-line texts). Builder suites 193/193, tsc/eslint/quality PASS.

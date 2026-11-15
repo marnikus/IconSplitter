@@ -126,24 +126,45 @@ function solidSide(a: Laid): string {
   return hero + rule + title + sub;
 }
 
+export interface EdgeParts { hero: number; title: number; rule: boolean; sub: number }
+export interface EdgeXs { hero: number; title: number; rule: number; sub: number }
+
+/**
+ * Where each part of an edge banner row starts. The reference: one centred group
+ * with fixed gaps (glyph + 16, rule 16 | 1 | 16). Spread (2026-11-15, ⇔ Rebalance
+ * row): EQUAL gaps between every present part and both edges; the rule is a
+ * zero-width part.
+ */
+export function edgeXs(box: Rect, p: EdgeParts, spread: boolean): EdgeXs {
+  if (!spread) {
+    const widths = [p.hero > 0 ? p.hero + 16 : 0, p.title, p.rule ? 33 : (p.sub > 0 ? 16 : 0), p.sub];
+    const x0 = box.x + (box.width - widths.reduce((s, w) => s + w, 0)) / 2;
+    const title = x0 + widths[0];
+    return { hero: x0, title, rule: title + p.title + 16, sub: title + p.title + widths[2] };
+  }
+  const parts: [keyof EdgeXs, number][] = [["hero", p.hero], ["title", p.title], ["rule", p.rule ? 0 : -1], ["sub", p.sub > 0 ? p.sub : -1]];
+  const present = parts.filter(([key, w]) => w >= 0 && (key !== "hero" || w > 0));
+  const gap = Math.max(0, (box.width - present.reduce((s, [, w]) => s + w, 0)) / (present.length + 1));
+  const out: EdgeXs = { hero: box.x, title: box.x, rule: box.x, sub: box.x };
+  let x = box.x + gap;
+  for (const [key, w] of present) { out[key] = x; x += w + gap; }
+  return out;
+}
+
 function solidEdge(a: Laid): string {
   const { box, banner } = a;
   const glyph = heroSize(banner, 0, Math.min(30, box.height * 0.38)).glyph;
   const tl = titleLines(a, false, banner.titleSize);
   const sl = subtitleLines(a, false);
-  const titleW = Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize)));
-  const subW = Math.min(380, Math.max(0, ...sl.map((l) => textWidth(l, banner.subtitleSize, 0.72))));
-  const ruleOn = banner.divider && sl.length > 0;
-  const widths = [banner.hero ? glyph + 16 : 0, titleW, ruleOn ? 33 : (sl.length > 0 ? 16 : 0), subW];
-  let x = box.x + (box.width - widths.reduce((p, q) => p + q, 0)) / 2;
+  const subMax = banner.edgeSpread ? Infinity : 380;
+  const parts: EdgeParts = { hero: banner.hero ? glyph : 0, title: Math.max(0, ...tl.map((l) => textWidth(l, banner.titleSize))), rule: banner.divider && sl.length > 0,
+    sub: Math.min(subMax, Math.max(0, ...sl.map((l) => textWidth(l, banner.subtitleSize, 0.72)))) };
+  const x = edgeXs(box, parts, banner.edgeSpread);
   const cy = box.y + box.height / 2;
-  const hero = banner.hero ? `<g data-banner-hero="true">${a.hero(x, cy - glyph / 2, glyph, banner.accent)}</g>` : "";
-  x += widths[0];
-  const title = titleText(a, tl, { x, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink: banner.textColor, anchor: "start" });
-  x += widths[1];
-  const rule = ruleOn ? `<rect x="${round(x + 16)}" y="${round(cy - 13)}" width="1" height="26" fill="${attr(solidMix(banner.textColor, banner.background, 0.24))}" data-accent-rule="true"/>` : "";
-  x += widths[2];
-  const sub = subtitleText(a, sl, { x, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
+  const hero = banner.hero ? `<g data-banner-hero="true">${a.hero(x.hero, cy - glyph / 2, glyph, banner.accent)}</g>` : "";
+  const title = titleText(a, tl, { x: x.title, top: cy - (tl.length * banner.titleSize * 1.03) / 2, size: banner.titleSize, ink: banner.textColor, anchor: "start" });
+  const rule = parts.rule ? `<rect x="${round(x.rule)}" y="${round(cy - 13)}" width="1" height="26" fill="${attr(solidMix(banner.textColor, banner.background, 0.24))}" data-accent-rule="true"/>` : "";
+  const sub = subtitleText(a, sl, { x: x.sub, top: cy - (sl.length * banner.subtitleSize * 1.55) / 2, anchor: "start" });
   return hero + title + rule + sub;
 }
 

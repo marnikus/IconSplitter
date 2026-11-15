@@ -95,6 +95,8 @@ export interface SheetConfig {
     captionTexts: Record<string, string>;
     /** Text box widths in px (2026-11-14): 0 = automatic (the reference character limits). */
     titleWidth: number; subtitleWidth: number;
+    /** Edge banner row with equal gaps between its parts and both edges (2026-11-15, ⇔ Rebalance row). */
+    edgeSpread: boolean;
   };
 }
 

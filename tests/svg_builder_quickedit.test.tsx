@@ -531,4 +531,20 @@ describe("number boxes apply as you type", () => {
     await hover(shadow().querySelector('[data-banner-text="subtitle"]')!);
     expect(q("builder-text-width-subtitle")).not.toBeNull();
   });
+
+  it("⇔ Rebalance row (top banner): one click spreads the row evenly with each text on one line; one undo step (2026-11-15)", async () => {
+    await openLibrary();
+    expect(q("builder-banner-rebalance")).toBeNull(); // the default side banner has no row
+    await click("builder-layout-masthead"); // a top banner
+    if (q("builder-banner-style") === null) { // the Banner section folded: open it
+      await act(async () => { q("builder-section-banner")!.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    }
+    if (config().banner.style !== "solid") await click("builder-banner-style-solid");
+    await click("builder-banner-rebalance");
+    expect(config().banner).toMatchObject({ edgeSpread: true, textPadding: 0, titleDx: 0, subtitleDx: 0 });
+    expect(config().banner.titleWidth).toBeGreaterThan(0);
+    expect(shadow().querySelectorAll('[data-banner-text="title"] text')).toHaveLength(1);
+    await click("builder-undo");
+    expect(config().banner.edgeSpread).toBe(false);
+  });
 });

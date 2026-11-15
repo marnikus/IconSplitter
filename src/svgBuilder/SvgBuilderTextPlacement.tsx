@@ -7,6 +7,7 @@ import { RANGES } from "../lib/svgBuilder/ranges";
 import type { SheetConfig } from "../lib/svgBuilder/types";
 import type { Edit } from "./SvgBuilderCustomize";
 import { Field, NumBox, Slider } from "./SvgBuilderFields";
+import { canRebalance, rebalancedBanner } from "../lib/svgBuilder/rebalance";
 
 type Banner = SheetConfig["banner"];
 type MoveKey = "titleDx" | "titleDy" | "subtitleDx" | "subtitleDy";
@@ -21,6 +22,11 @@ export default function TextPlacement({ n, edit }: { n: Banner; edit: Edit }) {
     <MoveRow label="Move subtitle" n={n} x="subtitleDx" y="subtitleDy" testid="builder-subtitle-move" edit={edit} />
     <button type="button" className="svg-btn tiny" data-testid="builder-text-placement-reset" disabled={!moved} onClick={reset}
       title="Back to the reference placement: no padding, no moves">↺ Reset text placement</button>
+    {canRebalance(n) && <button type="button" className="svg-btn tiny primary" data-testid="builder-banner-rebalance"
+      onClick={() => edit("banner", rebalancedBanner(n))}
+      title="Every text on one line, and equal space between the banner edges, the icon, the title, the divider and the subtitle">⇔ Rebalance row</button>}
+    {n.edgeSpread && <button type="button" className="svg-btn tiny" data-testid="builder-banner-rebalance-off"
+      onClick={() => edit("banner", { edgeSpread: false })} title="Back to the centred group with fixed gaps">Centred row</button>}
   </div>;
 }
 
