@@ -23,6 +23,7 @@ arrow, `data-dir`, reverses any order), `svg-search` (name too), `svg-shown`
 | `svg-estimate` | text | token estimate for the selection |
 | `svg-generate-selected` | button | "✦ Generate selected" — arms first (`Confirm SVG generation`), then queues/sends all checked rows, including rows with no SVG; **stays enabled while a run is in flight** (I-53), disabled only at 0 selected |
 | `svg-regenerate-selected` | button | "↻ Regenerate selected (N)" — N counts only checked rows whose `row.newest !== null`; disabled at 0. The shared "Confirm SVG regeneration" previews/sends only those rows; bulk regeneration runs in parallel, conflicts wait (I-53) |
+| `svg-register-styles` | button | scans selected items for style folders and reports folder progress and newly added style pairs in `register-styles-progress-*` |
 | `svg-register-existing` | button | "⤓ Register existing SVGs (N)" — records on-disk SVGs missing from the pair file (`<stem>.svg`, `_vN`, a copy, the pre-split name), newest shown; disabled at 0, an invalid file skipped, an empty pass names the pair, busy pairs refused ([contract](../sor/version-acceptance.md#svgs-already-in-the-folder-are-registered-as-versions)) |
 | `svg-needs-review-selected` / `svg-approve-selected` / `svg-decline-selected` | buttons | review the selection (needs-review = yellow, regenerated — new review); disabled at 0 |
 | `svg-cancel-run` / `svg-batch-progress` | while running | cancellation + per-batch progress; the progress line carries the same ticking `svg-bulk-elapsed` as the strip |

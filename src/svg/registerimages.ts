@@ -22,7 +22,7 @@ import type { ImageVersion } from "../lib/svgimgreg";
 import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { fileTimeOf, isReadablePng, listPairImages } from "./imgfiles";
-import { beginRegister } from "./registerprogress";
+import { beginRegister, registerRunning } from "./registerprogress";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 import { baseNameOf, namingOf, siblingsOf, usableRow, type RegisterCtx } from "./registernames";
 import { toRow } from "./rowmodel";
@@ -49,6 +49,7 @@ export async function runRegisterImagesFor(c: RegisterCtx, ids: string[]): Promi
   if (root === null) return c.say("No folder is open — nothing to look at", true);
   const rows = ids.map((id) => c.rows.find((r) => r.source.id === id)).filter(usableRow);
   if (rows.length === 0) return c.say("Select the items whose folder should be checked", true);
+  if (registerRunning(c.refs)) return c.say("A registration is already running — wait for it to finish", true);
   const release = reserveSources(c, rows.map((r) => r.source.id));
   if (release === null) return c.say(SOURCE_BUSY, true);
   try {

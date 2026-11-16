@@ -5277,3 +5277,7 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-16 SVG builder: template folder + template.json at creation; artboard folders artboard_NN_<title> inside it. Builder suites 219/219, tsc/eslint/quality PASS.
 - 2026-11-16 SVG builder: Location button opens the template/artboard folder in Explorer via the helper (/open-folder). Builder + helper suites 223/223 + bridge_inkscape 8/8, tsc/eslint/quality PASS.
 - 2026-11-16 Location in every tab via the helper (copy full path, open Explorer, select an existing file); docs split (rebalance page), apply.test types list. Full suite: only pre-existing failures (bridge_crash_guard, bridge_getty_web, docs_navigation pre-existing over-budget pages, fs_case_collisions, getty_web_browser/session, random_select_ui, upload_flag_viewport, verify_execution) — identical with the change stashed; tsc/eslint/quality PASS.
+
+- 2026-11-16 — Register styles progress: focused Vitest suites passed (19 tests; related register suites 30 tests); TypeScript, lint (23 warnings), explicit-base changed quality and build passed. `verify:fast` failed because its coverage/test process was killed after 188 s; complete suite/coverage not established.
+
+- 2026-11-16 — Pre-push full verification (single CPU): types, lint, explicit-base changed quality, 30 native performance tests and build passed; coverage aborted after 290 s when a Vitest worker exited during `selection_response.test.tsx`. That file passed separately (6 tests), without coverage.

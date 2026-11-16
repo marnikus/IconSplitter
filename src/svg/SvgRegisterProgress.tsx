@@ -1,4 +1,4 @@
-// SvgRegisterProgress.tsx — the bar the two register passes report through
+// SvgRegisterProgress.tsx — the bar the register passes report through
 // (2026-11-02), in the shared lifecycle (ui/ProcessProgressBar, 2026-11-03):
 // Cancel while it reads folders, then Review results + ✕. A finished pass STAYS
 // until its ✕ or the next pass — it used to clear itself after 6 s.

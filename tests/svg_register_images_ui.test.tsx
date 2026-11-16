@@ -16,7 +16,7 @@ import { svgSource, pairMetaFor } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { FOG, click, input, installSvgPanelHooks, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
 import { armCompletionSound } from "../src/ui/completionSound";
-import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
+import { completionAudio, flushCompletionAudio, recordCompletionAudio, settleCompletionAudio } from "./helpers/completionAudio";
 
 installSvgPanelHooks();
 
@@ -196,6 +196,10 @@ describe("the button in the tab", () => {
     await click(q("[data-testid=svg-register-styles]") as HTMLElement);
     await vi.waitFor(() => expect(text("[data-testid=svg-toast]")).toContain("Styles registered for 1 of 1"));
     expect(style.children.has("download-icon-01_AI_01_colored_wiggle.svg.json")).toBe(true);
+    expect(text("[data-testid=register-styles-progress-title]")).toBe("Registering styles complete");
+    expect(text("[data-testid=register-styles-progress-completed]")).toBe("1 completed / 1");
+    expect(text("[data-testid=register-styles-progress-file]")).toContain("1 new style added");
+    expect(text("[data-testid=register-styles-progress-percent]")).toBe("100%");
     await click(q("[data-testid=svg-style-select]") as HTMLElement); // the app's dark menu, not a native list
     await click(q("[data-testid=svg-style-opt-colored_wiggle]") as HTMLElement);
     await settle();
@@ -205,6 +209,7 @@ describe("the button in the tab", () => {
 
   it("is disabled with nothing selected and registers the selected folder on a click", async () => {
     recordCompletionAudio();
+    await settleCompletionAudio();
     armCompletionSound();
     const root = splitRoot();
     await mount(root);

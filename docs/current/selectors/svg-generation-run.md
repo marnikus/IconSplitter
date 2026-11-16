@@ -62,9 +62,9 @@ Cancel flow: `svg-progress-cancel` → `svg-cancel-dialog` with current thumbnai
 
 ### Register progress — `src/svg/SvgRegisterProgress.tsx` (2026-11-02)
 
-Both register passes report through the shared bar, portalled to
+All register passes report through the shared bar, portalled to
 `#svg-progress-mount` beside the run header. Prefix `register-svg` (existing
-SVGs) or `register-images` (existing AI sources), same suffixes as above:
+SVGs), `register-images` (existing AI sources), or `register-styles` (styles), same suffixes as above:
 `-header`, `-title`, `-file` (pair being read), `-track`, `-completed` ("N
 registered · K skipped"), `-remaining` ("3 remaining"), `-note` ("N new files
 registered" so far this run; "no new files yet"), `-percent`, `-cancel`, `-review` and `-dismiss`
@@ -85,3 +85,7 @@ save failure),
 `svg-status-progress`, `svg-status-running`. The image batch's `svg-busy`
 message is [documented with image-edit status](svg-image-edits.md#image-edit-interruption-and-status).
 Undo of a review gesture goes through the [global history bar](shared.md#o-global-history-bar-reset-actions-verified-2026-10-01).
+
+For `register-styles`, `-completed` counts processed selected item folders and
+`-note` / finished `-file` count new style pair files added; a repeat pass does
+not count existing style pairs again. Failed folders appear as skipped.

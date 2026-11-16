@@ -115,3 +115,12 @@ circle/ellipse quarter points, all group/element transforms applied; defs,
 clip paths, masks and symbols skipped). Inline `!important` styles beat the
 preview stroke sheet. Releasing Ctrl, leaving the preview or a window blur
 removes it; the file is never changed. Tests: `svg_anchors.test.tsx`.
+
+## Register styles progress (2026-11-16)
+
+Register styles scans the selected base items one by one. The shared register
+bar shows item folders processed / selected and newly created style pair files
+added (not image variants or style names; updating an existing pair adds zero).
+It remains visible after completion. Cancel stops before the next item; failures
+are counted and do not stop other folders. An unreadable style pair is not
+overwritten. Only one registration pass may run at a time.

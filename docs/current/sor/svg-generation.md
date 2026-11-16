@@ -123,3 +123,5 @@ provider calls are the narrow RULE 20 exception, never part of local splitting):
   fact across a restart: the rows come back as **Unknown** with the id and the
   elapsed time, and the panel offers an explicit "Retry these" through the
   normal confirmation — never an automatic resend.
+
+[Register styles progress](svg-generation-results.md#register-styles-progress-2026-11-16).

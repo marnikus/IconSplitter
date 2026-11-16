@@ -1,5 +1,5 @@
-// registerprogress.ts — the progress bar behind the two "register what is already
-// in the folder" passes (SVGs 2026-11-01, AI sources 2026-11-02). Both do the same
+// registerprogress.ts — the progress bar behind the "register what is already
+// in the folder" passes (SVGs, AI sources and styles). All do the same
 // work — read one folder per pair, then the next — so both drive ONE model: a
 // session publishes the folder being read, how many folders settled, and how many
 // records each one left behind. The bar in `SvgRegisterProgress.tsx` renders it, and
@@ -13,8 +13,8 @@ import { createProcessReporter } from "../lib/processprogress";
 import { createSlotMap, publishProcess, type ProcessSlot } from "../lib/processslot";
 import type { SvgRefs } from "./types";
 
-/** Which pass is running: an SVG pass or the AI-source pass. */
-export type RegisterKind = "svg" | "images";
+/** Which registration pass is running. */
+export type RegisterKind = "svg" | "images" | "styles";
 
 export interface RegisterProgress {
   /** The run this bar reports; the completion cue is keyed by it. */
@@ -25,7 +25,7 @@ export interface RegisterProgress {
   /** The pair being read right now — its AI file's name, never a path. */
   current: string;
   phase: "running" | "complete" | "cancelled" | "failed";
-  /** New records written so far. */
+  /** New records written so far (for styles, newly created style pair files). */
   registered: number;
   /** Files that matched a pair but could not be read or validated. */
   skipped: number;
@@ -49,6 +49,11 @@ const slotOf = createSlotMap<RegisterProgress>();
 /** The tab's one register bar (the last pass, or nothing). */
 export function registerSlot(refs: SvgRefs): ProcessSlot<RegisterProgress> {
   return slotOf(refs);
+}
+
+/** A second register pass cannot replace the live bar or its cancellation handle. */
+export function registerRunning(refs: SvgRefs): boolean {
+  return registerSlot(refs).value?.phase === "running";
 }
 
 /** Clears the bar — only its ✕ does this; a finished pass stays visible. */
@@ -111,6 +116,7 @@ export function registerStatusOf(p: Pick<RegisterProgress, "phase">): ProcessSta
 export function registerDetail(p: RegisterProgress): string {
   if (p.phase === "running") return p.current === "" ? "Reading the selected folders…" : p.current;
   const skipped = p.skipped === 0 ? "" : ` · ${p.skipped} skipped`;
+  if (p.kind === "styles") return `${p.registered} new style${p.registered === 1 ? "" : "s"} added${skipped}`;
   return `${p.registered} registered${skipped}`;
 }
 
@@ -121,13 +127,14 @@ export function registerDetail(p: RegisterProgress): string {
  */
 export function registerNote(p: RegisterProgress): string {
   if (p.phase !== "running") return "";
+  if (p.kind === "styles") return `${p.registered} new style${p.registered === 1 ? "" : "s"} added`;
   if (p.registered === 0) return "no new files yet";
   return `${p.registered} new file${p.registered === 1 ? "" : "s"} registered`;
 }
 
 /** The bar's title: what is happening, in the tab's own words. */
 export function registerTitle(p: RegisterProgress): string {
-  const what = p.kind === "svg" ? "existing SVGs" : "AI sources";
+  const what = p.kind === "svg" ? "existing SVGs" : p.kind === "styles" ? "styles" : "AI sources";
   const folders = `${p.total} folder${p.total === 1 ? "" : "s"}`;
   if (p.phase === "running") return `Registering ${what} · ${folders}`;
   if (p.phase === "cancelled") return `Registering ${what} cancelled`;
