@@ -111,7 +111,7 @@ describe("SelectionV2Panel in a DOM", () => {
     await settle();
     // the row shows the folder's own name while no full path was captured (I-46)
     expect(el.querySelector("[data-testid='v2-folder-path']")?.textContent).toContain("test_processing");
-    expect(el.querySelector("[data-testid='v2-folder-path']")?.textContent).toContain("full path not captured");
+    expect(el.querySelector("[data-testid='v2-folder-path']")?.textContent).toContain("full path not found yet");
     expect(el.querySelector("[data-testid='v2-folder-path']")?.querySelector("input, button")).toBeNull();
     // the removed chrome is absent, and the folder's name is never the button
     expect(el.querySelector("[data-testid='sel-root']")).toBeNull();

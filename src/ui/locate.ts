@@ -42,7 +42,7 @@ export async function revealPath(p: { folder: string; file?: string; say: Say })
   const copied = await copy(text);
   const copyNote = copied ? "path copied" : "the path could not be copied";
   if (!isFullPath(p.folder)) {
-    p.say(`${copied ? "Path copied" : "Could not copy the path"} — the folder's full path is unknown (Ctrl+Shift+C in Explorer, then Rescan): ${text}`, !copied);
+    p.say(`${copied ? "Path copied" : "Could not copy the path"} — the folder's full path is unknown (start the local helper, then Rescan): ${text}`, !copied);
     return;
   }
   const failed = await openInExplorer(p.folder, p.file);

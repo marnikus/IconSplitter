@@ -30,7 +30,9 @@ function managerOf(platform) {
 }
 
 function launchDetached(cmd, args) {
-  const child = spawn(cmd, args, { detached: true, stdio: "ignore", shell: false, windowsHide: false });
+  // Explorer parses `/select,"<file>"` itself: Node's own quoting of an argument holding spaces
+  // makes Explorer OPEN the file instead of selecting it (2026-11-16) — so it gets the text verbatim.
+  const child = spawn(cmd, args, { detached: true, stdio: "ignore", shell: false, windowsHide: false, windowsVerbatimArguments: cmd === "explorer.exe" });
   child.on("error", () => undefined); // a missing file manager is reported by the caller's check, never fatal
   child.unref();
 }
@@ -67,8 +69,8 @@ function checkSelect(folder, raw) {
 
 /** The file manager's arguments: the folder, or the file selected in it (each ONE argument, no shell). */
 function argsOf(platform, folder, file) {
-  if (file === null) return [folder];
-  if (platform === "win32") return [`/select,${file}`];
+  if (file === null) return platform === "win32" ? [`"${folder}"`] : [folder]; // verbatim on Windows: quoted here
+  if (platform === "win32") return [`/select,"${file}"`]; // a Windows path holds no quote
   if (platform === "darwin") return ["-R", file];
   return [folder]; // xdg-open has no "select": the folder
 }

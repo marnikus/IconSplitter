@@ -21,7 +21,7 @@
 
 import { adoptCopiedText, readClipboardText } from "../lib/clipboardpath";
 import type { DirHandleLike } from "../lib/fs";
-import { boundRootPathInfo } from "../lib/knownroots";
+import { boundRootPathInfo, resolveRootPath } from "../lib/knownroots";
 import type { RootPathInfo } from "../lib/rootpath";
 
 /**
@@ -43,6 +43,8 @@ export async function captureFromPaste(text: string, root: DirHandleLike | null)
  */
 export async function retryCapture(root: DirHandleLike | null): Promise<string | null> {
   if (root === null || boundRootPathInfo(root).path !== "") return null;
+  const found = await resolveRootPath(root); // the local helper first (2026-11-16)
+  if (found !== null) return `Folder path found: ${boundRootPathInfo(root).path}`;
   if (!byUserGesture()) return null;
   const read = await readClipboardText();
   if (read.state !== "text") return null;

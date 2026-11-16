@@ -501,7 +501,7 @@ describe("the Full path row — never a previous root with the new name appended
     await click("[data-testid=upload-open-folder]");
     await waitFor(() => text("[data-testid=upload-folder-path] code") === "test_process_3", "the new root's row");
     expect(text("[data-testid=upload-folder-path]")).not.toContain("export\\test_process_3");
-    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not found yet");
   });
 
   itSlow("a stored guess in the old name-keyed store is never shown and never glued onto a child pick", async () => {
@@ -514,12 +514,12 @@ describe("the Full path row — never a previous root with the new name appended
     Object.assign(root, { resolve: async () => ["_split_output"] });
     await mount(root);
     expect(text("[data-testid=upload-folder-path] code")).toBe(root.name);
-    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not found yet");
     readClipboard("");
     usePicker(async () => new BinDir("_split_output"));
     await click("[data-testid=upload-open-folder]");
     await waitFor(() => text("[data-testid=upload-folder-path] code") === "_split_output", "the child's row");
-    expect(text("[data-testid=upload-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=upload-folder-path]")).toContain("full path not found yet");
     expect(text("[data-testid=upload-folder-path]")).not.toContain("export");
   });
 

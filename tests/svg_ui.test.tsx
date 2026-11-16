@@ -116,7 +116,7 @@ describe("the folder control and the path row", () => {
   it("names the folder and says when no full path was captured (RULE 4)", async () => {
     await mount(await makeRoot());
     expect(text("[data-testid=svg-folder-path]")).toContain("split_root");
-    expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=svg-folder-path]")).toContain("full path not found yet");
   });
 
   it("never completes a copied PARENT into a guess — the row says 'not captured' instead (I-59)", async () => {
@@ -125,7 +125,7 @@ describe("the folder control and the path row", () => {
     try {
       await mountPick(root);
       expect(text("[data-testid=svg-folder-path]")).not.toContain("icons testing");
-      expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
+      expect(text("[data-testid=svg-folder-path]")).toContain("full path not found yet");
     } finally {
       Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     }

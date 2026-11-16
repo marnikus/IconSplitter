@@ -93,7 +93,7 @@ describe("FolderPathRow — the full path, in one full-width read-only row", () 
   it("names the folder and says when no full path was captured", async () => {
     await mount(<FolderPathRow root={dir(ROOT)} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).toContain(ROOT);
-    expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=x-folder-path]")).toContain("full path not found yet");
     expect(q("[data-testid=x-folder-path]")?.querySelector("input, button")).toBeNull();
   });
 
@@ -102,14 +102,14 @@ describe("FolderPathRow — the full path, in one full-width read-only row", () 
     rememberKnownRoot(dir("_split_output"), GLUED); // ANOTHER folder with this name
     await mount(<FolderPathRow root={dir("_split_output")} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).not.toContain("export");
-    expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=x-folder-path]")).toContain("full path not found yet");
   });
 
   it("never shows anything from the old name-keyed store (I-63: it is not read)", async () => {
     localStorage.setItem("iconSplitter.rootpaths.v1", JSON.stringify({ [ROOT]: { path: FULL, how: "copied" } }));
     await mount(<FolderPathRow root={dir(ROOT)} testid="x-folder-path" />);
     expect(text("[data-testid=x-folder-path]")).not.toContain(FULL);
-    expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=x-folder-path]")).toContain("full path not found yet");
   });
 
   it("renders nothing while no folder is loaded", async () => {
@@ -121,7 +121,7 @@ describe("FolderPathRow — the full path, in one full-width read-only row", () 
   it("follows the memory live: a capture in any tab appears without a reload (I-36/RULE 24)", async () => {
     const root = dir(ROOT);
     await mount(<FolderPathRow root={root} testid="x-folder-path" />);
-    expect(text("[data-testid=x-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=x-folder-path]")).toContain("full path not found yet");
     await act(async () => { rememberKnownRoot(root, FULL); });
     expect(text("[data-testid=x-folder-path]")).toContain(FULL);
     expect(text("[data-testid=x-folder-path]")).not.toContain("not captured");
@@ -141,9 +141,9 @@ describe("FolderPathRow — the note says what to do (I-52)", () => {
   it("names the Explorer copy and the Rescan that captures it when there is no path", async () => {
     await mount(<FolderPathRow root={dir(ROOT)} testid="x-folder-path" />);
     const note = q("[data-testid=x-folder-path] em") as HTMLElement;
-    expect(note.textContent).toContain("Ctrl+Shift+C");
+    expect(note.textContent).toContain("local helper");
     expect(note.textContent).toContain("Rescan");
-    expect((q("[data-testid=x-folder-path]") as HTMLElement).title).toContain("Ctrl+Shift+C");
+    expect((q("[data-testid=x-folder-path]") as HTMLElement).title).toContain("local helper");
   });
 
   it("keeps the plain note when a path IS known", async () => {

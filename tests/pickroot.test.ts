@@ -129,7 +129,7 @@ describe("a pick whose path could not be captured says what to do (I-52)", () =>
     const picked = await pickRootWithPath();
     expect(picked?.path).toBe("");
     const message = pickMessage(picked!);
-    expect(message).toContain("Ctrl+Shift+C");
+    expect(message).toContain("local helper");
     expect(message).toContain("Rescan");
   });
 
@@ -177,7 +177,7 @@ describe("the full path of a pick whose clipboard says nothing (I-51)", () => {
     const picked = await pickRootWithPath();
     expect(picked?.path).toBe(""); // never `${OUT}\\2026-10-05_18-45-20` — a guess
     expect(picked?.how).toBeNull();
-    expect(pickMessage(picked!)).toContain("Ctrl+Shift+C");
+    expect(pickMessage(picked!)).toContain("local helper");
   });
 
   it("derives from a known folder whose exact path arrived LATER (Rescan / Ctrl+V)", async () => {
@@ -240,7 +240,7 @@ describe("the third report (2026-10-09): a name-keyed memory never wins", () => 
     usePicker(async () => handle("_split_output"));
     const picked = await pickRootWithPath();
     expect(picked?.path).toBe("");
-    expect(pickMessage(picked!)).toContain("Ctrl+Shift+C"); // honest: raise the question
+    expect(pickMessage(picked!)).toContain("local helper"); // honest: raise the question
   });
 
   it("picks the parent one level UP of a known child exactly — 'it should not change anything'", async () => {

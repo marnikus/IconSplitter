@@ -32,7 +32,7 @@ describe("helper: open a folder", () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const out = openFolder(dir, { launch: (cmd: string, args: string[]) => { calls.push({ cmd, args }); }, platform: "win32" });
     expect(out).toEqual({ ok: true });
-    expect(calls).toEqual([{ cmd: "explorer.exe", args: [path.resolve(dir)] }]);
+    expect(calls).toEqual([{ cmd: "explorer.exe", args: [`"${path.resolve(dir)}"`] }]);
     const mac: Array<{ cmd: string; args: string[] }> = [];
     openFolder(dir, { launch: (cmd: string, args: string[]) => { mac.push({ cmd, args }); }, platform: "darwin" });
     expect(mac[0].cmd).toBe("open");
@@ -46,7 +46,7 @@ describe("helper: open a folder", () => {
     const calls: Array<{ cmd: string; args: string[] }> = [];
     const launch = (cmd: string, args: string[]) => { calls.push({ cmd, args }); };
     expect(openFolder(dir, { launch, platform: "win32", select: file })).toEqual({ ok: true });
-    expect(calls[0]).toEqual({ cmd: "explorer.exe", args: [`/select,${path.resolve(file)}`] });
+    expect(calls[0]).toEqual({ cmd: "explorer.exe", args: [`/select,"${path.resolve(file)}"`] });
     openFolder(dir, { launch, platform: "darwin", select: file });
     expect(calls[1]).toEqual({ cmd: "open", args: ["-R", path.resolve(file)] });
     expect(openFolder(dir, { launch, platform: "win32", select: path.join(dir, "missing.svg") }).ok).toBe(false);

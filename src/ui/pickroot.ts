@@ -14,7 +14,8 @@
 import { pickDirectory } from "../batch/picker";
 import { adoptCopiedText, readClipboardText, type ClipRead, type ClipState } from "../lib/clipboardpath";
 import type { DirHandleLike } from "../lib/fs";
-import { deriveRootPath, rememberKnownRoot } from "../lib/knownroots";
+import { deriveRootPath, rememberKnownRoot, resolveRootPath } from "../lib/knownroots";
+import "./bridgeroot";
 import { NO_ROOT_PATH, type RootPathInfo } from "../lib/rootpath";
 import { persistRootPath } from "../lib/rootstore";
 
@@ -64,6 +65,7 @@ async function derivedOrNothing(handle: DirHandleLike): Promise<RootPathInfo> {
   const derived = await deriveRootPath(handle);
   if (derived === null) {
     rememberKnownRoot(handle, "");
+    void resolveRootPath(handle); // the local helper finds it in the background (2026-11-16); the rows update when bound
     return NO_ROOT_PATH;
   }
   const info: RootPathInfo = { path: derived, how: "derived" };
@@ -106,5 +108,5 @@ function captureHelp(clip: ClipState): string {
   if (clip === "blocked" || clip === "unsupported") {
     return "Folder path not captured — the browser blocked the clipboard: copy it in Explorer, then press Ctrl+V here";
   }
-  return "Folder path not captured — in Explorer press Ctrl+Shift+C on the folder, then Rescan";
+  return "Finding the folder's full path through the local helper… (if it is not running, start it, then Rescan)";
 }
