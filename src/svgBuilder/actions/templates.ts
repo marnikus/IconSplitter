@@ -106,8 +106,16 @@ function dropArtboardsOf(ctx: BuilderActionContext, templateId: string): void {
 function removeTemplate(ctx: BuilderActionContext, id: string): void {
   const template = ctx.model.templates.find((t) => t.id === id);
   if (template === undefined) return;
-  const editing = ctx.model.editingTemplateId === id ? null : undefined;
-  store(ctx, ctx.model.templates.filter((t) => t.id !== id), editing);
+  const shown = ctx.model.editingTemplateId === id || ctx.model.artboards.some((a) => a.id === ctx.model.editingArtboardId && a.templateId === id);
+  const next = shown ? neighbourTemplate(ctx.model.templates, id) : null;
+  store(ctx, ctx.model.templates.filter((t) => t.id !== id), ctx.model.editingTemplateId === id ? null : undefined);
   dropArtboardsOf(ctx, id);
   ctx.say(`Template “${template.name}” removed`);
+  if (next !== null) { ctx.dispatch({ templateSel: { ...ctx.model.templateSel, active: next, anchor: next } }); editTemplate(ctx, next, false); }
+}
+
+/** The template the stage moves to when the shown one is removed (2026-11-16): the one above, else below — no dead preview. */
+function neighbourTemplate(all: readonly SheetTemplate[], id: string): string | null {
+  const at = all.findIndex((t) => t.id === id);
+  return (all[at - 1] ?? all[at + 1])?.id ?? null;
 }

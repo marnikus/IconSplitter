@@ -196,6 +196,14 @@ describe("templates — the window under the builder", () => {
     await click(`builder-template-remove-${first.id}`);
     expect(saved().map((t) => t.id)).not.toContain(first.id);
     expect(blocks()).toHaveLength(1);
+    const copy = saved()[0];
+    await click(`builder-template-${copy.id}`);
+    await click("builder-template-save-new"); // a third, now shown on the stage
+    const third = saved()[1];
+    expect(text("builder-template-editing")).toContain(third.name);
+    await click(`builder-template-remove-${third.id}`); // the SHOWN one: the stage moves to the one above (2026-11-16)
+    expect(q(`builder-template-${copy.id}`)?.className).toContain("is-editing");
+    expect(text("builder-template-editing")).toContain(copy.name);
   });
 
   it("opening a template is one undo step", async () => {
