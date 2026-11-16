@@ -7,6 +7,8 @@
 // the root (2026-10-08, stock review): a serializer re-declares an undeclared
 // prefix on every element that uses it, which is what the reviewer flagged.
 
+import { metadataRights } from "./rights";
+import { rightsXmp } from "./xmp";
 import type { IconMetadata } from "./meta";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -43,11 +45,13 @@ export function readEmbeddedMetadata(svgText: string): IconMetadata | null {
   const description = directChildText(root, "desc");
   const metadata = directChild(root, "metadata");
   if (title === null || description === null || metadata === null) return null;
-  const tags = descendants(metadata, "li")
+  const subject = descendants(metadata, "subject")[0];
+  if (!subject) return null;
+  const tags = descendants(subject, "li")
     .map((el) => (el.textContent ?? "").trim())
     .filter((t) => t !== "");
   if (tags.length === 0) return null;
-  return { title, description, tags };
+  return { title, description, tags, ...readSvgRights(metadata) };
 }
 
 /** The two vocabularies the block uses, declared once where every serializer finds them in scope. */
@@ -74,6 +78,7 @@ function metadataElement(doc: Document, meta: IconMetadata): Element {
   }
   subject.appendChild(bag);
   description.append(title, desc, subject);
+  appendRights(doc, description, meta);
   rdf.appendChild(description);
   metadata.appendChild(rdf);
   return metadata;
@@ -102,4 +107,16 @@ function localNameOf(el: Element): string {
 
 function name(el: Element): string {
   return el.nodeName.toLowerCase();
+}
+
+function appendRights(doc: Document, description: Element, meta: IconMetadata): void {
+  const xml = `<rdf:RDF xmlns:rdf="${RDF_NS}" xmlns:dc="${DC_NS}">${rightsXmp(meta)}</rdf:RDF>`;
+  const rights = new DOMParser().parseFromString(xml, "application/xml");
+  for (const child of Array.from(rights.documentElement.children)) description.append(doc.importNode(child, true));
+}
+
+function readSvgRights(metadata: Element) {
+  const creator = descendants(metadata, "creator")[0]?.textContent ?? undefined;
+  const copyright = descendants(metadata, "rights")[0]?.textContent ?? undefined;
+  return metadataRights({ creator, copyright });
 }

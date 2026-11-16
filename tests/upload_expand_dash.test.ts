@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_expand_dash.test.ts — arc length, cubic splitting and dash pieces
 // for the stroke expander (2026-10-09, design D4 "Dashes (v1)"): a dash
 // boundary inside a curve is a real split point of that cubic, never a chord;

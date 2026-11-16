@@ -8,6 +8,7 @@
 // No rule lives here — every value comes from the hook and every change goes
 // straight back to it.
 
+import { STATE_SORT_OPTIONS } from "../lib/statesort";
 import type { KeySource } from "../lib/keyvault";
 import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
 import type { DirHandleLike } from "../lib/fs";
@@ -19,11 +20,15 @@ import {
   type GeminiConfig,
 } from "../lib/upload/gemini";
 import type { ModelCheck, UploadListFilter, UploadSort } from "./types";
+import type { RowBadge } from "../lib/upload/rowbadge";
 import UploadPromptPanel, { type UploadPromptPanelProps } from "./UploadPromptPanel";
+import UploadRowBadgeFilter from "./UploadRowBadgeFilter";
 import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import SearchField from "../ui/SearchField";
+import MultiSelect from "../ui/MultiSelect";
 
 export interface UploadControlsProps {
   rootName: string;
@@ -54,6 +59,8 @@ export interface UploadControlsProps {
   onFilter: (patch: Partial<UploadListFilter>) => void;
   onSort: (sort: UploadSort) => void;
   onClearFilters: () => void;
+  badgeCatalog: readonly RowBadge[];
+  onOpenRowBadges: () => void;
 }
 
 export default function UploadControls(p: UploadControlsProps) {
@@ -218,21 +225,18 @@ function keyNote(source: KeySource): string {
 function FilterLine({ p }: { p: UploadControlsProps }) {
   return (
     <div className="svg-filters">
-      <Select label="Package" testid="upload-filter-status" value={p.filter.status}
+      <MultiSelect label="Package" testid="upload-filter-status" value={p.filter.status}
         options={[["all", "All packages"], ["processed", "Processed"], ["partial", "Partial"], ["failed", "Failed"], ["cancelled", "Cancelled"], ["stale", "Stale"], ["not-exported", "Not exported"]]}
         onChange={(v) => p.onFilter({ status: v as UploadListFilter["status"] })} />
-      <Select label="Metadata" testid="upload-filter-metadata" value={p.filter.metadata}
+      <MultiSelect label="Metadata" testid="upload-filter-metadata" value={p.filter.metadata}
         options={[["all", "All metadata"], ["empty", "Empty"], ["pending", "Generating"], ["generated", "Generated"], ["invalid", "Invalid"], ["accepted", "Accepted"], ["interrupted", "Interrupted"]]}
         onChange={(v) => p.onFilter({ metadata: v as UploadListFilter["metadata"] })} />
       <Select label="Sort by" testid="upload-sort" value={p.sort}
-        options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"]]}
+        options={[["name", "Filename"], ["status", "Package status"], ["metadata", "Metadata state"], ...STATE_SORT_OPTIONS]}
         onChange={(v) => p.onSort(v as UploadSort)} />
-      <label className="svg-field">
-        <span className="svg-label">Search</span>
-        <input className="svg-input" data-testid="upload-search" type="search" aria-label="Search icons"
-          placeholder="Filename, folder or version…" value={p.filter.search}
-          onChange={(e) => p.onFilter({ search: e.target.value })} />
-      </label>
+      <UploadRowBadgeFilter filter={p.filter} catalog={p.badgeCatalog} onFilter={p.onFilter} onOpen={p.onOpenRowBadges} />
+      <SearchField testid="upload-search" value={p.filter.search} placeholder="Filename, folder, version or status…"
+        onChange={(search) => p.onFilter({ search })} />
       <span className="svg-result-copy" data-testid="upload-shown">Showing {p.shown} of {p.total}</span>
       <button type="button" className="svg-btn" data-testid="upload-clear-filters" onClick={p.onClearFilters}>× Clear filters</button>
     </div>

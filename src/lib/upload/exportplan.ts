@@ -1,3 +1,4 @@
+import { hasOutputFormats, outputFormats } from "./formats";
 // exportplan.ts — the STAGE PLANNER for selective re-export (design §4.4),
 // split out of export.ts (2026-10-09, RULE 18). Decides which stages re-run
 // and which output files rebuild from the record on disk and the run's input.
@@ -16,14 +17,18 @@ export interface PlanInput {
   settingsFp: string;
   metadataFp: string;
   hasMetadata: boolean;
+  /** What export.json's metadata block should hold: accepted text, else a saved draft, else "" (2026-11-13). */
+  recordMetadataFp?: string;
   optimize: boolean;
+  includeSvg?: boolean;
+  includeJpeg?: boolean;
   includeEps: boolean;
   /** The converter the run would use; a record written by another one rebuilds the EPS only (2026-10-09). */
   epsConverter: EpsConverterId;
   /** Which output file handles exist on disk right now. */
   outputs: { svg: boolean; jpg: boolean; eps: boolean };
-  /** Whether SVG/EPS read back to the accepted metadata; JPEG is deliberately unchanged. */
-  metadataOutputs: { svg: boolean; eps: boolean };
+  /** Whether every file reads back to accepted metadata in its required carriers. */
+  metadataOutputs: { svg: boolean; jpg: boolean; eps: boolean };
 }
 
 /** The plan: which stages re-run, and which OUTPUT files rebuild. */
@@ -38,29 +43,34 @@ export interface StagePlan {
  * raster render (and refreshes EPS when EPS is requested); an optimize toggle
  * re-optimizes (JPEG kept); an EPS toggle is EPS-only; a missing/corrupt
  * output rebuilds just that file, while absent accepted metadata rebuilds only
- * the affected SVG/EPS; no change means no work at all. `rebuild` disambiguates
+ * the affected file; no change means no work at all. `rebuild` disambiguates
  * the shared stages: `embed`
- * touches the SVG and the JPEG's XMP on an explicit metadata change, but
- * repairing an SVG/EPS readback never rewrites the JPEG.
+ * touches the SVG and the JPEG's XMP/IPTC on a metadata change, but
+ * repairing an SVG/EPS readback never rewrites an intact JPEG.
  */
+/**
+ * The fingerprint of the metadata the record's FILES carry: only an accepted
+ * block is embedded. A saved draft (state "invalid"/"generated", 2026-11-13)
+ * lives in export.json alone, so it counts as "nothing embedded" ("").
+ */
+export function embeddedMetadataFp(record: Pick<ExportRecord, "metadata">): string {
+  const block = record.metadata;
+  return block !== null && block.state === "accepted" ? block.fingerprint : "";
+}
+
 export function planStages(record: ExportRecord | null, input: PlanInput): StagePlan {
   const need = new Set<Stage>();
   const rebuild = { svg: false, jpg: false, eps: false };
+  if (!hasOutputFormats(input)) return { stages: [], rebuild };
   const regeometry = record === null
     || record.source.fingerprint !== input.sourceHash
     || record.settings.fingerprint !== input.settingsFp;
   if (regeometry) {
-    need.add("prepare");
-    need.add("render");
-    if (input.optimize) need.add("optimize");
-    if (input.hasMetadata) need.add("embed");
-    if (input.includeEps) need.add("eps");
-    rebuild.svg = true;
-    rebuild.jpg = true;
-    rebuild.eps = input.includeEps;
+    planGeometry(input, need, rebuild);
   } else {
     planDeltas(record as ExportRecord, input, need, rebuild);
   }
+  if (record !== null && hasDisabledOutputs(record, input)) need.add("commit");
   if (need.size > 0) {
     need.add("validate");
     need.add("commit");
@@ -68,18 +78,37 @@ export function planStages(record: ExportRecord | null, input: PlanInput): Stage
   return { stages: STAGE_ORDER.filter((stage) => need.has(stage)), rebuild };
 }
 
+/** Geometry is shared, but rendering and delivered files follow requested formats. */
+function planGeometry(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
+  Object.assign(rebuild, outputFormats(input));
+  need.add("prepare");
+  if (rebuild.jpg) need.add("render");
+  if (input.optimize) need.add("optimize");
+  if (input.hasMetadata) need.add("embed");
+  if (rebuild.eps) need.add("eps");
+}
+
+/** Detaching old outputs is a record-only commit when enabled files need no work. */
+function hasDisabledOutputs(record: ExportRecord, input: PlanInput): boolean {
+  const enabled = outputFormats(input);
+  return (["svg", "jpg", "eps"] as const).some((ext) => !enabled[ext] && record.outputs[ext] !== null);
+}
+
 function planDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
   planMetadataDelta(record, input, need, rebuild);
-  planToggleDeltas(record, input, need, rebuild);
+  // A draft export.json does not hold yet is a record-only commit: no file is rebuilt.
+  if (input.recordMetadataFp !== undefined && (record.metadata?.fingerprint ?? "") !== input.recordMetadataFp) need.add("commit");
+  planSvgOptimizeDelta(record, input, need, rebuild);
+  planEpsToolDelta(record, input, need, rebuild);
   planMissingOutputs(input, need, rebuild);
 }
 
 function planMetadataDelta(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
   const metadataFp = input.hasMetadata ? input.metadataFp : "";
-  if ((record.metadata?.fingerprint ?? "") === metadataFp) return;
+  if (embeddedMetadataFp(record) === metadataFp) return;
   need.add("embed");
-  rebuild.svg = true;
-  rebuild.jpg = true;
+  rebuild.svg = input.includeSvg !== false;
+  rebuild.jpg = input.includeJpeg !== false;
   // EPS is converted before its XMP is embedded, so a metadata edit must also
   // refresh it whenever EPS is part of this run (no raster render is added).
   if (input.includeEps) {
@@ -88,12 +117,16 @@ function planMetadataDelta(record: ExportRecord, input: PlanInput, need: Set<Sta
   }
 }
 
-function planToggleDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  if (record.tools.svgo.enabled !== input.optimize) {
+function planSvgOptimizeDelta(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
+  if (input.includeSvg !== false && record.tools.svgo.enabled !== input.optimize) {
     need.add("optimize");
     if (input.hasMetadata) need.add("embed");
     rebuild.svg = true;
   }
+}
+
+/** EPS converter/writer changes and prior partial failures require only another EPS attempt. */
+function planEpsToolDelta(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
   const writerChanged = input.epsConverter === "builtin" && record.tools.eps.writer !== BUILTIN_WRITER;
   const retryFailedEps = record.status === "partial" && record.error !== null;
   if (input.includeEps && (!record.tools.eps.enabled || recordConverter(record) !== input.epsConverter || writerChanged || retryFailedEps)) {
@@ -108,8 +141,8 @@ export function recordConverter(record: ExportRecord): EpsConverterId {
 }
 
 function planMissingOutputs(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
-  if (!input.outputs.svg || (input.hasMetadata && !input.metadataOutputs.svg)) planSvgRebuild(input, need, rebuild);
-  if (!input.outputs.jpg) planJpegRebuild(input, need, rebuild);
+  if (input.includeSvg !== false && (!input.outputs.svg || (input.hasMetadata && !input.metadataOutputs.svg))) planSvgRebuild(input, need, rebuild);
+  planJpegRepair(input, need, rebuild);
   const epsNeedsRebuild = !input.outputs.eps || (input.hasMetadata && !input.metadataOutputs.eps);
   if (epsNeedsRebuild && input.includeEps) {
     need.add("eps");
@@ -128,4 +161,14 @@ function planJpegRebuild(input: PlanInput, need: Set<Stage>, rebuild: StagePlan[
   need.add("render");
   if (input.hasMetadata) need.add("embed");
   rebuild.jpg = true;
+}
+
+/** Missing pixels require render; stripped compatibility metadata requires only embed. */
+function planJpegRepair(input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
+  if (input.includeJpeg === false) return;
+  if (!input.outputs.jpg) planJpegRebuild(input, need, rebuild);
+  else if (input.hasMetadata && !input.metadataOutputs.jpg) {
+    need.add("embed");
+    rebuild.jpg = true;
+  }
 }

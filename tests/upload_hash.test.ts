@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — fingerprints run for real: SHA-256 over bytes and over UTF-8
 // text, against published test vectors.
 import { describe, expect, it } from "vitest";

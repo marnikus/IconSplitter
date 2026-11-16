@@ -1,0 +1,626 @@
+{
+  "date": "2026-10-23",
+  "referenceCommit": "0fa074c",
+  "targetAdditionalReductionPct": 50,
+  "targetAchieved": false,
+  "applicationChangesAllowed": false,
+  "executionArchitectureChanged": false,
+  "baselineWarmMedianSeconds": 74.8843991915,
+  "records": {
+    "baseline-populate": {
+      "schema": 1,
+      "label": "round2 baseline initial cache population",
+      "command": [
+        "npm",
+        "run",
+        "verify",
+        "--",
+        "--base",
+        "0fa074c"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 115.940174546,
+      "exitCode": 0,
+      "signal": null
+    },
+    "baseline-warm1": {
+      "schema": 1,
+      "label": "round2 current full warm baseline1 after setup",
+      "command": [
+        "npm",
+        "run",
+        "verify",
+        "--",
+        "--base",
+        "0fa074c"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 76.297274289,
+      "exitCode": 0,
+      "signal": null
+    },
+    "baseline-warm2": {
+      "schema": 1,
+      "label": "round2 current full warm baseline2",
+      "command": [
+        "npm",
+        "run",
+        "verify",
+        "--",
+        "--base",
+        "0fa074c"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 73.471524094,
+      "exitCode": 0,
+      "signal": null
+    },
+    "heap64": {
+      "schema": 1,
+      "label": "experimental young heap64; all tests coverage",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--coverage",
+        "--coverage.reportsDirectory=/home/user/harness-round2/heap64-coverage",
+        "--reporter=dot",
+        "--reporter=json",
+        "--outputFile.json=/home/user/harness-round2/heap64-tests.json"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 57.592347062,
+      "exitCode": 0,
+      "signal": null
+    },
+    "optimizer1": {
+      "schema": 1,
+      "label": "experimental dependency prebundle; all tests coverage",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "node_modules/.cache/round2/optimizer.config.ts",
+        "--coverage",
+        "--coverage.reportsDirectory=/home/user/harness-round2/optimizer1-coverage",
+        "--reporter=dot"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 83.04175172699999,
+      "exitCode": 1,
+      "signal": null
+    },
+    "threads-istanbul": {
+      "schema": 1,
+      "label": "experimental isolated threads Istanbul; all tests coverage",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--pool=threads",
+        "--coverage",
+        "--coverage.reportsDirectory=/home/user/harness-round2/threads-istanbul-coverage",
+        "--reporter=dot"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 115.63604663,
+      "exitCode": 0,
+      "signal": null
+    },
+    "warm4": {
+      "schema": 1,
+      "label": "experimental four VM workers warm",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--maxWorkers=4",
+        "--coverage",
+        "--coverage.reportsDirectory=/home/user/harness-round2/warm4-coverage",
+        "--reporter=dot"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 58.655130605000004,
+      "exitCode": 0,
+      "signal": null
+    },
+    "v4-complete-first": {
+      "schema": 1,
+      "label": "experimental v4-complete-first; all tests and full coverage",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "node_modules/.cache/round2/v4.config.ts",
+        "--coverage",
+        "--coverage.reportsDirectory=/home/user/harness-round2/v4-complete-first-coverage",
+        "--reporter=dot"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 75.445761292,
+      "exitCode": 0,
+      "signal": null
+    },
+    "v4-complete-warm": {
+      "schema": 1,
+      "label": "experimental v4-complete-warm; all tests and full coverage",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "node_modules/.cache/round2/v4.config.ts",
+        "--coverage",
+        "--coverage.reportsDirectory=/home/user/harness-round2/v4-complete-warm-coverage",
+        "--reporter=dot"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 64.297956341,
+      "exitCode": 0,
+      "signal": null
+    },
+    "vmforks-first": {
+      "schema": 1,
+      "label": "experimental main-only vmForks Istanbul; native preserved",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "node_modules/.cache/round2/vmforks.config.ts",
+        "--coverage",
+        "--coverage.reportsDirectory=/home/user/harness-round2/vmforks-first-coverage",
+        "--reporter=dot"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 71.67487474999999,
+      "exitCode": 0,
+      "signal": null
+    },
+    "vmforks-warm": {
+      "schema": 1,
+      "label": "experimental main-only vmForks Istanbul; warm; native preserved",
+      "command": [
+        "node",
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--config",
+        "node_modules/.cache/round2/vmforks.config.ts",
+        "--coverage",
+        "--coverage.reportsDirectory=/home/user/harness-round2/vmforks-warm-coverage",
+        "--reporter=dot"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 56.570600400000004,
+      "exitCode": 0,
+      "signal": null
+    },
+    "final-full1": {
+      "schema": 1,
+      "label": "round2 retained architecture; target comparison tool only; full1",
+      "command": [
+        "npm",
+        "run",
+        "verify",
+        "--",
+        "--base",
+        "0fa074c"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 81.064494573,
+      "exitCode": 0,
+      "signal": null
+    },
+    "final-full2": {
+      "schema": 1,
+      "label": "round2 retained architecture; target comparison tool only; full2",
+      "command": [
+        "npm",
+        "run",
+        "verify",
+        "--",
+        "--base",
+        "0fa074c"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 73.928039752,
+      "exitCode": 0,
+      "signal": null
+    },
+    "final-cold": {
+      "schema": 1,
+      "label": "round2 retained architecture; all six gates; explicit cold",
+      "command": [
+        "npm",
+        "run",
+        "verify",
+        "--",
+        "--cold",
+        "--base",
+        "0fa074c"
+      ],
+      "environment": {
+        "node": "v22.22.3",
+        "platform": "linux",
+        "arch": "x64",
+        "cpus": 2,
+        "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+        "memoryBytes": 4131278848,
+        "kernel": "6.1.158+",
+        "host": "e2b.local"
+      },
+      "seconds": 108.692518783,
+      "exitCode": 0,
+      "signal": null
+    }
+  },
+  "negativeControl": {
+    "beforeSeconds": 73.471524094,
+    "afterSeconds": 73.928039752,
+    "reductionPct": -0.6213504669046133,
+    "requiredReductionPct": 50,
+    "passed": false
+  },
+  "equivalence": {
+    "baselineDiscoveryEntries": 2390,
+    "afterDiscoveryEntries": 2392,
+    "missing": [],
+    "added": [
+      [
+        "tests/harness_benchmark.test.ts",
+        "main",
+        "supports a requested additional 50% reduction without changing the default 60% target"
+      ],
+      [
+        "tests/harness_benchmark.test.ts",
+        "main",
+        "rejects missing, nonnumeric and out-of-range reduction targets with a diagnostic"
+      ]
+    ],
+    "coverageJsonExactlyEqual": true,
+    "coverageFiles": 167,
+    "totals": {
+      "lines": {
+        "total": 5746,
+        "covered": 5633,
+        "skipped": 0,
+        "pct": 98.03
+      },
+      "statements": {
+        "total": 7861,
+        "covered": 7467,
+        "skipped": 0,
+        "pct": 94.98
+      },
+      "functions": {
+        "total": 1820,
+        "covered": 1784,
+        "skipped": 0,
+        "pct": 98.02
+      },
+      "branches": {
+        "total": 5486,
+        "covered": 4898,
+        "skipped": 0,
+        "pct": 89.28
+      },
+      "branchesTrue": {
+        "total": 0,
+        "covered": 0,
+        "skipped": 0,
+        "pct": 100
+      }
+    }
+  },
+  "resources": {
+    "exitCode": 0,
+    "childUserSeconds": 118.307814,
+    "childSystemSeconds": 19.247409,
+    "maxRSSKiB": 2074356,
+    "measurement": "Linux getrusage(RUSAGE_CHILDREN), includes command and reaped descendants; diagnostic only"
+  },
+  "fourWorkerResources": {
+    "userSeconds": 105.8002,
+    "systemSeconds": 7.591687,
+    "peakRSSKiB": 2435304,
+    "method": "Linux getrusage(RUSAGE_CHILDREN); external Python experiment wrapper"
+  },
+  "fullLaneTimings": {
+    "baseline-warm1": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 3.7
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 1.3
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.5
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 3.7
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 59.8
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 7.1
+      }
+    ],
+    "baseline-warm2": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 3.6
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 1.3
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.6
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 3.7
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 57.3
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 6.9
+      }
+    ],
+    "final-full1": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 10.5
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 1.7
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.6
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 3.8
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 57.4
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 6.8
+      }
+    ],
+    "final-full2": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 3.7
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 1.3
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.5
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 3.6
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 57.7
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 7.0
+      }
+    ],
+    "final-cold": [
+      {
+        "lane": "Types",
+        "status": "PASS",
+        "seconds": 14.6
+      },
+      {
+        "lane": "Lint",
+        "status": "PASS",
+        "seconds": 11.5
+      },
+      {
+        "lane": "Quality gate (changed)",
+        "status": "PASS",
+        "seconds": 0.5
+      },
+      {
+        "lane": "Perf budgets (native, uninstrumented)",
+        "status": "PASS",
+        "seconds": 4.0
+      },
+      {
+        "lane": "Tests + coverage",
+        "status": "PASS",
+        "seconds": 70.8
+      },
+      {
+        "lane": "Build",
+        "status": "PASS",
+        "seconds": 7.1
+      }
+    ]
+  },
+  "sourceTree": "baf04095ddd8a7d2670d7dbad37648fae72d1379",
+  "experimentEnvironmentOverrides": {
+    "heap64": {
+      "NODE_OPTIONS": "--max-semi-space-size=64"
+    },
+    "coverageOnlyRuns": {
+      "PERF_BUDGETS": "coverage"
+    }
+  },
+  "classifications": {
+    "optimizer1": "Rejected: two assertion failures including root cleanup; no speed acceptance",
+    "v4-complete-first": "Successful complete private dependency probe; project lock unchanged",
+    "v4-complete-warm": "Successful but slower than retained configuration",
+    "final-full1": "All gates pass; post-experiment static-cache revalidation, not clean warm comparison",
+    "final-full2": "Successful normal warm workflow; no performance gain claimed",
+    "final-cold": "Successful explicit static/transform cache bypass; separate conditions"
+  }
+}

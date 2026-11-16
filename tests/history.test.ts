@@ -1,3 +1,4 @@
+// @vitest-environment node
 // history.test.ts — RULE 8/12: the ONE global undo timeline. Contracts follow
 // the reference implementation's UndoStore/UndoService (see
 // docs/archive/2026-10-01-history-session/design.md §1) with this app's

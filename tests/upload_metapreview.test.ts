@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_metapreview.test.ts — preparing the images the confirmation shows and
 // the request sends (design §2.4). The wire seam reads each selected icon's OWN
 // approved SVG and renders it with the ONE render primitive the runner uses, so

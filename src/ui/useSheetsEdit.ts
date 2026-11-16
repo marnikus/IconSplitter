@@ -6,8 +6,8 @@
 import { useCallback } from "react";
 import { SIZES, type SheetOpts } from "../lib/exportopts";
 import { getAppState, setAppState } from "../state/appstore";
-import { useAppState } from "../state/useAppState";
-import { useHistory } from "../state/HistoryProvider";
+import { useAppSlice } from "../state/useAppState";
+import { useHistoryActions } from "../state/HistoryProvider";
 
 export interface SheetsEdit {
   opts: SheetOpts;
@@ -17,8 +17,8 @@ export interface SheetsEdit {
 }
 
 export function useSheetsEdit(): SheetsEdit {
-  const opts = useAppState().sheets;
-  const hist = useHistory();
+  const opts = useAppSlice("sheets");
+  const hist = useHistoryActions();
   const apply = useCallback((patch: Partial<SheetOpts>, label: string, id: string, gesture: boolean) => {
     const before = getAppState().sheets;
     const after = { ...before, ...patch };

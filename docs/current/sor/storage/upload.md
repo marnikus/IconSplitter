@@ -1,0 +1,44 @@
+# Storage — SVG to upload
+
+Validate on read (RULE 13). Part of the [storage map](../STORAGE.md).
+
+| Where | What | Rules |
+|---|---|---|
+| IndexedDB `iconSplitter/handles["__upload__"]` | SVG to upload root handle | falls back to the Generate SVG handle, then the Selection handle |
+| localStorage `iconSplitter.upload.settings.v1` | upload settings `{ v, defaults, overrides, applied }` (global defaults, per-icon overrides map, and the decoration values a global control applied: `{ pairId: DecorationValues }`, missing → `{}`, junk keys dropped; `v: 2` since 2026-10-21, a `v: 1` payload has its marks and decoration overrides migrated here on read) | validated/clamped on read (RULE 13): `background` is `transparent` or a hex (a missing or junk value → `transparent`; a stored white from before 2026-10-08 stays white), `strokeColor` is a hex or `artwork` (missing or junk → `#000000`, the 2026-10-08 default; a stored `artwork` stays `artwork`), `strokePx` is 0–50 px (the pre-2026-10-08 key `strokePt` reads as the same number); shadow defaults off with width 80% (10–200) and gap 5% (0–100), per-pair overrides persist here and join `uploadSettings` undo; its template hash/dimensions fingerprint only while on so old exports do not turn stale; corner badge defaults off at bottom-right (width 40%, X/Y 3%) and only icon overrides opt in; validated corner/percentages and the bundled asset hash fingerprint only while enabled; S/L size guide defaults off at bottom-left (S 6%, L 12%, `sizeGuideSmallStrokePx` / `sizeGuideLargeStrokePx` 0–50 px with legacy `*StrokePct` keys migrated as the same number on read, gap 2%, X/Y 3%), icon overrides opt in, and its fields + templates fingerprint only while enabled; the undo path writes through the same store |
+| localStorage `iconSplitter.upload.gemini.v1` | the Gemini provider config (endpoint, model, timeout, retries, concurrency) | clamped on read (RULE 13) |
+| localStorage `iconSplitter.upload.bridge.v1` | the Inkscape helper config `{ v, url }` (2026-10-09) | validated on read (RULE 13): only an `http(s)://` URL is kept, anything else → `http://127.0.0.1:47391`; device config, never per icon |
+| localStorage `iconSplitter.upload.prompt.v1` | the metadata prompt `{ v, prompt }` | validated on read: missing/empty/junk/foreign version → the documented default (`parsePromptText`, RULE 13); written on every edit, so a restart opens with the user's own text |
+| localStorage `iconSplitter.upload.prompts.v1` | the saved prompt presets `{ v, presets: [{ name, text }] }` | validated entry by entry (names trimmed 1–60, text ≤ 8000), duplicates keep the last, capped at 50; corrupt → no presets |
+| localStorage `iconSplitter.upload.prefs.v1` | upload view prefs `{ thumbHeight, providerOpen, previewBg }` | clamped/validated on read; display-only — the zoom never feeds the output scale |
+| localStorage `iconSplitter.upload.rowBadges.v1` | row-badge catalog + per-pair assignments `{ v: 1, catalog: [{ id, name, color }], assigned: { [pairId]: id[] } }` (I-79) | validated entry by entry on read (RULE 13): junk catalog rows dropped, unknown assignment ids dropped, foreign version → empty; capped at 40 badges; never exported or sent |
+| localStorage `iconSplitter.upload.journal.v1` | the in-flight metadata-request journal (row id, start time, request id — no key, no prompt, no answer) | validated on read; corrupt = empty; an open entry after a restart is `interrupted`, never resent |
+| localStorage `iconSplitter.upload.meta.v1` | the **accepted-metadata cache** (CP-15), keyed by the sha256 of the SOURCE SVG: `{ v, cache: { [sha256]: { state: generated \| accepted, meta } } }` | validated entry-by-entry on read (junk dropped, foreign version = empty); bounded at 512 entries, oldest evicted first; an entry whose text no longer passes `upload-meta-v1` comes back `invalid`, never exportable: edited artwork misses the cache by construction |
+| localStorage `iconSplitter.upload.jobs.v1` | the **per-icon job store** (CP-2): `{ v, states: { [pairId]: queued \| running \| processed \| partial \| failed \| cancelled \| interrupted } }` | validated on read (unknown states dropped), bounded at 1024; a `queued`/`running` entry left by a previous session becomes `interrupted` **once per page load**; the store never re-sends, retries or re-bills anything |
+| IndexedDB `iconSplitter/secrets["gemini-api-key"]` | the Gemini API key | its own slot beside the Requesty key; never in localStorage, logs or exports (RULE 20); a refused write falls back to a session-only key the UI names as such |
+| `<pair-folder>/export/<base>.svg|.jpg|.eps` | the requested export files (SVG/JPEG default on, EPS default off). `<base>` keeps the icon's own name and drops ONLY the app's `_AI` marker (`lib/upload/export.ts` `stemOf`, the ONE rule the commit and the published-JPEG path share) — `fog_AI.svg` → `fog.svg`, `fog_AI_03.svg` → `fog_03.svg`, `icon-bunny-face_AI_7_04.svg` → `icon-bunny-face_7_04.svg`, `fog_AI_v2.svg` → `fog_v2.svg`; every numeric tail STAYS (the digits are what tell one icon from another — `fog_AI.svg` and `fog_AI_7.svg` are different pairs and stay `fog.*` and `fog_7.*`), and a name without a trailing `_AI` marker (or with a non-numeric tail, `fog_AI_x.svg`) comes back unchanged, never invented | written only by the validated export commit; the approved source and its sidecar are never touched. The approved version also stays in `export.json` (`source.version`) as before |
+| `<pair-folder>/export/export.json` | the per-icon export record (schema v1: source/settings fingerprints, svgo + eps tool records, metadata block, outputs with hashes, stage, status, validation, timestamps) | one per icon, no global multi-icon file; written LAST as the commit marker; corrupt/missing → rebuilt, never destroys outputs |
+
+Object URLs from user files are revoked on sheet removal (sheets mode).
+
+
+The badge's `badgeTemplateSvg` field is stored in the same defaults/overrides/
+applied payload. Empty means bundled source; nonempty code must pass the shared
+safe-vector validator on every read. Invalid template data drops only that
+field. No source file or extra asset store is written. See
+[custom badge templates](../upload-badge.md#custom-svg-templates).
+
+Padding keeps its existing field/key/version: scalar or null payloads remain
+compatible; asymmetric `{left,right,top,bottom}` values validate on read and
+participate in overrides/history. [Four-side padding](../upload-padding.md).
+
+Explicit [local batch snapshots](../upload-local-settings.md) reuse the v2
+overrides map, including content-fit artboard pins; no schema/key change.
+
+Format flags `includeSvg`/`includeJpeg` reuse the settings payload/version;
+absent/junk defaults normalize to true, only boolean overrides survive.
+See [format persistence/delivery](../upload-formats.md).
+
+Named Export settings presets use `iconSplitter.upload.exportPresets.v1`, a
+versioned `{v:1,presets:[{name,settings}]}` catalog, separate from active settings.
+Validation, bounds and verified-write behavior: [presets](../upload-settings-presets.md).

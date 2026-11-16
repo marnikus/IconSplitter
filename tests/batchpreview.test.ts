@@ -1,3 +1,4 @@
+// @vitest-environment node
 // batchpreview.test.ts — pure lib for Batch merge preview
 
 import { describe, expect, it } from "vitest";

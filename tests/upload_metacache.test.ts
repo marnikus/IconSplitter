@@ -11,6 +11,9 @@ import {
 } from "../src/upload/metacache";
 import { MANDATORY_TAGS, validateMetadata, type IconMetadata } from "../src/lib/upload/meta";
 import { EMPTY_META } from "../src/upload/types";
+import { metaFromRecord } from "../src/upload/rowmodel";
+import { metadataBlock, newExportRecord } from "../src/lib/upload/export";
+import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
 
 const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "business", "finance",
   "analytics", "data", "trend", "increase", "graph", "statistics", "report", "dashboard", "money",
@@ -21,6 +24,7 @@ const META: IconMetadata = {
   title: "Minimal line icon of growth and speed",
   description: "Clean line icon showing growth and rising business trends",
   tags: TAGS,
+  name: "growth",
 };
 
 const HASH = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
@@ -83,6 +87,11 @@ describe("write, read and the bound", () => {
 describe("what the row opens with", () => {
   it("an accepted answer comes back accepted; a generated one comes back unaccepted", () => {
     expect(restoredMeta({ state: "accepted", meta: META }).state).toBe("accepted");
+    // 2026-11-08: a remembered answer with a field empty is NOT accepted, whatever it was stored as
+    const noName = restoredMeta({ state: "accepted", meta: { ...META, name: undefined } });
+    expect(noName.state).toBe("invalid");
+    expect(noName.validation?.errors).toContain("Icon Name is empty — one word of at most 9 characters is required");
+    expect(noName.detail).toContain("no longer passes the policy");
     expect(restoredMeta({ state: "generated", meta: META }).state).toBe("generated");
     expect(restoredMeta({ state: "accepted", meta: META }).metadata).toEqual(META);
   });
@@ -112,5 +121,33 @@ describe("what the row opens with", () => {
     expect(needsModelCall(EMPTY_META)).toBe(true);
     expect(needsModelCall({ ...EMPTY_META, state: "interrupted" })).toBe(true);
     expect(needsModelCall({ ...EMPTY_META, state: "invalid", metadata: META })).toBe(true);
+  });
+});
+
+describe("an already exported package with an empty Icon Name (2026-11-08)", () => {
+  const record = (meta: IconMetadata) => {
+    const rec = newExportRecord({
+      pair: { id: "p", base: "b", suffix: "", dir: "d" },
+      source: { svgPath: "d/b.svg", version: 1, approval: "approved", fingerprint: "f" },
+      settings: { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, effective: DEFAULT_UPLOAD_SETTINGS, fingerprint: "s" },
+      svgo: { enabled: false, version: "", config: "", beforeBytes: 0, afterBytes: 0, beforeHash: "", afterHash: "" },
+      epsEnabled: false,
+    });
+    rec.metadata = metadataBlock(meta, {
+      prompt: "p", provider: "Gemini", model: "m", requestId: null, usage: { input: null, output: null, total: null },
+      fingerprint: "f", validation: { ok: true, errors: [], warnings: [] },
+    });
+    return rec;
+  };
+
+  it("keeps its accepted state (a non-accepted row would re-export WITHOUT its metadata) but warns about the empty field", () => {
+    const state = metaFromRecord(record({ ...META, name: undefined }), false);
+    expect(state.state).toBe("accepted");
+    expect(state.validation?.ok).toBe(true);
+    expect(state.validation?.warnings).toContain("Icon Name is empty — one word of at most 9 characters is required");
+  });
+
+  it("a package that has its Icon Name shows no warning", () => {
+    expect(metaFromRecord(record(META), false).validation?.warnings).toEqual([]);
   });
 });

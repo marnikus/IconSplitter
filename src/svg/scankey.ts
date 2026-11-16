@@ -17,8 +17,8 @@ function rowKey(row: SvgRow): string {
     row.source.problems.map((p) => p.kind).join("+"),
     row.corrupt ? "corrupt" : "ok", row.status,
     row.meta ? `n${row.meta.versions.length}` : "n0",
-    v ? `v${v.version}:${v.svgPath}:${v.status}:${v.review}` : "v0",
-    row.approved ? `a${row.approved.version}` : "a0",
+    v ? `v${v.version}:${v.svgPath}:${v.status}` : "v0",
+    `r${row.review}`,
   ].join("~");
 }
 

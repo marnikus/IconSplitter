@@ -57,7 +57,8 @@ describe("SvgBatchStrip — elapsed time and Cancel while a request runs", () =>
     ui = createRoot(host);
     await render(progress(), true, onCancel);
     expect(q("[data-testid=svg-batch-elapsed]")?.textContent).toBe("elapsed 0s");
-    expect(q("[data-testid=svg-batch-cancel]")).not.toBeNull();
+    expect(q("[data-testid=svg-batch-cancel]")?.textContent).toBe("Skip current request");
+    expect(q("[data-testid=svg-batch-cancel]")?.getAttribute("title")).toContain("all icons sharing it");
 
     await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
     expect(q("[data-testid=svg-batch-elapsed]")?.textContent).toBe("elapsed 5s");

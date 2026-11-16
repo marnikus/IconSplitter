@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_runtotals.test.ts — the ONE arithmetic behind "N done · M left"
 // (2026-10-08): the popup on every tab, the bulk bar and the log all read it,
 // so they can never disagree. Proven on plain data: mid-request, between
@@ -42,7 +43,7 @@ describe("runTotals", () => {
   });
 
   it("batches waiting behind the run are LEFT too", () => {
-    const waiting = [queueItem(["x", "y"], 1, "x"), queueItem(["z"], 1, "z")];
+    const waiting = [queueItem({ ids: ["x", "y"], requests: 1, label: "x" }), queueItem({ ids: ["z"], requests: 1, label: "z" })];
     const t = runTotals(progress(), waiting);
     expect(t.queued).toBe(3);
     expect(t.left).toBe(16 + 3);
@@ -51,7 +52,7 @@ describe("runTotals", () => {
   it("after the run ended: done equals the run's images, left is only what waits", () => {
     const ended = progress({ index: 5, outcomes: [1, 2, 3, 4, 5].map((i) => outcome(i)) });
     expect(runTotals(ended, [])).toMatchObject({ done: 20, left: 0 });
-    expect(runTotals(ended, [queueItem(["q"], 1, "q")]).left).toBe(1);
+    expect(runTotals(ended, [queueItem({ ids: ["q"], requests: 1, label: "q" })]).left).toBe(1);
   });
 
   it("never reports more done than the run has images (a request's counters cannot overshoot)", () => {

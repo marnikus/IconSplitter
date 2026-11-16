@@ -1,3 +1,4 @@
+// @vitest-environment node
 // selection_state.test.ts — RULE 8/24: pure reducers behind useSelection.
 import { describe, expect, it } from "vitest";
 import {
@@ -82,10 +83,12 @@ describe("nextPendingId", () => {
     return withDecision(s, "b", "approved", "t");
   };
 
-  it("rolls to the next pending after the current position, wrapping", () => {
+  it("chooses the closest pending below without wrapping", () => {
     const s = mk();
     expect(nextPendingId(s.pairs, "a")).toBe("c");
-    expect(nextPendingId(s.pairs, "c")).toBe("a");
+    expect(nextPendingId(s.pairs, "c")).toBeNull();
+    expect(nextPendingId(s.pairs, "missing")).toBeNull();
+    expect(nextPendingId([], "a")).toBeNull();
   });
 
   it("null when nothing pending remains", () => {

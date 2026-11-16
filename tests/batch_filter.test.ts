@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { applyBatchFilters, ALL_BATCH_FILTER, monthKey, type BatchRowLike } from "../src/lib/batchfilter";
 

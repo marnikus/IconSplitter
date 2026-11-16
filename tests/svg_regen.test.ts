@@ -69,7 +69,7 @@ describe("regenPlanOf — the plan a run is given", () => {
   it("hands over the picked preset's name and text", () => {
     expect(regenPlanOf({ mode: "current-svg", presetName: "Bolder" }, PRESETS)).toEqual({
       ok: true,
-      plan: { kind: "current-svg", presetName: "Bolder", presetText: "Make the strokes bolder and keep the layout." },
+      plan: { kind: "current-svg", presetName: "Bolder", presetText: "Make the strokes bolder and keep the layout.", size: 1 },
     });
   });
 });
@@ -80,30 +80,40 @@ describe("requestSizeFor — one icon per request in the current-SVG mode", () =
     expect(requestSizeFor(DEFAULT_CONFIG.imagesPerRequest, { kind: "main" })).toBe(DEFAULT_CONFIG.imagesPerRequest);
   });
 
-  it("is 1 in the current-SVG mode whatever the configured size says", () => {
-    const plan = { kind: "current-svg" as const, presetName: "Bolder", presetText: "x" };
-    expect(requestSizeFor(9, plan)).toBe(1);
-    expect(requestSizeFor(1, plan)).toBe(1);
+  it("is the size frozen in the current-SVG plan, never the generation size", () => {
+    const plan = { kind: "current-svg" as const, presetName: "Bolder", presetText: "x", size: 4 };
+    expect(requestSizeFor(9, plan)).toBe(4);
+    expect(requestSizeFor(1, plan)).toBe(4);
+    expect(requestSizeFor(9, { ...plan, size: 1 })).toBe(1);
+    expect(requestSizeFor(9, { ...plan, size: 99 })).toBe(9);
   });
 });
 
-describe("currentSvgPrompt — the saved prompt, the icon's name, then the code", () => {
+describe("currentSvgPrompt — the icon's name, its code, then the saved prompt at the bottom", () => {
   const code = "<svg viewBox=\"0 0 24 24\"><path d=\"M2 2h20\"/></svg>";
 
-  it("carries the trimmed prompt, the name line and the SVG code verbatim, in that order", () => {
+  it("puts the name line first, the SVG code verbatim next, and the trimmed prompt last (2026-11-05)", () => {
     const text = currentSvgPrompt("  Make it bolder.  ", "icon-1_AI", code);
     const at = (s: string) => text.indexOf(s);
-    expect(text.startsWith("Make it bolder.")).toBe(true);
-    expect(at("Icon name (use it as the SVG <title>): icon-1_AI")).toBeGreaterThan(at("Make it bolder."));
+    expect(text.startsWith("Icon name (use it as the SVG <title>): icon-1_AI")).toBe(true);
     expect(at(code)).toBeGreaterThan(at("Icon name (use it as the SVG <title>): icon-1_AI"));
-    expect(text.endsWith(code)).toBe(true);
+    expect(at("Regenerate it from the attached image following these instructions:")).toBeGreaterThan(at(code));
+    expect(text.endsWith("Make it bolder.")).toBe(true);
+    expect(text).not.toContain("instructions above");
+  });
+
+  it("never mentions an attached image when none is sent", () => {
+    const text = currentSvgPrompt("Make it bolder.", "icon-1_AI", code, false);
+    expect(text).not.toContain("attached image");
+    expect(text).toContain("no image is attached");
+    expect(text.endsWith("Make it bolder.")).toBe(true);
   });
 });
 
 describe("regenLabelOf — what the log and the user are told", () => {
   it("names the main mode and the picked saved prompt", () => {
     expect(regenLabelOf({ kind: "main" })).toBe("main prompt + first image");
-    expect(regenLabelOf({ kind: "current-svg", presetName: "Bolder", presetText: "x" })).toContain("“Bolder”");
+    expect(regenLabelOf({ kind: "current-svg", presetName: "Bolder", presetText: "x", size: 4 })).toContain("“Bolder”");
   });
 });
 
@@ -131,7 +141,7 @@ describe("regenstore — the setting is stored and read back (RULE 13)", () => {
     saveRegenSetting({ mode: "current-svg", presetName: "Bolder" });
     expect(resolveRegen()).toEqual({
       ok: true,
-      plan: { kind: "current-svg", presetName: "Bolder", presetText: "Make the strokes bolder and keep the layout." },
+      plan: { kind: "current-svg", presetName: "Bolder", presetText: "Make the strokes bolder and keep the layout.", size: 1 },
     });
     savePresets([]);
     expect(resolveRegen().ok).toBe(false);
@@ -140,7 +150,7 @@ describe("regenstore — the setting is stored and read back (RULE 13)", () => {
 
 describe("the plan and the guard read the stored choice (the confirmation shows the same plan)", () => {
   const ctxWithKey = () => ({
-    rows: [], m: { config: { ...DEFAULT_CONFIG, imagesPerRequest: 4 } },
+    rows: [], m: { busy: null, config: { ...DEFAULT_CONFIG, imagesPerRequest: 4 } },
     refs: { root: { current: new FakeDir("root") }, key: { current: "key" } },
   });
 
@@ -149,15 +159,21 @@ describe("the plan and the guard read the stored choice (the confirmation shows 
     savePresets(PRESETS);
   });
 
-  it("counts the configured size in the main mode, one icon per request in the current-SVG mode", () => {
+  it("counts the configured size in the main mode, the stored batch size in the current-SVG mode", () => {
     expect(perRequestOf(ctxWithKey())).toBe(4);
     saveRegenSetting({ mode: "current-svg", presetName: "Bolder" });
-    expect(perRequestOf(ctxWithKey())).toBe(1);
+    expect(perRequestOf(ctxWithKey())).toBe(1); // the legacy setting has no size: one icon
   });
 
   it("the guard refuses a current-SVG run with no usable saved prompt, and names why", () => {
     saveRegenSetting({ mode: "current-svg", presetName: "" });
     expect(guard(ctxWithKey() as unknown as SvgCtx, ["a"])).toContain("saved prompt");
+  });
+
+  it("refuses scanning/non-image work but permits independent SVG confirmation during image work", () => {
+    const c = ctxWithKey();
+    expect(guard({ ...c, m: { ...c.m, busy: "Scanning sources" } } as unknown as SvgCtx, ["a"])).toContain("Scanning");
+    expect(guard({ ...c, m: { ...c.m, busy: "Regenerating AI sources: 1 left" } } as unknown as SvgCtx, ["a"])).toBeNull();
   });
 
   it("the guard lets a valid choice through", () => {

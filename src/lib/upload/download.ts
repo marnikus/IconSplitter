@@ -49,12 +49,18 @@ export function planDownload(rows: readonly DownloadSource[]): DownloadPlan {
   return { items, notExported, icons };
 }
 
+/** UI-only count; the same eligibility as execution, without destination names. */
+export function committedArtifactCount(record: ExportRecord | null): number {
+  return record === null ? 0 : artifactKinds(record).length;
+}
+
+function artifactKinds(record: ExportRecord) {
+  return ARTIFACT_EXTS.filter((ext) => record.outputs[ext] !== null);
+}
+
 /** The record's committed artifacts, in svg → jpg → eps order. */
 function artifactsOf(record: ExportRecord): { ext: string; path: string }[] {
-  return ARTIFACT_EXTS.flatMap((ext) => {
-    const out = record.outputs[ext];
-    return out === null ? [] : [{ ext, path: out.path }];
-  });
+  return artifactKinds(record).map((ext) => ({ ext, path: record.outputs[ext]!.path }));
 }
 
 /** `architecture/export/fog.svg` → `fog`. */

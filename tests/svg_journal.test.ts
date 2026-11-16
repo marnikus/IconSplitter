@@ -19,6 +19,27 @@ function record(batchId: string, sourceIds: string[]): Omit<InflightRequest, "re
 
 beforeEach(() => window.localStorage.clear());
 
+describe("parallel runs have independent journal scopes", () => {
+  it("keeps repeated batch ids in different runs and attaches only the matching request", () => {
+    beginRequest(record("batch_1_4", ["pair_1"]));
+    beginRequest({ ...record("batch_1_4", ["pair_2"]), runId: "run_2" });
+    expect(loadInflight()).toHaveLength(2);
+    attachRequestId("batch_1_4", "second-provider-id", "run_2");
+    expect(loadInflight().map((r) => [r.runId, r.requestId])).toEqual([["run_1", null], ["run_2", "second-provider-id"]]);
+    endRequest("batch_1_4", "run_2");
+    expect(loadInflight().map((r) => r.runId)).toEqual(["run_1"]);
+  });
+
+  it("refuses ambiguous legacy attach/end rather than touching another run", () => {
+    beginRequest(record("batch_1_4", ["pair_1"]));
+    beginRequest({ ...record("batch_1_4", ["pair_2"]), runId: "run_2" });
+    attachRequestId("batch_1_4", "ambiguous");
+    endRequest("batch_1_4");
+    expect(loadInflight()).toHaveLength(2);
+    expect(loadInflight().every((r) => r.requestId === null)).toBe(true);
+  });
+});
+
 describe("journal — what was in flight when the app stopped", () => {
   it("records a request when it starts, with no id yet", () => {
     beginRequest(record("batch_1_4", ["pair_1", "pair_2"]));

@@ -15,6 +15,7 @@ import { attachRequestId, beginRequest } from "./journal";
 import { requestTextOf } from "./regenprompt";
 import type { BatchCtx } from "./runbatch";
 import type { RunState } from "./runtypes";
+import { modelOf } from "./answerer";
 
 interface SendOk { ok: true; text: string; usage: Usage; requestId: string | null }
 interface SendBad { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: number | null }
@@ -24,16 +25,26 @@ export async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promi
   const text = await requestTextOf(state.args, items, plan);
   if (!text.ok) return { ok: false, error: text.error, failure: "payload", retryAfterMs: null };
   ctx.recorded = text.text.record;
+  ctx.records = text.text.records;
+  journalRequest(ctx);
+  const web = state.args.web;
+  const image = composite.dataUrl === "" ? null : composite.dataUrl; // "" = text-only (runbatch)
+  if (web) return web.send({ prompt: text.text.prompt, image, key: `${state.runId}:${ctx.plan.id}`, signal: ctx.signal, ...webAnchorOf(ctx) });
   const request = buildChatRequest({
-    model: state.args.config.model, prompt: text.text.prompt, image: composite.dataUrl,
+    model: state.args.config.model, prompt: text.text.prompt, image,
     caps: state.args.caps, params: state.args.params,
   });
-  journalRequest(ctx);
+  return attemptSend(ctx, request);
+}
+
+/** The retry ladder: only a provider-confirmed failure is ever sent twice. */
+async function attemptSend(ctx: BatchCtx, request: ReturnType<typeof buildChatRequest>): Promise<SendOk | SendBad> {
+  const { state } = ctx;
   for (let attempt = 0; attempt <= state.args.config.retries; attempt++) {
-    if (state.args.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
+    if (ctx.signal.aborted) return { ok: false, error: "cancelled before sending", failure: "aborted", retryAfterMs: null };
     const out = await sendChatStreaming({
       url: chatUrl(state.args.config.baseUrl), body: request, apiKey: state.args.apiKey,
-      signal: state.args.signal, stallMs: state.stallMs, onId: (id) => rememberId(ctx, id),
+      signal: ctx.signal, stallMs: state.stallMs, onId: (id) => rememberId(ctx, id),
     });
     if (out.ok) {
       // A non-streamed answer carries no stream `id:`; keep the header id it does have.
@@ -45,7 +56,7 @@ export async function sendBatch(ctx: BatchCtx, composite: BuiltComposite): Promi
     }
     const waitMs = out.failure.retryAfterMs ?? backoff(attempt);
     noteRetry(ctx, attempt + 1, out.failure, waitMs);
-    await delay(waitMs, state.args.signal);
+    await delay(waitMs, ctx.signal);
   }
   return { ok: false, error: "not sent", failure: "aborted", retryAfterMs: null };
 }
@@ -56,18 +67,27 @@ function journalRequest(ctx: BatchCtx): void {
   beginRequest({
     runId: state.runId, batchId: plan.id, index: ctx.index,
     sourceIds: items.map((i) => i.id), sourceNames: items.map((i) => i.name),
-    model: state.args.config.model, startedAt: new Date(ctx.startedAt).toISOString(),
+    model: modelOf(state.args), startedAt: new Date(ctx.startedAt).toISOString(),
   });
+}
+
+/** A web request carries one icon: its name labels the activity bar. */
+function webAnchorOf(ctx: BatchCtx): { label?: string } {
+  const stem = ctx.items[0]?.stem;
+  return stem === undefined ? {} : { label: stem };
 }
 
 /** The id is written the moment it arrives — the journal, then the record. */
 function rememberId(ctx: BatchCtx, id: string): void {
   if (ctx.requestId === null) ctx.requestId = id;
-  attachRequestId(ctx.plan.id, id);
+  attachRequestId(ctx.plan.id, id, ctx.state.runId);
 }
 
 /** The user-facing reason: redacted; a stall names the window and the id. */
 function failureText(state: RunState, failure: Failure, ctx: BatchCtx): string {
+  if (failure.kind === "aborted" && !state.args.signal.aborted) {
+    return "Current request skipped — remaining requests continue; the provider may still finish or bill it. Not resent.";
+  }
   if (failure.kind !== "stalled") return redact(failure.message, state.args.apiKey);
   const id = ctx.requestId === null ? "" : ` Provider request id: ${ctx.requestId}.`;
   return stallHint(state.args.caps, state.args.params, state.stallMs) + id;
@@ -87,10 +107,11 @@ function backoff(attempt: number): number {
 }
 
 async function delay(ms: number, signal: AbortSignal): Promise<void> {
-  if (ms <= 0) return;
+  if (ms <= 0 || signal.aborted) return;
   await new Promise<void>((resolve) => {
     const done = () => {
       window.clearTimeout(timer);
+      signal.removeEventListener("abort", done);
       resolve();
     };
     const timer = window.setTimeout(done, ms);

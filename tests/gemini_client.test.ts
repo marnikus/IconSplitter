@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the Gemini client runs for real against a fake transport: the
 // verified endpoint/model, the x-goog-api-key auth header, the camelCase
 // inlineData request body, the response readers, failure classification, and

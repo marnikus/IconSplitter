@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_expand_geom.test.ts — the built-in stroke expander's geometry
 // (2026-10-09, design D4): pinned outlines where the answer is exact, and
 // measured coverage, area and offset distance everywhere else — what a stock

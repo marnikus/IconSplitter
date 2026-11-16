@@ -1,0 +1,14 @@
+{
+  "baselineWarmMedianSeconds": 94.00398284349998,
+  "candidateWarmMedianSeconds": 91.227626289,
+  "timeReductionPct": 2.953445663171661,
+  "throughputFactor": 1.0304332872336803,
+  "requiredWarmSeconds": 56.40238970609999,
+  "baselineColdSeconds": 129.91633793100002,
+  "candidateColdSeconds": 117.84540329299999,
+  "coldTimeReductionPct": 9.29131380258812,
+  "passed": false,
+  "releaseValidationSeconds": 86.376866556,
+  "allRetainedWarmMedianSeconds": 90.314857487,
+  "allRetainedWarmReductionPct": 3.924435162116191
+}

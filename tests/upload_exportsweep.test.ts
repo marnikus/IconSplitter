@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_exportsweep.test.ts — the export folder's own housekeeping
 // (2026-10-08). A folder exported before the naming change carries files the
 // current rule no longer writes (`fog_AI.eps` beside `fog.svg`/`fog.jpg`), and

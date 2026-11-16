@@ -4,8 +4,9 @@
 // default the bat files use.
 
 import { isRecord } from "../../isrecord";
+import { HELPER_PORT } from "../../helperurl";
 
-export const DEFAULT_BRIDGE_PORT = 47391;
+export const DEFAULT_BRIDGE_PORT = HELPER_PORT;
 export const DEFAULT_BRIDGE_URL = `http://127.0.0.1:${DEFAULT_BRIDGE_PORT}`;
 
 export interface BridgeConfig { url: string }

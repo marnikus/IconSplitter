@@ -1,3 +1,4 @@
+// @vitest-environment node
 // svg_effort.test.ts — what the reasoning level may change, and what it must
 // not (RULE 8). The tier raises the STALL WINDOW (how long silence is
 // tolerated before a connection is presumed dead); it never caps the batch,

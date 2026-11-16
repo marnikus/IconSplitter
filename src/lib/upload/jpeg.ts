@@ -1,13 +1,12 @@
-// jpeg.ts — JPEG metadata and verification for the "SVG to upload" tab
-// (design §2.6): XMP APP1 carries dc:title / dc:description / dc:subject, the
-// modern compatible carrier (IPTC-IIM is legacy binary). The packet is
-// embedded as the first APP1 segment after SOI, replacing any previous XMP
-// packet (idempotent), and read back for verification. Dimensions come from
-// the SOF segment itself — never from the encode call (RULE 15: verify by
-// decoding, and here by parsing, what was actually written).
+// JPEG XMP + IPTC-IIM metadata; pixel data is preserved, APP1/APP13 replaced.
 
+import { sameMetadata } from "./rights";
+import { joinBytes, utf8 } from "./metadatabytes";
 import type { IconMetadata } from "./meta";
 import { buildXmpPacket, readXmpPacket } from "./xmp";
+import { embedIptcInJpeg, readJpegIptc } from "./jpegiptc";
+import { sameLegacyMetadata } from "./iptc";
+import { jpegSegments, jpegSegment, hasBytesPrefix, type JpegSegment } from "./jpegmarkers";
 
 export { buildXmpPacket } from "./xmp";
 
@@ -28,12 +27,12 @@ export interface JpegVerification {
   height: number | null;
 }
 
-/** The JPEG with the XMP APP1 packet embedded (idempotent; input untouched). */
+/** The JPEG with XMP APP1 and IPTC APP13 embedded (idempotent; input untouched). */
 export function embedXmpMetadata(jpeg: Uint8Array, meta: IconMetadata): Uint8Array {
-  const withoutXmp = stripXmp(jpeg);
-  const payload = concat(ascii(XMP_ID), new TextEncoder().encode(buildXmpPacket(meta)));
-  const segment = concat(new Uint8Array([0xff, APP1]), u16(payload.length + 2), payload);
-  return concat(concat(new Uint8Array(SOI), segment), withoutXmp.slice(2));
+  const withoutXmp = stripXmp(embedIptcInJpeg(jpeg, meta));
+  const payload = joinBytes(utf8(XMP_ID), utf8(buildXmpPacket(meta)));
+  const segment = jpegSegment(APP1, payload);
+  return joinBytes(joinBytes(new Uint8Array(SOI), segment), withoutXmp.slice(2));
 }
 
 /** The embedded metadata read back; null when no valid XMP packet is present. */
@@ -52,12 +51,13 @@ export function readJpegDimensions(jpeg: Uint8Array): JpegDimensions | null {
   return null;
 }
 
-/** Full verification: SOI/EOI, decoded dimensions, XMP readback equals. */
+/** Full verification: SOI/EOI, decoded dimensions, XMP and IPTC readback equals. */
 export function verifyJpeg(jpeg: Uint8Array, expected: { width: number; height: number; metadata: IconMetadata }): JpegVerification {
   const errors: string[] = [];
   checkFrame(jpeg, errors);
   const dims = checkDimensions(jpeg, expected, errors);
   checkMetadata(jpeg, expected, errors);
+  if (!sameLegacyMetadata(readJpegIptc(jpeg), expected.metadata)) errors.push("IPTC metadata does not match the accepted fields");
   return { ok: errors.length === 0, errors, width: dims?.width ?? null, height: dims?.height ?? null };
 }
 
@@ -81,38 +81,21 @@ function checkMetadata(jpeg: Uint8Array, expected: { metadata: IconMetadata }, e
     errors.push("no XMP metadata found");
     return;
   }
-  const same = meta.title === expected.metadata.title && meta.description === expected.metadata.description
-    && meta.tags.join("\u0000") === expected.metadata.tags.join("\u0000");
+  const same = sameMetadata(meta, expected.metadata);
   if (!same) errors.push("XMP metadata does not match the accepted fields");
 }
 
 // --- segment plumbing ---------------------------------------------------------
 
-interface Segment { marker: number; data: Uint8Array }
-
-function segments(jpeg: Uint8Array): Segment[] {
-  const out: Segment[] = [];
-  let at = 2; // past SOI
-  while (at + 4 <= jpeg.length) {
-    if (jpeg[at] !== 0xff) break;
-    const marker = jpeg[at + 1];
-    if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
-      out.push({ marker, data: new Uint8Array(0) });
-      at += 2;
-      continue;
-    }
-    const length = (jpeg[at + 2] << 8) | jpeg[at + 3];
-    out.push({ marker, data: jpeg.slice(at + 4, at + 2 + length) });
-    at += 2 + length;
-  }
-  return out;
+function segments(jpeg: Uint8Array): JpegSegment[] {
+  try { return jpegSegments(jpeg); } catch { return []; }
 }
 
 /** The XMP APP1 payload, or null; the first XMP packet wins. */
 function xmpPayload(jpeg: Uint8Array): string | null {
   for (const seg of segments(jpeg)) {
     if (seg.marker !== APP1) continue;
-    const id = ascii(XMP_ID);
+    const id = utf8(XMP_ID);
     if (seg.data.length <= id.length) continue;
     if (!id.every((byte, i) => seg.data[i] === byte)) continue;
     return new TextDecoder().decode(seg.data.slice(id.length));
@@ -124,44 +107,11 @@ function xmpPayload(jpeg: Uint8Array): string | null {
 function stripXmp(jpeg: Uint8Array): Uint8Array {
   const parts: Uint8Array[] = [jpeg.slice(0, 2)];
   let at = 2;
-  while (at + 4 <= jpeg.length) {
-    if (jpeg[at] !== 0xff) break;
-    const marker = jpeg[at + 1];
-    if (marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
-      parts.push(jpeg.slice(at, at + 2));
-      at += 2;
-      continue;
-    }
-    const length = (jpeg[at + 2] << 8) | jpeg[at + 3];
-    const end = at + 2 + length;
-    const isXmp = marker === APP1 && startsWithId(jpeg.slice(at + 4, end));
-    if (!isXmp) parts.push(jpeg.slice(at, end));
-    at = end;
+  for (const seg of jpegSegments(jpeg)) {
+    parts.push(jpeg.slice(at, seg.start));
+    if (seg.marker !== APP1 || !hasBytesPrefix(seg.data, utf8(XMP_ID))) parts.push(jpeg.slice(seg.start, seg.end));
+    at = seg.end;
   }
   parts.push(jpeg.slice(at));
-  return concat(...parts);
-}
-
-function startsWithId(data: Uint8Array): boolean {
-  const id = ascii(XMP_ID);
-  return data.length > id.length && id.every((byte, i) => data[i] === byte);
-}
-
-function ascii(text: string): Uint8Array {
-  return new TextEncoder().encode(text);
-}
-
-function u16(value: number): Uint8Array {
-  return new Uint8Array([(value >> 8) & 0xff, value & 0xff]);
-}
-
-function concat(...parts: Uint8Array[]): Uint8Array {
-  const total = parts.reduce((sum, p) => sum + p.length, 0);
-  const out = new Uint8Array(total);
-  let at = 0;
-  for (const part of parts) {
-    out.set(part, at);
-    at += part.length;
-  }
-  return out;
+  return joinBytes(...parts);
 }

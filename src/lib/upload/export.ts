@@ -4,6 +4,7 @@
 // pipeline rebuilds it — a bad record never destroys valid output files.
 // One record per icon, in `<pair-folder>/export/`; no global multi-icon file.
 
+import { metadataRights } from "./rights";
 import { isRecord } from "../isrecord";
 import type { UploadSettings, SettingsOverrides } from "./settings";
 import type { Artboard } from "./artboard";
@@ -109,7 +110,13 @@ export interface ExportRecord {
     title: string;
     description: string;
     tags: string[];
+    /** The one-word icon name (2026-11-08); absent on older packages. */
+    name?: string;
+    creator?: string;
+    copyright?: string;
     prompt: string;
+    /** The provider's full last answer, verbatim (2026-11-08); absent on older packages and manual entries. */
+    response?: string;
     provider: string;
     model: string;
     requestId: string | null;
@@ -189,24 +196,29 @@ function recordAt(raw: Record<string, unknown>, path: string): Record<string, un
 }
 
 // --- the stage planner lives in exportplan.ts (design §4.4; moved 2026-10-09, RULE 18) ---
-export { planStages, recordConverter, type PlanInput, type Stage, type StagePlan } from "./exportplan";
+export { embeddedMetadataFp, planStages, recordConverter, type PlanInput, type Stage, type StagePlan } from "./exportplan";
 
-/** The metadata block for a record (null until metadata is accepted). */
+/** The metadata block for a record: accepted text, or a saved draft with its validation. */
 export function metadataBlock(meta: IconMetadata, args: {
   prompt: string;
+  response?: string;
   provider: string;
   model: string;
   requestId: string | null;
   usage: GeminiUsage;
   fingerprint: string;
   validation: MetadataValidation;
+  draftState?: "generated" | "invalid"; // a draft never accepted keeps its own state
 }): ExportRecord["metadata"] {
   return {
-    state: args.validation.ok ? "accepted" : "invalid",
+    state: args.draftState ?? (args.validation.ok ? "accepted" : "invalid"),
     title: meta.title,
     description: meta.description,
     tags: meta.tags,
+    ...(meta.name ? { name: meta.name } : {}),
+    ...metadataRights(meta),
     prompt: args.prompt,
+    ...(args.response ? { response: args.response } : {}),
     provider: args.provider,
     model: args.model,
     requestId: args.requestId,

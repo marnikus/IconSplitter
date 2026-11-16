@@ -18,10 +18,11 @@
 // 2026-10-09). Elements whose bounds no geometry can answer for (text, image,
 // use…) are named `unsupported`, never guessed.
 
-import { identity, multiply, parseTransform, scaleOf, type Matrix } from "./matrix";
+import { scaleOf, type Matrix } from "./matrix";
 import { pathGeometry, type ShapeGeom, type Subpath } from "./path";
 import { lineSeg, type Seg } from "./seg";
-import { baseStroke, inheritStroke, type Stroke } from "./stroke";
+import type { Stroke } from "./stroke";
+import { visiblePaint, walkPaintTree } from "./visibility";
 
 export type { Stroke } from "./stroke";
 
@@ -51,7 +52,6 @@ interface Acc {
 }
 
 const SHAPES = ["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"];
-const CONTAINERS = ["svg", "g", "a", "switch"];
 
 /** True for elements that paint geometry (and so can paint a stroke). */
 export function isShape(el: Element): boolean {
@@ -61,16 +61,17 @@ const UNSUPPORTED = ["text", "tspan", "textpath", "image", "use", "foreignobject
 /** CSS properties a `<style>` block could use to move or restyle geometry. */
 const RISKY_CSS = ["stroke", "transform", "display", "clip", "mask"];
 
-/** Visible bounds of the document under `root`; null when it has no geometry. */
-export function visibleBounds(root: Element): BoundsResult | null {
+/** Visible paint bounds; includeStroke=false measures visible geometry without stroke reach. */
+export function visibleBounds(root: Element, includeStroke = true): BoundsResult | null {
   const acc: Acc = { bounds: null, unsupported: [] };
-  walkTree(root, identity(), baseStroke(), (el, ctm, stroke) => {
+  walkPaintTree(root, (el, { ctm, stroke, visibility }) => {
     const bad = unsupportedTag(el);
     if (bad !== null) {
       acc.unsupported.push(bad);
       return;
     }
-    const b = SHAPES.includes(name(el)) && !paintsNothing(stroke) ? shapeBounds(el, stroke, ctm) : null;
+    const b = SHAPES.includes(name(el)) && visiblePaint(stroke, visibility)
+      ? shapeBounds(el, stroke, ctm, visibility.stroke && includeStroke) : null;
     if (b !== null) acc.bounds = acc.bounds === null ? b : union(acc.bounds, b);
   });
   if (acc.bounds === null) return null;
@@ -85,25 +86,14 @@ export function paintsNothing(stroke: Stroke): boolean {
 /** Every element with its accumulated CTM and inherited stroke state. */
 export function strokeHits(root: Element): StrokeHit[] {
   const hits: StrokeHit[] = [];
-  walkTree(root, identity(), baseStroke(), (el, ctm, stroke) => {
+  walkPaintTree(root, (el, { ctm, stroke }) => {
     hits.push({ el, ctm, stroke });
   });
   return hits;
 }
 
-type Visit = (el: Element, ctm: Matrix, stroke: Stroke) => void;
-
-function walkTree(el: Element, ctm: Matrix, parent: Stroke, visit: Visit): void {
-  const here = inheritStroke(el, parent);
-  const local = multiply(ctm, parseTransform(el.getAttribute("transform")));
-  visit(el, local, here);
-  if (CONTAINERS.includes(name(el))) {
-    for (const child of Array.from(el.children)) walkTree(child, local, here, visit);
-  }
-}
-
 /** The element's name when its bounds cannot be computed honestly. */
-function unsupportedTag(el: Element): string | null {
+export function unsupportedTag(el: Element): string | null {
   const tag = name(el);
   if (UNSUPPORTED.includes(tag)) return tag;
   const css = tag === "style" ? (el.textContent ?? "").toLowerCase() : "";
@@ -111,17 +101,17 @@ function unsupportedTag(el: Element): string | null {
 }
 
 /** Device-space bounds: CTM hull of the geometry, grown by the stroke extension. */
-function shapeBounds(el: Element, stroke: Stroke, ctm: Matrix): Bounds | null {
+function shapeBounds(el: Element, stroke: Stroke, ctm: Matrix, strokeVisible: boolean): Bounds | null {
   const g = shapeGeometry(el);
   if (g === null) return null;
   const device = hullOf(g.hull, ctm);
-  const extra = strokeExtraOf(g, stroke) * scaleOf(ctm);
+  const extra = strokeExtraOf(g, stroke, strokeVisible) * scaleOf(ctm);
   return grow(device, extra);
 }
 
 /** The stroke extension in local units: the largest cap/join reach. */
-function strokeExtraOf(g: ShapeGeom, stroke: Stroke): number {
-  if (stroke.none || stroke.width <= 0) return 0;
+function strokeExtraOf(g: ShapeGeom, stroke: Stroke, strokeVisible: boolean): number {
+  if (!strokeVisible || stroke.none || stroke.width <= 0) return 0;
   if (g.smooth) return stroke.width / 2;
   let extra = 0;
   for (const sub of g.subs) extra = Math.max(extra, subpathExtra(sub, stroke));
@@ -219,7 +209,7 @@ function openSegs(pts: number[][]): Seg[] {
 
 // --- bounds plumbing --------------------------------------------------------
 
-function union(a: Bounds, b: Bounds): Bounds {
+export function union(a: Bounds, b: Bounds): Bounds {
   const minX = Math.min(a.minX, b.minX);
   const minY = Math.min(a.minY, b.minY);
   return {

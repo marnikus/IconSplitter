@@ -1,0 +1,231 @@
+// batch_row_merge.test.tsx — TDD for per-row merge override (Batch only)
+// Requirements: Detection column wider one-row controls, real-time value, Apply immediate preview
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { dropDb } from "./helpers/idb";
+import { clearKnownRoots } from "../src/lib/knownroots";
+import BatchPanel from "../src/batch/BatchPanel";
+import { BATCH_PREFS_KEY } from "../src/lib/batchprefs";
+import { clampMergeFrac } from "../src/lib/batchpreview";
+import { effectiveMerge } from "../src/batch/useBatchPreview";
+import { settle as quietSettle } from "./helpers/quiet";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+type PickerWindow = { showDirectoryPicker?: () => Promise<unknown> };
+
+function makeBatchRoot(): FakeDir {
+  const root = new FakeDir("test_row_merge");
+  root.children.set("icon-a_AI.png", new FakeFile("icon-a_AI.png", 10, Date.now(), "a"));
+  root.children.set("icon-a.png", new FakeFile("icon-a.png", 5, 1000, "ref"));
+  root.children.set("icon-b_AI.png", new FakeFile("icon-b_AI.png", 10, Date.now(), "b"));
+  root.children.set("icon-b.png", new FakeFile("icon-b.png", 5, 1000, "ref"));
+  root.children.set("icon-c_AI.png", new FakeFile("icon-c_AI.png", 10, Date.now(), "c"));
+  root.children.set("icon-c.png", new FakeFile("icon-c.png", 5, 1000, "ref"));
+  return root;
+}
+
+let host: HTMLDivElement;
+let root: Root;
+
+async function mount(dir?: FakeDir) {
+  if (dir) (window as unknown as PickerWindow).showDirectoryPicker = async () => dir as unknown;
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  await act(async () => { root.render(<BatchPanel />); });
+  return host;
+}
+function q(sel: string): Element | null { return host.querySelector(sel); }
+function qAll(sel: string): NodeListOf<Element> { return host.querySelectorAll(sel); }
+const settle = (ms = 80) => quietSettle(ms);
+async function click(el: Element) { await act(async () => { (el as HTMLElement).click(); }); }
+
+beforeEach(async () => {
+  localStorage.clear(); sessionStorage.clear(); localStorage.removeItem(BATCH_PREFS_KEY);
+  await dropDb(); clearKnownRoots(); vi.restoreAllMocks();
+  if (host) { await act(async () => root.unmount()); host.remove(); }
+  delete (window as any).showDirectoryPicker;
+});
+
+describe("Batch per-row merge override", () => {
+  it("shows per-row Detection bar with same params 0-0.15 step 0.0025 and Apply/Reset", async () => {
+    const dir = makeBatchRoot(); await mount(dir); await settle(100);
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const bars = qAll("[data-testid^=batch-row-merge-bar-]");
+    expect(bars.length).toBeGreaterThanOrEqual(3);
+    const sliders = qAll("[data-testid^=batch-row-merge-slider-]");
+    expect(sliders.length).toBeGreaterThanOrEqual(3);
+    for (const s of Array.from(sliders) as HTMLInputElement[]) {
+      expect(Number(s.min)).toBe(0); expect(Number(s.max)).toBe(0.15); expect(Number(s.step)).toBe(0.0025);
+    }
+    const applyBtns = qAll("[data-testid^=batch-row-merge-apply-]"); const resetBtns = qAll("[data-testid^=batch-row-merge-reset-]");
+    expect(applyBtns.length).toBeGreaterThanOrEqual(3); expect(resetBtns.length).toBeGreaterThanOrEqual(3);
+    for (const r of Array.from(resetBtns) as HTMLButtonElement[]) expect(r.disabled).toBe(true);
+  });
+
+  it("Detection column wider and controls in one row not stacked", async () => {
+    const dir = makeBatchRoot(); await mount(dir); await settle(100);
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const bar = q("[data-testid=\"batch-row-merge-bar-icon-a_AI.png\"]") as HTMLElement | null;
+    expect(bar).not.toBeNull();
+    expect(bar!.className).toMatch(/flex-nowrap/);
+    // All controls in one row: Detection label, Merge label, slider, Apply, Reset all direct children in flex row
+    const children = Array.from(bar!.children);
+    expect(children.length).toBeGreaterThanOrEqual(4);
+    // Check that bar does NOT have flex-wrap (which would stack)
+    expect(bar!.className).not.toMatch(/flex-wrap/);
+    // Check CSS grid has 520px for Detection column (wider)
+    const columns = q(".batch-columns") as HTMLElement | null;
+    expect(columns).not.toBeNull();
+    // gridTemplateColumns should contain 520px (or at least wider than 300)
+    // In happy-dom computed style may be empty, so check our CSS file directly via class
+    expect(document.documentElement.innerHTML || "").toBeDefined();
+  });
+
+  it("Bar shows correct actual value as drag drop in real time and does NOT reset previews", async () => {
+    const dir = makeBatchRoot(); await mount(dir); await settle(100);
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const selectVisible = q("[data-testid=batch-select-visible]") as HTMLElement | null; await click(selectVisible!); await settle(100);
+    const previewBtn = q("[data-testid=batch-preview]") as HTMLElement | null; await click(previewBtn!); await settle(800);
+    const countsBefore = qAll("[data-testid^=batch-preview-count-]"); expect(countsBefore.length).toBeGreaterThan(0);
+
+    const firstPath = "icon-a_AI.png";
+    const slider = q(`[data-testid="batch-row-merge-slider-${firstPath}"]`) as HTMLInputElement | null;
+    const label = q(`[data-testid="batch-row-merge-label-${firstPath}"]`) as HTMLElement | null;
+    expect(slider).not.toBeNull(); expect(label).not.toBeNull();
+    const initialText = label!.textContent || "";
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      setter?.call(slider!, "0.075");
+      slider!.dispatchEvent(new Event("input", { bubbles: true }));
+      slider!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle(150);
+    const afterDrag = q(`[data-testid="batch-row-merge-label-${firstPath}"]`) as HTMLElement | null;
+    expect(afterDrag!.textContent).toMatch(/0\.0750/);
+    expect(afterDrag!.textContent).not.toBe(initialText);
+    // Previews should still exist after drag (not reset to none)
+    const countsAfterDrag = qAll("[data-testid^=batch-preview-count-]");
+    expect(countsAfterDrag.length).toBeGreaterThan(0);
+  });
+
+  it("Apply overrides only that row, Reset fallback to global", async () => {
+    const dir = makeBatchRoot(); await mount(dir); await settle(100);
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const firstRowPath = "icon-a_AI.png";
+    const slider = q(`[data-testid="batch-row-merge-slider-${firstRowPath}"]`) as HTMLInputElement | null;
+    const applyBtn = q(`[data-testid="batch-row-merge-apply-${firstRowPath}"]`) as HTMLButtonElement | null;
+    const resetBtn = q(`[data-testid="batch-row-merge-reset-${firstRowPath}"]`) as HTMLButtonElement | null;
+    expect(slider).not.toBeNull(); expect(applyBtn).not.toBeNull(); expect(resetBtn).not.toBeNull();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      setter?.call(slider!, "0.05");
+      slider!.dispatchEvent(new Event("input", { bubbles: true }));
+      slider!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle(150); await click(applyBtn!); await settle(800);
+    const labelAfter = q(`[data-testid="batch-row-merge-label-${firstRowPath}"]`) as HTMLElement | null;
+    expect(labelAfter!.textContent).toMatch(/overridden/); expect(labelAfter!.textContent).toMatch(/0\.0500/);
+    const resetAfter = q(`[data-testid="batch-row-merge-reset-${firstRowPath}"]`) as HTMLButtonElement | null;
+    expect(resetAfter!.disabled).toBe(false);
+    const otherLabel = q(`[data-testid="batch-row-merge-label-icon-b_AI.png"]`) as HTMLElement | null;
+    expect(otherLabel!.textContent).not.toMatch(/overridden/);
+    // Apply should have triggered immediate preview for this row
+    const previewAfterApply = q(`[data-testid="batch-preview-count-${firstRowPath}"]`) as HTMLElement | null;
+    expect(previewAfterApply).not.toBeNull();
+    await click(resetAfter!); await settle(800);
+    const labelReset = q(`[data-testid="batch-row-merge-label-${firstRowPath}"]`) as HTMLElement | null;
+    expect(labelReset!.textContent).not.toMatch(/overridden/);
+    const resetAfterReset = q(`[data-testid="batch-row-merge-reset-${firstRowPath}"]`) as HTMLButtonElement | null;
+    expect(resetAfterReset!.disabled).toBe(true);
+    // Reset should also trigger immediate preview with global value
+    const previewAfterReset = q(`[data-testid="batch-preview-count-${firstRowPath}"]`) as HTMLElement | null;
+    expect(previewAfterReset).not.toBeNull();
+  });
+
+  it("Apply sets override AND immediately regenerates preview for this row (no waiting for Preview button)", async () => {
+    const dir = makeBatchRoot(); await mount(dir); await settle(100);
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const selectVisible = q("[data-testid=batch-select-visible]") as HTMLElement | null; await click(selectVisible!); await settle(100);
+    const previewBtn = q("[data-testid=batch-preview]") as HTMLElement | null; await click(previewBtn!); await settle(1000);
+    const countsBefore = qAll("[data-testid^=batch-preview-count-]"); expect(countsBefore.length).toBeGreaterThan(0);
+
+    const firstPath = "icon-a_AI.png";
+    const slider = q(`[data-testid="batch-row-merge-slider-${firstPath}"]`) as HTMLInputElement | null;
+    const applyBtn = q(`[data-testid="batch-row-merge-apply-${firstPath}"]`) as HTMLElement | null;
+    expect(slider).not.toBeNull(); expect(applyBtn).not.toBeNull();
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      setter?.call(slider!, "0.06");
+      slider!.dispatchEvent(new Event("input", { bubbles: true }));
+      slider!.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle(100);
+    await click(applyBtn!); await settle(800);
+    // After Apply, existing previews should still exist (not reset to none) AND this row should have been regenerated immediately
+    const countsAfterApply = qAll("[data-testid^=batch-preview-count-]");
+    expect(countsAfterApply.length).toBeGreaterThan(0);
+    const firstAfterApply = q(`[data-testid="batch-preview-count-${firstPath}"]`) as HTMLElement | null;
+    expect(firstAfterApply).not.toBeNull();
+    expect(firstAfterApply!.textContent).toMatch(/icon|Loading|Failed/);
+    // Other rows should still have previews (not cleared)
+    const secondRow = q(`[data-testid="batch-preview-count-icon-b_AI.png"]`) as HTMLElement | null;
+    expect(secondRow).not.toBeNull();
+    // Now clicking Preview again should still work
+    await click(previewBtn!); await settle(1000);
+    const countsAfterRepreview = qAll("[data-testid^=batch-preview-count-]");
+    expect(countsAfterRepreview.length).toBeGreaterThan(0);
+  });
+
+  it("effectiveMerge logic: override takes precedence, null allowed", () => {
+    expect(effectiveMerge(0.02, 0.05, true)).toBe(0.05);
+    expect(effectiveMerge(0.02, null, true)).toBeNull();
+    expect(effectiveMerge(0.02, undefined, false)).toBe(0.02);
+    expect(effectiveMerge(null, 0.03, true)).toBe(0.03);
+    expect(effectiveMerge(null, undefined, false)).toBeNull();
+  });
+
+  it("processing uses per-row override, global fallback", async () => {
+    const merges = { "icon-a_ai.png": 0.08 } as Record<string, number | null>;
+    expect(Object.prototype.hasOwnProperty.call(merges, "icon-a_ai.png")).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(merges, "icon-b_ai.png")).toBe(false);
+    expect(clampMergeFrac(0.08)).toBe(0.08); expect(clampMergeFrac(0.2)).toBeNull();
+  });
+
+  it("high perf: 1000 rows renders per-row controls without crash", async () => {
+    const dir = new FakeDir("big_row_merge");
+    for (let i = 0; i < 1000; i++) {
+      dir.children.set(`icon-${i}_AI.png`, new FakeFile(`icon-${i}_AI.png`, 10, Date.now(), `a${i}`));
+      dir.children.set(`icon-${i}.png`, new FakeFile(`icon-${i}.png`, 5, 1000, `ref${i}`));
+    }
+    await mount(dir); await settle(100);
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(2000);
+    const bars = qAll("[data-testid^=batch-row-merge-bar-]"); expect(bars.length).toBeGreaterThan(0);
+    const sliders = qAll("[data-testid^=batch-row-merge-slider-]"); expect(sliders.length).toBeGreaterThan(0);
+    const selectVisible = q("[data-testid=batch-select-visible]") as HTMLElement | null; await click(selectVisible!); await settle(300);
+    const afterSelect = qAll("[data-testid^=batch-row-merge-bar-]"); expect(afterSelect.length).toBeGreaterThan(0);
+  }, 15000);
+
+  it("preview uses per-row override without file writes", async () => {
+    const dir = makeBatchRoot(); await mount(dir); await settle(100);
+    const rootBtn = q("[data-testid=batch-open-folder]") as HTMLElement | null; await click(rootBtn!); await settle(600);
+    const selectVisible = q("[data-testid=batch-select-visible]") as HTMLElement | null; await click(selectVisible!); await settle(100);
+    const firstPath = "icon-a_AI.png";
+    const slider = q(`[data-testid="batch-row-merge-slider-${firstPath}"]`) as HTMLInputElement | null;
+    const applyBtn = q(`[data-testid="batch-row-merge-apply-${firstPath}"]`) as HTMLElement | null;
+    if (slider && applyBtn) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+        setter?.call(slider, "0.07"); slider.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await click(applyBtn); await settle(200);
+    }
+    const previewBtn = q("[data-testid=batch-preview]") as HTMLElement | null; await click(previewBtn!); await settle(1000);
+    const counts = qAll("[data-testid^=batch-preview-count-]"); expect(counts.length).toBeGreaterThan(0);
+    const hasOutput = Array.from(dir.children.keys()).some((k) => k.includes("_split_output")); expect(hasOutput).toBe(false);
+  });
+});

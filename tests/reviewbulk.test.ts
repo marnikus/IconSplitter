@@ -1,3 +1,4 @@
+// @vitest-environment node
 // reviewbulk.test.ts — RULE 4/8: the bulk rule is pure. Incomplete pairs are
 // never approved silently, and one operation produces ONE summary line
 // (spec V2 §6 — no toast per image).

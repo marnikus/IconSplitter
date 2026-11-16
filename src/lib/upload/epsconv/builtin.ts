@@ -5,11 +5,11 @@
 import { verifyEps, writeEps } from "../eps";
 import type { ConvertResult, EpsConverter, EpsConvertInput } from "./types";
 
-export const BUILTIN_WRITER = "builtin-subset-2";
+export const BUILTIN_WRITER = "builtin-vector-4";
 
 export const builtinConverter: EpsConverter = {
   id: "builtin",
-  label: "Built-in (PostScript subset)",
+  label: "Built-in (vector gradients, Level 3)",
   probe: async () => ({ ok: true, version: BUILTIN_WRITER }),
   convert: async (input: EpsConvertInput): Promise<ConvertResult> => {
     const out = writeEps(input.svg, input.background, {

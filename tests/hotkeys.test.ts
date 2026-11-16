@@ -1,7 +1,9 @@
 // hotkeys.test.ts — RULE 8: the review hotkey mapping drives the review, and
 // only the review. Shared by both Selection surfaces, so it is tested once.
 import { describe, expect, it } from "vitest";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { hotTarget, isTextField, runHotAction, type HotTarget } from "../src/selection/hotkeys";
+import { isNativeListKeyTarget, isRowGestureClick } from "../src/ui/rowgesture";
 
 interface Stub extends HotTarget {
   log: string[];
@@ -33,6 +35,15 @@ describe("runHotAction", () => {
     runHotAction("next", t);
     runHotAction("prev", t);
     expect(t.log).toEqual(["select:c", "select:a"]);
+  });
+
+  it("starts at the first or last visible row when none is active", () => {
+    const down = stub(null);
+    runHotAction("next", down);
+    expect(down.log).toEqual(["select:a"]);
+    const up = stub(null);
+    runHotAction("prev", up);
+    expect(up.log).toEqual(["select:c"]);
   });
 
   it("does not wrap past either end of the visible list", () => {
@@ -110,5 +121,24 @@ describe("isTextField", () => {
     const editable = document.createElement("div");
     editable.contentEditable = "true";
     expect(isTextField(editable)).toBe(true);
+  });
+});
+
+describe("shared list control guards", () => {
+  it("leaves row clicks on nested controls to those controls", () => {
+    const row = document.createElement("div");
+    const text = document.createElement("span");
+    const button = document.createElement("button");
+    row.append(text, button);
+    expect(isRowGestureClick({ target: text } as unknown as ReactMouseEvent<Element>)).toBe(true);
+    expect(isRowGestureClick({ target: button } as unknown as ReactMouseEvent<Element>)).toBe(false);
+  });
+
+  it("keeps arrows and Space native for focused controls", () => {
+    const slider = document.createElement("input");
+    slider.type = "range";
+    expect(isNativeListKeyTarget(slider)).toBe(true);
+    expect(isNativeListKeyTarget(document.createElement("button"))).toBe(true);
+    expect(isNativeListKeyTarget(document.createElement("div"))).toBe(false);
   });
 });

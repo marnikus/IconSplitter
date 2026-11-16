@@ -7,11 +7,12 @@
 // the stroke width setting — are px, written as typed (2026-10-08): the file
 // shows the number the user chose, no unit conversion between them.
 //
-// Fit: padding is a percent of the fitted artwork's LARGEST side, uniform on
-// all four sides; the artwork is centred by translation only — never
+// Fit: independent side padding is a percent of the artwork's LARGEST side
+// (or the pinned board's); artwork is centred in the inset rectangle — never
 // stretched, never cropped (design §2.11). The JPEG renders the artboard
 // viewBox at the target resolution, so 1 user unit maps to width/artW px.
 
+import { scaledPadding, type PaddingSides } from "./padding";
 import type { Bounds } from "./geom/bounds";
 
 // One import surface for the feature: document bounds live in lib/upload/geom/bounds,
@@ -53,8 +54,10 @@ export interface ArtboardFit {
   /** Translation applied to the artwork group. */
   offsetX: number;
   offsetY: number;
-  /** Uniform padding actually applied (user units). */
+  /** Legacy uniform margin (left margin for asymmetric fits), in user units. */
   pad: number;
+  /** Exact individual margins; absent on legacy/as-is fits. */
+  padding?: PaddingSides;
   /** How much the artwork is scaled: 1 when the artboard hugs the content. */
   scale: number;
 }
@@ -68,35 +71,42 @@ export interface ArtboardFit {
  * With a megapixel `target` (I-62) the artboard is the content fit scaled
  * uniformly so its area is N × 10⁶ px² — the same box, the same padding share.
  */
-export function fitArtboard(bounds: Bounds, paddingPct: number, target?: FitTarget | null): ArtboardFit {
-  const pct = Math.max(0, paddingPct);
-  if (target === undefined || target === null) return contentFit(bounds, pct, 1);
-  if ("megapixels" in target) return contentFit(bounds, pct, megapixelScale(bounds, pct, target.megapixels));
+export function fitArtboard(bounds: Bounds, paddingPct: number | PaddingSides, target?: FitTarget | null): ArtboardFit {
+  if (target === undefined || target === null) return contentFit(bounds, paddingPct, 1);
+  if ("megapixels" in target) return contentFit(bounds, paddingPct, megapixelScale(bounds, paddingPct, target.megapixels));
   const artW = Math.max(1, target.width);
   const artH = Math.max(1, target.height);
-  const pad = (Math.max(artW, artH) * pct) / 100;
-  const scale = fitScale(bounds, artW - 2 * pad, artH - 2 * pad);
+  const padding = scaledPadding(paddingPct, Math.max(artW, artH) / 100);
+  const box = paddingBox({ artW, artH, pad: padding.left, padding });
+  const scale = fitScale(bounds, box.width, box.height);
   return {
     viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`, artW, artH,
-    offsetX: (artW - bounds.width * scale) / 2 - bounds.minX * scale,
-    offsetY: (artH - bounds.height * scale) / 2 - bounds.minY * scale,
-    pad, scale,
+    offsetX: box.minX + (box.width - bounds.width * scale) / 2 - bounds.minX * scale,
+    offsetY: box.minY + (box.height - bounds.height * scale) / 2 - bounds.minY * scale,
+    pad: padding.left, padding, scale,
   };
 }
 
-/** The content fit scaled by k: the box, its padding and the artwork all grow together. */
-function contentFit(bounds: Bounds, pct: number, k: number): ArtboardFit {
-  const pad = ((Math.max(bounds.width, bounds.height) * pct) / 100) * k;
-  const artW = bounds.width * k + 2 * pad;
-  const artH = bounds.height * k + 2 * pad;
+/** The content fit scaled by k: each margin and the artwork grow together. */
+function contentFit(bounds: Bounds, pct: number | PaddingSides, k: number): ArtboardFit {
+  const padding = scaledPadding(pct, Math.max(bounds.width, bounds.height) * k / 100);
+  const artW = bounds.width * k + padding.left + padding.right;
+  const artH = bounds.height * k + padding.top + padding.bottom;
   return {
     viewBox: `0 0 ${fmt(artW)} ${fmt(artH)}`, artW, artH,
-    offsetX: pad - bounds.minX * k, offsetY: pad - bounds.minY * k, pad, scale: k,
+    offsetX: padding.left - bounds.minX * k, offsetY: padding.top - bounds.minY * k,
+    pad: padding.left, padding, scale: k,
   };
+}
+
+/** The usable inset rectangle; fallback placement must use the same centre. */
+export function paddingBox(fit: Pick<ArtboardFit, "artW" | "artH" | "pad" | "padding">): Bounds {
+  const p = fit.padding ?? { left: fit.pad, right: fit.pad, top: fit.pad, bottom: fit.pad };
+  return { minX: p.left, minY: p.top, width: fit.artW - p.left - p.right, height: fit.artH - p.top - p.bottom };
 }
 
 /** The uniform factor that makes the padded content fit's area N × 10⁶ px²; 1 when the fit has no area. */
-function megapixelScale(bounds: Bounds, pct: number, megapixels: number): number {
+function megapixelScale(bounds: Bounds, pct: number | PaddingSides, megapixels: number): number {
   const unscaled = contentFit(bounds, pct, 1);
   const area = unscaled.artW * unscaled.artH;
   if (!(area > 0) || !(megapixels > 0)) return 1;

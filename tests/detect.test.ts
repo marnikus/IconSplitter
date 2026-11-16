@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — tests execute the real thing: detect() runs against synthetic
 // Analysis masks, not mocks. A deleted or inverted detect() fails here.
 import { describe, expect, it } from "vitest";

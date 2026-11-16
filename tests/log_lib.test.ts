@@ -1,3 +1,4 @@
+// @vitest-environment node
 // log_lib.test.ts — the pure rules of the global log (feature §2/§3): one entry
 // shape, a bounded ring buffer, redaction that a stored payload cannot escape,
 // and validate-on-read that turns corruption into defaults instead of a crash.

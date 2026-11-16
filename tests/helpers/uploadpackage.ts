@@ -11,7 +11,7 @@ export type PackageKind = "svg" | "jpg" | "eps";
 
 export const PACKAGE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2h20v20H2z"/></svg>`;
 export const PACKAGE_JPG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
-export const PACKAGE_EPS = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 24 24\n";
+export const PACKAGE_EPS = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 24 24\n%%LanguageLevel: 3\nnewpath 0 0 moveto 24 0 lineto 24 24 lineto closepath fill\n%%EOF\n";
 
 export interface CommitPackageArgs {
   dir: BinDir;

@@ -1,0 +1,22 @@
+{
+  "browser": "153.0.8010.0",
+  "method": "Transparent-canvas alpha comparison, original SVG vs prepared source-width export with identical black paint and source frame; same Chromium renderer at 1024 square. Coordinate rounding/outline AA differences expected; supplementary evidence, not a gate.",
+  "results": [
+    {
+      "name": "supplied snowflake",
+      "size": 1024,
+      "outlinedStrokes": 1,
+      "alphaAbsoluteErrorFraction": 0.0006547577052334156,
+      "differentPixels": 147,
+      "totalPixels": 1048576
+    },
+    {
+      "name": "filled translucent dashed affine path",
+      "size": 1024,
+      "outlinedStrokes": 1,
+      "alphaAbsoluteErrorFraction": 0.0016878860368789992,
+      "differentPixels": 830,
+      "totalPixels": 1048576
+    }
+  ]
+}

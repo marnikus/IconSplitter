@@ -7,6 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { pairId } from "../src/lib/pairing";
 import { chosenVersion, newestValid } from "../src/lib/svgfile";
+import { mainImageOf, parseImageVersions } from "../src/lib/svgimgreg";
 import { metaFileName, parsePairMeta, serializePairMeta, type PairMeta } from "../src/lib/pairmeta";
 import { saveSvgVersion, metaAfterFailure } from "../src/svg/saveversion";
 import { readSvgText, listSvgFiles } from "../src/svg/svgfiles";
@@ -269,6 +270,27 @@ describe("approved-source discovery", () => {
     expect(found.problems).toEqual([]);
   });
 
+  it("omits only owned image versions from the reference audit while retaining main-image access", async () => {
+    const root = makeRoot();
+    const arch = await root.getDirectoryHandle("architecture");
+    const versions = new FakeDir("AI SOURCE REGENERATION VERSIONS");
+    const imagePath = `${FOG_SRC.dirPath}/${versions.name}/fog_AI_v1.png`;
+    versions.children.set("fog_AI_v1.png", new FakeFile("fog_AI_v1.png"));
+    versions.children.set("ordinary_v2.png", new FakeFile("ordinary_v2.png"));
+    arch.children.set(versions.name, versions);
+    arch.children.set("fog_AI_v2.png", new FakeFile("fog_AI_v2.png"));
+    await saveMetaAt(root, FOG_SRC.metaPath, {
+      ...pairMetaFor(FOG_SRC),
+      imageVersions: parseImageVersions([{ version: 1, file: imagePath, status: "done" }]),
+      imagePreferred: 1,
+    });
+    const found = await discoverApprovedSources(root);
+    expect(found.sources.map((s) => s.id)).toEqual([FOG]);
+    expect(found.audit).toEqual({ files: 10, aiSources: 3, references: 5, missing: 0, duplicates: 0, rows: 1 });
+    expect(found.fileIndex.has(imagePath)).toBe(true);
+    expect(mainImageOf(found.metas.get(FOG) ?? null, FOG_SRC.relPath)).toBe(imagePath);
+  });
+
   it("maps a source onto its batch identity without touching the file id", () => {
     expect(toBatchSource(FOG_SRC)).toEqual({ sourceId: FOG, name: "fog_AI", relPath: "architecture/fog_AI.png", fingerprint: "20:3100" });
   });
@@ -344,7 +366,7 @@ describe("row model", () => {
     const row = toRow(source, null, false);
     expect(row.status).toBe("not-generated");
     expect(row.newest).toBeNull();
-    expect(row.approved).toBeNull();
+    expect(row.review).toBe("pending");
     expect(toListRow(row)).toMatchObject({ generation: "not-generated", review: "pending", version: 0, tokens: null, cost: null });
   });
 
@@ -460,8 +482,8 @@ describe("row model", () => {
     const list = [older, { ...toRow(COURT_SRC, null, false), status: "generated" as const }];
     const pinned = sortedIds(list, "name"); // [court, fog]
     expect(pinned).toEqual([COURT, FOG]);
-    expect(visibleRows(list, { generation: "all", review: "all", search: "" }, "date", pinned).map((r) => r.source.id)).toEqual([COURT, FOG]);
-    expect(visibleRows(list, { generation: "all", review: "all", search: "fog" }, "date", pinned).map((r) => r.source.id)).toEqual([FOG]);
+    expect(visibleRows(list, { generation: "all", review: "all", search: "" }, "date", { order: pinned }).map((r) => r.source.id)).toEqual([COURT, FOG]);
+    expect(visibleRows(list, { generation: "all", review: "all", search: "fog" }, "date", { order: pinned }).map((r) => r.source.id)).toEqual([FOG]);
     // the reducer: a scan (`rows`), a sort change and `repin` refresh the pin; a run event (`rows-fn`) never does
     const start = reduceState(initialModel(CFG, "prompt", VIEW_PREFS), { type: "sort", sort: "name" });
     const scanned = reduceState(start, { type: "rows", rows: list });
@@ -472,12 +494,12 @@ describe("row model", () => {
     expect(reduceState(landed, { type: "repin" }).order).toEqual(sortedIds(landed.rows, "name"));
   });
 
-  it("drops a checked id the rescan removed", () => {
-    patchSvg({ checked: [FOG, COURT] });
+  it("drops checked, active and anchor ids the rescan removed", () => {
+    patchSvg({ checked: [FOG, COURT], activeId: COURT, anchorId: COURT });
     const rows = [toRow(svgSource(FOG), null, false)];
     pruneChecked(rows);
-    expect(getAppState().svg.checked).toEqual([FOG]);
-    patchSvg({ checked: [] });
+    expect(getAppState().svg).toEqual({ checked: [FOG], activeId: null, anchorId: null });
+    patchSvg({ checked: [], activeId: null, anchorId: null });
   });
 });
 
@@ -639,16 +661,16 @@ describe("runner events and the review decision", () => {
       say: () => {}, hist: { push: (e: { label: string; ids: string[] }) => pushed.push(e) },
     };
     await decideReview(ctx, [FOG], "approved");
-    expect(rows[0].newest?.review).toBe("approved");
+    expect(rows[0].review).toBe("approved");
     expect(pushed).toHaveLength(1);
     expect(pushed[0].label).toBe("Approve 1 SVG");
     const onDisk = parsePairMeta(await (await (await root.getDirectoryHandle("architecture")).getFileHandle("fog_AI.svg.json")).getFile().then((f) => f.text()));
     expect(onDisk.ok && onDisk.meta.versions[0].review).toBe("approved");
     expect(onDisk.ok && onDisk.meta.decision).toBe("approved"); // the pair decision is untouched
 
-    const back = await applyReviewPatch(ctx, { recs: [{ id: FOG, version: 1, review: "declined" }] });
+    const back = await applyReviewPatch(ctx, { recs: [{ id: FOG, review: "declined" }] });
     expect(back).toBe(true);
-    expect(rows[0].newest?.review).toBe("declined");
+    expect(rows[0].review).toBe("declined");
   });
 
   it("refuses to review a source with no generated version", async () => {
@@ -662,7 +684,7 @@ describe("runner events and the review decision", () => {
 });
 
 const CFG = { baseUrl: "u", model: "m", timeoutMs: 1000, retries: 0, concurrency: 1, imagesPerRequest: 4, maxTokens: 0 };
-const VIEW_PREFS = { thumb: 84, providerOpen: true, bg: { preset: "white", custom: "#808080" } } as const;
+const VIEW_PREFS = { thumb: 84, providerOpen: true, bg: { preset: "white", custom: "#808080" }, stroke: null } as const;
 
 describe("state reducer and preview", () => {
   it("starts from the documented defaults and applies every action once", () => {
@@ -685,9 +707,9 @@ describe("state reducer and preview", () => {
 
   it("remembers the zoom, the card's state and the preview background", () => {
     localStorage.setItem(SVG_PREFS_KEY, JSON.stringify({ thumbHeight: 132, providerOpen: false }));
-    expect(loadSvgPrefs()).toEqual({ thumbHeight: 132, providerOpen: false, previewBg: DEFAULT_PREVIEW_BACKGROUND });
-    saveSvgPrefs({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" } });
-    expect(loadSvgPrefs()).toEqual({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" } });
+    expect(loadSvgPrefs()).toEqual({ thumbHeight: 132, providerOpen: false, previewBg: DEFAULT_PREVIEW_BACKGROUND, previewStroke: null });
+    saveSvgPrefs({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" }, previewStroke: 2.5 });
+    expect(loadSvgPrefs()).toEqual({ thumbHeight: 96, providerOpen: false, previewBg: { preset: "black", custom: "#123456" }, previewStroke: 2.5 });
     localStorage.removeItem(SVG_PREFS_KEY);
   });
 

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the metadata pipeline runs for real over a fake transport: the
 // exact default prompt goes out with the preview image, the answer is parsed
 // and validated deterministically, only provider-confirmed failures are
@@ -18,7 +19,8 @@ const TAGS = [...MANDATORY_TAGS, "speed", "growth", "chart", "arrow", "up", "bus
 
 const ANSWER = `Title: Minimal line icon of growth and speed
 Description: Clean line icon showing growth and rising business trends
-Tags: ${TAGS.join(", ")}`;
+Tags: ${TAGS.join(", ")}
+Name: growth`;
 
 const SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" fill="#000"/></svg>`;
 const API_KEY = "test-gemini-key-123";
@@ -105,6 +107,35 @@ describe("generateMetadata — deterministic parse + validation", () => {
     expect(result.metadata?.tags).toHaveLength(9);
     expect(result.validation?.ok).toBe(false);
     expect(result.validation?.errors[0]).toContain("at least 10");
+  });
+});
+
+describe("generateMetadata — every field must be filled to be accepted (2026-11-08)", () => {
+  const MISSING = "Icon Name is empty — one word of at most 9 characters is required";
+  const run = (answer: string) => {
+    const { fetch } = fakeFetch(() => jsonResponse(200, okBody(answer)));
+    return generateMetadata(args({ deps: { render, fetch } }));
+  };
+
+  it("an answer with no Name line is invalid, names the missing field, and is not accepted", async () => {
+    const result = await run(ANSWER.replace(`\nName: growth`, ""));
+    expect(result.outcome).toBe("invalid");
+    expect(result.validation?.ok).toBe(false);
+    expect(result.validation?.errors).toEqual([MISSING]);
+    expect(result.detail).toContain("Icon Name is empty");
+    expect(result.metadata).not.toBeNull(); // the draft stays editable: fill the field, then Accept
+  });
+
+  it("an empty Name line is the same", async () => {
+    const result = await run(ANSWER.replace("Name: growth", "Name:"));
+    expect(result.outcome).toBe("invalid");
+    expect(result.validation?.errors).toContain(MISSING);
+  });
+
+  it("a complete answer is generated (and so accepted)", async () => {
+    const result = await run(ANSWER);
+    expect(result.outcome).toBe("generated");
+    expect(result.metadata?.name).toBe("growth");
   });
 });
 

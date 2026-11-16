@@ -5,6 +5,7 @@
 
 import type { KeySource } from "../lib/keyvault";
 import { useReducer, type Dispatch } from "react";
+import { seedConnections, type Connection, type ConnectionsStore } from "../lib/svgconnections";
 import type { SvgConfig } from "../lib/svgconfig";
 import {
   DEFAULT_PARAMS,
@@ -13,14 +14,17 @@ import {
   type ModelCaps,
   type SamplingParams,
 } from "../lib/modelcaps";
-import { ALL_SVG_FILTER, type SvgListFilter, type SvgSort } from "../lib/svglist";
+import { naturalDir, type SvgDir, type SvgListFilter, type SvgSort } from "../lib/svglist";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { findPreset, type PromptPreset } from "../lib/promptpresets";
 import type { Discovery } from "./sources";
 import type { QueueItem } from "./runqueue";
-import type { Dialog, RunProgress, SvgRow } from "./types";
+import type { Dialog, ImageReview, RunProgress, SvgRow } from "./types";
+import { loadImageJournal, type ImageRequestEvidence } from "./imgjournal";
 import { sortedIds } from "./rowmodel";
 import { NO_CHAIN, type Chain } from "./runtotals";
+import { loadSvgListView } from "./listview";
+import { LIST_VIEW_KEYS, useSaveListView } from "../state/listviewstore";
 
 export interface Toast {
   msg: string;
@@ -35,6 +39,9 @@ export interface SvgModel {
   busy: string | null;
   toast: Toast | null;
   config: SvgConfig;
+  /** The saved provider setups (quick-switch); the active one owns config's base+model. */
+  connections: Connection[];
+  activeConn: string;
   /** Sampling values for the selected model — never a value it refuses. */
   params: SamplingParams;
   /** What the selected model accepts (lib/modelcaps), for the controls and the payload. */
@@ -60,8 +67,12 @@ export interface SvgModel {
   providerOpen: boolean;
   /** Preview-frame background — an app setting, never part of an SVG. */
   bg: PreviewBackground;
+  /** Preview-only stroke width for the row thumbnails; null = each file's own. */
+  stroke: number | null;
   filter: SvgListFilter;
   sort: SvgSort;
+  /** The one direction control; a new order resets it to that order's own direction. */
+  sortDir: SvgDir;
   /**
    * The pinned list order (2026-10-08): refreshed by a scan, a sort change and
    * `repin` (a tab re-activation) — never by a run event, so a landing result
@@ -77,6 +88,13 @@ export interface SvgModel {
   queue: QueueItem[];
   /** Currently generating source id, for persistent progress header. */
   currentId: string | null;
+  /** Sources whose AI image is being regenerated (2026-10-19 RC3); one writer: the run in svg/imgactions. */
+  imgRunning: string[];
+  /** The generated composite awaits an explicit Apply or Discard. */
+  imgReview: ImageReview | null;
+  /** Metadata-only sent requests with no saved result after a restart. */
+  imgJournal: ImageRequestEvidence[];
+  imgJournalWarning: boolean;
 }
 
 export type SvgAction =
@@ -87,6 +105,7 @@ export type SvgAction =
   | { type: "busy"; busy: string | null }
   | { type: "toast"; toast: Toast | null }
   | { type: "config"; config: SvgConfig }
+  | { type: "connections"; list: Connection[]; activeId: string }
   | { type: "params"; params: SamplingParams }
   | { type: "caps"; caps: ModelCaps }
   | { type: "catalog"; catalog: CatalogModel[] | null }
@@ -99,8 +118,10 @@ export type SvgAction =
   | { type: "thumb"; px: number }
   | { type: "provider-open"; open: boolean }
   | { type: "bg"; bg: PreviewBackground }
+  | { type: "stroke"; px: number | null }
   | { type: "filter"; patch: Partial<SvgListFilter> }
   | { type: "sort"; sort: SvgSort }
+  | { type: "sort-dir"; dir: SvgDir }
   | { type: "repin" }
   | { type: "dialog"; dialog: Dialog | null }
   | { type: "progress"; progress: RunProgress | null }
@@ -108,7 +129,19 @@ export type SvgAction =
   | { type: "progress-fn"; fn: (p: RunProgress | null) => RunProgress | null }
   | { type: "running"; running: boolean }
   | { type: "queue"; queue: QueueItem[] }
-  | { type: "current"; id: string | null };
+  | { type: "current"; id: string | null }
+  | { type: "img-running"; ids: string[]; on: boolean }
+  | { type: "img-review"; review: ImageReview | null }
+  | { type: "img-journal"; entries: ImageRequestEvidence[] }
+  | { type: "img-journal-warning"; warning: boolean };
+
+/** The active connection always mirrors the live config's base+model, so a hand
+ *  edit of the MODEL field is kept by the dropdown too (one truth, two views). */
+function syncConn(m: SvgModel): SvgModel {
+  const active = m.connections.find((c) => c.id === m.activeConn);
+  if (!active || (active.baseUrl === m.config.baseUrl && active.model === m.config.model)) return m;
+  return { ...m, connections: m.connections.map((c) => (c.id === m.activeConn ? { ...c, baseUrl: m.config.baseUrl, model: m.config.model } : c)) };
+}
 
 /** Table-driven: one handler per action, so no branch chain can grow (RULE 19). */
 const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgModel> = {
@@ -118,7 +151,15 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   discovery: (m, a) => ({ ...m, discovery: (a as { discovery: Discovery | null }).discovery }),
   busy: (m, a) => ({ ...m, busy: (a as { busy: string | null }).busy }),
   toast: (m, a) => ({ ...m, toast: (a as { toast: Toast | null }).toast }),
-  config: (m, a) => ({ ...m, config: (a as { config: SvgConfig }).config }),
+  config: (m, a) => syncConn({ ...m, config: (a as { config: SvgConfig }).config }),
+  // The ONE writer of the connection list: switching/adding/removing land here,
+  // and the live config's base+model follow the now-active connection — so the
+  // dropdown and the runner can never drift apart (useModelSync resolves caps).
+  connections: (m, a) => {
+    const { list, activeId } = a as { list: Connection[]; activeId: string };
+    const active = list.find((c) => c.id === activeId) ?? list[0];
+    return syncConn({ ...m, connections: list, activeConn: active?.id ?? "", config: active ? { ...m.config, baseUrl: active.baseUrl, model: active.model } : m.config });
+  },
   params: (m, a) => ({ ...m, params: (a as { params: SamplingParams }).params }),
   caps: (m, a) => ({ ...m, caps: (a as { caps: ModelCaps }).caps }),
   catalog: (m, a) => ({ ...m, catalog: (a as { catalog: CatalogModel[] | null }).catalog }),
@@ -131,8 +172,13 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   thumb: (m, a) => ({ ...m, thumb: (a as { px: number }).px }),
   "provider-open": (m, a) => ({ ...m, providerOpen: (a as { open: boolean }).open }),
   bg: (m, a) => ({ ...m, bg: (a as { bg: PreviewBackground }).bg }),
+  stroke: (m, a) => ({ ...m, stroke: (a as { px: number | null }).px }),
   filter: (m, a) => ({ ...m, filter: { ...m.filter, ...(a as { patch: Partial<SvgListFilter> }).patch } }),
-  sort: (m, a) => repinned({ ...m, sort: (a as { sort: SvgSort }).sort }),
+  sort: (m, a) => {
+    const sort = (a as { sort: SvgSort }).sort;
+    return repinned({ ...m, sort, sortDir: naturalDir(sort) });
+  },
+  "sort-dir": (m, a) => repinned({ ...m, sortDir: (a as { dir: SvgDir }).dir }),
   repin: (m) => repinned(m),
   dialog: (m, a) => ({ ...m, dialog: (a as { dialog: Dialog | null }).dialog }),
   progress: (m, a) => ({ ...m, progress: (a as { progress: RunProgress | null }).progress }),
@@ -141,7 +187,16 @@ const HANDLERS: Record<SvgAction["type"], (m: SvgModel, a: SvgAction) => SvgMode
   running: (m, a) => ({ ...m, running: (a as { running: boolean }).running }),
   queue: (m, a) => ({ ...m, queue: (a as { queue: QueueItem[] }).queue }),
   current: (m, a) => ({ ...m, currentId: (a as { id: string | null }).id }),
+  "img-running": (m, a) => ({ ...m, imgRunning: inFlight(m.imgRunning, a as { ids: string[]; on: boolean }) }),
+  "img-review": (m, a) => ({ ...m, imgReview: (a as { review: ImageReview | null }).review }),
+  "img-journal": (m, a) => ({ ...m, imgJournal: (a as { entries: ImageRequestEvidence[] }).entries }),
+  "img-journal-warning": (m, a) => ({ ...m, imgJournalWarning: (a as { warning: boolean }).warning }),
 };
+
+/** Marks ids in flight (on) or landed (off); concurrent writers never clobber each other. */
+function inFlight(now: string[], a: { ids: string[]; on: boolean }): string[] {
+  return a.on ? [...now, ...a.ids.filter((id) => !now.includes(id))] : now.filter((id) => !a.ids.includes(id));
+}
 
 export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
   return HANDLERS[action.type](model, action);
@@ -149,7 +204,7 @@ export function reduceState(model: SvgModel, action: SvgAction): SvgModel {
 
 /** The pin is the sort's order over every row at this moment. */
 function repinned(m: SvgModel): SvgModel {
-  return { ...m, order: sortedIds(m.rows, m.sort) };
+  return { ...m, order: sortedIds(m.rows, m.sort, m.sortDir) };
 }
 
 /**
@@ -174,6 +229,7 @@ export interface ViewPrefs {
   thumb: number;
   providerOpen: boolean;
   bg: PreviewBackground;
+  stroke: number | null;
 }
 
 /** The model a fresh tab opens with (persisted values are merged in boot). */
@@ -183,17 +239,26 @@ function presetsModel(m: SvgModel, presets: PromptPreset[]): SvgModel {
   return { ...m, presets, presetPick: picked };
 }
 
-export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, presets: PromptPreset[] = []): SvgModel {
+export function initialModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, extras: { presets?: PromptPreset[]; conns?: ConnectionsStore } = {}): SvgModel {
+  const journal = loadImageJournal();
+  const stored = extras.conns ?? { list: seedConnections(config), activeId: "" };
+  const active = stored.list.find((c) => c.id === stored.activeId) ?? stored.list[0];
+  const live = { ...config, baseUrl: active.baseUrl, model: active.model };
   return {
     rootName: "", rows: [], discovery: null, busy: null, toast: null,
-    config, params: { ...DEFAULT_PARAMS }, caps: capsFor(config.model), catalog: null, paramNote: null,
-    prompt, presets, presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
-    thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg,
-    filter: ALL_SVG_FILTER, sort: "date", order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null,
+    config: live, connections: stored.list, activeConn: active.id,
+    params: { ...DEFAULT_PARAMS }, caps: capsFor(live.model), catalog: null, paramNote: null,
+    prompt, presets: extras.presets ?? [], presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
+    thumb: prefs.thumb, providerOpen: prefs.providerOpen, bg: prefs.bg, stroke: prefs.stroke,
+    ...loadSvgListView(), order: [], dialog: null, progress: null, chain: NO_CHAIN, running: false, queue: [], currentId: null, imgRunning: [],
+    imgReview: null, imgJournal: journal.entries, imgJournalWarning: journal.warning,
   };
 }
 
 /** One hook, one line of state: the panel never holds a second copy. */
-export function useSvgModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, presets: PromptPreset[]): [SvgModel, Dispatch<SvgAction>] {
-  return useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs, presets));
+export function useSvgModel(config: SvgConfig, prompt: string, prefs: ViewPrefs, extras: { presets?: PromptPreset[]; conns?: ConnectionsStore }): [SvgModel, Dispatch<SvgAction>] {
+  const state = useReducer(reduceState, config, (c) => initialModel(c, prompt, prefs, extras));
+  const [m] = state;
+  useSaveListView(LIST_VIEW_KEYS.svg, { filter: m.filter, sort: m.sort, sortDir: m.sortDir });
+  return state;
 }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — squareInfo / cropRect are pure geometry; run the real functions.
 import { describe, expect, it } from "vitest";
 import { cropRect, squareInfo, type SquareInfo } from "../src/lib/render";

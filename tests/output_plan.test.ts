@@ -1,3 +1,4 @@
+// @vitest-environment node
 // TDD cycle 5 — output planning (spec §5): month/timestamp layout, per-source
 // folders, collision → _v02/_v03, never overwriting existing names.
 import { describe, expect, it } from "vitest";
@@ -13,12 +14,12 @@ const src = (relPath: string, ref: string | null = null): BatchSource => ({
 const date = new Date(2026, 8, 30, 14, 32, 8);
 
 describe("planBatch — layout (spec §5 + ROOT FOLDER EXAMPLE)", () => {
-  it("groups by month then timestamped batch, preserving source hierarchy", () => {
+  it("groups by month then day batch, preserving source hierarchy", () => {
     const plan = planBatch([src("Category-A/icon-award-ribbon_AI.png")], () => [], date);
-    expect(plan.relBase).toBe("2026-09/2026-09-30_14-32-08");
+    expect(plan.relBase).toBe("2026-09/2026-09-30");
     expect(plan.items[0].relDir).toBe("Category-A");
     expect(plan.items[0].folder).toBe("icon-award-ribbon_AI");
-    expect(plan.items[0].relFolder).toBe("2026-09/2026-09-30_14-32-08/Category-A/icon-award-ribbon_AI");
+    expect(plan.items[0].relFolder).toBe("2026-09/2026-09-30/Category-A/icon-award-ribbon_AI");
   });
 
   it("keeps existing variant suffixes untouched", () => {

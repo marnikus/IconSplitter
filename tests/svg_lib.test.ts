@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the SVG lib modules execute for real: config defaults/validation,
 // secret masking and redaction, prompt + manifest text, response extraction and
 // matching, validation/security, icon counting, versioning + pair-file parsing,

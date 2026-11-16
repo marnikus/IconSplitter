@@ -46,22 +46,23 @@ export function loadInflight(): InflightRequest[] {
 
 /** Records a request as in flight, replacing an earlier entry for its batch. */
 export function beginRequest(record: Omit<InflightRequest, "requestId">): void {
-  const kept = read().requests.filter((entry) => entry.batchId !== record.batchId);
+  const kept = read().requests.filter((entry) => entry.batchId !== record.batchId || entry.runId !== record.runId);
   write([...kept, { ...record, requestId: null }]);
 }
 
 /** Keeps the provider's id as soon as it is known (header or first SSE frame). */
-export function attachRequestId(batchId: string, requestId: string): void {
+export function attachRequestId(batchId: string, requestId: string, runId?: string): void {
   const { requests } = read();
-  if (!requests.some((entry) => entry.batchId === batchId)) return;
-  write(requests.map((entry) => (entry.batchId === batchId ? { ...entry, requestId } : entry)));
+  const target = requestOf(requests, batchId, runId);
+  if (!target) return;
+  write(requests.map((entry) => (entry === target ? { ...entry, requestId } : entry)));
 }
 
 /** The request has a confirmed outcome (saved, failed or cancelled): drop it. */
-export function endRequest(batchId: string): void {
+export function endRequest(batchId: string, runId?: string): void {
   const { requests } = read();
-  if (!requests.some((entry) => entry.batchId === batchId)) return;
-  write(requests.filter((entry) => entry.batchId !== batchId));
+  const target = requestOf(requests, batchId, runId);
+  if (target) write(requests.filter((entry) => entry !== target));
 }
 
 /** Forgets every note — used after the user dismisses the recovery banner. */
@@ -115,4 +116,10 @@ function isRequest(value: unknown): value is InflightRequest {
     && typeof value.index === "number" && typeof value.model === "string"
     && typeof started === "string" && Array.isArray(value.sourceIds) && Array.isArray(value.sourceNames)
     && (value.requestId === null || typeof value.requestId === "string");
+}
+
+/** Legacy callers may name a batch only when it is unambiguous. */
+function requestOf(requests: InflightRequest[], batchId: string, runId?: string): InflightRequest | null {
+  const matches = requests.filter((entry) => entry.batchId === batchId && (runId === undefined || entry.runId === runId));
+  return matches.length === 1 ? matches[0] : null;
 }

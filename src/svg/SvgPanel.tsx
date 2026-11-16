@@ -1,3 +1,4 @@
+import SvgRuns from "./SvgRuns";
 // SvgPanel.tsx — the Generate SVG tab (prompt §1/§2/§17): controls, the honest
 // discovery banners, the bulk bar, the source list, the run record (strip and
 // queue, below the list), the status footer, the three dialogs and the toast. The panel owns no rule of
@@ -5,26 +6,32 @@
 // and the review decision all live in tested modules; this file is the wiring
 // that makes them one screen.
 
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { modelLabel } from "../lib/svgconfig";
 import { costText } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
 import { OpenFolderButton } from "../ui/FolderBar";
-import { setAppState } from "../state/appstore";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
+import { PanelDialogs, panelRowActions } from "./panelbits";
 import SvgBulkBar from "./SvgBulkBar";
+import { svgDataRows } from "./getdatarows";
 import RunRecord from "./RunRecord";
-import SvgProgressHeader from "./SvgProgressHeader";
-import SvgControls, { type SvgCounts } from "./SvgControls";
+import SvgImgReview from "./SvgImgReview";
+import SvgImgInflight from "./SvgImgInflight";
+import SvgJobProgress from "./SvgJobProgress";
+import SvgControls from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
-import SvgDialogs from "./SvgDialogs";
 import { useSvgHotkeys } from "./SvgHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
-import { idsWithGeneratedSvg, shownVersion } from "./rowmodel";
+import { useRunning } from "../ui/rebuildwatch";
+import { idsWithGeneratedSvg } from "./rowmodel";
+import { countsOf, decidableCount } from "./panelcounts";
 import SvgList from "./SvgList";
-import type { SvgRowActions } from "./SvgRow";
 import type { Discovery, SourceProblem } from "./sources";
+
 import { exclusionSummary } from "./sourcelist";
+import { useBusyActivity } from "../ui/useBusyActivity";
+import SvgEditModal from "./pathedit/SvgEditModal";
 
 /**
  * `active` (2026-10-08): the Workbench keeps this panel mounted on every tab
@@ -34,29 +41,31 @@ import { exclusionSummary } from "./sourcelist";
  */
 export default function SvgPanel({ active = true }: { active?: boolean }) {
   const g = useSvgGen();
+  // The AI image run already has its own job bar: it is not shown twice.
+  useBusyActivity("svg", g.busy, (busy) => busy.startsWith("Regenerating AI sources"));
   const rootRef = g.refs.root as { current: DirHandleLike | null };
-  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active);
+  const dialogOpen = g.dialog !== null || g.imgReview !== null;
+  // A reload must not land inside a generation run.
+  useRunning("svg", g.running);
+  useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active && !dialogOpen);
   useSvgHotkeys({
-    visible: g.visible, activeId: g.activeId, dialogOpen: g.dialog !== null,
+    visible: g.visible, activeId: g.activeId, dialogOpen,
     setActive: g.setActive, toggleCheck: g.toggleCheck, generate: g.requestGenerate,
     decide: g.decide, showCode: g.showCode, dismissDialog: g.dismissDialog,
-  });
+  }, active);
   useActivation(active, g);
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg" data-testid="svg-panel" style={thumbStyle(g.thumb)}>
-      <SvgProgressHeader progress={g.progress} running={g.running} queue={g.queue} chain={g.chain} currentId={g.currentId} rows={g.rows} rootRef={rootRef}
-        onCancel={g.cancelRun} onDismiss={() => g.dispatch({ type: "progress", progress: null })}
-        onReview={() => setAppState({ tab: "generateSvg" })} />
+      <SvgJobProgress g={g} rootRef={rootRef} />
       <Controls g={g} root={rootRef.current} />
       <Banners g={g} />
       <Body g={g} rootRef={rootRef} />
       <SvgStatus g={g} />
-      <SvgDialogs dialog={g.dialog} rows={g.rows} config={g.config} caps={g.caps} params={g.params}
-        rootRef={rootRef} readCode={g.readCode} presets={g.presets} prompt={g.prompt}
-        onConfirm={g.confirmGenerate} onDismiss={g.dismissDialog} onShowCode={g.showCode}
-        onUseVersion={g.preferVersion} running={g.running} />
+      <PanelDialogs g={g} rootRef={rootRef} />
+      {g.imgReview && <SvgImgReview review={g.imgReview} onApply={g.applyImageReview} onDiscard={g.discardImageReview} />}
       <Overlay g={g} />
+      <SvgEditModal rows={g.visible} rootRef={rootRef} rootToken={g.rootToken} />
     </div>
   );
 }
@@ -78,40 +87,48 @@ function useActivation(active: boolean, g: SvgGenApi): void {
 
 /** The control block, wired straight from the api — one place to read it. */
 function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
+  const counts = useMemo(() => countsOf(g.rows), [g.rows]);
   return (
-    <SvgControls rootName={g.rootName} root={root} discovery={g.discovery} busy={g.busy} counts={countsOf(g)}
+    <SvgControls rootName={g.rootName} root={root} discovery={g.discovery} busy={g.busy} counts={counts}
       prompt={svgPromptWindowOf(g)} provider={g.provider} config={g.config} caps={g.caps} params={g.params}
+      connections={g.connections} activeConn={g.activeConn}
+      onSwitchConnection={g.switchConnection} onAddConnection={g.addConnection} onRemoveConnection={g.removeConnection}
+      onConnectionMeta={g.setConnectionMeta} onImage={g.setImage}
       paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
-      filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
+      filter={g.filter} sort={g.sort} sortDir={g.sortDir} shown={g.visible.length} total={g.rows.length}
       onChooseRoot={g.chooseRoot} onRescan={g.rescan} onConfig={g.setConfig} onParams={g.setParams} onRefreshModels={g.refreshModels}
       onDismissNote={() => g.dispatch({ type: "param-note", note: null })}
       onSaveKey={g.saveKey} onForgetKey={g.forgetKey} onProviderOpen={g.setProviderOpen}
-      onFilter={g.setFilter} onSort={g.setSort}
+      onFilter={g.setFilter} onSort={g.setSort} onSortDir={g.setSortDir}
       onClearFilters={() => g.setFilter({ generation: "all", review: "all", search: "" })} />
   );
 }
 
 /** Everything that only exists once a root is picked. */
 function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike | null } }) {
+  const decidable = useMemo(() => decidableCount(g.rows, g.affected), [g.rows, g.affected]);
+  const regenerable = useMemo(() => idsWithGeneratedSvg(g.rows, g.checked).length, [g.rows, g.checked]);
   if (g.rootName === "") return <PickRoot onPick={g.chooseRoot} />;
-  const actions: SvgRowActions = {
-    activeId: g.activeId, checked: g.checked, thumb: g.thumb, rootToken: g.rootToken, bg: g.bg, rootRef,
-    toggleCheck: g.toggleCheck, setActive: g.setActive, generate: g.requestGenerate,
-    decide: g.decide, copyCode: g.copyCode, showCode: g.showCode, showHistory: g.showHistory,
-    openLocation: g.openLocation,
-  };
+  const actions = panelRowActions(g, rootRef);
   return (
     <>
-      <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={idsWithGeneratedSvg(g.rows, g.checked).length}
-        requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidableCount(g)}
-        thumb={g.thumb} bg={g.bg} model={modelLabel(g.config.model)} totals={g.totals}
-        progress={g.progress} running={g.running}
-        onToggleAll={(on) => (on ? g.selectVisible() : g.deselectAll())} onSelectVisible={g.selectVisible}
-        onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
-        onRegenerate={() => g.regenerateSelected(g.checked)}
-        onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
+      <div className="svg-bulkbar-pin" data-testid="svg-bulkbar-pin">
+        <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={regenerable}
+          requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidable}
+          thumb={g.thumb} bg={g.bg} stroke={g.stroke} onStroke={g.setPreviewStroke} model={modelLabel(g.config.model)} totals={g.totals}
+          progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
+          onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible} onInvert={g.invertVisible}
+          onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
+          onRegenerate={() => g.regenerateSelected(g.checked)}
+          onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}
+          onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun}
+          onRegisterExisting={() => g.registerExisting(g.checked)} getData={() => svgDataRows(g.rows, g.checked)}
+          onRegisterImages={() => g.registerImages(g.checked)} onRemove={() => g.removeRows(g.checked)}
+          checkedIds={g.checked} onCutTails={g.cutTails} onApproveCuts={g.approveCuts} />
+      </div>
       <SvgList g={g} actions={actions} />
-      <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.cancelRun} onDrop={g.dropQueued} />
+      <SvgRuns refs={g.refs} onStop={g.cancelRun} />
+      <RunRecord progress={g.progress} running={g.running} queue={g.queue} onCancel={g.skipCurrentRequest} onDrop={g.dropQueued} />
     </>
   );
 }
@@ -135,22 +152,6 @@ function thumbStyle(px: number): CSSProperties {
   return { "--svg-thumb": `${px}px` } as CSSProperties;
 }
 
-/** The four counters above the list, straight off the rows (no extra state). */
-function countsOf(g: SvgGenApi): SvgCounts {
-  const rows = g.rows;
-  return {
-    eligible: rows.length,
-    generated: rows.filter((r) => r.status === "generated").length,
-    approved: rows.filter((r) => shownVersion(r)?.review === "approved").length,
-    failed: rows.filter((r) => r.status === "failed").length,
-  };
-}
-
-/** Selected rows that actually have a valid SVG to approve or decline. */
-function decidableCount(g: SvgGenApi): number {
-  return g.affected.filter((id) => { const r = g.rows.find((x) => x.source.id === id); return r !== undefined && shownVersion(r) !== null; }).length;
-}
-
 /** What the scan could not use — said out loud, and never by removing a row. */
 function Banners({ g }: { g: SvgGenApi }) {
   const d = g.discovery;
@@ -169,6 +170,8 @@ function Banners({ g }: { g: SvgGenApi }) {
   return (
     <>
       <Inflight g={g} />
+      <SvgImgInflight entries={g.imgJournal} warning={g.imgJournalWarning} busy={g.busy?.startsWith("Regenerating AI sources") ?? false}
+        onRetry={g.retryImageUnknown} onDismiss={g.dismissImageJournal} />
       {notes.map((n) => <Banner key={n.id} note={n} />)}
     </>
   );

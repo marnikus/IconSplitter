@@ -6,7 +6,7 @@
 // stays clean.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { containsSecret, findSecrets } from "../src/lib/svgsecret";
 import { formatLogText } from "../src/lib/log";
@@ -16,10 +16,16 @@ import { readKey } from "../src/state/safestorage";
 const SAMPLE = ["rq", "live", "QwErTy7UiOpAsDfGh4JkLzXcVbNm2"].join("_");
 const TEXT_EXT = /\.(ts|tsx|js|mjs|json|md|html|css|bat|sh|yml|yaml|txt)$/i;
 
-function repoFiles(): string[] {
-  const tracked = execSync("git ls-files", { cwd: process.cwd() }).toString().trim();
-  const untracked = execSync("git ls-files --others --exclude-standard", { cwd: process.cwd() }).toString().trim();
-  return [...tracked.split("\n"), ...untracked.split("\n")].filter(Boolean);
+/**
+ * Tracked + untracked (not ignored) text files that contain any of `needles`.
+ * One native `git grep` pre-filters the ~12k files; the real gate below then
+ * runs on the few candidates (reading every file in JS took 6–85 s).
+ */
+function candidates(needles: string[], ignoreCase = false): string[] {
+  const args = ["grep", "-l", "--untracked", "-F", ...(ignoreCase ? ["-i"] : []), ...needles.flatMap((n) => ["-e", n])];
+  const r = spawnSync("git", args, { cwd: process.cwd(), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0 && r.status !== 1) throw new Error(`git grep failed: ${r.stderr}`);
+  return r.stdout.split("\n").filter((f) => f !== "" && TEXT_EXT.test(f));
 }
 
 function read(rel: string): string {
@@ -54,6 +60,37 @@ describe("the global log never leaks a key", () => {
     localStorage.clear();
     resetLogStore();
   });
+
+  it("drops FTP/ESP username, password, apiKey and apiSecret fields from logged data and ids", () => {
+    localStorage.clear();
+    resetLogStore();
+    log({
+      feature: "stockUpload",
+      action: "ftps-test",
+      ids: { preset: "getty-images", username: "artist@example.com", apiKey: "GettyKey77", apiSecret: "GettySecret88" },
+      data: {
+        ok: false,
+        username: "artist@example.com",
+        password: "MySecretPassword99",
+        ftpUser: "artist",
+        ftpPass: "MySecretPassword99",
+        apiKey: "GettyKey77",
+        apiSecret: "GettySecret88",
+        clientSecret: "GettySecret88",
+      },
+    });
+    flushLog();
+    const state = getLogState();
+    const copied = formatLogText(state.entries);
+    expect(copied).not.toContain("artist@example.com");
+    expect(copied).not.toContain("MySecretPassword99");
+    expect(copied).not.toContain("GettyKey77");
+    expect(copied).not.toContain("GettySecret88");
+    expect(state.entries[0].data).toEqual({ ok: false });
+    expect(state.entries[0].ids).toEqual({ preset: "getty-images" });
+    localStorage.clear();
+    resetLogStore();
+  });
 });
 
 describe("secret hygiene", () => {
@@ -65,15 +102,14 @@ describe("secret hygiene", () => {
   });
 
   it("no tracked or untracked file contains a key-shaped literal", () => {
-    const offenders = repoFiles()
-      .filter((f) => TEXT_EXT.test(f))
+    const offenders = candidates(["rq_live_", "rq_test_", "sk-"])
       .flatMap((f) => findSecrets(read(f)).map((s) => `${f}: ${s.slice(0, 8)}…`));
     expect(offenders).toEqual([]);
   });
 
   it("no file hardcodes an Authorization header value", () => {
     const pattern = /Authorization["'\s:=]+["'`]?\s*Bearer\s+[A-Za-z0-9._-]{8,}/i;
-    const offenders = repoFiles().filter((f) => TEXT_EXT.test(f) && pattern.test(read(f)));
+    const offenders = candidates(["authorization"], true).filter((f) => pattern.test(read(f)));
     expect(offenders).toEqual([]);
   });
 

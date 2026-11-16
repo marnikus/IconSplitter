@@ -77,3 +77,23 @@ function keyOf(decl: string): string {
   const at = decl.indexOf(":");
   return (at > 0 ? decl.slice(0, at) : decl).trim().toLowerCase();
 }
+
+/** This non-inherited SVG property pins the pen to the final viewport. */
+export function nonScalingStroke(el: Element): boolean {
+  const value = ownPresentation(el, "vector-effect");
+  return value?.trim() === "non-scaling-stroke";
+}
+
+/** The element's own presentation value: inline declaration before attribute. */
+export function ownPresentation(el: Element, prop: string): string | null {
+  return styleMap(el.getAttribute("style"))[prop] ?? el.getAttribute(prop);
+}
+
+/** Nearest presentation value in the SVG inheritance chain. */
+export function inheritedPresentation(el: Element, prop: string): string | null {
+  for (let node: Element | null = el; node !== null; node = node.parentElement) {
+    const value = ownPresentation(node, prop);
+    if (value !== null && value.trim() !== "") return value;
+  }
+  return null;
+}

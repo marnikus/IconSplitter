@@ -1,3 +1,4 @@
+// @vitest-environment node
 // tools/verify.mjs — the cross-platform RULE 16 lane runner (CODE_VERIFICATION.md §8).
 // These tests spawn the REAL runner in --plan mode and characterize its contract:
 // which lanes run in fast mode, which in --full mode, in which order, and with
@@ -28,7 +29,7 @@ describe("fast lane plan (npm run verify:fast)", () => {
     expect(lanes[0].args).toContain("--coverage");
   });
 
-  it("keeps the lane order types → lint → quality gate → coverage → build", () => {
+  it("keeps canonical inventory types → lint → quality gate → coverage → build (execution groups control scheduling)", () => {
     expect(plan().map((l) => l.name)).toEqual([
       "Types",
       "Lint",
@@ -49,17 +50,18 @@ describe("fast lane plan (npm run verify:fast)", () => {
 });
 
 describe("full lane plan (npm run verify, pre-push hook)", () => {
-  it("adds the standalone test lane before the coverage lane", () => {
+  it("adds only the uninstrumented native project before coverage — never a second full suite", () => {
     const lanes = plan("--full");
     expect(vitestLanes(lanes)).toHaveLength(2);
     expect(lanes.map((l) => l.name)).toEqual([
       "Types",
       "Lint",
       "Quality gate (changed)",
-      "Tests",
+      "Perf budgets (native, uninstrumented)",
       "Tests + coverage",
       "Build",
     ]);
+    expect(lanes[3].args).toEqual(["vitest", "run", "--project", "native"]);
   });
 });
 
@@ -79,4 +81,41 @@ describe("--plan mode itself", () => {
     expect(r.stdout).toContain("1/5 Types");
     expect(r.stdout).toContain("npx tsc --noEmit");
   });
+});
+
+describe("honest incremental static checks and explicit cold verification", () => {
+  it("uses compiler-owned incremental checking and content-keyed lint cache, never a cached test success", () => {
+    const lanes = plan("--full");
+    expect(lanes[0].args).toContain("--incremental");
+    expect(lanes[0].args).toContain("--tsBuildInfoFile");
+    expect(lanes[1].args).toContain("--cache");
+    expect(lanes[1].args).toContain("content");
+    expect(lanes.find((l) => l.name === "Tests + coverage")?.args).toEqual(["vitest", "run", "--coverage"]);
+    expect(lanes.at(-1)?.name).toBe("Build");
+  });
+
+  it("cold mode bypasses static and transform caches but keeps every gate", () => {
+    const cold = plan("--full", "--cold");
+    expect(cold.map((l) => l.name)).toEqual(plan("--full").map((l) => l.name));
+    expect(cold[0].args).not.toContain("--incremental");
+    expect(cold[1].args).not.toContain("--cache");
+    for (const lane of vitestLanes(cold)) expect(lane.args).toContain("--fsModuleCache=false");
+  });
+});
+
+describe('explicit execution groups for bounded full verification overlap', () => {
+  it('exposes native quarantine, one static queue and one complete coverage queue', () => {
+    const lanes = plan('--full') as (Lane & { executionGroup: string })[];
+    expect(lanes.find(l => l.name.startsWith('Perf budgets'))?.executionGroup).toBe('native');
+    expect(lanes.find(l => l.name === 'Tests + coverage')?.executionGroup).toBe('suite');
+    expect(lanes.filter(l => l.executionGroup === 'static').map(l => l.name)).toEqual(['Types', 'Lint', 'Quality gate (changed)', 'Build']);
+  });
+});
+
+
+it('keeps serial as the explicit/default machine-readable execution mode', () => {
+  for (const flags of [[], ['--serial'], ['--overlap', '--serial']]) {
+    const lanes = plan(...flags) as (Lane & {executionMode: string})[];
+    expect(lanes.every(l => l.executionMode === 'serial')).toBe(true);
+  }
 });

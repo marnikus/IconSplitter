@@ -1,3 +1,4 @@
+// @vitest-environment node
 // log_scroll.test.ts — the ONE auto-scroll rule (feature §2): while the reader
 // is at the bottom the log follows the tail; a small slack keeps a wheel tick or
 // a rounding error from unpinning it; scrolling up pauses the follow.

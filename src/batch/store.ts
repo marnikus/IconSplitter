@@ -11,6 +11,7 @@ const LAST_KEY = "iconSplitter.lastPreset.v1";
 const DB_NAME = "iconSplitter";
 const DB_STORE = "handles";
 const SECRET_STORE = "secrets";
+export const PREVIEW_STORE = "batchPreviews";
 /** Captured full paths, each WITH the folder handle it was captured for (I-63). */
 export const ROOTPATHS_STORE = "rootpaths";
 
@@ -48,12 +49,13 @@ export async function loadHandles(presetName: string): Promise<StoredHandles | n
 
 /**
  * Version 2 added the `secrets` object store (RULE 20). Version 3 adds
- * `rootpaths` (I-63): captured folder paths travel with their handle. Anyone
- * who used an older build never gets the new store without a version bump —
+ * `rootpaths` (I-63): captured folder paths travel with their handle. Version 4
+ * adds `batchPreviews`: rendered split previews survive a restart. Anyone who
+ * used an older build never gets a new store without a version bump —
  * opening at the same version never runs `onupgradeneeded`, so every write
  * would fail. Bumping the version is what creates the store for them.
  */
-const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 /**
  * The page's ONE connection. Opening a fresh connection per read and per write
@@ -106,6 +108,7 @@ function upgrade(req: IDBOpenDBRequest): void {
   if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
   if (!db.objectStoreNames.contains(SECRET_STORE)) db.createObjectStore(SECRET_STORE);
   if (!db.objectStoreNames.contains(ROOTPATHS_STORE)) db.createObjectStore(ROOTPATHS_STORE);
+  if (!db.objectStoreNames.contains(PREVIEW_STORE)) db.createObjectStore(PREVIEW_STORE);
 }
 
 /** Lets go the moment someone else needs the database, then reopens on demand. */
@@ -166,4 +169,39 @@ export async function idbDelete(store: string, key: string): Promise<boolean> {
   if (!db) return false;
   await tx(db, store, "readwrite", (s) => s.delete(key));
   return true;
+}
+
+export async function idbGetAll<T>(store: string): Promise<T[]> {
+  const db = await openDb();
+  if (!db) return [];
+  return new Promise((resolve, reject) => {
+    let t: IDBTransaction;
+    try { t = db.transaction(store, "readonly"); } catch (e) { releaseDb(); reject(e); return; }
+    t.onerror = () => reject(t.error ?? new Error("tx failed"));
+    t.onabort = () => reject(t.error ?? new Error("tx aborted"));
+    const req = t.objectStore(store).getAll();
+    req.onsuccess = () => resolve(req.result as T[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function idbClear(store: string): Promise<boolean> {
+  const db = await openDb();
+  if (!db) return false;
+  await tx(db, store, "readwrite", (s) => s.clear());
+  return true;
+}
+
+export async function idbGetAllKeys(store: string): Promise<string[]> {
+  const db = await openDb();
+  if (!db) return [];
+  return new Promise((resolve, reject) => {
+    let t: IDBTransaction;
+    try { t = db.transaction(store, "readonly"); } catch (e) { releaseDb(); reject(e); return; }
+    t.onerror = () => reject(t.error ?? new Error("tx failed"));
+    t.onabort = () => reject(t.error ?? new Error("tx aborted"));
+    const req = t.objectStore(store).getAllKeys();
+    req.onsuccess = () => resolve((req.result as string[]).map(String));
+    req.onerror = () => reject(req.error);
+  });
 }

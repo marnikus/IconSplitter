@@ -6,11 +6,15 @@
 // the optimizer baked the transforms and re-multiplied it. Stroke widths and
 // dash lengths follow their geometry here (× the baked scale); containers lose
 // their `stroke-width` because every shape now carries its own. What a bake
-// would distort is refused by name BEFORE the tree is touched (RULE 15).
+// would distort is repaired by outlining the local pen, or refused by name
+// BEFORE the tree is touched when it cannot be repaired safely (RULE 15).
 
 import { isShape, strokeHits, type StrokeHit } from "./geom/bounds";
-import { bakeShapeAttrs, isUniform } from "./geom/bakeshape";
+import { bakeShapeAttrs } from "./geom/bakeshape";
 import { fmt } from "./geom";
+import { nonScalingStroke, stripStyleKeys } from "./geom/stroke";
+import { repairAnisotropicStrokes } from "./strokerepair";
+import type { StrokeStyle } from "./restyle";
 import { multiply, scaleOf, type Matrix } from "./geom/matrix";
 import { outlineToPathData, shapeOutline, transformOutline } from "./geom/outline";
 
@@ -19,6 +23,8 @@ export interface BakeResult {
   baked: number;
   /** Named reasons the bake refused; non-empty = the tree is untouched. */
   unsupported: string[];
+  /** Source pens outlined automatically before baking; included in export counts. */
+  repaired?: { expanded: number; colors: number };
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -28,12 +34,14 @@ const GEOMETRY_ATTRS = ["x", "y", "width", "height", "rx", "ry", "cx", "cy", "r"
 const COORDINATE_DEFS = ["clipPath", "mask", "filter", "pattern"];
 
 /** Bakes `artboard × CTM` into every shape under `root`; refuses (untouched) with reasons. */
-export function bakeGeometry(root: Element, artboard: Matrix): BakeResult {
-  const hits = strokeHits(root);
-  const unsupported = [...bakeVetoes(root), ...shapeVetoes(hits, artboard)];
+export function bakeGeometry(root: Element, artboard: Matrix, style?: StrokeStyle): BakeResult {
+  const unsupported = bakeVetoes(root);
   if (unsupported.length > 0) return { baked: 0, unsupported };
+  const hits = strokeHits(root);
+  const repair = repairAnisotropicStrokes(hits, artboard, style);
+  if (repair.unsupported.length > 0) return { baked: 0, unsupported: repair.unsupported };
   let baked = 0;
-  for (const hit of hits) {
+  for (const hit of repair.changed ? strokeHits(root) : hits) {
     if (isShape(hit.el)) {
       bakeShape(hit, multiply(artboard, hit.ctm));
       baked++;
@@ -42,7 +50,8 @@ export function bakeGeometry(root: Element, artboard: Matrix): BakeResult {
       hit.el.removeAttribute("stroke-width");
     }
   }
-  return { baked, unsupported: [] };
+  const repaired = repair.expanded > 0 ? { expanded: repair.expanded, colors: repair.colors } : undefined;
+  return repaired === undefined ? { baked, unsupported: [] } : { baked, unsupported: [], repaired };
 }
 
 /** Definitions with user-space coordinates of their own (D6). */
@@ -56,31 +65,16 @@ function bakeVetoes(root: Element): string[] {
   return [...new Set(out)];
 }
 
-/**
- * A stroke under a non-uniform matrix is anisotropic — refused. (A rounded
- * rect under a rotation used to be refused too; since 2026-10-08 the outline
- * model draws its corners, so it becomes a <path> like any turned shape.)
- */
-function shapeVetoes(hits: StrokeHit[], artboard: Matrix): string[] {
-  const out: string[] = [];
-  for (const hit of hits) {
-    if (!isShape(hit.el)) continue;
-    const m = multiply(artboard, hit.ctm);
-    const tag = hit.el.nodeName.toLowerCase();
-    if (!hit.stroke.none && !isUniform(m)) out.push(`a stroked <${tag}> under a non-uniform transform`);
-  }
-  return [...new Set(out)];
-}
-
 /** One shape: coordinates, then the lengths that scale with them. */
 function bakeShape(hit: StrokeHit, m: Matrix): void {
+  const nonScaling = nonScalingStroke(hit.el);
   const el = bakeShapeAttrs(hit.el, m) ? hit.el : asPath(hit.el, m);
   el.removeAttribute("transform");
-  const k = scaleOf(m);
+  const k = nonScaling ? 1 : scaleOf(m);
   scaleLengths(el, "stroke-dasharray", k);
   scaleLengths(el, "stroke-dashoffset", k);
   if (hit.stroke.none) return;
-  const nonScaling = el.getAttribute("vector-effect") === "non-scaling-stroke";
+  stripStyleKeys(el, ["vector-effect"]);
   el.removeAttribute("vector-effect");
   el.setAttribute("stroke-width", fmt(nonScaling ? hit.stroke.width : hit.stroke.width * k));
 }

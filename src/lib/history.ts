@@ -12,7 +12,15 @@
 
 import { isRecord } from "./isrecord";
 
-export const HISTORY_VERSION = 1;
+/**
+ * Payload version. 2 = a selection gesture is a compact diff (lib/selectiondelta)
+ * instead of two whole checked arrays. Timelines written by 1 still load: their
+ * absolute payloads are applied as before, so upgrading never loses undo history.
+ * A 1.x build reading a 2 timeline discards it (its entries name no arrays) and
+ * keeps the session selection — history is the only thing that resets.
+ */
+export const HISTORY_VERSION = 2;
+const READ_VERSIONS: readonly number[] = [1, 2];
 export const MAX_HISTORY = 100;
 /** One drag on one control is a single gesture, not forty entries. */
 export const COALESCE_MS = 900;
@@ -28,8 +36,15 @@ export interface HistoryEntry {
   at: string;
   /** Originating tab/feature, for the history list and for debugging. */
   origin: string;
-  /** Affected stable ids (I-10). */
+  /** Affected stable ids (I-10). A capped label, never a copy of the selection. */
   ids: string[];
+  /**
+   * Optional coalescing key. Two gesture entries with the same key collapse into
+   * one even though their `ids` differ per step (an Up/Down burst on one list).
+   * A gesture payload must therefore be absolute or an empty diff: replacing the
+   * tip's `after` must not lose the first step's edit.
+   */
+  gesture?: string;
   /** Minimal state to restore on undo. */
   before: unknown;
   /** Minimal state to re-apply on redo. */
@@ -68,6 +83,13 @@ function shape(e: HistoryEntry): string {
   return JSON.stringify([e.type, e.ids, e.before, e.after]);
 }
 
+/** Two entries belong to the same gesture when their key and kind match. */
+function sameGesture(a: HistoryEntry, b: HistoryEntry): boolean {
+  if (a.type !== b.type) return false;
+  if (a.gesture !== undefined || b.gesture !== undefined) return a.gesture === b.gesture;
+  return a.ids.join("\u0000") === b.ids.join("\u0000");
+}
+
 /** Record a finished action. A new action always clears the redo branch. */
 export function pushEntry(t: Timeline, e: HistoryEntry, max = MAX_HISTORY): Timeline {
   const head = t.entries.slice(0, t.index + 1);
@@ -87,7 +109,7 @@ export function pushEntry(t: Timeline, e: HistoryEntry, max = MAX_HISTORY): Time
  */
 export function pushCoalesced(t: Timeline, e: HistoryEntry, nowMs: number, windowMs = COALESCE_MS): Timeline {
   const tip = t.entries[t.index];
-  if (!tip || tip.type !== e.type || tip.ids.join("\u0000") !== e.ids.join("\u0000")) return pushEntry(t, e);
+  if (!tip || !sameGesture(tip, e)) return pushEntry(t, e);
   if (nowMs - Date.parse(tip.at) > windowMs) return pushEntry(t, e);
   const entries = [...t.entries.slice(0, t.index), { ...e, before: tip.before }];
   return { entries, index: entries.length - 1 };
@@ -135,8 +157,10 @@ export function parseTimeline(text: string | null): Timeline {
 }
 
 function toTimeline(raw: unknown): Timeline {
-  if (!isRecord(raw) || raw.v !== HISTORY_VERSION || !Array.isArray(raw.entries)) return emptyTimeline();
-  const entries = raw.entries.filter(isEntry);
+  if (!isRecord(raw) || typeof raw.v !== "number" || !READ_VERSIONS.includes(raw.v) || !Array.isArray(raw.entries)) {
+    return emptyTimeline();
+  }
+  const entries = raw.entries.filter(isEntry).map((e) => ({ ...e, v: HISTORY_VERSION }));
   return { entries, index: clampIndex(raw.index, entries.length - 1) };
 }
 
@@ -148,7 +172,8 @@ function clampIndex(raw: unknown, max: number): number {
 const TEXT_KEYS = ["id", "type", "label", "at", "origin"] as const;
 
 function isEntry(value: unknown): value is HistoryEntry {
-  if (!isRecord(value) || value.v !== HISTORY_VERSION) return false;
+  if (!isRecord(value) || typeof value.v !== "number" || !READ_VERSIONS.includes(value.v)) return false;
   if (!Array.isArray(value.ids) || !value.ids.every((id) => typeof id === "string")) return false;
+  if (value.gesture !== undefined && typeof value.gesture !== "string") return false;
   return TEXT_KEYS.every((key) => typeof value[key] === "string");
 }

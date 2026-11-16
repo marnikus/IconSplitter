@@ -5,7 +5,11 @@
 // Owned here so the number/toggle rows (UploadSettingsDialog) and the paint
 // rows (UploadPaintSettings) cannot drift apart.
 
+import type { DecorationValues } from "../lib/upload/decorations";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
+import type { SelectedShadow } from "./shadowselection";
+import type { SelectedBadge } from "./badgeselection";
+import type { SelectedSizeGuide } from "./sizeguideselection";
 
 export interface UploadSettingsDialogProps {
   /** null = the global defaults; else the icon's file name. */
@@ -15,6 +19,17 @@ export interface UploadSettingsDialogProps {
   defaults: UploadSettings;
   /** The icon's current override ({} in the global scope). */
   overrides: SettingsOverrides;
+  /** Decorations a global control applied to this icon — values, not pins ({} in the global scope). */
+  applied: DecorationValues;
+  selectedShadow: SelectedShadow;
+  selectedCount: number;
+  onSelectedShadowToggle: () => void;
+  onSelectedShadowDimensions: (patch: Partial<Pick<UploadSettings, "shadowWidthPct" | "shadowGapPct">>) => void;
+  selectedBadge: SelectedBadge;
+  onSelectedBadgeToggle: () => void;
+  selectedSizeGuide: SelectedSizeGuide;
+  onSelectedSizeGuideToggle: () => void;
+  onApplyLocal: () => void;
   onDefaults: (patch: Partial<UploadSettings>) => void;
   onOverride: (id: string, patch: SettingsOverrides) => void;
   onResetOverride: (id: string) => void;
@@ -27,7 +42,11 @@ export interface SettingsFieldProps {
   effective: UploadSettings;
 }
 
-/** The marker a field carries in the icon scope: pinned, or inherited. */
+/**
+ * The marker a field carries in the icon scope: pinned locally (row edit or explicit batch snapshot),
+ * or inherited. Decorations a global control applied are not overrides, so
+ * they read `inherited` here (2026-10-21).
+ */
 export function markerOf(p: UploadSettingsDialogProps, field: keyof UploadSettings): string | null {
   if (p.id === null) return null;
   return p.overrides[field] !== undefined ? "overridden" : "inherited";
@@ -51,4 +70,20 @@ export function changeMany(p: UploadSettingsDialogProps, patch: Partial<UploadSe
     return;
   }
   p.onOverride(p.id, { ...p.overrides, ...patch });
+}
+
+/** Shared boolean row, with the same live/pinned write path as every setting. */
+export function ToggleSetting({ p, effective, field, label, testid, hint }: {
+  p: UploadSettingsDialogProps; effective: UploadSettings; field: keyof UploadSettings;
+  label: string; testid: string; hint: string;
+}) {
+  const value = effective[field] as boolean;
+  return (
+    <label className="svg-field up-set-field">
+      <span className="svg-label">{label}<Marker p={p} field={field} testid={testid} /></span>
+      <input data-testid={`upload-set-${testid}`} type="checkbox" aria-label={label} checked={value}
+        onChange={(e) => change(p, field, e.target.checked)} />
+      <small className="up-hint">{hint}</small>
+    </label>
+  );
 }

@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — approved-SVG discovery runs for real over a fake folder tree:
 // one row per pair with a valid approved SVG version (newest = the export
 // source), `export/` never discovered (no export loops), splitscope applied,
@@ -5,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { serializePairMeta } from "../src/lib/pairmeta";
 import { discoverUploadSources, type UploadDiscovery } from "../src/upload/discovery";
-import { FakeDir, FakeFile } from "./helpers/fakefs";
+import { FakeDir, FakeFile, LockedFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 
@@ -70,6 +71,80 @@ describe("discoverUploadSources — approved-only, one row per pair", () => {
     expect(row.aiPath).toBe(`${DIR}/${AI}`);
     expect(row.metaPath).toBe(`${DIR}/${STEM}.svg.json`);
     expect(row.approvedValid).toBe(2);
+  });
+
+  it("exports the explicitly accepted older SVG rather than the newest version", async () => {
+    const root = happyRoot();
+    const folder = pairDir(root, DIR, AI, {}, JSON.stringify({ ...JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })])), preferred: 1 }));
+    const found = await discoverUploadSources(root);
+    expect(found.rows[0]).toMatchObject({ version: 1, svgPath: `${DIR}/${STEM}.svg` });
+    expect(folder.children.has(`${STEM}_v2.svg`)).toBe(true); // history preserved
+  });
+
+  it("never substitutes other artwork when the accepted SVG file is missing", async () => {
+    const root = happyRoot();
+    const folder = pairDir(root, DIR, AI, {}, JSON.stringify({ ...JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })])), preferred: 1 }));
+    folder.children.delete(`${STEM}.svg`);
+    const found = await discoverUploadSources(root);
+    expect(found.rows).toHaveLength(0);
+    expect(found.excluded.some((e) => e.kind === "no-valid-svg" && e.reason.includes("v1"))).toBe(true);
+  });
+
+  it("reports an unreadable accepted file instead of exporting a different available version", async () => {
+    const root = happyRoot();
+    const folder = pairDir(root, DIR, AI, {}, JSON.stringify({ ...JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })])), preferred: 1 }));
+    folder.children.set(`${STEM}.svg`, new LockedFile(`${STEM}.svg`));
+    const found = await discoverUploadSources(root);
+    expect(found.rows).toHaveLength(0);
+    expect(found.excluded.some((e) => e.reason.includes("v1"))).toBe(true);
+  });
+
+  it.each([3, 999])("retains legacy newest-valid fallback for unusable preference %s", async (preferred) => {
+    const root = happyRoot();
+    const stored = JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 }), { version: 3, status: "failed", valid: false }]));
+    pairDir(root, DIR, AI, {}, JSON.stringify({ ...stored, preferred }));
+    const found = await discoverUploadSources(root);
+    expect(found.rows[0]).toMatchObject({ version: 2, approvedValid: 2 });
+  });
+
+  it.each(["pending", "declined", "needs-review"])("a stored choice cannot bypass %s item review", async (review) => {
+    const root = happyRoot();
+    const stored = JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })]));
+    pairDir(root, DIR, AI, {}, JSON.stringify({ ...stored, preferred: 1, review }));
+    expect((await discoverUploadSources(root)).rows).toHaveLength(0);
+  });
+
+  it("does not export an older approved version when a legacy item's newest review is declined", async () => {
+    const stored = JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })]));
+    delete stored.review; // pre-item-review pair files recorded decisions on versions only
+    stored.versions[1].review = "declined";
+    const root = new FakeDir("test_processing");
+    pairDir(root, DIR, AI, { [`${STEM}.svg`]: "<svg/>", [`${STEM}_v2.svg`]: "<svg/>" }, JSON.stringify(stored));
+    const found = await discoverUploadSources(root);
+    expect(found.rows).toHaveLength(0);
+    expect(found.excluded[0]?.kind).toBe("no-approved-svg");
+  });
+
+  it("keeps a regenerated item out of Upload until the item is approved again", async () => {
+    const stored = JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })]));
+    stored.review = "needs-review";
+    const root = new FakeDir("test_processing");
+    pairDir(root, DIR, AI, { [`${STEM}.svg`]: "<svg/>", [`${STEM}_v2.svg`]: "<svg/>" }, JSON.stringify(stored));
+    const found = await discoverUploadSources(root);
+    expect(found.rows).toHaveLength(0);
+    expect(found.excluded[0]?.kind).toBe("no-approved-svg");
+  });
+
+  it("exports the accepted version when item approval disagrees with legacy per-version reviews", async () => {
+    const stored = JSON.parse(sidecar(DIR, AI, [approved({ version: 1 }), approved({ version: 2 })]));
+    stored.review = "approved";
+    stored.versions[1].review = "declined";
+    stored.preferred = 1; // the accepted version, not a preview-only preference
+    const root = new FakeDir("test_processing");
+    pairDir(root, DIR, AI, { [`${STEM}.svg`]: "<svg/>", [`${STEM}_v2.svg`]: "<svg/>" }, JSON.stringify(stored));
+    const found = await discoverUploadSources(root);
+    expect(found.rows).toHaveLength(1);
+    expect(found.rows[0]).toMatchObject({ version: 1, approvedValid: 2 });
   });
 
   it("reports the unapproved pair, never lists it", async () => {

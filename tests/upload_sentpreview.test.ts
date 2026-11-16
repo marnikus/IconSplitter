@@ -1,3 +1,4 @@
+// @vitest-environment node
 // upload_sentpreview.test.ts — the rule that makes "the image sent is the image
 // a human saw, for the icon it belongs to" checkable (design §2.4, RULE 15): a
 // prepared preview carries the row's identity (id) AND the source file's

@@ -8,6 +8,7 @@
 
 import { isShape, strokeHits } from "./geom/bounds";
 import { stripStyleKeys } from "./geom/stroke";
+import { setStrokeCap } from "./strokecaps";
 import { fmt } from "./geom";
 import { readPaint, STROKE_COLOR_ARTWORK, type UploadSettings } from "./settings";
 
@@ -16,22 +17,25 @@ export interface StrokeStyle {
   /** The width in px of the FINAL file — the setting's own number, geometry already baked. */
   widthPx: number | null;
   color: string | null;
+  linecap?: "butt" | "round" | null;
 }
 
 /** The stroke style the settings ask for: width 0 = the artwork's own; `artwork` colour = the artwork's own. */
 export function strokeStyleOf(settings: UploadSettings): StrokeStyle {
   return {
+    linecap: settings.strokeLinecap === "source" ? null : settings.strokeLinecap,
     widthPx: settings.strokePx > 0 ? settings.strokePx : null,
     color: settings.strokeColor === STROKE_COLOR_ARTWORK ? null : readPaint(settings.strokeColor, STROKE_COLOR_ARTWORK),
   };
 }
 
-/** One walk over every visible stroke on a shape: width and/or paint, as configured. */
+/** One walk over every visible stroke on a shape: width, paint and/or endpoints, as configured. */
 export function restyleStrokes(root: Element, want: StrokeStyle): { widths: number; colors: number } {
   const touched = { widths: 0, colors: 0 };
-  if (want.widthPx === null && want.color === null) return touched;
+  if (want.widthPx === null && want.color === null && want.linecap == null) return touched;
   for (const hit of strokeHits(root)) {
     if (hit.stroke.none || !isShape(hit.el)) continue;
+    if (want.linecap != null) setStrokeCap(hit.el, want.linecap);
     if (want.widthPx !== null) {
       setStrokeWidth(hit.el, want.widthPx);
       touched.widths++;

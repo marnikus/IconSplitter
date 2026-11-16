@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "label": "shipped-warm2",
+  "command": [
+    "npm",
+    "run",
+    "verify",
+    "--",
+    "--base",
+    "281edd6"
+  ],
+  "environment": {
+    "node": "v22.22.3",
+    "platform": "linux",
+    "arch": "x64",
+    "cpus": 2,
+    "cpuModel": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "memoryBytes": 4131278848,
+    "kernel": "6.1.158+",
+    "host": "e2b.local"
+  },
+  "seconds": 90.314857487,
+  "exitCode": 0,
+  "signal": null
+}

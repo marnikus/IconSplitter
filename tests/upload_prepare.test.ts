@@ -415,12 +415,13 @@ describe("prepareExportSvg — honest failures", () => {
     }
   });
 
-  it("names what a bake would distort: a stroked shape under a non-uniform transform, a clipPath", () => {
+  it("repairs anisotropic strokes but still names unsupported clipping", () => {
     const skewed = prepare(`<svg ${NS} viewBox="0 0 24 24"><rect x="1" y="1" width="10" height="10" fill="none" stroke="#000" transform="scale(2 1)"/></svg>`);
-    expect(skewed.ok).toBe(false);
-    if (!skewed.ok) {
-      expect(skewed.code).toBe("unsupported");
-      expect(skewed.detail).toBe("unsupported content: a stroked <rect> under a non-uniform transform");
+    expect(skewed.ok).toBe(true);
+    if (skewed.ok) {
+      expect(skewed.strokesExpanded).toBe(1);
+      expect(insideArtboard(new DOMParser().parseFromString(skewed.svg, "image/svg+xml").documentElement)).toBe(true);
+      expect(skewed.svg).not.toContain("transform=");
     }
     const clipped = prepare(`<svg ${NS} viewBox="0 0 24 24"><clipPath id="c"><rect width="5" height="5"/></clipPath><rect x="1" y="1" width="10" height="10" fill="#000" clip-path="url(#c)"/></svg>`);
     expect(clipped.ok).toBe(false);

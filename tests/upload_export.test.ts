@@ -1,3 +1,4 @@
+// @vitest-environment node
 // RULE 8 — the export record runs for real: schema v1 round-trips, corrupt
 // JSON is rejected (never destroys outputs), and the stage planner implements
 // selective re-export exactly as design §4.4 specifies.
@@ -61,7 +62,7 @@ function input(over: Partial<PlanInput> = {}): PlanInput {
     includeEps: false,
     epsConverter: "builtin",
     outputs: { svg: true, jpg: true, eps: true },
-    metadataOutputs: { svg: true, eps: true },
+    metadataOutputs: { jpg: true, svg: true, eps: true },
     ...over,
   };
 }
@@ -227,21 +228,21 @@ describe("planStages — selective re-export (design §4.4)", () => {
     withEps.tools.eps = { enabled: true, converter: "builtin", writer: BUILTIN_WRITER, fixes: [] };
     const both = planStages(withEps, input({
       hasMetadata: true, metadataFp: "m1", includeEps: true,
-      metadataOutputs: { svg: false, eps: false },
+      metadataOutputs: { jpg: true, svg: false, eps: false },
     }));
     expect(both.stages).toEqual(["prepare", "embed", "eps", "validate", "commit"]);
     expect(both.rebuild).toEqual({ svg: true, jpg: false, eps: true });
 
     const svgOnly = planStages(withEps, input({
       hasMetadata: true, metadataFp: "m1", includeEps: true,
-      metadataOutputs: { svg: false, eps: true },
+      metadataOutputs: { jpg: true, svg: false, eps: true },
     }));
     expect(svgOnly.stages).toEqual(["prepare", "embed", "validate", "commit"]);
     expect(svgOnly.rebuild).toEqual({ svg: true, jpg: false, eps: false });
 
     const epsOnly = planStages(withEps, input({
       hasMetadata: true, metadataFp: "m1", includeEps: true,
-      metadataOutputs: { svg: true, eps: false },
+      metadataOutputs: { jpg: true, svg: true, eps: false },
     }));
     expect(epsOnly.stages).toEqual(["eps", "validate", "commit"]);
     expect(epsOnly.rebuild).toEqual({ svg: false, jpg: false, eps: true });

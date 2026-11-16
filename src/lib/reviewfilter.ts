@@ -4,7 +4,9 @@
 // generated timestamps: it passes a range when either of them falls inside it.
 
 import { attentionInfo, type ReviewPair } from "./pairing";
+import { anyOf, isAllPicked, multiText, parseMulti, type Multi } from "./multifilter";
 import { isRecord } from "./isrecord";
+import { matchesSearch } from "./textsearch";
 
 export type Decision = "pending" | "approved" | "declined";
 
@@ -24,9 +26,10 @@ export type PairingFilter = "all" | "complete" | "incomplete";
 
 export interface ListFilter {
   date: DateFilter;
-  status: "all" | Decision;
+  /** One decision, several, or all — lib/multifilter. */
+  status: Multi<"all" | Decision>;
   search: string;
-  pairing: PairingFilter;
+  pairing: Multi<PairingFilter>;
 }
 
 export const ALL_FILTER: ListFilter = { date: { mode: "all" }, status: "all", search: "", pairing: "all" };
@@ -36,9 +39,8 @@ export function applyFilters(pairs: ViewPair[], f: ListFilter): ViewPair[] {
     && inSearch(p, f.search) && inPairing(p, f.pairing));
 }
 
-function inPairing(p: ViewPair, f: PairingFilter): boolean {
-  if (f === "all") return true;
-  return (attentionInfo(p) === null) === (f === "complete");
+function inPairing(p: ViewPair, f: Multi<PairingFilter>): boolean {
+  return anyOf(f, "all", (w) => (attentionInfo(p) === null) === (w === "complete"));
 }
 
 function inDate(p: ViewPair, d: DateFilter): boolean {
@@ -55,13 +57,12 @@ function anchors(p: ViewPair): number[] {
 }
 
 function inStatus(p: ViewPair, s: ListFilter["status"]): boolean {
-  return s === "all" || p.decision === s;
+  return anyOf(s, "all", (w) => p.decision === w);
 }
 
-function inSearch(p: ViewPair, q: string): boolean {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return true;
-  return `${p.relDir}/${p.base}`.toLowerCase().includes(needle);
+/** The pair's name, folder, both files and its decision (lib/textsearch). */
+function inSearch(p: ViewPair, query: string): boolean {
+  return matchesSearch(query, [`${p.relDir}/${p.base}`, p.source?.relPath, p.ai?.relPath, p.decision]);
 }
 
 /** Epoch ms -> "YYYY-MM" in local time (month filter buckets). */
@@ -70,7 +71,7 @@ export function monthKey(t: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-const STATUSES: ListFilter["status"][] = ["all", "pending", "approved", "declined"];
+const STATUSES: ("all" | Decision)[] = ["all", "pending", "approved", "declined"];
 const PAIRINGS: PairingFilter[] = ["all", "complete", "incomplete"];
 
 /**
@@ -81,9 +82,9 @@ export function parseFilter(raw: unknown): ListFilter {
   if (!isRecord(raw)) return ALL_FILTER;
   return {
     date: parseDate(raw.date),
-    status: pick(STATUSES, raw.status, "all"),
+    status: parseMulti(raw.status, STATUSES, "all"),
     search: typeof raw.search === "string" ? raw.search : "",
-    pairing: pick(PAIRINGS, raw.pairing, "all"),
+    pairing: parseMulti(raw.pairing, PAIRINGS, "all"),
   };
 }
 
@@ -98,15 +99,11 @@ function isRange(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
-function pick<T extends string>(allowed: T[], raw: unknown, fallback: T): T {
-  return allowed.includes(raw as T) ? (raw as T) : fallback;
-}
-
 /** "Status: approved" — the words a history entry shows for a filter change. */
 export function filterLabel(f: ListFilter): string {
   const bits: string[] = [];
-  if (f.status !== "all") bits.push(`status ${f.status}`);
-  if (f.pairing !== "all") bits.push(f.pairing === "complete" ? "complete pairs" : "incomplete pairs");
+  if (!isAllPicked(f.status, "all")) bits.push(`status ${multiText(f.status, "all")}`);
+  if (!isAllPicked(f.pairing, "all")) bits.push(multiText(f.pairing, "all", (v) => (v === "complete" ? "complete pairs" : "incomplete pairs")));
   if (f.search !== "") bits.push(`“${f.search}”`);
   if (f.date.mode === "month") bits.push(f.date.month);
   if (f.date.mode === "custom") bits.push("custom range");

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { sortBatchRows, DEFAULT_BATCH_SORT } from "../src/lib/batchsort";
 import type { BatchSortable } from "../src/lib/batchsort";

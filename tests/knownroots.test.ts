@@ -1,3 +1,4 @@
+// @vitest-environment node
 // knownroots.test.ts — RULE 4/13: the browser never tells a page a picked
 // folder's drive path, but it does tell it that one folder contains another
 // (`FileSystemDirectoryHandle.resolve`). The folders this app has already

@@ -5,6 +5,9 @@
 // named. With the setting off the output is byte-identical to today.
 import { describe, expect, it } from "vitest";
 import { prepareExportSvg } from "../src/lib/upload/prepare";
+import { optimizeSvg } from "../src/lib/upload/optimize";
+import { visibleBounds } from "../src/lib/upload/geom/bounds";
+import { insideArtboard } from "../src/lib/upload/place";
 import { DEFAULT_UPLOAD_SETTINGS, effectiveSettings, type SettingsOverrides } from "../src/lib/upload/settings";
 
 const NS = `xmlns="http://www.w3.org/2000/svg"`;
@@ -58,6 +61,35 @@ describe("Expand strokes to fills — the prepare pass", () => {
     expect(result.strokesExpanded).toBe(2);
     expect(result.svg).not.toMatch(/stroke/);
     expect(shapes.every((s) => s.nodeName === "path" && s.getAttribute("fill") === "#000000")).toBe(true);
+  });
+
+  it("does not reveal hidden strokes when expanding and placing a shadow", async () => {
+    const source = svg(`<rect x="40" y="40" width="20" height="20"/>
+      <path d="M150 20h10" fill="none" stroke="#000" display="none"/>
+      <path d="M150 30h10" fill="none" stroke="#000" visibility="hidden"/>
+      <g display="none"><path d="M150 40h10" fill="none" stroke="#000" display="inline"/></g>`);
+    const { root, result } = prepared(source, { shadowEnabled: true });
+    expect(result.strokesExpanded).toBe(3);
+    expect(Number(root.getAttribute("viewBox")?.split(" ")[2])).toBeLessThan(100);
+    expect(root.querySelector("path[display='none']")).not.toBeNull();
+    expect(root.querySelector("path[visibility='hidden']")).not.toBeNull();
+    expect(root.querySelector("g[display='none'] path[fill]")).not.toBeNull();
+    const optimized = await optimizeSvg(result.svg, true);
+    const shipped = new DOMParser().parseFromString(optimized.svg, "image/svg+xml").documentElement;
+    expect(insideArtboard(shipped)).toBe(true);
+  });
+
+  it("a stroke expanded under zero fill opacity stays painted after optimization", async () => {
+    const source = svg(`<g fill-opacity="0"><path d="M10 50h80" fill="none" stroke="#111" stroke-width="4"/></g>`);
+    const { root, result } = prepared(source, { shadowEnabled: true, strokePx: 4 });
+    expect(result.strokesExpanded).toBe(1);
+    const outline = root.querySelector("g path")!;
+    expect(outline.getAttribute("fill-opacity")).toBe("1");
+    expect(root.querySelector("ellipse")).not.toBeNull();
+    const optimized = await optimizeSvg(result.svg, true);
+    const shipped = new DOMParser().parseFromString(optimized.svg, "image/svg+xml").documentElement;
+    shipped.querySelector("ellipse")?.remove(); // only the expanded line can now paint
+    expect(visibleBounds(shipped)?.bounds).toMatchObject({ width: 80, height: 4 });
   });
 
   it("a dashed stroke expands into capped pieces (v1): the piece count follows the pattern", () => {

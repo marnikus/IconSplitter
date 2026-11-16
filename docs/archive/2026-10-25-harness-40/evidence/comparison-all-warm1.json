@@ -1,0 +1,10 @@
+{
+  "beforeSeconds": 91.85238483699999,
+  "afterSeconds": 90.314857487,
+  "reductionPct": 1.6739111921029282,
+  "requiredReductionPct": 40,
+  "speedup": 1.017024079899825,
+  "throughputGainPct": 1.7024079899824907,
+  "requiredSpeedup": 1.6666666666666667,
+  "passed": false
+}

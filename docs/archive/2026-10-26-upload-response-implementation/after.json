@@ -1,0 +1,1279 @@
+{
+  "baseline": "aba2474",
+  "environment": {
+    "node": "22.22.3",
+    "vitest": "5.0.3",
+    "runtime": "isolated main lane / Happy DOM",
+    "warning": "Diagnostics, not browser latency; original baseline is one run, not a controlled multi-run comparison."
+  },
+  "initialMixedRun": [
+    {
+      "count": 100,
+      "pinned": false,
+      "storedBytes": 867,
+      "samples": [
+        {
+          "gesture": "activate-first",
+          "actMs": 44.826,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "activate-next",
+          "actMs": 11.233,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "check-one",
+          "actMs": 22.442,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "select-visible",
+          "actMs": 14.352,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "active-with-all-checked",
+          "actMs": 15.296,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "open-export-settings",
+          "actMs": 77.052,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 100,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 1
+        }
+      ]
+    },
+    {
+      "count": 1000,
+      "pinned": false,
+      "storedBytes": 867,
+      "samples": [
+        {
+          "gesture": "activate-first",
+          "actMs": 12.023,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "activate-next",
+          "actMs": 13.822,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "check-one",
+          "actMs": 11.402,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "select-visible",
+          "actMs": 18.262,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "active-with-all-checked",
+          "actMs": 7.284,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "open-export-settings",
+          "actMs": 23.419,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 1000,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 1
+        }
+      ]
+    },
+    {
+      "count": 1000,
+      "pinned": true,
+      "storedBytes": 72866,
+      "samples": [
+        {
+          "gesture": "activate-first",
+          "actMs": 11.325,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "activate-next",
+          "actMs": 7.938,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "check-one",
+          "actMs": 8.056,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "select-visible",
+          "actMs": 17.709,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "active-with-all-checked",
+          "actMs": 6.775,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "open-export-settings",
+          "actMs": 21.53,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 1000,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 1
+        }
+      ]
+    },
+    {
+      "count": 1000,
+      "pinned": "snapshot",
+      "storedBytes": 837866,
+      "samples": [
+        {
+          "gesture": "activate-first",
+          "actMs": 16.752,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "activate-next",
+          "actMs": 86.526,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "check-one",
+          "actMs": 120.174,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "select-visible",
+          "actMs": 71.975,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "active-with-all-checked",
+          "actMs": 24.936,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 0,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 0
+        },
+        {
+          "gesture": "open-export-settings",
+          "actMs": 70.637,
+          "bootSettingsLoads": 0,
+          "bootLoadMs": 0,
+          "effectiveSettingsCalls": 1000,
+          "downloadPlans": 0,
+          "metadataScans": 0,
+          "previewPrepares": 0,
+          "storageReads": 1
+        }
+      ]
+    }
+  ],
+  "isolatedWarmRuns": [
+    [
+      {
+        "count": 100,
+        "pinned": false,
+        "storedBytes": 867,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 23.02,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 30.655,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 15.746,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 6.576,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 16.519,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 31.932,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 100,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": false,
+        "storedBytes": 867,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 12.641,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 10.039,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 11.853,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 18.349,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 12.811,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 18.817,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": true,
+        "storedBytes": 72866,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 10.341,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 11.287,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 7.391,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 14.003,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 6.022,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 22.631,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": "snapshot",
+        "storedBytes": 837866,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 10.81,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 7.934,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 8.841,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 42.389,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 6.262,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 29.115,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "count": 100,
+        "pinned": false,
+        "storedBytes": 867,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 17.765,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 11.488,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 6.501,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 6.128,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 5.205,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 27.741,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 100,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": false,
+        "storedBytes": 867,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 9.474,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 12.157,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 9.025,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 17.56,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 6.69,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 22.237,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": true,
+        "storedBytes": 72866,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 15.141,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 8.506,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 7.795,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 16.294,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 6.466,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 22.482,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": "snapshot",
+        "storedBytes": 837866,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 10.571,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 8.555,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 8.996,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 29.964,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 6.383,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 40.038,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      }
+    ],
+    [
+      {
+        "count": 100,
+        "pinned": false,
+        "storedBytes": 867,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 14.753,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 7.036,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 6.239,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 5.949,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 5.314,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 33.538,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 100,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": false,
+        "storedBytes": 867,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 9.253,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 7.438,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 8.663,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 21.922,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 8.226,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 16.077,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": true,
+        "storedBytes": 72866,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 13.726,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 7.304,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 7.041,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 14.414,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 6.293,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 23.131,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      },
+      {
+        "count": 1000,
+        "pinned": "snapshot",
+        "storedBytes": 837866,
+        "samples": [
+          {
+            "gesture": "activate-first",
+            "actMs": 12.109,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "activate-next",
+            "actMs": 9.06,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "check-one",
+            "actMs": 8.631,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "select-visible",
+            "actMs": 27.677,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 1,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "active-with-all-checked",
+            "actMs": 6.666,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 0,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 0
+          },
+          {
+            "gesture": "open-export-settings",
+            "actMs": 34.486,
+            "bootSettingsLoads": 0,
+            "bootLoadMs": 0,
+            "effectiveSettingsCalls": 1000,
+            "downloadPlans": 0,
+            "summaryScans": 0,
+            "metadataScans": 0,
+            "previewPrepares": 0,
+            "storageReads": 1
+          }
+        ]
+      }
+    ]
+  ],
+  "isolatedOverrideReducer": [
+    {
+      "count": 100,
+      "rows": 0,
+      "patchMs": 0.487,
+      "resetMs": 0.06
+    },
+    {
+      "count": 1000,
+      "rows": 0,
+      "patchMs": 5.95,
+      "resetMs": 1.002
+    },
+    {
+      "count": 2000,
+      "rows": 0,
+      "patchMs": 1.751,
+      "resetMs": 1.673
+    }
+  ]
+}

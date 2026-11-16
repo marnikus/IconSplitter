@@ -6,12 +6,13 @@
 // no polyline faceting reaches the shipped file.
 
 import {
-  add, cross, dot, isDegenerate, leftNormal, mul, pointAt, same, splitSeg, sub, tangentAt, unit, TOL,
+  add, cross, isDegenerate, leftNormal, mul, same, splitSeg, sub, unit,
   type Pt, type Seg,
 } from "./pen";
 
+import { offsetFits } from "./offsetcheck";
+
 const MAX_DEPTH = 8;
-const CHECKS = [0.25, 0.5, 0.75];
 
 /** The segment offset to its left by `d` (negative d = right), as one or more segments. */
 export function offsetSeg(s: Seg, d: number): Seg[] {
@@ -25,13 +26,13 @@ export function offsetSeg(s: Seg, d: number): Seg[] {
 
 function offsetCubic(s: Extract<Seg, { kind: "C" }>, d: number, depth: number): Seg[] {
   const guess = tillerHanson(s, d);
-  if (depth >= MAX_DEPTH || maxError(s, guess, d) <= TOL) return [guess];
+  if (depth >= MAX_DEPTH || offsetFits(s, guess, d)) return [guess];
   const [a, b] = splitSeg(s, 0.5) as [Extract<Seg, { kind: "C" }>, Extract<Seg, { kind: "C" }>];
   return [...offsetCubic(a, d, depth + 1), ...offsetCubic(b, d, depth + 1)];
 }
 
 /** The control polygon's three legs each moved by d; the new controls are where neighbouring legs meet. */
-function tillerHanson(s: Extract<Seg, { kind: "C" }>, d: number): Seg {
+function tillerHanson(s: Extract<Seg, { kind: "C" }>, d: number): Extract<Seg, { kind: "C" }> {
   const legs = distinctLegs(s);
   const moved = legs.map((leg) => {
     const n = mul(leftNormal(unit(sub(leg[1], leg[0]))), d);
@@ -65,27 +66,4 @@ function intersect(a: [Pt, Pt], b: [Pt, Pt]): Pt | null {
   if (Math.abs(den) < 1e-12) return null;
   const t = cross(sub(b[0], a[0]), s) / den;
   return add(a[0], mul(r, t));
-}
-
-/** The largest distance between the guess and the true offset at the check parameters. */
-function maxError(s: Seg, guess: Seg, d: number): number {
-  let worst = 0;
-  for (const t of CHECKS) {
-    const want = add(pointAt(s, t), mul(leftNormal(tangentAt(s, t)), d));
-    worst = Math.max(worst, nearestDistance(guess, want));
-  }
-  return worst;
-}
-
-/** Distance from a point to a segment, by a short golden-section search on t. */
-function nearestDistance(s: Seg, p: Pt): number {
-  let lo = 0;
-  let hi = 1;
-  const f = (t: number) => { const q = sub(pointAt(s, t), p); return dot(q, q); };
-  for (let i = 0; i < 40; i += 1) {
-    const m1 = lo + (hi - lo) * 0.382;
-    const m2 = lo + (hi - lo) * 0.618;
-    if (f(m1) < f(m2)) hi = m2; else lo = m1;
-  }
-  return Math.sqrt(f((lo + hi) / 2));
 }
