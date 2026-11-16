@@ -7,6 +7,10 @@
 import { boundRootPathInfo } from "../../lib/knownroots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { revealPath } from "../../ui/locate";
+import { probePath } from "../../lib/fs";
+import { seedArtboardFolder } from "./sheetexport";
+import { sheetsRoot } from "./sheetsroot";
+import { writeTemplateFolder } from "./templatefolder";
 
 /** The folder's full path: the opened folder's captured path + the relative `_artboard_sheets/…` folder. */
 export function explorerPathOf(rootPath: string, rel: string): string {
@@ -25,14 +29,33 @@ function locationOf(ctx: BuilderActionContext): string | null {
   return artboard?.folder ?? template?.folder ?? null;
 }
 
+/**
+ * Its folder on disk, made now when missing (2026-11-16): an artboard's (its
+ * template's folder first), else the edited template's — no save needed first.
+ */
+async function ensureLocation(get: () => BuilderActionContext): Promise<void> {
+  const m = get().model;
+  const root = sheetsRoot(get());
+  if (root === null) return;
+  const artboardId = m.editingArtboardId;
+  const templateId = m.artboards.find((a) => a.id === artboardId)?.templateId ?? m.editingTemplateId;
+  const template = m.templates.find((t) => t.id === templateId);
+  if (template === undefined) return;
+  const there = template.folder != null && await probePath(root, template.folder).catch(() => null) !== null;
+  if (!there) await writeTemplateFolder(get, template);
+  if (artboardId !== null) await seedArtboardFolder(get, artboardId);
+}
+
 /** The shared Location (ui/locate.ts): the full path copied and opened in Explorer through the helper. */
-async function openLocation(ctx: BuilderActionContext): Promise<void> {
+async function openLocation(get: () => BuilderActionContext): Promise<void> {
+  await ensureLocation(get);
+  const ctx = get();
   const rel = locationOf(ctx);
-  if (rel === null) return ctx.say("No folder yet — it is made when the template is saved (with the folder open)", true);
+  if (rel === null) return ctx.say(ctx.model.root === null ? "Open the folder first — sheets are saved inside it" : "Nothing open on the stage to locate", true);
   const root = boundRootPathInfo(ctx.model.root).path;
   await revealPath({ folder: root === "" ? rel : explorerPathOf(root, rel), say: ctx.say });
 }
 
 export function locationActions(get: () => BuilderActionContext): Pick<BuilderActions, "openLocation"> {
-  return { openLocation: () => { void openLocation(get()); } };
+  return { openLocation: () => { void openLocation(get); } };
 }

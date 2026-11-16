@@ -529,6 +529,21 @@ describe("final artboards — the list under the templates", () => {
     const open = calls.find((c) => c.url.endsWith("/open-folder"));
     expect(open?.body).toEqual({ path: `F:\\Stocks\\icons\\${tplDir.replace(/\//g, "\\")}` });
     expect(text("builder-toast")).toMatch(/Explorer/);
+    // missing on disk: Location makes it first, no save needed (2026-11-16)
+    const dirOf = (path: string) => path.split("/").reduce<FakeDir | undefined>((d, part) => d?.children.get(part) as FakeDir | undefined, scanned);
+    const sheets = scanned.children.get("_artboard_sheets") as FakeDir;
+    sheets.children.clear();
+    await click("builder-editing-location");
+    await waitUntil(() => dirOf(tplDir)?.children.has("template.json") === true, "template folder made by Location");
+    await click("builder-editing-add-artboard");
+    await waitUntil(() => typeof (savedArtboards()[0] as { folder?: unknown }).folder === "string", "artboard folder");
+    const artDir = (savedArtboards()[0] as unknown as { folder: string }).folder;
+    sheets.children.clear(); // template AND artboard folders gone
+    calls.length = 0;
+    await click("builder-editing-location");
+    await waitUntil(() => dirOf(artDir)?.children.has("metadata.json") === true && dirOf(tplDir)?.children.has("template.json") === true, "both made by Location");
+    await waitUntil(() => calls.some((c) => c.url.endsWith("/open-folder")), "then opened");
+    expect(calls.find((c) => c.url.endsWith("/open-folder"))?.body).toEqual({ path: `F:\\Stocks\\icons\\${artDir.replace(/\//g, "\\")}` });
     clearKnownRoots(); // the full path is unknown now: the path is copied instead, and the toast says why
     await click("builder-editing-location");
     expect(text("builder-toast")).toMatch(/full path is unknown/);
