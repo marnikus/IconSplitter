@@ -157,6 +157,8 @@ export interface BuilderActions {
   cancelArtboardsMetadata: () => void;
   /** Export all selected (2026-11-14): the checked artboards (else the open one) as stock packages under `_artboard_sheets`. */
   exportSelectedArtboards: () => void;
+  /** 📂 Location (2026-11-16): the open artboard's / edited template's folder in Explorer, through the helper. */
+  openLocation: () => void;
   /** The artboard icon editor (2026-11-15): open it on an icon, close it. */
   openIconEditor: (id: string | null) => void;
   /** An artboard row's metadata editor (2026-11-15): edit its fields, ✓ Accept re-validates; saved into that artboard. */

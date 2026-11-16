@@ -98,6 +98,8 @@ import { acceptSheetMetadata } from "../src/lib/svgBuilder/metadata";
 import { composeSheet } from "../src/lib/svgBuilder/compose";
 import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { overrideCount, overridesOf } from "../src/lib/svgBuilder/lookoverrides";
+import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
+import { explorerPathOf } from "../src/svgBuilder/actions/location";
 import { BUILDER_ARTBOARDS_KEY } from "../src/svgBuilder/artboardstore";
 
 // Final artboards (2026-11-13): a template is the blueprint; each artboard is one
@@ -499,6 +501,32 @@ describe("final artboards — the list under the templates", () => {
     expect((q("builder-title") as HTMLInputElement).value).toBe("First one");
     expect(q(`builder-artboard-${a1.id}`)?.className).toContain("is-open");
     expect(a2.id).not.toBe(a1.id);
+  });
+
+  it("joins the opened folder's path and the relative sheet folder the way Explorer reads it", () => {
+    expect(explorerPathOf(String.raw`F:\Stocks\icons\ `.trim(), "_artboard_sheets/2026-11/x")).toBe(String.raw`F:\Stocks\icons\_artboard_sheets\2026-11\x`);
+    expect(explorerPathOf(String.raw`\\nas\share`, "_artboard_sheets/a")).toBe(String.raw`\\nas\share\_artboard_sheets\a`);
+    expect(explorerPathOf("/home/me/icons", "_artboard_sheets/a")).toBe("/home/me/icons/_artboard_sheets/a");
+  });
+
+  it("📂 Location beside ＋ Artboard asks the helper to open the template / artboard folder in Explorer (2026-11-16)", async () => {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: init?.body === undefined ? null : JSON.parse(String(init.body)) });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }));
+    rememberKnownRoot(scanned, "F:\\Stocks\\icons"); // the folder's full path, as captured when it was picked
+    await openLibrary();
+    await click("builder-template-save");
+    await waitUntil(() => typeof (savedTemplates()[0] as { folder?: string | null }).folder === "string", "template folder made");
+    const tplDir = (savedTemplates()[0] as unknown as { folder: string }).folder;
+    await click("builder-editing-location"); // editing the template: its folder
+    const open = calls.find((c) => c.url.endsWith("/open-folder"));
+    expect(open?.body).toEqual({ path: `F:\\Stocks\\icons\\${tplDir.replace(/\//g, "\\")}` });
+    expect(text("builder-toast")).toMatch(/Explorer/);
+    clearKnownRoots(); // the full path is unknown now: the path is copied instead, and the toast says why
+    await click("builder-editing-location");
+    expect(text("builder-toast")).toMatch(/full path is unknown/);
   });
 
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {

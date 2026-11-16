@@ -13,6 +13,7 @@ export default function SvgBuilderEditingLabel({ b }: { b: BuilderApi }) {
         {template !== undefined && <span className="bld-editing-of">of template {template.name}</span>}
       </div>
       {template !== undefined && <AddArtboard b={b} templateId={template.id} />}
+      <Location b={b} />
       <button type="button" className="svg-btn bld-editing-add" data-testid="builder-editing-remove-artboard"
         title="Remove this artboard (Undo brings it back)" onClick={() => b.actions.removeArtboards([artboard.id])}>✕ Remove artboard</button>
     </div>;
@@ -23,7 +24,14 @@ export default function SvgBuilderEditingLabel({ b }: { b: BuilderApi }) {
       <span className="bld-editing-kind">EDITING TEMPLATE</span><b>{template.name}</b>
     </div>
     <AddArtboard b={b} templateId={template.id} />
+    <Location b={b} />
   </div>;
+}
+
+/** 📂 Location (2026-11-16): this artboard's / template's folder in Explorer. */
+function Location({ b }: { b: BuilderApi }) {
+  return <button type="button" className="svg-btn bld-editing-add" data-testid="builder-editing-location"
+    title="Open this artboard's folder (or the template's) in Explorer — through the local helper" onClick={b.actions.openLocation}>📂 Location</button>;
 }
 
 /** ＋ Artboard beside the label (2026-11-16): a new artboard of the template being worked on. */

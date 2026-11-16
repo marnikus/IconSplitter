@@ -43,6 +43,7 @@ import {
 } from "./aichat/routes.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
 import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
+import { handleOpenFolder } from "./openfolder.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..");
@@ -273,6 +274,7 @@ async function route(req, res, port) {
   if (req.method === "GET" && url === "/aichat/progress") return handleAichatProgress(req, res, json);
   if (req.method === "POST" && url === "/aichat/cancel") return handleAichatCancel(req, res, readBody, json);
   if (req.method === "POST" && url === "/aichat/close") return handleAichatClose(req, res, readBody, json);
+  if (req.method === "POST" && url === "/open-folder") return handleOpenFolder(req, res, readBody, json);
   if (req.method === "GET") return serveDist(url, res);
   return json(res, 404, { reason: "not found" });
 }

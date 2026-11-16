@@ -14,6 +14,7 @@ import { declineActions } from "./decline";
 import { uiActions } from "./ui";
 import { leaveActions } from "./leave";
 import { sheetExportActions } from "./sheetexport";
+import { locationActions } from "./location";
 import { artboardMetaEditActions } from "./artboardmetaedit";
 
 export function createBuilderActions(get: () => BuilderActionContext): BuilderActions {
@@ -31,9 +32,10 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const decline = declineActions(get);
   const leave = leaveActions(get);
   const sheetExport = sheetExportActions(get);
+  const location = locationActions(get);
   const metaEdit = artboardMetaEditActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...location,
     presets: get().presetActions,
   };
 }
