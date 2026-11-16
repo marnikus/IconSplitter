@@ -15,6 +15,7 @@
 // (2026-10-19, archive/2026-10-19-svg-version-chips) — one click shows that
 // version, through the same preferVersion owner as the Versions dialog.
 
+import { removeVersion, type VersionKind } from "./versionremove";
 import { useCallback, useState } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -200,7 +201,8 @@ function VersionChips({ row, onMain }: { row: SvgRow; onMain: AiBarActions["onMa
       title={main === version ? "Accept this version as the AI source" : "Accept and use this version as the AI source"}
       onClick={(e) => { e.stopPropagation(); onMain(id, version); }}>{text}</button>
   );
-  return <>{chip("orig", "original", null)}{versions.map((v) => chip(String(v.version), `v${v.version}`, v.version))}</>;
+  return <>{chip("orig", "original", null)}{versions.map((v) => <span key={v.version} className="svg-chip-with-trash">
+    {chip(String(v.version), `v${v.version}`, v.version)}<TrashChip id={id} kind="image" version={v.version} /></span>)}</>;
 }
 
 /**
@@ -212,7 +214,7 @@ function VersionChips({ row, onMain }: { row: SvgRow; onMain: AiBarActions["onMa
  */
 function SvgVersionChips({ row, onPrefer }: { row: SvgRow; onPrefer: (id: string, version: number) => void }) {
   const usable = (row.meta?.versions ?? []).filter((v) => v.status === "generated" && v.validation.ok);
-  if (usable.length < 2) return null;
+  if (usable.length < 1) return null; // one version still gets its 🗑 (2026-11-16)
   const id = row.source.id;
   const shown = shownVersion(row)?.version ?? null;
   return (
@@ -222,12 +224,20 @@ function SvgVersionChips({ row, onPrefer }: { row: SvgRow; onPrefer: (id: string
         // The stored choice, not the approval: choosing never approves the row.
         const chosen = row.meta?.preferred === version;
         return (
-          <button key={version} type="button" className={`svg-btn tiny${on ? " primary" : ""}`}
+          <span key={version} className="svg-chip-with-trash"><button type="button" className={`svg-btn tiny${on ? " primary" : ""}`}
             data-testid={`svg-ver-chip-${id}-${version}`} data-active={on ? "true" : "false"} aria-pressed={on}
             title={chosen ? "This SVG version is the one the row shows and exports" : "Show this SVG version — choosing does not approve the row"}
             onClick={(e) => { e.stopPropagation(); if (!chosen) onPrefer(id, version); }}>v{version}</button>
+            <TrashChip id={id} kind="svg" version={version} /></span>
         );
       })}
     </div>
   );
+}
+
+/** 🗑 beside a version chip (2026-11-16): that version leaves the row and its folder — Undo brings it back. */
+function TrashChip({ id, kind, version }: { id: string; kind: VersionKind; version: number }) {
+  return <button type="button" className="svg-chip-trash" data-testid={`svg-${kind === "svg" ? "ver" : "ai"}-trash-${id}-${version}`}
+    title={`Remove ${kind === "svg" ? "SVG" : "AI source"} v${version} from this item and its folder (moved to .removed versions; Undo brings it back)`}
+    aria-label={`Remove v${version}`} onClick={(e) => { e.stopPropagation(); void removeVersion(id, kind, version); }}>🗑</button>;
 }

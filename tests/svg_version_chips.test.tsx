@@ -190,10 +190,10 @@ describe("SVG version chips under the SVG preview", () => {
     expect(chip(2)?.getAttribute("data-active")).toBe("true");
   });
 
-  it("a single valid version has nothing to switch to: no chips", async () => {
+  it("a single valid version keeps its one chip — for its 🗑 (2026-11-16)", async () => {
     await mountRoot(makeRoot(true));
     expect(previewVersion()).toBe("1");
-    expect(q(`[data-testid=svg-ver-bar-${FOG}]`)).toBeNull();
-    expect(chipIds()).toEqual([]);
+    expect(chipIds()).toEqual([`svg-ver-chip-${FOG}-1`]);
+    expect(q(`[data-testid=svg-ver-trash-${FOG}-1]`)).not.toBeNull();
   });
 });

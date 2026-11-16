@@ -82,7 +82,7 @@ function collect(node: TreeNode, parentPath: string, ignore: string[], out: File
 }
 
 function isIgnored(name: string, ignore: string[]): boolean {
-  return ignore.some((x) => x.toLowerCase() === name.toLowerCase());
+  return name === ".removed versions" /* lib/fs TRASH_DIR */ || ignore.some((x) => x.toLowerCase() === name.toLowerCase());
 }
 
 function joinPath(parent: string, name: string): string {

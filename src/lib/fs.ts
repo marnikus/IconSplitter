@@ -85,8 +85,11 @@ async function readFile(handle: FileHandleLike): Promise<File | null> {
   return null;
 }
 
+/** Where 🗑 puts a removed version (2026-11-16, svg/versionremove.ts): no scan ever walks it. */
+export const TRASH_DIR = ".removed versions";
+
 function isIgnored(name: string, ignore: string[]): boolean {
-  return ignore.some((x) => x.toLowerCase() === name.toLowerCase());
+  return name === TRASH_DIR || ignore.some((x) => x.toLowerCase() === name.toLowerCase());
 }
 
 /** True when a child of the given kind exists (probe never creates). */

@@ -18,6 +18,7 @@ import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { isReview } from "../lib/svgmodel";
 import { applySvgEdit } from "../svg/svgedit";
+import { applyVersionRemove } from "../svg/versionremove";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
 import { applyBuilderConfig } from "../svgBuilder/undoBinding";
@@ -30,7 +31,7 @@ import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 export const ENTRY_TYPES = [
   "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
   "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit",
-  "builderChecked", "builderConfig", "builderSvgEdit", "builderArtboards",
+  "builderChecked", "builderConfig", "builderSvgEdit", "builderArtboards", "svgVersionRemove",
 ] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
@@ -40,11 +41,12 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
   return applyDomainEntry(entry, value);
 }
 
-/** The SVG builder's own entries: its sheet config and its artboard icon edits (2026-11-15). */
+/** The SVG builder's own entries (2026-11-15), and Generate SVG's removed versions (2026-11-16). */
 function applyBuilderEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> | null {
   if (entry.type === "builderConfig") return applyBuilderConfig(value);
   if (entry.type === "builderSvgEdit") return applyBuilderSvgEdit(value);
   if (entry.type === "builderArtboards") return applyBuilderArtboards(value);
+  if (entry.type === "svgVersionRemove") return applyVersionRemove(value); // Generate SVG 🗑 (2026-11-16)
   return null;
 }
 
