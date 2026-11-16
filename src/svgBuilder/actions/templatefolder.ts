@@ -11,6 +11,22 @@ import type { SheetTemplate } from "../../lib/svgBuilder/templates";
 import type { BuilderActionContext } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
 import { writeTemplateBlueprint } from "../sheetwriter";
+import { probePath, type DirHandleLike } from "../../lib/fs";
+
+/**
+ * The template's previous folder after it moved home (2026-11-16): removed only
+ * when it holds nothing but the app's own template.json — never anything else.
+ */
+async function dropStray(root: DirHandleLike, folder: string): Promise<void> {
+  const cut = folder.lastIndexOf("/");
+  const parent = await probePath(root, folder.slice(0, cut));
+  const dir = parent === null ? null : await probePath(parent, folder.slice(cut + 1));
+  if (parent === null || dir === null || parent.removeEntry === undefined || dir.removeEntry === undefined) return;
+  const names: string[] = [];
+  for await (const [name] of dir.entries()) names.push(name);
+  if (names.length !== 1 || names[0] !== "template.json") return;
+  try { await dir.removeEntry("template.json"); await parent.removeEntry(folder.slice(cut + 1)); } catch { /* left as it was */ }
+}
 
 /** A blueprint from the template alone (an older template, first written by an artboard). */
 function blueprintOf(ctx: BuilderActionContext, template: SheetTemplate): Record<string, unknown> {
@@ -22,13 +38,15 @@ function blueprintOf(ctx: BuilderActionContext, template: SheetTemplate): Record
 export async function writeTemplateFolder(get: () => BuilderActionContext, template: SheetTemplate, json?: Record<string, unknown>): Promise<string | null> {
   const ctx = get();
   if (ctx.model.root === null) return null;
-  const folder = templateFolder(template, new Date());
+  const folder = templateFolder(template, new Date(), ctx.model.artboards); // where its artboards live, when any do
   try {
     await writeTemplateBlueprint(ctx.model.root, folder, json ?? blueprintOf(ctx, template));
   } catch (error) {
     ctx.say(`Template folder not written — ${error instanceof Error ? error.message : "the folder may be read-only"}`, true);
     return null;
   }
+  const before = template.folder ?? null;
+  if (before !== null && before !== folder) await dropStray(ctx.model.root, before);
   const now = get();
   if (now.model.templates.find((t) => t.id === template.id)?.folder !== folder) {
     const templates = now.model.templates.map((t) => (t.id === template.id ? { ...t, folder } : t));

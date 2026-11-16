@@ -529,6 +529,36 @@ describe("final artboards — the list under the templates", () => {
     expect(text("builder-toast")).toMatch(/full path is unknown/);
   });
 
+  it("an artboard folder of an older day stays home: template.json moves there, the stray template-only folder goes (2026-11-16)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    await waitUntil(() => typeof (savedTemplates()[0] as { folder?: string | null }).folder === "string", "template folder made");
+    const stray = (savedTemplates()[0] as unknown as { folder: string }).folder;
+    const tplId = savedTemplates()[0].id;
+    await click("builder-editing-add-artboard");
+    const art = savedArtboards()[0];
+    // an artboard saved before, under the OLD layout, on another day
+    const OLD = "_artboard_sheets/2026-11/2026-11-15/icon-sheet_sheet_32_icons_green_palette_id00001";
+    const stored = JSON.parse(localStorage.getItem(BUILDER_ARTBOARDS_KEY) ?? "[]");
+    stored[0].folder = `${OLD}/artboard_variant_1`;
+    localStorage.setItem(BUILDER_ARTBOARDS_KEY, JSON.stringify(stored));
+    act(() => ui.unmount());
+    ui = createRoot(host);
+    act(() => { ui.render(<Workbench />); });
+    await openLibrary();
+    await click(`builder-template-open-${tplId}`);
+    await click("builder-columns-inc");
+    await click("builder-stage-template-save"); // the next save writes template.json beside its artboards
+    await waitUntil(() => (savedTemplates()[0] as unknown as { folder: string }).folder === OLD, "the template's home is its artboards' folder");
+    let node: FakeDir | undefined = scanned;
+    for (const part of OLD.split("/")) node = node?.children.get(part) as FakeDir | undefined;
+    expect(node?.children.has("template.json")).toBe(true);
+    let strayNode: FakeDir | undefined = scanned;
+    for (const part of stray.split("/")) strayNode = strayNode?.children.get(part) as FakeDir | undefined;
+    expect(strayNode?.children.has("template.json") ?? false).toBe(false); // the folder holding only template.json is cleaned up
+    expect(art.templateId).toBe(tplId);
+  });
+
   it("after a reload the open artboard is still open and selected, so edits keep saving into it (2026-11-14)", async () => {
     await openLibrary();
     await click("builder-template-save");

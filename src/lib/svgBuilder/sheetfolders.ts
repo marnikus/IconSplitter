@@ -67,7 +67,10 @@ export function sheetFolderName(args: { title: string; icons: number; palette: r
  * A template's folder (2026-11-16): the one it already has, else a new one under
  * the given day, named from ITS title, cell count, banner colours and code.
  */
-export function templateFolder(template: Pick<SheetTemplate, "id" | "config" | "folder">, now: Date): string {
+export function templateFolder(template: Pick<SheetTemplate, "id" | "config" | "folder">, now: Date, artboards: readonly FinalArtboard[] = []): string {
+  // Its artboards never split from it (2026-11-16): where an artboard of it already lives is its home.
+  const lived = artboards.find((a) => a.templateId === template.id && a.folder !== null)?.folder;
+  if (lived != null) return lived.slice(0, lived.lastIndexOf("/"));
   if (template.folder != null) return template.folder;
   const { config } = template;
   const name = sheetFolderName({ title: config.banner.title, icons: config.grid.columns * config.grid.rows, palette: paletteWords(config), templateId: template.id });
@@ -91,7 +94,7 @@ export interface FolderArgs { artboard: FinalArtboard; artboards: readonly Final
 export function artboardFolder(args: FolderArgs): string {
   if (args.artboard.folder !== null) return args.artboard.folder;
   const n = String(variantOf(args.artboard, args.artboards)).padStart(2, "0");
-  return `${templateFolder(args.template, args.now)}/artboard_${n}_${slugWords(args.artboard.title || args.artboard.name)}`;
+  return `${templateFolder(args.template, args.now, args.artboards)}/artboard_${n}_${slugWords(args.artboard.title || args.artboard.name)}`;
 }
 
 /** The stem the export files carry: the sheet folder name + `_v<N>`. */

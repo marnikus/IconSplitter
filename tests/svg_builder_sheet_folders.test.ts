@@ -51,4 +51,14 @@ describe("template and artboard folders", () => {
     expect(artboardFolder({ artboard: a, artboards: [a], template: tpl, now: NOW }).startsWith(`${TPL_DIR}/artboard_01_`)).toBe(true);
     expect(parseArtboards([{ ...a, folder: "../x" }])[0].folder).toBeNull();
   });
+
+  it("a template's artboards never split from it: its home is where its artboards already live (2026-11-16)", () => {
+    const OLD = `_artboard_sheets/2026-11/2026-11-15/icon-sheet_sheet_50_icons_green_palette_id${templateCode("tpl-1")}`;
+    const a1 = { ...newArtboard(tpl, [], { now: "t", id: "a1" }), folder: `${OLD}/artboard_variant_1` };
+    const a2 = newArtboard(tpl, [a1], { now: "t", id: "a2" });
+    const moved = { ...tpl, folder: TPL_DIR }; // made a day later, elsewhere
+    expect(templateFolder(moved, NOW, [a1, a2])).toBe(OLD); // the artboards' folder wins
+    expect(artboardFolder({ artboard: a2, artboards: [a1, a2], template: moved, now: NOW }).startsWith(`${OLD}/artboard_02_`)).toBe(true);
+    expect(templateFolder(moved, NOW, [a2])).toBe(TPL_DIR); // no artboard saved yet: its own folder
+  });
 });
