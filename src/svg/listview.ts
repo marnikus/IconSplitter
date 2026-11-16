@@ -2,6 +2,7 @@
 // and review filters (one value or several), the search text, the sort and its
 // direction, restored after a reload and validated on read (RULE 13).
 
+import type { StyleFilter } from "../lib/svglist";
 import { isRecord } from "../lib/isrecord";
 import { parseMulti } from "../lib/multifilter";
 import { ALL_SVG_FILTER, naturalDir, type GenFilter, type SvgDir, type SvgListFilter, type SvgSort } from "../lib/svglist";
@@ -23,6 +24,7 @@ export function parseSvgListView(raw: unknown): SvgListView {
       generation: parseMulti(f.generation, GENS, "all"),
       review: parseMulti(f.review, ["all", ...REVIEW_STATUSES], "all"),
       search: typeof f.search === "string" ? f.search : ALL_SVG_FILTER.search,
+      style: parseMulti<StyleFilter>(f.style, ["all", "styled", "ai", "svg", "none"], "all"),
     },
     sort,
     sortDir: v.sortDir === "asc" || v.sortDir === "desc" ? v.sortDir : naturalDir(sort),

@@ -65,3 +65,15 @@ describe("register and switch styles", () => {
     expect(rowsForStyle(discovery, refs, null)[0].source.id).toBe("pair_1");
   });
 });
+
+describe("the style filter (2026-11-16)", () => {
+  it("splits rows in the picked style: AI source only, SVG generated, has it, or without it", async () => {
+    const { applySvgFilters, ALL_SVG_FILTER } = await import("../src/lib/svglist");
+    const row = (id: string, style: "none" | "ai" | "svg") => ({ id, name: id, relPath: id, generation: "generated" as const, review: "pending" as const,
+      generatedAt: null, cost: null, costEstimated: false, tokens: null, version: 1, svgCreatedAt: null, aiCreatedAt: null, style });
+    const rows = [row("a", "none"), row("b~s", "ai"), row("c~s", "svg")];
+    const ids = (style: "ai" | "svg" | "styled" | "none") => applySvgFilters(rows, { ...ALL_SVG_FILTER, style }).map((r) => r.id);
+    expect([ids("ai"), ids("svg"), ids("styled"), ids("none")]).toEqual([["b~s"], ["c~s"], ["b~s", "c~s"], ["a"]]);
+    expect(applySvgFilters([row("a", "none")], { ...ALL_SVG_FILTER, style: "ai" })).toHaveLength(1); // base style shown: no effect
+  });
+});

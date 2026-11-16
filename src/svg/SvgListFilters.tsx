@@ -12,6 +12,17 @@ import { REVIEW_LABEL, REVIEW_STATUSES } from "../lib/svgmodel";
 const REVIEW_OPTIONS: [string, string][] = [["all", "All reviews"], ...REVIEW_STATUSES.map((s): [string, string] => [s, REVIEW_LABEL[s]])];
 import SearchField from "../ui/SearchField";
 import MultiSelect from "../ui/MultiSelect";
+import { useStylePrefs } from "./styles";
+
+/** Style filter (2026-11-16), while an image style is picked: has it, its AI source only, its SVG generated, or not it. */
+function StyleFilterSelect({ filter, onFilter }: { filter: SvgListFilter; onFilter: (patch: Partial<SvgListFilter>) => void }) {
+  const { active } = useStylePrefs();
+  if (active === null) return null;
+  const name = active.replace(/_/g, " ");
+  return <MultiSelect label="Style" testid="svg-filter-style" value={filter.style}
+    options={[["all", "All items"], ["styled", `Has ${name}`], ["ai", `${name}: AI source only`], ["svg", `${name}: SVG generated`], ["none", `Without ${name}`]]}
+    onChange={(v) => onFilter({ style: v as SvgListFilter["style"] })} />;
+}
 
 /** Every order the list offers: files, time, cost, status and the two groups. */
 const SORT_OPTIONS: [SvgSort, string][] = [
@@ -56,6 +67,7 @@ export default function SvgListFilters({ filter, sort, sortDir, shown, total, on
       <MultiSelect label="Review" testid="svg-filter-review" value={filter.review}
         options={REVIEW_OPTIONS}
         onChange={(v) => onFilter({ review: v as SvgListFilter["review"] })} />
+      <StyleFilterSelect filter={filter} onFilter={onFilter} />
       <Select label="Sort by" testid="svg-sort" value={sort}
         options={SORT_OPTIONS}
         onChange={(v) => onSort(v as SvgSort)} />

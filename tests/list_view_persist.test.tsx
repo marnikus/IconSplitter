@@ -21,7 +21,7 @@ const put = (key: string, v: unknown) => localStorage.setItem(key, JSON.stringif
 describe("Generate SVG", () => {
   it("restores filters (several values), search, sort and direction", () => {
     put(LIST_VIEW_KEYS.svg, { filter: { generation: ["generating", "generated"], review: "pending", search: "fog" }, sort: "name", sortDir: "desc" });
-    expect(loadSvgListView()).toEqual({ filter: { generation: ["generating", "generated"], review: "pending", search: "fog" }, sort: "name", sortDir: "desc" });
+    expect(loadSvgListView()).toEqual({ filter: { generation: ["generating", "generated"], review: "pending", search: "fog", style: "all" }, sort: "name", sortDir: "desc" });
   });
   it("falls back to the defaults for anything unknown or a damaged entry", () => {
     put(LIST_VIEW_KEYS.svg, { filter: { generation: "bogus", review: ["nope"], search: 4 }, sort: "sideways", sortDir: "up" });

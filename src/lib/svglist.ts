@@ -30,14 +30,19 @@ export type SvgSort =
 /** The one direction control: applies to whichever order and filter is in force. */
 export type SvgDir = "asc" | "desc";
 
+/** Image style filter (2026-11-16): has the picked style, only its AI source, its SVG generated, or not the style. */
+export type StyleFilter = "all" | "styled" | "ai" | "svg" | "none";
+
 export interface SvgListFilter {
   /** One state, several (Generating + Generated), or all — lib/multifilter. */
   generation: Multi<GenFilter>;
   review: Multi<ReviewFilter>;
   search: string;
+  /** Optional: older saved views have none (= all). */
+  style?: Multi<StyleFilter>;
 }
 
-export const ALL_SVG_FILTER: SvgListFilter = { generation: "all", review: "all", search: "" };
+export const ALL_SVG_FILTER: SvgListFilter = { generation: "all", review: "all", search: "", style: "all" };
 
 /** The row fields a filter or sort may look at. */
 export interface SvgListRow {
@@ -59,10 +64,18 @@ export interface SvgListRow {
   svgCreatedAt: number | null;
   /** Epoch ms the shown AI source was created; null when that cannot be known. */
   aiCreatedAt: number | null;
+  /** In the picked image style: not this style, its AI source only, or its SVG generated too. */
+  style?: "none" | "ai" | "svg";
 }
 
 export function applySvgFilters(rows: readonly SvgListRow[], f: SvgListFilter): SvgListRow[] {
-  return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, f.search));
+  // no row in a style (the base style is shown): the style filter has nothing to say
+  const styled = rows.some((r) => (r.style ?? "none") !== "none");
+  return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, f.search) && (!styled || inStyle(r, f.style)));
+}
+
+function inStyle(row: SvgListRow, want: Multi<StyleFilter> | undefined): boolean {
+  return anyOf(want ?? "all", "all", (w) => (w === "styled" ? (row.style ?? "none") !== "none" : (row.style ?? "none") === w));
 }
 
 function inGeneration(row: SvgListRow, want: Multi<GenFilter>): boolean {

@@ -15,6 +15,7 @@ import { getAppState, patchSvg } from "../state/appstore";
 import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { checkState, pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import type { SvgSource } from "./sources";
+import { STYLE_ID_SEP } from "../lib/svgstyles";
 import type { SvgRow } from "./types";
 import { queuedIds, type QueueItem } from "./runqueue";
 
@@ -97,6 +98,7 @@ export function toListRow(row: SvgRow): SvgListRow {
     id: row.source.id, name: row.source.name, relPath: row.source.relPath,
     generation: row.status, review: row.review, ...versionFields(v),
     svgCreatedAt: svgCreatedAtOf(v), aiCreatedAt: aiCreatedAtOf(row),
+    style: !row.source.id.includes(STYLE_ID_SEP) ? "none" : row.newest !== null ? "svg" : "ai",
   };
 }
 
