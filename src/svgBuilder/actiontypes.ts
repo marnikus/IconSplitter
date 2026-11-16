@@ -159,6 +159,9 @@ export interface BuilderActions {
   exportSelectedArtboards: () => void;
   /** Rewrites the open artboard's sheet.json from the stage (2026-11-16). */
   syncSheetJson: () => void;
+  /** Registers hand-added template / artboard folders (2026-11-16). */
+  registerSheets: (quiet?: boolean) => void;
+  setAutoRegister: (on: boolean) => void;
   /** 📂 Location (2026-11-16): the open artboard's / edited template's folder in Explorer, through the helper. */
   openLocation: () => void;
   /** The artboard icon editor (2026-11-15): open it on an icon, close it. */

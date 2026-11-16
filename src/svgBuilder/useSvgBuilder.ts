@@ -33,6 +33,7 @@ export function useSvgBuilder(): BuilderApi {
   useIconEditBinding(model, computed, patch);
   useArtboardUndo(model, actions, patch);
   useSheetJsonSync(model, slice.checked, actions);
+  useAutoRegister(model, actions);
   return {
     ...model, ...computed,
     checked: slice.checked, activeId: slice.activeId, anchorId: slice.anchorId, actions,
@@ -58,6 +59,12 @@ function useSheetJsonSync(model: BuilderModel, placedIds: readonly string[], act
     const t = setTimeout(() => actions.syncSheetJson(), 600);
     return () => clearTimeout(t);
   }, [actions, folder, model.config, placedIds, model.lockedIds, model.seed, model.recipe, model.metadata]);
+}
+
+/** After each scan, with "Automatic register" on: hand-added folders join the lists (2026-11-16). */
+function useAutoRegister(model: BuilderModel, actions: BuilderActions): void {
+  const on = model.autoRegister, discovery = model.discovery;
+  useEffect(() => { if (on && discovery !== null) actions.registerSheets(true); }, [on, discovery, actions]);
 }
 
 export type { BuilderIconAsset, BuilderListView, SelectionRecipe, SheetConfig, SheetDocument, SheetLayout };

@@ -59,6 +59,18 @@ export function IndexingControl({ b }: { b: BuilderApi }) {
   </>;
 }
 
+/** Register hand-added template / artboard folders (2026-11-16): now, or after every scan. */
+export function RegisterControl({ b }: { b: BuilderApi }) {
+  return <>
+    <button type="button" className="svg-btn" data-testid="builder-register" disabled={b.root === null}
+      title="Find template folders (template.json) and artboard folders (sheet.json / metadata.json) added by hand under _artboard_sheets, and add them to the lists"
+      onClick={() => b.actions.registerSheets()}>🗂 Register templates and artboards</button>
+    <label className="v2-chip" title="Register them after every scan of the folder">
+      <input type="checkbox" data-testid="builder-auto-register" checked={b.autoRegister} onChange={(e) => b.actions.setAutoRegister(e.target.checked)} /> Automatic register
+    </label>
+  </>;
+}
+
 function progressText(run: NonNullable<BuilderApi["indexing"]>): string {
   if (run.phase === "models") {
     const m = run.model;

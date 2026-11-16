@@ -1,5 +1,6 @@
 // model.ts — the builder workspace's one React state shape. Pure reducer and
 // validated initial state; storage, provider calls and disk IO stay in siblings.
+import { loadAutoRegister } from "./actions/register";
 import type { GeminiConfig } from "../lib/upload/gemini";
 import { loadGeminiConfig } from "../upload/configstore";
 import { getAppState } from "../state/appstore";
@@ -56,6 +57,8 @@ export interface BuilderModelCheck { state: "idle" | "checking" | "found" | "mis
 
 export interface BuilderModel {
   supported: boolean;
+  /** Register hand-added template / artboard folders after each scan (2026-11-16). */
+  autoRegister: boolean;
   root: DirHandleLike | null;
   discovery: BuilderDiscovery | null;
   busy: string | null;
@@ -105,7 +108,7 @@ export interface BuilderAction { type: "patch"; patch: Partial<BuilderModel> }
 
 export function initialBuilderModel(): BuilderModel {
   return {
-    supported: hasFolderPicker(), root: null, discovery: null, busy: null,
+    supported: hasFolderPicker(), autoRegister: loadAutoRegister(), root: null, discovery: null, busy: null,
     status: "Open a folder to build from approved SVGs", error: false,
     config: loadSheetConfig(), recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SEED,
     lockedIds: getAppState().builder.lockedIds ?? [], excludedIds: getAppState().builder.excludedIds ?? [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),

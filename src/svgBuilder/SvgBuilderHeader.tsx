@@ -4,7 +4,7 @@
 import { useOptionalHistoryView } from "../state/HistoryProvider";
 import { sheetCopy } from "../lib/svgBuilder/compose";
 import SvgBuilderExportMenu from "./SvgBuilderExportMenu";
-import { IndexingControl } from "./SvgBuilderControls";
+import { IndexingControl, RegisterControl } from "./SvgBuilderControls";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
@@ -14,7 +14,7 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <span className="bld-eyebrow">COLLECTION / 01 · <i className="bld-live-dot" /> LIVE</span>
       <h2 data-testid="builder-sheet-title">{title === "" ? "Untitled icon sheet" : title}</h2>
     </div>
-    <div className="bld-header-index" data-testid="builder-header-index"><IndexingControl b={b} /></div>
+    <div className="bld-header-index" data-testid="builder-header-index"><IndexingControl b={b} /><RegisterControl b={b} /></div>
     <div className="bld-header-actions">
       <UndoRedo b={b} />
       <button type="button" className="svg-btn" data-testid="builder-seed" title="Re-roll this seed" disabled={b.assets.length === 0}
