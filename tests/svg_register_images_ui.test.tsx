@@ -196,9 +196,10 @@ describe("the button in the tab", () => {
     await click(q("[data-testid=svg-register-styles]") as HTMLElement);
     await vi.waitFor(() => expect(text("[data-testid=svg-toast]")).toContain("Styles registered for 1 of 1"));
     expect(style.children.has("download-icon-01_AI_01_colored_wiggle.svg.json")).toBe(true);
-    const select = q("[data-testid=svg-style-select]") as HTMLSelectElement;
-    await act(async () => { select.value = "colored_wiggle"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    await click(q("[data-testid=svg-style-select]") as HTMLElement); // the app's dark menu, not a native list
+    await click(q("[data-testid=svg-style-opt-colored_wiggle]") as HTMLElement);
     await settle();
+    expect(text("[data-testid=svg-style-select]")).toContain("colored wiggle");
     expect(q(`[data-testid="svg-check-${SPLIT_ID}~colored_wiggle"]`)).not.toBeNull(); // the row now shows its style
   });
 
