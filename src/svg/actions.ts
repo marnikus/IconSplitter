@@ -19,6 +19,7 @@ import type { HistoryActions } from "../state/HistoryProvider";
 import { selectionPayloads } from "../lib/selectiondelta";
 import { useKeyActions } from "./keyactions";
 import { useSvgPromptActions, type SvgPromptActions } from "./promptactions";
+import { useStyleActions, type StyleActions } from "./styles";
 import { refreshCatalog } from "./catalog";
 import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
@@ -34,12 +35,11 @@ import { hasJobs } from "./jobstate";
 import { useDecisionFollower, useRemoveAction } from "./removerows";
 import { skipCurrentSvgRequest, stopSvgRuns } from "./runjobs";
 import type { CancelNote } from "./runcontext";
-import type { ConfirmedBatch } from "./types";
 import { useCodeActions } from "./codeactions";
 import { useRegisterActions } from "./registerexisting";
 import { useRegisterImageActions } from "./registerimages";
 import type { SvgAction, SvgModel } from "./statemodel";
-import type { Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
+import type { ConfirmedBatch, Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
 import { idsWithGeneratedSvg } from "./rowmodel";
 import type { Discovery } from "./sources";
 import { MAIN_PLAN, clampRegenPerRequest, regenPlanFromPreset, type RegenPlan } from "../lib/svgregen";
@@ -54,7 +54,7 @@ export interface SvgCtx {
   setCurrent: (id: string | null) => void;
 }
 export type SvgSetters = Pick<SvgCtx, "say" | "loadAll" | "refreshKey" | "setRootName" | "setDiscovery" | "setBusy" | "setRootToken" | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn" | "setCurrent">;
-export interface SvgActions extends SvgPromptActions {
+export interface SvgActions extends SvgPromptActions, StyleActions {
   readCode: (id: string, version: number) => Promise<string | null>;
   chooseRoot: () => void; rescan: () => void; setThumb: (px: number) => void; setPreviewBg: (bg: PreviewBackground) => void;
   setPreviewStroke: (px: number | null) => void;
@@ -95,7 +95,7 @@ export function useSvgActions(ctx: SvgCtx): SvgActions {
   return {
     ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx), ...useImgRegenActions(ctx),
     ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx),
-    ...useRegisterActions(ctx), ...useRegisterImageActions(ctx), ...useSvgPromptActions(ctx), ...useRemoveRows(ctx), ...tailCut,
+    ...useRegisterActions(ctx), ...useRegisterImageActions(ctx), ...useSvgPromptActions(ctx), ...useRemoveRows(ctx), ...tailCut, ...useStyleActions(ctx),
   };
 }
 /** Remove + the list following every written pair decision (a click, an undo, a redo). */

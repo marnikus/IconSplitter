@@ -17,6 +17,8 @@ import { discoverApprovedSources, type Discovery, type SvgSource } from "./sourc
 import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
 import { metaPathFor } from "../lib/pairmeta";
+import { STYLE_ID_SEP } from "../lib/svgstyles";
+import { styledRows, stylePrefs } from "./styles";
 
 import { saveSourceIndex, type IndexEntry } from "../state/sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
@@ -99,7 +101,11 @@ function loadRows(found: Discovery): LoadedRows {
     metas.push([source.id, meta]);
     return toRow(source, meta, found.corruptFiles.includes(metaPathOf(source)));
   });
-  return { rows, metas };
+  // the image style picked in the pinned bar (2026-11-16): rows that have it show it, with their style pair files
+  const style = stylePrefs().active;
+  const styled = styledRows(rows, (id) => found.metas.get(id), style);
+  for (const r of styled) if (r.source.id.includes(STYLE_ID_SEP)) metas.push([r.source.id, r.meta]);
+  return { rows: styled, metas };
 }
 
 /** Everything one commit needs, so the commit stays one parameter (RULE 16). */
