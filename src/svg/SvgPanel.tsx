@@ -125,8 +125,8 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
           onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun}
           onRegisterExisting={() => g.registerExisting(g.checked)} getData={() => svgDataRows(g.rows, g.checked)}
           onRegisterImages={() => g.registerImages(g.checked)} onRemove={() => g.removeRows(g.checked)}
-          checkedIds={g.checked} onCutTails={g.cutTails} onApproveCuts={g.approveCuts} />
-        <SvgStyleBar checked={g.checked.length} onRegister={() => g.registerStyles(g.checked)} onStyle={g.setStyle} />
+          checkedIds={g.checked} onCutTails={g.cutTails} onApproveCuts={g.approveCuts}
+          styles={<SvgStyleBar checked={g.checked.length} onRegister={() => g.registerStyles(g.checked)} onStyle={g.setStyle} />} />
       </div>
       <SvgList g={g} actions={actions} />
       <SvgRuns refs={g.refs} onStop={g.cancelRun} />

@@ -6,7 +6,7 @@
 // never re-registered and a folder with only it says so, a file that is not a PNG
 // is not recorded, a second click adds nothing, a busy pair is refused.
 import { act } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
 import { reserveSources, SOURCE_BUSY } from "../src/svg/jobstate";
@@ -181,6 +181,26 @@ describe("the button in the tab", () => {
     root.children.set("review-decisions.json", new FakeFile("review-decisions.json", 10, 10, JSON.stringify({ records: recs })));
     return root;
   }
+
+  it("◐ Register styles sits in the bar, registers a style folder's numbered images and offers the style switch (2026-11-16)", async () => {
+    localStorage.removeItem("iconSplitter.svg.styles.v1");
+    (await import("../src/svg/styles")).resetStylePrefs();
+    const root = splitRoot();
+    const style = new FakeDir("_colored_wiggle");
+    for (const n of ["download-icon-01_AI_01_colored_wiggle_01.png", "download-icon-01_AI_01_colored_wiggle_02.png"]) style.children.set(n, new FakeFile(n, 10, 1, "png"));
+    (root.children.get("split_01") as FakeDir).children.set("_colored_wiggle", style);
+    await mount(root);
+    expect(q("[data-testid=svg-bulk] [data-testid=svg-register-styles]")).not.toBeNull(); // inside the toolbar
+    await act(async () => input(`[data-testid=svg-check-${SPLIT_ID}]`).click());
+    await settle();
+    await click(q("[data-testid=svg-register-styles]") as HTMLElement);
+    await vi.waitFor(() => expect(text("[data-testid=svg-toast]")).toContain("Styles registered for 1 of 1"));
+    expect(style.children.has("download-icon-01_AI_01_colored_wiggle.svg.json")).toBe(true);
+    const select = q("[data-testid=svg-style-select]") as HTMLSelectElement;
+    await act(async () => { select.value = "colored_wiggle"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    await settle();
+    expect(q(`[data-testid="svg-check-${SPLIT_ID}~colored_wiggle"]`)).not.toBeNull(); // the row now shows its style
+  });
 
   it("is disabled with nothing selected and registers the selected folder on a click", async () => {
     recordCompletionAudio();

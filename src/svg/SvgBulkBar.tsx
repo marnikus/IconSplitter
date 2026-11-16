@@ -9,6 +9,7 @@
 // While a run is in flight the bar shows the live batch progress and a Cancel that
 // keeps everything already saved.
 
+import type { ReactNode } from "react";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import { costText, fmtTokens } from "../lib/svgusage";
@@ -72,6 +73,8 @@ export interface SvgBulkBarProps {
   checkedIds: readonly string[];
   onCutTails: () => void;
   onApproveCuts: () => void;
+  /** Image styles (2026-11-16): Register styles + the style switch, inside the bar beside the register buttons. */
+  styles?: ReactNode;
 }
 
 export default function SvgBulkBar(p: SvgBulkBarProps) {
@@ -191,11 +194,12 @@ function RegisterImagesButton({ p }: { p: SvgBulkBarProps }) {
   const title = p.checkedCount === 0
     ? "Select the items whose folders should be checked"
     : `Look in ${p.checkedCount} selected folder(s) for AI source images the app has not recorded yet; the newest numbered one becomes the main image`;
-  return (
+  return (<>
     <button type="button" className="svg-btn" data-testid="svg-register-images"
       disabled={p.checkedCount === 0} onClick={p.onRegisterImages} title={title}>
       ⤓ Register AI sources ({p.checkedCount})</button>
-  );
+    {p.styles /* ◐ Register styles + the style switch, right after (2026-11-16) */}
+  </>);
 }
 
 /** One image batch at a time: while it runs the action waits and Stop sends nothing new (RULE 7). */

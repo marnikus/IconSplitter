@@ -145,6 +145,7 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   if (root === null) return c.say("No folder is open", true);
   const bases = [...new Set(ids.map(baseRowId))].flatMap((id) => c.discovery?.sources.find((s) => s.id === id) ?? []);
   if (bases.length === 0) return c.say("Select the items whose style folders should be registered", true);
+  c.say(`Registering styles in ${bases.length} item folder(s)…`);
   const styles = new Set(prefs.styles);
   let rows = 0;
   for (const base of bases) {

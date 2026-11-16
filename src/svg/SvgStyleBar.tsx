@@ -7,7 +7,7 @@ export default function SvgStyleBar({ checked, onRegister, onStyle }: {
   checked: number; onRegister: () => void; onStyle: (style: string | null) => void;
 }) {
   const { styles, active } = useStylePrefs();
-  return <div className="svg-bulk-row" data-testid="svg-style-bar">
+  return <span className="svg-style-bar" data-testid="svg-style-bar" style={{ display: "contents" }}>
     <button type="button" className="svg-btn" data-testid="svg-register-styles" disabled={checked === 0} onClick={onRegister}
       title="Look in the selected items' folders for style folders (_colored_wiggle …) with numbered images (_01, _02 …) and register them as that style's variants">
       ◐ Register styles ({checked})</button>
@@ -17,5 +17,5 @@ export default function SvgStyleBar({ checked, onRegister, onStyle }: {
         <option value="">Base · line stroke</option>
         {styles.map((s) => <option key={s} value={s}>{s.replace(/_/g, " ")}</option>)}
       </select></label>}
-  </div>;
+  </span>;
 }
