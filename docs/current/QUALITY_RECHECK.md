@@ -5274,3 +5274,4 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-16 SVG builder: Remove artboard button; add/remove artboards undoable (builderArtboards). Builder+state+history suites 285/285, tsc/eslint/quality PASS.
 - 2026-11-16 SVG builder: undo / remove of the open artboard moves the stage to the last viewed one. Builder suites 219/219, tsc/eslint/quality PASS.
 - 2026-11-16 SVG builder: ⇔ rebalance in the split block quick bar too. Builder suites 220/220, tsc/eslint/quality PASS.
+- 2026-11-16 SVG builder: template folder + template.json at creation; artboard folders artboard_NN_<title> inside it. Builder suites 219/219, tsc/eslint/quality PASS.

@@ -30,7 +30,8 @@ function titleOf(ctx: BuilderActionContext): string {
   return sheetCopy(ctx.model.metadata, ctx.model.config.banner).title;
 }
 
-function currentJson(ctx: BuilderActionContext): Record<string, unknown> {
+/** The sheet as the preset JSON (also each template's template.json, 2026-11-16). */
+export function currentJson(ctx: BuilderActionContext): Record<string, unknown> {
   const m = ctx.model;
   return presetJsonOf({
     name: titleOf(ctx), config: m.config, placedIds: ctx.placedIds, lockedIds: m.lockedIds,

@@ -344,9 +344,20 @@ describe("final artboards — the list under the templates", () => {
     expect(q("builder-stage-artboard-save")).toBeNull();
   });
 
-  it("Export all selected writes each checked artboard under _artboard_sheets/<month>/<day>/<sheet>/artboard_variant_N/export (2026-11-14)", async () => {
+  it("a template gets its folder + template.json at once; Export all selected writes each artboard INSIDE it as artboard_NN_<title>/export (2026-11-16)", async () => {
     await openLibrary();
     await click("builder-template-save");
+    const tplDir = await (async () => {
+      await waitUntil(() => typeof (savedTemplates()[0] as { folder?: string | null }).folder === "string", "template folder made");
+      return (savedTemplates()[0] as unknown as { folder: string }).folder;
+    })();
+    expect(tplDir).toMatch(/^_artboard_sheets\/\d{4}-\d{2}\/\d{4}-\d{2}-\d{2}\/[a-z0-9-]+_sheet_32_icons_[a-z_]+_palette_id\d{5}$/);
+    let tplNode: FakeDir | undefined = scanned;
+    for (const part of tplDir.split("/")) tplNode = tplNode?.children.get(part) as FakeDir | undefined;
+    const blueprint = JSON.parse((tplNode!.children.get("template.json") as FakeFile).text);
+    expect(blueprint).toMatchObject({ format: "iconsplitter-sheet-preset", config: { grid: { columns: 8, rows: 4 } } });
+    expect(Array.isArray(blueprint.icons)).toBe(true);
+    expect(blueprint.icons[0]).toMatchObject({ name: expect.any(String), id: expect.any(String) });
     const [tpl] = savedTemplates();
     await click(`builder-template-add-artboard-${tpl.id}`);
     await click(`builder-template-add-artboard-${tpl.id}`);
@@ -359,13 +370,14 @@ describe("final artboards — the list under the templates", () => {
     await waitUntil(() => savedArtboards().every((a) => typeof (a as { folder?: string | null }).folder === "string"), "both exported");
     const f1 = (savedArtboards()[0] as unknown as { folder: string }).folder;
     const f2 = (savedArtboards()[1] as unknown as { folder: string }).folder;
-    expect(f1).toMatch(/^_artboard_sheets\/\d{4}-\d{2}\/\d{4}-\d{2}-\d{2}\/[a-z0-9-]+_sheet_\d+_icons_[a-z_]+_palette_id\d{5}\/artboard_variant_1$/);
-    expect(f2).toBe(f1.replace(/artboard_variant_1$/, "artboard_variant_2")); // one template = one sheet folder
+    expect(f1.startsWith(`${tplDir}/artboard_01_`)).toBe(true); // inside the template's folder, numbered, with its title
+    expect(f2.startsWith(`${tplDir}/artboard_02_`)).toBe(true);
     let node: FakeDir | undefined = scanned;
     for (const part of `${f1}/export`.split("/")) node = dir(node, part);
     const names = [...(node?.children.keys() ?? [])];
     expect(names).toContain("export.json");
     expect(names.some((n) => n.endsWith("_v1.svg"))).toBe(true);
+    expect(tplNode!.children.has("template.json")).toBe(true); // still beside its artboards
     const record = JSON.parse((node!.children.get("export.json") as FakeFile).text);
     expect(record.outputs.svg.path).toMatch(/_v1\.svg$/);
     expect(text("builder-toast")).toMatch(/exported/i); // canvas-only parts (JPG / PNG) and the EPS report their problem here

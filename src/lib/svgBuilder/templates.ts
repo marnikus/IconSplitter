@@ -18,9 +18,16 @@ export interface SheetTemplate {
   config: SheetConfig;
   created: string;
   updated: string;
+  /** Its folder under `_artboard_sheets` (2026-11-16): made when it is created; null before / without a folder open. */
+  folder?: string | null;
 }
 
 export const TEMPLATE_LIMIT = 60;
+
+/** A stored folder path: inside `_artboard_sheets` only, never climbing out. */
+export function sheetFolderOf(raw: unknown): string | null {
+  return typeof raw === "string" && raw.startsWith("_artboard_sheets/") && !raw.includes("..") ? raw.slice(0, 400) : null;
+}
 export const TEMPLATE_NAME_MAX = 60;
 
 const POSITION_LABEL: Readonly<Record<SheetConfig["banner"]["position"], string>> = {
@@ -94,7 +101,7 @@ function parseTemplate(raw: unknown): SheetTemplate | null {
   if (name === "" || !isRecord(raw.config)) return null;
   const created = typeof raw.created === "string" ? raw.created : "";
   const updated = typeof raw.updated === "string" ? raw.updated : created;
-  return { id: raw.id.slice(0, 80), name, config: lookOf(parseSheetConfig(raw.config)), created, updated };
+  return { id: raw.id.slice(0, 80), name, config: lookOf(parseSheetConfig(raw.config)), created, updated, folder: sheetFolderOf(raw.folder) };
 }
 
 /** The short facts under a block's name: grid, icon box and stroke. */

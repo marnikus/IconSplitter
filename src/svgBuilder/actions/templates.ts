@@ -12,14 +12,16 @@ import { clampZoom } from "../../lib/zoom";
 import { commitConfig, prefs } from "./config";
 import { saveArtboards } from "../artboardstore";
 import { blockLeave, editedTemplate } from "./leaveguard";
+import { writeTemplateFolder } from "./templatefolder";
+import { currentJson } from "./presetjson";
 
 type TemplateActions = Pick<BuilderActions,
   "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "renameTemplate" | "removeTemplate" | "setTemplateZoom" | "resetTemplate">;
 
 export function templateActions(get: () => BuilderActionContext): TemplateActions {
   return {
-    saveTemplate: () => saveTemplate(get()),
-    saveTemplateAsNew: () => saveAsNew(get()),
+    saveTemplate: () => withFolder(get, saveTemplate(get())),
+    saveTemplateAsNew: () => withFolder(get, saveAsNew(get())),
     editTemplate: (id) => editTemplate(get(), id),
     renameTemplate: (id, name) => renameTemplate(get(), id, name),
     removeTemplate: (id) => removeTemplate(get(), id),
@@ -36,20 +38,27 @@ function store(ctx: BuilderActionContext, templates: readonly SheetTemplate[], e
 const templateId = () => `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 /** "Save template": the one being edited gets the current look and stays edited (2026-11-15: later changes are tracked again); otherwise a new one. */
-export function saveTemplate(ctx: BuilderActionContext): void {
+/** Its folder and template.json, right after it is created or saved (2026-11-16); the blueprint is the sheet as it is now. */
+function withFolder(get: () => BuilderActionContext, saved: SheetTemplate | null): void {
+  if (saved !== null) void writeTemplateFolder(get, saved, currentJson(get()));
+}
+
+export function saveTemplate(ctx: BuilderActionContext): SheetTemplate | null {
   const editing = ctx.model.templates.find((t) => t.id === ctx.model.editingTemplateId);
   if (editing === undefined) return saveAsNew(ctx);
   const updated: SheetTemplate = { ...editing, config: lookOf(ctx.model.config), updated: new Date().toISOString() };
   store(ctx, ctx.model.templates.map((t) => (t.id === editing.id ? updated : t)), editing.id);
   ctx.say(`Template “${editing.name}” saved`);
+  return updated;
 }
 
-function saveAsNew(ctx: BuilderActionContext): void {
+function saveAsNew(ctx: BuilderActionContext): SheetTemplate | null {
   const list = ctx.model.templates;
-  if (list.length >= TEMPLATE_LIMIT) return ctx.say(`At most ${TEMPLATE_LIMIT} templates — remove one first`, true);
+  if (list.length >= TEMPLATE_LIMIT) { ctx.say(`At most ${TEMPLATE_LIMIT} templates — remove one first`, true); return null; }
   const created = newTemplate(ctx.model.config, list.map((t) => t.name), new Date().toISOString(), templateId());
   store(ctx, [...list, created], created.id); // the new template is the one being edited: later changes are tracked
   ctx.say(`Saved as template “${created.name}” — rename it on its block`);
+  return created;
 }
 
 /** Opens a template on the sheet to edit its design, with its sample words (one undo entry). */

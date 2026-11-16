@@ -28,16 +28,23 @@ Since 2026-11-14 the builder's metadata is the **same system as the SVG to uploa
   - Edits and ✓ Accept are written into that artboard at once. An artboard open on the stage gets the same metadata there, so it shows no unsaved change.
   - Every row has **↻ Metadata** (`builder-artboard-regen-<id>`), which opens the exact-request confirmation for that one artboard.
 
-## Saving sheets in the folder (2026-11-14)
+## Saving sheets in the folder (2026-11-16 layout)
 
 The tree mirrors single icons' `_split_output`, but under **`_artboard_sheets`** (`lib/svgBuilder/sheetfolders.ts`):
 
-`<root>/_artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<title-artboard>_sheet_<icons>_icons_<colour>_<colour>_palette_id<template code>/artboard_variant_<N>/`
+```
+_artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/
+  template.json                                   ← the template's blueprint
+  artboard_<NN>_<its title>/                      ← one per derived artboard
+    metadata.json  preview.png  export/…
+```
 
-- **Sheet folder**: the slug of the artboard's title (its Title-Artboard after generation), the number of icons, the banner background and accent named as colour words (`colorWord`), and a 5-digit template code.
-  - All artboards of one template share their template's sheet folder; the first one saved names it.
-  - Each artboard is `artboard_variant_<N>`, where N is its own "#N".
-  - The artboard remembers its folder (`FinalArtboard.folder`, validated on read: inside `_artboard_sheets` only), so later saves land in the same place, even on a later day.
+- **Template folder**: `<its title>_sheet_<cells>_icons_<colour>_<colour>_palette_id<code>` (`templateFolder`).
+  - It is made as soon as the template is created and refreshed on every save (`actions/templatefolder.ts`).
+  - `template.json` is the sheet preset (`presetJsonOf`, format `iconsplitter-sheet-preset`): config, icons by name and id, locks, seed, recipe and metadata. That is enough to rebuild the design.
+  - With no folder open, nothing is written yet: the folder is made the first time one of its artboards is written.
+  - The template remembers its folder (`SheetTemplate.folder`, validated on read).
+- **Artboard folders** sit inside their template's folder: `artboard_<NN>_<its title>`, where NN is its "#N" and the title is its Title-Artboard after generation (`artboardFolder`). The artboard remembers its folder (`FinalArtboard.folder`), so later saves land in the same place even after a rename.
 - **When metadata is generated** (✦ Generate metadata): the variant folder is created with `metadata.json` (Title, Description, Tags, Title-Artboard, validation, prompt, model) and `preview.png`, the exact icons-only image that was sent (`sheetwriter.ts`).
 - **⇪ Export all selected** (header, `builder-export-selected`): exports the checked artboards (else the open one), from their **saved** state. Each one goes into `…/artboard_variant_<N>/export/` (`actions/sheetexport.ts`, `sheetpackage.ts`):
   - `<stem>.svg` with the metadata embedded, where `<stem>` is the sheet folder name + `_v<N>`;

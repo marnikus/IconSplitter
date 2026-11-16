@@ -35,6 +35,12 @@ export async function writeSheetMetadata(root: DirHandleLike, folder: string, fi
   await writeFileOverwrite(dir, "preview.png", blob(bytesOfDataUrl(file.preview), "image/png"));
 }
 
+/** The template's blueprint (2026-11-16): `<template folder>/template.json`, the sheet preset. */
+export async function writeTemplateBlueprint(root: DirHandleLike, folder: string, json: Record<string, unknown>): Promise<void> {
+  const dir = await ensureDirPath(root, folder);
+  await writeFileOverwrite(dir, "template.json", blob(`${JSON.stringify(json, null, 2)}\n`, "application/json"));
+}
+
 /** The export package into `<variant>/export/`. */
 export async function writeSheetExport(root: DirHandleLike, folder: string, files: readonly SheetFile[]): Promise<void> {
   const dir = await ensureDirPath(root, `${folder}/export`);

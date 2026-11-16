@@ -17,6 +17,7 @@ import { loadUploadSettings } from "../../upload/settingsstore";
 import { buildSheetPackage } from "../sheetpackage";
 import { writeSheetExport, writeSheetMetadata, type SheetMetaFile } from "../sheetwriter";
 import { recordUse } from "../usagestore";
+import { writeTemplateFolder } from "./templatefolder";
 import { svgTextsFor } from "./artboardmeta";
 
 export function sheetExportActions(get: () => BuilderActionContext): Pick<BuilderActions, "exportSelectedArtboards"> {
@@ -29,11 +30,12 @@ function targetsOf(ctx: BuilderActionContext): FinalArtboard[] {
   return ctx.model.artboards.filter((a) => ids.includes(a.id));
 }
 
-/** Its folder: kept once known, so later saves (and its template's other artboards) land beside it. */
-function folderFor(ctx: BuilderActionContext, artboard: FinalArtboard, now: Date): string {
-  const template = ctx.model.templates.find((t) => t.id === artboard.templateId);
-  const config = template === undefined ? ctx.model.config : artboardConfig(template, artboard);
-  return artboardFolder({ artboard, artboards: ctx.model.artboards, config, icons: artboardIcons(artboard).length, now });
+/** Its folder, inside its template's folder (made with template.json first when missing, 2026-11-16); kept once known. */
+async function folderFor(get: () => BuilderActionContext, artboard: FinalArtboard, now: Date): Promise<string | null> {
+  const template = get().model.templates.find((t) => t.id === artboard.templateId);
+  if (template === undefined) return null;
+  const templateDir = template.folder ?? await writeTemplateFolder(get, template);
+  return artboardFolder({ artboard, artboards: get().model.artboards, template: { ...template, folder: templateDir ?? template.folder ?? null }, now });
 }
 
 /** Remembers the folder (and, after an export, when and which icons were counted). */
@@ -52,7 +54,8 @@ async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboar
   const template = ctx.model.templates.find((t) => t.id === artboard.templateId);
   if (root === null || template === undefined) return [`${artboard.name}: its template or the folder is gone`];
   const now = new Date();
-  const folder = folderFor(ctx, artboard, now);
+  const folder = await folderFor(get, artboard, now);
+  if (folder === null) return [`${artboard.name}: its template is gone`];
   const config = artboardConfig(template, artboard);
   const doc = composeSheet({ config, layout: computeLayout(config), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts: texts, metadata: artboard.metadata });
   const settings = loadUploadSettings().defaults;
@@ -101,7 +104,8 @@ export async function saveSheetMetadataFiles(get: () => BuilderActionContext, id
   const artboard = ctx.model.artboards.find((a) => a.id === id);
   if (ctx.model.root === null || artboard === undefined) return null;
   const now = new Date();
-  const folder = folderFor(ctx, artboard, now);
+  const folder = await folderFor(get, artboard, now);
+  if (folder === null) return `${artboard.name}: its template is gone`;
   try {
     await writeSheetMetadata(ctx.model.root, folder, { ...file, at: now.toISOString() });
     remember(get(), id, { folder });

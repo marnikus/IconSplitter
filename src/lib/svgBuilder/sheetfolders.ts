@@ -1,12 +1,13 @@
-// sheetfolders.ts — where an artboard sheet is saved in the scanned root
-// (2026-11-14), the same tree as single icons but under `_artboard_sheets`:
-//   _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<sheet>/artboard_variant_<N>/export
-// <sheet> = `<title-artboard>_sheet_<count>_icons_<colour>_<colour>_palette_id<code>`;
-// every artboard of one template shares its template's sheet folder (the first
-// one saved names it) and is its own variant (its "#N"). Pure.
+// sheetfolders.ts — where templates and their artboards are saved in the scanned
+// root (2026-11-16), the same tree as single icons but under `_artboard_sheets`:
+//   _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/          template.json
+//   _artboard_sheets/…/<template>/artboard_<NN>_<its title>/   metadata.json, preview.png, export/
+// <template> = `<its title>_sheet_<cells>_icons_<colour>_<colour>_palette_id<code>`,
+// made when the template is created; every derived artboard lives inside it. Pure.
 import { fnv1a32 } from "../pairing";
 import type { FinalArtboard } from "./artboards";
 import type { SheetConfig } from "./types";
+import type { SheetTemplate } from "./templates";
 
 export const SHEETS_DIR = "_artboard_sheets";
 
@@ -62,6 +63,17 @@ export function sheetFolderName(args: { title: string; icons: number; palette: r
   return `${slugWords(args.title)}_sheet_${args.icons}_icons_${args.palette.join("_")}_palette_id${templateCode(args.templateId)}`;
 }
 
+/**
+ * A template's folder (2026-11-16): the one it already has, else a new one under
+ * the given day, named from ITS title, cell count, banner colours and code.
+ */
+export function templateFolder(template: Pick<SheetTemplate, "id" | "config" | "folder">, now: Date): string {
+  if (template.folder != null) return template.folder;
+  const { config } = template;
+  const name = sheetFolderName({ title: config.banner.title, icons: config.grid.columns * config.grid.rows, palette: paletteWords(config), templateId: template.id });
+  return `${SHEETS_DIR}/${dayPath(now)}/${name}`;
+}
+
 /** The artboard's variant number: its "#N", else its place among its template's artboards. */
 export function variantOf(artboard: FinalArtboard, artboards: readonly FinalArtboard[]): number {
   const hash = /#(\d+)\s*$/.exec(artboard.name);
@@ -70,26 +82,22 @@ export function variantOf(artboard: FinalArtboard, artboards: readonly FinalArtb
   return Math.max(1, mine.findIndex((a) => a.id === artboard.id) + 1);
 }
 
-export interface FolderArgs { artboard: FinalArtboard; artboards: readonly FinalArtboard[]; config: SheetConfig; icons: number; now: Date }
+export interface FolderArgs { artboard: FinalArtboard; artboards: readonly FinalArtboard[]; template: Pick<SheetTemplate, "id" | "config" | "folder">; now: Date }
 
 /**
- * The artboard's `artboard_variant_N` folder, relative to the root: the one it
- * already has; else in the sheet folder another artboard of its template has;
- * else a new sheet folder named from this artboard, under today's date.
+ * An artboard's folder, INSIDE its template's folder (2026-11-16):
+ * `artboard_<NN>_<its title>`; the one it already has is kept.
  */
 export function artboardFolder(args: FolderArgs): string {
-  const { artboard } = args;
-  if (artboard.folder !== null) return artboard.folder;
-  const variant = `artboard_variant_${variantOf(artboard, args.artboards)}`;
-  const sibling = args.artboards.find((a) => a.templateId === artboard.templateId && a.id !== artboard.id && a.folder !== null)?.folder;
-  if (sibling != null) return `${sibling.slice(0, sibling.lastIndexOf("/"))}/${variant}`;
-  const name = sheetFolderName({ title: artboard.title, icons: args.icons, palette: paletteWords(args.config), templateId: artboard.templateId });
-  return `${SHEETS_DIR}/${dayPath(args.now)}/${name}/${variant}`;
+  if (args.artboard.folder !== null) return args.artboard.folder;
+  const n = String(variantOf(args.artboard, args.artboards)).padStart(2, "0");
+  return `${templateFolder(args.template, args.now)}/artboard_${n}_${slugWords(args.artboard.title || args.artboard.name)}`;
 }
 
 /** The stem the export files carry: the sheet folder name + `_v<N>`. */
 export function sheetStem(folder: string): string {
   const parts = folder.split("/");
-  const variant = /(\d+)$/.exec(parts[parts.length - 1] ?? "")?.[1] ?? "1";
+  const last = parts[parts.length - 1] ?? "";
+  const variant = Number(/^artboard_(?:variant_)?(\d+)/.exec(last)?.[1] ?? /(\d+)$/.exec(last)?.[1] ?? "1");
   return `${parts[parts.length - 2] ?? "sheet"}_v${variant}`;
 }

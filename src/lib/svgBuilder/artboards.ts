@@ -7,7 +7,7 @@ import { isRecord } from "../isrecord";
 import { applyCopy, parseCaptionTexts } from "./config";
 import { DEFAULT_ARTBOARD_SUBTITLE, cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
 import { emptySlotFor, isEmptySlot } from "./slots";
-import { lookOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
+import { lookOf, sheetFolderOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
 import { parseOverrides, withOverrides, type LookOverrides } from "./lookoverrides";
 import type { BuilderIconAsset, SheetConfig, SheetMetadata } from "./types";
 
@@ -151,7 +151,7 @@ function parseArtboard(input: unknown, templateIds: ReadonlySet<string> | null):
     created: text(raw.created, 40), updated: text(raw.updated, 40),
     exportedAt: typeof raw.exportedAt === "string" ? raw.exportedAt : null, countedIds: strings(raw.countedIds, 192),
     overrides: parseOverrides(raw.overrides), captionTexts: parseCaptionTexts(raw.captionTexts),
-    folder: typeof raw.folder === "string" && /^_artboard_sheets\/[^.][^]*$/.test(raw.folder) && !raw.folder.includes("..") ? raw.folder.slice(0, 400) : null,
+    folder: sheetFolderOf(raw.folder),
   };
 }
 
