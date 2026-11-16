@@ -14,18 +14,19 @@ import SearchField from "../ui/SearchField";
 import MultiSelect from "../ui/MultiSelect";
 import { useStylePrefs } from "./styles";
 
-/** Style filter (2026-11-16): always shown in the filter bar; filters by AI source, SVG generated, both, or none. */
+/** Style filter (2026-11-16): filter by style (Base · Line Stroke or registered styles) and/or state (AI source, SVG generated, both). */
 function StyleFilterSelect({ filter, onFilter }: { filter: SvgListFilter; onFilter: (patch: Partial<SvgListFilter>) => void }) {
-  const { active } = useStylePrefs();
-  const name = active === null ? null : active.replace(/_/g, " ");
+  const { styles } = useStylePrefs();
+  const options: [string, string][] = [
+    ["all", "All styles"],
+    ["base", "Base · Line Stroke"],
+    ...styles.map((s): [string, string] => [`style:${s}`, s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())]),
+    ["ai", "AI source"],
+    ["svg", "SVG generated"],
+    ["both", "Both (AI + SVG)"],
+  ];
   return <MultiSelect label="Style" testid="svg-filter-style" value={filter.style}
-    options={[
-      ["all", "All styles"],
-      ["ai", name ? `${name}: AI source` : "AI source"],
-      ["svg", name ? `${name}: SVG generated` : "SVG generated"],
-      ["styled", name ? `${name}: Both (AI + SVG)` : "Both (AI + SVG)"],
-      ["none", name ? `Without ${name}` : "No style"],
-    ]}
+    options={options}
     onChange={(v) => onFilter({ style: v as SvgListFilter["style"] })} />;
 }
 

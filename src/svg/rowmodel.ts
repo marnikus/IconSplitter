@@ -94,11 +94,18 @@ function joinPath(dir: string, name: string): string {
 
 export function toListRow(row: SvgRow): SvgListRow {
   const v = shownVersion(row);
+  const sep = row.source.id.indexOf(STYLE_ID_SEP);
+  const styleName = sep === -1 ? "base" : row.source.id.slice(sep + STYLE_ID_SEP.length);
+  const hasAi = row.source.relPath !== "" || (row.meta?.imageVersions?.length ?? 0) > 0;
+  const hasSvg = row.newest !== null;
   return {
     id: row.source.id, name: row.source.name, relPath: row.source.relPath,
     generation: row.status, review: row.review, ...versionFields(v),
     svgCreatedAt: svgCreatedAtOf(v), aiCreatedAt: aiCreatedAtOf(row),
-    style: !row.source.id.includes(STYLE_ID_SEP) ? "none" : row.newest !== null ? "svg" : "ai",
+    style: sep === -1 ? "none" : hasSvg ? "svg" : "ai",
+    styleName,
+    hasAi,
+    hasSvg,
   };
 }
 

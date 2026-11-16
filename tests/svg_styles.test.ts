@@ -74,6 +74,7 @@ describe("the style filter (2026-11-16)", () => {
     const rows = [row("a", "none"), row("b~s", "ai"), row("c~s", "svg")];
     const ids = (style: "ai" | "svg" | "styled" | "none") => applySvgFilters(rows, { ...ALL_SVG_FILTER, style }).map((r) => r.id);
     expect([ids("ai"), ids("svg"), ids("styled"), ids("none")]).toEqual([["b~s"], ["c~s"], ["b~s", "c~s"], ["a"]]);
-    expect(applySvgFilters([row("a", "none")], { ...ALL_SVG_FILTER, style: "ai" })).toHaveLength(1); // base style shown: no effect
+    expect(applySvgFilters([{ ...row("a", "none"), styleName: "base", hasAi: true }, { ...row("b~colored_wiggle", "ai"), styleName: "colored_wiggle", hasAi: true }], { ...ALL_SVG_FILTER, style: ["base", "ai"] }).map((r) => r.id)).toEqual(["a"]);
+    expect(applySvgFilters([{ ...row("a", "none"), styleName: "base", hasAi: true }, { ...row("b~colored_wiggle", "ai"), styleName: "colored_wiggle", hasAi: true }], { ...ALL_SVG_FILTER, style: ["style:colored_wiggle", "ai"] }).map((r) => r.id)).toEqual(["b~colored_wiggle"]);
   });
 });

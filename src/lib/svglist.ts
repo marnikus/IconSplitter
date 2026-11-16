@@ -30,8 +30,8 @@ export type SvgSort =
 /** The one direction control: applies to whichever order and filter is in force. */
 export type SvgDir = "asc" | "desc";
 
-/** Image style filter (2026-11-16): has the picked style, only its AI source, its SVG generated, or not the style. */
-export type StyleFilter = "all" | "styled" | "ai" | "svg" | "none";
+/** Image style filter (2026-11-16): filter by style ("base" or "style:<name>") and/or state ("ai", "svg", "both"). */
+export type StyleFilter = "all" | "base" | "ai" | "svg" | "both" | "styled" | "none" | `style:${string}`;
 
 export interface SvgListFilter {
   /** One state, several (Generating + Generated), or all — lib/multifilter. */
@@ -66,16 +66,35 @@ export interface SvgListRow {
   aiCreatedAt: number | null;
   /** In the picked image style: not this style, its AI source only, or its SVG generated too. */
   style?: "none" | "ai" | "svg";
+  /** Active style name on this row ("base" or registered style name). */
+  styleName?: string;
+  /** Whether this row has an AI source image. */
+  hasAi?: boolean;
+  /** Whether this row has a generated SVG. */
+  hasSvg?: boolean;
 }
 
 export function applySvgFilters(rows: readonly SvgListRow[], f: SvgListFilter): SvgListRow[] {
-  // no row in a style (the base style is shown): the style filter has nothing to say
-  const styled = rows.some((r) => (r.style ?? "none") !== "none");
-  return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, f.search) && (!styled || inStyle(r, f.style)));
+  return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, f.search) && inStyle(r, f.style));
 }
 
 function inStyle(row: SvgListRow, want: Multi<StyleFilter> | undefined): boolean {
-  return anyOf(want ?? "all", "all", (w) => (w === "styled" ? (row.style ?? "none") !== "none" : (row.style ?? "none") === w));
+  if (want === undefined || want === "all") return true;
+  const list = Array.isArray(want) ? want : [want];
+  if (list.length === 0 || list.includes("all")) return true;
+  const styles = list.filter((w) => w === "base" || w.startsWith("style:")).map((w) => (w === "base" ? "base" : w.slice(6)));
+  const states = list.filter((w) => w === "ai" || w === "svg" || w === "both" || w === "styled" || w === "none");
+  if (styles.length > 0 && !styles.includes(row.styleName ?? "base")) return false;
+  if (states.length === 0) return true;
+  const hasAi = row.hasAi ?? (row.style === "ai");
+  const hasSvg = row.hasSvg ?? (row.style === "svg");
+  return states.some((s) => {
+    if (s === "ai") return hasAi;
+    if (s === "svg") return hasSvg;
+    if (s === "both") return hasAi && hasSvg;
+    if (s === "styled") return (row.style ?? "none") !== "none" || (hasAi && hasSvg);
+    return (row.style ?? "none") === "none";
+  });
 }
 
 function inGeneration(row: SvgListRow, want: Multi<GenFilter>): boolean {

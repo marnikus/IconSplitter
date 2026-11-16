@@ -15,6 +15,17 @@ const GENS: GenFilter[] = ["all", "not-generated", "generating", "generated", "f
 const SORTS: SvgSort[] = ["date", "name", "generation", "review", "cost", "svg-created", "ai-created", "selected", "unselected", "unapproved", "approved"];
 const DEFAULT_SORT: SvgSort = "date";
 
+const isStyleFilter = (v: unknown): v is StyleFilter =>
+  v === "all" || v === "base" || v === "ai" || v === "svg" || v === "both" || v === "styled" || v === "none" || (typeof v === "string" && v.startsWith("style:") && v.length > 6);
+
+function parseStyleFilter(raw: unknown): SvgListFilter["style"] {
+  if (Array.isArray(raw)) {
+    const kept = raw.filter(isStyleFilter);
+    return kept.length === 0 ? "all" : kept.length === 1 ? kept[0] : kept;
+  }
+  return isStyleFilter(raw) ? raw : "all";
+}
+
 export function parseSvgListView(raw: unknown): SvgListView {
   const v = isRecord(raw) ? raw : {};
   const f = isRecord(v.filter) ? v.filter : {};
@@ -24,7 +35,7 @@ export function parseSvgListView(raw: unknown): SvgListView {
       generation: parseMulti(f.generation, GENS, "all"),
       review: parseMulti(f.review, ["all", ...REVIEW_STATUSES], "all"),
       search: typeof f.search === "string" ? f.search : ALL_SVG_FILTER.search,
-      style: parseMulti<StyleFilter>(f.style, ["all", "styled", "ai", "svg", "none"], "all"),
+      style: parseStyleFilter(f.style),
     },
     sort,
     sortDir: v.sortDir === "asc" || v.sortDir === "desc" ? v.sortDir : naturalDir(sort),
