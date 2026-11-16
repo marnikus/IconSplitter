@@ -467,9 +467,14 @@ describe("final artboards — the list under the templates", () => {
     expect(q("builder-editing-remove-artboard")).toBeNull(); // only while an artboard is open
     await click("builder-editing-add-artboard");
     await click("builder-editing-add-artboard");
+    await waitUntil(() => savedArtboards().every((a) => typeof (a as { folder?: unknown }).folder === "string"), "both folders made");
     const [a1, a2] = savedArtboards();
     expect(savedArtboards()).toHaveLength(2);
+    const dirOf = (path: string) => path.split("/").reduce<FakeDir | undefined>((d, part) => d?.children.get(part) as FakeDir | undefined, scanned);
+    const a2Dir = (a2 as unknown as { folder: string }).folder;
+    expect(dirOf(a2Dir)).toBeDefined();
     await click("builder-editing-remove-artboard"); // the open one (a2)
+    await waitUntil(() => dirOf(a2Dir) === undefined, "its folder goes with it (2026-11-16)");
     expect(savedArtboards().map((a) => a.id)).toEqual([a1.id]);
     expect(q("builder-editing")?.textContent).toContain(a1.name); // the stage moves to a1 — no dead view
     await click("builder-undo"); // the removal comes back, whole
@@ -536,7 +541,14 @@ describe("final artboards — the list under the templates", () => {
     const stray = (savedTemplates()[0] as unknown as { folder: string }).folder;
     const tplId = savedTemplates()[0].id;
     await click("builder-editing-add-artboard");
+    await waitUntil(() => typeof (savedArtboards()[0] as { folder?: unknown }).folder === "string", "the new artboard's folder is made at once");
     const art = savedArtboards()[0];
+    let seeded: FakeDir | undefined = scanned;
+    for (const part of ((art as unknown as { folder: string }).folder).split("/")) seeded = seeded?.children.get(part) as FakeDir | undefined;
+    expect(seeded?.children.has("metadata.json")).toBe(true); // visible in Explorer right after "+ Artboard"
+    let strayDir: FakeDir | undefined = scanned;
+    for (const part of stray.split("/")) strayDir = strayDir?.children.get(part) as FakeDir | undefined;
+    strayDir?.children.delete(((art as unknown as { folder: string }).folder).split("/").pop() as string); // the old layout had no artboard here
     // an artboard saved before, under the OLD layout, on another day
     const OLD = "_artboard_sheets/2026-11/2026-11-15/icon-sheet_sheet_32_icons_green_palette_id00001";
     const stored = JSON.parse(localStorage.getItem(BUILDER_ARTBOARDS_KEY) ?? "[]");

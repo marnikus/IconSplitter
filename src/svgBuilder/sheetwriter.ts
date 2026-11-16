@@ -35,6 +35,14 @@ export async function writeSheetMetadata(root: DirHandleLike, folder: string, fi
   await writeFileOverwrite(dir, "preview.png", blob(bytesOfDataUrl(file.preview), "image/png"));
 }
 
+/** A new artboard's folder (2026-11-16): made at once with a metadata.json stub (no preview yet); an existing file is kept. */
+export async function writeArtboardSeed(root: DirHandleLike, folder: string, json: Record<string, unknown>): Promise<void> {
+  const dir = await ensureDirPath(root, folder);
+  try { await dir.getFileHandle("metadata.json"); return; } catch { /* not there yet */ }
+  await writeFileOverwrite(dir, "metadata.json", blob(`${JSON.stringify(json, null, 2)}
+`, "application/json"));
+}
+
 /** The template's blueprint (2026-11-16): `<template folder>/template.json`, the sheet preset. */
 export async function writeTemplateBlueprint(root: DirHandleLike, folder: string, json: Record<string, unknown>): Promise<void> {
   const dir = await ensureDirPath(root, folder);

@@ -15,9 +15,10 @@ import { saveArtboards } from "../artboardstore";
 import { loadBridgeConfig } from "../../upload/configstore";
 import { loadUploadSettings } from "../../upload/settingsstore";
 import { buildSheetPackage } from "../sheetpackage";
-import { writeSheetExport, writeSheetMetadata, type SheetMetaFile } from "../sheetwriter";
+import { writeArtboardSeed, writeSheetExport, writeSheetMetadata, type SheetMetaFile } from "../sheetwriter";
 import { recordUse } from "../usagestore";
 import { writeTemplateFolder } from "./templatefolder";
+import { probePath } from "../../lib/fs";
 import { svgTextsFor } from "./artboardmeta";
 
 export function sheetExportActions(get: () => BuilderActionContext): Pick<BuilderActions, "exportSelectedArtboards"> {
@@ -96,6 +97,51 @@ async function exportSelected(get: () => BuilderActionContext): Promise<void> {
     get().setBusy(null);
   }
   get().say(problems.length === 0 ? `${targets.length} artboard(s) exported into _artboard_sheets` : `Exported with problems — ${problems.join("; ")}`, problems.length > 0);
+}
+
+/** The store catches up with a just-added artboard (a few ticks at most). */
+async function arrived(get: () => BuilderActionContext, id: string): Promise<FinalArtboard | undefined> {
+  for (let i = 0; i < 20 && !get().model.artboards.some((a) => a.id === id); i += 1) await new Promise((r) => setTimeout(r, 0));
+  return get().model.artboards.find((a) => a.id === id);
+}
+
+/** metadata.json before any metadata exists: the artboard's title, empty fields. */
+function seedJson(artboard: FinalArtboard, at: string): Record<string, unknown> {
+  const m = artboard.metadata;
+  return { v: 1, at, state: m?.state ?? "empty", title: m?.title ?? "", description: m?.description ?? "", tags: m?.tags ?? [],
+    artboardTitle: artboard.title, prompt: "", model: "" };
+}
+
+/** "+ Artboard" (2026-11-16): its folder appears in Explorer at once, with a metadata.json to fill later. */
+export async function seedArtboardFolder(get: () => BuilderActionContext, id: string): Promise<void> {
+  const artboard = await arrived(get, id);
+  const root = get().model.root;
+  if (root === null || artboard === undefined) return;
+  const now = new Date();
+  const folder = await folderFor(get, artboard, now);
+  if (folder === null) return;
+  try {
+    await writeArtboardSeed(root, folder, seedJson(artboard, now.toISOString()));
+    remember(get(), id, { folder });
+  } catch (error) {
+    get().say(`Artboard folder not written — ${error instanceof Error ? error.message : "write failed"}`, true);
+  }
+}
+
+/** Removing artboards (2026-11-16) deletes their own folders under _artboard_sheets too; failures are reported. */
+export async function dropArtboardFolders(get: () => BuilderActionContext, gone: readonly FinalArtboard[]): Promise<void> {
+  const root = get().model.root;
+  if (root === null) return;
+  const failed: string[] = [];
+  for (const a of gone) {
+    if (a.folder === null || !a.folder.startsWith("_artboard_sheets/")) continue;
+    const cut = a.folder.lastIndexOf("/");
+    try {
+      const parent = await probePath(root, a.folder.slice(0, cut));
+      if (parent?.removeEntry !== undefined) await parent.removeEntry(a.folder.slice(cut + 1), { recursive: true });
+    } catch { failed.push(a.name); }
+  }
+  if (failed.length > 0) get().say(`Folder not deleted for ${failed.join(", ")} — remove it in Explorer`, true);
 }
 
 /** After an artboard's metadata is generated: metadata.json + preview.png in its folder (the folder is created). */

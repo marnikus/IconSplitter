@@ -17,6 +17,7 @@ import { saveSheetConfig } from "../configstore";
 import { visibleArtboards } from "../artboardview";
 import { commitConfig, prefs } from "./config";
 import { startIcons } from "./startpick";
+import { dropArtboardFolders, seedArtboardFolder } from "./sheetexport";
 import { artboardFromStage, openArtboardOf } from "../artboarddraft";
 
 type ArtboardActions = Pick<BuilderActions,
@@ -28,12 +29,12 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
     templateGesture: (id, intent) => templateGesture(get(), id, intent),
     toggleTemplateCheck: (id) => { const c = get(); setTemplateSel(c, { ...c.model.templateSel, checked: toggleChecked(c.model.templateSel.checked, id) }); },
     setTemplateChecks: (ids, on) => { const c = get(); setTemplateSel(c, { ...c.model.templateSel, checked: setCheckedIds(c.model.templateSel.checked, ids, on) }); },
-    addArtboard: (templateId) => addArtboard(get(), templateId),
+    addArtboard: (templateId) => { const id = addArtboard(get(), templateId); if (id !== null) void seedArtboardFolder(get, id); },
     artboardGesture: (id, intent) => artboardGesture(get(), id, intent),
     toggleArtboardCheck: (id) => { const c = get(); c.dispatch({ artboardSel: { ...c.model.artboardSel, checked: toggleChecked(c.model.artboardSel.checked, id) } }); },
     setArtboardChecks: (ids, on) => { const c = get(); c.dispatch({ artboardSel: { ...c.model.artboardSel, checked: setCheckedIds(c.model.artboardSel.checked, ids, on) } }); },
     renameArtboard: (id, name) => renameArtboard(get(), id, name),
-    removeArtboards: (ids) => removeArtboards(get(), ids),
+    removeArtboards: (ids) => { const gone = get().model.artboards.filter((a) => ids.includes(a.id)); removeArtboards(get(), ids); void dropArtboardFolders(get, gone); },
     closeArtboard: () => get().dispatch({ editingArtboardId: null }),
     resetArtboardLook: (id) => resetArtboardLook(get(), id),
     saveArtboard: () => saveArtboard(get()),
@@ -74,11 +75,11 @@ function templateGesture(ctx: BuilderActionContext, id: string, intent: SelectIn
 const artboardId = () => `art-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 /** "+ Artboard": a new, empty final artboard of the template, opened on the stage to pick icons. */
-export function addArtboard(ctx: BuilderActionContext, templateId: string, guard = true): void {
+export function addArtboard(ctx: BuilderActionContext, templateId: string, guard = true): string | null {
   const template = ctx.model.templates.find((t) => t.id === templateId);
-  if (template === undefined) return ctx.say("That template is gone", true);
-  if (guard && blockLeave(ctx, { kind: "add-artboard", id: templateId })) return;
-  if (ctx.model.artboards.length >= ARTBOARD_LIMIT) return ctx.say(`At most ${ARTBOARD_LIMIT} artboards — remove some first`, true);
+  if (template === undefined) { ctx.say("That template is gone", true); return null; }
+  if (guard && blockLeave(ctx, { kind: "add-artboard", id: templateId })) return null;
+  if (ctx.model.artboards.length >= ARTBOARD_LIMIT) { ctx.say(`At most ${ARTBOARD_LIMIT} artboards — remove some first`, true); return null; }
   const capacity = template.config.grid.columns * template.config.grid.rows;
   const created = newArtboard(template, ctx.model.artboards, { now: new Date().toISOString(), id: artboardId(), placedIds: startIcons(ctx, capacity) });
   storeArtboards(ctx, [...ctx.model.artboards, created]);
@@ -88,6 +89,7 @@ export function addArtboard(ctx: BuilderActionContext, templateId: string, guard
   openArtboard(ctx, created);
   ctx.dispatch({ artboardSel: { ...ctx.model.artboardSel, active: created.id, anchor: created.id } });
   ctx.say(`Artboard “${created.name}” added — ${placedOnly(created.placedIds).length} icons and sample words to start; change any of them`);
+  return created.id;
 }
 
 function artboardGesture(ctx: BuilderActionContext, id: string, intent: SelectIntent): void {
