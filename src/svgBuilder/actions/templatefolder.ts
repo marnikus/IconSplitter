@@ -12,6 +12,7 @@ import type { BuilderActionContext } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
 import { writeTemplateBlueprint } from "../sheetwriter";
 import { probePath, type DirHandleLike } from "../../lib/fs";
+import { sheetsRoot } from "./sheetsroot";
 
 /**
  * The template's previous folder after it moved home (2026-11-16): removed only
@@ -37,16 +38,17 @@ function blueprintOf(ctx: BuilderActionContext, template: SheetTemplate): Record
 /** Writes the template's folder and template.json; remembers the folder on the template. Answers the folder, or null. */
 export async function writeTemplateFolder(get: () => BuilderActionContext, template: SheetTemplate, json?: Record<string, unknown>): Promise<string | null> {
   const ctx = get();
-  if (ctx.model.root === null) return null;
+  const root = sheetsRoot(ctx, true);
+  if (root === null) return null;
   const folder = templateFolder(template, new Date(), ctx.model.artboards); // where its artboards live, when any do
   try {
-    await writeTemplateBlueprint(ctx.model.root, folder, json ?? blueprintOf(ctx, template));
+    await writeTemplateBlueprint(root, folder, json ?? blueprintOf(ctx, template));
   } catch (error) {
     ctx.say(`Template folder not written — ${error instanceof Error ? error.message : "the folder may be read-only"}`, true);
     return null;
   }
   const before = template.folder ?? null;
-  if (before !== null && before !== folder) await dropStray(ctx.model.root, before);
+  if (before !== null && before !== folder) await dropStray(root, before);
   const now = get();
   if (now.model.templates.find((t) => t.id === template.id)?.folder !== folder) {
     const templates = now.model.templates.map((t) => (t.id === template.id ? { ...t, folder } : t));

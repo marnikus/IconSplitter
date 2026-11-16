@@ -19,6 +19,7 @@ import { writeArtboardSeed, writeSheetExport, writeSheetMetadata, type SheetMeta
 import { recordUse } from "../usagestore";
 import { writeTemplateFolder } from "./templatefolder";
 import { probePath } from "../../lib/fs";
+import { sheetsRoot } from "./sheetsroot";
 import { svgTextsFor } from "./artboardmeta";
 
 export function sheetExportActions(get: () => BuilderActionContext): Pick<BuilderActions, "exportSelectedArtboards"> {
@@ -51,7 +52,7 @@ const epsOf = (converter: Parameters<typeof converterOf>[0]) => (input: Paramete
 
 async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboard, texts: Record<string, string>): Promise<string[]> {
   const ctx = get();
-  const root = ctx.model.root;
+  const root = sheetsRoot(ctx, true);
   const template = ctx.model.templates.find((t) => t.id === artboard.templateId);
   if (root === null || template === undefined) return [`${artboard.name}: its template or the folder is gone`];
   const now = new Date();
@@ -82,6 +83,7 @@ async function countUse(get: () => BuilderActionContext, artboard: FinalArtboard
 async function exportSelected(get: () => BuilderActionContext): Promise<void> {
   const ctx = get();
   if (ctx.model.root === null) return ctx.say("Open the folder first — sheets are saved inside it", true);
+  if (sheetsRoot(ctx) === null) return;
   const targets = targetsOf(ctx);
   if (targets.length === 0) return ctx.say("Check the artboards to export first", true);
   ctx.setBusy(`Exporting ${targets.length} artboard(s) into _artboard_sheets…`);
@@ -115,7 +117,7 @@ function seedJson(artboard: FinalArtboard, at: string): Record<string, unknown> 
 /** "+ Artboard" (2026-11-16): its folder appears in Explorer at once, with a metadata.json to fill later. */
 export async function seedArtboardFolder(get: () => BuilderActionContext, id: string): Promise<void> {
   const artboard = await arrived(get, id);
-  const root = get().model.root;
+  const root = sheetsRoot(get());
   if (root === null || artboard === undefined) return;
   const now = new Date();
   const folder = await folderFor(get, artboard, now);
@@ -130,7 +132,7 @@ export async function seedArtboardFolder(get: () => BuilderActionContext, id: st
 
 /** Removing artboards (2026-11-16) deletes their own folders under _artboard_sheets too; failures are reported. */
 export async function dropArtboardFolders(get: () => BuilderActionContext, gone: readonly FinalArtboard[]): Promise<void> {
-  const root = get().model.root;
+  const root = sheetsRoot(get(), true);
   if (root === null) return;
   const failed: string[] = [];
   for (const a of gone) {
@@ -148,12 +150,13 @@ export async function dropArtboardFolders(get: () => BuilderActionContext, gone:
 export async function saveSheetMetadataFiles(get: () => BuilderActionContext, id: string, file: Omit<SheetMetaFile, "at">): Promise<string | null> {
   const ctx = get();
   const artboard = ctx.model.artboards.find((a) => a.id === id);
-  if (ctx.model.root === null || artboard === undefined) return null;
+  const root = sheetsRoot(ctx);
+  if (root === null || artboard === undefined) return null;
   const now = new Date();
   const folder = await folderFor(get, artboard, now);
   if (folder === null) return `${artboard.name}: its template is gone`;
   try {
-    await writeSheetMetadata(ctx.model.root, folder, { ...file, at: now.toISOString() });
+    await writeSheetMetadata(root, folder, { ...file, at: now.toISOString() });
     remember(get(), id, { folder });
     return null;
   } catch (error) {
