@@ -20,10 +20,11 @@ import { recordUse } from "../usagestore";
 import { writeTemplateFolder } from "./templatefolder";
 import { probePath } from "../../lib/fs";
 import { sheetsRoot } from "./sheetsroot";
+import { writeSheetJson } from "./sheetjson";
 import { svgTextsFor } from "./artboardmeta";
 
-export function sheetExportActions(get: () => BuilderActionContext): Pick<BuilderActions, "exportSelectedArtboards"> {
-  return { exportSelectedArtboards: () => { void exportSelected(get); } };
+export function sheetExportActions(get: () => BuilderActionContext): Pick<BuilderActions, "exportSelectedArtboards" | "syncSheetJson"> {
+  return { exportSelectedArtboards: () => { void exportSelected(get); }, syncSheetJson: () => { void writeSheetJson(get); } };
 }
 
 /** The checked artboards, else the open one. */
@@ -125,6 +126,7 @@ export async function seedArtboardFolder(get: () => BuilderActionContext, id: st
   try {
     await writeArtboardSeed(root, folder, seedJson(artboard, now.toISOString()));
     remember(get(), id, { folder });
+    if (get().model.editingArtboardId === id) await writeSheetJson(get, folder);
     return folder;
   } catch (error) {
     get().say(`Artboard folder not written — ${error instanceof Error ? error.message : "write failed"}`, true);

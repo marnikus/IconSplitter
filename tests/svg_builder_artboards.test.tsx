@@ -561,6 +561,14 @@ describe("final artboards — the list under the templates", () => {
     let seeded: FakeDir | undefined = scanned;
     for (const part of ((art as unknown as { folder: string }).folder).split("/")) seeded = seeded?.children.get(part) as FakeDir | undefined;
     expect(seeded?.children.has("metadata.json")).toBe(true); // visible in Explorer right after "+ Artboard"
+    const sheetJson = async () => JSON.parse((seeded?.children.get("sheet.json") as FakeFile).text);
+    await waitUntil(() => seeded?.children.has("sheet.json") === true, "sheet.json written with the folder");
+    expect((await sheetJson()).format).toBe("iconsplitter-sheet-preset");
+    const cols = (await sheetJson()).config.grid.columns as number;
+    await click("builder-columns-inc"); // an edit: sheet.json follows it
+    await vi.waitFor(async () => expect((await sheetJson()).config.grid.columns).toBe(cols + 1), { timeout: 3000 });
+    await click("builder-columns-dec"); // and back (the rest of this test reloads)
+    await vi.waitFor(async () => expect((await sheetJson()).config.grid.columns).toBe(cols), { timeout: 3000 });
     let strayDir: FakeDir | undefined = scanned;
     for (const part of stray.split("/")) strayDir = strayDir?.children.get(part) as FakeDir | undefined;
     strayDir?.children.delete(((art as unknown as { folder: string }).folder).split("/").pop() as string); // the old layout had no artboard here

@@ -32,6 +32,7 @@ export function useSvgBuilder(): BuilderApi {
   useAutoPlacement(actions, computed.assets, computed.layout.capacity);
   useIconEditBinding(model, computed, patch);
   useArtboardUndo(model, actions, patch);
+  useSheetJsonSync(model, slice.checked, actions);
   return {
     ...model, ...computed,
     checked: slice.checked, activeId: slice.activeId, anchorId: slice.anchorId, actions,
@@ -47,6 +48,16 @@ function useAutoPlacement(actions: BuilderActions, assets: readonly BuilderIconA
     lastCapacity.current = capacity;
     actions.fitSelection();
   }, [actions, capacity]);
+}
+
+/** The open artboard's sheet.json follows the edits (2026-11-16), one write per pause. */
+function useSheetJsonSync(model: BuilderModel, placedIds: readonly string[], actions: BuilderActions): void {
+  const folder = model.artboards.find((a) => a.id === model.editingArtboardId)?.folder ?? null;
+  useEffect(() => {
+    if (folder === null) return;
+    const t = setTimeout(() => actions.syncSheetJson(), 600);
+    return () => clearTimeout(t);
+  }, [actions, folder, model.config, placedIds, model.lockedIds, model.seed, model.recipe, model.metadata]);
 }
 
 export type { BuilderIconAsset, BuilderListView, SelectionRecipe, SheetConfig, SheetDocument, SheetLayout };
