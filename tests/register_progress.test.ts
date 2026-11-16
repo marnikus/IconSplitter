@@ -83,6 +83,22 @@ describe("the register progress model", () => {
     expect(registerSlot(b).value).toBeNull();
     expect(registerSlot(a).value).toMatchObject({ total: 3 });
   });
+
+  it("reports styles registration with folder progress and added count", () => {
+    const r = refs();
+    const s = beginRegister(r, "styles", 2);
+    expect(registerTitle(registerSlot(r).value!)).toBe("Registering styles · 2 folders");
+    s.reading("sun.png");
+    expect(registerDetail(registerSlot(r).value!)).toBe("sun.png");
+    s.settled({ registered: 2, skipped: 0 });
+    expect(registerSlot(r).value).toMatchObject({ done: 1, total: 2, registered: 2 });
+    expect(registerNote(registerSlot(r).value!)).toBe("2 new files registered");
+    s.reading("moon.png");
+    s.settled({ registered: 1, skipped: 0 });
+    s.finish();
+    expect(registerTitle(registerSlot(r).value!)).toBe("Registering styles complete");
+    expect(registerDetail(registerSlot(r).value!)).toBe("3 registered");
+  });
 });
 
 describe("the bar the user sees", () => {

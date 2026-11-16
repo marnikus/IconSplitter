@@ -13,6 +13,7 @@ import { svgStem } from "../lib/svgfile";
 import { baseRowId, styleFilesOf, styleOfFolder, styleRowId, variantVersions, type StyleFiles } from "../lib/svgstyles";
 import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
 import { getAppState, patchSvg } from "../state/appstore";
+import { beginRegister } from "./registerprogress";
 import type { SvgSource } from "./sources";
 import { toRow } from "./rowmodel";
 import type { SvgRefs, SvgRow } from "./types";
@@ -146,11 +147,27 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   const bases = [...new Set(ids.map(baseRowId))].flatMap((id) => c.discovery?.sources.find((s) => s.id === id) ?? []);
   if (bases.length === 0) return c.say("Select the items whose style folders should be registered", true);
   c.say(`Registering styles in ${bases.length} item folder(s)…`);
+  const bar = beginRegister(c.refs, "styles", bases.length);
   const styles = new Set(prefs.styles);
   let rows = 0;
-  for (const base of bases) {
-    try { const got = await registerRow(root, c.refs, base); if (got.length > 0) rows++; got.forEach((s) => styles.add(s)); } catch { /* reported in the count */ }
+  try {
+    for (const base of bases) {
+      if (bar.cancelled()) break;
+      bar.reading(base.name);
+      let added = 0;
+      try {
+        const got = await registerRow(root, c.refs, base);
+        added = got.length;
+        if (added > 0) rows++;
+        got.forEach((s) => styles.add(s));
+      } catch { /* reported in the count */ }
+      bar.settled({ registered: added, skipped: 0 });
+    }
+  } catch (error) {
+    bar.fail();
+    throw error;
   }
+  bar.finish();
   setPrefs({ ...prefs, styles: [...styles].sort() });
   if (c.discovery !== null) c.setRows(rowsForStyle(c.discovery, c.refs, prefs.active));
   c.say(rows === 0 ? "No style folders (_<style> with numbered images) found in the selected items" : `Styles registered for ${rows} of ${bases.length} item(s): ${[...styles].join(", ")}`);

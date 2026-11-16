@@ -13,8 +13,8 @@ import { createProcessReporter } from "../lib/processprogress";
 import { createSlotMap, publishProcess, type ProcessSlot } from "../lib/processslot";
 import type { SvgRefs } from "./types";
 
-/** Which pass is running: an SVG pass or the AI-source pass. */
-export type RegisterKind = "svg" | "images";
+/** Which pass is running: an SVG pass, the AI-source pass, or the styles pass. */
+export type RegisterKind = "svg" | "images" | "styles";
 
 export interface RegisterProgress {
   /** The run this bar reports; the completion cue is keyed by it. */
@@ -125,9 +125,15 @@ export function registerNote(p: RegisterProgress): string {
   return `${p.registered} new file${p.registered === 1 ? "" : "s"} registered`;
 }
 
+const REGISTER_KIND_LABEL: Record<RegisterKind, string> = {
+  svg: "existing SVGs",
+  images: "AI sources",
+  styles: "styles",
+};
+
 /** The bar's title: what is happening, in the tab's own words. */
 export function registerTitle(p: RegisterProgress): string {
-  const what = p.kind === "svg" ? "existing SVGs" : "AI sources";
+  const what = REGISTER_KIND_LABEL[p.kind];
   const folders = `${p.total} folder${p.total === 1 ? "" : "s"}`;
   if (p.phase === "running") return `Registering ${what} · ${folders}`;
   if (p.phase === "cancelled") return `Registering ${what} cancelled`;
