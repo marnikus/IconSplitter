@@ -32,26 +32,27 @@ function locationOf(ctx: BuilderActionContext): string | null {
  * Its folder on disk, made now when missing (2026-11-16): an artboard's (its
  * template's folder first), else the edited template's — no save needed first.
  */
-async function ensureLocation(get: () => BuilderActionContext): Promise<void> {
+async function ensureLocation(get: () => BuilderActionContext): Promise<string | null> {
   const m = get().model;
   const root = sheetsRoot(get());
-  if (root === null) return;
+  if (root === null) return null;
   const artboardId = m.editingArtboardId;
   const templateId = m.artboards.find((a) => a.id === artboardId)?.templateId ?? m.editingTemplateId;
   const template = m.templates.find((t) => t.id === templateId);
-  if (template === undefined) return;
+  if (template === undefined) return null;
   const there = template.folder != null && await probePath(root, template.folder).catch(() => null) !== null;
-  if (!there) await writeTemplateFolder(get, template);
-  if (artboardId !== null) await seedArtboardFolder(get, artboardId);
+  // the folders made are answered directly — the store may not show them yet (2026-11-16)
+  const tplDir = there ? template.folder ?? null : await writeTemplateFolder(get, template);
+  return artboardId !== null ? await seedArtboardFolder(get, artboardId) : tplDir;
 }
 
 /** The shared Location (ui/locate.ts): the full path copied and opened in Explorer through the helper. */
 async function openLocation(get: () => BuilderActionContext): Promise<void> {
   if (!(await ensureSheetsParent(get()))) return;
-  await ensureLocation(get);
+  const made = await ensureLocation(get);
   const ctx = get();
-  const rel = locationOf(ctx);
-  if (rel === null) return ctx.say(ctx.model.root === null ? "Open the folder first — sheets are saved inside it" : "Nothing open on the stage to locate", true);
+  const rel = made ?? locationOf(ctx);
+  if (rel === null) return ctx.say(ctx.model.root === null ? "Open the folder first — sheets are saved inside it" : "Its folder could not be made — see the message before this one", true);
   const root = sheetsRootPath(ctx);
   await revealPath({ folder: root === "" ? rel : explorerPathOf(root, rel), say: ctx.say });
 }

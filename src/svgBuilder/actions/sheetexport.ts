@@ -115,18 +115,20 @@ function seedJson(artboard: FinalArtboard, at: string): Record<string, unknown> 
 }
 
 /** "+ Artboard" (2026-11-16): its folder appears in Explorer at once, with a metadata.json to fill later. */
-export async function seedArtboardFolder(get: () => BuilderActionContext, id: string): Promise<void> {
+export async function seedArtboardFolder(get: () => BuilderActionContext, id: string): Promise<string | null> {
   const artboard = await arrived(get, id);
   const root = sheetsRoot(get());
-  if (root === null || artboard === undefined) return;
+  if (root === null || artboard === undefined) return null;
   const now = new Date();
   const folder = await folderFor(get, artboard, now);
-  if (folder === null) return;
+  if (folder === null) return null;
   try {
     await writeArtboardSeed(root, folder, seedJson(artboard, now.toISOString()));
     remember(get(), id, { folder });
+    return folder;
   } catch (error) {
     get().say(`Artboard folder not written — ${error instanceof Error ? error.message : "write failed"}`, true);
+    return null;
   }
 }
 
