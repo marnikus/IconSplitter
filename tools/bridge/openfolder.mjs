@@ -39,19 +39,44 @@ function launchDetached(cmd, args) {
 export function openFolder(raw, deps = {}) {
   const checked = checkFolder(raw);
   if (!checked.ok) return checked;
+  const file = checkSelect(checked.path, deps.select);
+  if (!file.ok) return file;
+  const platform = deps.platform ?? process.platform;
   const launch = deps.launch ?? launchDetached;
   try {
-    launch(managerOf(deps.platform ?? process.platform), [checked.path]);
+    launch(managerOf(platform), argsOf(platform, checked.path, file.path));
     return { ok: true };
   } catch (err) {
     return { ok: false, reason: `the file manager did not start: ${err instanceof Error ? err.message : "unknown error"}` };
   }
 }
 
-/** POST /open-folder `{ "path": "F:\\…" }` → `{ ok: true }` or 400 with a reason. */
+/** A file to select (2026-11-16): it must exist and sit directly inside the folder. */
+function checkSelect(folder, raw) {
+  if (raw === undefined || raw === null || raw === "") return { ok: true, path: null };
+  if (typeof raw !== "string" || !path.isAbsolute(raw)) return { ok: false, reason: "the file path must be a full path" };
+  const full = path.resolve(raw);
+  if (path.dirname(full) !== folder) return { ok: false, reason: "the file is not in that folder" };
+  try {
+    if (!statSync(full).isFile()) return { ok: false, reason: "that path is not a file" };
+  } catch {
+    return { ok: false, reason: "that file does not exist (yet)" };
+  }
+  return { ok: true, path: full };
+}
+
+/** The file manager's arguments: the folder, or the file selected in it (each ONE argument, no shell). */
+function argsOf(platform, folder, file) {
+  if (file === null) return [folder];
+  if (platform === "win32") return [`/select,${file}`];
+  if (platform === "darwin") return ["-R", file];
+  return [folder]; // xdg-open has no "select": the folder
+}
+
+/** POST /open-folder `{ "path": "<folder>", "select"?: "<file in it>" }` → `{ ok: true }` or 400 with a reason. */
 export async function handleOpenFolder(req, res, readBody, json) {
   let body;
   try { body = JSON.parse(await readBody(req, 8192)); } catch { return json(res, 400, { ok: false, reason: "the request is not JSON" }); }
-  const out = openFolder(body?.path);
+  const out = openFolder(body?.path, { select: body?.select });
   return json(res, out.ok ? 200 : 400, out);
 }

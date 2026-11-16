@@ -2277,7 +2277,7 @@ describe("export — green means a complete committed package", () => {
     const copied = clip.written.at(-1) ?? "";
     expect(copied).toContain("architecture");
     expect(copied).toContain("export");
-    expect(text("[data-testid=upload-toast]")).toContain("Folder path copied");
+    expect(text("[data-testid=upload-toast]")).toContain("Path copied");
   });
 
   itSlow("T5 — the paid-work ledger: a click buys one call, and nothing else ever does", async () => {

@@ -179,9 +179,9 @@ describe("Selection V2 panel", () => {
     const row = rows(el)[0];
     const pair = row.getAttribute("data-testid")?.replace("v2-row-", "") ?? "";
     await click(q(el, `[data-testid='v2-open-ai-${pair}']`) as HTMLElement);
-    // the folder, as a full Windows path — never the file, never forward slashes
-    expect(written).toEqual(["F:\\Stocks 2026\\icons\\split_root\\architecture"]);
-    expect(text(el, "[data-testid='v2-toast']")).toContain("Folder path copied");
+    // 2026-11-16: the file's own full path is copied (its folder opens in Explorer with it selected); never forward slashes
+    expect(written).toEqual(["F:\\Stocks 2026\\icons\\split_root\\architecture\\fog_AI.png"]);
+    await vi.waitFor(() => expect(text(el, "[data-testid='v2-toast']")).toContain("Path copied")); // after the helper's answer (2026-11-16)
   });
 
   it("keeps the picked root name when the scan commits in the same batch", async () => {
@@ -649,7 +649,7 @@ describe("the folder control of Selection V2 (I-44/I-45/I-46)", () => {
     // the split folder the reference image sits in, never the run folder above it.
     const id = rows(el)[0].getAttribute("data-testid")?.replace("v2-row-", "") ?? "";
     await click(q(el, `[data-testid='v2-open-src-${id}']`)!);
-    expect(written[0]).toBe("F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-01_10-24-31\\icon-sheet_AI\\split_01");
+    expect(written[0]).toBe("F:\\Stocks 2026\\icons testing\\single\\test_processing_2\\_split_output\\2026-10\\2026-10-01_10-24-31\\icon-sheet_AI\\split_01\\icon-sheet.png"); // the file itself (2026-11-16)
   });
 
   it("shows the exact full path of a pick inside a folder picked before (I-51)", async () => {

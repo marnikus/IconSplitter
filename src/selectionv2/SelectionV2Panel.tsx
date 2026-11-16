@@ -11,7 +11,7 @@ import { ALL_FILTER, type ViewPair } from "../lib/reviewfilter";
 import { selectIntent } from "../lib/reviewselect";
 import { isNativeListKeyTarget } from "../ui/rowgesture";
 import CompareView from "../selection/CompareView";
-import { copyFolderText } from "../lib/copypath";
+import { locateFolder } from "../ui/locate";
 import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
 import StatusFooter from "../selection/StatusFooter";
 import { CorruptNote, Overlays, PairFilesNote, WriteBanner } from "../selection/Surfaces";
@@ -86,7 +86,7 @@ function Body({ v, thumbFor, onBulkArmed }: { v: SelectionV2Api; thumbFor: SideT
 }
 
 function openSide(v: SelectionV2Api, relPath: string): void {
-  void copyFolderText(v.core.rootRef.current, relPath, v.core.say);
+  void locateFolder(v.core.rootRef.current, relPath, v.core.say);
 }
 
 function CompareBody({ v }: { v: SelectionV2Api }) {

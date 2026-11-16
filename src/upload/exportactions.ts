@@ -11,7 +11,7 @@
 import type { ProcessReporter } from "../lib/processprogress";
 import { startUploadProgress } from "./processprogress";
 import { useCallback, useRef } from "react";
-import { copyFolderText } from "../lib/copypath";
+import { locateFolder } from "../ui/locate";
 import { log } from "../log/logstore";
 import { withDirCache, type DirHandleLike } from "../lib/fs";
 import { publishedJpegPath } from "../lib/upload/export";
@@ -70,7 +70,7 @@ export function useExportActions(ctx: UploadCtx): ExportSlice {
 function copyLocation(c: UploadCtx, id: string): void {
   const row = rowOf(c, id);
   if (row === null) return;
-  void copyFolderText(c.refs.root.current as DirHandleLike | null, artifactPathOf(row), c.say);
+  void locateFolder(c.refs.root.current as DirHandleLike | null, artifactPathOf(row), c.say);
 }
 
 /** The file that decides which folder a copy names: committed first, plan second. */

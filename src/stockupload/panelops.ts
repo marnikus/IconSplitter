@@ -1,7 +1,7 @@
 // panelops.ts — folder pick/rescan, metadata accept/copy, and FTPS batch runner ops.
 
 import { useMemo, useRef } from "react";
-import { copyFolderText } from "../lib/copypath";
+import { locateFolder } from "../ui/locate";
 import { boundRootPathInfo } from "../lib/knownroots";
 import { newUploadRunHistory, recordUploadTaskResult, saveUploadRunHistory, type UploadRunHistoryDrafts } from "./historyrecord";
 import type { DirHandleLike } from "../lib/fs";
@@ -274,7 +274,7 @@ export function useStockPanelOps(ctx: OpsCtx): StockPanelOps {
       const item = ref.current.items.find((it) => it.id === id);
       if (!item) return;
       const first = item.files.raster?.relPath ?? item.files.svg?.relPath ?? item.files.eps?.relPath ?? item.recordPath;
-      void copyFolderText(ref.current.r.root.current, first, ref.current.say);
+      void locateFolder(ref.current.r.root.current, first, ref.current.say);
     },
     setPrefs: (patch) => ref.current.dispatch({ type: "prefs", patch }),
     setFilter: (patch) => ref.current.dispatch({ type: "filter", patch }),

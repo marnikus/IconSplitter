@@ -38,4 +38,18 @@ describe("helper: open a folder", () => {
     expect(mac[0].cmd).toBe("open");
     expect(openFolder(path.join(dir, "nope"), { launch: () => { throw new Error("must not run"); }, platform: "win32" }).ok).toBe(false);
   });
+
+  it("selects a file in its folder when asked (Explorer /select), and only a real file inside that folder", () => {
+    const dir = tempDir();
+    const file = path.join(dir, "icon.svg");
+    writeFileSync(file, "<svg/>");
+    const calls: Array<{ cmd: string; args: string[] }> = [];
+    const launch = (cmd: string, args: string[]) => { calls.push({ cmd, args }); };
+    expect(openFolder(dir, { launch, platform: "win32", select: file })).toEqual({ ok: true });
+    expect(calls[0]).toEqual({ cmd: "explorer.exe", args: [`/select,${path.resolve(file)}`] });
+    openFolder(dir, { launch, platform: "darwin", select: file });
+    expect(calls[1]).toEqual({ cmd: "open", args: ["-R", path.resolve(file)] });
+    expect(openFolder(dir, { launch, platform: "win32", select: path.join(dir, "missing.svg") }).ok).toBe(false);
+    expect(openFolder(dir, { launch, platform: "win32", select: path.join(tmpdir(), "elsewhere.txt") }).ok).toBe(false); // not inside
+  });
 });
