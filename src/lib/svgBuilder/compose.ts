@@ -99,21 +99,22 @@ function heroPainter(args: ComposeSheetArgs, ids: readonly string[]): HeroPainte
   };
 }
 
-/** Captions: centred, auto-shrunk to the box width, letter-spaced .075em. */
+/** Captions: centred, letter-spaced .075em, ALL one size (2026-11-16): the caption size, shrunk only as far as the longest needs to fit its box. */
 function captionsOf(args: ComposeSheetArgs, placed: readonly Placed[]): string {
   const grid = args.config.grid;
   if (!grid.captions) return "";
-  const texts = placed.flatMap(({ asset, frame }) => {
+  const rows = placed.flatMap(({ asset, frame }) => {
     if (asset === undefined) return [];
     const typed = args.config.banner.captionTexts[asset.id]; // typed by hand: shown exactly as typed (2026-11-14)
     const caption = captionOf(asset);
-    const label = typed ?? (grid.captionCase === "upper" ? caption.toUpperCase() : caption);
-    const base = frame.captionSize;
-    const size = Math.max(3.2, base * Math.min(1, (frame.size * 0.96) / Math.max(1, label.length * base * 0.67)));
-    // Each caption is marked (2026-11-14) so the quick editor can target it.
-    return [`<g data-caption="${frame.index}" data-caption-id="${attr(asset.id)}">${textEl({ x: frame.x + frame.size / 2, y: frame.captionY, value: label, size, colour: grid.captionColor,
-      face: "sans", weight: 500, anchor: "middle", spacing: "0.075em" })}</g>`];
+    return [{ asset, frame, label: typed ?? (grid.captionCase === "upper" ? caption.toUpperCase() : caption) }];
   });
+  const fit = (r: (typeof rows)[number]) => Math.min(1, (r.frame.size * 0.96) / Math.max(1, r.label.length * r.frame.captionSize * 0.67));
+  const shrink = Math.min(1, ...rows.map(fit));
+  const texts = rows.map(({ asset, frame, label }) =>
+    // Each caption is marked (2026-11-14) so the quick editor can target it.
+    `<g data-caption="${frame.index}" data-caption-id="${attr(asset.id)}">${textEl({ x: frame.x + frame.size / 2, y: frame.captionY, value: label, size: Math.max(3.2, frame.captionSize * shrink), colour: grid.captionColor,
+      face: "sans", weight: 500, anchor: "middle", spacing: "0.075em" })}</g>`);
   return `<g data-export="captions">${texts.join("")}</g>`;
 }
 

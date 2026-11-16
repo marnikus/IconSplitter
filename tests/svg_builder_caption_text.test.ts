@@ -31,6 +31,16 @@ describe("captions", () => {
     expect(shift).toBeCloseTo(20 * b.fitScale, 3);
   });
 
+  it("every caption has the same font size, even when one is long (2026-11-16)", () => {
+    const b = { ...asset, id: "b", label: "Iced Drink and Bottle with a very long name" };
+    const typed = { ...base, grid: { ...base.grid, columns: 2, rows: 1 } };
+    const svg = composeSheet({ config: typed, layout: computeLayout(typed), assets: [asset, b], placedIds: ["a", "b"], svgTexts: { a: SVG, b: SVG } }).svg;
+    const caps = svg.slice(svg.indexOf('data-export="captions"'));
+    const sizes = [...caps.matchAll(/font-size="([\d.]+)"/g)].map((m) => m[1]);
+    expect(sizes).toHaveLength(2);
+    expect(new Set(sizes).size).toBe(1);
+  });
+
   it("a caption typed by hand replaces the icon's name; an empty one is ignored", () => {
     const typed = { ...base, banner: { ...base.banner, captionTexts: { a: "My Toast" } } };
     const svg = composeSheet({ config: typed, layout: computeLayout(typed), assets: [asset], placedIds: ["a"], svgTexts: { a: SVG } }).svg;
