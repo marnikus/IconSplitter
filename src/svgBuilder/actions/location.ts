@@ -4,12 +4,11 @@
 // helper does it (POST /open-folder, tools/bridge/openfolder.mjs). Without the
 // helper, or without the folder's full path, the path is copied instead and the
 // toast says why.
-import { boundRootPathInfo } from "../../lib/knownroots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { revealPath } from "../../ui/locate";
 import { probePath } from "../../lib/fs";
 import { seedArtboardFolder } from "./sheetexport";
-import { sheetsRoot } from "./sheetsroot";
+import { ensureSheetsParent, sheetsRoot, sheetsRootPath } from "./sheetsroot";
 import { writeTemplateFolder } from "./templatefolder";
 
 /** The folder's full path: the opened folder's captured path + the relative `_artboard_sheets/…` folder. */
@@ -48,11 +47,12 @@ async function ensureLocation(get: () => BuilderActionContext): Promise<void> {
 
 /** The shared Location (ui/locate.ts): the full path copied and opened in Explorer through the helper. */
 async function openLocation(get: () => BuilderActionContext): Promise<void> {
+  if (!(await ensureSheetsParent(get()))) return;
   await ensureLocation(get);
   const ctx = get();
   const rel = locationOf(ctx);
   if (rel === null) return ctx.say(ctx.model.root === null ? "Open the folder first — sheets are saved inside it" : "Nothing open on the stage to locate", true);
-  const root = boundRootPathInfo(ctx.model.root).path;
+  const root = sheetsRootPath(ctx);
   await revealPath({ folder: root === "" ? rel : explorerPathOf(root, rel), say: ctx.say });
 }
 

@@ -9,7 +9,7 @@ import { restoreKnownRoot } from "../lib/knownroots";
 import { rememberListTargets } from "../state/listtargets";
 import { ALL_EMPTY_SLOTS } from "../lib/svgBuilder/slots";
 import { builderAuditLine, discoverBuilderAssets, type BuilderDiscovery } from "./discovery";
-import { isSplitOutput, SHEETS_BESIDE_SPLIT } from "./actions/sheetsroot";
+import { findSheetsParent, isSplitOutput, SHEETS_BESIDE_SPLIT } from "./actions/sheetsroot";
 import { refreshIconMap, type IconMapState } from "./iconmapstore";
 
 export const BUILDER_HANDLE_KEY = "__svgBuilder__";
@@ -75,7 +75,7 @@ export async function scanBuilderRoot(
     });
     setters.say(builderAuditLine(found));
     for (const warning of warnings(found)) setters.say(warning, true);
-    if (isSplitOutput(root)) setters.say(SHEETS_BESIDE_SPLIT, true);
+    if (isSplitOutput(root)) void findSheetsParent(root).then((found) => { if (!found) setters.say(SHEETS_BESIDE_SPLIT, true); });
   } catch {
     if (isCurrent(refs.seq, ticket.id)) setters.say("Rescan failed — the folder may be unreadable", true);
   } finally {
