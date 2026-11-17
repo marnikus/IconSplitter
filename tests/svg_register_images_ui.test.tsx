@@ -15,8 +15,7 @@ import { toListRow, toRow } from "../src/svg/rowmodel";
 import { svgSource, pairMetaFor } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { FOG, click, input, installSvgPanelHooks, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
-import { armCompletionSound } from "../src/ui/completionSound";
-import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
+import { completionAudio, flushCompletionAudio, recordCompletionAudio, settleCompletionAudio } from "./helpers/completionAudio";
 
 installSvgPanelHooks();
 
@@ -205,7 +204,9 @@ describe("the button in the tab", () => {
 
   it("is disabled with nothing selected and registers the selected folder on a click", async () => {
     recordCompletionAudio();
-    armCompletionSound();
+    // the styles pass above left its completion cue queued: spend it first, so
+    // this test counts only the cue of the registration it starts itself
+    await settleCompletionAudio();
     const root = splitRoot();
     await mount(root);
     expect(input("[data-testid=svg-register-images]").hasAttribute("disabled")).toBe(true);

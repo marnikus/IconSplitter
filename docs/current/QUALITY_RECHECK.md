@@ -5277,3 +5277,31 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-16 SVG builder: template folder + template.json at creation; artboard folders artboard_NN_<title> inside it. Builder suites 219/219, tsc/eslint/quality PASS.
 - 2026-11-16 SVG builder: Location button opens the template/artboard folder in Explorer via the helper (/open-folder). Builder + helper suites 223/223 + bridge_inkscape 8/8, tsc/eslint/quality PASS.
 - 2026-11-16 Location in every tab via the helper (copy full path, open Explorer, select an existing file); docs split (rebalance page), apply.test types list. Full suite: only pre-existing failures (bridge_crash_guard, bridge_getty_web, docs_navigation pre-existing over-budget pages, fs_case_collisions, getty_web_browser/session, random_select_ui, upload_flag_viewport, verify_execution) — identical with the change stashed; tsc/eslint/quality PASS.
+
+## 2026-11-17 — row preview strips: one bar cell per preview slot
+
+- Report: in a row shown in a registered image style (three previews — Base ·
+  Stroke, AI source, SVG) the strip under the previews kept exactly two cells,
+  so the image/style version chips landed under Base · Stroke and Edit + the
+  SVG version chips under AI source; the SVG preview had nothing under it.
+- Fix: `SvgThumbs` builds ONE list of sides (preview slot + the bar under it)
+  and `PairBars` (`svgeditslot.tsx`) draws one cell per side in slot order and
+  exactly the slot's width; `.svg-pair-bar` lost its 96 px min-width so a cell
+  can never be wider than the preview above it. The style chips keep their
+  meaning: the picked version is the main image the next run vectorizes
+  (`mainImageOf`, read by `runbatch`/`SvgConfirmPager`).
+- Measured: new `tests/svg_row_bar_alignment.test.tsx` 5/5 (red first: 3
+  failures naming the shifted chips), neighbours green — svg_version_chips +
+  svg_versions_ui + svg_imgreg_ui + paired_thumbs + svg_styles +
+  svg_preview_stroke 79/79, svg_ui + svg_ui_config + tailcut_ui +
+  lazy_previews + svg_row_gestures 74/74; `npm run lint` 0 errors,
+  `quality:changed` PASS, `tsc --noEmit` clean, build PASS. Docs: rows table
+  split into `selectors/svg-generation-list-rows.md` (RULE 18 read budget),
+  placement stated in `selectors/svg-image-edits.md`,
+  `sor/svg-generation-results.md`; two pages already over the 9 000-byte
+  budget at HEAD (`sor/bridge-helper.md`, `sor/tests/upload.md`) compressed
+  prose-only back under it, and the pre-existing red
+  `svg_register_images_ui` cue-count fixed with the harness's own
+  `settleCompletionAudio`. Still red at HEAD and untouched (product-semantics
+  question, reported): `random_select_ui` stockUpload plain-click expectation
+  vs `selectionactions.selectRow`'s "plain pick replaces the queued set".

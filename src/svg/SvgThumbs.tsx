@@ -9,14 +9,18 @@
 // The pair is laid out by the shared PairedThumbs and sized by the shared zoom
 // rule (I-55), which is what makes this tab and Selection V2 zoom identically:
 // each side gets the box its OWN ratio asks for at the slider's height, so
-// neither is stretched, capped or cut. Under the pair sits one strip of two
-// cells, each as wide as the preview above it: the AI-source strip (AiSourceBar,
-// 2026-10-19: in flight, version chips, last failure) and the SVG version chips
-// (2026-10-19, archive/2026-10-19-svg-version-chips) — one click shows that
-// version, through the same preferVersion owner as the Versions dialog.
+// neither is stretched, capped or cut. Under the previews sits one strip with
+// ONE cell per preview slot, in the slots' own order and width (2026-11-17):
+// the AI-source strip (AiSourceBar, 2026-10-19: in flight, version chips, last
+// failure) under the AI-source preview it switches, the SVG bar (Edit + the
+// SVG version chips, 2026-10-19, archive/2026-10-19-svg-version-chips — one
+// click shows that version, through the same preferVersion owner as the
+// Versions dialog) under the SVG preview, and an empty cell where a Base ·
+// Stroke preview has no versions of its own — a chip set can never land under
+// a preview it does not belong to, whatever the number of previews.
 
 import { removeVersion, type VersionKind } from "./versionremove";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
 import { buildSvgPreview } from "../lib/svgpreview";
@@ -71,21 +75,33 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   const svgSide = svgSlot(slotArgs);
   const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
   const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />, review);
-  const slots: PreviewSlot[] = [
-    ...(row.baseAiPath ? [{
-      tag: "Base · Stroke", testid: `svg-base-ai-${id}`, width: aiBox.width, height: aiBox.height,
-      children: <Thumb url={baseAi} alt={`${row.source.name} (base)`} testid={`svg-base-ai-img-${id}`} onDims={() => {}} />,
-    }] : []),
-    { tag: "AI source", testid: `svg-ai-${id}`, width: aiBox.width, height: aiBox.height,
-      children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> },
-    svgSide,
-  ];
+  // ONE list of sides: each preview slot + the bar cell under it (2026-11-17).
+  const sides: PreviewSide[] = [...(row.baseAiPath ? [baseSide(row, id, aiBox, baseAi)] : []),
+    { slot: { tag: "AI source", testid: `svg-ai-${id}`, width: aiBox.width, height: aiBox.height,
+      children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> }, bar: aiBar },
+    { slot: svgSide, bar: svgBar }];
   return (
     <div className="svg-pair-with-bar">
-      <PairedThumbs slots={slots} />
-      <PairBars ai={aiBar} aiWidth={aiBox.width} svg={svgBar} svgWidth={svgSide.width} />
+      <PairedThumbs slots={sides.map((s) => s.slot)} />
+      <PairBars cells={sides.map((s) => ({ width: s.slot.width, children: s.bar }))} />
     </div>
   );
+}
+
+/** A preview slot together with the bar cell that sits under it. */
+interface PreviewSide {
+  slot: PreviewSlot;
+  /** The strip under this preview; null = this preview has no versions to switch. */
+  bar: ReactNode;
+}
+
+/** The Base · Stroke side: the base line-stroke image, no versions of its own. */
+function baseSide(row: SvgRow, id: string, box: { width: number; height: number }, url: string | null): PreviewSide {
+  return {
+    slot: { tag: "Base · Stroke", testid: `svg-base-ai-${id}`, width: box.width, height: box.height,
+      children: <Thumb url={url} alt={`${row.source.name} (base)`} testid={`svg-base-ai-img-${id}`} onDims={() => {}} /> },
+    bar: null,
+  };
 }
 
 /** Everything the SVG side of a row is drawn from — nothing else is read. */

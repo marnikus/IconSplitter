@@ -2,7 +2,7 @@
 
 Selector priority: **semantic** (role / label / text) > **structural** (parent / child) > **class fragment** (last resort). See [shared selector rules](shared.md#i-selector-object-structure--for-every-element).
 
-**Detail pages:** [filters, bulk bar, rows](svg-generation-list.md) · [queue, run record, progress header, status](svg-generation-run.md) · [dialogs, restart recovery, regeneration confirm](svg-generation-dialogs.md) · [image-edit controls](svg-image-edits.md).
+**Detail pages:** [filters, bulk bar](svg-generation-list.md) · [rows](svg-generation-list-rows.md) · [queue, run record, progress header, status](svg-generation-run.md) · [dialogs, restart recovery, regeneration confirm](svg-generation-dialogs.md) · [image-edit controls](svg-image-edits.md).
 
 ## P. Generate SVG — `src/svg/*` (verified 2026-10-01)
 
