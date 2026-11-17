@@ -60,8 +60,42 @@ export function styledRows(bases: readonly SvgRow[], metaOf: (id: string) => Pai
   if (style === null) return [...bases];
   return bases.map((row) => {
     const meta = metaOf(styleRowId(row.source.id, style));
-    return meta == null ? row : { ...toRow(styleSourceOf(row.source, meta), meta, false), baseAiPath: mainImageOf(row.meta, row.source.relPath) };
+    if (meta == null) return row;
+    const face = baseFaceOf(meta.id, metaOf) ?? mainImageOf(row.meta, row.source.relPath);
+    return { ...toRow(styleSourceOf(row.source, meta), meta, false), baseAiPath: face };
   });
+}
+
+/** The base face a style row shows beside its own previews (2026-11-16): the
+    base pair's main image — the same file the base row itself shows (RC8). */
+export function baseFaceOf(id: string, metaOf: (id: string) => PairMeta | null | undefined): string | undefined {
+  const base = baseRowId(id);
+  if (base === id) return undefined;
+  const m = metaOf(base);
+  return m == null ? undefined : mainImageOf(m, m.ai.relPath);
+}
+
+/** A row rebuilt from a fresh pair file keeps its style's base face
+    (2026-11-17): EVERY in-place rebuild (🗑 removals, run saves, registers)
+    goes through here, so a style row can never lose its Base · Stroke
+    preview; with no base pair in hand the row keeps the face it already had. */
+export function rebuiltRow(row: SvgRow, meta: PairMeta | null, corrupt: boolean, metaOf: (id: string) => PairMeta | null | undefined): SvgRow {
+  const next = toRow(row.source, meta, corrupt);
+  const face = baseFaceOf(row.source.id, metaOf) ?? row.baseAiPath;
+  return face === undefined ? next : { ...next, baseAiPath: face };
+}
+
+/** The pair file a style row owns, named by the folder's own names — the SAME
+    rule registration uses (the style image may carry a version, `_v2`); null
+    when the folder or its style image is not there (2026-11-17, restart scan). */
+export async function styleMetaPathAt(root: DirHandleLike, dirPath: string, stem: string, style: string): Promise<string | null> {
+  const rel = dirPath === "" ? `_${style}` : `${dirPath}/_${style}`;
+  const dir = await probePath(root, rel).catch(() => null);
+  if (dir === null || dir.kind !== "directory") return null;
+  const names: string[] = [];
+  for await (const [name, h] of dir.entries()) if (h.kind === "file") names.push(name);
+  const name = styleNameOf(styleFilesOf(stem, style, names));
+  return name === null ? null : metaPathForAi(`${rel}/${name}`);
 }
 
 /** Rows rebuilt for a style switch: from the scan's base sources and the freshest pair files. */
@@ -158,16 +192,9 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   try {
     const worker = async () => {
       while (next < bases.length && !bar.cancelled()) {
-        const base = bases[next++];
-        bar.reading(base.name);
-        let added = 0;
-        try {
-          const got = await registerRow(root, c.refs, base);
-          added = got.length;
-          if (added > 0) rows++;
-          got.forEach((s) => styles.add(s));
-        } catch { /* reported in the count */ }
-        bar.settled({ registered: added, skipped: 0 });
+        const done = await registerOne(bar, root, c.refs, bases[next++]);
+        if (done.added > 0) rows++;
+        done.styles.forEach((s) => styles.add(s));
       }
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, bases.length) }, worker));
@@ -179,6 +206,19 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   setPrefs({ ...prefs, styles: [...styles].sort() });
   if (c.discovery !== null) c.setRows(rowsForStyle(c.discovery, c.refs, prefs.active));
   c.say(rows === 0 ? "No style folders (_<style> with numbered images) found in the selected items" : `Styles registered for ${rows} of ${bases.length} item(s): ${[...styles].join(", ")}`);
+}
+
+/** One item folder through the register bar: its styles, and how many landed. */
+async function registerOne(bar: ReturnType<typeof beginRegister>, root: DirHandleLike, refs: StyleCtx["refs"], base: SvgSource): Promise<{ added: number; styles: string[] }> {
+  bar.reading(base.name);
+  try {
+    const got = await registerRow(root, refs, base);
+    bar.settled({ registered: got.length, skipped: 0 });
+    return { added: got.length, styles: got };
+  } catch { // reported in the bar's count, never as a failed whole run
+    bar.settled({ registered: 0, skipped: 0 });
+    return { added: 0, styles: [] };
+  }
 }
 
 /** The pinned bar's style switch: every row that has it shows that style; the selection follows. */

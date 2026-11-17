@@ -5320,3 +5320,44 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
   all 26 stockupload_* suites 174/174, apply + session_review_fixes +
   upload_remove_row green; `npm run verify` (full: types, lint, quality
   gate, perf budgets native, 4731 tests + coverage, build) ALL LANES PASSED.
+
+## 2026-11-17 — Style rows keep their Base · Stroke face and survive a restart
+
+- Both reports reproduced red first in the new `tests/svg_style_persist.test.tsx`
+  (witness: UI behaviour + `styles.rebuiltRow` units, RULE 8).
+- Bug 1 (removing any style AI variant also killed the Base · Stroke preview):
+  every in-place row rebuild used a plain `toRow(source, meta, false)`, which
+  cannot know the row is a STYLE row, so `baseAiPath` was dropped and the third
+  preview never came back. Fix: one owner — `styles.rebuiltRow(row, meta,
+  corrupt, metaOf)` re-attaches the base face (`baseFaceOf` reads the BASE pair
+  file, falling back to the row's previous face), and `versionremove`,
+  `registerexisting`, `registerimages`, `runstate` ("item-saved",
+  `reloadSidecars`) and `jobprogress` all route through it (`RunSetters.metaOf`,
+  supplied by `jobSetters` from `refs.metas`). `styledRows` uses the same rule.
+- Bug 2 (a restart lost recently registered style images until re-registered):
+  two causes. `scan.loadStyleMetas` guessed ONE pair-file name
+  (`_<style>/<stem>_<style>.png`), so a style main carrying a version
+  (`fog_AI_v2_colored_wiggle.png` — what registration itself writes) was never
+  found; now `styles.styleMetaPathAt` asks the folder for its names and resolves
+  them through the SAME rule registration uses (`styleNameOf(styleFilesOf(…))`).
+  And `lib/pairrebase.rebaseMeta` (I-49) re-derived the id from the file's own
+  directory, flattening `<pairId>~<style>`; the pair half is now re-derived from
+  the folder one level up (the base pair lives beside `_<style>`) with the style
+  half kept, so a style id survives every write/read round-trip.
+- Also fixed a pre-existing race the full lane hit (fails at the previous commit
+  too, proven with `git stash -u`): `upload_ui` "bulk Generate and Regenerate"
+  waited on the ONE shared `export.json` per row, so the second row's wait passed
+  before its SVG was written. It now waits on that row's own SVG plus "no run in
+  flight" (the SVG alone is written mid-export, so the next click would hit the
+  in-flight guard); 86/86 three runs in a row.
+- Measured: svg_style_persist 5/5 (red first: 2 behaviour failures), pair
+  identity neighbours 250/250 across 19 suites (pairing, pairmeta, pairstore,
+  selection_state, session*, svg_scan, svg_register_*, svg_runner, svg_regen,
+  svg_styles, svg_row_bar_alignment, svg_versions_ui, svg_version_chips);
+  `npm run verify` (full: types, lint, quality gate, perf budgets native,
+  4736 tests + coverage, build, docs budgets, navigation) ALL LANES PASSED.
+  Docs (RULE 17): new `sor/svg-styles.md` states the style contract, linked from
+  `selectors/svg-generation.md`; `selectors/svg-generation-list-rows.md` records
+  that the Base · Stroke face survives rebuilds and restarts. `registerStyles`
+  was over the 30-line gate once `styles.ts` became changed, so its per-folder
+  unit moved into `registerOne` (RULE 19 order).

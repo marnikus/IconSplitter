@@ -8,13 +8,14 @@
 // Pure: paths in, paths out (RULE 1/3).
 
 import { pairId } from "./pairing";
+import { baseRowId, styleOfFolder, STYLE_ID_SEP } from "./svgstyles";
 import type { PairIdentity, PairMeta, PairSide } from "./pairmeta";
 import type { SvgVersion } from "./svgmodel";
 
 /** The pair as THIS root sees it: the file's directory and the names it holds. */
 export function rebaseMeta(meta: PairMeta, dirPath: string): PairMeta {
   const identity: PairIdentity = {
-    id: pairId(dirPath, meta.base, meta.suffix), base: meta.base, suffix: meta.suffix, dirPath,
+    id: rebasedId(meta, dirPath), base: meta.base, suffix: meta.suffix, dirPath,
   };
   return {
     ...meta, ...identity,
@@ -22,6 +23,24 @@ export function rebaseMeta(meta: PairMeta, dirPath: string): PairMeta {
     source: meta.source === null ? null : rebaseSide(meta.source, dirPath),
     versions: meta.versions.map((v) => rebaseVersion(v, dirPath)),
   };
+}
+
+/**
+ * The rebased id (2026-11-17): a STYLE pair's id is its BASE pair's id plus the
+ * style (`<pairId>~<style>`), and the base pair lives one folder up — beside
+ * `_<style>`, not in it. Re-deriving from the file's own directory dropped or
+ * mis-anchored the identity, so a restart forgot the registered style until it
+ * was registered again; the pair half is re-derived from the base folder and
+ * the style half kept, so the id follows the folder between roots (I-49).
+ */
+function rebasedId(meta: PairMeta, dirPath: string): string {
+  const base = baseRowId(meta.id);
+  if (base === meta.id) return pairId(dirPath, meta.base, meta.suffix);
+  const style = meta.id.slice(base.length + STYLE_ID_SEP.length);
+  const at = dirPath.lastIndexOf("/");
+  const folder = dirPath.slice(at + 1);
+  const baseDir = styleOfFolder(folder) === style ? dirPath.slice(0, Math.max(0, at)) : dirPath;
+  return `${pairId(baseDir, meta.base, meta.suffix)}${STYLE_ID_SEP}${style}`;
 }
 
 /** One face, re-pointed at `dirPath`: a face with no file keeps no path either. */

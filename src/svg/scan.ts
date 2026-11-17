@@ -17,12 +17,12 @@ import { discoverApprovedSources, type Discovery, type SvgSource } from "./sourc
 import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
 import { metaPathFor } from "../lib/pairmeta";
-import { STYLE_ID_SEP } from "../lib/svgstyles";
-import { styledRows, stylePrefs } from "./styles";
+import { STYLE_ID_SEP, styleRowId } from "../lib/svgstyles";
+import { styledRows, styleMetaPathAt, stylePrefs } from "./styles";
 
 import { saveSourceIndex, type IndexEntry } from "../state/sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
-import { metaPathForAi, type PairMeta } from "../lib/pairmeta";
+import type { PairMeta } from "../lib/pairmeta";
 import { loadMetaAt } from "../selection/pairstore";
 import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
@@ -92,25 +92,24 @@ interface LoadedRows {
   metas: [string, PairMeta | null][];
 }
 
-/** Load existing `_<style>` pair files for all registered styles so style rows survive app restarts. */
+/** Load existing `_<style>` pair files for all registered styles so style rows
+    survive app restarts — the FOLDER names the pair file (2026-11-17: one
+    guessed `<stem>_<style>.png` missed every style whose image carries a
+    version, so a restart lost the style rows until re-registered). */
 async function loadStyleMetas(root: DirHandleLike, found: Discovery, styles: readonly string[]): Promise<void> {
-  const paths: string[] = [];
-  for (const source of found.sources) {
-    for (const style of styles) {
-      const styleDir = source.dirPath === "" ? `_${style}` : `${source.dirPath}/_${style}`;
-      paths.push(metaPathForAi(`${styleDir}/${source.stem}_${style}.png`));
-    }
-  }
+  const plans = found.sources.flatMap((source) => styles.map((style) => ({ source, style })));
   const CONCURRENCY = 16;
   let next = 0;
   const worker = async () => {
-    while (next < paths.length) {
-      const p = paths[next++];
-      const res = await loadMetaAt(root, p).catch(() => null);
-      if (res?.meta) found.metas.set(res.meta.id, res.meta);
+    while (next < plans.length) {
+      const { source, style } = plans[next++];
+      const path = await styleMetaPathAt(root, source.dirPath, source.stem, style);
+      if (path === null) continue;
+      const res = await loadMetaAt(root, path).catch(() => null);
+      if (res?.meta && res.meta.id === styleRowId(source.id, style)) found.metas.set(res.meta.id, res.meta);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, paths.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, plans.length) }, worker));
 }
 
 /**
