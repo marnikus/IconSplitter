@@ -6,6 +6,7 @@
 // wiring: one reducer for the model (svg/statemodel), one context object for
 // the actions (svg/ctx + svg/actions), and the flat API the panel reads.
 
+import { usePasteOverwriteBinding } from "./pasteoverwrite";
 import { useVersionRemoveBinding } from "./versionremove";
 import { useRef } from "react";
 import { fsSupported } from "../batch/picker";
@@ -40,6 +41,7 @@ export function useSvgGen(): SvgGenApi {
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);
   useVersionRemoveBinding(ctx); // 🗑 on version chips (2026-11-16)
+  usePasteOverwriteBinding(ctx); // Paste in a preview's corner (2026-11-17)
   const recovery = useInflightRecovery(model.rows, ctx.setRowsFn, actions.requestGenerate);
   const { visible, checked, activeId, header, affected, totals, provider, requests, refs } = ctx;
   return {

@@ -5,6 +5,7 @@
 // versionremove, the file still moves to `.removed versions`, and Undo still
 // brings the version and its record back in one step.
 import type { ReactNode } from "react";
+import { pasteInto, type PasteSide } from "./pasteoverwrite";
 import { removeVersion, type VersionKind } from "./versionremove";
 import type { SvgTarget } from "./rowmodel";
 import type { SvgRow } from "./types";
@@ -28,6 +29,25 @@ export function svgCorner(target: SvgTarget | null, id: string): ReactNode {
 export function aiCorner(meta: SvgRow["meta"], id: string): ReactNode {
   const main = mainVersionOf(meta);
   return main !== null ? <CornerTrash id={id} kind="image" version={main} /> : null;
+}
+
+/**
+ * The corner cluster of one preview (2026-11-17): the 🗑 where the preview has
+ * a version to remove, left of the Paste button; Paste is always rightmost.
+ */
+export function Corner({ id, side, trash }: { id: string; side: PasteSide; trash?: ReactNode }) {
+  return <span className="pair-thumb-corner">{trash}<PasteButton id={id} side={side} /></span>;
+}
+
+/** Paste the clipboard over this preview — SVG code or a PNG image (2026-11-17). */
+function PasteButton({ id, side }: { id: string; side: PasteSide }) {
+  return (
+    <button type="button" className="pair-thumb-paste" data-testid={`svg-paste-${side}-${id}`}
+      title="Paste the clipboard over this preview — SVG code or a PNG image; the overwritten bytes park in .removed versions (Undo brings them back)"
+      aria-label="Paste from the clipboard over this preview"
+      onClick={(e) => { e.stopPropagation(); void pasteInto(id, side); }}
+      onDoubleClick={(e) => { e.stopPropagation(); }}>📋 Paste</button>
+  );
 }
 
 /** The can itself: quiet until hovered, one click removes the version this preview shows. */

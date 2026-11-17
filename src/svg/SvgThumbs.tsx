@@ -19,7 +19,7 @@
 // Stroke preview has no versions of its own — a chip set can never land under
 // a preview it does not belong to, whatever the number of previews.
 
-import { aiCorner, mainVersionOf, svgCorner } from "./previewtrash";
+import { aiCorner, Corner, mainVersionOf, svgCorner } from "./previewtrash";
 import { useCallback, useState, type ReactNode } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -99,7 +99,8 @@ interface PreviewSide {
 function baseSide(row: SvgRow, id: string, box: { width: number; height: number }, url: string | null): PreviewSide {
   return {
     slot: { tag: "Base · Stroke", testid: `svg-base-ai-${id}`, width: box.width, height: box.height,
-      children: <Thumb url={url} alt={`${row.source.name} (base)`} testid={`svg-base-ai-img-${id}`} onDims={() => {}} /> },
+      children: <><Thumb url={url} alt={`${row.source.name} (base)`} testid={`svg-base-ai-img-${id}`} onDims={() => {}} />
+        <Corner id={id} side="base" /></> },
     bar: null,
   };
 }
@@ -120,7 +121,7 @@ function aiSide({ row, id, box, url, onDims, bar }: AiSideArgs): PreviewSide {
   return {
     slot: { tag: "AI source", testid: `svg-ai-${id}`, width: box.width, height: box.height,
       children: <><Thumb url={url} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={onDims} />
-        {aiCorner(row.meta, id)}</> },
+        {url !== null && <Corner id={id} side="ai" trash={aiCorner(row.meta, id)} />}</> },
     bar,
   };
 }
@@ -158,7 +159,7 @@ function svgSlot({ svg, thumb, id, stem, version, frame, marks, onOpen, trash }:
         onDoubleClick={(e) => { if (onOpen) { e.stopPropagation(); onOpen(); } }}>
         <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`} marks={marks}
       label={`${stem} SVG v${version}`} version={version} strokeSheet={SVG_STROKE_SHEET} />
-        {trash}
+        <Corner id={id} side="svg" trash={trash} />
       </div>
     ),
   };
