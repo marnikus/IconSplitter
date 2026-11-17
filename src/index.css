@@ -1487,6 +1487,7 @@
 }
 
 .svg-file-main { min-width: 0; }
+.svg-row-style-label { color: #c4b5fd; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 
 .svg-file-name {
   overflow: hidden;

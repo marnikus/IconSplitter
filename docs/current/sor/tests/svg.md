@@ -87,6 +87,7 @@ Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and revie
   Regenerate still jumps to the front
 * `svg_version_chips.test.tsx` — valid/active chips switch preview, tag and pair
   file; dialog path preserved
+* `svg_styles.test.ts` / `svg_style_persist.test.tsx` / `svg_row_bar_alignment.test.tsx` — style pair identity and restart, three-slot preview alignment, and All styles mode: base plus registered styles appear as separate labeled rows, the view restores after remount, style approval persists only to its own pair file, and existing single-style behavior remains intact
 * `svg_pinned_bulkbar.test.tsx` — sticky bulk bar above rows, direct child of tab
 * `svg_row_gestures.test.tsx` — RULE 25: modifiers, hidden checks, Q/E, A/D/W, dialog isolation and SVG-only undo
 * `svg_preview_stroke.test.tsx` — parse, shared thumbnail style without rewrite,

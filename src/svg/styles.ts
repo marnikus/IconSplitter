@@ -22,15 +22,15 @@ import type { Discovery } from "./sources";
 
 export const STYLES_KEY = "iconSplitter.svg.styles.v1";
 
-export interface StylePrefs { styles: string[]; active: string | null }
+export interface StylePrefs { styles: string[]; active: string | null; showAll: boolean }
 
 function readPrefs(): StylePrefs {
   try {
     const raw = JSON.parse(localStorage.getItem(STYLES_KEY) ?? "{}") as Partial<StylePrefs>;
     const styles = Array.isArray(raw.styles) ? raw.styles.filter((s): s is string => typeof s === "string" && styleOfFolder(`_${s}`) !== null) : [];
     const active = typeof raw.active === "string" && styles.includes(raw.active) ? raw.active : null;
-    return { styles, active };
-  } catch { return { styles: [], active: null }; }
+    return { styles, active, showAll: raw.showAll === true };
+  } catch { return { styles: [], active: null, showAll: false }; }
 }
 
 let prefs = readPrefs();
@@ -103,6 +103,25 @@ export function rowsForStyle(discovery: Discovery, refs: SvgRefs, style: string 
   const metaOf = (id: string) => (refs.metas.has(id) ? refs.metas.get(id) : discovery.metas.get(id));
   const bases = discovery.sources.map((s) => toRow(s, metaOf(s.id) ?? null, false));
   return styledRows(bases, metaOf, style);
+}
+
+/** Base and each registered style become separate rows with their own pair-file review status. */
+export function rowsForAllStyles(discovery: Discovery, metaOf: (id: string) => PairMeta | null | undefined, styles: readonly string[]): SvgRow[] {
+  const bases = discovery.sources.map((s) => toRow(s, metaOf(s.id) ?? null, false));
+  const byBase = new Map<string, SvgRow[]>();
+  for (const style of styles) {
+    for (const row of styledRows(bases, metaOf, style)) {
+      if (row.source.id === baseRowId(row.source.id)) continue;
+      const base = baseRowId(row.source.id);
+      byBase.set(base, [...(byBase.get(base) ?? []), row]);
+    }
+  }
+  return bases.flatMap((base) => [base, ...(byBase.get(base.source.id) ?? [])]);
+}
+
+function rowsForPrefs(discovery: Discovery, refs: SvgRefs): SvgRow[] {
+  const metaOf = (id: string) => (refs.metas.has(id) ? refs.metas.get(id) : discovery.metas.get(id));
+  return prefs.showAll ? rowsForAllStyles(discovery, metaOf, prefs.styles) : rowsForStyle(discovery, refs, prefs.active);
 }
 
 const withDir = (dir: string, name: string) => (dir === "" ? name : `${dir}/${name}`);
@@ -204,7 +223,7 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   }
   bar.finish();
   setPrefs({ ...prefs, styles: [...styles].sort() });
-  if (c.discovery !== null) c.setRows(rowsForStyle(c.discovery, c.refs, prefs.active));
+  if (c.discovery !== null) c.setRows(rowsForPrefs(c.discovery, c.refs));
   c.say(rows === 0 ? "No style folders (_<style> with numbered images) found in the selected items" : `Styles registered for ${rows} of ${bases.length} item(s): ${[...styles].join(", ")}`);
 }
 
@@ -222,25 +241,30 @@ async function registerOne(bar: ReturnType<typeof beginRegister>, root: DirHandl
 }
 
 /** The pinned bar's style switch: every row that has it shows that style; the selection follows. */
-export function switchStyle(c: StyleCtx, style: string | null): void {
-  setPrefs({ ...prefs, active: style });
+export function switchStyle(c: StyleCtx, style: string | null, showAll = false): void {
+  setPrefs({ ...prefs, active: showAll ? prefs.active : style, showAll });
   if (c.discovery === null) return;
-  const next = rowsForStyle(c.discovery, c.refs, style);
+  const next = rowsForPrefs(c.discovery, c.refs);
   const ids = new Set(next.map((r) => r.source.id));
-  const moved = (id: string) => { const b = baseRowId(id), s = style === null ? b : styleRowId(b, style); return ids.has(s) ? s : b; };
+  const moved = (id: string) => {
+    if (showAll && ids.has(id)) return id;
+    const base = baseRowId(id);
+    const target = showAll || style === null ? base : styleRowId(base, style);
+    return ids.has(target) ? target : base;
+  };
   const svg = getAppState().svg;
-  patchSvg({ checked: svg.checked.map(moved), activeId: svg.activeId === null ? null : moved(svg.activeId) });
+  patchSvg({ checked: [...new Set(svg.checked.map(moved))], activeId: svg.activeId === null ? null : moved(svg.activeId) });
   c.setRows(next);
 }
 
 /** Image styles (2026-11-16): register the selected rows' `_<style>` folders; switch the shown style. */
-export interface StyleActions { registerStyles: (ids: string[]) => void; setStyle: (style: string | null) => void }
+export interface StyleActions { registerStyles: (ids: string[]) => void; setStyle: (style: string | null, showAll?: boolean) => void }
 
 export function useStyleActions(c: { refs: SvgRefs; rows: SvgRow[]; m: { discovery: Discovery | null }; say: StyleCtx["say"]; setRows: StyleCtx["setRows"] }): StyleActions {
   const latest = useRef<StyleCtx>({ ...c, discovery: c.m.discovery });
   latest.current = { refs: c.refs, rows: c.rows, discovery: c.m.discovery, say: c.say, setRows: c.setRows };
   return {
     registerStyles: useCallback((ids: string[]) => { void registerStyles(latest.current, ids); }, []),
-    setStyle: useCallback((style: string | null) => switchStyle(latest.current, style), []),
+    setStyle: useCallback((style: string | null, showAll = false) => switchStyle(latest.current, style, showAll), []),
   };
 }

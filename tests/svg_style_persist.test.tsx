@@ -8,16 +8,20 @@
 // workspaces and the registration rule produce), so registered styles lost
 // their rows until re-registered; the scan now asks the folder for the name
 // the registration rule itself computes.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parsePairMeta } from "../src/lib/pairmeta";
 import { styleRowId } from "../src/lib/svgstyles";
-import { baseFaceOf, rebuiltRow } from "../src/svg/styles";
+import { baseFaceOf, rebuiltRow, resetStylePrefs } from "../src/svg/styles";
 import type { SvgRow } from "../src/svg/types";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { FOG, click, host, installSvgPanelHooks, mount, q, settle, unmountPanel } from "./helpers/svgpanel";
 
 installSvgPanelHooks();
+beforeEach(() => {
+  resetStylePrefs();
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })));
+});
 
 const STYLE = "colored_wiggle";
 const SID = styleRowId(FOG, STYLE);

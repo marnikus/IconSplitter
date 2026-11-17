@@ -5,7 +5,7 @@
 // and the picked style swaps the rows that have it.
 import { beforeEach, describe, expect, it } from "vitest";
 import { styleFilesOf, styleOfFolder, styleRowId, baseRowId } from "../src/lib/svgstyles";
-import { registerStyles, resetStylePrefs, rowsForStyle, stylePrefs, switchStyle, STYLES_KEY } from "../src/svg/styles";
+import { registerStyles, resetStylePrefs, rowsForAllStyles, rowsForStyle, stylePrefs, switchStyle, STYLES_KEY } from "../src/svg/styles";
 import { toRow } from "../src/svg/rowmodel";
 import type { SvgSource } from "../src/svg/sources";
 import type { Discovery } from "../src/svg/sources";
@@ -61,6 +61,10 @@ describe("register and switch styles", () => {
     expect(rows[0].source.id).toBe("pair_1~colored_wiggle");
     expect(rows[0].source.dirPath).toBe(`${DIR}/_colored_wiggle`);
     expect(rows[0].source.stem).toBe(`${STEM}_v2_colored_wiggle`); // its SVGs: <stem>.svg, _v2.svg
+    const allRows = rowsForAllStyles(discovery, (id) => refs.metas.get(id) ?? discovery.metas.get(id), ["colored_wiggle"]);
+    expect(allRows.map((r) => r.source.id)).toEqual(["pair_1", "pair_1~colored_wiggle"]);
+    expect(allRows[0].review).toBe("pending");
+    expect(allRows[1].review).toBe("pending");
     switchStyle(c, null);
     expect(rowsForStyle(discovery, refs, null)[0].source.id).toBe("pair_1");
   });

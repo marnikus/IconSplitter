@@ -10,6 +10,7 @@ Part of [Generate SVG selectors](svg-generation.md).
 |---|---|---|
 | `svg-row-{sourceId}` | row `role="listitem"` | `aria-current` = active; plain click activates, not checks; Shift range / Ctrl, Alt, Cmd toggle (I-73) |
 | `svg-check-{sourceId}` | checkbox | `aria-label="Select {base}"`; toggles just this check, not active/anchor |
+| `svg-style-label-{sourceId}` | visible style identity | "Base · line stroke" for the base pair; the registered style name for a style pair. In All styles mode each reviewable result is its own labeled row |
 | `svg-ai-{sourceId}` | thumbnail | the approved AI image (`<img>` in the `svg-thumb` box, `object-fit: contain`); missing → placeholder of the same size |
 | `svg-base-ai-{sourceId}` | third preview slot "Base · Stroke" | only a row shown in a registered image style (2026-11-16) has it: the base line-stroke AI image beside the style's own AI source and SVG; its bar cell in the strip under the previews stays empty — the base image has no versions of its own (2026-11-17). The face survives every in-place row rebuild and every restart ([styles contract](../sor/svg-styles.md), 2026-11-17 fixes) |
 | `svg-prev-{sourceId}` | inline preview | the selected (else newest valid) SVG, rendered INLINE in an open shadow root (`el.shadowRoot.querySelector("svg")`); square frame, the same `svg-thumb` px box as the AI thumbnail beside it; `data-version` = the version Copy hands over; empty (no SVG yet) shows "No SVG", an un-previewable file shows "Preview failed" + `data-error` (e.g. `not well-formed XML`) |

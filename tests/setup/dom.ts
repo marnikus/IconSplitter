@@ -42,16 +42,21 @@ afterEach(async () => {
   document.body.replaceChildren();
 });
 
-// The local helper on THIS machine must never act for a test (2026-11-16): a test
-// that clicks 📂 Location without its own fetch stub used to reach a running
-// helper and open real Explorer windows. Folder-opening and folder-finding calls
-// are answered here instead; a test's own vi.stubGlobal("fetch", …) still wins.
+// DOM tests never use the live network: unmocked model discovery gets a tiny
+// offline catalog; other external requests fail closed. A test's own
+// vi.stubGlobal("fetch", …) still overrides this transport.
 {
   const real = globalThis.fetch?.bind(globalThis);
   const HELPER_ONLY = /\/(open-folder|find-folder)(\?|$)/;
+  const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     if (HELPER_ONLY.test(url)) return new Response(JSON.stringify({ ok: false, reason: "tests never open or search real folders" }), { status: 200 });
+    const target = new URL(url, globalThis.location.href);
+    if (target.origin !== globalThis.location.origin && !LOOPBACK.has(target.hostname)) {
+      if (target.hostname === "router.requesty.ai" && target.pathname.endsWith("/models") && (init?.method ?? "GET") === "GET") return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      return new Response(JSON.stringify({ error: "external requests are disabled in tests" }), { status: 503 });
+    }
     if (real === undefined) throw new TypeError("fetch is not available");
     return real(input, init);
   }) as typeof fetch;
