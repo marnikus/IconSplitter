@@ -9,6 +9,7 @@
 
 import { pairId } from "./pairing";
 import { baseRowId, styleOfFolder, STYLE_ID_SEP } from "./svgstyles";
+import { imageRegenDir, type ImageVersion } from "./svgimgreg";
 import type { PairIdentity, PairMeta, PairSide } from "./pairmeta";
 import type { SvgVersion } from "./svgmodel";
 
@@ -22,6 +23,7 @@ export function rebaseMeta(meta: PairMeta, dirPath: string): PairMeta {
     ai: rebaseSide(meta.ai, dirPath),
     source: meta.source === null ? null : rebaseSide(meta.source, dirPath),
     versions: meta.versions.map((v) => rebaseVersion(v, dirPath)),
+    imageVersions: meta.imageVersions.map((v) => rebaseImageVersion(v, meta.dirPath, dirPath)),
   };
 }
 
@@ -41,6 +43,24 @@ function rebasedId(meta: PairMeta, dirPath: string): string {
   const folder = dirPath.slice(at + 1);
   const baseDir = styleOfFolder(folder) === style ? dirPath.slice(0, Math.max(0, at)) : dirPath;
   return `${pairId(baseDir, meta.base, meta.suffix)}${STYLE_ID_SEP}${style}`;
+}
+
+/**
+ * One AI-source version's file, re-pointed like the faces (2026-11-17): a
+ * regeneration lives in the pair's version folder and a registered copy beside
+ * the pair, so a record in EITHER follows the folder into the reading root —
+ * without this, a root picked again left every chosen regeneration unreadable
+ * while the original still showed. A record whose folder is neither keeps its
+ * stored path untouched: re-pointing it would be a guess.
+ */
+function rebaseImageVersion(version: ImageVersion, fromDir: string, dirPath: string): ImageVersion {
+  const name = baseName(version.file);
+  if (name === "") return version;
+  const at = version.file.lastIndexOf("/");
+  const dir = at === -1 ? "" : version.file.slice(0, at);
+  const moved = dir === fromDir ? dirPath : dir === imageRegenDir(fromDir) ? imageRegenDir(dirPath) : null;
+  if (moved === null) return version;
+  return { ...version, file: moved === "" ? name : `${moved}/${name}` };
 }
 
 /** One face, re-pointed at `dirPath`: a face with no file keeps no path either. */

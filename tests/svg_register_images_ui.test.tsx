@@ -10,6 +10,8 @@ import { describe, expect, it, vi } from "vitest";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { pairId } from "../src/lib/pairing";
 import { reserveSources, SOURCE_BUSY } from "../src/svg/jobstate";
+import { mainImageOf } from "../src/lib/svgimgreg";
+import { resolveFile } from "../src/selection/handles";
 import { runRegisterImagesFor } from "../src/svg/registerimages";
 import { toListRow, toRow } from "../src/svg/rowmodel";
 import { svgSource, pairMetaFor } from "./helpers/svgpair";
@@ -273,5 +275,35 @@ describe("hidden AI source versions are repaired (2026-11-06 report)", () => {
     await runRegisterImagesFor(ctx as never, [FOG]);
     expect(pairFileOnDisk(root).imageVersions[0].status).toBe("failed");
     expect(said.at(-1)?.msg).toContain("found but none could be registered");
+  });
+});
+
+describe("a recorded version whose stored path went stale (2026-11-17)", () => {
+  it("re-points the record at the file the folder holds, keeping the chosen version main", async () => {
+    const versions = new FakeDir("AI source regeneration versions");
+    versions.children.set("fog_AI_v2.png", pngFile("fog_AI_v2.png"));
+    const stale = [{
+      version: 2, file: "moved root/architecture/AI source regeneration versions/fog_AI_v2.png",
+      status: "done", prompt: "p", model: "m", requestId: null, error: null,
+      updatedAt: "2026-11-01T10:00:00.000Z", usage: { input: 1, output: 2, total: 3 },
+      cost: { actual: null, estimated: null, currency: "USD", pricing: "", basis: "none" },
+    }];
+    const root = rootWith({ "AI source regeneration versions": versions }, stale as never);
+    // the user had chosen v2 as the main image before the path went stale
+    const dir = root.children.get("architecture") as FakeDir;
+    const stored = parsePairMeta((dir.children.get("fog_AI.svg.json") as FakeFile).text);
+    if (stored.ok) {
+      dir.children.set("fog_AI.svg.json", new FakeFile("fog_AI.svg.json", 10, 3300, serializePairMeta({ ...stored.meta, imagePreferred: 2 })));
+    }
+    const { ctx, said } = ctxFor(root);
+    expect(ctx.rows[0].meta?.imagePreferred).toBe(2);
+    await runRegisterImagesFor(ctx as never, [FOG]);
+    const meta = pairFileOnDisk(root);
+    expect(meta.imageVersions.map((v) => v.file)).toEqual(["architecture/AI source regeneration versions/fog_AI_v2.png"]);
+    expect(meta.imagePreferred).toBe(2); // re-pointing never moves the pointer on its own
+    expect(ctx.rows[0].meta?.imageVersions[0]?.file).toBe("architecture/AI source regeneration versions/fog_AI_v2.png");
+    // the preview's own resolver now finds the main image — the row stops saying Unreadable
+    expect(await resolveFile(root, mainImageOf(meta, "architecture/fog_AI.png"))).not.toBeNull();
+    expect(said.at(-1)).toEqual({ msg: "1 recorded AI source re-pointed at the folder — the main image did not change", err: false });
   });
 });

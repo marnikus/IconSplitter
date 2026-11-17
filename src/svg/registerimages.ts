@@ -37,6 +37,8 @@ interface FolderOutcome {
   others: string[];
   /** The version that became the main image, when one did. */
   shown: number | null;
+  /** Records re-pointed at the file their folder holds (2026-11-17). */
+  repaired: number;
 }
 
 /**
@@ -59,7 +61,7 @@ export async function runRegisterImagesFor(c: RegisterCtx, ids: string[]): Promi
 }
 
 async function runRegister(c: RegisterCtx, root: DirHandleLike, rows: SvgRow[]): Promise<void> {
-  const tally: ImageTally = { registered: 0, skipped: 0, folders: rows.length, shown: null, others: [] };
+  const tally: ImageTally = { registered: 0, repaired: 0, skipped: 0, folders: rows.length, shown: null, others: [] };
   if (rows.length === 1) Object.assign(tally, { stem: rows[0].source.stem, original: rows[0].source.name });
   const bar = beginRegister(c.refs, "images", rows.length);
   try {
@@ -68,6 +70,7 @@ async function runRegister(c: RegisterCtx, root: DirHandleLike, rows: SvgRow[]):
       bar.reading(row.source.name);
       const out = await registerOne(c, root, row);
       tally.registered += out.registered;
+      tally.repaired = (tally.repaired ?? 0) + out.repaired;
       tally.skipped += out.skipped;
       tally.others = [...(tally.others ?? []), ...out.others];
       if (out.shown !== null) tally.shown = Math.max(tally.shown ?? 0, out.shown);
@@ -101,13 +104,17 @@ async function registerOne(c: RegisterCtx, root: DirHandleLike, row: SvgRow): Pr
     self: namingOf(row), files, versions: base.imageVersions, siblings: siblingsOf(c, row), skip: skipOf(row),
   });
   const repairs = planImageRepairs(files, base.imageVersions);
-  const empty: FolderOutcome = { registered: 0, skipped: 0, others: plan.others, shown: null };
+  const empty: FolderOutcome = { registered: 0, skipped: 0, others: plan.others, shown: null, repaired: 0 };
   if (plan.fresh.length === 0 && repairs.length === 0) return empty;
   const read = await recordsOf(root, [...plan.fresh, ...repairs]);
   if (read.records.length === 0) return { ...empty, skipped: read.skipped };
-  const repaired = read.records.filter((r) => repairs.some((x) => x.version === r.version)).map((r) => r.version);
-  const meta = applyRecords(base, read.records, plan.named, repaired);
-  return save(c, row, meta, { registered: read.records.length, skipped: read.skipped, others: plan.others });
+  const done = read.records.filter((r) => repairs.some((x) => x.version === r.version));
+  // only a re-found FAILED attempt moves the main pointer on its own (2026-11-17):
+  // re-pointing a stale path must not change the image the pair shows
+  const reMain = done.filter((r) => repairs.some((x) => x.version === r.version && x.wasFailed)).map((r) => r.version);
+  const meta = applyRecords(base, read.records, plan.named, reMain);
+  // a re-pointed record is not a NEW registration: the two counts stay apart (2026-11-17)
+  return save(c, row, meta, { registered: read.records.length - done.length, skipped: read.skipped, others: plan.others, repaired: done.length });
 }
 
 /** Each candidate proved to be a readable PNG; unreadable ones are counted. */
@@ -153,12 +160,14 @@ interface SaveDone {
   registered: number;
   skipped: number;
   others: string[];
+  /** Of the records: how many re-pointed an existing one (2026-11-17). */
+  repaired: number;
 }
 
 /** Writes the pair's own file; a refused write reports and changes no row. */
 async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone): Promise<FolderOutcome> {
   const root = c.refs.root.current as DirHandleLike | null;
-  const failed: FolderOutcome = { registered: 0, skipped: done.skipped, others: done.others, shown: null };
+  const failed: FolderOutcome = { registered: 0, skipped: done.skipped, others: done.others, shown: null, repaired: 0 };
   if (root === null) {
     c.say(`Could not save the AI sources of ${row.source.name}`, true);
     return failed;
@@ -172,7 +181,7 @@ async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone)
   c.refs.metas.set(row.source.id, meta);
   c.setRowsFn((rows) => rows.map((r) => (r.source.id === row.source.id ? rebuiltRow(r, meta, false, (x) => c.refs.metas.get(x)) : r)));
   const changed = meta.imagePreferred !== null && meta.imagePreferred !== (row.meta?.imagePreferred ?? null);
-  return { registered: done.registered, skipped: done.skipped, others: done.others, shown: changed ? meta.imagePreferred : null };
+  return { registered: done.registered, skipped: done.skipped, others: done.others, shown: changed ? meta.imagePreferred : null, repaired: done.repaired };
 }
 
 /** The button's handler: reads the latest context, so one callback serves every render. */

@@ -5361,3 +5361,37 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
   that the Base · Stroke face survives rebuilds and restarts. `registerStyles`
   was over the 30-line gate once `styles.ts` became changed, so its per-folder
   unit moved into `registerOne` (RULE 19 order).
+
+## 2026-11-17 — a chosen AI-source version stays previewable across roots and repairs
+
+- Report: a row's v2 AI source sits in the folder (and in the pair file) yet the
+  preview says Unreadable while the original still shows; re-registering the AI
+  sources changed nothing. Reproduced red first (RULE 8) in three witnesses:
+  `pairmeta.test.ts` (rebase of `imageVersions`), `svg_register_images.test.ts`
+  (repair plan + summary lines) and `svg_register_images_ui.test.tsx` (the whole
+  pass re-points a stale record and the preview resolver finds it again).
+- Cause 1: `lib/pairrebase.rebaseMeta` (I-49) re-pointed the faces and the SVG
+  versions but NOT `imageVersions[].file`, so any root picked again left every
+  chosen regeneration pointing at the old root — unreadable — while the rebased
+  original kept working. `rebaseImageVersion` now follows the folder for records
+  in the pair's folder or its `AI source regeneration versions` folder and leaves
+  any other record untouched (re-pointing it would be a guess).
+- Cause 2: the register pass could not heal a stale record — a name the pair file
+  already records is "known" (skipped) and `planImageRepairs` only refound FAILED
+  attempts. It now also re-points a record whose stored path the scanned folders
+  no longer hold when they hold the same name; re-pointing never moves the main
+  pointer on its own (only a re-found failed attempt does), and the toast counts
+  repairs apart from registrations (`imageSummary`, split per RULE 19 after it
+  crossed CC 10).
+- Measured: 6 red witnesses before the fix; after it pairmeta +
+  svg_register_images + svg_register_images_ui + svg_imgreg_ui + svgimgreg
+  131/131, scan/selection/session/batch neighbours 155/155 across 16 suites;
+  `npm run verify` lanes Types/Lint/Quality gate/Perf/Build PASS, and the
+  Tests+coverage lane — istanbul OOM-killed twice in this 4 GB sandbox (Killed,
+  exit 137, no test failure; it passed on the parent commit in the earlier,
+  larger sandbox) — re-run complete over the same suite with the config's
+  documented v8 provider: 470 files / 4746 tests, exit 0; docs_navigation
+  (byte budgets + links) 4/4.
+- Docs (RULE 17): `sor/invariants/paths-scope.md` I-49 now names the AI-source
+  history among the re-pointed paths; `sor/svg-image-edits.md` states the
+  re-point rule, that it never moves the main pointer, and the split toast.

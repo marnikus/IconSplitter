@@ -12,6 +12,7 @@ import {
   toRecord, withDecision, type PairMeta, type PairSide,
 } from "../src/lib/pairmeta";
 import { rebaseMeta } from "../src/lib/pairrebase";
+import type { ImageVersion } from "../src/lib/svgimgreg";
 
 const SIDE_AI: PairSide = { relPath: "a/icon_AI.png", name: "icon_AI.png", fingerprint: "20:300" };
 const SIDE_SRC: PairSide = { relPath: "a/icon.png", name: "icon.png", fingerprint: "12:200" };
@@ -187,6 +188,38 @@ describe("a generated SVG follows the pair file between roots (I-49)", () => {
       version(2, { svgPath: "/" }),
     ] }), "copied");
     expect(moved.versions.map((v) => v.svgPath)).toEqual(["copied/icon_AI.svg", "/"]);
+  });
+});
+
+describe("the AI source history follows the pair file between roots (I-49, 2026-11-17)", () => {
+  function imageVersion(n: number, file: string): ImageVersion {
+    return {
+      version: n, file, status: "done", prompt: "p", model: "m", requestId: null, error: null,
+      updatedAt: "2026-11-01T10:00:00.000Z", usage: { input: 1, output: 2, total: 3 }, cost: { ...NO_COST },
+    };
+  }
+
+  it("re-points a regeneration at the version folder of the root doing the reading", () => {
+    const moved = rebaseMeta(meta({ imageVersions: [imageVersion(2, "a/AI source regeneration versions/icon_AI_v2.png")] }), "copied");
+    expect(moved.imageVersions.map((v) => v.file)).toEqual(["copied/AI source regeneration versions/icon_AI_v2.png"]);
+  });
+
+  it("re-points a registered copy that lives beside the pair", () => {
+    const moved = rebaseMeta(meta({ imageVersions: [imageVersion(3, "a/icon_AI_v3.png")] }), "copied");
+    expect(moved.imageVersions.map((v) => v.file)).toEqual(["copied/icon_AI_v3.png"]);
+  });
+
+  it("leaves a record whose folder is neither alone — re-pointing it would be a guess", () => {
+    const moved = rebaseMeta(meta({ imageVersions: [imageVersion(4, "elsewhere/icon_AI_v4.png")] }), "copied");
+    expect(moved.imageVersions.map((v) => v.file)).toEqual(["elsewhere/icon_AI_v4.png"]);
+  });
+
+  it("keeps the chosen version chosen: the pointer survives the move with the history", () => {
+    const moved = rebaseMeta(meta({
+      imagePreferred: 2, imageVersions: [imageVersion(2, "a/AI source regeneration versions/icon_AI_v2.png")],
+    }), "copied");
+    expect(moved.imagePreferred).toBe(2);
+    expect(moved.imageVersions).toHaveLength(1);
   });
 });
 

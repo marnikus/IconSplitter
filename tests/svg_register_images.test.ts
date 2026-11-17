@@ -5,7 +5,7 @@
 // numbered regeneration the app never recorded, a copy), each becomes the version
 // its name says and the newest NUMBERED one becomes the main image.
 import { describe, expect, it } from "vitest";
-import { imageSummary, planImageImport } from "../src/lib/imgimport";
+import { imageSummary, planImageImport, planImageRepairs } from "../src/lib/imgimport";
 import type { ImageVersion } from "../src/lib/svgimgreg";
 
 /** The pair a split folder holds: its split AI stem and the name it had before. */
@@ -115,5 +115,39 @@ describe("what the pass says", () => {
       .toBe("No other AI source for fog_AI in 1 selected folder — 1 other PNG there is not this pair's (e.g. fog_AI_other.png)");
     expect(imageSummary({ registered: 0, skipped: 0, folders: 3, shown: null }))
       .toEqual({ text: "No other AI source for this pair in 3 selected folders", err: false });
+  });
+});
+
+describe("a recorded version whose file is not where the record says (2026-11-17)", () => {
+  const REGEN_DIR = "architecture/AI source regeneration versions";
+
+  it("repairs a done record whose stored path went stale when a folder holds that name", () => {
+    const stale = { ...regen("fog_AI", 2), file: `old root/${REGEN_DIR}/fog_AI_v2.png` };
+    const files = [at("fog_AI.png"), at("fog_AI_v2.png", REGEN_DIR)];
+    expect(planImageRepairs(files, [stale]).map((r) => [r.version, r.path])).toEqual([[2, `${REGEN_DIR}/fog_AI_v2.png`]]);
+  });
+
+  it("leaves a record whose stored path IS the folder's own file alone", () => {
+    const files = [at("fog_AI_v2.png", REGEN_DIR)];
+    expect(planImageRepairs(files, [regen("fog_AI", 2)])).toEqual([]);
+  });
+
+  it("repairs nothing when no folder holds the file — a missing image is said, never guessed", () => {
+    expect(planImageRepairs([at("fog_AI.png")], [{ ...regen("fog_AI", 2), file: "gone/fog_AI_v2.png" }])).toEqual([]);
+  });
+
+  it("still refinds a failed attempt's image under its recorded name", () => {
+    const failed = { ...regen("fog_AI", 2), status: "failed" as const };
+    const files = [at("fog_AI_v2.png", REGEN_DIR)];
+    const [repair] = planImageRepairs(files, [failed]);
+    expect(repair.path).toBe(`${REGEN_DIR}/fog_AI_v2.png`);
+    expect(repair.wasFailed).toBe(true);
+  });
+
+  it("says re-pointed records apart from freshly registered ones", () => {
+    expect(imageSummary({ registered: 0, repaired: 1, skipped: 0, folders: 1, shown: null }).text)
+      .toBe("1 recorded AI source re-pointed at the folder — the main image did not change");
+    expect(imageSummary({ registered: 1, repaired: 1, skipped: 0, folders: 1, shown: 3 }).text)
+      .toBe("1 existing AI source registered — v3 is now the main image · 1 recorded re-pointed at its folder");
   });
 });

@@ -66,6 +66,14 @@ row kept showing the wrong artwork. **⤓ Register AI sources (N)**
 - The newest **NUMBERED** version becomes `imagePreferred` — the main image the
   row shows and SVG generation vectorizes (`mainImageOf`). An unnumbered copy is
   taken in but never moves the pointer on its own.
+- A record the folder no longer holds under its stored path is **re-pointed**
+  (2026-11-17): when a scanned folder holds a file of the same name, the record
+  keeps its version and takes that file's path — a version an older build wrote,
+  or a folder moved between roots, stops being an unreadable preview, and the
+  pass that once said "nothing to register" now repairs instead. Re-pointing
+  never moves the main pointer on its own; a re-found **failed** attempt still
+  becomes usable and main, as before. The toast counts re-pointed records apart
+  from freshly registered ones.
 - One `saveMetaAt` per pair through the usual verified path; the SVG fields and
   the pair's review status are untouched; a busy pair is refused; nothing on disk
   is renamed or deleted.
