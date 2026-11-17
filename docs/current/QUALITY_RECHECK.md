@@ -5395,3 +5395,8 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - Docs (RULE 17): `sor/invariants/paths-scope.md` I-49 now names the AI-source
   history among the re-pointed paths; `sor/svg-image-edits.md` states the
   re-point rule, that it never moves the main pointer, and the split toast.
+### 2026-11-17 — independent style review rows
+- Focused SVG style/review regression set: 5 files, 37 tests passed in 6.49 s.
+- `npx tsc --noEmit`: passed in 38.5 s; `npm run lint`: passed in 35.1 s (26 existing warnings); changed-file quality gate against `2ee7b0c7baba7e4c0ed51e176561c72a0831d450`: passed in 1.1 s.
+- `npm run verify:fast`: not green; the complete coverage test worker was killed after 1366.9 s. Its production build lane passed in 13.1 s. No full verification pass is claimed.
+- Final rerun after the offline test transport change: 5 focused files / 37 tests passed in 6.36 s; types passed in 37.2 s; lint passed in 34.4 s; explicit-base changed quality gate passed in 1.9 s.

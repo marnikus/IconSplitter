@@ -15,6 +15,7 @@ import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
 import type { ReviewStatus } from "../lib/svgfile";
 import { isReview, NO_COST, REVIEW_LABEL } from "../lib/svgmodel";
+import { STYLE_ID_SEP } from "../lib/svgstyles";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { costLabel, costNote, fmtTokens } from "../lib/svgusage";
 import type { DirHandleLike } from "../lib/fs";
@@ -158,10 +159,16 @@ function ImageRegenButton({ id, running, onClick }: { id: string; running: boole
   );
 }
 
+function styleLabel(id: string): string {
+  const at = id.indexOf(STYLE_ID_SEP);
+  return at < 0 ? "Base · line stroke" : id.slice(at + STYLE_ID_SEP.length).replace(/_/g, " ");
+}
+
 function FileCell({ row }: { row: SvgRow }) {
   const target = targetPathOf(row); // the ONE file a row is about (I-56)
   return (
     <div className="svg-file-main">
+      <div className="svg-row-style-label" data-testid={`svg-style-label-${row.source.id}`}>{styleLabel(row.source.id)}</div>
       <div className="svg-file-name" title={row.source.name}>{row.source.name}</div>
       <div className="svg-file-sub" data-testid={`svg-target-${row.source.id}`} title={target}>{target}</div>
       <ProblemLine row={row} />

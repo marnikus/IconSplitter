@@ -7,17 +7,22 @@
 // two-cell strip shifted every chip set one slot to the left. The style chips
 // keep their meaning: the picked version IS the image the next SVG generation
 // vectorizes (`mainImageOf`, the run's own rule), as before.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { mainImageOf } from "../src/lib/svgimgreg";
 import { styleRowId } from "../src/lib/svgstyles";
+import { resetStylePrefs } from "../src/svg/styles";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
-import { FOG, click, host, installSvgPanelHooks, mount, q, settle } from "./helpers/svgpanel";
+import { FOG, click, host, installSvgPanelHooks, mount, q, settle, unmountPanel } from "./helpers/svgpanel";
 
 installSvgPanelHooks();
+beforeEach(() => {
+  resetStylePrefs();
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })));
+});
 
 const STYLE = "colored_wiggle";
 const SID = styleRowId(FOG, STYLE);
@@ -47,13 +52,14 @@ function makeRoot(styleSvg: boolean): FakeDir {
   if (styleSvg) {
     style.children.set(`${STYLE_STEM}.svg`, file(`${STYLE_STEM}.svg`, doc("#2f6dc2")));
     style.children.set(`${STYLE_STEM}_v2.svg`, file(`${STYLE_STEM}_v2.svg`, doc("#2fc26d")));
-    const side = serializePairMeta(pairFile(STYLE_DIR, `${STYLE_STEM}.png`, {
+    const stylePair = pairFile(STYLE_DIR, `${STYLE_STEM}.png`, {
       id: SID, decision: null, sourceName: null,
       versions: [
         svgVersion(`${STYLE_DIR}/${STYLE_STEM}.svg`, { version: 1 }),
         svgVersion(`${STYLE_DIR}/${STYLE_STEM}_v2.svg`, { version: 2 }),
       ],
-    }));
+    });
+    const side = serializePairMeta({ ...stylePair, base: "fog", suffix: "" });
     style.children.set(`${STYLE_STEM}.svg.json`, file(`${STYLE_STEM}.svg.json`, side));
   }
   arch.children.set(`_${STYLE}`, style);
@@ -141,6 +147,41 @@ describe("the strip under the previews keeps one cell per preview", () => {
     expect(tags()).toEqual(["AI source", "SVG v1"]);
     expect(cells()).toHaveLength(2);
     expect(cells()[1].querySelector(`[data-testid=svg-ver-bar-${FOG}]`)).not.toBeNull();
+  });
+
+  it("all styles mode exposes base and each style as independently reviewable rows", async () => {
+    const root = await mountStyleRow(true);
+    await click(q("[data-testid=svg-style-select]")!);
+    await click(q("[data-testid=svg-style-opt-all]")!);
+    await settle();
+
+    expect(q(`[data-testid="svg-row-${FOG}"]`)).not.toBeNull();
+    expect(q(`[data-testid="svg-row-${SID}"]`)).not.toBeNull();
+    expect(all("[data-testid^=svg-row-][role=listitem]")).toHaveLength(2);
+
+    await unmountPanel();
+    await mount(root);
+    await settle();
+    await settle();
+    expect(q(`[data-testid="svg-row-${FOG}"]`)).not.toBeNull();
+    expect(q(`[data-testid="svg-row-${SID}"]`)).not.toBeNull();
+
+    await click(q(`[data-testid="svg-approve-${SID}"]`)!);
+    await settle();
+    const arch = root.children.get("architecture") as FakeDir;
+    const baseFile = arch.children.get("fog_AI.svg.json") as FakeFile;
+    const styleDir = arch.children.get(`_${STYLE}`) as FakeDir;
+    const styleFile = styleDir.children.get(`${STYLE_STEM}.svg.json`) as FakeFile;
+    const base = parsePairMeta(baseFile.text);
+    const styled = parsePairMeta(styleFile.text);
+    expect(base.ok && base.meta.review).toBe("pending");
+    expect(styled.ok && styled.meta.review).toBe("approved");
+    expect(q(`[data-testid="svg-review-${FOG}"]`)?.textContent).toContain("Pending");
+    expect(q(`[data-testid="svg-review-${SID}"]`)?.textContent).toContain("Approved");
+    expect(q(`[data-testid="svg-style-label-${FOG}"]`)?.textContent).toBe("Base · line stroke");
+    expect(q(`[data-testid="svg-style-label-${SID}"]`)?.textContent).toBe("colored wiggle");
+    expect(localStorage.getItem("iconSplitter.svg.styles.v1")).toContain("\"showAll\":true");
+    expect(localStorage.getItem("iconSplitter.svg.styles.v1")).toContain(STYLE);
   });
 });
 

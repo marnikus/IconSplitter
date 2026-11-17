@@ -73,6 +73,10 @@ one static command and one Vitest live, own worker budget. Not a speed promise.
 2. Installs quiet tracking before application modules capture timers/immediates.
 3. Tracks actual createRoot results, unmounts leftovers after each test, clears
    document.body. Leaked roots otherwise render throughout the rest of a file.
+4. Keeps the live network offline: unstubbed Requesty model discovery gets an
+   empty local catalog, and other external requests fail closed (loopback tests
+   remain available). Per-test `vi.stubGlobal("fetch", …)` overrides this guard
+   for explicit transport tests; tests never spend or call a live provider.
 
 | Helper | Contract |
 |---|---|

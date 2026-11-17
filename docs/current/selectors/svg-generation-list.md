@@ -30,6 +30,14 @@ arrow, `data-dir`, reverses any order), `svg-search` (name too), `svg-shown`
 
 New lists start unchecked; gestures use global Undo ([RULE 25](../rules/BEHAVIOR.md#rule-25)). ↑/↓ move active; E/Q check/uncheck, Space toggles; A/D/W review the active valid SVG. Paid actions need confirmation. Image batch and Stop are [owned by AI-source image edits](svg-image-edits.md#image-regeneration-actions-and-row-feedback).
 
+Image styles in the pinned bar: `svg-register-styles` registers style folders
+for checked base items. `svg-style-select` opens a menu with `svg-style-opt-base`,
+one `svg-style-opt-{style}` per registered style, and `svg-style-opt-all`.
+**All styles · separate rows** shows the base and each existing registered
+style as independent rows (see [style review contract](../sor/svg-styles.md));
+`iconSplitter.svg.styles.v1.showAll` restores that view after a reload. Row review
+buttons and bulk review remain scoped to each checked style pair.
+
 List chrome: `svg-row-count` (visible rows), `svg-running-count`,
 `svg-queued-count` ("N next attempt" — rows waiting in a queued batch, I-53),
 `svg-attention-count` (rows needing attention), `svg-empty` ("No approved

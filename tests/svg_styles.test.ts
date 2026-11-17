@@ -5,11 +5,13 @@
 // and the picked style swaps the rows that have it.
 import { beforeEach, describe, expect, it } from "vitest";
 import { styleFilesOf, styleOfFolder, styleRowId, baseRowId } from "../src/lib/svgstyles";
-import { registerStyles, resetStylePrefs, rowsForStyle, stylePrefs, switchStyle, STYLES_KEY } from "../src/svg/styles";
+import { registerStyles, resetStylePrefs, rowsForAllStyles, rowsForStyle, stylePrefs, switchStyle, STYLES_KEY } from "../src/svg/styles";
+import { registerSlot } from "../src/svg/registerprogress";
 import { toRow } from "../src/svg/rowmodel";
 import type { SvgSource } from "../src/svg/sources";
 import type { Discovery } from "../src/svg/sources";
 import type { SvgRefs, SvgRow } from "../src/svg/types";
+import { probePath } from "../src/lib/fs";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
 const STEM = "download-icon-31_AI_03";
@@ -61,8 +63,35 @@ describe("register and switch styles", () => {
     expect(rows[0].source.id).toBe("pair_1~colored_wiggle");
     expect(rows[0].source.dirPath).toBe(`${DIR}/_colored_wiggle`);
     expect(rows[0].source.stem).toBe(`${STEM}_v2_colored_wiggle`); // its SVGs: <stem>.svg, _v2.svg
+    const allRows = rowsForAllStyles(discovery, (id) => refs.metas.get(id) ?? discovery.metas.get(id), ["colored_wiggle"]);
+    expect(allRows.map((r) => r.source.id)).toEqual(["pair_1", "pair_1~colored_wiggle"]);
+    expect(allRows[0].review).toBe("pending");
+    expect(allRows[1].review).toBe("pending");
+    const corruptDiscovery = { ...discovery, corruptFiles: [source.metaPath] } as unknown as Discovery;
+    expect(rowsForStyle(corruptDiscovery, refs, null)[0].corrupt).toBe(true);
+    expect(rowsForAllStyles(corruptDiscovery, (id) => refs.metas.get(id) ?? discovery.metas.get(id), ["colored_wiggle"])[0].corrupt).toBe(true);
     switchStyle(c, null);
     expect(rowsForStyle(discovery, refs, null)[0].source.id).toBe("pair_1");
+  });
+});
+
+describe("style registration failures", () => {
+  it("reports a failed style-pair write instead of silently counting it as no styles found", async () => {
+    const root = tree();
+    const parent = await probePath(root, DIR);
+    const style = parent && await probePath(parent, "_colored_wiggle");
+    expect(style).not.toBeNull();
+    style!.getFileHandle = async () => { throw new Error("disk full"); };
+    const sibling = await parent!.getDirectoryHandle("_line_art", { create: true }) as FakeDir;
+    sibling.children.set(`${STEM}_line_art_01.png`, new FakeFile(`${STEM}_line_art_01.png`, 10, 1, "png"));
+    const refs = { root: { current: root }, metas: new Map() } as unknown as SvgRefs;
+    const discovery = { sources: [source], metas: new Map() } as unknown as Discovery;
+    const said: string[] = [];
+    await registerStyles({ refs, rows: [], discovery, say: (m: string) => said.push(m), setRows: () => {} }, ["pair_1"]);
+    expect(said.join(" ")).toContain("Could not register styles");
+    expect(refs.metas.has("pair_1~line_art")).toBe(true);
+    expect(stylePrefs().styles).toEqual(["line_art"]);
+    expect(registerSlot(refs).value?.skipped).toBe(1);
   });
 });
 
