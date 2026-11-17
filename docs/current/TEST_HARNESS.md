@@ -7,19 +7,17 @@ Feature tests: [test index](sor/TESTS.md).
 ## 1. Current evidence (2026-10-30)
 
 **Both 40% attempts failed; the second measures 7.5%.** `verify:fast` medians
-117.44s -> 108.61s (clean runs 109.80/107.42) on 2 vCPU/Node22.22.3: the Getty bridge shed ~30s of real
-production sleep (22.65s->0.25s, 7.98s->0.63s), but the suite is CPU-bound --
-167s CPU for a 93s run (85-90% packing), 132.6s of it real test bodies that
-render the actual panel (react-dom dev 23%, DOM 16%, GC 13% of samples).
-`isolate:false` (106s), other pools, group merges and optimizer bundling were
-slower. 40% needs fewer/scaled-down rendering tests or 4 vCPU:
-[plan and rejected experiments](../archive/2026-10-30-harness-speed/README.md).
+117.44s -> 108.61s on 2 vCPU/Node22.22.3: the Getty bridge shed ~30s of production
+sleep (22.65s->0.25s, 7.98s->0.63s), but the suite is CPU-bound -- 167s CPU for a 93s run
+(85-90% packing), 132.6s test bodies rendering the real panel (react-dom dev 23%,
+DOM 16%, GC 13%). `isolate:false` (106s), other pools, merges and bundling
+were slower; 40% needs fewer/scaled-down rendering tests or 4 vCPU ([plan and rejected experiments](../archive/2026-10-30-harness-speed/README.md)).
 
-2026-10-25 attempt: warm 94.00s -> 91.23s (2.95%), cold 129.92 -> 117.85; target
-was <=56.40s ([plan](../archive/2026-10-25-harness-40/README.md),
-[results](../archive/2026-10-25-harness-40/results.md)). Host variation is
-large -- **never advertise a guaranteed multiplier**; opt-in `--overlap`
-(82.05s vs 82.37s) is noise, not the default. No Windows guarantee.
+2026-10-25 attempt: warm 94.00s -> 91.23s (2.95%), cold 129.92 -> 117.85 vs a
+<=56.40s target ([plan](../archive/2026-10-25-harness-40/README.md),
+[results](../archive/2026-10-25-harness-40/results.md)). Host variation is large --
+**never advertise a guaranteed multiplier**; opt-in `--overlap` (82.05s vs 82.37s)
+is noise, not the default; no Windows guarantee.
 
 ## 2. Isolated projects and resource budget
 
@@ -29,65 +27,65 @@ large -- **never advertise a guaranteed multiplier**; opt-in `--overlap`
 | `geometry` | `GEOMETRY_TESTS`: centred-fit/auto-repair and isolation canaries | `threads`, group1 |
 | `native` | unchanged five `NATIVE_TESTS` | `threads`, one worker, group2 |
 
-- Every file belongs to exactly one project. Groups run sequentially, not
-  competing pools. Native files also run serially. All retain `isolate:true`.
-- Main/geometry inherit min(4,available CPUs,75%RAM/768MiB) workers, floor1.
-  Do not add workers on a two-core host without complete-run measurements.
-- Main VMs reuse external DOM/React imports, but give each file a fresh module
-  graph, global context and DOM. Native realms support Buffer/typed-array checks.
-- A **first-line** `// @vitest-environment node` skips all DOM/React setup.
-  Use it for files that do not touch document/window.
-- `fsModuleCache:true` reuses transforms in `node_modules/.vitest-cache`.
-  First transforms after config changes are not fully warmed measurements.
-- Mixed pool types in one group cause costly worker respawning.
-  Add timing/realm files to `NATIVE_TESTS`, measured CPU files to `GEOMETRY_TESTS`.
+- Every file belongs to exactly one project; groups run sequentially, not
+  competing pools, native files serially. All retain `isolate:true`.
+- Main/geometry inherit min(4,CPUs,75%RAM/768MiB) workers, floor1; do not add
+  none added on a two-core host without complete-run measurements.
+- Main VMs reuse external DOM/React imports while giving each file a fresh module
+  graph, context and DOM; native realms support Buffer/typed-array checks.
+- A **first-line** `// @vitest-environment node` skips all DOM/React setup; use
+  it for files that do not touch document/window.
+- `fsModuleCache:true` reuses transforms in `node_modules/.vitest-cache`; first
+  transforms after config changes are not warmed measurements.
+- Mixed pools in one group cause costly worker respawning: timing/realm files go
+  to `NATIVE_TESTS`, measured CPU files to `GEOMETRY_TESTS`.
 
 ## 3. Verification architecture
 
 Default `npm run verify` retains canonical sequential commands: types, lint,
 changed-quality, native uninstrumented performance alarms, one complete coverage
-suite, build. `verify:fast` omits only the additional uninstrumented native lane.
-No test/coverage/build success is cached. Every native algorithm/budget still runs.
+suite, build; `verify:fast` omits only the extra native lane; no success is cached, every
+native algorithm/budget still runs.
 
 `npm run verify -- --overlap` (>=2CPUs, >=3GiB) runs native alarms alone first,
 then the serial Types→Lint→Quality→Build queue beside one coverage run: at most
-one static command and one Vitest live, own worker budget. Not a speed promise.
+one static command and one Vitest live. Not a speed promise.
 
-- `--serial` overrides overlap. Inadequate resources fall back to serial.
+- `--serial` overrides overlap; inadequate resources fall back to serial.
 - `--plan [--json]` lists commands with `executionGroup`/`executionMode`;
   canonical order is not overlapping start order.
-- Coverage gets `PERF_BUDGETS=coverage`; native alarms do not. No verifier lane
-  overlaps the uninstrumented native stage.
+- Coverage gets `PERF_BUDGETS=coverage`, native alarms do not; no lane overlaps
+  the uninstrumented native stage.
 - All gate failures propagate, including executable-start errors; other gates
-  still diagnose failures. Unknown groups fail closed, never silently skip work.
-- SIGINT/SIGTERM cancel owned child process trees and prevent subsequent starts.
-  Windows uses taskkill tree cleanup; Windows timing is not validated here.
-- Overlap interleaves logs; named start/finish records identify lanes.
+  still diagnose. Unknown groups fail closed, never silently skip work.
+- SIGINT/SIGTERM cancel owned child process trees and prevent subsequent starts
+  (Windows: taskkill tree cleanup; its timing unvalidated).
+- Overlap interleaves logs; named records identify lanes.
 
 ## 4. DOM setup and readiness
 
-`tests/setup/harness.ts` loads DOM setup only when document exists. DOM setup:
+`tests/setup/harness.ts` loads DOM setup only when document exists:
 
-1. Disables React19 dev-only owner-stack capture (Error per JSX element).
-   `REACT_OWNER_STACKS=1` restores warning component-stack diagnostics.
-2. Installs quiet tracking before application modules capture timers/immediates.
-3. Tracks actual createRoot results, unmounts leftovers after each test, clears
-   document.body. Leaked roots otherwise render throughout the rest of a file.
-4. Keeps the live network offline: unstubbed Requesty model discovery gets an
-   empty local catalog, and other external requests fail closed (loopback tests
-   remain available). Per-test `vi.stubGlobal("fetch", …)` overrides this guard
-   for explicit transport tests; tests never spend or call a live provider.
+1. Disables React19 dev-only owner-stack capture (Error per JSX element);
+   `REACT_OWNER_STACKS=1` restores component-stack diagnostics.
+2. Installs quiet tracking before modules capture timers/immediates.
+3. Tracks createRoot results, unmounts leftovers after each test, clears
+   document.body; leaked roots otherwise render through the rest of a file.
+4. Keeps the live network offline: unstubbed Requesty discovery gets an empty
+   local catalog, other external requests fail closed (loopback tests remain);
+   per-test `vi.stubGlobal("fetch", …)` overrides it for transport tests. Never
+   spend or call a live provider.
 
 | Helper | Contract |
 |---|---|
-| `settle(maxMs=80)` | three calm turns inside act; accelerate timers due within maxMs, bounded by max(maxMs,250) real ms |
-| `waitUntil(pred,what,budgetMs=4000)` | flush queued Promise/React/immediate work, recheck readiness BEFORE advancing a future timer; throw `never reached: what` on timeout |
+| `settle(maxMs=80)` | three calm turns inside act; accelerate timers due within maxMs, bounded by max(maxMs,250) ms |
+| `waitUntil(pred,what,budgetMs=4000)` | flush queued Promise/React/immediate work, recheck readiness BEFORE advancing a future timer; `never reached: what` at timeout |
 
-A step drains immediates first (IndexedDB/React) and only advances an eligible
-timer when otherwise idle; a timer beyond the window is left alone. A
-fast-forward never consumes `waitUntil`'s app window. `settle(0)` is a
-one-tick-style settle; never poll inside one long act callback, since React
-cannot commit until it returns. Wait for state, not a guessed turn count.
+A step drains immediates first (IndexedDB/React) and advances an eligible timer
+only when idle; a timer beyond the window is left alone, and a fast-forward never
+consumes `waitUntil`'s app window. `settle(0)` is a one-tick
+settle; never poll inside one long act callback — React cannot commit until it
+returns. Wait for state, not a guessed turn count.
 
 **Do not indiscriminately cancel pending work between cases.** Cancel the
 shared IndexedDB immediates and later transactions deadlock; blanket timeout
