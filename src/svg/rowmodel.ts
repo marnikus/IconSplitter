@@ -56,6 +56,24 @@ export function withMeta(row: SvgRow, meta: PairMeta | null): SvgRow {
 }
 
 /**
+ * The SAME row after one of its own pair files was written (2026-11-17): what
+ * the history says is re-read (newest, the chosen version, the review, the
+ * status), while the fields the row itself owns survive — a row that is running
+ * or waiting stays so, and a style row keeps the comparison side drawn beside
+ * its own preview. Writing one version can therefore never take away a preview
+ * the row was showing (the reported Base · Stroke disappearing after a 🗑).
+ */
+export function withPairWrite(row: SvgRow, meta: PairMeta | null, corrupt = row.corrupt): SvgRow {
+  const versions = meta?.versions ?? [];
+  const next = withMeta({ ...row, corrupt }, meta);
+  return {
+    ...next,
+    status: next.newest ? "generated" : versions.some((v) => v.status !== "generated") ? "failed" : "not-generated",
+    error: versions.filter((v) => v.error).at(-1)?.error ?? null,
+  };
+}
+
+/**
  * The version the row SHOWS: the user's choice when it is usable, else the
  * newest valid one (I-54). The preview, Copy, Code, the decision buttons, the
  * hotkeys and the list's fields all ask this one question, so they can never

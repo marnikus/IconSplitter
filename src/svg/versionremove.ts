@@ -14,7 +14,7 @@ import { saveMetaAt } from "../selection/pairstore";
 import { getAppState } from "../state/appstore";
 import type { HistoryActions } from "../state/HistoryProvider";
 import { SVG_HANDLE_KEY } from "../state/handlekeys";
-import { toRow } from "./rowmodel";
+import { withPairWrite } from "./rowmodel";
 import { bumpSvgFile } from "./usesvgtext";
 import type { SvgRefs, SvgRow } from "./types";
 
@@ -39,7 +39,7 @@ export function useVersionRemoveBinding(c: { refs: SvgRefs; rows: SvgRow[]; hist
   useEffect(() => {
     const b: Binding = {
       root: () => refs.root.current as DirHandleLike | null, push: hist.push, say, rows: () => rows.current,
-      update: (id, meta) => { refs.metas.set(id, meta); setRowsFn((all) => all.map((r) => (r.source.id === id ? toRow(r.source, meta, false) : r))); },
+      update: (id, meta) => { refs.metas.set(id, meta); setRowsFn((all) => all.map((r) => (r.source.id === id ? withPairWrite(r, meta) : r))); },
     };
     live = b;
     return () => { if (live === b) live = null; };

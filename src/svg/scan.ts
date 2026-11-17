@@ -18,12 +18,11 @@ import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
 import { metaPathFor } from "../lib/pairmeta";
 import { STYLE_ID_SEP } from "../lib/svgstyles";
-import { styledRows, stylePrefs } from "./styles";
+import { discoveredStyles, rememberStyles, styledRows, stylePrefs } from "./styles";
 
 import { saveSourceIndex, type IndexEntry } from "../state/sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
-import { metaPathForAi, type PairMeta } from "../lib/pairmeta";
-import { loadMetaAt } from "../selection/pairstore";
+import type { PairMeta } from "../lib/pairmeta";
 import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
 
@@ -58,8 +57,9 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters, audible = false
   s.setBusy("Scanning approved sources…");
   try {
     const found = await discoverApprovedSources(root);
-    const styles = stylePrefs().styles;
-    if (styles.length > 0) await loadStyleMetas(root, found, styles);
+    // A style's registration is its own pair file in the walk (2026-11-17): the
+    // bar's list is rebuilt from it, so a restart shows the styles again.
+    rememberStyles(discoveredStyles(found));
     const loaded = loadRows(found);
     if (!scanMayCommit(refs, ticket.id)) return; // a newer scan took over
     const key = scanKey(root.name, found, loaded.rows);
@@ -90,27 +90,6 @@ function scanMayCommit(refs: SvgRefs, ticket: number): boolean {
 interface LoadedRows {
   rows: SvgRow[];
   metas: [string, PairMeta | null][];
-}
-
-/** Load existing `_<style>` pair files for all registered styles so style rows survive app restarts. */
-async function loadStyleMetas(root: DirHandleLike, found: Discovery, styles: readonly string[]): Promise<void> {
-  const paths: string[] = [];
-  for (const source of found.sources) {
-    for (const style of styles) {
-      const styleDir = source.dirPath === "" ? `_${style}` : `${source.dirPath}/_${style}`;
-      paths.push(metaPathForAi(`${styleDir}/${source.stem}_${style}.png`));
-    }
-  }
-  const CONCURRENCY = 16;
-  let next = 0;
-  const worker = async () => {
-    while (next < paths.length) {
-      const p = paths[next++];
-      const res = await loadMetaAt(root, p).catch(() => null);
-      if (res?.meta) found.metas.set(res.meta.id, res.meta);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, paths.length) }, worker));
 }
 
 /**

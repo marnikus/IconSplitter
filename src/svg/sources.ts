@@ -12,7 +12,8 @@ import { metaPathFor, newPairMeta, withDecision, type PairMeta } from "../lib/pa
 import { compareNames, walkTree, type FileEntry } from "../lib/scan";
 import { directoryNames, scopeOf } from "../lib/splitscope";
 import { pairEntries, pairId, problemsOf, unreadableReason, type PairProblem } from "../lib/pairing";
-import { loadPairDecisions } from "../selection/pairstore";
+import { loadPairDecisions, loadPairFiles } from "../selection/pairstore";
+import { styleFileIdentityOf } from "../lib/svgstyles";
 import {
   auditText, fileTally, selectRows,
   type RowPair, type ScanAudit, type SourceExclusion,
@@ -66,7 +67,12 @@ export interface Discovery {
   audit: ScanAudit;
   /** Files that could not be read (locked or being written) — not "changed". */
   unreadable: FileProblem[];
-  /** Every pair file the walk found, by pair id — the versions rows show (I-41). */
+  /**
+   * Every pair file the walk found, by pair id — the versions rows show (I-41)
+   * — including each registered style's own file under ITS style row id
+   * (`<base id>~<style>`, 2026-11-17), so a restart finds the styles again
+   * without re-registering them.
+   */
   metas: Map<string, PairMeta>;
   /** Pair files that exist but could not be parsed, by path. */
   corruptFiles: string[];
@@ -87,6 +93,7 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
   const rule = scopeOf(directoryNames(tree), root.name);
   const entries = walkTree(tree, []);
   const load = await loadPairDecisions(root, entries);
+  const styles = await styleMetasOf(root, entries);
   const reviewEntries = entries.filter((e) => !isImageRegenArtifact(e, root.name));
   const picked = selectRows(pairEntries(reviewEntries), load.records, rule.hideOutside);
   const sources = sortSources(picked.rows.map(toSource));
@@ -96,7 +103,7 @@ export async function discoverApprovedSources(root: DirHandleLike): Promise<Disc
     excluded: picked.excluded,
     audit: { ...fileTally(entries, root.name), missing: picked.missing, duplicates: picked.duplicates, rows: sources.length },
     unreadable: unreadableFiles(entries),
-    metas: load.metas,
+    metas: new Map([...load.metas, ...styles]),
     corruptFiles: load.corruptFiles,
     fileIndex: fileIndexOf(entries),
     corruptDecisions: load.legacyCorrupt,
@@ -122,6 +129,28 @@ function toSource(pair: RowPair): SvgSource {
     sourcePath: pair.source?.relPath ?? null,
     sourceFingerprint: pair.source === null ? null : `${pair.source.size}:${pair.source.mtime}`,
   };
+}
+
+/**
+ * The style pair files of a walk, each under the style row id its own PATH names
+ * (2026-11-17). A style record is stored in `<base dir>/_<style>/` and its id is
+ * not the id a plain rebase would compute, so it is re-keyed here — the versions
+ * (and so the style's previews) belong to the row the style bar switches to.
+ * They are read through the same cached pass a scan already made, so a style
+ * costs no second read.
+ */
+async function styleMetasOf(root: DirHandleLike, entries: readonly FileEntry[]): Promise<Map<string, PairMeta>> {
+  const files = entries.filter((e) => e.error === null && styleFileIdentityOf(e.relPath) !== null);
+  if (files.length === 0) return new Map();
+  const reads = await loadPairFiles(root, files);
+  const out = new Map<string, PairMeta>();
+  for (const entry of files) {
+    const id = styleFileIdentityOf(entry.relPath);
+    const read = reads.get(entry.relPath);
+    if (id === null || read === undefined || read.meta === null) continue;
+    out.set(id.id, { ...read.meta, id: id.id });
+  }
+  return out;
 }
 
 function flattenProblems(sources: SvgSource[]): SourceProblem[] {

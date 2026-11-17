@@ -11,10 +11,13 @@ import { probePath } from "../lib/fs";
 import { mainImageOf } from "../lib/svgimgreg";
 import { metaPathForAi, newPairMeta, sideOf, type PairMeta } from "../lib/pairmeta";
 import { svgStem } from "../lib/svgfile";
-import { baseRowId, styleFilesOf, styleOfFolder, styleRowId, variantVersions, type StyleFiles } from "../lib/svgstyles";
+import {
+  baseRowId, styleFilesOf, styleImageName, styleMetaPathOf, styleOfFolder, styleRowId, STYLE_ID_SEP,
+  variantVersions,
+} from "../lib/svgstyles";
 import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
 import { getAppState, patchSvg } from "../state/appstore";
-import { beginRegister } from "./registerprogress";
+import { beginRegister, type RegisterSession } from "./registerprogress";
 import type { SvgSource } from "./sources";
 import { toRow } from "./rowmodel";
 import type { SvgRefs, SvgRow } from "./types";
@@ -47,6 +50,31 @@ export function useStylePrefs(): StylePrefs {
 /** Tests: start clean. */
 export function resetStylePrefs(): void { prefs = readPrefs(); }
 
+/**
+ * The styles this walk found on disk: every style row a LISTED row has a pair
+ * file for. Registration lives in that file, so it is the file — not a
+ * remembered list — that says a style exists (2026-11-17: a restart, or a
+ * cleared browser cache, lost the list and every style had to be registered
+ * again although its JSON was right there).
+ */
+export function discoveredStyles(d: Discovery): string[] {
+  const listed = new Set(d.sources.map((s) => s.id));
+  const out = new Set<string>();
+  for (const id of d.metas.keys()) {
+    const at = id.indexOf(STYLE_ID_SEP);
+    if (at > 0 && listed.has(id.slice(0, at))) out.add(id.slice(at + STYLE_ID_SEP.length));
+  }
+  return [...out].sort();
+}
+
+/** Adds the styles a scan found to the bar's list; nothing is ever removed here. */
+export function rememberStyles(styles: readonly string[]): void {
+  const known = new Set(prefs.styles);
+  const added = styles.filter((s) => !known.has(s));
+  if (added.length === 0) return;
+  setPrefs({ ...prefs, styles: [...known, ...added].sort() });
+}
+
 /** The source a style row stands on: its pair file's own image, folder and stem. */
 export function styleSourceOf(base: SvgSource, meta: PairMeta): SvgSource {
   return {
@@ -73,13 +101,6 @@ export function rowsForStyle(discovery: Discovery, refs: SvgRefs, style: string 
 
 const withDir = (dir: string, name: string) => (dir === "" ? name : `${dir}/${name}`);
 
-/** The style's stem: its own image's name, else its first variant's without `_NN`. */
-function styleNameOf(files: StyleFiles): string | null {
-  if (files.main !== null) return files.main;
-  const first = files.variants[0]?.name;
-  return first === undefined ? null : first.replace(/_\d+(\.[^.]+)$/, "$1");
-}
-
 interface StyleArgs { root: DirHandleLike; base: SvgSource; baseMeta: PairMeta | null; style: string; names: string[] }
 
 /** The pair file a style starts from: the one on disk, else a new one beside its images. */
@@ -96,12 +117,12 @@ function inherited(prev: PairMeta, base: PairMeta | null): Pick<PairMeta, "decis
 /** The style pair file for one row and one style folder — new, or the old one with any new variants. */
 async function styleMeta(a: StyleArgs): Promise<{ path: string; meta: PairMeta } | null> {
   const files = styleFilesOf(a.base.stem, a.style, a.names);
-  const name = styleNameOf(files);
-  if (name === null || files.variants.length === 0) return null;
+  const name = styleImageName(files);
+  const path = styleMetaPathOf(a.base.dirPath, a.style, files);
+  if (name === null || path === null || files.variants.length === 0) return null;
   const dir = withDir(a.base.dirPath, `_${a.style}`);
   // The style's own name stands for its AI face: its SVGs are `<that stem>.svg` / `_v2.svg`; the variant chosen is what shows and is vectorised.
   const aiRel = withDir(dir, name);
-  const path = metaPathForAi(aiRel);
   const prev = await startMeta(a, dir, aiRel, path);
   const imageVersions = variantVersions(dir, files, prev.imageVersions, new Date().toISOString());
   return { path, meta: { ...prev, ...inherited(prev, a.baseMeta), id: styleRowId(a.base.id, a.style), dirPath: dir, imageVersions, imagePreferred: prev.imagePreferred ?? imageVersions[0]?.version ?? null } };
@@ -143,6 +164,38 @@ export interface StyleCtx {
   setRows: (rows: SvgRow[]) => void;
 }
 
+/** One registration pass: the folder, the rows it reads, and the styles it grows. */
+interface StylePass {
+  root: DirHandleLike;
+  refs: SvgRefs;
+  bases: readonly SvgSource[];
+  styles: Set<string>;
+  bar: RegisterSession;
+}
+
+/** Reads every base row's style folders, a bounded number at once; answers how many rows gained a style. */
+async function readStyleRows(p: StylePass): Promise<number> {
+  const CONCURRENCY = 16;
+  let rows = 0;
+  let next = 0;
+  const worker = async () => {
+    while (next < p.bases.length && !p.bar.cancelled()) {
+      const base = p.bases[next++];
+      p.bar.reading(base.name);
+      let added = 0;
+      try {
+        const got = await registerRow(p.root, p.refs, base);
+        added = got.length;
+        if (added > 0) rows++;
+        got.forEach((style) => p.styles.add(style));
+      } catch { /* reported in the count */ }
+      p.bar.settled({ registered: added, skipped: 0 });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, p.bases.length) }, worker));
+  return rows;
+}
+
 /** "Register styles" on the selected rows: style pair files written, the style list grown. */
 export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promise<void> {
   const root = c.refs.root.current as DirHandleLike | null;
@@ -152,25 +205,9 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   c.say(`Registering styles in ${bases.length} item folder(s)…`);
   const bar = beginRegister(c.refs, "styles", bases.length);
   const styles = new Set(prefs.styles);
-  let rows = 0;
-  const CONCURRENCY = 16;
-  let next = 0;
+  let rows;
   try {
-    const worker = async () => {
-      while (next < bases.length && !bar.cancelled()) {
-        const base = bases[next++];
-        bar.reading(base.name);
-        let added = 0;
-        try {
-          const got = await registerRow(root, c.refs, base);
-          added = got.length;
-          if (added > 0) rows++;
-          got.forEach((s) => styles.add(s));
-        } catch { /* reported in the count */ }
-        bar.settled({ registered: added, skipped: 0 });
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, bases.length) }, worker));
+    rows = await readStyleRows({ root, refs: c.refs, bases, styles, bar });
   } catch (error) {
     bar.fail();
     throw error;

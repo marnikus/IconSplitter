@@ -47,6 +47,7 @@ No session schema/key, shared root handle or pair-sidecar deletion is performed.
 
 | Where | What | Rules |
 |---|---|---|
+| `iconSplitter.svg.styles.v1` | known image styles + the picked one | display-only list REBUILT from each style's own pair file on every scan (2026-11-17, [styles](svg-image-styles.md)); corrupt → empty, the bar repopulates |
 | `iconSplitter.svgBuilder.config.v1` | validated sheet config | one owner: `src/svgBuilder/configstore.ts` |
 | `iconSplitter.svgBuilder.prefs.v1` | zoom, card open state, thumb size | display-only, validated |
 | `iconSplitter.svgBuilder.prompt.v1` / `.prompts.v1` | sheet prompt and presets | no key or image bytes |

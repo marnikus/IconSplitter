@@ -26,7 +26,7 @@ import { log } from "../log/logstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { metaForSource } from "./sources";
 import { listSvgFiles, readSvgFile } from "./svgfiles";
-import { toRow } from "./rowmodel";
+import { withPairWrite } from "./rowmodel";
 import { beginRegister } from "./registerprogress";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 import { namingOf, siblingsOf, usableRow, type RegisterCtx } from "./registernames";
@@ -186,7 +186,7 @@ async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone)
     return failed;
   }
   c.refs.metas.set(row.source.id, meta);
-  c.setRowsFn((rows) => rows.map((r) => (r.source.id === row.source.id ? toRow(r.source, meta, false) : r)));
+  c.setRowsFn((rows) => rows.map((r) => (r.source.id === row.source.id ? withPairWrite(r, meta) : r)));
   return { meta, registered, skipped: done.skipped, shown: meta.preferred, others: done.others };
 }
 

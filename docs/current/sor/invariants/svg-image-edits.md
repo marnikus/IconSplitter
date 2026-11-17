@@ -67,3 +67,18 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   is skipped; cost and request ID stay at request granularity. Unknown sent
   requests and lost pending reviews survive as metadata-only notices and are
   never automatically resent.
+
+<a id="i-86"></a>
+* **I-86 — an image style IS its own pair file, and a pair-file write changes
+  only what it writes (2026-11-17).** A style row (`<base id>~<style>`) is
+  named by its own record's PATH
+  (`<base dir>/_<style>/<stem>[_vN]_<style>.svg.json`,
+  `lib/svgstyles.styleFileIdentityOf`): the scan keys it by that id, the style
+  bar's list is rebuilt from those files, and a restart or a cleared browser
+  cache therefore needs no second registration — a scan only reads. A file that
+  is not a style record answers null, never a guess. A write that replaces a
+  row's pair file (`rowmodel.withPairWrite`) re-reads only what the history
+  says; the row's own fields — its running/queued state and a style row's
+  Base · Stroke side — survive it, so removing one version can never take away
+  a preview the row was showing. `imageVersions` paths are rebased with the
+  record when they live in its own folder or version subfolder (I-49).

@@ -9,6 +9,7 @@
 
 import { pairId } from "./pairing";
 import type { PairIdentity, PairMeta, PairSide } from "./pairmeta";
+import { IMAGE_REGEN_DIR, type ImageVersion } from "./svgimgreg";
 import type { SvgVersion } from "./svgmodel";
 
 /** The pair as THIS root sees it: the file's directory and the names it holds. */
@@ -21,6 +22,7 @@ export function rebaseMeta(meta: PairMeta, dirPath: string): PairMeta {
     ai: rebaseSide(meta.ai, dirPath),
     source: meta.source === null ? null : rebaseSide(meta.source, dirPath),
     versions: meta.versions.map((v) => rebaseVersion(v, dirPath)),
+    imageVersions: rebaseImages(meta.imageVersions, meta.dirPath, dirPath),
   };
 }
 
@@ -49,4 +51,32 @@ function rebaseVersion(version: SvgVersion, dirPath: string): SvgVersion {
 function baseName(relPath: string): string {
   const parts = relPath.split(/[\\/]/).filter((s) => s !== "");
   return parts.length > 0 ? parts[parts.length - 1] : "";
+}
+
+/**
+ * The pair's own regenerated images and image styles, re-pointed the same way
+ * (2026-11-17): a file the record wrote inside its own folder — a style's
+ * variant beside its pair file, a regeneration in the
+ * `AI source regeneration versions` folder — moves WITH that folder, so its
+ * preview still resolves. A path outside the record's folder is left exactly as
+ * it is: that file does not live here, and moving its path would invent one.
+ */
+function rebaseImages(versions: readonly ImageVersion[], oldDir: string, newDir: string): ImageVersion[] {
+  return versions.map((v) => {
+    if (v.file === "") return v;
+    const at = v.file.lastIndexOf("/");
+    const name = at < 0 ? v.file : v.file.slice(at + 1);
+    const tail = tailOf(at < 0 ? "" : v.file.slice(0, at), oldDir);
+    if (name === "" || tail === null) return v;
+    const folder = [newDir, tail.replace(/^\//, "")].filter((part) => part !== "").join("/");
+    const joined = folder === "" ? name : `${folder}/${name}`;
+    return joined === v.file ? v : { ...v, file: joined };
+  });
+}
+
+/** What a file's folder is, relative to the record: "" beside it, "/…" below it, null elsewhere. */
+function tailOf(dir: string, oldDir: string): string | null {
+  if (dir === oldDir) return "";
+  const versionDir = oldDir === "" ? IMAGE_REGEN_DIR : `${oldDir}/${IMAGE_REGEN_DIR}`;
+  return dir === versionDir ? `/${IMAGE_REGEN_DIR}` : null;
 }

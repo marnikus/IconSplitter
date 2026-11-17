@@ -10,6 +10,12 @@ opt-in checkbox, frozen run policy, independent image process bar and Stop.
 Image chips [accept the selected version as the actual source](version-acceptance.md),
 without approving an existing SVG.
 
+Image **styles** (`_<style>` folders: another look of the same icon, with its own
+pair file, previews and SVG history) have their own page —
+[image styles](svg-image-styles.md) — and their own
+[selectors](../selectors/svg-image-styles.md); the 🗑 on a version chip is
+documented there too.
+
 ## Confirmed composite workflow
 
 * **AI-source image edits (2026-10-19, I-71/I-72):** the separate

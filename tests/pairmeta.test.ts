@@ -190,6 +190,41 @@ describe("a generated SVG follows the pair file between roots (I-49)", () => {
   });
 });
 
+describe("a pair's own image versions follow it between roots (2026-11-17)", () => {
+  const img = (file: string) => ({
+    version: 1, file, status: "done" as const, prompt: "", model: "", requestId: null,
+    error: null, updatedAt: "2026-11-01T10:00:00.000Z", usage: { input: 0, output: 0, total: 0 }, cost: NO_COST,
+  });
+  const withImages = (...files: string[]) => meta({ imageVersions: files.map(img) });
+
+  it("re-points a variant stored beside the record — a style's images move with its pair file", () => {
+    const moved = rebaseMeta(withImages("a/icon_AI_v1.png", "a/icon_AI_v2.png"), "copied");
+    expect(moved.imageVersions.map((v) => v.file)).toEqual(["copied/icon_AI_v1.png", "copied/icon_AI_v2.png"]);
+  });
+
+  it("re-points the pair's version folder too, and keeps the folder name", () => {
+    const moved = rebaseMeta(withImages("a/AI source regeneration versions/icon_AI_v3.png"), "copied");
+    expect(moved.imageVersions.map((v) => v.file)).toEqual(["copied/AI source regeneration versions/icon_AI_v3.png"]);
+  });
+
+  it("leaves a file that does not live in the record's folder exactly where it says", () => {
+    const moved = rebaseMeta(withImages("elsewhere/icon_AI_v4.png", ""), "copied");
+    expect(moved.imageVersions.map((v) => v.file)).toEqual(["elsewhere/icon_AI_v4.png", ""]);
+  });
+
+  it("changes nothing when the file is read from the root that wrote it", () => {
+    const moved = rebaseMeta(withImages("a/icon_AI_v1.png", "a/AI source regeneration versions/icon_AI_v3.png"), "a");
+    expect(moved.imageVersions.map((v) => v.file)).toEqual(["a/icon_AI_v1.png", "a/AI source regeneration versions/icon_AI_v3.png"]);
+  });
+
+  it("reads a root-level record: the file name alone is the path, the folder is its own", () => {
+    const root = rebaseMeta({ ...meta({ dirPath: "", imageVersions: [img("icon_AI_v1.png"), img("AI source regeneration versions/icon_AI_v3.png")] }) }, "");
+    expect(root.imageVersions.map((v) => v.file)).toEqual(["icon_AI_v1.png", "AI source regeneration versions/icon_AI_v3.png"]);
+    const child = rebaseMeta({ ...meta({ dirPath: "", imageVersions: [img("icon_AI_v1.png")] }) }, "moved");
+    expect(child.imageVersions.map((v) => v.file)).toEqual(["moved/icon_AI_v1.png"]);
+  });
+});
+
 describe("the record rules are unchanged (I-13)", () => {
   it("a pending pair owns no record, even after being reviewed before", () => {
     expect(toRecord(meta({ decision: "pending", reviewedAt: "2026-10-05T17:02:11.000Z" }), pair())).toBeNull();

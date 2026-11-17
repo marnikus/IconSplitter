@@ -25,7 +25,7 @@ import { fileTimeOf, isReadablePng, listPairImages } from "./imgfiles";
 import { beginRegister } from "./registerprogress";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 import { baseNameOf, namingOf, siblingsOf, usableRow, type RegisterCtx } from "./registernames";
-import { toRow } from "./rowmodel";
+import { withPairWrite } from "./rowmodel";
 import { metaForSource } from "./sources";
 import type { SvgRow } from "./types";
 import type { Slice } from "./actions";
@@ -170,7 +170,7 @@ async function save(c: RegisterCtx, row: SvgRow, meta: PairMeta, done: SaveDone)
     return failed;
   }
   c.refs.metas.set(row.source.id, meta);
-  c.setRowsFn((rows) => rows.map((r) => (r.source.id === row.source.id ? toRow(r.source, meta, false) : r)));
+  c.setRowsFn((rows) => rows.map((r) => (r.source.id === row.source.id ? withPairWrite(r, meta) : r)));
   const changed = meta.imagePreferred !== null && meta.imagePreferred !== (row.meta?.imagePreferred ?? null);
   return { registered: done.registered, skipped: done.skipped, others: done.others, shown: changed ? meta.imagePreferred : null };
 }

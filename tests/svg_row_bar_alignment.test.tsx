@@ -7,17 +7,21 @@
 // two-cell strip shifted every chip set one slot to the left. The style chips
 // keep their meaning: the picked version IS the image the next SVG generation
 // vectorizes (`mainImageOf`, the run's own rule), as before.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { mainImageOf } from "../src/lib/svgimgreg";
 import { styleRowId } from "../src/lib/svgstyles";
+import { STYLES_KEY, resetStylePrefs } from "../src/svg/styles";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { FOG, click, host, installSvgPanelHooks, mount, q, settle } from "./helpers/svgpanel";
 
 installSvgPanelHooks();
+
+// the style list is module state as well as localStorage: one clean start per case
+beforeEach(() => { window.localStorage.removeItem(STYLES_KEY); resetStylePrefs(); });
 
 const STYLE = "colored_wiggle";
 const SID = styleRowId(FOG, STYLE);
