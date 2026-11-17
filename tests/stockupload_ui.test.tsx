@@ -261,11 +261,13 @@ describe("Upload (stockUpload) tab UI", () => {
     expect(loadSessionState().stockUpload?.checked).toHaveLength(100);
     expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(100);
 
-    // Choosing a row after the history bulk pick replaces that old queue item-set.
+    // RULE 25: a plain row click activates and anchors only — the queued set
+    // the history bulk pick composed stays exactly as it was.
     await clickEl(q("stock-row-item-4")!);
-    expect(getAppState().stockUpload.checked).toEqual(["item-4"]);
-    expect(loadSessionState().stockUpload?.checked).toEqual(["item-4"]);
-    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(1);
+    expect(getAppState().stockUpload.checked).toHaveLength(100);
+    expect(getAppState().stockUpload.activeId).toBe("item-4");
+    expect(loadSessionState().stockUpload?.checked).toHaveLength(100);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(100);
 
     await clickEl(q("stock-upload-history-batch-newer-history-run")!);
     await clickEl(q("stock-history-select-files")!);

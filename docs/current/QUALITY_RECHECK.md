@@ -5305,3 +5305,18 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
   `settleCompletionAudio`. Still red at HEAD and untouched (product-semantics
   question, reported): `random_select_ui` stockUpload plain-click expectation
   vs `selectionactions.selectRow`'s "plain pick replaces the queued set".
+
+## 2026-11-17 — Stock Upload row gestures back under RULE 25 (user decision)
+
+- Conflict pinned at HEAD: `selectionactions.selectRow` made a plain row click
+  replace the queued upload set (`checked: [id]`) while frozen RULE 25 (which
+  names SVG-to-upload) and `tests/random_select_ui.test.tsx` say a plain click
+  only activates/anchors; `stockupload_ui` pinned the override, so the suite
+  could not go green either way. User chose RULE 25.
+- Fix: the override is gone — `selectRow` commits `applyRowGesture` unchanged;
+  `stockupload_ui` now expects the 100-row queue to survive a plain click with
+  `activeId` moved; `selectors/stock-upload.md` states the gesture rule.
+- Measured: random_select_ui 8/8 (red witness before), stockupload_ui 12/12,
+  all 26 stockupload_* suites 174/174, apply + session_review_fixes +
+  upload_remove_row green; `npm run verify` (full: types, lint, quality
+  gate, perf budgets native, 4731 tests + coverage, build) ALL LANES PASSED.

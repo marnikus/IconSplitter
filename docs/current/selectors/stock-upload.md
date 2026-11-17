@@ -32,7 +32,7 @@ Behaviour: [sor/stock-upload](../sor/stock-upload.md).
 - `stock-upload-getty-batches` — the confirmation's Getty line whenever `getty-web` is a target (`250 icon(s) → 3 batches (Getty takes 100 uploads per batch; a JPEG + EPS pair counts once)`, singular `1 batch` for a short run), so the chunking (100 icons, 64 MB) is visible before Upload.
 
 ## Rows & local metadata (`StockUploadRow.tsx`, `StockUploadMetaFields.tsx`)
-- `stock-rows`, `stock-row-<id>`, `stock-check-<id>`, `stock-prev-<id>` — row container, checkbox, and zoomed preview.
+- `stock-rows`, `stock-row-<id>`, `stock-check-<id>`, `stock-prev-<id>` — row container, checkbox, and zoomed preview. Row gestures are [RULE 25](../rules/BEHAVIOR.md#rule-25) like every checkable list: a plain click (or Enter) activates and anchors, the checkbox and modifier clicks change checks, and activating never re-queues the upload set (2026-11-17, user decision over the old "plain pick replaces the queue" override).
 - `stock-name-<id>`, `stock-path-<id>`, `stock-formats-<id>`, `upload-rowbadge-chip-<id>-<badgeId>` — stem, `export/` path, available formats, and unified general row badges; plain left-click removes one row's badge, Ctrl + left-click removes it from all checked rows.
 - `stock-location-<id>`, `stock-meta-btn-<id>` — copy folder path & expand metadata actions.
 - `stock-meta-fields-<id>`, `stock-meta-title-<id>`, `stock-meta-description-<id>`, `stock-meta-tags-<id>`, `stock-meta-accept-<id>`, `stock-meta-state-<id>` — local metadata editor & in-place carrier re-embedder.
