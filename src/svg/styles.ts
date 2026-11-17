@@ -119,17 +119,19 @@ async function folderNames(dir: DirHandleLike): Promise<{ dirs: Array<[string, D
 async function registerRow(root: DirHandleLike, refs: SvgRefs, base: SvgSource): Promise<string[]> {
   const dir = await probePath(root, base.dirPath).catch(() => null);
   if (dir === null) return [];
-  const found: string[] = [];
-  for (const [folder, handle] of (await folderNames(dir)).dirs) {
-    const style = styleOfFolder(folder);
-    if (style === null) continue;
-    const plan = await styleMeta({ root, base, baseMeta: refs.metas.get(base.id) ?? null, style, names: (await folderNames(handle)).files });
-    if (plan === null) continue;
+  const styleDirs = (await folderNames(dir)).dirs
+    .map(([folder, handle]) => ({ style: styleOfFolder(folder), handle }))
+    .filter((d): d is { style: string; handle: DirHandleLike } => d.style !== null);
+  if (styleDirs.length === 0) return [];
+  const baseMeta = refs.metas.get(base.id) ?? null;
+  const results = await Promise.all(styleDirs.map(async ({ style, handle }) => {
+    const plan = await styleMeta({ root, base, baseMeta, style, names: (await folderNames(handle)).files });
+    if (plan === null) return null;
     await saveMetaAt(root, plan.path, plan.meta);
     refs.metas.set(plan.meta.id, plan.meta);
-    found.push(style);
-  }
-  return found;
+    return style;
+  }));
+  return results.filter((s): s is string => s !== null);
 }
 
 export interface StyleCtx {
@@ -150,19 +152,24 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   const bar = beginRegister(c.refs, "styles", bases.length);
   const styles = new Set(prefs.styles);
   let rows = 0;
+  const CONCURRENCY = 16;
+  let next = 0;
   try {
-    for (const base of bases) {
-      if (bar.cancelled()) break;
-      bar.reading(base.name);
-      let added = 0;
-      try {
-        const got = await registerRow(root, c.refs, base);
-        added = got.length;
-        if (added > 0) rows++;
-        got.forEach((s) => styles.add(s));
-      } catch { /* reported in the count */ }
-      bar.settled({ registered: added, skipped: 0 });
-    }
+    const worker = async () => {
+      while (next < bases.length && !bar.cancelled()) {
+        const base = bases[next++];
+        bar.reading(base.name);
+        let added = 0;
+        try {
+          const got = await registerRow(root, c.refs, base);
+          added = got.length;
+          if (added > 0) rows++;
+          got.forEach((s) => styles.add(s));
+        } catch { /* reported in the count */ }
+        bar.settled({ registered: added, skipped: 0 });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, bases.length) }, worker));
   } catch (error) {
     bar.fail();
     throw error;
