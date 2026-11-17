@@ -56,6 +56,7 @@ interface Dims {
 export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiActions, onPreferSvg }: SvgThumbsProps) {
   // The AI side shows the MAIN image — the same file the SVG generation reads (RC8).
   const ai = useImageUrl(rootRef, mainImageOf(row.meta, row.source.relPath));
+  const baseAi = useImageUrl(rootRef, row.baseAiPath ?? "");
   const target = previewTargetOf(row);
   const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
   const id = row.source.id;
@@ -70,13 +71,18 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   const svgSide = svgSlot(slotArgs);
   const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
   const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />, review);
+  const slots: PreviewSlot[] = [
+    ...(row.baseAiPath ? [{
+      tag: "Base · Stroke", testid: `svg-base-ai-${id}`, width: aiBox.width, height: aiBox.height,
+      children: <Thumb url={baseAi} alt={`${row.source.name} (base)`} testid={`svg-base-ai-img-${id}`} onDims={() => {}} />,
+    }] : []),
+    { tag: "AI source", testid: `svg-ai-${id}`, width: aiBox.width, height: aiBox.height,
+      children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> },
+    svgSide,
+  ];
   return (
     <div className="svg-pair-with-bar">
-      <PairedThumbs slots={[
-      { tag: "AI source", testid: `svg-ai-${id}`, width: aiBox.width, height: aiBox.height,
-        children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> },
-      svgSide,
-    ]} />
+      <PairedThumbs slots={slots as [PreviewSlot, PreviewSlot]} />
       <PairBars ai={aiBar} aiWidth={aiBox.width} svg={svgBar} svgWidth={svgSide.width} />
     </div>
   );

@@ -8,6 +8,7 @@
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { probePath } from "../lib/fs";
+import { mainImageOf } from "../lib/svgimgreg";
 import { metaPathForAi, newPairMeta, sideOf, type PairMeta } from "../lib/pairmeta";
 import { svgStem } from "../lib/svgfile";
 import { baseRowId, styleFilesOf, styleOfFolder, styleRowId, variantVersions, type StyleFiles } from "../lib/svgstyles";
@@ -59,7 +60,7 @@ export function styledRows(bases: readonly SvgRow[], metaOf: (id: string) => Pai
   if (style === null) return [...bases];
   return bases.map((row) => {
     const meta = metaOf(styleRowId(row.source.id, style));
-    return meta == null ? row : toRow(styleSourceOf(row.source, meta), meta, false);
+    return meta == null ? row : { ...toRow(styleSourceOf(row.source, meta), meta, false), baseAiPath: mainImageOf(row.meta, row.source.relPath) };
   });
 }
 

@@ -39,6 +39,8 @@ export interface SvgRow {
    * restore — the row's own `status` is untouched underneath.
    */
   queued: boolean;
+  /** For a style row: the chosen AI image path of its base (stroke-only) row, for side-by-side comparison. */
+  baseAiPath?: string;
 }
 
 /** Where a confirmed batch goes: behind what waits (bulk) or first (a row's Regenerate). */
