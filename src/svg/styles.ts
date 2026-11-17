@@ -7,7 +7,7 @@
 // in the pinned bar swaps every row that has it for its style row.
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import type { DirHandleLike } from "../lib/fs";
-import { probePath } from "../lib/fs";
+import { probePath, tryGetFile } from "../lib/fs";
 import { mainImageOf } from "../lib/svgimgreg";
 import { metaPathForAi, newPairMeta, sideOf, type PairMeta } from "../lib/pairmeta";
 import { svgStem } from "../lib/svgfile";
@@ -60,7 +60,7 @@ export function styledRows(bases: readonly SvgRow[], metaOf: (id: string) => Pai
   if (style === null) return [...bases];
   return bases.map((row) => {
     const meta = metaOf(styleRowId(row.source.id, style));
-    return meta == null ? row : { ...toRow(styleSourceOf(row.source, meta), meta, false), baseAiPath: mainImageOf(row.meta, row.source.relPath) };
+    return meta == null ? row : { ...toRow(styleSourceOf(row.source, meta), meta, false), baseAiPath: mainImageOf(row.meta, row.source.relPath), baseRow: row };
   });
 }
 
@@ -85,7 +85,12 @@ interface StyleArgs { root: DirHandleLike; base: SvgSource; baseMeta: PairMeta |
 /** The pair file a style starts from: the one on disk, else a new one beside its images. */
 async function startMeta(a: StyleArgs, dir: string, aiRel: string, path: string): Promise<PairMeta> {
   const read = await loadMetaAt(a.root, path);
-  return read.meta ?? newPairMeta({ id: styleRowId(a.base.id, a.style), base: a.base.base, suffix: a.base.suffix, dirPath: dir, ai: sideOf(aiRel, ""), source: null });
+  const folder = await probePath(a.root, dir);
+  const file = folder === null ? null : await tryGetFile(folder, aiRel.split("/").at(-1) ?? "");
+  const blob = await file?.getFile().catch(() => null);
+  const fingerprint = blob ? `${blob.size}:${blob.lastModified}` : "";
+  const meta = read.meta ?? newPairMeta({ id: styleRowId(a.base.id, a.style), base: a.base.base, suffix: a.base.suffix, dirPath: dir, ai: sideOf(aiRel, fingerprint), source: null });
+  return { ...meta, ai: { ...meta.ai, fingerprint } };
 }
 
 /** A style row is approved like its row: the decision comes from the base pair until it has its own. */
@@ -104,7 +109,9 @@ async function styleMeta(a: StyleArgs): Promise<{ path: string; meta: PairMeta }
   const path = metaPathForAi(aiRel);
   const prev = await startMeta(a, dir, aiRel, path);
   const imageVersions = variantVersions(dir, files, prev.imageVersions, new Date().toISOString());
-  return { path, meta: { ...prev, ...inherited(prev, a.baseMeta), id: styleRowId(a.base.id, a.style), dirPath: dir, imageVersions, imagePreferred: prev.imagePreferred ?? imageVersions[0]?.version ?? null } };
+  const initial = prev.imageVersions.length === 0 || prev.ai.fingerprint === "";
+  const imagePreferred = initial ? prev.imagePreferred ?? imageVersions[0]?.version ?? null : prev.imagePreferred;
+  return { path, meta: { ...prev, ...inherited(prev, a.baseMeta), id: styleRowId(a.base.id, a.style), dirPath: dir, imageVersions, imagePreferred } };
 }
 
 async function folderNames(dir: DirHandleLike): Promise<{ dirs: Array<[string, DirHandleLike]>; files: string[] }> {
@@ -152,25 +159,9 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   c.say(`Registering styles in ${bases.length} item folder(s)…`);
   const bar = beginRegister(c.refs, "styles", bases.length);
   const styles = new Set(prefs.styles);
-  let rows = 0;
-  const CONCURRENCY = 16;
-  let next = 0;
+  let rows: number;
   try {
-    const worker = async () => {
-      while (next < bases.length && !bar.cancelled()) {
-        const base = bases[next++];
-        bar.reading(base.name);
-        let added = 0;
-        try {
-          const got = await registerRow(root, c.refs, base);
-          added = got.length;
-          if (added > 0) rows++;
-          got.forEach((s) => styles.add(s));
-        } catch { /* reported in the count */ }
-        bar.settled({ registered: added, skipped: 0 });
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, bases.length) }, worker));
+    rows = await registerAll({ root, refs: c.refs, bases, styles, bar });
   } catch (error) {
     bar.fail();
     throw error;
@@ -181,11 +172,34 @@ export async function registerStyles(c: StyleCtx, ids: readonly string[]): Promi
   c.say(rows === 0 ? "No style folders (_<style> with numbered images) found in the selected items" : `Styles registered for ${rows} of ${bases.length} item(s): ${[...styles].join(", ")}`);
 }
 
+/** Scan selected folders concurrently and report each settled result. */
+async function registerAll(a: { root: DirHandleLike; refs: SvgRefs; bases: SvgSource[]; styles: Set<string>; bar: ReturnType<typeof beginRegister> }): Promise<number> {
+  const { root, refs, bases, styles, bar } = a;
+  let next = 0, rows = 0;
+  const worker = async () => {
+    while (next < bases.length && !bar.cancelled()) {
+      const base = bases[next++];
+      bar.reading(base.name);
+      let added = 0;
+      try {
+        const got = await registerRow(root, refs, base);
+        added = got.length;
+        if (added > 0) rows++;
+        got.forEach((style) => styles.add(style));
+      } catch { /* reported in the count */ }
+      bar.settled({ registered: added, skipped: 0 });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(16, bases.length) }, worker));
+  return rows;
+}
+
 /** The pinned bar's style switch: every row that has it shows that style; the selection follows. */
 export function switchStyle(c: StyleCtx, style: string | null): void {
   setPrefs({ ...prefs, active: style });
   if (c.discovery === null) return;
   const next = rowsForStyle(c.discovery, c.refs, style);
+  for (const row of next) if (row.meta !== null) c.refs.metas.set(row.source.id, row.meta);
   const ids = new Set(next.map((r) => r.source.id));
   const moved = (id: string) => { const b = baseRowId(id), s = style === null ? b : styleRowId(b, style); return ids.has(s) ? s : b; };
   const svg = getAppState().svg;

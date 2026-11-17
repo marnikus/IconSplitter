@@ -5277,3 +5277,7 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-16 SVG builder: template folder + template.json at creation; artboard folders artboard_NN_<title> inside it. Builder suites 219/219, tsc/eslint/quality PASS.
 - 2026-11-16 SVG builder: Location button opens the template/artboard folder in Explorer via the helper (/open-folder). Builder + helper suites 223/223 + bridge_inkscape 8/8, tsc/eslint/quality PASS.
 - 2026-11-16 Location in every tab via the helper (copy full path, open Explorer, select an existing file); docs split (rebalance page), apply.test types list. Full suite: only pre-existing failures (bridge_crash_guard, bridge_getty_web, docs_navigation pre-existing over-budget pages, fs_case_collisions, getty_web_browser/session, random_select_ui, upload_flag_viewport, verify_execution) — identical with the change stashed; tsc/eslint/quality PASS.
+
+## 2026-11-17 — SVG preview slot and style selection
+
+Changed-source quality gate against 48038541: passed; focused SVG/scan/docs tests: 96 passed; TypeScript and changed-file ESLint: passed (4 existing warnings). Build passed. verify:fast did not pass: initial lint error subsequently fixed; coverage run was killed after resource pressure, with Getty timeouts and an SVG path failure subsequently passing in focused runs. Full verify not run.

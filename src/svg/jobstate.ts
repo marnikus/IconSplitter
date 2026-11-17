@@ -6,6 +6,7 @@ import type { BatchOutcome } from "../lib/svgbatch";
 import type { DirHandleLike } from "../lib/fs";
 import type { RunCtx } from "./runcontext";
 import type { RunProgress, SvgRefs, SvgRow } from "./types";
+import { rowOrBase } from "./rowmodel";
 
 export const SOURCE_BUSY = "This source is in use by another process — wait for it to finish; nothing was changed or sent";
 export const MAX_SVG_RUNS = 3;
@@ -35,7 +36,7 @@ export function jobStore(refs: SvgRefs): JobStore {
 }
 
 export function sourceKeys(c: Pick<LockCtx, "rows">, ids: readonly string[]): string[] {
-  return ids.map((id) => (c.rows.find((row) => row.source.id === id)?.source.metaPath ?? id).replace(/\\/g, "/").toLowerCase());
+  return ids.map((id) => (rowOrBase(c.rows, id)?.source.metaPath ?? id).replace(/\\/g, "/").toLowerCase());
 }
 
 export function sourcesBusy(c: Pick<LockCtx, "rows" | "refs">, ids: readonly string[]): boolean {

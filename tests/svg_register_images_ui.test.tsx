@@ -16,7 +16,7 @@ import { svgSource, pairMetaFor } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { FOG, click, input, installSvgPanelHooks, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
 import { armCompletionSound } from "../src/ui/completionSound";
-import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
+import { completionAudio, flushCompletionAudio, recordCompletionAudio, settleCompletionAudio } from "./helpers/completionAudio";
 
 installSvgPanelHooks();
 
@@ -201,10 +201,52 @@ describe("the button in the tab", () => {
     await settle();
     expect(text("[data-testid=svg-style-select]")).toContain("colored wiggle");
     expect(q(`[data-testid="svg-check-${SPLIT_ID}~colored_wiggle"]`)).not.toBeNull(); // the row now shows its style
+    const id = `${SPLIT_ID}~colored_wiggle`;
+    const row = q(`[data-testid="svg-row-${id}"]`)!;
+    const slots = [...row.querySelectorAll(".pair-thumb")];
+    const bars = [...row.querySelectorAll(".svg-pair-bar")];
+    expect(slots).toHaveLength(3);
+    expect(bars).toHaveLength(3);
+    expect(bars.map((bar) => (bar as HTMLElement).style.width)).toEqual(slots.map((slot) => (slot as HTMLElement).style.width));
+    expect(bars[1].querySelector(`[data-testid="svg-ai-chip-${id}-1"]`)).not.toBeNull();
+    expect(bars[1].querySelector(`[data-testid="svg-ai-chip-${id}-orig"]`)).toBeNull();
+    expect(bars[2].querySelector(`[data-testid="svg-edit-btn-${id}"]`)).not.toBeNull();
+    const baseImage = q(`[data-testid="svg-base-ai-img-${id}"]`) as HTMLImageElement;
+    const styleImage = q(`[data-testid="svg-ai-img-${id}"]`) as HTMLImageElement;
+    expect(baseImage.tagName).toBe("IMG");
+    expect(styleImage.tagName).toBe("IMG");
+    Object.defineProperties(baseImage, { naturalWidth: { value: 40 }, naturalHeight: { value: 80 } });
+    Object.defineProperties(styleImage, { naturalWidth: { value: 160 }, naturalHeight: { value: 80 } });
+    await act(async () => { baseImage.dispatchEvent(new Event("load")); styleImage.dispatchEvent(new Event("load")); });
+    const resizedSlots = [...row.querySelectorAll(".pair-thumb")];
+    const resizedBars = [...row.querySelectorAll(".svg-pair-bar")];
+    expect((resizedSlots[0] as HTMLElement).style.width).not.toBe((resizedSlots[1] as HTMLElement).style.width);
+    expect(resizedBars.map((bar) => (bar as HTMLElement).style.width)).toEqual(resizedSlots.map((slot) => (slot as HTMLElement).style.width));
+    await click(q(`[data-testid="svg-ai-chip-${id}-2"]`) as HTMLElement);
+    await settle();
+    const saved = parsePairMeta((style.children.get("download-icon-01_AI_01_colored_wiggle.svg.json") as FakeFile).text);
+    expect(saved.ok && saved.meta.imagePreferred).toBe(2);
+    expect(q(`[data-testid="svg-ai-chip-${id}-2"]`)?.getAttribute("data-active")).toBe("true");
+    await click(q("[data-testid=svg-style-select]") as HTMLElement);
+    await click(q("[data-testid=svg-style-opt-base]") as HTMLElement);
+    await click(q("[data-testid=svg-rescan]") as HTMLElement);
+    await settle();
+    await click(q("[data-testid=svg-style-select]") as HTMLElement);
+    await click(q("[data-testid=svg-style-opt-colored_wiggle]") as HTMLElement);
+    await settle();
+    expect(q(`[data-testid="svg-ai-chip-${id}-2"]`)?.getAttribute("data-active")).toBe("true");
+    await unmountPanel();
+    await mount(root);
+    await settle();
+    expect(q(`[data-testid="svg-ai-chip-${id}-2"]`)?.getAttribute("data-active")).toBe("true");
+    await click(q(`[data-testid="svg-ai-trash-${id}-2"]`) as HTMLElement);
+    await vi.waitFor(() => expect(q(`[data-testid="svg-ai-chip-${id}-1"]`)?.getAttribute("data-active")).toBe("true"));
+    expect(q(`[data-testid="svg-base-ai-${id}"]`)).not.toBeNull();
   });
 
   it("is disabled with nothing selected and registers the selected folder on a click", async () => {
     recordCompletionAudio();
+    await settleCompletionAudio();
     armCompletionSound();
     const root = splitRoot();
     await mount(root);

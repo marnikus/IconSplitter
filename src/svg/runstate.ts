@@ -11,7 +11,7 @@ import type { DirHandleLike } from "../lib/fs";
 import type { RunEvent, RunSummary } from "./runner";
 import { loadMetaAt } from "../selection/pairstore";
 import { loadSourceIndex, metaPathOfEntry } from "../state/sourceindex";
-import { toRow } from "./rowmodel";
+import { rebuildRow } from "./rowmodel";
 import type { RunProgress, SvgRefs, SvgRow } from "./types";
 import type { SvgSource } from "./sources";
 
@@ -32,7 +32,7 @@ const HANDLERS: Record<string, Handler> = {
     perRequest: e.perRequest, startedAt: e.startedAt, images: e.images, outcomes: prev?.outcomes ?? [],
   })),
   "batch-done": (e, s) => s.setProgressFn((prev) => prev ? { ...prev, saved: e.report.saved, failed: e.report.failed, missing: e.report.missing, outcomes: [...prev.outcomes, e.report] } : prev),
-  "item-saved": (e, s) => s.setRowsFn((rows) => rows.map((r) => r.source.id === e.sourceId ? toRow(r.source, e.meta, false) : r)),
+  "item-saved": (e, s) => s.setRowsFn((rows) => rows.map((r) => r.source.id === e.sourceId ? rebuildRow(r, e.meta, false) : r)),
   "item-failed": (e, s) => {
     const status = e.failure === "stalled" ? "unknown" : "failed";
     s.setRowsFn((rows) => rows.map((r) => r.source.id === e.sourceId ? { ...r, status, running: false, error: redact(e.error) } : r));
@@ -56,7 +56,7 @@ export async function reloadSidecars(refs: SvgRefs, sources: SvgSource[], s: Run
   for (const source of sources) {
     const load = await loadMetaAt(root, reloadPathOf(source));
     refs.metas.set(source.id, load.meta);
-    s.setRowsFn((rows) => rows.map((r) => (r.source.id === source.id ? toRow(source, load.meta, load.corrupt) : r)));
+    s.setRowsFn((rows) => rows.map((r) => (r.source.id === source.id ? rebuildRow(r, load.meta, load.corrupt) : r)));
   }
 }
 

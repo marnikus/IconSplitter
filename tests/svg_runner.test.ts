@@ -510,6 +510,32 @@ describe("runGeneration — the main AI image is the source", () => {
   });
 });
 
+it("a selected style version remains the image sent by the next generation after switching from Base", async () => {
+  const { switchStyle } = await import("../src/svg/styles");
+  const { chooseMainImage } = await import("../src/svg/imagechoice");
+  const { root, sources } = fixture(1);
+  const dir = new FakeDir("_color");
+  (root.children.get("architecture") as FakeDir).children.set("_color", dir);
+  dir.children.set("icon-1_AI_color_02.png", new FakeFile("icon-1_AI_color_02.png", 20, 1, "image"));
+  const styleSource = svgSource(`${sources[0].id}~color`, { dir: "architecture/_color", name: "icon-1_AI_color.png" });
+  const path = "architecture/_color/icon-1_AI_color_02.png";
+  const entry = { version: 2, file: path, status: "done" as const, prompt: "", model: "", requestId: null, error: null, updatedAt: "2026-11-17" };
+  const meta = { ...pairMetaFor(styleSource), imageVersions: [entry], imagePreferred: null };
+  const discovery = { sources, metas: new Map([[meta.id, meta]]) } as unknown as import("../src/svg/sources").Discovery;
+  const refs = { root: { current: root }, metas: new Map(), queue: { current: [] } } as unknown as import("../src/svg/types").SvgRefs;
+  let rows = [toRow(sources[0], null, false)];
+  switchStyle({ refs, discovery, get rows() { return rows; }, setRows: (v) => { rows = v; }, say: () => {} }, "color");
+  await chooseMainImage({ refs, rows, setRowsFn: (fn) => { rows = fn(rows); }, say: () => {} }, meta.id, 2);
+  expect(rows[0].meta?.imagePreferred).toBe(2);
+  const t = transport();
+  vi.stubGlobal("fetch", t.fetch);
+  const { args } = runArgs(root, rows.map((r) => r.source), { imagesPerRequest: 4 }, { temperature: null, maxTokens: 8000, effort: null });
+  args.metas = refs.metas;
+  await runGeneration(args);
+  const call = compositeCalls.mock.calls.slice(callsAtStart)[0] as unknown[];
+  expect((call[2] as (s: SvgSource) => string)(rows[0].source)).toBe(path);
+});
+
 // RC6 (field ownership): the image writer may land while an SVG is being saved —
 // between the save's read of the pair file and its write. The image history
 // must survive; the SVG writer owns the SVG fields only.

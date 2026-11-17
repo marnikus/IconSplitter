@@ -1,6 +1,6 @@
 # The loopback helper (`tools/bridge/`) — one window, kept current
 
-Behaviour of the sites it drives: [Upload (stock)](stock-upload.md) ·
+Site behavior: [Upload (stock)](stock-upload.md) ·
 [Getty web upload](stock-upload-getty-web.md). Handles: [selectors/stock-upload](../selectors/stock-upload.md).
 
 ## 1. What it is
@@ -8,8 +8,7 @@ Behaviour of the sites it drives: [Upload (stock)](stock-upload.md) ·
 `tools/bridge/server.mjs` is one dependency-free Node process on `127.0.0.1:47391`
 (loopback only) that the Upload tab calls for everything the browser cannot do:
 FTPS/SFTP transfers, Inkscape EPS conversion, Getty ESP OAuth and the Getty web upload
-driving Chrome/Edge. It also serves `dist/index.html`, so `run_app_ftp.bat` opens the
-app from the same origin. `GET /health` is the probe.
+driving Chrome/Edge. It serves `dist/index.html`, so `run_app_ftp.bat` opens the app from the same origin. `GET /health` is the probe.
 
 ## 2. Launchers and the supervisor
 
@@ -28,8 +27,7 @@ spinning. `--once` runs the helper once; any argument the supervisor does not co
 
 ## 3. A `git pull` restarts it in place
 
-The problem: the helper reads its code once, at boot. A pull that brought new helper
-code used to leave the old code in memory until the window was closed by hand.
+The helper reads its code at boot; previously a pull left old code in memory until the window closed.
 
 - At boot the helper hashes the bytes of its own files (`helperCodeStamp`,
   `tools/bridge/updatewatch.mjs`, over `tools/bridge/`, `--watch-dir` to change) and

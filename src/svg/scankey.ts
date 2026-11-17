@@ -37,5 +37,6 @@ export function scanKey(rootName: string, discovery: Discovery, rows: SvgRow[]):
     rootName, discovery.corruptDecisions ? "corrupt" : "ok",
     sources.join("|"), problems.join("|"), excluded.join("|"), auditKey(discovery.audit), unreadable.join("|"),
     rows.map(rowKey).join("|"),
+    JSON.stringify([...discovery.metas].filter(([id]) => id.includes("~"))),
   ].join("#");
 }

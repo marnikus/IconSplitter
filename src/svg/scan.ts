@@ -17,12 +17,13 @@ import { discoverApprovedSources, type Discovery, type SvgSource } from "./sourc
 import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
 import { metaPathFor } from "../lib/pairmeta";
-import { STYLE_ID_SEP } from "../lib/svgstyles";
 import { styledRows, stylePrefs } from "./styles";
 
 import { saveSourceIndex, type IndexEntry } from "../state/sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
-import { metaPathForAi, type PairMeta } from "../lib/pairmeta";
+import type { PairMeta } from "../lib/pairmeta";
+import { stylePairPaths } from "./stylepaths";
+import { mapLimited } from "../lib/limiter";
 import { loadMetaAt } from "../selection/pairstore";
 import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
@@ -94,13 +95,8 @@ interface LoadedRows {
 
 /** Load existing `_<style>` pair files for all registered styles so style rows survive app restarts. */
 async function loadStyleMetas(root: DirHandleLike, found: Discovery, styles: readonly string[]): Promise<void> {
-  const paths: string[] = [];
-  for (const source of found.sources) {
-    for (const style of styles) {
-      const styleDir = source.dirPath === "" ? `_${style}` : `${source.dirPath}/_${style}`;
-      paths.push(metaPathForAi(`${styleDir}/${source.stem}_${style}.png`));
-    }
-  }
+  const requests = found.sources.flatMap((source) => styles.map((style) => ({ source, style })));
+  const paths = (await mapLimited(requests, 16, ({ source, style }) => stylePairPaths(root, source, style).catch(() => []))).flat();
   const CONCURRENCY = 16;
   let next = 0;
   const worker = async () => {
@@ -119,7 +115,7 @@ async function loadStyleMetas(root: DirHandleLike, found: Discovery, styles: rea
  * record it did not see (I-41).
  */
 function loadRows(found: Discovery): LoadedRows {
-  const metas: [string, PairMeta | null][] = [];
+  const metas: [string, PairMeta | null][] = [...found.metas];
   const rows = found.sources.map((source) => {
     const meta = found.metas.get(source.id) ?? null;
     metas.push([source.id, meta]);
@@ -128,7 +124,6 @@ function loadRows(found: Discovery): LoadedRows {
   // the image style picked in the pinned bar (2026-11-16): rows that have it show it, with their style pair files
   const style = stylePrefs().active;
   const styled = styledRows(rows, (id) => found.metas.get(id), style);
-  for (const r of styled) if (r.source.id.includes(STYLE_ID_SEP)) metas.push([r.source.id, r.meta]);
   return { rows: styled, metas };
 }
 
@@ -143,6 +138,7 @@ interface Commit {
 
 /** The single commit: state first, then the cache that must never fail a scan. */
 function commit(c: Commit): void {
+  c.refs.metas.clear();
   for (const [id, meta] of c.loaded.metas) c.refs.metas.set(id, meta);
   c.setters.setRows(c.loaded.rows);
   c.setters.setDiscovery(c.discovery);

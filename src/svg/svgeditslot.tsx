@@ -31,11 +31,10 @@ function TailReviewBadge({ id, review, busy }: { id: string; review: TailReview;
   );
 }
 
-export function PairBars({ ai, aiWidth, svg, svgWidth }: { ai: ReactNode; aiWidth: number; svg: ReactNode; svgWidth: number }) {
+export function PairBars({ bars }: { bars: Array<{ width: number; content: ReactNode }> }) {
   return (
     <div className="svg-pair-bars">
-      <div className="svg-pair-bar" style={{ width: `${aiWidth}px` }}>{ai}</div>
-      <div className="svg-pair-bar" style={{ width: `${svgWidth}px` }}>{svg}</div>
+      {bars.map((bar, i) => <div key={i} className="svg-pair-bar" style={{ width: `${bar.width}px` }}>{bar.content}</div>)}
     </div>
   );
 }

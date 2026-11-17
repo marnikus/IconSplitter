@@ -5,8 +5,8 @@
 [Caps](../upload-stroke-endpoints.md#owners-and-tests);
 [local](../upload-local-settings.md#tests); [formats](../upload-formats.md#owners-and-tests); [presets](../upload-settings-presets.md#owners-and-tests).
 
-* `keyvault.test.ts` — refused storage reports `session` (key still loads),
-  empty save erases nothing, unreadable stays distinct from absent, corrupt
+* `keyvault.test.ts` — refused storage reports `session`,
+  empty save erases nothing, unreadable differs from absent, corrupt
   envelopes are absent rather than crashing.
 * `upload_keypersist.test.tsx` — saved key survives edit/tab/restart; session
   state is reported, empty Save cannot destroy a key, Forget clears it; five

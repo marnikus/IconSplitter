@@ -14,7 +14,7 @@ import { saveMetaAt } from "../selection/pairstore";
 import { getAppState } from "../state/appstore";
 import type { HistoryActions } from "../state/HistoryProvider";
 import { SVG_HANDLE_KEY } from "../state/handlekeys";
-import { toRow } from "./rowmodel";
+import { rowOrBase, updateRowOrBase } from "./rowmodel";
 import { bumpSvgFile } from "./usesvgtext";
 import type { SvgRefs, SvgRow } from "./types";
 
@@ -39,7 +39,7 @@ export function useVersionRemoveBinding(c: { refs: SvgRefs; rows: SvgRow[]; hist
   useEffect(() => {
     const b: Binding = {
       root: () => refs.root.current as DirHandleLike | null, push: hist.push, say, rows: () => rows.current,
-      update: (id, meta) => { refs.metas.set(id, meta); setRowsFn((all) => all.map((r) => (r.source.id === id ? toRow(r.source, meta, false) : r))); },
+      update: (id, meta) => { refs.metas.set(id, meta); setRowsFn((all) => all.map((r) => updateRowOrBase(r, id, meta))); },
     };
     live = b;
     return () => { if (live === b) live = null; };
@@ -72,7 +72,9 @@ function withoutVersion(meta: PairMeta, kind: VersionKind, version: number): { m
   }
   const v = meta.imageVersions.find((x) => x.version === version);
   if (v === undefined) return null;
-  return { file: v.file, meta: { ...meta, imageVersions: meta.imageVersions.filter((x) => x !== v), imagePreferred: meta.imagePreferred === version ? null : meta.imagePreferred } };
+  const imageVersions = meta.imageVersions.filter((x) => x !== v);
+  const fallback = meta.id.includes("~") && meta.ai.fingerprint === "" ? imageVersions.find((x) => x.status === "done")?.version ?? null : null;
+  return { file: v.file, meta: { ...meta, imageVersions, imagePreferred: meta.imagePreferred === version ? fallback : meta.imagePreferred } };
 }
 
 /** Applies one side: its file moves, then its pair file is written and the row redrawn. */
@@ -97,7 +99,7 @@ function sidesOf(row: SvgRow & { meta: PairMeta }, next: { meta: PairMeta; file:
 export async function removeVersion(id: string, kind: VersionKind, version: number): Promise<void> {
   const b = live;
   const root = b?.root() ?? null;
-  const row = b?.rows().find((r) => r.source.id === id);
+  const row = b ? rowOrBase(b.rows(), id) : undefined;
   if (b === null || root === null || row?.meta == null) return b?.say("This version cannot be removed now — no folder or record", true);
   const next = withoutVersion(row.meta, kind, version);
   if (next === null) return b.say("That version is already gone", true);

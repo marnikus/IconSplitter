@@ -101,3 +101,11 @@ Version choices remain off the undo timeline as before; existing explicit review
 - Regressions: `svg_version_chips`, `svg_versions_ui`, `svg_imagechoice`, `svg_imgreg_ui`, `svg_register_existing`, `svg_register_existing_ui`, `svg_register_images`, `svg_register_images_ui`, `upload_discovery` and `upload_runexport` tests. The real export pipeline checks that accepted older artwork, not a newer file beside it, is committed.
 
 See [SVG results/review](svg-generation-results.md), [image edits](svg-image-edits.md), [Upload discovery](upload.md#scope-and-discovery), [I-54](invariants/svg-run.md#i-54) and [I-71](invariants/svg-image-edits.md#i-71).
+
+## Style preview sources
+
+A style row's AI-source chips select that style pair's image, and the accepted
+version is the input to the next SVG generation, including after a style switch
+or rescan. Base · Stroke is a separate comparison source. A missing unnumbered
+style image is not offered as an original. Pair-file rebasing preserves style
+identity and image history paths when a folder is opened from another root.

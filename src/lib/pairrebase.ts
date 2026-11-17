@@ -8,20 +8,39 @@
 // Pure: paths in, paths out (RULE 1/3).
 
 import { pairId } from "./pairing";
+import { IMAGE_REGEN_DIR } from "./svgimgreg";
+import { styleRowId } from "./svgstyles";
 import type { PairIdentity, PairMeta, PairSide } from "./pairmeta";
 import type { SvgVersion } from "./svgmodel";
 
 /** The pair as THIS root sees it: the file's directory and the names it holds. */
 export function rebaseMeta(meta: PairMeta, dirPath: string): PairMeta {
   const identity: PairIdentity = {
-    id: pairId(dirPath, meta.base, meta.suffix), base: meta.base, suffix: meta.suffix, dirPath,
+    id: rebasedId(meta, dirPath), base: meta.base, suffix: meta.suffix, dirPath,
   };
   return {
     ...meta, ...identity,
     ai: rebaseSide(meta.ai, dirPath),
     source: meta.source === null ? null : rebaseSide(meta.source, dirPath),
     versions: meta.versions.map((v) => rebaseVersion(v, dirPath)),
+    imageVersions: meta.imageVersions.map((v) => ({ ...v, file: rebaseImage(v.file, dirPath) })),
   };
+}
+
+function rebasedId(meta: PairMeta, dir: string): string {
+  const style = meta.id.split("~")[1];
+  if (!style) return pairId(dir, meta.base, meta.suffix);
+  const parent = dir.split("/").slice(0, -1).join("/");
+  return styleRowId(pairId(parent, meta.base, meta.suffix), style);
+}
+
+function rebaseImage(path: string, dir: string): string {
+  if (!path) return path;
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  const name = parts.at(-1) ?? "";
+  const parent = parts.at(-2) ?? "";
+  const subdir = parent.toLowerCase() === IMAGE_REGEN_DIR.toLowerCase() ? parent : "";
+  return [dir, subdir, name].filter(Boolean).join("/");
 }
 
 /** One face, re-pointed at `dirPath`: a face with no file keeps no path either. */

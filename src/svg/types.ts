@@ -41,6 +41,8 @@ export interface SvgRow {
   queued: boolean;
   /** For a style row: the chosen AI image path of its base (stroke-only) row, for side-by-side comparison. */
   baseAiPath?: string;
+  /** The independent base pair, used for its comparison controls. */
+  baseRow?: SvgRow;
 }
 
 /** Where a confirmed batch goes: behind what waits (bulk) or first (a row's Regenerate). */

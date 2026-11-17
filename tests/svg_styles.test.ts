@@ -64,6 +64,22 @@ describe("register and switch styles", () => {
     switchStyle(c, null);
     expect(rowsForStyle(discovery, refs, null)[0].source.id).toBe("pair_1");
   });
+  it("keeps an explicitly accepted original when registering the style again", async () => {
+    const root = tree();
+    const refs = { root: { current: root }, metas: new Map() } as unknown as SvgRefs;
+    const discovery = { sources: [source], metas: new Map() } as unknown as Discovery;
+    let rows: SvgRow[] = [toRow(source, null, false)];
+    const c = { refs, discovery, get rows() { return rows; }, setRows: (r: SvgRow[]) => { rows = r; }, say: () => {} };
+    await registerStyles(c, [source.id]);
+    const path = `${DIR}/_colored_wiggle/${STEM}_v2_colored_wiggle.svg.json`;
+    const { loadMetaAt, saveMetaAt } = await import("../src/selection/pairstore");
+    const meta = (await loadMetaAt(root, path)).meta!;
+    expect(meta.ai.fingerprint).not.toBe("");
+    await saveMetaAt(root, path, { ...meta, imagePreferred: null });
+    await registerStyles(c, [source.id]);
+    expect((await loadMetaAt(root, path)).meta?.imagePreferred).toBeNull();
+  });
+
 });
 
 describe("the style filter (2026-11-16)", () => {

@@ -9,7 +9,7 @@ import { saveMetaAt } from "../selection/pairstore";
 import type { SvgCtx } from "./actions";
 import { readReferenceImage } from "./imgregfiles";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
-import { withMeta } from "./rowmodel";
+import { rowOrBase, updateRowOrBase, withMeta } from "./rowmodel";
 import type { SvgRow } from "./types";
 
 export type ImageChoiceCtx = Pick<SvgCtx, "refs" | "rows" | "say" | "setRowsFn">;
@@ -23,7 +23,7 @@ export async function chooseMainImage(c: ImageChoiceCtx, id: string, version: nu
 
 async function saveMainImage(c: ImageChoiceCtx, id: string, version: number | null): Promise<void> {
   const root = c.refs.root.current as DirHandleLike | null;
-  const row = c.rows.find((r) => r.source.id === id);
+  const row = rowOrBase(c.rows, id);
   if (root === null || row === undefined) return c.say("No folder is open — the choice cannot be saved", true);
   const prev = c.refs.metas.get(id) ?? row.meta;
   if (prev === null) return c.say("This pair has no record file yet — regenerate its image first", true);
@@ -36,7 +36,7 @@ async function saveMainImage(c: ImageChoiceCtx, id: string, version: number | nu
     return c.say(`The choice for ${row.source.name} could not be saved — nothing changed`, true);
   }
   c.refs.metas.set(id, meta);
-  c.setRowsFn((rs) => rs.map((r) => (r.source.id === id ? withMeta(r, meta) : r)));
+  c.setRowsFn((rs) => rs.map((r) => r.source.id === id ? withMeta(r, meta) : updateRowOrBase(r, id, meta)));
   log({ feature: "svg", action: "image-main", ids: { source: id }, detail: version === null ? "accepted original" : `accepted v${version}` });
   c.say(version === null ? "AI source: the original is accepted as main" : `AI source: v${version} is accepted as main — the SVG generation uses it`);
 }

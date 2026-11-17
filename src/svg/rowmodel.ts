@@ -16,6 +16,7 @@ import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { checkState, pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
 import type { SvgSource } from "./sources";
 import { STYLE_ID_SEP } from "../lib/svgstyles";
+import { mainImageOf } from "../lib/svgimgreg";
 import type { SvgRow } from "./types";
 import { queuedIds, type QueueItem } from "./runqueue";
 
@@ -37,6 +38,23 @@ export function toRow(source: SvgSource, meta: PairMeta | null, corrupt: boolean
     status: row.newest ? "generated" : failed ? "failed" : "not-generated",
     error: versions.filter((v) => v.error).at(-1)?.error ?? null,
   };
+}
+
+/** Rebuild derived state without losing a style row's base comparison. */
+export function rebuildRow(row: SvgRow, meta: PairMeta | null, corrupt: boolean): SvgRow {
+  return { ...toRow(row.source, meta, corrupt), baseAiPath: row.baseAiPath, baseRow: row.baseRow };
+}
+
+/** Find and update either the displayed row or its independent base comparison. */
+export function rowOrBase(rows: readonly SvgRow[], id: string): SvgRow | undefined {
+  return rows.find((row) => row.source.id === id) ?? rows.find((row) => row.baseRow?.source.id === id)?.baseRow;
+}
+
+export function updateRowOrBase(row: SvgRow, id: string, meta: PairMeta): SvgRow {
+  if (row.source.id === id) return rebuildRow(row, meta, false);
+  if (row.baseRow?.source.id !== id) return row;
+  const baseRow = rebuildRow(row.baseRow, meta, false);
+  return { ...row, baseRow, baseAiPath: mainImageOf(meta, baseRow.source.relPath) };
 }
 
 /**

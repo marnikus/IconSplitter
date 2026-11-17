@@ -9,14 +9,14 @@
 // The pair is laid out by the shared PairedThumbs and sized by the shared zoom
 // rule (I-55), which is what makes this tab and Selection V2 zoom identically:
 // each side gets the box its OWN ratio asks for at the slider's height, so
-// neither is stretched, capped or cut. Under the pair sits one strip of two
+// neither is stretched, capped or cut. Under the previews sits one strip with matching
 // cells, each as wide as the preview above it: the AI-source strip (AiSourceBar,
 // 2026-10-19: in flight, version chips, last failure) and the SVG version chips
 // (2026-10-19, archive/2026-10-19-svg-version-chips) — one click shows that
 // version, through the same preferVersion owner as the Versions dialog.
 
 import { removeVersion, type VersionKind } from "./versionremove";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
 import { buildSvgPreview } from "../lib/svgpreview";
@@ -60,32 +60,41 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   const target = previewTargetOf(row);
   const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
   const id = row.source.id;
-  const [aiNat, setAiNat] = useState<Dims | null>(null);
-  // Both boxes come from the one rule: the raster from its own pixels, the
-  // vector from the ratio of the document it is about to draw.
-  const aiBox = zoomBox(thumb, aiNat);
   const { review, marks } = useRowTailMarks(id, target?.svgPath ?? "", svg, useCutSettings());
   // double-click on the SVG opens it in the edit mode (2026-11-06)
   const onOpen = editBlocked(row, svg) === null ? () => openSvgEditor(id) : undefined;
   const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg), marks, onOpen };
   const svgSide = svgSlot(slotArgs);
-  const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
   const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />, review);
+  return <PreviewPairs row={row} thumb={thumb} ai={ai} baseAi={baseAi} aiActions={aiActions} svgSide={svgSide} svgBar={svgBar} />;
+}
+
+interface PreviewPairsProps {
+  row: SvgRow; thumb: number; ai: string | null; baseAi: string | null; aiActions?: AiBarActions;
+  svgSide: PreviewSlot; svgBar: ReactNode;
+}
+
+function PreviewPairs({ row, thumb, ai, baseAi, aiActions, svgSide, svgBar }: PreviewPairsProps) {
+  const [aiNat, setAiNat] = useState<Dims | null>(null);
+  const [baseNat, setBaseNat] = useState<Dims | null>(null);
+  const aiBox = zoomBox(thumb, aiNat), baseBox = zoomBox(thumb, baseNat);
+  const id = row.source.id;
   const slots: PreviewSlot[] = [
     ...(row.baseAiPath ? [{
-      tag: "Base · Stroke", testid: `svg-base-ai-${id}`, width: aiBox.width, height: aiBox.height,
-      children: <Thumb url={baseAi} alt={`${row.source.name} (base)`} testid={`svg-base-ai-img-${id}`} onDims={() => {}} />,
+      tag: "Base · Stroke", testid: `svg-base-ai-${id}`, width: baseBox.width, height: baseBox.height,
+      children: <Thumb url={baseAi} alt={`${row.source.name} (base)`} testid={`svg-base-ai-img-${id}`} onDims={setBaseNat} />,
     }] : []),
     { tag: "AI source", testid: `svg-ai-${id}`, width: aiBox.width, height: aiBox.height,
       children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> },
     svgSide,
   ];
-  return (
-    <div className="svg-pair-with-bar">
-      <PairedThumbs slots={slots} />
-      <PairBars ai={aiBar} aiWidth={aiBox.width} svg={svgBar} svgWidth={svgSide.width} />
-    </div>
-  );
+  const baseBar = row.baseRow && aiActions ? <AiSourceBar row={row.baseRow} ai={{ ...aiActions, running: false }} /> : null;
+  const aiBar = aiActions ? <AiSourceBar row={row} ai={aiActions} /> : null;
+  return <div className="svg-pair-with-bar">
+    <PairedThumbs slots={slots} />
+    <PairBars bars={[...(row.baseAiPath ? [{ width: baseBox.width, content: baseBar }] : []),
+      { width: aiBox.width, content: aiBar }, { width: svgSide.width, content: svgBar }]} />
+  </div>;
 }
 
 /** Everything the SVG side of a row is drawn from — nothing else is read. */
@@ -207,7 +216,7 @@ function VersionChips({ row, onMain }: { row: SvgRow; onMain: AiBarActions["onMa
       title={main === version ? "Accept this version as the AI source" : "Accept and use this version as the AI source"}
       onClick={(e) => { e.stopPropagation(); onMain(id, version); }}>{text}</button>
   );
-  return <>{chip("orig", "original", null)}{versions.map((v) => <span key={v.version} className="svg-chip-with-trash">
+  return <>{(!id.includes("~") || row.source.fingerprint !== "") && chip("orig", "original", null)}{versions.map((v) => <span key={v.version} className="svg-chip-with-trash">
     {chip(String(v.version), `v${v.version}`, v.version)}<TrashChip id={id} kind="image" version={v.version} /></span>)}</>;
 }
 
