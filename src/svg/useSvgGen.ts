@@ -6,6 +6,7 @@
 // wiring: one reducer for the model (svg/statemodel), one context object for
 // the actions (svg/ctx + svg/actions), and the flat API the panel reads.
 
+import { useVersionRemoveBinding } from "./versionremove";
 import { useRef } from "react";
 import { fsSupported } from "../batch/picker";
 import { loadConfig, loadConnections, loadPrompt, loadPresets } from "./promptstore";
@@ -38,6 +39,7 @@ export function useSvgGen(): SvgGenApi {
   const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs, { presets: boot.presets, conns: boot.connections });
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);
+  useVersionRemoveBinding(ctx); // 🗑 on version chips (2026-11-16)
   const recovery = useInflightRecovery(model.rows, ctx.setRowsFn, actions.requestGenerate);
   const { visible, checked, activeId, header, affected, totals, provider, requests, refs } = ctx;
   return {

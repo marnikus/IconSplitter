@@ -9,7 +9,7 @@ import { fmt } from "./geom";
 import { pathOutline, outlineToPathData, transformOutline, type Outline } from "./geom/outline";
 import type { Matrix } from "./geom/matrix";
 import { styleMap } from "./geom/stroke";
-import { insideArtboard } from "./place";
+import { insideArtboard } from "./shippedbounds";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const SOURCE_W = 412;

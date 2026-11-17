@@ -1,3 +1,4 @@
+import SvgStyleBar from "./SvgStyleBar";
 import SvgRuns from "./SvgRuns";
 // SvgPanel.tsx — the Generate SVG tab (prompt §1/§2/§17): controls, the honest
 // discovery banners, the bulk bar, the source list, the run record (strip and
@@ -14,6 +15,7 @@ import { OpenFolderButton } from "../ui/FolderBar";
 import { useSvgGen, type SvgGenApi } from "./useSvgGen";
 import { PanelDialogs, panelRowActions } from "./panelbits";
 import SvgBulkBar from "./SvgBulkBar";
+import { svgDataRows } from "./getdatarows";
 import RunRecord from "./RunRecord";
 import SvgImgReview from "./SvgImgReview";
 import SvgImgInflight from "./SvgImgInflight";
@@ -22,12 +24,15 @@ import SvgControls from "./SvgControls";
 import { svgPromptWindowOf } from "./SvgPromptZone";
 import { useSvgHotkeys } from "./SvgHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
+import { useRunning } from "../ui/rebuildwatch";
 import { idsWithGeneratedSvg } from "./rowmodel";
 import { countsOf, decidableCount } from "./panelcounts";
 import SvgList from "./SvgList";
 import type { Discovery, SourceProblem } from "./sources";
 
 import { exclusionSummary } from "./sourcelist";
+import { useBusyActivity } from "../ui/useBusyActivity";
+import SvgEditModal from "./pathedit/SvgEditModal";
 
 /**
  * `active` (2026-10-08): the Workbench keeps this panel mounted on every tab
@@ -37,8 +42,12 @@ import { exclusionSummary } from "./sourcelist";
  */
 export default function SvgPanel({ active = true }: { active?: boolean }) {
   const g = useSvgGen();
+  // The AI image run already has its own job bar: it is not shown twice.
+  useBusyActivity("svg", g.busy, (busy) => busy.startsWith("Regenerating AI sources"));
   const rootRef = g.refs.root as { current: DirHandleLike | null };
   const dialogOpen = g.dialog !== null || g.imgReview !== null;
+  // A reload must not land inside a generation run.
+  useRunning("svg", g.running);
   useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active && !dialogOpen);
   useSvgHotkeys({
     visible: g.visible, activeId: g.activeId, dialogOpen,
@@ -57,6 +66,7 @@ export default function SvgPanel({ active = true }: { active?: boolean }) {
       <PanelDialogs g={g} rootRef={rootRef} />
       {g.imgReview && <SvgImgReview review={g.imgReview} onApply={g.applyImageReview} onDiscard={g.discardImageReview} />}
       <Overlay g={g} />
+      <SvgEditModal rows={g.visible} rootRef={rootRef} rootToken={g.rootToken} />
     </div>
   );
 }
@@ -86,11 +96,11 @@ function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
       onSwitchConnection={g.switchConnection} onAddConnection={g.addConnection} onRemoveConnection={g.removeConnection}
       onConnectionMeta={g.setConnectionMeta} onImage={g.setImage}
       paramNote={g.paramNote} keySet={g.keySet} keyMask={g.keyMask} keySource={g.keySource} providerOpen={g.providerOpen}
-      filter={g.filter} sort={g.sort} shown={g.visible.length} total={g.rows.length}
+      filter={g.filter} sort={g.sort} sortDir={g.sortDir} shown={g.visible.length} total={g.rows.length}
       onChooseRoot={g.chooseRoot} onRescan={g.rescan} onConfig={g.setConfig} onParams={g.setParams} onRefreshModels={g.refreshModels}
       onDismissNote={() => g.dispatch({ type: "param-note", note: null })}
       onSaveKey={g.saveKey} onForgetKey={g.forgetKey} onProviderOpen={g.setProviderOpen}
-      onFilter={g.setFilter} onSort={g.setSort}
+      onFilter={g.setFilter} onSort={g.setSort} onSortDir={g.setSortDir}
       onClearFilters={() => g.setFilter({ generation: "all", review: "all", search: "" })} />
   );
 }
@@ -108,11 +118,15 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
           requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidable}
           thumb={g.thumb} bg={g.bg} stroke={g.stroke} onStroke={g.setPreviewStroke} model={modelLabel(g.config.model)} totals={g.totals}
           progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
-          onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
+          onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible} onInvert={g.invertVisible}
           onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setPreviewBg} onGenerate={() => g.requestGenerate(g.checked)}
           onRegenerate={() => g.regenerateSelected(g.checked)}
           onImageRegen={() => g.requestImageRegen(g.checked)} imageRunning={g.imgRunning.length + (g.imgReview?.cells.length ?? 0)} onImageStop={g.stopImageRegen}
-          onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun} />
+          onDecide={(d) => g.decide(g.affected, d)} onCancel={g.cancelRun}
+          onRegisterExisting={() => g.registerExisting(g.checked)} getData={() => svgDataRows(g.rows, g.checked)}
+          onRegisterImages={() => g.registerImages(g.checked)} onRemove={() => g.removeRows(g.checked)}
+          checkedIds={g.checked} onCutTails={g.cutTails} onApproveCuts={g.approveCuts}
+          styles={<SvgStyleBar checked={g.checked.length} onRegister={() => g.registerStyles(g.checked)} onStyle={g.setStyle} />} />
       </div>
       <SvgList g={g} actions={actions} />
       <SvgRuns refs={g.refs} onStop={g.cancelRun} />

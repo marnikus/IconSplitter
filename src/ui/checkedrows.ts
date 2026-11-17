@@ -9,6 +9,18 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 interface Binding { node: HTMLDivElement; input: HTMLInputElement }
+
+// 2026-11-06: an undo / redo restores the active row WITHOUT scrolling to it —
+// the page stays where the user is. The history holds the scroll briefly.
+let scrollHeldUntil = 0;
+const HOLD_MS = 600;
+
+/** The next active-row changes (for a moment) do not scroll the list. */
+export function holdRowScroll(): void {
+  scrollHeldUntil = Date.now() + HOLD_MS;
+}
+
+const scrollHeld = (): boolean => Date.now() < scrollHeldUntil;
 export type RegisterCheckedRow = (id: string, node: HTMLDivElement | null) => void;
 
 function projectChecked(binding: Binding, checked: boolean): void {
@@ -51,7 +63,7 @@ function useActiveProjection(activeId: string | null | undefined, bindings: RefO
     if (next) projectActive(next, true, roving.current);
   }, [activeId, bindings, roving]);
   useEffect(() => {
-    if (activeId === null || activeId === undefined) return;
+    if (activeId === null || activeId === undefined || scrollHeld()) return;
     bindings.current.get(activeId)?.node.scrollIntoView?.({ block: "nearest" });
   }, [activeId, bindings]);
 }
@@ -68,8 +80,15 @@ export function useCheckedRows(checked: readonly string[], activeId?: string | n
   active.current = activeId;
   const rovingRef = useRef(roving);
   rovingRef.current = roving;
+  // After a reload the active row is known before its row exists (the rows load
+  // later): the first time it appears it is scrolled into view, once (2026-11-06).
+  const revealed = useRef(false);
   const register = useCallback<RegisterCheckedRow>((id, node) => {
     if (node === null) { bindings.current.delete(id); return; }
+    if (!revealed.current && active.current === id) {
+      revealed.current = true;
+      if (!bindings.current.has(id)) window.setTimeout(() => { if (!scrollHeld()) node.scrollIntoView?.({ block: "nearest" }); }, 60);
+    }
     const input = node.querySelector<HTMLInputElement>('input[type="checkbox"]');
     if (input === null) return;
     const binding = { node, input };
@@ -89,7 +108,7 @@ export function useCheckedRow(id: string, active: boolean, register: RegisterChe
     register(id, ref.current);
     return () => register(id, null);
   });
-  useEffect(() => { if (active) ref.current?.scrollIntoView?.({ block: "nearest" }); }, [active]);
+  useEffect(() => { if (active && !scrollHeld()) ref.current?.scrollIntoView?.({ block: "nearest" }); }, [active]);
   return ref;
 }
 

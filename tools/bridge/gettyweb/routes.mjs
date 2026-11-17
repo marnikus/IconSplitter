@@ -17,7 +17,9 @@ const MAX_DESCRIPTION = 2000;
 const MAX_KEYWORDS = 49;
 const MAX_KEYWORD = 64;
 const MAX_SESSIONS = 2;
-const MAX_ICONS = 200;
+// Getty takes at most 100 uploads per batch: one icon (JPEG + optional EPS) is
+// one upload, so the counted limit is icons, not files.
+const MAX_ICONS = 100;
 const MAX_FILES_PER_ICON = 2;
 const GETTY_HOST = /(^|\.)gettyimages\.com$/i;
 const sessions = new Map();
@@ -39,16 +41,23 @@ export function sanitizeMetadata(raw) {
 }
 
 /** `/health` capability block; never launches a browser. */
-export function gettyWebHealth() {
+export function gettyWebHealth(env = process.env) {
   const browser = findBrowser();
-  return { ready: true, browser: browser.found ? "found" : "missing", headed: process.env.GETTY_WEB_HEADED === "1" };
+  return {
+    ready: true,
+    browser: browser.found ? "found" : "missing",
+    headed: env.GETTY_WEB_HEADED === "1",
+    // What one upload request may weigh. The app sizes its batches to this, and a
+    // helper that reports nothing is an older build the app must not overfill.
+    maxBytes: Number(env.GETTY_WEB_MAX_BYTES ?? 256 * 1024 * 1024),
+  };
 }
 
 function scrub(text, cfg) {
   let out = typeof text === "string" && text.trim() !== "" ? text.trim() : "Getty web upload failed";
   for (const raw of [cfg?.password, cfg?.username]) {
     const secret = typeof raw === "string" ? raw.trim() : "";
-    if (secret !== "") out = out.split(secret).join("••••••••");
+    if (secret.length >= 4) out = out.split(secret).join("••••••••");
   }
   return out.slice(0, 500);
 }
@@ -104,9 +113,39 @@ function poolKeyOf(cfg, url) {
 
 const headed = () => process.env.GETTY_WEB_HEADED === "1";
 
+/** A session with a request in flight is never swept: one batch outlives 5 min. */
+export function mayReleaseSession(entry) {
+  return entry?.busy !== true;
+}
+
+/**
+ * A batch is moving — uploading, or its metadata being typed. The helper asks
+ * before it restarts itself: a restart would close the browser mid-run and lose
+ * the batch the user is watching. A browser merely pooled and idle is not busy.
+ */
+export function gettyWebBusy() {
+  for (const entry of sessions.values()) if (entry.busy === true) return true;
+  return false;
+}
+
+/** Hands every idle browser back before a restart; a busy one is never touched. */
+export function releaseIdleSessions() {
+  let released = 0;
+  for (const [key, entry] of [...sessions.entries()]) {
+    if (!mayReleaseSession(entry)) continue;
+    if (entry.timer) clearTimeout(entry.timer);
+    sessions.delete(key);
+    releaseSession(entry.session, headed());
+    released += 1;
+  }
+  return released;
+}
+
 function touch(key, entry) {
   if (entry.timer) clearTimeout(entry.timer);
   entry.timer = setTimeout(() => {
+    // A long batch keeps its browser: re-arm instead of closing what is working.
+    if (!mayReleaseSession(entry)) { touch(key, entry); return; }
     sessions.delete(key);
     releaseSession(entry.session, headed());
   }, SESSION_IDLE_MS);
@@ -168,6 +207,28 @@ export function iconsFromConfig(cfg) {
   return [{ files, metadata: sanitizeMetadata(cfg?.metadata) }];
 }
 
+/**
+ * Rebuilds the request config with the per-icon manifest the body carries. The
+ * header holds settings only: 100 icons with 2 KB descriptions is a ~290 KB
+ * base64 header, and Node kills such a request with 431 before this route runs.
+ * A config that still lists its icons in the header keeps working.
+ */
+export function configFromBody(cfg, body) {
+  const bytes = cfg?.manifestBytes;
+  if (bytes === undefined) return { config: cfg, files: body };
+  if (!Number.isInteger(bytes) || bytes <= 0 || bytes > body.length) return null;
+  let manifest;
+  try {
+    manifest = JSON.parse(body.subarray(body.length - bytes).toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(manifest?.icons)) return null;
+  const settings = { ...cfg };
+  delete settings.manifestBytes;
+  return { config: { ...settings, icons: manifest.icons }, files: body.subarray(0, body.length - bytes) };
+}
+
 /** Reads every staged file of every icon out of the body, or why it cannot. */
 export function iconsFromBody(body, cfg) {
   const icons = iconsFromConfig(cfg);
@@ -190,14 +251,45 @@ async function performUpload(cfg, url, icons) {
   const session = acquired.entry.session;
   if (!session) return acquired.failure;
   touch(acquired.key, acquired.entry);
-  const batch = await session.ensureBatch({ batchName: cfg.batchName, submissionType: cfg.submissionType });
-  if (!batch.ok) return batch;
-  const uploaded = await session.upload({
-    icons,
-    // The run submits its one batch itself; nothing here may lock it early.
-    complete: cfg.complete === true && process.env.GETTY_WEB_COMPLETE !== "0",
-  });
-  return { ...uploaded, batchId: batch.batchId };
+  acquired.entry.busy = true;
+  try {
+    const start = { batchName: cfg.batchName, submissionType: cfg.submissionType };
+    // `newBatch` is one batch per chunk of a long run; without it the session
+    // keeps the batch it already has (a run that fits in one batch).
+    const batch = cfg.newBatch === true ? await session.startBatch(start) : await session.ensureBatch(start);
+    if (!batch.ok) return batch;
+    const uploaded = await session.upload({
+      icons,
+      // The run finishes each batch itself; nothing here may lock it early.
+      complete: cfg.complete === true && process.env.GETTY_WEB_COMPLETE !== "0",
+    });
+    return { ...uploaded, batchId: batch.batchId };
+  } finally {
+    acquired.entry.busy = false;
+    touch(acquired.key, acquired.entry);
+  }
+}
+
+/**
+ * What a failed upload may say: its code, its scrubbed reason, and the names the
+ * page had already accepted or rejected. Names only — never page text, never a
+ * credential — so a timed-out chunk is not re-sent whole.
+ */
+export function failurePayload(result, cfg) {
+  const state = result?.state ?? null;
+  return {
+    ok: false,
+    code: result?.code ?? "page",
+    reason: scrub(result?.reason, cfg),
+    state,
+    // A batch whose readiness gate ran says itself what it validated (2026-11-12):
+    // a card with a picture but an empty Description is not accepted — it is named
+    // not ready and goes to a later batch. Without a gate, the thumbnails stand.
+    accepted: Array.isArray(result?.accepted) ? result.accepted : (state?.uploaded ?? []),
+    failed: state?.failures ?? [],
+    seen: state?.namesSeen ?? [],
+    notReady: Array.isArray(result?.notReady) ? result.notReady : [],
+  };
 }
 
 /**
@@ -208,28 +300,32 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
   const cfg = parseConfig(req.headers["x-getty-web-config"]);
   const invalid = validConfig(cfg);
   if (invalid !== null) return json(res, 400, { ok: false, code: "bad-request", reason: invalid });
-  if (Number(req.headers["content-length"] ?? 0) > limit) {
-    res.setHeader("connection", "close");
-    return json(res, 413, { ok: false, code: "bad-request", reason: `the staged files exceed the helper's limit (${limit} bytes)` });
-  }
+  // No early content-length check: the body is drained first, so an oversized
+  // batch gets this 413 as a real answer instead of a connection reset mid-upload.
   const body = await post(req, limit);
-  if (body === null) return json(res, 413, { ok: false, code: "bad-request", reason: "the request body was too large" });
-  const icons = iconsFromBody(body, cfg);
-  if (!icons) return json(res, 400, { ok: false, code: "bad-request", reason: "the upload must contain a JPEG (and optional matching EPS) per icon" });
-  const url = contributeUrlOf(cfg);
+  if (body === null) {
+    return json(res, 413, {
+      ok: false, code: "bad-request",
+      reason: `the staged files exceed the helper's limit (${limit} bytes) — send fewer icons per batch, or raise GETTY_WEB_MAX_BYTES on the helper`,
+    });
+  }
+  const parsed = configFromBody(cfg, body);
+  const icons = parsed && iconsFromBody(parsed.files, parsed.config);
+  if (!parsed || !icons) return json(res, 400, { ok: false, code: "bad-request", reason: "the upload must contain a JPEG (and optional matching EPS) per icon" });
+  const url = contributeUrlOf(parsed.config);
   try {
-    const result = await performUpload(cfg, url, icons);
+    const result = await performUpload(parsed.config, url, icons);
     if (!result?.ok) {
-      const code = result?.code ?? "page";
-      return json(res, statusFor(code), {
-        ok: false, code, reason: scrub(result?.reason, cfg), state: result?.state ?? null,
-      });
+      return json(res, statusFor(result?.code ?? "page"), failurePayload(result, parsed.config));
     }
     return json(res, 200, {
       ok: true, batchId: result.batchId ?? null,
-      // Only a card with a picture counts: "Upload failed" is reported, never accepted.
+      // Only a card carrying Getty's "Ready to submit" icon counts: "Upload failed" is reported, never accepted.
       accepted: result.accepted ?? result.state?.uploaded ?? [],
       failed: result.failed ?? result.state?.failures ?? [],
+      // Contributions Getty never marked "Ready to submit": named, so the app can
+      // say which file is not submittable instead of counting it as uploaded.
+      notReady: result.notReady ?? result.report?.readiness?.notReady ?? [],
       chips: result.state?.chips ?? null,
       completed: result.report?.completion?.clicked === true,
       // Every card carried Getty's "Ready to submit" icon: the batch is finished
@@ -240,7 +336,7 @@ export async function handleGettyWebUpload(req, res, post, json, limit) {
       submitted: result.state?.submitted === true,
     });
   } catch (err) {
-    return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, cfg) });
+    return json(res, 502, { ok: false, code: "page", reason: scrub(err?.message, parsed.config) });
   }
 }
 
@@ -254,6 +350,19 @@ export function handleGettyWebProgress(req, res, json) {
   const entry = [...sessions.values()].find((item) => item.sessionKey === key && item.session);
   if (!entry) return json(res, 404, { ok: false, code: "bad-request", reason: "no Getty upload is running for this run" });
   return json(res, 200, { ok: true, progress: entry.session.progress ?? null });
+}
+
+/**
+ * `POST /getty-web/skip-wait` {sessionKey}: "Retry now" — the retry timer the run
+ * is waiting on ends at once and the run takes its next step. `skipped` says
+ * whether a timer was running; a deadline or an idle run answers false.
+ */
+export async function handleGettyWebSkipWait(req, res, post, json) {
+  const parsed = parseCloseBody(await post(req, 65536));
+  const key = typeof parsed?.sessionKey === "string" ? parsed.sessionKey : null;
+  const entry = [...sessions.values()].find((item) => item.sessionKey === key && item.session);
+  if (!entry) return json(res, 404, { ok: false, code: "bad-request", reason: "no Getty upload is running for this run" });
+  return json(res, 200, { ok: true, skipped: entry.session.skipWait() === true });
 }
 
 function sessionKeyOf(rawUrl) {
@@ -304,7 +413,8 @@ export async function handleGettyWebFinish(req, res, post, json) {
     });
   }
   try {
-    const result = await entry.session.finish({});
+    entry.busy = true;
+    const result = await entry.session.finish({}).finally(() => { entry.busy = false; });
     touch(key, entry);
     if (!result?.ok) {
       const code = result?.code ?? "page";
@@ -313,6 +423,7 @@ export async function handleGettyWebFinish(req, res, post, json) {
     const report = result.report ?? {};
     return json(res, 200, {
       ok: true, batchId: entry.session.batchId ?? null, accepted: [], completed: report.completion?.clicked === true,
+      notReady: report.readiness?.notReady ?? [],
       ready: report.readiness?.ok === true && report.readiness?.verified !== false,
       completion: report.completion ?? null, metadata: [], contributions: report.contributions ?? null,
       submitted: report.state?.submitted === true,

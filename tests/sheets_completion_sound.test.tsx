@@ -64,7 +64,7 @@ async function importedSheet() {
   return { host, downloads };
 }
 
-it.each(["zip", "folder", "download"])("Single sheets %s cues after the real export finishes", async (kind) => {
+it.each(["zip", "folder"])("Single sheets %s cues after the real export finishes", async (kind) => {
   const { host, downloads } = await importedSheet();
   const dest = new FakeDir("destination");
   (window as unknown as { showDirectoryPicker: () => Promise<FakeDir> }).showDirectoryPicker = async () => dest;

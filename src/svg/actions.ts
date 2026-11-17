@@ -11,28 +11,35 @@ import { useImgRegenActions } from "./imgactions";
 import type { PreparedImageRun } from "./imgprepare";
 import { parsePreviewBackground, type PreviewBackground } from "../lib/svgbackground";
 import { clampStroke } from "../lib/previewstroke";
-import type { SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
+import type { SvgDir, SvgListFilter, SvgSort, UsageTotals } from "../lib/svglist";
 import { pickFolderFor } from "../ui/pickroot";
 import { getAppState, patchSvg } from "../state/appstore";
-import { applyRowGesture, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
+import { applyRowGesture, invertChecked, sameRowSelection, setChecked, toggleChecked, type RowSelection, type SelectIntent } from "../lib/reviewselect";
 import type { HistoryActions } from "../state/HistoryProvider";
 import { selectionPayloads } from "../lib/selectiondelta";
 import { useKeyActions } from "./keyactions";
 import { useSvgPromptActions, type SvgPromptActions } from "./promptactions";
+import { useStyleActions, type StyleActions } from "./styles";
 import { refreshCatalog } from "./catalog";
 import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
 import { rememberRoot, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
+import { useSvgEditBinding } from "./svgedit";
+import { useTailCutActions } from "./tailcut/usetailcut";
+import type { DirHandleLike } from "../lib/fs";
+import { loadWebChat } from "./webchatstore";
 import { guard, perRequestOf, planOf } from "./runplan";
 import { confirmRun, dropQueueForCancel, dropWaiting } from "./runcontrol";
 import { hasJobs } from "./jobstate";
+import { useDecisionFollower, useRemoveAction } from "./removerows";
 import { skipCurrentSvgRequest, stopSvgRuns } from "./runjobs";
 import type { CancelNote } from "./runcontext";
-import type { ConfirmedBatch } from "./types";
 import { useCodeActions } from "./codeactions";
+import { useRegisterActions } from "./registerexisting";
+import { useRegisterImageActions } from "./registerimages";
 import type { SvgAction, SvgModel } from "./statemodel";
-import type { Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
+import type { ConfirmedBatch, Dialog, Placement, RunProgress, SvgOperation, SvgRefs, SvgRow } from "./types";
 import { idsWithGeneratedSvg } from "./rowmodel";
 import type { Discovery } from "./sources";
 import { MAIN_PLAN, clampRegenPerRequest, regenPlanFromPreset, type RegenPlan } from "../lib/svgregen";
@@ -47,16 +54,17 @@ export interface SvgCtx {
   setCurrent: (id: string | null) => void;
 }
 export type SvgSetters = Pick<SvgCtx, "say" | "loadAll" | "refreshKey" | "setRootName" | "setDiscovery" | "setBusy" | "setRootToken" | "setRows" | "setRowsFn" | "setProgress" | "setProgressFn" | "setCurrent">;
-export interface SvgActions extends SvgPromptActions {
+export interface SvgActions extends SvgPromptActions, StyleActions {
   readCode: (id: string, version: number) => Promise<string | null>;
   chooseRoot: () => void; rescan: () => void; setThumb: (px: number) => void; setPreviewBg: (bg: PreviewBackground) => void;
   setPreviewStroke: (px: number | null) => void;
-  setFilter: (patch: Partial<SvgListFilter>) => void; setSort: (sort: SvgSort) => void; setConfig: (patch: Partial<SvgConfig>) => void;
+  setFilter: (patch: Partial<SvgListFilter>) => void; setSort: (sort: SvgSort) => void;
+  setSortDir: (dir: SvgDir) => void; setConfig: (patch: Partial<SvgConfig>) => void;
   switchConnection: (id: string) => void; addConnection: () => void; removeConnection: () => void;
   setConnectionMeta: (patch: { name?: string; kind?: ConnectionKind }) => void;
   setImage: (patch: Partial<Connection["image"]>) => void;
   setProviderOpen: (open: boolean) => void; setParams: (patch: Partial<SamplingParams>) => void; refreshModels: () => void;
-  saveKey: (key: string) => void; forgetKey: () => void; toggleCheck: (id: string) => void; selectVisible: () => void;
+  saveKey: (key: string) => void; forgetKey: () => void; toggleCheck: (id: string) => void; selectVisible: () => void; invertVisible: () => void;
   uncheckVisible: () => void; deselectAll: () => void; checkActive: () => void; uncheckActive: () => void;
   selectRow: (id: string, intent: SelectIntent) => void; setActive: (id: string) => void;
   decide: (ids: string[], decision: ReviewStatus) => void;
@@ -68,15 +76,36 @@ export interface SvgActions extends SvgPromptActions {
   regenerateSelected: (ids: string[]) => void; cancelRun: (id?: string) => void; skipCurrentRequest: () => void; confirmGenerate: (batch: ConfirmedBatch) => void;
   dismissDialog: () => void; showCode: (id: string, version: number) => void; showHistory: (id: string) => void;
   dropQueued: (itemId: string) => void; preferVersion: (id: string, version: number) => Promise<string | null>;
+  /** Take the SVGs already in the folder into the pair, newest shown (2026-11-01). */
+  registerExisting: (ids: string[]) => void;
+  /** Take the AI source images already in the folder into the pair, newest main (2026-11-02). */
+  registerImages: (ids: string[]) => void;
   copyCode: (id: string, version: number) => void; openLocation: (id: string) => void;
+  /** Take rows out of the list by declining their images in Selection V2 (2026-11-04). */
+  removeRows: (ids: string[]) => void;
+  /** Tail cutter (2026-11-06): run on the checked rows; approve the checked reviewed rows. */
+  cutTails: () => void;
+  approveCuts: () => void;
 }
 export type Slice<K extends keyof SvgActions> = Pick<SvgActions, K>;
 export function useSvgActions(ctx: SvgCtx): SvgActions {
   useReviewApplier(ctx);
+  const tailCut = useTailCutActions(ctx);
+  useSvgEditBinding(ctx.refs.root as { current: DirHandleLike | null }, ctx.hist);
   return {
     ...useSourceActions(ctx), ...useViewActions(ctx), ...useModelActions(ctx), ...useSelectActions(ctx), ...useConnectionActions(ctx), ...useImgRegenActions(ctx),
-    ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx), ...useSvgPromptActions(ctx),
+    ...useKeyActions(ctx), ...useRunActions(ctx), ...useQueueActions(ctx), ...useCodeActions(ctx),
+    ...useRegisterActions(ctx), ...useRegisterImageActions(ctx), ...useSvgPromptActions(ctx), ...useRemoveRows(ctx), ...tailCut, ...useStyleActions(ctx),
   };
+}
+/** Remove + the list following every written pair decision (a click, an undo, a redo). */
+function useRemoveRows(ctx: SvgCtx): Slice<"removeRows"> {
+  const rescanIfIdle = () => {
+    if (!hasJobs(ctx.refs)) void scanSources(ctx.refs, ctx);
+    else ctx.say("An image was approved again — it is listed after the running process finishes (Rescan)");
+  };
+  useDecisionFollower({ rows: ctx.rows, setRowsFn: ctx.setRowsFn, rescanIfIdle });
+  return { removeRows: useRemoveAction(ctx) };
 }
 function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   const latest = useRef(ctx); latest.current = ctx;
@@ -96,15 +125,16 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
   const rescan = useCallback(() => { void scanSources(latest.current.refs, latest.current, true); }, []);
   return { chooseRoot, rescan };
 }
-function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPreviewStroke" | "setProviderOpen" | "setFilter" | "setSort"> {
+function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPreviewStroke" | "setProviderOpen" | "setFilter" | "setSort" | "setSortDir"> {
   const latest = useRef(ctx); latest.current = ctx;
   const setThumb = useCallback((px: number) => latest.current.dispatch({ type: "thumb", px }), []);
   const setPreviewBg = useCallback((bg: PreviewBackground) => latest.current.dispatch({ type: "bg", bg: parsePreviewBackground(bg) }), []);
   const setPreviewStroke = useCallback((px: number | null) => latest.current.dispatch({ type: "stroke", px: px === null ? null : clampStroke(px) }), []);
   const setFilter = useCallback((patch: Partial<SvgListFilter>) => latest.current.dispatch({ type: "filter", patch }), []);
   const setSort = useCallback((sort: SvgSort) => latest.current.dispatch({ type: "sort", sort }), []);
+  const setSortDir = useCallback((dir: SvgDir) => latest.current.dispatch({ type: "sort-dir", dir }), []);
   const setProviderOpen = useCallback((open: boolean) => latest.current.dispatch({ type: "provider-open", open }), []);
-  return { setThumb, setPreviewBg, setPreviewStroke, setProviderOpen, setFilter, setSort };
+  return { setThumb, setPreviewBg, setPreviewStroke, setProviderOpen, setFilter, setSort, setSortDir };
 }
 function useModelActions(ctx: SvgCtx): Slice<"setConfig" | "setParams" | "refreshModels"> {
   const latest = useRef(ctx); latest.current = ctx;
@@ -132,7 +162,7 @@ async function refreshModelsNow(latest: { current: SvgCtx }): Promise<void> {
     c.say(`Model list refreshed — ${models.length} models`);
   } catch (error) { c.say(message(error), true); }
 }
-function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "decide"> {
+function useSelectActions(ctx: SvgCtx): Slice<"toggleCheck" | "selectVisible" | "invertVisible" | "uncheckVisible" | "deselectAll" | "checkActive" | "uncheckActive" | "selectRow" | "setActive" | "decide"> {
   const latest = useRef(ctx); latest.current = ctx;
   return { ...useSvgChecks(latest), ...useSvgRowActions(latest), decide: useDecide(latest) };
 }
@@ -156,7 +186,12 @@ function useSvgChecks(latest: { current: SvgCtx }) {
     const before = svgSelection();
     editChecked(latest.current, { ...before, checked: [] }, "Deselect all");
   }, [latest]);
-  return { toggleCheck, selectVisible, uncheckVisible, deselectAll,
+  const invertVisible = useCallback(() => {
+    const before = svgSelection();
+    const ids = latest.current.visible.map((r) => r.source.id);
+    editChecked(latest.current, { ...before, checked: invertChecked(before.checked, ids) }, "Invert selection");
+  }, [latest]);
+  return { toggleCheck, selectVisible, uncheckVisible, deselectAll, invertVisible,
     checkActive: useCheckActive(latest), uncheckActive: useUncheckActive(latest) };
 }
 
@@ -199,7 +234,7 @@ function useRunActions(ctx: SvgCtx): Slice<"requestGenerate" | "regenerateSelect
   const requestGenerate = useCallback((ids: string[], placement: Placement = "back", operation: SvgOperation = "generate") => {
     const c = latest.current;
     const regenForGuard: RegenPlan | null = operation === "regenerate" ? dummyRegen(c) : null;
-    const why = guard(c, ids, regenForGuard);
+    const why = guard(c, ids, regenForGuard, !loadWebChat().enabled);
     if (why !== null) return c.say(why, true);
     const perReq = perRequestOf(c, regenForGuard);
     const problems = validateBatchPlan(planOf(c, ids, regenForGuard), perReq);

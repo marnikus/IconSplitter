@@ -43,6 +43,7 @@ export interface BatchView {
   toggle: (relPath: string) => void;
   toggleCheck: (relPath: string) => void;
   checkVisible: () => void;
+  invertVisible: () => void;
   uncheckAll: () => void;
   toggleAllVisible: (on: boolean) => void;
   selectRow: (id: string, intent: SelectIntent) => void;
@@ -92,7 +93,7 @@ function makeView(a: ViewArgs): BatchView {
     rowMerges: core.s.rowMerges,
     reviewCounts: a.reviewCounts, decidableCount: a.decidableCount, approvedSelectedCount: a.approvedSelectedCount,
     setFilter: ps.setFilter, setSort: ps.setSort, setThumb: ps.setThumb,
-    toggle: sel.toggleCheck, toggleCheck: sel.toggleCheck, checkVisible: sel.checkVisible,
+    toggle: sel.toggleCheck, toggleCheck: sel.toggleCheck, checkVisible: sel.checkVisible, invertVisible: sel.invertVisible,
     uncheckAll: sel.uncheckAll, toggleAllVisible: sel.toggleAllVisible, selectRow: sel.selectRow,
     moveActive: sel.moveActive, selectActive: sel.selectActive, checkActive: sel.checkActive, uncheckActive: sel.uncheckActive,
     setRowMerge: core.setRowMerge, clearRowMerge: core.clearRowMerge,

@@ -9,10 +9,11 @@ import { startCompletionSound } from "../ui/completionSound";
 import { readDirTree, type DirHandleLike } from "../lib/fs";
 import { pairEntries, type ReviewPair } from "../lib/pairing";
 import { isReviewExcludedFolder, REVIEW_EXCLUDED_FOLDERS } from "../lib/reviewfolders";
+import { withoutRecordedVariants } from "../lib/imageartifact";
 import type { FileEntry } from "../lib/scan";
 import { walkTree } from "../lib/scan";
 import { pairIdOfMetaPath } from "../lib/pairmeta";
-import { directoryNames, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
+import { directoryNames, inSplitFolder, isSplitPiece, scopeOf, scopeText, splitPairs, type ScanScope } from "../lib/splitscope";
 import { log } from "../log/logstore";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import type { ViewPair } from "../lib/reviewfilter";
@@ -100,14 +101,50 @@ interface Walked {
 }
 
 async function walkAndLoad(root: DirHandleLike): Promise<Walked> {
-  if (isReviewExcludedFolder(root.name)) {
-    return {
-      pairs: [], scope: { split: false, outside: 0 },
-      load: { metas: new Map(), records: [], corruptFiles: [], legacy: false, legacyCorrupt: false },
-    };
-  }
-  const { pairs, scope, entries } = await scanRoot(root);
-  return { pairs, scope, load: await loadPairDecisions(root, entries) };
+  if (isReviewExcludedFolder(root.name)) return emptyWalk();
+  const tree = await readDirTree(root, REVIEW_EXCLUDED_FOLDERS);
+  const entries = walkTree(tree, REVIEW_EXCLUDED_FOLDERS);
+  const load = await loadPairDecisions(root, entries);
+  const rule = scopeOf(directoryNames(tree), root.name);
+  const discoverable = batchPieces(reviewablePairs(entries, load), root.name);
+  const { pairs, outside } = splitPairs(discoverable, rule);
+  return { pairs, scope: { split: rule.split, outside: outside.length }, load };
+}
+
+/**
+ * Selection V2 reviews what the Batch wrote (2026-11-02): inside a split folder
+ * the only result is the piece that folder was made for, beside the reference
+ * copy the Batch put there. Registered variants, `_v2` PNGs and stray images in
+ * that folder are that pair's history, so they never become rows — while a
+ * folder that never saw a Batch keeps every pair it has.
+ */
+function batchPieces(pairs: readonly ReviewPair[], rootName: string): ReviewPair[] {
+  return pairs.filter((p) => keepsBatchPiece(p, rootName));
+}
+
+function keepsBatchPiece(pair: ReviewPair, rootName: string): boolean {
+  const ai = pair.ai?.relPath ?? null;
+  const source = pair.source?.relPath ?? null;
+  const inBatch = [ai, source].some((p) => p !== null && inSplitFolder(p, rootName));
+  if (!inBatch) return true;
+  return ai !== null && isSplitPiece(ai, rootName);
+}
+
+/** What a walk of an excluded folder (the app's own output) finds: nothing. */
+function emptyWalk(): Walked {
+  return {
+    pairs: [], scope: { split: false, outside: 0 },
+    load: { metas: new Map(), records: [], corruptFiles: [], legacy: false, legacyCorrupt: false },
+  };
+}
+
+/**
+ * The pairs the list may show. An image the registration pass took in as a pair's
+ * own AI-source version is that pair's history, not a new pair: without this a
+ * folder whose sources were just registered grew phantom rows to review (2026-11-02).
+ */
+function reviewablePairs(entries: FileEntry[], load: PairLoad): ReviewPair[] {
+  return withoutRecordedVariants(pairEntries(entries), load.metas.values());
 }
 
 /** The single commit: state, then the cache the undo paths read, then the report. */
@@ -128,20 +165,6 @@ function commit(
   pruneChecked(next.pairs); // a restored check must not point at a removed pair
   announce(prevScope, w.scope, say);
   reportReads(w.load, say);
-}
-
-/**
- * Walks the root once and decides the reviewable set (I-38): when the tree holds
- * a split-output folder, that folder's pairs are the set and the main folder's
- * unsplit sheets are counted as outside; otherwise every pair is reviewable, so a
- * folder that never saw a batch behaves exactly as before.
- */
-async function scanRoot(root: DirHandleLike): Promise<{ pairs: ReviewPair[]; scope: ScanScope; entries: FileEntry[] }> {
-  const tree = await readDirTree(root, REVIEW_EXCLUDED_FOLDERS);
-  const rule = scopeOf(directoryNames(tree), root.name);
-  const entries = walkTree(tree, REVIEW_EXCLUDED_FOLDERS);
-  const { pairs, outside } = splitPairs(pairEntries(entries), rule);
-  return { pairs, scope: { split: rule.split, outside: outside.length }, entries };
 }
 
 /** The id -> AI path cache every cross-tab undo reads (state/sourceindex). */

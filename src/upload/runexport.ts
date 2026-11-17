@@ -29,6 +29,7 @@ import {
 
 import { commitExport, type CommitExportInput, type CommitValidation } from "./exportcommit";
 import { converterDeps, fillToolBlocks, jpegBlock, metadataBlockOf } from "./exportrecord";
+import type { SavedMetadata } from "./recorddraft";
 import { metadataOutputsAt } from "./exportmetadata";
 import type { UploadRowSource } from "./discovery";
 
@@ -65,9 +66,11 @@ export interface ExportRunArgs {
   /** Accepted metadata (null = no embed stage). */
   metadata: IconMetadata | null;
   metadataInfo: {
-    prompt: string; provider: string; model: string; requestId: string | null;
+    prompt: string; response?: string; provider: string; model: string; requestId: string | null;
     usage: GeminiUsage; validation: MetadataValidation;
   } | null;
+  /** Text NOT accepted: saved in export.json only, never embedded (recorddraft.ts). */
+  savedMetadata?: SavedMetadata | null;
   /** The previous export.json, parsed (null = none/corrupt). */
   record: ExportRecord | null;
   signal?: AbortSignal;
@@ -115,6 +118,7 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
     settingsFp: settingsFingerprint(args.settings),
     metadataFp: args.metadata === null ? "" : metadataFingerprint(args.metadata),
     hasMetadata: args.metadata !== null,
+    recordMetadataFp: recordMetadataFpOf(args),
     optimize: args.settings.optimizeSvg,
     includeEps: args.settings.includeEps,
     includeSvg: args.settings.includeSvg, includeJpeg: args.settings.includeJpeg,
@@ -257,6 +261,12 @@ function commitInput(args: ExportRunArgs, plan: PlanFor, payload: CommitPayload)
 }
 
 // --- small helpers ----------------------------------------------------------------
+
+/** The fingerprint export.json should carry: accepted text, else the saved draft, else "". */
+function recordMetadataFpOf(args: ExportRunArgs): string {
+  const text = args.metadata ?? args.savedMetadata?.metadata ?? null;
+  return text === null ? "" : metadataFingerprint(text);
+}
 
 function isCancel(error: unknown): boolean {
   return error instanceof StageError && error.klass === "cancel";

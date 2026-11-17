@@ -101,11 +101,11 @@ export function Fixture({ tab, count, settings = DEFAULT_UPLOAD_SETTINGS }: { ta
   }, [checked, activeId]);
   const checkedSet = new Set(checked);
   const a = { activeId, checked, thumb: 64, bg, rootToken: 1, rootRef, toggleCheck: toggle, selectRow: (id: string) => click(id),
-    generate: noop, decide: noop, copyCode: noop, showCode: noop, showHistory: noop, openLocation: noop,
+    generate: noop, decide: noop, remove: noop, copyCode: noop, showCode: noop, showHistory: noop, openLocation: noop,
     requestImageRegen: noop, setImageVersion: noop, imgRunning: emptyIds, preferVersion: noopAsync } satisfies SvgRowActions;
   const u = { activeId, checked, thumb: 64, bg, rootToken: 1, rootRef, defaults: settings,
     overrides: emptySettings, applied: emptySettings, toggleCheck: toggle, selectRow: (id: string) => click(id), openSettings: noop, openLocation: noop,
-    requestMetadata: noop, acceptMetadata: noop, editMetadata: noop, copyMeta: noop, exportRow: noop,
+    requestMetadata: noop, acceptMetadata: noop, editMetadata: noop, copyMeta: noop, exportRow: noop, removeRows: noop,
     rowBadges: EMPTY_ROW_BADGES, toggleRowBadge: noop, removeRowBadgeSelected: noop } satisfies UploadRowActions;
   const first = ids[0] ?? "";
   const last = ids[ids.length - 1] ?? "";

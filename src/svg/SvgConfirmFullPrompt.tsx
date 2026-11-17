@@ -22,6 +22,8 @@ interface Props {
   picked: SvgRow[];
   codes: ReadonlyMap<string, RegenCode>;
   loading: boolean;
+  /** Regeneration: false = text-only, previewed with the no-image wording. */
+  attachImage?: boolean;
 }
 
 export function FullPromptPreview(p: Props) {
@@ -62,7 +64,7 @@ function generationText(p: Props, active: BatchPlan): string {
 
 function regenerationText(p: Props, active: BatchPlan): string {
   const presetText = p.choice.kind === "preset" ? p.choice.text : p.prompt;
-  return regenBatchPrompt(presetText, codeItemsOf(active, p.codes));
+  return regenBatchPrompt(presetText, codeItemsOf(active, p.codes), p.attachImage !== false);
 }
 
 /** The page's codes in manifest order; a missing one is named, never invented. */

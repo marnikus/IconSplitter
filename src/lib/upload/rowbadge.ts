@@ -3,6 +3,7 @@
 // Independent of the corner-badge decoration. RULE 13 on every parse.
 
 import { isRecord } from "../isrecord";
+import { anyOf, type Multi } from "../multifilter";
 
 export const ROW_BADGE_VERSION = 1;
 export const ROW_BADGE_MAX = 40;
@@ -180,6 +181,11 @@ export function rowMatchesBadge(ids: readonly string[], want: BadgeFilter): bool
   return ids.includes(want);
 }
 
+/** Several picked badge filters: a row passes when it matches ANY of them (2026-11-06). */
+export function rowMatchesBadges(ids: readonly string[], want: Multi<BadgeFilter>): boolean {
+  return anyOf(want, "all", (w) => rowMatchesBadge(ids, w));
+}
+
 export function applyState(value: unknown): RowBadgeState | null {
   if (!isRecord(value) || value.v !== ROW_BADGE_VERSION) return null;
   return parseRowBadgeState(value);
@@ -226,6 +232,14 @@ export function ensureHardcodedBadges(state: RowBadgeState): RowBadgeState {
   return unchanged ? state : { ...clean, catalog: nextCatalog };
 }
 
+/** The badge a stock's uploads assign: its preset id, else the same name (e.g. hardcoded "Adobe Stock"). */
+export function findNamedBadge(state: RowBadgeState, name: string, preferredId?: string): RowBadge | null {
+  const key = normalizeName(name).toLowerCase();
+  return state.catalog.find(
+    (b) => (preferredId !== undefined && b.id === preferredId) || (key !== "" && b.name.toLowerCase() === key),
+  ) ?? null;
+}
+
 export function ensureNamedBadge(
   state: RowBadgeState,
   name: string,
@@ -233,9 +247,7 @@ export function ensureNamedBadge(
 ): { state: RowBadgeState; id: string | null } {
   const trimmed = normalizeName(name);
   if (trimmed === "") return { state, id: null };
-  const existing = state.catalog.find(
-    (b) => (preferredId !== undefined && b.id === preferredId) || b.name.toLowerCase() === trimmed.toLowerCase(),
-  );
+  const existing = findNamedBadge(state, trimmed, preferredId);
   if (existing) return { state, id: existing.id };
   if (state.catalog.length >= ROW_BADGE_MAX) return { state, id: null };
   const idTaken = preferredId !== undefined && state.catalog.some((b) => b.id === preferredId);

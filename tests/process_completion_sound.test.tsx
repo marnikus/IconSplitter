@@ -84,7 +84,14 @@ describe("completion cues belong to real processes on every tab", () => {
     await act(async () => root.render(<HistoryProvider><App /></HistoryProvider>));
     const input = host.querySelector('[data-testid="file-input"]')!;
     Object.defineProperty(input, "files", { value: [new File(["x"], "a.png", { type: "image/png" }), new File(["x"], "b.png", { type: "image/png" })] });
-    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); await new Promise((r) => setTimeout(r, 110)); });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    // Wait for the attempt to finish (not a fixed 110 ms: the whole app mounts here and its speed varies), then
+    // give any extra per-image cue the chance to show up before asserting there was exactly one.
+    for (let i = 0; i < 40 && completionAudio.starts.length === 0; i++) {
+      await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+      await flushCompletionAudio();
+    }
+    await act(async () => { await new Promise((r) => setTimeout(r, 150)); });
     await flushCompletionAudio(); expect(completionAudio.starts).toHaveLength(1);
   });
   it("user-requested Batch, Selection and SVG folder scans cue; restoration scans stay silent", async () => {

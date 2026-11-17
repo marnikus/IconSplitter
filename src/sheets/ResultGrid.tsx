@@ -1,45 +1,58 @@
-// ResultGrid.tsx — result squares grid with copy/save actions
+// ResultGrid.tsx — every detected icon of the active sheet as a result square.
+// Clicking the image or its checkbox includes / excludes it from export; the
+// excluded icon stays visible, dimmed, so it can be brought back (I-3).
 
-type Item = { i: number; n: number };
+export interface ResultItem { i: number; off: boolean }
 
-type Active = { id: string };
-
-type Props = {
-  active: Active;
-  activeItems: Item[];
+export interface ResultGridProps {
+  items: ResultItem[];
   previews: string[];
   checker: string;
-  onCopy: (a: Active, it: Item) => void;
-  onSave: (a: Active, it: Item) => void;
-};
+  onToggle: (i: number) => void;
+  onCopy: (i: number) => void;
+  onSave: (i: number) => void;
+}
 
-export default function ResultGrid({ active, activeItems, previews, checker, onCopy, onSave }: Props) {
+export default function ResultGrid({ items, previews, checker, onToggle, onCopy, onSave }: ResultGridProps) {
+  const on = items.filter((x) => !x.off).length;
   return (
     <section>
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="panel-title !mb-0">Result — {activeItems.length} icons</h3>
-        <span className="text-xs text-slate-400">Same-size squares</span>
+        <h3 className="panel-title !mb-0">Result — {on} of {items.length} icons</h3>
+        <span className="text-xs text-slate-400">Click an icon to include / exclude it</span>
       </div>
-      {activeItems.length ? (
+      {items.length ? (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-          {activeItems.map((it, k) => (
-            <div key={it.i} className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-              <div className={`aspect-square ${checker}`}>
-                <img src={previews[k]} alt={`icon ${it.n + 1}`} className="h-full w-full" />
-              </div>
-              <div className="flex items-center gap-2 p-2">
-                <span className="text-xs text-slate-400">#{it.n + 1}</span>
-                <div className="ml-auto flex gap-1.5">
-                  <button onClick={() => onCopy(active as never, it as never)} className="btn-mini">Copy</button>
-                  <button onClick={() => onSave(active as never, it as never)} className="btn-mini !bg-indigo-500 hover:!bg-indigo-400">Save</button>
-                </div>
-              </div>
-            </div>
-          ))}
+          {items.map((it, k) => <ResultCard key={it.i} it={it} src={previews[k]} checker={checker} p={{ onToggle, onCopy, onSave }} />)}
         </div>
       ) : (
-        <p className="rounded-xl border border-white/10 p-6 text-center text-slate-400">No icons selected. Click a box above or adjust the merge distance.</p>
+        <p className="rounded-xl border border-white/10 p-6 text-center text-slate-400">No icons detected. Adjust the merge distance.</p>
       )}
     </section>
+  );
+}
+
+type Actions = Pick<ResultGridProps, "onToggle" | "onCopy" | "onSave">;
+
+function ResultCard({ it, src, checker, p }: { it: ResultItem; src: string; checker: string; p: Actions }) {
+  return (
+    <div className={`overflow-hidden rounded-2xl border transition ${it.off ? "border-white/5 bg-white/[0.02]" : "border-white/10 bg-white/[0.04]"}`}>
+      <button type="button" data-testid={`result-image-${it.i}`} aria-pressed={!it.off} title={it.off ? "Excluded — click to include" : "Click to exclude"}
+        onClick={() => p.onToggle(it.i)} className={`relative block aspect-square w-full cursor-pointer ${checker} ${it.off ? "opacity-30 grayscale" : ""}`}>
+        <img src={src} alt={`icon ${it.i + 1}`} className="h-full w-full" draggable={false} />
+        {it.off && <span className="absolute inset-x-0 top-2 mx-auto w-fit rounded-full bg-slate-900/90 px-2 py-0.5 text-xs text-slate-200">excluded</span>}
+      </button>
+      <div className="flex items-center gap-2 p-2">
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-400">
+          <input type="checkbox" data-testid={`result-check-${it.i}`} aria-label={`Export icon ${it.i + 1}`} checked={!it.off}
+            onChange={() => p.onToggle(it.i)} className="h-4 w-4 accent-indigo-500" />
+          #{it.i + 1}
+        </label>
+        <div className="ml-auto flex gap-1.5">
+          <button onClick={() => p.onCopy(it.i)} className="btn-mini">Copy</button>
+          <button onClick={() => p.onSave(it.i)} className="btn-mini !bg-indigo-500 hover:!bg-indigo-400">Save</button>
+        </div>
+      </div>
+    </div>
   );
 }

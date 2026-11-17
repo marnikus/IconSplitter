@@ -23,7 +23,8 @@ export function settingsFingerprint(s: UploadSettings): string {
     ...(s.strokeLinecap !== "source" ? [["linecap", s.strokeLinecap]] : []),
     ...(s.expandStrokes ? ["expand"] : []),
     ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
-    ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, templateHash]] : []),
+    // The bundled graphic keeps its old hash (existing packages stay current); a user template hashes its own code.
+    ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, s.shadowTemplateSvg ? fnv1a32(s.shadowTemplateSvg).toString(16) : templateHash]] : []),
     ...(s.badgeEnabled ? [["badge", s.badgeCorner, s.badgeWidthPct, s.badgeOffsetXPct, s.badgeOffsetYPct, fnv1a32(s.badgeTemplateSvg || badgeTemplate).toString(16)]] : []),
     ...formatToken(s),
     ...(s.sizeGuideEnabled ? [["sizeguide", s.sizeGuideCorner, s.sizeGuideSmallPct, s.sizeGuideLargePct,

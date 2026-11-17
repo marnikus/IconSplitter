@@ -92,6 +92,14 @@ async function deriveFrom(root: KnownRoot, handle: DirHandleLike): Promise<strin
 export async function restoreKnownRoot(handle: DirHandleLike): Promise<void> {
   const info = await lookupRootPath(handle);
   if (info.path !== "") rememberKnownRoot(handle, info.path, info.how);
+  else if (resolver !== null) void resolver(handle).catch(() => null); // the local helper finds it in the background (2026-11-16); the rows update when bound
+}
+
+/** Who finds a folder's full path when none was saved (ui/bridgeroot.ts registers the local helper). */
+let resolver: ((handle: DirHandleLike) => Promise<string | null>) | null = null;
+export function setRootResolver(fn: ((handle: DirHandleLike) => Promise<string | null>) | null): void { resolver = fn; }
+export async function resolveRootPath(handle: DirHandleLike): Promise<string | null> {
+  return resolver === null ? null : resolver(handle).catch(() => null);
 }
 
 /** `parent.resolve(child)`, or null when it is not a descendant / not allowed. */

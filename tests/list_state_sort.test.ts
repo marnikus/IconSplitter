@@ -9,7 +9,8 @@ import type { ViewPair } from "../src/lib/reviewfilter";
 
 const names = (rows: { id: string }[]) => rows.map((r) => r.id);
 const svg = (id: string, review: SvgListRow["review"]): SvgListRow => ({ id, name: id, relPath: id,
-  review, generation: "generated", generatedAt: null, cost: null, costEstimated: false, tokens: null, version: 1 });
+  review, generation: "generated", generatedAt: null, cost: null, costEstimated: false, tokens: null, version: 1,
+  svgCreatedAt: null, aiCreatedAt: null });
 const upload = (id: string, metadata: UploadListRow["metadata"]): UploadListRow => ({ id, name: id,
   relPath: id, metadata, status: "processed", approvedValid: 1, badges: [] });
 const batch = (name: string, review?: "approved" | "pending" | "declined" | "warning") => ({ name,

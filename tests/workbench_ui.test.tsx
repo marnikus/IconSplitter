@@ -6,7 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SESSION } from "../src/lib/session";
-import { getAppState, patchBatch, resetAppStore } from "../src/state/appstore";
+import { getAppState, patchBatch, patchStockUpload, resetAppStore } from "../src/state/appstore";
 import { bootStores } from "../src/state/boot";
 import { loadSessionState, saveSessionState, SESSION_KEY } from "../src/state/sessionstore";
 import Workbench from "../src/ui/Workbench";
@@ -101,6 +101,22 @@ describe("the shell", () => {
     expect(loadSessionState().tab).toBe("batch"); // …and now it is
   });
 
+  it("immediately replaces a saved Stock Upload bulk selection and flushes the latest state on exit", () => {
+    mountWorkbench();
+    const oldBulkPick = Array.from({ length: 100 }, (_, i) => `old-${i}`);
+    patchStockUpload({ checked: oldBulkPick, activeId: "old-99", anchorId: "old-0" });
+    expect(loadSessionState().stockUpload?.checked).toEqual(oldBulkPick);
+
+    patchStockUpload({ checked: ["new-a", "new-b"], activeId: "new-b", anchorId: "new-a" });
+    expect(loadSessionState().stockUpload?.checked).toEqual(["new-a", "new-b"]);
+
+    patchStockUpload({ activeId: "new-a" }); // active-only changes remain debounced
+    act(() => { window.dispatchEvent(new Event("pagehide")); });
+    expect(loadSessionState().stockUpload).toEqual({
+      checked: ["new-a", "new-b"], activeId: "new-a", anchorId: "new-a",
+    });
+  });
+
   it("opens on the tab the last session ended on", () => {
     saveSessionState({ ...DEFAULT_SESSION, tab: "selectionV2" }, "2026-10-01T12:00:00.000Z");
     bootStores();
@@ -116,7 +132,8 @@ describe("the shell", () => {
     mountWorkbench();
     const tabs = [...host.querySelectorAll("[data-testid^='tab-']")].map((el) => el.getAttribute("data-testid"));
     expect(tabs).toEqual([
-      "tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload", "tab-stock-upload",
+      "tab-sheets", "tab-batch", "tab-selection-v2", "tab-generate-svg", "tab-upload",
+      "tab-svg-builder", "tab-stock-upload",
     ]);
     await click("[data-testid='tab-upload']");
     await settle();

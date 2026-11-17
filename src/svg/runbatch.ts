@@ -13,7 +13,9 @@
 // charge. Only a failure the provider itself confirmed may be retried.
 
 import { batchManifest, batchOutcome, type BatchPlan } from "../lib/svgbatch";
-import { extractSvgBlocks, matchBlocks } from "../lib/svgextract";
+import { extractSvgBlocks } from "../lib/svgextract";
+import { expandUses } from "../lib/svguse";
+import { modelOf, providerOf, replyMatcherOf } from "./answerer";
 import type { Failure, Usage } from "../lib/svgrequest";
 import { endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
@@ -21,6 +23,7 @@ import { type PairMeta } from "../lib/pairmeta";
 import { sendBatch } from "./runsend";
 import { saveMetaAt } from "../selection/pairstore";
 import { buildComposite, type BuiltComposite } from "./composite";
+import { compositeLayout } from "../lib/svgcomposite";
 import { mainImageOf, withImagesOf } from "../lib/svgimgreg";
 import { metaAfterFailure, saveSvgVersion, type SaveArgs } from "./saveversion";
 import type { SvgSource } from "./sources";
@@ -97,8 +100,14 @@ function newBatchCtx(ctx: Omit<BatchCtx, "tally">): BatchCtx {
   return { ...ctx, tally: { saved: 0, failed: 0, missing: 0 } };
 }
 
+/** A text-only request sends no picture: nothing is read or drawn, the hash says so. */
+function textOnlyComposite(count: number): BuiltComposite {
+  return { dataUrl: "", hash: "text-only", layout: compositeLayout(count), bytes: 0 };
+}
+
 /** A composite that cannot be built must produce no request at all. */
 async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
+  if (ctx.state.args.attachImage === false) return textOnlyComposite(ctx.items.length);
   try {
     const metas = ctx.state.args.metas; // the main AI image is the source (RC8)
     return await buildComposite(ctx.state.args.root, ctx.items, (s) => mainImageOf(metas.get(s.id) ?? null, s.relPath));
@@ -112,7 +121,7 @@ async function tryComposite(ctx: BatchCtx): Promise<BuiltComposite | null> {
 function finishBatch(ctx: BatchCtx): void {
   const { state, plan, index, tally } = ctx;
   const report = batchOutcome({
-    plan, index, model: state.args.config.model,
+    plan, index, model: modelOf(state.args),
     saved: tally.saved, failed: tally.failed, missing: tally.missing,
     usage: ctx.usage ?? zeroUsage(), error: ctx.error,
     unknown: ctx.unsettled, elapsedMs: Date.now() - ctx.startedAt, requestId: ctx.requestId,
@@ -127,7 +136,7 @@ function finishBatch(ctx: BatchCtx): void {
 }
 
 async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<void> {
-  const matched = matchBlocks(extractSvgBlocks(text), batchManifest(ctx.plan.items));
+  const matched = replyMatcherOf(ctx.state.args)(extractSvgBlocks(text), batchManifest(ctx.plan.items));
   ctx.state.usages.push(usage);
   ctx.usage = usage;
   ctx.share = allocateUsage(usage, ctx.items.length);
@@ -135,7 +144,7 @@ async function saveMatches(ctx: BatchCtx, text: string, usage: Usage): Promise<v
     const position = ctx.plan.items.find((i) => i.sourceId === item.id)?.position ?? 0;
     const code = matched.byPosition.get(position);
     if (code === undefined) await missOne(ctx, item, position);
-    else await saveOne(ctx, item, position, code);
+    else await saveOne(ctx, item, position, expandUses(code));
   }
 }
 
@@ -156,7 +165,7 @@ async function saveOne(ctx: BatchCtx, item: SvgSource, position: number, code: s
   const isRegen = state.args.regen.kind === "current-svg";
   const args: SaveArgs = {
     root: state.args.root, source: item, code, prompt: ctx.records.get(item.id) ?? ctx.recorded,
-    provider: "Requesty", model: state.args.config.model, requestedAt: new Date().toISOString(),
+    provider: providerOf(state.args), model: modelOf(state.args), requestedAt: new Date().toISOString(),
     usage, batch: toBatchRef(plan, position, ctx.hash, batchManifest(plan.items)), requestId: ctx.requestId, meta,
     review: isRegen ? "needs-review" : "pending",
   };
@@ -186,7 +195,7 @@ async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error
   // A charged attempt keeps its share of the usage, and a pair without a file
   // gets one so no task can vanish without its cost (I-41).
   const next = metaAfterFailure({
-    source: item, prompt: ctx.recorded, provider: "Requesty", model: state.args.config.model,
+    source: item, prompt: ctx.recorded, provider: providerOf(state.args), model: modelOf(state.args),
     requestedAt: new Date().toISOString(), error, meta, usage: ctx.share ?? zeroUsage(),
   });
   await persist(state, item, next);

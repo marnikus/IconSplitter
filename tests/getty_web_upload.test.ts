@@ -32,11 +32,20 @@ function decodeHeader(value: string): Record<string, unknown> {
   return JSON.parse(atob(value)) as Record<string, unknown>;
 }
 
+/** The per-icon manifest, which rides at the end of the request body. */
+async function decodeManifest(init: RequestInit): Promise<Record<string, unknown>> {
+  const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
+  const size = Number(header.manifestBytes);
+  const bytes = new Uint8Array(await (init.body as Blob).arrayBuffer());
+  return JSON.parse(new TextDecoder().decode(bytes.subarray(bytes.length - size))) as Record<string, unknown>;
+}
+
 describe("Getty web upload rules", () => {
   it("builds a dated batch name from the plan size", () => {
     const now = new Date("2026-10-29T12:00:00Z");
-    expect(gettyWebBatchName(now, 1)).toBe("IconSplitter 2026-10-29 (1 icon)");
-    expect(gettyWebBatchName(now, 3)).toBe("IconSplitter 2026-10-29 (3 icons)");
+    // Getty's batch name carries no product name — just the date and the size.
+    expect(gettyWebBatchName(now, 1)).toBe("2026-10-29 (1 icon)");
+    expect(gettyWebBatchName(now, 3)).toBe("2026-10-29 (3 icons)");
     expect(gettyWebBatchName(now, 3).length).toBeLessThanOrEqual(60);
   });
 
@@ -81,7 +90,7 @@ describe("Getty web loopback client", () => {
     const result = await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
       icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1, 2, 3]) }, { name: "icon_a.eps", bytes: new Uint8Array([4, 5]) }], metadata }],
-      batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      batchName: "2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       complete: true, fetchImpl,
     });
     // `failed` is normalized even when the helper reports none.
@@ -91,8 +100,10 @@ describe("Getty web loopback client", () => {
     const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
     expect(header).toMatchObject({
       protocol: "getty-web", host: "esp.gettyimages.com", username: CREDS.username, password: CREDS.password,
-      batchName: "IconSplitter 2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      batchName: "2026-10-29 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       complete: true,
+    });
+    expect(await decodeManifest(init)).toMatchObject({
       icons: [{ metadata, files: [{ name: "icon_a.jpeg", bytes: 3 }, { name: "icon_a.eps", bytes: 2 }] }],
     });
   });
@@ -109,16 +120,17 @@ describe("Getty web loopback client", () => {
     await uploadBridgeGettyWeb({
       bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
       icons: [icon("icon_a", 3), icon("icon_b", 2)],
-      batchName: "IconSplitter 2026-10-29 (2 icons)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      batchName: "2026-10-29 (2 icons)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
       sessionKey: "run-7", fetchImpl,
     });
     // One call for the whole run: no per-icon request can stop after the first pair.
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
-    expect(header.icons).toHaveLength(2);
     expect(header).toMatchObject({ sessionKey: "run-7", complete: false });
-    expect((init.body as Blob).size).toBe(10);
+    expect(((await decodeManifest(init)).icons as unknown[])).toHaveLength(2);
+    // Ten staged bytes plus the manifest that names them, in one body.
+    expect((init.body as Blob).size).toBe(10 + Number(header.manifestBytes));
   });
 
   it("scrubs a password echoed by the helper and keeps the failure code", async () => {
@@ -155,6 +167,81 @@ describe("Getty web loopback client", () => {
       expect(down.code).toBe("helper-down");
       expect(down.reason).toContain("run_ftp_bridge.bat");
     }
+  });
+
+  it("keeps the per-icon manifest out of the header, where Node caps it at 16 KB", async () => {
+    // A 100-icon batch with 2 KB descriptions used to be a ~200 KB base64 header:
+    // Node answers 431 and destroys the socket before the route runs, which is why
+    // a 209-icon run failed instantly and never opened a browser window.
+    const icon = (i: number) => ({
+      files: [{ name: `icon_${i}.jpeg`, bytes: new Uint8Array(4) }, { name: `icon_${i}.eps`, bytes: new Uint8Array(4) }],
+      metadata: { title: `title ${i}`, description: "d".repeat(2000), keywords: ["k1", "k2"] },
+    });
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {
+      ok: true, batchId: "b", accepted: [], completed: false, completion: null, metadata: [],
+    }));
+    await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: Array.from({ length: 100 }, (_v, i) => icon(i)),
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const header = (init.headers as Record<string, string>)["x-getty-web-config"];
+    // The header carries the small settings only, far under any header cap.
+    expect(header.length).toBeLessThan(8 * 1024);
+    expect(decodeHeader(header)).not.toHaveProperty("icons");
+    expect((init.body as Blob).size).toBeGreaterThan(200 * 1024);
+  });
+
+  it("says how big the batch was when the helper drops the connection", async () => {
+    // A 209-icon run saw only "cannot reach the local helper" — the helper was
+    // there all along and had refused the size. The reason now carries the size.
+    const twoMB = new Uint8Array(1024 * 1024);
+    const dropped = vi.fn(async () => { throw new TypeError("Failed to fetch"); });
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [
+        { files: [{ name: "icon_a.jpeg", bytes: twoMB }, { name: "icon_a.eps", bytes: twoMB }] },
+        { files: [{ name: "icon_b.jpeg", bytes: twoMB }] },
+      ],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl: dropped,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("helper-down");
+      // 3 MB of staged bytes, named as such, plus the way out.
+      expect(result.reason).toContain("3.0 MB");
+      expect(result.reason).toContain("GETTY_WEB_MAX_BYTES");
+      expect(result.reason).toContain("run_ftp_bridge.bat");
+    }
+  });
+
+  it("reports an answer that is not JSON with its HTTP status, not as a dead helper", async () => {
+    // The helper's own 413 body must never be read as "the helper is not running".
+    const plain = vi.fn(async () => new Response("payload too large", { status: 413 }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl: plain,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // A refused size is its own code: the run can answer it by halving the batch.
+      expect(result.code).toBe("too-large");
+      expect(result.reason).toContain("HTTP 413");
+      expect(result.reason).not.toContain("cannot reach the local helper");
+    }
+  });
+
+  it("reads the helper's own Getty byte cap, so batches are sized to it", async () => {
+    const advertises = vi.fn(async () => jsonResponse(200, {
+      gettyWeb: { ready: true, browser: "found", maxBytes: 32 * 1024 * 1024 },
+    }));
+    expect(await probeBridgeGettyWeb("http://127.0.0.1:47391", advertises))
+      .toEqual({ ok: true, maxBytes: 32 * 1024 * 1024 });
+    // An older helper says nothing about its limits: the app then assumes the small cap.
+    const silent = vi.fn(async () => jsonResponse(200, { gettyWeb: { ready: true, browser: "found" } }));
+    expect(await probeBridgeGettyWeb("http://127.0.0.1:47391", silent)).toEqual({ ok: true });
   });
 
   it("probes the helper for the Getty web capability and a browser", async () => {
@@ -266,5 +353,56 @@ describe("Getty web finish call", () => {
     });
     expect(result).toMatchObject({ ok: false, code: "bad-request" });
     if (!result.ok) expect(result.reason).toContain("restart run_ftp_bridge.bat");
+  });
+});
+
+describe("Getty web batch requests", () => {
+  it("asks the helper for a new batch, so a run can exceed one batch's 100 icons", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {
+      ok: true, batchId: "9", accepted: ["icon_a.jpeg"], completed: false, completion: null, metadata: [],
+    }));
+    await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "2026-10-30 2/3 (1 icon)", submissionType: GETTY_WEB_SUBMISSION_TYPE,
+      newBatch: true, sessionKey: "run-8", fetchImpl,
+    });
+    const [, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    const header = decodeHeader((init.headers as Record<string, string>)["x-getty-web-config"]);
+    expect(header).toMatchObject({ newBatch: true, batchName: "2026-10-30 2/3 (1 icon)" });
+  });
+
+  it("keeps what a failed batch had already accepted, rejected and listed", async () => {
+    // A 100-icon chunk that timed out after 95 cards: re-sending the whole chunk
+    // would upload those 95 a second time.
+    const fetchImpl = vi.fn(async () => jsonResponse(504, {
+      ok: false, code: "timeout",
+      reason: "Getty listed 98 of 100 file(s) in 180 s",
+      accepted: ["icon_a.jpeg", "icon_a.eps"],
+      failed: [{ name: "icon_b.eps", id: "FSPID9" }],
+      seen: ["icon_a.eps", "icon_b.eps"],
+    }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("timeout");
+      expect(result.accepted).toEqual(["icon_a.jpeg", "icon_a.eps"]);
+      expect(result.failed).toEqual([{ name: "icon_b.eps", id: "FSPID9" }]);
+      expect(result.seen).toEqual(["icon_a.eps", "icon_b.eps"]);
+    }
+  });
+
+  it("leaves those lists out when the helper could not report them", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(503, { ok: false, code: "browser", reason: "no browser" }));
+    const result = await uploadBridgeGettyWeb({
+      bridgeUrl: "http://127.0.0.1:47391", preset: GETTY_WEB_PRESET, creds: CREDS,
+      icons: [{ files: [{ name: "icon_a.jpeg", bytes: new Uint8Array([1]) }] }],
+      batchName: "b", submissionType: GETTY_WEB_SUBMISSION_TYPE, fetchImpl,
+    });
+    expect(result).toEqual({ ok: false, code: "browser", reason: "no browser" });
   });
 });

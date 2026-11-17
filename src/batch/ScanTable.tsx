@@ -14,6 +14,7 @@ import type { PreviewEntry } from "./useBatchPreview";
 import BatchRowMergeBar from "./BatchRowMergeBar";
 import BatchThumbInfoCell from "./BatchThumbInfoCell";
 import type { BatchReviewStatus } from "../lib/statefile";
+import { withRowIndexes } from "../ui/LazyPreview";
 
 export interface ScanTableProps {
   /** I-68: answers whether this row's stored preview was made under other settings. */
@@ -242,9 +243,9 @@ export default function ScanTable(props: ScanTableProps) {
   const register = useCheckedRows(checked, activeId);
   // The active row is projected into the registry, so an arrow move no longer
   // recreates every row element (the Batch list is the largest by default).
-  const list = useMemo(() => rows.map((r) => (
+  const list = useMemo(() => withRowIndexes(rows.map((r) => (
     <RowView key={r.relPath} r={r} a={a} register={register} entry={previews?.get(r.relPath)} stale={rowStale?.(r.relPath) ?? false} />
-  )), [rows, a, register, previews, rowStale]);
+  ))), [rows, a, register, previews, rowStale]);
   return (
     <div className="svg-panel" data-testid="scan-table">
       <Header rows={props.rows} />

@@ -150,8 +150,11 @@ describe("the versions popup", () => {
     expect(text("[data-testid=svg-history-v3]")).toContain("invalid SVG");
     // the newest version is the one in use when nobody has chosen
     expect(q("[data-testid=svg-history-v2]")?.className).toContain("shown");
-    expect((q("[data-testid=svg-history-use-2]") as HTMLButtonElement).disabled).toBe(false); // shown is not yet accepted
+    expect((q("[data-testid=svg-history-use-2]") as HTMLButtonElement).disabled).toBe(false); // shown, not yet chosen
     expect((q("[data-testid=svg-history-use-1]") as HTMLButtonElement).disabled).toBe(false);
+    // the control says what it does: it chooses, it does not approve
+    expect((q("[data-testid=svg-history-use-1]") as HTMLButtonElement).title).toContain("does not approve");
+    expect(text("[data-testid=svg-history-shown]")).toContain("approves nothing");
     // cost and review are still there
     expect(text("[data-testid=svg-history-cost-1]")).toContain("no cost reported");
     expect(text("[data-testid=svg-history-shown]")).toContain("v2");
@@ -165,9 +168,9 @@ describe("the versions popup", () => {
     // the main preview switches immediately, without closing the popup
     expect(previewVersion()).toBe("1");
     expect(q(`[data-testid=svg-prev-${FOG}]`)?.shadowRoot?.innerHTML).toContain("#c22f2f");
-    // the choice is in the pair's own file, beside the images
-    expect(sidecar(root).preferred).toBe(1);
-    expect(sidecar(root).review).toBe("approved");
+    // the choice is in the pair's own file, beside the images — and the row is
+    // still unapproved: only the row's approve button is a review decision
+    expect(sidecar(root)).toMatchObject({ preferred: 1, review: "pending" });
     // the mark moved, the OTHER version now offers the same choice
     expect(q("[data-testid=svg-history-v1]")?.className).toContain("shown");
     expect(q("[data-testid=svg-history-use-2]")).not.toBeNull();

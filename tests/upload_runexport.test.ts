@@ -997,6 +997,54 @@ describe("vector-only EPS delivery gates", () => {
     expect(verifyEpsDocument(delivered).ok).toBe(true);
   });
 
+  it("exports SVG + JPEG + EPS with accepted metadata that carries an Icon Name and the AI response (2026-11-08)", async () => {
+    const root = pairRoot();
+    const settings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const named = { ...META, name: "team" };
+    const info = {
+      prompt: "p", response: "Title: t\nName: team", provider: "Gemini", model: "gemini-3.1-flash-lite", requestId: null,
+      usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(named),
+    };
+    const result = await runExport(args(root, { settings, defaults: settings, metadata: named, metadataInfo: info }));
+    expect(result.status, result.error?.detail).toBe("processed");
+    expect(result.error).toBeNull();
+    const eps = fileText(root, `${DIR}/export/${ART}.eps`);
+    expect(verifyEpsDocument(eps).errors).toEqual([]);
+    expect(readXmpMetadataFromEps(eps)).toEqual(META); // the name is not in the file
+    expect(readRecord(root).metadata).toMatchObject({ name: "team", response: "Title: t\nName: team", prompt: "p" });
+    expect(readRecord(root).validation).toMatchObject({ eps: true, readback: true });
+    // a re-export of the same accepted state reuses the package: nothing is rebuilt
+    const again = await runExport(args(root, { settings, defaults: settings, metadata: named, metadataInfo: info, record: readRecord(root) }));
+    expect(again.stages).toEqual([]);
+  });
+
+  it("a package left Partial by the envelope failure heals on the next export: only the EPS is rebuilt (2026-11-08)", async () => {
+    const root = pairRoot();
+    const settings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
+    const named = { ...META, name: "team" };
+    const info = {
+      prompt: "p", response: "r", provider: "Gemini", model: "gemini-3.1-flash-lite", requestId: null,
+      usage: { input: 1, output: 2, total: 3 }, validation: validateMetadata(named),
+    };
+    const first = await runExport(args(root, { settings, defaults: settings, metadata: named, metadataInfo: info }));
+    expect(first.status, first.error?.detail).toBe("processed");
+    // the state the failed run left behind: no EPS on disk, the record Partial with the stage's error
+    const exportDir = dirAt(root, `${DIR}/export`);
+    exportDir.children.delete(`${ART}.eps`);
+    const partial = readRecord(root);
+    partial.status = "partial";
+    partial.error = "EPS vector-only verification failed: EPS metadata envelope is not verified vector-only content";
+    partial.outputs.eps = null;
+    partial.validation = { ...partial.validation, eps: false };
+    const healed = await runExport(args(root, { settings, defaults: settings, metadata: named, metadataInfo: info, record: partial }));
+    expect(healed.status, healed.error?.detail).toBe("processed");
+    expect(healed.stages).toContain("eps");
+    expect(healed.stages).not.toContain("render"); // the JPEG is not drawn again
+    expect(healed.error).toBeNull();
+    expect(verifyEpsDocument(fileText(root, `${DIR}/export/${ART}.eps`)).errors).toEqual([]);
+    expect(readRecord(root)).toMatchObject({ status: "processed", error: null });
+  });
+
   it("does not reuse or download a raster-injected cached EPS even with matching fingerprints", async () => {
     const root = pairRoot();
     const settings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };

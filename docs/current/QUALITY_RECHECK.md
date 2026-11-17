@@ -4122,3 +4122,1158 @@ icon), `sor/stock-upload.md` (bar + `batch-ready`), `selectors/stock-upload.md`
 (ready chip, bar handles); every `docs/current` page stays under 9 000 B
 (8 966 / 7 724 / 8 558 B). `dist/` and `node_modules/` were restored, not
 committed.
+
+## 2026-10-30 — Getty uploads are verified by "Ready to submit", never a thumbnail
+
+Correction of the entry above, on the user's instruction: a rendered thumbnail is
+not evidence of an upload at all (Getty draws one for files it later rejects), so
+the ready icon is now the **only** proof.
+
+`driver.mjs` dropped `cardHasThumbnail`/`CARD_THUMBNAIL` and the card's
+`thumbnail` field: `fileStatus` returns `uploaded` only for a card carrying
+`[data-cy="pending-icon"][aria-label="Ready to submit"]`, `failed` for
+`invalid-file-media`, `processing` for anything else, and a page without cards
+can only prove a row is listed (never `uploaded`). `readUploadState.uploaded`
+therefore means "Getty validated this file"; `processingNames` is every listed
+file without the icon.
+
+`contribute.mjs`: `waitForVerified` waits for the icon on every card and, when
+the bound passes, returns `ok` with the still-pending names instead of claiming
+them — the following metadata save is what makes Getty validate a card, and the
+readiness gate (`waitForReadyToSubmit`, retry 30 s ×2 then 75 s) is the single
+judge. `finishBatch` now reads the icons before pressing Complete too: a card
+without the icon gets the readiness wait and, if it stays unvalidated, the batch
+is refused with the file named instead of submitted.
+
+`session.mjs` gained `acceptedOf`: the upload answer's `accepted` list comes from
+the **last** reading — the one taken after the grid-wide save — never from the
+attach phase, so a thumbnail-only card can no longer be reported as uploaded.
+`progressOf` keeps counting the same icon, and the panel line reads "N of M
+file(s) ready to submit".
+
+Focused runs: 24 files / **275 tests** passing — `getty_web_driver` 45 (incl. the
+new "never counts a rendered thumbnail as an upload on its own"), `getty_web_batch`
+30 (incl. a not-ready card kept out of `uploaded`, a listed-but-unvalidated card
+handed to the metadata step, and `finishBatch` refusing to submit it),
+`getty_web_session` 9 (3 new `acceptedOf` cases: post-save reading wins, empty
+when nothing was validated, attach fallback), plus finalize/upload/cdp/signin/
+browser/bridge and the stock-upload UI suites. `npx tsc --noEmit` clean;
+`npm run quality:changed` GATE PASSED; `npm run verify:fast` ALL LANES PASSED.
+No test removed, skipped or loosened; no threshold, budget or harness change.
+Docs: `sor/stock-upload-getty-web.md` (icon-only proof, `pending`, `acceptedOf`),
+`selectors/stock-upload.md` (thumbnails decide nothing); both stay under 9 000 B
+(8 996 / 8 527 B). `dist/` and `node_modules/` restored, not committed.
+
+## 2026-10-30 — Getty: metadata starts on the picture, the bar follows the chips
+
+Reported: the run froze on the step that types Date Created and presses Save
+metadata. Cause: the previous change made the transfer wait require the "Ready to
+submit" chip, but Getty only shows that chip **after** the metadata is saved — a
+deadlock that could only end at the 300 s bound.
+
+Two stages are now separate and measured. `driver.mjs` `fileStatus` counts a file
+as arrived on its picture **or** its chip (`uploaded`), while
+`readState.readyToSubmit` is the chip alone; `readState.awaitingReady` is every
+listed card without it. `contribute.mjs` `waitForVerified` waits for **arrival**
+(a picture or a chip) and returns as soon as every file has one — that is what
+starts the metadata step — and only reports `timeout` for a file with neither
+after the bound. The chip remains the finish line: `waitForReadyToSubmit` runs
+after the grid-wide Save metadata, re-presses Save metadata after `readyRetryMs`
+30 s (twice at most, `readyTimeoutMs` 75 s) and re-checks only the files that are
+not ready; a card that never turns ready is named and never clicks Complete.
+
+Progress: `progressOf` reports both counts; `settledFiles` is
+`max(arrived, ready) + failed` so the bar never runs backwards while the metadata
+is saved, and `progressLabel` switches to "N of M file(s) ready to submit" during
+the metadata/readiness phase. `session.upload` passes `onState` into
+`finalizeBatch`, so every readiness reading the helper takes also updates
+`/getty-web/progress` and the panel's bar at 100 % stays a finished, closable bar.
+
+Measured: `getty_web_batch` 30 (new "starts the metadata step on the picture,
+without waiting for the validation chip" reproduces the freeze under fake timers
+and passes in ~2 s of app time instead of the 300 s bound; "waits for the picture
+and then says which files never arrived" pins the honest timeout),
+`getty_web_finalize` 23 (new "presses Save metadata again when the grid save left
+a card not ready" — two grid saves, Complete only after the retry — and "never
+clicks Complete while a card still lacks its Ready to submit chip"),
+`getty_web_driver` 45 ("counts a rendered picture as arrival only, never as ready
+to submit"), `stockupload_getty_web` 15 (bar verifies against chips: 1 of 4 then
+2 of 4 ready while done stays at the arrived count). Focused total: 24 files /
+**275 tests**, all passing. `npx tsc --noEmit` clean, `npm run lint` 0 errors (22
+pre-existing warnings), `npm run quality:changed` GATE PASSED, `npm run
+verify:fast` ALL LANES PASSED. No test skipped, loosened or removed; no threshold
+or budget changed. Docs: `sor/stock-upload-getty-web.md` (arrival vs finish),
+`selectors/stock-upload.md` (picture starts metadata, chip finishes),
+`sor/stock-upload.md` (bar counting) — 8 964 / 8 568 / 8 067 B. `dist/` and
+`node_modules/` restored, not committed.
+
+## 2026-10-30 — Getty progress truth + re-upload of unvalidated cards
+
+Measured this round: `npx tsc --noEmit` clean; `npm run lint` 0 errors (22
+pre-existing warnings); `npm run quality:changed` GATE PASSED (largest touched
+file `gettywebtransfer.ts` 251 lines / 24 fns); `npm run verify:fast` ALL LANES
+PASSED (build 1,951.06 kB). Focused vitest: `stockupload_progress_ui` 6/6,
+`stockupload_getty_web` 17/17, `getty_web_session` 11/11, `getty_web_finalize`
+26/26, `getty_web_batch` 32/32, `docs_navigation` 4/4 after the SOR page was
+reflowed 9220 B → 8985 B.
+
+## 2026-10-30 — Getty runs above 100 icons (batched upload, one retry)
+
+Measured this round: `npx tsc --noEmit` clean; `npm run lint` 0 errors (22
+pre-existing warnings); `npm run quality:changed` GATE PASSED (largest touched
+file `gettywebclient.ts` 295 lines after splitting `parseFailure` into
+`failureReason`/`presentLists`/`pageLists`); `npm run verify:fast` ALL LANES
+PASSED (build 1,954.73 kB). Focused vitest: `getty_web_chunk` (new) +
+`getty_web_upload`, `stockupload_getty_web`, `bridge_getty_web`,
+`getty_web_session`, `getty_web_finalize`, `getty_web_batch`,
+`stockupload_progress_ui`, `quality_base`, `docs_navigation` green. Full suite
+3,420 tests: only `algo_efficiency`'s "synthetic 1000px 4-icon grid <200 ms"
+missed its wall-clock budget on this 2-vCPU sandbox (~224–280 ms); it touches no
+file this round changed and the budget was left untouched.
+
+## 2026-10-30 — a batch that is too big for one request (209-icon run)
+
+Measured this round: `npx tsc --noEmit` clean; `npm run lint` 0 errors (22
+pre-existing warnings); `npm run quality:changed` GATE PASSED (new
+`gettywebparse.ts` 107 lines; `gettywebclient.ts` 234 after the parse split);
+`npm run verify:fast` ALL LANES PASSED (build 1,956.20 kB). Focused vitest:
+`getty_web_chunk` 10/10, `getty_web_upload` 22/22, `stockupload_getty_web` 25/25,
+`bridge_getty_web` 25/25 incl. the new live 413 test, `docs_navigation` 4/4.
+Full suite 3,426 of 3,427: the only miss is `algo_efficiency`'s "synthetic
+1000px grid <200 ms" (216–308 ms) on this 2-vCPU box at load 1.3–2.1; it touches
+no file changed here and the budget was not touched.
+
+## 2026-10-30 — request sizing against the helper that is running
+
+Measured this round: `npx tsc --noEmit` clean; `npm run lint` 0 errors (24
+pre-existing warnings); `npm run quality:changed` GATE PASSED (`gettywebtransfer.ts`
+235 lines, `panelops.ts` 268, `runupload.ts` 285); `npm run verify:fast` ALL LANES
+PASSED. Focused vitest 10 files / 168 tests green: `getty_web_chunk` 11/11,
+`getty_web_upload` 23/23, `stockupload_getty_web` 26/26, `bridge_getty_web`
+26/26, `getty_web_batch`, `getty_web_finalize`, `getty_web_session`,
+`stockupload_progress_ui`, `stockupload_getty_web_ui`, `docs_navigation`. Full
+suite 3,430 of 3,431: only `algo_efficiency`'s wall-clock "synthetic 1000px
+<200 ms" (228 ms on this 2-vCPU box) missed, untouched by this change.
+
+## 2026-10-30 — Getty web: a 209-icon run failed at the header, not the helper
+
+- Cause (measured): `x-getty-web-config` carried `{icons:[…]}` — 100 icons with
+  2 KB descriptions = **287,340 chars** of base64 — and Node's 16 KB
+  `maxHeaderSize` answered **431 in 5 ms**, destroying the socket before any
+  route ran, so no browser opened and 418 files were reported as a dead helper
+  (`/tmp/hdr_probe.mjs`: small header → 503 in 46 ms, 100 KB header → 431 in 5 ms).
+- Fix: the header keeps settings + `manifestBytes` (< 8 KB); the per-icon manifest
+  is the **body's tail**; the helper rebuilds the config (`configFromBody`), still
+  reads an older `icons` header, and raises `maxHeaderSize` to 1 MB as defence.
+- Bar: `uploadBar` counts **uploaded** files (`done`), so 0 of 418 is `0%` /
+  "Upload failed — nothing was uploaded", `failed` paints red, and `complete`
+  (green) needs `failed === 0`.
+- Measured: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 12 files / 176 tests green;
+  full suite 3,434/3,435 — the only miss is `algo_efficiency`
+  "synthetic 1000px 4-icon grid < 200 ms" at 265 ms (environmental, budget kept);
+  docs 4/4 (soR 8,998 B, selectors 8,933 B, invariants 8,762 B).
+
+## 2026-10-30 — Getty web: a stuck batch page is reloaded before it is written off
+
+- Symptom: 100 cards listed, chips red for the whole readiness window, one card
+  "Upload failed", and no page reload — the run simply waited out its bound and
+  moved on. A reload is the recovery that turns those cards most of the time.
+- Helper: `waitForVerified` now reloads a page that gives no new picture for a
+  stall window; `waitForReadyToSubmit` runs a bounded ladder per batch —
+  **save, reload + save, save, reload + save, then re-upload** (`readyPlan`,
+  `READY_RELOADS = 2`) — re-reading the chips after every step, so a batch is
+  always reloaded at least once in its own verification before it is reported or
+  the next 100-icon batch starts. One `reloadMeter` per attach keeps the count
+  honest, and `session.mjs` feeds it into `progress.reloads` so the bar says
+  "page reloaded to get it moving".
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 10 files / 175 tests green;
+  full suite 3,437/3,438 (only the environmental `algo_efficiency` 1000px budget,
+  259 ms vs 200 ms, budgets untouched); docs 4/4 (soR 8,998 B, invariants
+  8,926 B).
+
+## 2026-10-30 — Getty web: the bar keeps counting after batch 1
+
+- Symptom: batch 1 verified, then the panel froze ("Verifying Ready to submit ·
+  0 completed / 418") while the browser kept uploading: only the first batch was
+  ever shown.
+- Cause 1 (`progressTick`): the poller **returned** on a `done`/`failed` reading.
+  The helper reports "done" at the end of *every* batch, so the watcher died after
+  batch 1 and no later reading was ever requested. It now runs until the run's own
+  `stop()` (the miss cap still covers a dead helper).
+- Cause 2 (`liveGettyProgress`): `done` was `base + settled` with `base` taken
+  from `counters.done` (only written after the whole run), so every batch restarted
+  the bar at 0. Readings now carry the **batch they belong to** (`progressOf`,
+  `batch`), a new batch banks the previous one's last count (`rebaseOnBatch`), and
+  the total is clamped to the run's file count.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED (`runupload.ts` 296 lines); `verify:fast` ALL LANES PASSED; focused 8
+  files / 91 tests green; full suite green except the environmental
+  `algo_efficiency` budget; docs 4/4 (process-progress 8,998 B).
+
+## 2026-10-30 — Getty batch names carry no product name
+
+- `gettyWebBatchName` now builds `2026-10-30 2/3 (100 icons)` (date, place,
+  size) instead of `IconSplitter 2026-10-30 2/3 (100 icons)`; the 60-character
+  cap and the retry form (`2026-10-30 retry 1/1 (7 icons)`) are unchanged.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 7 files / 147 tests green;
+  docs 4/4 (soR 9,000 B).
+- 2026-10-30 — Random 100-icon batch selection (`stock-random-batches`): the
+  Getty web run can now draw each 100-icon batch at random from the icons not yet
+  sent (`randomBatchOrder`, Fisher–Yates over the index list, opt-in through the
+  persisted `randomBatches` preference, default off) instead of taking the list in
+  row order; every selected icon is still uploaded exactly once, the last batch
+  keeps the remainder, and batch names, counts, progress totals, retries and the
+  metadata step are untouched. Injected `rng` keeps it deterministic in tests.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 7 files / 107 tests green;
+  `tests/stockupload*` 14 files / 101 tests green; docs 4/4 (soR 8,992 B,
+  selectors 8,994 B).
+- 2026-10-30 — A metadata drawer that is only skeleton bars (or never unlocks)
+  is now treated as the page's fault, not the file's: `metadataEditorReady`
+  reports `[data-cy="metadata-skeleton"]` as `skeleton`, the editor wait stops
+  at once instead of polling 15 s and re-clicking, and the helper reloads the
+  Getty page immediately and walks the metadata **again from the first file**
+  (once; the last walk never stops early, so one stubborn file cannot cost the
+  rest). Files whose card never got its picture are skipped (`no-thumbnail`)
+  instead of being retried through a drawer that cannot exist. New tests:
+  `getty_web_driver` (skeleton vs loaded drawer), `getty_web_finalize`
+  (skeleton → `Page.reload` → the first file is opened again; a picture-less
+  file is skipped without a reload; the never-unlocks ladder now reloads).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; full suite 3,445 / 3,446 (only
+  `algo_efficiency` 209.6 ms vs its 200 ms budget, environmental); helper 11
+  files / 258 tests green; docs 4/4 (soR 8,998 B, selectors 8,994 B).
+- 2026-10-30 — `Random batches` now also mixes each drawn 100-icon batch inside
+  itself (`mixedBatch` → `randomBatchOrder` over the chunk, the run's own rng), so
+  neighbouring stems from the list are never uploaded side by side; the check
+  that decides batch membership stays the same one-time permutation, and with the
+  box off the batch keeps the user's row order exactly. New test:
+  `stockupload_getty_web` "also mixes the icons inside a random batch, not just
+  between batches" (off = star/moon/sun row order; on with `rng = () => 0` =
+  sun/star/moon, i.e. draw `[b,c,a]` then mix to `[c,a,b]`).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; `tests/stockupload*` 14 files / 102
+  tests green; docs 4/4 (soR 8,997 B).
+- 2026-10-30 — A request the helper refuses as too large is now answered the
+  same way a dropped one is: `unreadableAnswer`/`parseFailure` map HTTP 413/431
+  to the new `too-large` code (never "cannot reach the local helper"), and
+  `sendRequest` halves the batch on `helper-down` **or** `too-large` (twice, so
+  one 51.6 MB body becomes 25.8 + 12.9 MB requests), logging what happened
+  (`batch-split`: "a request of 51.6 MB (100 icons) was larger than the helper
+  takes — sending it as two smaller batches"). `too-large` is deliberately not
+  session-level, so one oversized batch no longer ends a 209-icon run.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; helper+bridge+stockupload 15 files /
+  130 tests green; focused 5 files / 80 tests green; docs 4/4 (soR 8,999 B).
+- 2026-10-30 — `Random batches` spreads look-alike icons as well as shuffling:
+  `similarityKeyOf` strips a trailing number (`icon-snowflake_2_01` →
+  `icon-snowflake_2`) and `spreadSimilar` moves a batch member that repeats its
+  neighbour's key further along, so two sizes of one picture no longer travel
+  side by side while the rest of the draw keeps its order. One uniform
+  Fisher–Yates draw stays the source of the randomness (a second pass would add
+  nothing to a uniform permutation); the batch with the box off is untouched.
+  New tests: `getty_web_chunk` (key grouping, dealing, nothing dropped) and
+  `stockupload_getty_web` ("keeps the two sizes of one picture apart inside a
+  random batch": `snow_01/snow_02/wheel_01/wheel_02` upload as
+  `wheel_01, snow_01, wheel_02, snow_02`).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused 3 files / 49 tests green;
+  docs 4/4 (soR 8,996 B).
+- 2026-10-30 — A random batch is uploaded under **shuffled names**, because Getty
+  orders the batch page by file name: `stagedRanks` deals a request's names with
+  `randomBatchOrder` + `spreadSimilar`, `stagedFileName` puts the rank in front
+  (`0007-icon-snowflake_2_01.jpg`), so the site's own sort cannot put two sizes of
+  one picture side by side. `withRealNames` maps the answer back to the real names
+  before an icon's fate is settled, so a ranked card is never read as "never
+  listed". With `Random batches` off the names go out untouched.
+  New tests: `getty_web_names` (rank format, one rank per icon, spread, a batch of
+  one picture, the answer restored on both branches) and `stockupload_getty_web`
+  (ranked names on the wire, `0001-…` for a one-icon batch, 8 files uploaded).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED (`gettywebnames.ts` 10 fns / 64 lines, `gettywebtransfer.ts` 31 fns /
+  296 lines); `verify:fast` ALL LANES PASSED; focused 3 files / 51 tests green;
+  docs tests 4/4 (soR 8,986 B).
+- 2026-10-30 — Shutterstock and Adobe Stock walk the selection in the same rhythm
+  as Getty web: **100 icons per batch**, drawn at random when `Random batches` is
+  on, mixed inside the batch, and uploaded under a shuffled number in front of the
+  real name (`0007-star_01.jpg`). `planIconBatches` draws and mixes
+  (`iconbatches.ts`); `stableRanks` gives every icon a rank that follows its name,
+  so a re-upload replaces the remote file instead of duplicating it — a fresh draw
+  could not promise that on a site that keeps files; `stagedFileName`/`realNameOf`
+  (`shufflenames.ts`, now shared with the Getty path) write and read the rank.
+  Rows, log and history keep the real name; the batch rides in the progress line
+  (`Shutterstock batch 2/3 · star_01.jpg`). `runupload.ts` was split — the file
+  loops live in `filetransfers.ts`. New tests: `stockupload_ftp_batches` (list
+  order and real names with the box off, batch labels, the draw and the in-batch
+  mix, the rank map, the same names on a second run, the Adobe SFTP drop) and
+  `getty_web_names` (`stableRanks` stability and spread, `planIconBatches`).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED (`filetransfers.ts` 14 fns / 154 lines, `runupload.ts` 18 fns / 204
+  lines); `verify:fast` ALL LANES PASSED; focused 8 files / 155 tests green; docs
+  4/4 (soR 8,979 B, selectors 8,990 B).
+- 2026-10-30 — The loopback helper restarts itself when a `git pull` changes its
+  own code, so an update no longer leaves old code in memory until the window is
+  closed by hand. `tools/bridge/updatewatch.mjs` hashes the bytes of `tools/bridge/`
+  (`helperCodeStamp`, reusing `computeSrcFingerprint`) and reads HEAD for the note
+  (`readCommit`, loose ref or detached HEAD, `null` outside a checkout);
+  `shouldRestart` refuses while an upload moves. The helper re-checks every 10 s
+  and exits `RESTART_CODE = 75`; `tools/bridge/supervise.mjs` is the new process
+  above it (all four `.bat` launchers start it) and re-runs the helper on `75`, on
+  a crash up to 10 times, and stops after more than 10 restarts inside a minute.
+  Mid-run restarts are deferred (`gettyWebBusy` counts only a batch actually in
+  flight), idle Getty browsers are handed back first (`releaseIdleSessions`), and
+  `/health` now reports `update: {watching, commit, restarts}`. New tests:
+  `bridge_update_watch` (byte-following stamp, HEAD reading, busy deferral, note,
+  launchers never calling the bare server, the supervisor's restart/clean-exit
+  loop, a live helper exiting `75` on a change and staying up with
+  `--no-update-watch`).
+- Verified: `tsc` clean (with `updatewatch.d.mts`); lint 0 errors / 24 warnings
+  (added `clearInterval` to the Node globals); `quality:changed` GATE PASSED;
+  `verify:fast` ALL LANES PASSED; focused 6 files / 59 tests green; docs 4/4
+  (new page `sor/bridge-helper.md` 3,980 B, router 4,971 B).
+- 2026-10-30 — Shutterstock/Adobe uploads now leave **in the numbered order** they
+  were given. `planIconBatches` gained `stable` (draw by `stableOrder`, a name
+  hash, so a run's batches and numbers repeat exactly — a fresh draw would upload
+  a second copy under another number) and no longer falls back to `Math.random`
+  for a stable draw; `filetransfers.batchFiles` numbers icons `0001, 0002, …`
+  across the whole run and emits them in that order, batch by batch. The Getty web
+  request does the same: a request's rank is its position (`index + 1`), not a
+  second, independent draw, so "the number I planned" and "the order it went up"
+  are one fact. New/updated tests: `stockupload_ftp_batches` (strictly ascending
+  ranks, name-based draw, same names on a rerun, Adobe) and
+  `stockupload_getty_web`/`getty_web_names` (rank = position, stable draw twice).
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; focused suites green (55 + 36 + 11
+  tests); docs 4/4 (soR 8,926 B).
+- 2026-10-30 — One timed-out transfer no longer ends the helper window. Reported:
+  `FtpsError: FTPS server timed out after 30s` at `ftps/reply.mjs` killed Node
+  mid-run (right after `POST /ftps/close → 200`). Two sources fixed —
+  `nextReply`'s timer only settles **its own** waiter (the old `if (waiter)
+  waiter = null` cancelled a newer read and rejected an abandoned promise), and
+  the early `STOR` reply is wrapped in `observed()` because it starts before the
+  data channel's TLS handshake finishes. Belt: `tools/bridge/guards.mjs` installs
+  `unhandledRejection`/`uncaughtException` handlers in `server.mjs` that log one
+  scrubbed line and keep serving. `scrubSecrets` (ftps + gettyweb routes) now hides
+  only secrets of 4+ characters — a one-letter password masked every "p" in the
+  message. The supervisor prints `the helper stopped (N) … stopping after N
+  restart(s)` when it gives up. New tests: `bridge_crash_guard` (stalled FTPS
+  answers a failure and the helper stays up; `/ftps/close` during a stalled upload
+  leaves the window alive past the reply timeout; independent waiters; guards keep
+  a real process alive after an abandoned rejection; crash-loop message).
+- Verified: `tsc` clean (new `guards.d.mts`); lint 0 errors / 24 warnings;
+  `quality:changed` GATE PASSED; `verify:fast` ALL LANES PASSED; focused 7 files /
+  61 tests green; docs 4/4 (bridge-helper.md 5,698 B).
+- 2026-10-30 — A helper restart is now a **full** restart: `supervise.mjs --build`
+  runs `npm run build` before starting the new helper (exactly what
+  `run_ftp_bridge.bat` does on a fresh launch), so a pull that changes app code
+  leaves the page on a current bundle instead of the pre-pull one. All four
+  launchers pass `--build`; the first start is not rebuilt (the launcher just did
+  it), `--build-cmd` / `--build-cwd` / `--no-build` / `BRIDGE_REBUILD=1` change the
+  step, a failed build logs `rebuild failed (…) — serving the previous bundle` and
+  the helper still starts, and the restarted child keeps this window's flags
+  (`--getty-headed`, `--getty-profile …`). The helper prints that the launcher will
+  rebuild when it announces its own restart. New tests:
+  `bridge_restart_rebuild` (build once per restart and never on the first start,
+  flags carried over, failed build still starts, `--build-cmd` alone does not
+  enable it) plus a launcher assertion that every `.bat` passes `--build`.
+- Verified: `tsc` clean; lint 0 errors / 24 warnings; `quality:changed` GATE
+  PASSED; `verify:fast` ALL LANES PASSED; bridge suites 53 tests + 16 new/updated
+  green; docs 4/4 (bridge-helper.md 6,554 B).
+
+## 2026-11-01 — round 18: the page reloads itself after a rebuild
+
+- **Asked:** "automatically restart browser after update — add small msg confirmation notification
+  for user as new rebuild just rebuild and run on top web page."
+- **Built:** the helper reports `update.served = { stamp, builtAt }` on `GET /health`
+  (`servedBundle` in `tools/bridge/distfresh.mjs`, one `stat` per poll); `src/lib/updatewatch.ts`
+  compares that stamp with the page's own `<meta name="iconsplitter-src-hash">` and decides
+  reload / wait / nothing; `src/lib/runbusy.ts` collects the panels' `running` flags so an
+  upload, split run or generation holds the reload; `src/ui/rebuildwatch.tsx` polls every 15 s
+  and shows one short line at the top of the page (`New build found — reloading this page now`,
+  then `New build is running — rebuilt from <commit> at HH:MM` for 8 s through `sessionStorage`).
+  One automatic reload per (own → served) pair, so a page that cannot pick the bundle up says
+  `press reload` instead of looping. `BatchPanel`'s five row callbacks moved into `useRowActions`
+  to stay inside the function-size rule.
+- **Measured:** focused suites `tests/update_reload.test.ts` (13) + `tests/rebuild_watch_ui.test.tsx`
+  (8) = **21 passing**, full suite **3,508 tests / 329 files passing**; `npx tsc --noEmit` clean;
+  `npm run lint` **0 errors / 24 warnings** (unchanged); `npm run quality:changed` **GATE PASSED**
+  (8 changed files, largest `src/ui/rebuildwatch.tsx` 219 lines); `npm run verify:fast`
+  **ALL LANES PASSED** (build 6.7 s, `dist/index.html` 1,968.70 kB). Live helper proof: build
+  stamp `3b8c963f…` in `dist/index.html` == `/health` → `update.served.stamp`; rewriting the
+  served file moves the stamp and a live helper follows it. Docs: `sor/bridge-helper.md`
+  8,565 B (≤9,000), `sor/OVERVIEW.md` 4,497 B.
+- **Not changed:** the reload never fires mid-run, the transfer/upload paths and the retry budget
+  (`READY_RETRY_MS` 30 s, `READY_RESAVES` 2, `READY_REPAIRS` 1) are untouched; no test was
+  deleted, skipped or loosened.
+
+## 2026-11-01 — round 19: register the SVGs that are already in the folder
+
+- **Asked:** "Generate SVG tab — look at the folder with AI source images and check if some SVG
+  already exists. If one, register it in the app same as it was generated with the app. If
+  several, check versions and add versions by their names; the latest version make active as if
+  it was selected as the best actual version. Add this button control — works for all selected
+  item folders."
+- **Built:** `src/lib/svgimport.ts` (pure: which files belong to a stem, the version each becomes,
+  what is already recorded, the one toast line) and `src/svg/registerexisting.ts` (read each
+  folder, validate with the real `validateSvg` gate, `withVersion` + `withReview(pair.review)`,
+  `withPreferred(newest readable)`, one verified pair-file write, row rebuilt with `toRow`). The
+  action is wired as `registerExisting(ids)` and exposed as **⤓ Register existing SVGs (N)** in
+  the bulk bar (`svg-register-existing`). A busy pair is refused; an invalid/unreadable file is
+  counted and skipped; a second click adds nothing.
+- **Measured:** focused `tests/svg_register_existing.test.ts` (12) +
+  `tests/svg_register_existing_ui.test.tsx` (8) = **20**; related SVG suites (`svg_ui`,
+  `svg_version_chips`, `svg_pinned_bulkbar`, `svg_versions_ui`) 61 total green; full suite
+  **3,527 of 3,528** under `npm run test:fast`; `npx tsc --noEmit` clean; `npm run lint`
+  **0 errors / 24 warnings**; `npm run quality:changed` **GATE PASSED** (6 changed source files,
+  largest `src/svg/SvgPanel.tsx` 289 lines, `registerexisting.ts` 188); `npm run verify:fast`
+  **ALL LANES PASSED** (build 8.6 s, `dist/index.html` 1,973.78 kB); docs 4/4
+  (`sor/version-acceptance.md` 6,253 B incl. the new section, `selectors/svg-generation-list.md`
+  8,989 B).
+- **Environment note (not a product defect):** the `native` perf project's wall-clock tripwire
+  `algo_efficiency … synthetic 1000px <200ms` measures **221–232 ms** on this sandbox host for
+  the untouched `src/lib/detect.ts` (it measured under 200 ms on the previous host earlier in
+  the same session). No budget was widened and no test was skipped; the documented gate
+  (`verify:fast`, `PERF_BUDGETS=coverage`) passes, so the failure is recorded here as a host
+  speed change, not as a regression of this round.
+
+- **2026-11-02 — register-existing learns the pre-split name.** Measured: `svg_register_existing` 17 cases, `svg_register_existing_ui` 10 cases, `docs_navigation` green (31 focused); `npx tsc --noEmit` clean; `npm run lint` 0 errors (24 pre-existing warnings); `npm run quality:changed` GATE PASSED (`src/lib/svgimport.ts` 213 lines, `src/svg/registerexisting.ts` 209); `npm run verify:fast` ALL LANES PASSED (build 6.9 s, `dist/index.html` 1,975.10 kB). Defect fixed: the split folder's `download-icon-01_AI.svg` now registers for the pair whose AI file is `download-icon-01_AI_01.png`; a no-op names the pair and any other SVG seen, so nothing is silent.
+
+- **2026-11-02 — AI sources already in the folder are registered.** Measured: new `svg_register_images` (11) + `svg_register_images_ui` (7) green, existing `svg_register_existing` (17) + `svg_register_existing_ui` (10) still green after the name rules moved to `src/lib/foldernames.ts`, `docs_navigation` (4) green — 72 focused in one run and 86 in the image-regen neighbourhood; `npx tsc --noEmit` clean; `npm run lint` 0 errors (24 pre-existing warnings); `npm run quality:changed` GATE PASSED (`src/lib/imgimport.ts` split into a plan object + two helpers: 28 fns, largest `SvgPanel.tsx` 290); `npm run verify:fast` ALL LANES PASSED (build 7.1 s, `dist/index.html` 1,981.66 kB). Button `svg-register-images` records a pre-split original, an unrecorded `_vN` and a copy per selected folder; only a NUMBERED file moves the main image, and a no-op names the pair and the original it saw.
+
+- **2026-11-02 — a pull that changes only the app rebuilds it in place.** Measured: new `bridge_app_rebuild` (3: app-only change rebuilt and served with a new stamp while the helper stays up; unchanged app builds nothing; a failed build is reported once and the previous bundle stays served) plus the existing `bridge_update_watch`, `update_reload`, `bridge_restart_rebuild` green — 28 in one run; `npx tsc --noEmit` clean; `npm run lint` 0 errors (24 pre-existing warnings); `npm run quality:changed` GATE PASSED (no file over the limits); `npm run verify:fast` ALL LANES PASSED (build 7.4 s, `dist/index.html` 1,981.66 kB). Defect fixed: the reported window kept the previous build after `git pull` because the watch compared only `tools/bridge/`; it now also compares `APP_WATCH` (`src/` + `index.html`) against the stamp inside `dist/index.html` and rebuilds, so the open page reloads itself onto the new bundle.
+
+## 2026-11-02 — round 24: every finished bar sounds, both register passes show the bar
+
+Measured on this checkout after the round-24 edits (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,574 tests pass, 0 fail; coverage lane PASS (113 s); build PASS (1,984.69 kB, gzip 612.44 kB, 7.4 s).
+- Lint 0 errors / 24 warnings (unchanged count; the new `SvgRegisterProgress` complexity warning was split away).
+- Quality gate (changed) PASS: `performConfirmUpload` is back to 27 lines after `startProgress`/`depsFor`/`abortStart` were extracted (RULE 19 order: nesting → CC → cognitive → size).
+- New: `notifyBarCompletion` makes the shared bar the cue owner of last resort — a feature that already cued the id keeps it, so no finished bar is silent and none plays twice; the deferred replay now surfaces an earlier refused cue at the next gesture, which the three action-timing tests absorb with `settleCompletionAudio()` instead of loosening an assertion.
+
+## 2026-11-02 — round 24b: the register bar builds on Windows
+
+The round-24 register bar shipped as `src/svg/RegisterProgress.tsx` beside the
+model `src/svg/registerprogress.ts`. On Windows those two names fold into one
+file, so `import RegisterProgress from "./RegisterProgress"` bound to the model
+and rollup failed with `"default" is not exported` — green on Linux, red on the
+contributor's machine. The UI is now `src/svg/SvgRegisterProgress.tsx`, matching
+`SvgImageProgress.tsx` beside `imgprogress.ts`.
+
+Measured after the rename (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,577 tests pass, 0 fail (2 new guards in `fs_case_collisions.test.ts`);
+  coverage lane PASS (112 s); build PASS (1,984.73 kB, gzip 612.43 kB, 6.6 s).
+- Lint 0 errors / 24 warnings; quality gate (changed) PASS.
+- New guards: no two paths in the tree differ only in case, every relative
+  import resolves with exact case, and none resolves only by folding. Verified by
+  recreating the old pair — both report the failing name.
+- Docs: `rules/QUALITY_GATES.md` 16.6a (naming rule), process-progress,
+  version-acceptance and the SVG-run selectors now name the new file.
+
+## 2026-11-02 — round 24c: the register bar says what the run produced, not only what is left
+
+The register bar already showed folders done, percent and "N remaining". It now
+carries a second reading next to it — `registered` folders that this run actually
+wrote: "no new files yet", "1 new file registered", "N new files registered" —
+so a pass that finds nothing new is visible while it runs instead of only in the
+final toast. The finished bar keeps its single line ("3 registered · 1 skipped"),
+so the count is never printed twice.
+
+`ProcessProgressBar` gained an optional `note` (rendered as
+`{prefix}-progress-note` in the stats row, green); the register model owns the
+wording in `registerNote`, so both passes and the tests read one source.
+
+Measured after the change (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,579 tests pass, 0 fail (2 new assertions); coverage lane PASS (103 s);
+  build PASS; `npm run verify:fast` all lanes passed.
+- Lint 0 errors / 24 warnings; quality gate (changed) PASS.
+- `register_progress.test.ts` covers 0 / 1 / many and the finished empty note;
+  `register_progress_ui.test.tsx` asserts the note and "N remaining" together on
+  the real bar.
+
+## 2026-11-02 — round 25: choosing an SVG version is a choice, not an approval
+
+Reported: picking or changing an SVG version immediately approved the row, while
+the AI-source chips only changed the shown version. Choosing a version wrote
+`preferred` **and** `review: "approved"` in one pair-file write, so the approve
+button was bypassed and a pending row became exportable just by browsing its
+history.
+
+`src/svg/codeactions.ts` now writes only `withPreferred(prev, version)`: the item's
+`review` is untouched (pending stays pending, needs-review/declined survive, an
+approved row stays approved). The chips and the history tile mark the stored
+choice (`chosen`), their tooltips say "choosing does not approve the row", and the
+dialog line ends "… and approves nothing". Export still requires approval
+(discovery excludes a non-approved item), so the version is used, not approved.
+
+Measured after the change (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,579 tests pass, 0 fail; coverage lane PASS (95 s); build PASS; verify:fast all
+  lanes passed.
+- Lint 0 errors / 24 warnings; quality gate (changed) PASS.
+- Rewritten assertions (not dropped): the chip/dialog tests now prove the strong
+  pair — choice saved, review unchanged, upload discovery still empty — then
+  approve with the row's own ✓ and get version 1 exported; a later needs-review
+  keeps the choice and removes only the approval. New UI assertions pin the
+  honest tooltip and the "approves nothing" line.
+- Docs: version-acceptance (SVG section), I-54, svg-generation-results and both
+  selector pages; `selectors/svg-generation-list.md` was trimmed back under 9,000 B.
+
+## 2026-11-02 — round 25b: the row itself can no longer be painted approved by a choice
+
+Re-reported after round 25: choosing v2 still turned the row green. The cause was
+the running build, not a second writer: commit 57e8524 (the fix) had never reached
+GitHub — `git push` failed with a TLS handshake error at the time — so the pulled
+app still contained `withReview(withPreferred(...), "approved")`. The commit is
+pushed now and `dist/index.html` rebuilt from it (the served bundle contains
+"does not approve" and no longer contains "approved for export").
+
+Two guards added so the same claim is checked against the row, not only the file,
+and so the shortcut cannot be reintroduced silently (both fail on the old code —
+verified by restoring it temporarily: 4 failures):
+
+- `never paints the row as approved when a version is only chosen` asserts the
+  row's badge text and its green-edge class before the click, after the click and
+  after a reload, then proves the row's own ✓ is still the only approval.
+- `chooses a version in a module that cannot write an approval at all` asserts the
+  choice owner (`src/svg/codeactions.ts`) has no `withReview` call and writes
+  `withPreferred(prev, version)`.
+
+Measured after the change (`npx tsc --noEmit`, `npm run lint`,
+`npm run quality:changed`, `npx vitest run --coverage`, `npm run build`):
+
+- 3,581 tests pass, 0 fail; coverage lane PASS (94 s); build PASS (1,985.25 kB,
+  gzip 612.58 kB); verify:fast all lanes passed.
+- Lint 0 errors / 24 warnings; quality gate (changed) PASS; focused run of the
+  chip, dialog, image-choice, review-item and io suites: 85 passed.
+
+## 2026-11-02 — round 26: two created-time orders and one direction arrow
+
+Requested: sort by when the SVG was created/added, sort by when the AI source was
+created, and an ascending/descending control that works for any sort plus filter.
+
+- `lib/svglist.ts` gained `svg-created` and `ai-created` orders, `SvgDir`,
+  `naturalDir`/`sortDirOf` and a `dir` argument on `sortSvgRows`. Direction is the
+  order's own until the user flips it, applies after filtering, swaps the blocks of
+  a grouped sort, keeps unknown timestamps last in both directions and always
+  breaks ties by path.
+- Rows now carry `svgCreatedAt` / `aiCreatedAt`: the shown SVG's own file time
+  (registered files store `fileTime` from `lastModified`), else completion/request
+  time; the accepted image version's `updatedAt` (found images keep their file
+  time), else the AI file's mtime from the scan fingerprint.
+- State: `sortDir` beside `sort`, actions `sort` (restores the order's natural
+  direction) and `sort-dir`, both repinning. UI: both orders in Sort by plus the
+  `svg-sort-dir` arrow with `data-dir` and an honest aria-label; the filter/sort
+  line moved to `src/svg/SvgListFilters.tsx` to keep `SvgControls.tsx` inside the
+  file budget (315 → 255 lines).
+
+Measured (`npx tsc --noEmit`, `npm run lint`, `npm run quality:changed`,
+`npx vitest run --coverage`, `npm run build`):
+
+- 3,602 tests pass, 0 fail (23 new); coverage lane PASS (97 s); build PASS;
+  verify:fast all lanes passed.
+- Lint 0 errors / 24 warnings (the new `model.sortDir` memo dependency keeps it at
+  24); quality gate (changed) PASS.
+- New tests: `svg_list_time_sort` (order semantics, reversal of every order, null
+  handling, stable ties, filter-then-sort) and `svg_sort_direction_ui` (the real
+  panel: both orders, a flipped filter, a flipped group, direction surviving a
+  filter change). Registration keeps the found file's time (both passes) and falls
+  back to the click time when the browser hides it.
+
+## 2026-11-02 — registered AI sources stay out of Selection V2 (round 27)
+
+- Reported: after Generate SVG's "Register AI sources" pass took an image into a
+  pair's `imageVersions`, the same image appeared in Selection V2 as a new pair.
+- Cause: two different rules. Generate SVG lists only approved canonical sources
+  (so nothing there), while Selection V2 lists pending pairs, and pairing has no
+  idea a file is somebody's recorded history.
+- Fix: `withoutRecordedVariants` + `variantOwner` in `src/lib/imageartifact.ts`
+  (the module that already owns the version-folder artifact rule). Selection's
+  walk reads the pair files first, then drops every pair with a side recorded as a
+  different pair's version — before split-scope counting. Matched on the record,
+  case-insensitively, on whole path segments either way round; a pair recording
+  its own face stays.
+- Tests: `tests/selection_ignores_registered_variants.test.tsx` (3) — the record
+  index, the drop/keep rule through the real registration action, and a mounted
+  Selection V2 panel that showed the phantom row before the fix.
+- Measured: types PASS · lint 0 errors / 24 warnings · quality gate (changed)
+  PASS · tests 3,605 passed · build PASS.
+
+## 2026-11-02 — a Batch split folder lists only its own piece (round 27, part 2)
+
+- Reported rule (user, with the folder screenshot): Selection V2 may show only the
+  original image (`download-icon-23.png`) and its split AI first generation
+  (`download-icon-23_AI_04.png`); every version PNG, every SVG and every
+  `.svg.json` is ignored.
+- Cause: pairing accepts any `_AI` name, so an unnumbered copy, a registered
+  variant or a stray `_v2.png` inside `<dest>/<month>/<run>/<sheet>/split_NN/`
+  became a pair of its own — the folder was the one fact nothing read.
+- Fix: `splitFolderIndex` + `isSplitPiece` in `src/lib/splitscope.ts` (the module
+  that already owns the Batch layout rules) and `batchPieces` in Selection's
+  root source: inside a split folder the only artwork is the piece whose number is
+  the folder's number, with the reference copy beside it. Applies to a picked
+  `split_NN` root too; folders that never saw a Batch keep every pair.
+- Tests: `tests/selection_ignores_registered_variants.test.tsx` (5) — the piece
+  index (padded, unpadded, sheet with a numeric tail, non-Batch path) and a
+  mounted Selection V2 panel over the reported folder: one row, not four.
+- Measured: types PASS · lint 0 errors / 24 warnings · quality gate (changed)
+  PASS · tests 3,607 passed · build PASS.
+
+## 2026-11-03 — SVG generation through the ChatGPT web page
+
+- Scope: new `tools/bridge/aichat/` (chatflow, chatpage, session, routes), `/aichat/*` helper routes, app web transport (`src/svg/runweb.ts`, `src/lib/webchatclient.ts`, `src/lib/webchatprefs.ts`, `src/lib/svguse.ts`, `matchLoneBlock`), LIVE WEB confirm variant, `Generate with web page` toggle, queue/job plumbing.
+- Measured: 9 new test files, 62 new tests green; `npx tsc --noEmit` clean; `npm run lint` 0 errors; `npm run quality:changed` GATE PASSED (new files ≤ 103 lines, SvgConfirm.tsx 236 lines).
+- `npm run verify:fast`: tests lane 17 failed / 3652 passed — the same 17 tests in the same 9 files fail on a clean HEAD stash on this Windows/Google-Drive machine (browser-present Getty tests, case-collision scan, docs size budget, verify_execution process tests); build lane PASS. Aggregate gate therefore NOT passed.
+
+## 2026-11-03 — web generation: architecture and interface isolation cleanup
+
+- Scope: shared `tools/bridge/webdriver/` (browser/cdp/cookies, feature names injected via `naming`; `gettyweb/{browser,cdp,sessioncookies}.mjs` are Getty-bound shims), `aichat/session.mjs` split into `browser.mjs` + `pool.mjs`, app `WebTransport` interface (`runweb.ts` `createWebTransport`), `answerer.ts`, neutral `src/lib/helperurl.ts`.
+- Fixed: web versions/journal recorded the unused API model (now `ChatGPT (web)`); parallel runs' web turns collided at the helper (now one at a time, cancel-aware); pool progress grew per request (now latest turn only); a nameless cancel aborted any turn; ChatGPT errors named GETTY_WEB_* variables.
+- Measured: Getty suites identical before/after (235 pass, same 8 environmental failures); 11 new tests; `tsc` clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3663 pass / 16 fail, all 16 in the pre-existing environmental set (one flaky baseline test passed); build PASS. Aggregate gate NOT passed.
+
+## 2026-11-03 — one progress-bar lifecycle for every process
+
+- Scope: `ProcessProgressBar` owns status-driven controls/marks/sound (callers pass `status`, `runId`, `onCancel`, `onReview`, `onDismiss`); per-feature mappings `batchStatusOf`, `svgRunStatusOf`, `imageStatusOf`, `registerStatusOf`, `stockStatusOf`; all 7 bars migrated.
+- Fixed: register bars auto-hid 6 s after finishing (now stay until ✕ / next run); register passes had no Cancel and spun forever on a thrown folder (now `cancelRegister` + `fail()`); Batch 'Review results' was a no-op; cancelled Batch/SVG bars claimed 100 %; stock bar ids `stock-progress-*` → documented `stock-upload-progress-*`; image Stop id → `svg-image-progress-cancel`; an SVG run ending before its first request had a sound but no bar (`endedProgress`).
+- Measured: `process_bar_lifecycle` 13 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3675 pass, failures only the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-03 — activity bars for every long wait
+
+- Scope: `src/lib/activity.ts` (app-wide activity list, label counts, `withActivity`), `src/ui/useBusyActivity.ts` (every tab's busy text → bar), `src/ui/ActivityBars.tsx` in Workbench, `src/ui/ProgressFrame.tsx` (shared frame extracted from ProcessProgressBar); explicit `withActivity` for SVG review writes, Selection V2 bulk saves/Retry, Batch review-outcome writes. Activity bars close themselves when the work ends; job bars unchanged.
+- Measured: `activity_bars` 16 new tests; tsc clean; lint 0 errors; quality:changed PASSED (createActivityStore flattened to fit 30 lines); verify:fast tests 3692 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-04 — Remove a row from Generate SVG (= declined in Selection V2)
+
+- Scope: `src/svg/removerows.ts` (Remove via Selection's `applyDecisionPatch`, Selection's own "decisions" history entry, list follower), `selection/offline.ts` (Generate SVG folder fallback, `onDecisionsWritten`), `state/handlekeys.ts`; row `svg-remove-<id>` and bulk `svg-remove-selected`.
+- Measured: `svg_remove_row` 9 new tests (incl. undo/redo through `applyEntry`); tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3701 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-04 — one list search in every tab
+
+- Scope: `src/lib/textsearch.ts` (one matcher: every word in some field), `src/ui/SearchField.tsx` (one field); Batch folders and Selection V2 get a search box; SVG to upload and Upload also match status words; five per-tab matchers and three input copies replaced. `FilterGrid` selects extracted to keep it ≤ 30 lines.
+- Measured: `textsearch_tabs` 18 new tests; one stale fixture query (`o`) in `upload_row_gestures` updated because status words now match; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3719 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT web steps paced like a person
+
+- Scope: `chatflow.mjs` pauses before attach, paste and Send click (`jitteredDelay`, 75–125 %, cancel-aware); `/aichat/send` `stepDelayMs` (0–10 s, default 1 s); app setting `stepDelaySec` with popup field `svg-web-step`.
+- Measured: 5 new tests + 4 extended; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3723 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT reply reading on the new layout + limit notice
+
+- Scope: `aichat/chatpage.mjs` `readChat` finds the reply by `[data-markdown-text-style=assistant-message]` (the 2026-11-05 layout has no `[data-turn-key]`), plus `notice` (limit text outside messages); `chatflow.mjs` stops with `limit` (429) before attaching or when the image never appears; client/run map it.
+- Measured: 9 new tests incl. fixtures from the user's DOM; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3732 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT reply anchored on the prompt's icon line
+
+- Scope: `readChat(anchor)` takes the first answer below the LAST prompt carrying `Icon name (use it as the SVG <title>): <name>`; flow waits for that prompt to appear (`sent`) before waiting for the finished answer; `/aichat/send` `anchor`; app sends `iconNameLine(stem)` (shared with both prompt builders); activity bar 'ChatGPT web · <icon> — <step>…' during a request.
+- Measured: 9 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3740 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — regenerate with or without the reference image
+
+- Scope: regeneration popup checkbox `svg-confirm-attach-image` (default on) → `ConfirmedBatch.attachImage` → `QueueItem.attachImage` → `RunArgs.attachImage`; off = no contact sheet (`textOnlyComposite`), API request without image part, web helper `image: null` (no staging, no attach, no attachment limit); strip `svg-batch-no-image`.
+- Measured: 12 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3751 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT code-block replies (preview mode)
+
+- Scope: `readChat` reply text = code block `[data-markdown-copy-text]`, else preview `img[src^=data:image/svg+xml]` decoded, else visible text; in-page `atob` declared for lint.
+- Measured: 4 new tests from the user's DOM; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3756 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — regeneration prompt below the SVG code
+
+- Scope: `currentSvgPrompt` / `regenBatchPrompt` put the saved prompt LAST (after the code), lead-in points down; `withImage` false = no-image wording (run via `args.attachImage`, popup preview via `attachImage`).
+- Measured: 4 new + 4 updated order assertions; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3757 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — ChatGPT: unique request id + Copy-button fallback
+
+- Scope: `withRequestRef`/`requestRefLine` (one-off 'Request id' line under the icon line, the anchor); one in-page reply finder `pickAnswer` shipped with every step; `clickReplyCopy` + `copyReply` (clipboard read, permission granted, focus emulated) as the last resort when a finished reply shows no SVG.
+- Measured: 11 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3767 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — Ctrl-hover anchor points on SVG previews
+
+- Scope: `src/lib/svganchors.ts` (nodes from the shared path tokenizer, shapes, transforms), `src/svg/anchoroverlay.ts` (`useCtrlHover`, `useAnchorOverlay`), two hook calls in `SvgPreview.tsx`.
+- Measured: 8 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3775 pass / 17 fail, all in the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-05 — Upload tab 'Limit'
+
+- Scope: `src/lib/stockupload/uploadlimit.ts` (`parseUploadLimit`, `limitStockUploadPlan`, `uploadIsRandomized`), pref `uploadLimit`, `LimitOption` + implied Random batches in the bulk bar, `LimitNote` in the confirmation, panelops wiring.
+- Measured: 11 new tests incl. end-to-end batches; tsc clean; lint 0 errors; quality:changed PASSED (ConfirmPlanBody kept ≤ 30 lines); verify:fast tests: no failure outside the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — lazy row previews in every list tab
+
+- Scope: `src/ui/LazyPreview.tsx` (`LazyPreview`, `withRowIndexes`, shared IntersectionObservers per scroll area), `src/ui/lazypreviews.ts` + `LazyPreviewsToggle` in the top bar; 5 row previews wrapped, 5 lists numbered; `.lazy-preview` style.
+- Measured: 17 new tests; tsc clean; lint 0 errors; quality:changed PASSED; full suite run twice: 3804 pass / 16 fail on the second run (all pre-existing environmental); the first run's one extra failure (process_completion_sound folder-scan cue) passes alone 3/3 and on HEAD — load flake. Build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — folder scans ≥ 80 % quicker
+
+- Scope: parallel bounded `readDirTree` (`src/lib/limiter.ts`, 24 in flight), parallel shared pair-file loader `loadPairFiles` (16), session cache `src/selection/paircache.ts` keyed by (folder, path, size, mtime), invalidated by `saveMetaAt`; upload discovery uses the shared loader.
+- Measured (scan_perf, slow-drive fake, 120 pairs): old ≈ 16.8 s → first scan 0.93 s (−94 %), unchanged rescan 0.44 s (−97 %); 7 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests: no failure outside the pre-existing environmental set (quality_base fixed with the gate); build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — SVG to upload row assembly ≥ 80 % quicker
+
+- Scope: `src/upload/rowreads.ts` (shared folder lookups, bounded reads, source-hash store by fingerprint across restarts), parallel `assembleRows`; shared test helper `tests/helpers/slowfs.ts` (scan_perf switched to it).
+- Measured (60 pairs, slow-drive fake): old 7.58 s → 0.23 s cold (−97 %) → 0.22 s after a restart, no SVG re-read; 4 new tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests: no failure outside the pre-existing environmental set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — lazy previews really lazy; Batch sync writes only changes
+
+- Scope: `LazyPreview` scroll root = the ancestor that really scrolls (overflow-y auto|scroll AND scrollHeight > clientHeight), else `.app-main` — `.svg-panel .pair-table` (overflow-x only) had made every row visible in Batch, Generate SVG, SVG to upload and Upload; Batch `syncAndCollect` writes a state file only when more than the scan stamp changed, groups in parallel.
+- Measured: Batch unchanged rescan (60 groups, slow-drive fake) ≈ 4.7 s → 0.18 s, 0 writes; 5 new/changed tests; tsc clean; lint 0 errors; quality:changed PASSED; verify:fast tests 3819 pass / 16 fail, all pre-existing environmental; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — Remove in SVG to upload and Upload (decline one step earlier)
+
+- Scope: row Remove + bulk Remove selected in SVG to upload and Upload; both decline the item in Generate SVG through `applySvgReviewPatch` (records carry `at` = handle key + pair path), one `svgReview` entry (undo/redo), announced via `onSvgReviewsWritten` (also Generate SVG's own ✓/✕); both lists follow; Upload discovery hides exports whose source pair is found and not approved (`sourcePairsOf`, injected; `audit.declinedSources`).
+- Measured: 13 new tests (`upload_remove_row`); related suites 29 files / 325 tests pass; tsc clean; eslint on changed files 0 problems; quality:changed PASSED (split `collectBucket` CC 11→ok); verify:fast tests 3831 pass / 17 fail = the pre-existing environmental set + `docs_navigation` budget (fails on HEAD too) + flaky `process_completion_sound` (passes alone); build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — Generate SVG regenerate marks (overlaps / geometry)
+
+- Scope: item statuses `regen-overlaps` / `regen-geometry` in one catalog (`REVIEW_STATUSES`, `REVIEW_LABEL`, `isReview`); row ⧉/△ + bulk buttons, filter from the catalog, label search, tally, history validation via `isReview`, auto-advance like approve/decline, CSS orange/cyan.
+- Measured: 5 new tests (`svg_regen_statuses`), 1 pinned tally updated (`svg_extract`); svg/state/history suites 81 files / 816 tests pass; tsc clean; eslint 0 problems on changed files; quality:changed PASSED; verify:fast tests 3837 pass / 16 fail = the pre-existing set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — Invert selection in every list tab
+
+- Scope: `invertChecked` (lib/reviewselect), `InvertButton` (ui), `invertVisible` in Batch, Selection V2, Generate SVG, SVG to upload, Upload — one undoable selection entry each; useSelectionV2 visible gestures extracted (`makeVisibleChecks`) to stay in the RULE 16 budget.
+- Measured: 14 new tests (`invert_selection`); tab suites 230 files / 2491 tests pass; tsc clean; eslint 0 errors; quality:changed PASSED.
+
+## 2026-11-06 — Multi-choice filter dropdowns in every list tab
+
+- Scope: `lib/multifilter` (Multi value = all | one | list; anyOf/toggle/parse/drop/text), `ui/MultiSelect` checkbox menu; Batch status+review, Selection V2 status+pairing, Generate SVG generation+review, SVG to upload package+metadata+badge, Upload format+badge; shared `rowMatchesBadges`/`badgeFilterOptions`; stored/history filters parse lists; UI tests drive filters through `helpers/multiselect` `pickOnly`.
+- Measured: 19 new tests (`multi_filter`); 7 UI suites updated to the new control (185 tests pass); tsc clean; lint PASS; quality:changed PASSED (`dropBadgeFromFilter` extracted); verify:fast tests 3870 pass / 16 fail = the pre-existing set; build PASS. Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — In-preview SVG path editor + Edit settings
+
+- Scope: lib/pathedit (model, ops, hit/snap, session, gesture state machine, svgdoc one-d rewrite); svg/pathedit (SvgPathEditor, editoroverlay, useEditorInput); svg/svgedit (Finish = one write + one `svgEdit` history entry with both texts, undo/redo write back, panel-lent folder + push); svg/svgeditslot (Edit button, larger frame); usesvgtext revision bump; Edit settings (anchor px) for editor and Ctrl-hover dots; shared ui/usedismiss.
+- Measured: 34 new tests (pathedit_core 25, pathedit_ui 9 incl. Finish/undo); apply.test pinned type list updated; selection_response guard caught per-row history subscription (fixed via binding); tsc PASS; lint PASS; quality:changed PASSED; verify:fast tests 3903 pass / 16 fail = the pre-existing set; build PASS. Not exercised in a real browser (happy-dom has no layout; screen matrix stubbed). Aggregate gate NOT passed (environment).
+
+## 2026-11-06 — Path editor: several paths (objects) per session
+
+- Scope: every <path> loaded as an owned object in root space (objects.ts, affine helpers); click selects one path, Shift+click toggles, marquee selects anchors across paths and their paths, Esc clears anchors then paths, joint moves, snap against all paths, Finish writes only changed objects through their inverse matrices; hitTest takes a query object; overlay in root svg.
+- Measured: 9 new tests (pathedit_objects) + 1 UI test; pathedit suites 42 + UI pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast 3911 pass / 17 fail = the pre-existing 16 + flaky process_completion_sound (passes alone); build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Path editor: basic shapes and geometric picking
+
+- Scope: svgdoc reads circle/ellipse/rect/line/polyline/polygon as objects (skips non-drawn containers), writes a changed shape as <path> keeping other attributes; hit.objectAt picks by geometry (9 px band of any shape, else inside an unselected closed shape, topmost first) — fixes the reported icon (stroke-width 1 in 1024 viewBox, five circles not editable).
+- Measured: 6 new tests (pathedit_shapes, written first, seen failing); editor suites 48 pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast 3917 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Path editor: click tolerance setting
+
+- Scope: Edit settings gains pickPx (2–40, default 14 screen px), passed into the pointer input; a single click within it of a shape's line picks the shape (gesture.pickedObject → hit.objectAt).
+- Measured: 3 new tests (pathedit_pick_tolerance, written first, seen failing); editor + quality_base suites 58 pass; tsc PASS; lint PASS; quality:changed PASSED; verify:fast before the final split: only the pre-existing failures plus quality_base (gate-coupled, green after the fix); build PASS.
+
+## 2026-11-06 — List view remembered across reload (Generate SVG, SVG to upload, Upload)
+
+- Scope: state/listviewstore (load/save/useSaveListView), per-tab parsers (svg/upload/stockupload listview.ts, parseMulti/parseAnyMulti), initial models read the saved view, hooks save filter+search+sort(+dir).
+- Measured: 6 new tests (list_view_persist, written first, seen failing); verify:fast 3927 pass / 16 fail = the pre-existing set; lint fixed (no-useless-assignment) and green; tsc PASS; quality:changed PASSED; build PASS.
+
+## 2026-11-06 — Full-screen SVG edit mode
+
+- Scope: one modal per tab (SvgEditModal + editmodalstore) opened by a row's Edit; controls outside the artboard (top bar, side arrows, hotkey legend); edit mode owns all keys; session history capped at 50, Ctrl+Shift+Z redo; ←/→ row navigation with Save/Discard/Stay, Ctrl+Shift+S / Ctrl+Shift+X; I thin/preset stroke, V/P tools; useEditMode hook; rows no longer edit in place.
+- Measured: 11 new tests (pathedit_modal, written first, seen failing); editor suites 61 pass; verify:fast 3937 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Edit mode artboard background
+
+- Scope: shared ui/PreviewBgPicker (replaces the duplicated pickers in Generate SVG and SVG to upload bulk bars, same handles); edit mode top bar picks the artboard background, white by default, remembered in Edit settings (bg, validated); dark backgrounds get the contrast outline.
+- Measured: 4 new tests (pathedit_bg, written first, seen failing); svg/upload/editor suites 185 files / 2116 tests pass; verify:fast 3940 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit artboard background fix
+
+- Scope: .svg-edit-board .svg-preview { background: none } — the preview's checkerboard covered the chosen PREVIEW BG (reported: white selected, transparent shown).
+- Measured: pathedit_bg 5 tests pass (new CSS guard).
+
+## 2026-11-06 — Path editor: Shift adds / Alt removes (click and box)
+
+- Scope: gesture SelectMode (replace/add/remove) for anchor presses and the marquee; Shift-drag still moves the whole selection with snap; Alt-drag on handles still breaks; legend updated.
+- Measured: 6 new tests (pathedit_select_mods, written first, seen failing); editor suites 72 pass; verify:fast 3948 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit mode: moved circles drawn live; no double line in preset
+
+- Scope: useEditMode liveShape swaps a changed basic shape for the <path> Finish writes (circles ignored d); overlay guide only in the thin view.
+- Measured: 3 new tests (pathedit_live_shapes, reproduced first); editor suites 75 pass; verify:fast 3950 pass / 17 fail = pre-existing 16 + flaky process_completion_sound (passes alone); tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — process_completion_sound: no fixed sleep
+
+- Scope: the Single sheets import test waited a fixed 110 ms after mounting the whole App; it now waits (≤ 2 s) for the attempt's cue, then 150 ms more, and asserts exactly one cue. It had started failing intermittently even alone (1 of 3) as the App grew.
+- Measured: 6 consecutive runs, 12/12 each.
+
+## 2026-11-06 — Ctrl+Shift + scroll preview zoom
+
+- Scope: lib/zoomview (10–400 %, pointer-anchored), ui/usePreviewZoom + ui/ZoomReset; SvgPreview (Generate SVG + SVG to upload rows) and the edit mode artboard (overlay redraws on zoom); legend entry.
+- Measured: 6 new tests (preview_zoom, written first, seen failing; happy-dom WheelEvent drops modifiers — set on the event in the test); verify:fast 3957 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Middle-drag pan in SVG previews
+
+- Scope: lib/zoomview panBy; ui/usePreviewZoom usePan (middle button, pointer capture, auto-scroll suppressed); row previews and the edit artboard; legend entry; reset restores position.
+- Measured: 4 new tests (preview_pan, written first, seen failing); zoom/pan/editor suites 84 pass; verify:fast 3960 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Tail cutter (detect + cut small overshooting tails)
+
+- Scope: lib/tailcut (open-end walk within tolerance, spatial grid, first crossing, curve-preserving cut, one-pass write via svgdoc.withPathDs); svgedit multi-file undo (saveSvgEdits / applySvgEdit files); svg/tailcut (settings, review store, actions incl. row binding, marks in SvgPreview, TailCutBar + Cutter algo popup, row Approve cut); wired via actions/useTailCutActions, SvgBulkBar, SvgThumbs.
+- Measured: typical icon review+cut ≈ 0.6 ms; 400 shapes / 50 tails ≈ 12.5 ms (70 ms before grid + one-pass write); review+cut+save < 10 ms. 22 new tests (tailcut_core 10, tailcut_speed 3, tailcut_ui 7 + regression for a closing-tag escape bug found by lint); verify:fast 3979 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Edit line gestures + hide tail highlights
+
+- Scope: double-click a line selects all its anchors; Ctrl+click a line inserts; Delete keeps the line joined, Ctrl+Delete breaks it (ops.breakAtAnchors); legend updated; tail cutter Hide/Show highlights (session toggle, useRowTailMarks); selectDown split (pressOn) for the RULE 16 budget.
+- Measured: 6 new tests (pathedit_line_ops, written first, seen failing); old double-click test updated to the new rule; editor + cutter suites 101 pass; verify:fast 3986 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Ctrl+Z no longer jumps the page
+
+- Scope: historyKeyOf ignores auto-repeat; holdRowScroll around undo/redo applies (checkedrows scroll effects skip while held); useSvgText keeps the old text when only the revision moved.
+- Measured: 3 new tests (undo_no_jump, seen failing first; one test-setup loop fixed — unstable ref); verify:fast 3989 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not reproduced in a real browser.
+
+## 2026-11-06 — Scroll position and last row restored after reload
+
+- Scope: ui/scrollmemory (per-tab scroll save/restore with retry, user input cancels, no saving while restoring); checkedrows reveals the restored active row on first appearance; SvgEditModal marks the edited row active; Workbench wiring.
+- Measured: 4 new tests (scroll_memory, written first, seen failing); verify:fast 3993 pass / 16 fail = the pre-existing set (one test-file lint fix after); tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Edit mode: scale selected anchors
+
+- Scope: lib/pathedit/scale (box, 8 padded handles, free/uniform/edge scale about the opposite side, ScaleSpec); gesture scale drag (one undo step); overlay box + handles; legend.
+- Measured: 8 new tests (pathedit_scale, written first, seen failing); editor suites 90+ pass; verify:fast 4001 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Ctrl+Shift+S = save, approve & next
+
+- Scope: useEditMode save-approve mode (approves even with no changes); EditNav.onGo approve flag; svgedit.approveEditedSvg (review path + its own svgReview entry; already approved records nothing); SvgEditModal saves, approves, then moves; legend text.
+- Measured: 6 new tests (pathedit_save_approve, written first, seen failing); editor suites 96 pass; verify:fast 4007 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Open the SVG edit mode with Enter / thumbnail double-click
+
+- Scope: SvgHotkeys Enter on the active row (Enter on a focused control stays native); SvgThumbs double-click on the SVG thumbnail; one rule editnav.editableRow shared with the modal.
+- Measured: 4 new tests (svg_open_editor, seen failing first); svg/editor suites 88 files pass; verify:fast 4011 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — AI source panel in the edit mode
+
+- Scope: pathedit/AiSourcePanel beside the artboard (row's main AI image); SvgPathEditor aside slot + fitted box leaves room; shared svg/useimageurl (moved from SvgThumbs); SvgEditModal useEditedRow hook for the RULE 16 budget.
+- Measured: 4 new tests (pathedit_ai_source, seen failing first); editor + svg suites pass; verify:fast 4015 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not exercised in a real browser.
+
+## 2026-11-06 — Registration repairs hidden SVG / AI source versions
+
+- Scope: svgimport.planRepairs (failed/interrupted/invalid record + file on disk → recheck, renumber by name when free), imgimport.planImageRepairs (failed image record + file → recheck); registerexisting / registerimages read them with the fresh files, replace records, newest usable active, explicit registered counts.
+- Measured: 5 new tests (seen failing first); register suites 71 pass; verify:fast 4020 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Not run on the user's folder.
+
+## 2026-11-06 — Edit mode copy / paste; drag the selection by its lines
+
+- Scope: lib/pathedit/clipboard (copy runs, paste with offset), keys.ts split from gesture.ts (RULE 16 file size) with Ctrl+C/Ctrl+V and a session-surviving clipboard; grab(): a selected line drags the whole selection; legend.
+- Measured: 7 new tests (pathedit_copy_drag, seen failing first); editor suites 107 pass; verify:fast 4027 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit mode: arrow keys nudge the selection
+
+- Scope: keys.ts arrow nudge (1 unit, Shift 10, burst = one undo step via EditorState.nudgeAt); useEditMode leaves ←/→ to the session while points are selected; legend; two older tests press Esc before → (a dragged point stays selected); tailcut_speed takes the best of three batches (it failed at 30.18 ms vs 30 under a loaded parallel run).
+- Measured: 5 new tests (pathedit_nudge, seen failing first); editor suites 112 pass; verify:fast 4031 pass / 17 fail = the pre-existing 16 + bridge_esp (passes alone, 2/2); tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit mode: rotate the selection
+
+- Scope: scale.ts rotateHandleOf / rotateAngle (Shift 15°) / rotateAnchors; gesture rotate drag (one undo step); overlay stem + circle; legend; docs on the sibling page.
+- Measured: 6 new tests (pathedit_rotate, seen failing first); editor suites 118 pass; verify:fast 4038 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS.
+
+## 2026-11-06 — Edit mode: rotate from the box corners, box cursors
+
+- Scope: scale.rotateZoneAt; new boxtarget.ts (box part under the pointer + cursor) and hitpx.ts (shared sizes) so gesture.ts stays < 300 lines; useEditorInput hover cursor (inline SVG rotate cursor, CSS resize cursors); legend.
+- Measured: 5 new tests (pathedit_rotate_zones, seen failing first); editor suites 123 pass; verify:fast 4043 pass / 16 fail = the pre-existing set; tsc, lint, quality:changed, build PASS. Cursor look not checked in a real browser.
+
+## 2026-11-07 — Single sheets: checked sheets, typed merge %, result-grid exclusion, multi-sheet export
+
+- quality:changed PASS; App.tsx legacy 246 → 107 lines; new files all OK (largest: exportActions.ts 91 lines, useSheetsModel.ts 72).
+- tsc PASS, lint 0 errors. New tests: sheetsel (5), sheets_multi_export (7), sheets_list_gestures (4) — all green; sheets_completion_sound green.
+- Full vitest: 4057 passed / 17 failed. All 17 also fail on the clean tree or are Windows-environment (bridge/getty helpers, verify_execution `C:\Program` path, fs_case_collisions, docs read-budget pages not touched here).
+## 2026-11-07 — SVG builder integration plan (docs only)
+
+- Scope: `docs/archive/2026-11-07-svg-builder-integration/PLAN.md` — reference/app research, screenshot checklist, architecture, interfaces, ordered steps, selector/persistence/test plan, and open decisions. No production code changed.
+- Measured: `npm run setup` PASS; `npm run verify` — Types PASS 20.1s, Lint PASS (0 errors / 23 warnings), quality:changed PASS (no changed `src/`), Build PASS 9.1s; native perf lane FAIL (`algo_efficiency` 239.2ms > 200ms); tests+coverage 4057 pass / 2 fail (`bridge_ftps` header, `docs_navigation` four current docs 9016–9088 bytes > 9000). Both failures are unrelated to the docs-only diff. No live provider call and no browser probe.
+## 2026-11-07 — SVG builder full TDD implementation
+
+Implemented the seventh `SVG builder` tab as a complete, interface-split feature: approved-only recursive discovery, pure domain modules, read-only SVG repository, session/global-undo/state integration, dark Workbench UI with full-width folder widget and top menu, shared Gemini prompt/key/model path, one previewed exact-request metadata flow, and verified SVG/PNG/clipboard/preset exports. Selectors, SOR, owners, storage, tests, README, AGENTS and the current-doc router were updated. No provider call is made in dev/test; keys, prompts and image bytes stay out of logs and localStorage.
+
+Resolved the earlier baseline gate failures instead of waiving them: bridge JSON responses now carry `cache-control: no-store`; the four oversized current docs and the router are back inside their read budgets; `detect.ts` reuses label buffers so the native synthetic 1000px budget passes; `tests/apply.test.ts` asserts the two new builder undo kinds.
+
+Verified: focused builder + shell suites 81 passed; `tests/apply.test.ts` 20 passed; `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 pre-existing warnings); `npm run quality:changed -- --files <explicit changed source list>` PASS; `npm run verify:fast -- --base HEAD` PASS all lanes; `npm run verify -- --base HEAD` PASS all lanes (399 files / 4094 tests with coverage, 30 native perf tests, production build PASS). No waivers remain.
+
+Attribution: Arena.ai Agent Mode — authored from the user's request and local repository research.
+
+## 2026-11-07 — SVG builder focused-test performance
+
+User asked to improve new-code test performance by at least 80%. Measured six-file focused Vitest builder/apply suite wall-clock median: **2.556 s** (3 runs); 80% reduction target: **≤ 0.511 s**. Added `npm run test:builder:fast`, a single Node/esbuild bundle of the real pure builder modules, injected provider seams, recursive discovery, session/undo payloads, export verification and static dark panel shell. Measured fast lane: **0.222 s** median (5 runs; **91.3% faster**), or **0.332 s** through the npm wrapper (5 runs; **87.0% faster**). Full Vitest TDD suite remains the contract; no tests were removed. `SheetPreviewDeps.rasterize` is a production injection seam so the provider test can run in Node without browser canvas/DOMParser; the UI test pins happy-dom explicitly.
+
+Verified: `npx tsc --noEmit` PASS; `npm run lint` PASS (0 errors, 23 pre-existing warnings); `npm run quality:changed -- --files src/svgBuilder/preview.ts` PASS; focused Vitest builder/apply/docs_navigation 7 files / 57 tests PASS; `npm run test:builder:fast` 14/14 PASS; `npm run verify:fast -- --base HEAD` PASS; `npm run verify -- --base HEAD` PASS (Types 5.1s, Lint 1.6s, changed quality gate 0.5s, native perf 5 files / 30 tests 3.4s, Tests+coverage 399 files / 4094 tests 145.2s, Build 10.3s, `ALL LANES PASSED`). No waivers; no live Gemini/provider calls.
+
+Attribution: Arena.ai Agent Mode — authored from the user's request and local repository research.
+
+## 2026-11-07 — SVG builder merged onto the sheets branch; reference-parity fixes (FIXES.md)
+
+- Merged arena/82342cab into arena/a6acc057 (merge 0d860d14; only QUALITY_RECHECK conflicted, both sides kept).
+- Root cause of the broken UI: builder panel borrowed `.svg-panel` (42px/auto/40px grid) and `.up-columns`; replaced with own `bld-*` layout on app tokens.
+- Domain rewritten to reference rules (ranges/clamp, presets, fitted grid, stroke-aware glyph, banner solid/split, seeded recipes with locks/top-up/grow-shrink, slug, reference preset shape); UI rebuilt (header, recipe card, library, stage + overlays, Customize, Export menu, briefs, metadata dialog).
+- New suites: svg_builder_parity (20) and svg_builder_workspace (9, real scanned fake library); builder + apply suites 46/46; test:builder:fast 14/14 (added `?raw` text loader).
+- tsc PASS; lint 0 errors; quality gate (--base 0d860d14) PASS; build PASS. Full vitest 4121 passed / 16 failed — same 8 pre-existing Windows-environment files as before this change (bridge/getty helpers, verify_execution, fs_case_collisions, docs read budget 15 pages, none builder).
+- Not verified: visual check in a real browser (no browser automation in this session).
+
+## 2026-11-07 — SVG builder: names, search and Similar tags from export/export.json
+
+- Discovery reads `<pair-folder>/export/export.json` (pair id must match): title = icon name; title/description/tags searchable and scorable; frequent tags (≥2, generic stock tags excluded) become `#tag` Similar profiles; audit counts icons with export metadata.
+- Tests: svg_builder_discovery +2, svg_builder_parity +1 (witnessed failing first); builder suites 64/64; test:builder:fast 14/14; tsc PASS; lint 0 errors (22 pre-existing warnings); quality gate (--base 338fe2f6) PASS.
+
+## 2026-11-07 — SVG builder: metadata prompt + Gemini widget after the folder bar
+
+- Widget = shared PromptWindow (edit/reset/saved presets) + Gemini card rebuilt on the Upload tab classes over the shared config/key (gemini-3.1-flash-lite default); folds (Minimize/Restore), drag-resizable body with remembered height and Restore height; dialog variant removed.
+- Builder suites 65/65 (new fold/height + placement tests); test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate (--base b8cb74c4) PASS.
+
+## 2026-11-08 — SVG builder: local icon vector index (Icons indexing) + vector Similar
+
+- Vendored transformers.js 3.8.1 browser build (npm registry here cannot resolve sharp/bare-events); CLIP image + MiniLM text in an inline Web Worker; model files cached in IndexedDB; per-icon `<svg>.index.json` beside the approved SVG (PNG render in memory only, after scanner audit showed a stray PNG would be imported by Generate SVG).
+- Similar = 50% image + 50% text cosine to the locked reference, one 0–100% slider; tiles mark unindexed (⚠) and no-metadata (dashed amber).
+- Tests: icon_index 9, icon_indexing_run 6, workspace +2, parity +1; builder+index suites 82/82; test:builder:fast 14/14; secret_hygiene 7/7; tsc PASS; lint 0 errors (22 pre-existing warnings); quality gate (--base 61e14b90) PASS; build PASS (dist 2.1 → 3.1 MB). Full vitest 4142 passed / 16 failed (same 8 pre-existing env files).
+- Not verified: real model download/inference in a browser (no browser in this session).
+
+## 2026-11-08 — SVG builder: user-set look alike / mean alike mix
+
+- Similar score = (100−T)% image + T% text cosine; `textWeight` in the recipe (0–100 step 5, default 50); slider + split bar in the Similar pane; caption shows the mix.
+- Tests: icon_index +1, parity caption +1, workspace weight assertions; builder+index suites 83/83; test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: artboard % closeness numbers, show/hide, × exclude
+
+- Per placed cell: REF / NN% (green ≥ threshold, amber below) / – ; toolbar toggle (pref showScores); × removes + excludes from later picks (excludedIds), library ⊘, footer restore.
+- Tests: parity +1 (exclusion in reshuffle/resize), workspace +2; builder+index suites 86/86; test:builder:fast 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: opacity slider for the artboard % labels
+
+- 1–100% slider beside % Similarity (pref scoreOpacity, default 100; hidden with the labels). Workspace test extended; builder+index suites 86/86; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: × refills the cell, Shift+× leaves it empty
+
+- refillOne (recipe pool, not placed/excluded; Similar best-first) fills the same cell; Shift keeps a hole via unique `~empty:N` placeholder ids (registered as undo targets; skipped by compose/export/counts/presets; library click fills the first hole).
+- Tests: parity +2, workspace +1 (incl. undo with a hole); builder+index+apply suites 109/109; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: Similar keeps the best matches stable, shuffles the rest
+
+- With vector scores the ≥ threshold pool is placed in rank order (stable across Reshuffle); the below-threshold top-up is a seeded random pick (changes per Reshuffle). Parity test rewritten (6 seeds); builder+index suites 90/90; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — SVG builder: Similar top-up limited to 5% below the threshold
+
+- TOP_UP_BAND = 5: random picks only from [T−5, T), then next most similar in rank order. Parity +1 test, band test rewritten; builder+index suites 91/91; fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS; dist rebuilt.
+
+### 2026-11-08 — Stock Upload batch-history
+
+Verified: focused Stock Upload suites (19 files / 129 tests), history/summary/runner/UI suites (4 files / 20 tests), and docs navigation (4 tests) PASS; `npm run verify:fast` PASS (types, lint: 0 errors / 22 existing warnings, changed-files quality, 4,174-test coverage suite, production build); `npm run verify` PASS (same plus native performance: 5 files / 30 tests). An earlier full run hit one scan timing-budget outlier; the isolated suite and both subsequent aggregate gates passed. External `router.requesty.ai` TLS resets appeared in logs but did not fail any lane.
+
+### 2026-11-08 — Random selection controls on Upload tabs
+
+Verified: random-selection and Stock Upload UI suites 3 files / 26 tests PASS; docs-navigation plus random-selection suites 3 files / 24 tests PASS; `npx tsc --noEmit` and `npm run quality:changed` PASS; `npm run verify:fast` and `npm run verify` PASS (including coverage and native performance: 5 files / 30 tests); production build PASS. Lint: 0 errors / 22 existing warnings. The docs-navigation size check prompted a compact rewrite of the Stock Upload pinned-bar description (final page: 8,985 bytes).
+
+### 2026-11-08 — Per-stock upload presets
+
+Verified: focused target-options, Stock Upload UI/runner, docs-navigation, and random-selection suites 6 files / 39 tests PASS; TypeScript, changed-files quality, `npm run verify:fast`, and `npm run verify` PASS; native performance 5 files / 30 tests and production build PASS. Lint: 0 errors / 22 existing warnings. Per-stock options cover format selection and Title + description; global Random batches and Limit remain global. Docs navigation passes with Getty-web handles and target-option details split into linked pages.
+
+### 2026-11-08 — Compact random-select bulk-bar controls
+
+Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript PASS; lint 0 errors / 22 existing warnings; changed-files quality PASS; `npm run verify:fast` PASS; `npm run verify` PASS (native performance 5 files / 30 tests, coverage and production build). One full run had an unrelated detector timing outlier (204.9 ms vs 200 ms); isolated native tests and the subsequent full run passed.
+
+## 2026-11-08 — Stock Upload history previews and upload notes
+
+- Added TDD coverage for EPS sibling-image lookup, hover/click previews with aspect-ratio sizing, backward-compatible batch notes, and upload-note persistence/rendering.
+- Verification: focused Stock Upload history tests passed; `npm run verify:fast` passed; `npm run verify` passed, including native performance budgets and production build.
+
+## 2026-11-08 — Stock Upload settings layout
+- Grouped preset selection/actions, connection settings, sign-in/test actions, and list filters into compact labeled sections with responsive grids; collapsed the long protocol guidance behind a disclosure.
+- Preserved existing control behavior and selectors; added integration assertions and updated the Stock Upload selector reference.
+- Verification: focused Stock Upload UI tests (13 passed); `npm run verify:fast` and `npm run verify` passed, including typecheck, lint, changed-file quality gate, full coverage suite, and production build. Existing lint warnings and transient `router.requesty.ai` ECONNRESET messages were non-fatal.
+
+## 2026-11-08 — Skip previously submitted Stock Upload items
+- Confirmation now skips icons carrying the destination stock badge by default; an independent checkbox per selected stock opts its already-badged icons into re-upload. Unbadged icons remain in the plan.
+- Planner tests cover mixed badges across multiple targets; confirmation UI tests cover independent choices and preventing an empty run. Stock Upload behavior and selector docs updated.
+- Verification: 140 Stock Upload tests passed; docs navigation passed; `npm run verify:fast` and `npm run verify` passed (types, lint, changed-file quality, full coverage tests, and build). Existing lint warnings and `router.requesty.ai` ECONNRESET messages were non-fatal.
+
+## 2026-11-08 — Upload tabs: the last selection survives a reload
+
+- Root cause of the third report: one snapshot writer, so an idle SECOND app page
+  re-wrote its older checks over the newer selection; the same-task write now
+  happens for every selection slice, a page may not overwrite a snapshot stamped
+  after its own last selection change (`lib/sessionorder`), a refused write is
+  read back, retried and reported (`session.save-refused`), and a zero-row rescan
+  prunes nothing. Five new tests failed before the change (`session_selection_persist.test.tsx`).
+- Tests: full suite 414 files / 4214 passed; new suite 6/6; tsc PASS; lint 0 errors
+  (22 pre-existing warnings); `quality:changed` GATE PASSED (6 changed source files);
+  `verify:fast` ALL LANES PASSED (suite + coverage + build).
+
+## 2026-11-08 — Session snapshot: storage-full fix (+ ported multi-page guard), builder locks persisted
+
+- Field log showed `session.save-refused` on every write (localStorage full) → the last snapshot that fitted (100 checks) returned on each reload. New `state/storagebudget.ts`: evict source-hash cache → svg index → log → undo timeline, retrying after each; never user data; refusal names the largest keys.
+- Ported 3733d2e3 from arena/d8ede24d (multi-page guard, same-task selection write, verified write, empty-rescan prune guard); it was never on this branch.
+- Test fix: spies on `Storage.prototype.setItem` do not intercept happy-dom localStorage — the ported refusal test never refused; now spies on the instance, restored in finally.
+- Builder lockedIds/excludedIds in the session builder slice.
+- Tests: session_selection_persist 10 (2 new quota + user-flow test, each witnessed failing first), svg_builder_session +1, workspace +1; 169/169 in session/builder/undo/stock suites; fast lane 14/14; tsc PASS; lint 0 errors; quality gate (--base HEAD) PASS. Full vitest 4192 passed / 29 failed — the 3 new failing files (quality_base, random_select_ui, upload_flag_viewport) fail identically on clean HEAD (from merged stock-upload commits).
+
+## 2026-11-08 — Stock upload: Upload history button moved into the bulk bar
+
+- Now right before Remove selected / Upload (N). stockupload_ui 11/11 (position assertion added, failed first); tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-08 — Stock upload: compact setup panel (layout only)
+
+- Header with icon + two-line title; Connection | Stock preset + Add preset | Sign-in & test as three cards; status badge in the sign-in card head; Test connection right-aligned. No control added/removed. stockupload suites 143/143 (layout assertions added, failed first); tsc PASS; lint 0 errors; quality gate PASS; build PASS.
+
+## 2026-11-08 — Session snapshot: code-review fixes
+
+- Only real selection fields claim the snapshot (stock rescan writes only a real prune; builder marks synced only when different; V2 scroll is a debounced view change). An outdated page writes its own tab/options/view with the stored selections and stays behind. First empty scan after start keeps restored checks, later empty rescans prune. Blocked storage reported as unavailable. Eviction: caches, then the log compacts itself (undo timeline untouched); guarded storage helpers live in safestorage. Stamp read from the document head (no separate key — robust against older builds). Builder locks/exclusions of vanished icons pruned.
+- Tests: session_review_fixes 8 (each witnessed failing first); session/builder/stock/undo suites 181/182 (random_select_ui fails identically on clean HEAD); fast lane 14/14; tsc PASS; lint 0 errors; quality gate PASS.
+
+## 2026-11-09 — Stock Upload: Remove unsuccessful uploads
+- Change: bulk-bar button + dialog (stock pick, pasted failed-files HTML or comma/line name list, live preview). Process removes that stock's row badge from matched items (one undoable step), drops their files from that stock's run history (moved to failed count) and marks their site status failed. New `lib/stockupload/rejectedfiles`, `stockupload/rejectedremoval`, `stockoptions`; `findNamedBadge` extracted in rowbadge; `buildSelectionApi` (pre-existing 35-line violation in a touched file) split into `buildActiveRowGestures`.
+- Tests: stockupload_rejected 7 (witnessed failing first), stockupload_rejected_removal 9, stockupload_ui 12/12 incl. new dialog+undo test; tsc PASS; eslint clean on touched files; quality:changed PASS; build PASS. verify:fast test lane fails on 11 files that are unrelated (docs CRLF page budgets, fs case scan, bridge/Getty browser, flag viewport, verify_execution, random_select_ui — same on clean HEAD).
+
+## 2026-11-12 — Getty web: cross-batch counter, skippable re-attach waits, refill of not-ready cards, metadata gate
+
+- Root cause of the counter restarting at each 100-icon batch: `readinessReport` dropped `state`, so the batch's final reading fell back to the attach-time reading (≈0 ready) and the next batch banked almost nothing. The gate's last reading now travels with the report (also fixes `acceptedOf`).
+- Re-attach waits (`reattach`, `reupload`) and the `ready-bound` / `pictures-bound` deadlines show a counter and a `⏭ Skip wait` button (`skipLabel`).
+- Not-ready cards get the app's metadata typed into their drawer again before each re-save and after a re-upload; a card that stays not ready is reported `notReady` (also on a failed batch answer), outranks its thumbnail in `fateOf`, is queued for a later batch, and is dropped from the finish step's expected names.
+- Upload tab: rows without title/description/keyword are left out (`metadatagate.ts`); all-blank selection refuses to start.
+- Measured: tsc clean; eslint 0 errors (changed files 0 warnings); quality:changed GATE PASSED; vitest 4511 passed / 27 failed in 10 files — the same 10 files fail on the clean tree (Windows file modes, missing-browser and runner tests, oversized docs pages); new tests: getty_web_refill (7), getty_web_batch +2, getty_web_wait_info +2, stockupload_getty_web +1, stockupload_metadata_gate (4), stockupload_ui +1.
+
+## 2026-11-13 — Upload: unaccepted metadata is saved in export.json
+
+- An answer with title/description/keywords but no Icon Name (state `invalid`) exported as `"metadata": null` because only `accepted` text reached the export. It is now saved as a draft block (`state: "invalid"`/`"generated"`, with validation errors), never embedded; reload restores it (`src/upload/recorddraft.ts`); planner/stale checks use `embeddedMetadataFp` (accepted only); the stock Upload gate requires accepted metadata.
+- Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; vitest 4516 passed / 27 failed in the same 10 files that fail on the clean tree; new tests upload_export_draft_metadata (4), stockupload_metadata_gate +1; stockupload_getty_ui fixture given valid metadata (it was always `invalid`).
+
+## 2026-11-13 — Helper self-update from committed, settled, self-tested code
+
+- Review of the update path found: watchers acted on raw working-tree bytes every 10 s (half-written edits got built/restarted), `serveDist` rebuilt on page load ungated, new helper code was never load-tested before the old one exited (crash loop → supervisor gave up), builds wrote straight into `dist/` (partial/mismatched bundles, two builders racing), no retry of transient failures, supervisor crash count never reset.
+- Fix: `updategate.mjs` (quiet window + no git op + committed via `git status`), `autoupdate.mjs` (helper `--self-test` before handover, back-off retry, never during upload/build), `appbuild.mjs` (staging folder via `ICONSPLITTER_OUT_DIR`, stamp-verified swap), page load builds only a missing bundle, supervisor staged build + crash-count reset.
+- Measured: tsc clean; eslint 0 errors; update-path suites 37/37 (bridge_app_rebuild was failing on Windows before: ESM path fixture); full vitest 4526 passed / 26 failed in 9 files, all failing on the clean tree.
+
+## 2026-11-13 — Upload: partial answers really reach export.json
+
+- User report (bread-slice, export.json from 2026-11-12 with "metadata": null): two causes. (1) "Export selected" = generate then export: only ACCEPTED answers travelled with the run (RULE 24), so an answer without its Icon Name was exported from the pre-answer row state → null. Now `metabatch` carries every produced state (`fresh`). (2) An already-exported row with nothing to rebuild returned the old record and never rewrote export.json; the planner now plans a record-only commit when export.json's metadata fingerprint differs (`recordMetadataFp`), and the row reads stale while its draft is unsaved (`savedMetadataMoved`).
+- Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; vitest 4530 passed / 26 failed in 9 files, all failing on the clean tree; new tests: upload_export_draft_metadata +3, upload_ui +1 (Export selected with a Name-less answer).
+
+## 2026-11-13 — SVG builder: saved templates window; indexing controls in the header
+
+- New: `src/lib/svgBuilder/templates.ts` (look-only templates, generated names, validated list, preview), `src/svgBuilder/{templatestore.ts, actions/templates.ts, SvgBuilderTemplates.tsx}`; `applyCopy` shared by layout presets and templates. Indexing controls moved from the folder bar to the header row beside the sheet title (user request).
+- Measured: tsc clean; eslint 0 errors in changed files; quality:changed GATE PASSED; svg_builder_templates 8/8; full vitest 4536 passed / 28 failed — the 9 clean-tree files plus upload_ui (passes alone; timeout under full-suite load) and algo_efficiency (201.5 ms vs a 200 ms speed bound; split code not touched).
+
+## 2026-11-13 — SVG builder: text placement, in-place banner text editing, template preview zoom
+
+- Banner `textPadding` + `titleDx/Dy`, `subtitleDx/Dy` (ranges table, parser, banner.ts `Laid` frame vs inset text box, `data-banner-text` groups); Customize "Text placement"; double-click editing on the artboard (native dblclick listener — happy-dom does not retarget shadow-root events for React); template pictures sized by the shared ZoomSliderBase (prefs `templateZoom`).
+- Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; svg_builder_templates 14/14; svg_builder suites green; full vitest 4544 passed / 26 failed in the 9 clean-tree files.
+
+## 2026-11-13 — SVG builder: captions use the one-word Icon Name
+
+- `discovery.ts` reads `metadata.name` (cleanName), `BuilderIconAsset.name`, `captionOf` (name → label fallback) used by `compose.ts` captions; the library keeps the title.
+- Measured: tsc clean; eslint 0 errors; quality:changed GATE PASSED; svg_builder suites 94/94; full vitest 4547 passed / 26 failed in the 9 clean-tree files.
+
+## 2026-11-13 — SVG builder: editable preset JSON (icons by name, merge, Copy for AI)
+
+- `src/lib/svgBuilder/presetjson.ts` (presetJsonOf, mergeConfig, resolveIcons, readPresetJson, presetSchemaText, presetBriefForAi), `actions/presetjson.ts`, `SvgBuilderPresetJson.tsx`; Export Save/Load preset now use the v2 JSON (v1 still read).
+- Measured: tsc clean; eslint 0 errors/0 warnings in changed files; quality:changed GATE PASSED (readPresetJson CC split, dialog split); svg_builder suites 102/102; full vitest: the 9 clean-tree files + quality_base (dirty tree only) + algo_efficiency (timing).
+
+## 2026-11-13 — SVG builder: icon-map.json (phase 1 of icon map / usage / final artboards)
+
+- `lib/svgBuilder/iconmap.ts`, `lib/svgBuilder/usage.ts` (pure, used by phase 2), `svgBuilder/iconmapstore.ts`; scan writes `<root>/icon-map.json`; folder bar line with the full path; assets carry the pair's `aiPath`.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder + upload_discovery suites 125/125.
+
+## 2026-11-13 — SVG builder: final artboards (phase 3)
+
+- Templates checkable (RULE 25); `lib/svgBuilder/artboards.ts`, `artboardstore.ts`, `artboardview.ts`, `actions/artboards.ts`, `actions/artboardmeta.ts`, `useArtboardSync.ts`, `SvgBuilderArtboards.tsx`, `SvgBuilderArtboardMeta.tsx`; row previews load the shown artboards' icons. bridge_update_gate timeouts widened (passes alone; timed out under full-suite load).
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites incl. artboards 7/7; full vitest 4564 passed / 27 failed: the 9 clean-tree files + bridge_update_gate (load timing, widened).
+
+## 2026-11-13 — SVG builder: icon use counts (phase 2)
+
+- `<svg>.usage.json` beside each SVG (`usagestore.ts`, read with the scan), counted on SVG/PNG export once per artboard (`actions/usage.ts`), pending use from artboards (`pendingUse` by `countedIds`), library tile `×N +M`. Selectors split into `selectors/svg-builder-presets.md` (the page had passed 9 KB).
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 113/113; full vitest: the 9 clean-tree files + quality_base (dirty tree only).
+
+## 2026-11-13 — SVG builder: use index on every tile and on the artboard (# Used toggle)
+
+- Library badge always shown (`×0` dimmed); artboard cell index bottom-left (`CellUse`), stage toggle `builder-toggle-usage`, prefs `showUsage`.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 114/114.
+
+## 2026-11-13 — SVG builder: 🗑 remove an icon from approved (undoable)
+
+- `declineasset.ts` (reuses `svg/declineitems` + `svgReview` history), `actions/decline.ts`, follower on `onSvgReviewsWritten`, trash button on artboard cells; boot remembers a borrowed root under `__svgBuilder__` (`borrowedRoot`).
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 115/115; full vitest 4568 passed / 26 failed in the 9 clean-tree files.
+
+## 2026-11-13 — SVG builder: icon box up to 240 px; red layout guides with toggle and opacity
+
+- `RANGES.box` 18–240; `lib/svgBuilder/guides.ts`, `SvgBuilderGuides.tsx`, stage `▦ Guides` + opacity slider, prefs `showGuides`/`guideOpacity`.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 118/118.
+
+## 2026-11-14 — SVG builder: templates show sample text; artboards use their own words
+
+- `lookOf` keeps banner words as sample text (default when empty), `templateConfig`, `sheetPreviewSvg`; ✎ edit opens the template with its sample words; artboard previews/configs keep their own words.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 120/120.
+
+## 2026-11-14 — SVG builder: Text padding moves the title too
+
+- banner.ts `paddingShift`: one shift for title and subtitle (right on edge banners, down on side banners), replacing per-style max() uses that left a centred title in place; label "Text padding · title + subtitle".
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 120/120.
+
+## 2026-11-14 — SVG builder: hero icon and circle size/stroke controls
+
+- banner `heroScale`, `heroStroke`, `ringScale`, `ringStroke` (ranges, parser, banner.ts `heroSize`, ring stroke-width / 0 hides, compose hero stroke, preset JSON guide), `SvgBuilderHeroStyle.tsx`.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 123/123.
+
+## 2026-11-14 — SVG builder: quick editing on the artboard (hover toolbar, smart swatches)
+
+- `lib/svgBuilder/swatches.ts`, `svgBuilder/quickedit.ts`, `SvgBuilderQuickEdit.tsx`, mounted in the artboard wrap.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder_quickedit 4/4; full vitest 4580 passed / 26 failed in the 9 clean-tree files.
+
+## 2026-11-14 — SVG builder: quick toolbar fixed anchors + stuck-panel fix; move text on the artboard; live number boxes
+
+- `anchorOf` (layout-based anchors), hide timer never hides an open panel + panel reset when the toolbar goes; `SvgBuilderTextMove.tsx` (✥ frame, handles, guide, badge, nudge, Apply); `NumBox` applies in-range values while typing.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites 132/132 (new: stuck-panel regression, fixed anchor, move frame, live number boxes).
+
+## 2026-11-14 — SVG builder: quick toolbar stays inside its own element, background toolbar on free space
+
+- `lib/svgBuilder/freespot.ts` (pure), `svgBuilder/quickplace.ts` (areas + obstacles per element kind); QuickEdit uses it.
+- Measured: tsc clean; eslint 0; quality:changed GATE PASSED; svg_builder suites green (quickedit 13/13).
+- 2026-11-14 SVG builder: banner icon hover area (preview-only hit box) and no transparency in composed artwork (solid ring/rule colours, icon opacity stripped). Builder suites 146/146, tsc clean, quality:changed GATE PASSED.
+- 2026-11-14 SVG builder templates: Done editing removed; ✓ Save template / Save as new / new save end editing. Builder suites 146/146, tsc + eslint clean, quality:changed GATE PASSED.
+- 2026-11-14 SVG builder: unsaved template edits — stage Reset/Save template, Save/Discard/Cancel before leaving, beforeunload. Builder suites 148/148, tsc/eslint/quality PASS; verify:fast fails only in pre-existing fs_case_collisions + getty_web_browser tests (fail identically without this change).
+- 2026-11-14 SVG builder: artboard edge grips (banner size, icon padding), one undo step per drag. Builder suites 149/149, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: selecting a template opens it for editing; ✎ removed. Builder suites 150/150, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: banner circle rings drawn in the full accent colour (no faded mix). Builder suites 151/151, tsc/eslint PASS.
+- 2026-11-14 SVG builder: artboard size grips (right/bottom/corner). Builder suites 152/152, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: Gap X / Gap Y max 60 → 200 px. Builder suites 153/153 (one earlier run had 15 transient failures that passed alone and on rerun).
+- 2026-11-14 SVG builder: gap strips on the artboard (guides on), shared trackdrag helper. Builder suites 154/154, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: artboard size grips moved just outside the artboard. Builder suites 154/154, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: open artboard/template survives reload (session slice), open artboard always selected. Builder + session suites 172/172, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: new artboard starts with stage icons + recipe fill and the template sample words. Builder suites 155/155, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: per-artboard look overrides with template inheritance + ↺ Template reset. Builder + session suites 174/174, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: editing label, Edit main template, double-click open, template editing clears row focus. Builder suites 158/158, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: declined/removed icons pruned from saved artboards, never drawn as Unavailable. Builder suites 161/161, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: caption quick edit (colour, size). Builder suites 162/162, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: new artboard = sample words + one random library icon, other cells empty. Builder suites 162/162, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: caption size up to 100, caption gap, typed captions per template/artboard (never metadata); flaky usage test fixed. Builder suites 167/167, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: artboard edits are drafts with Save/Reset and the Save/Discard/Cancel leave question; autosync removed. Builder suites 168/168, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: library/recipe category chips → drop-down. Builder suites 169/169, tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: metadata = upload tab system (Title/Description/Tags), stock prompt with Title-Artboard, icons-only PNG <=1MP, Title-Artboard fills the banner title, upload editor reused. Builder+upload suites pass except pre-existing upload_flag_viewport; builder fast lane fails only in the pre-existing dark-shell check; tsc/eslint/quality PASS.
+- 2026-11-14 SVG builder: title/subtitle box width (grip + inline editor). Builder suites 178/178 (the decline test timed out once under full load, passed 3x alone and on the rerun); tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: _artboard_sheets tree (metadata.json + preview.png on generate; Export all selected writes SVG/JPG/EPS/PNG + export.json), sticky header. Builder suites 188/188, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: active artboard row shows the upload metadata editor; ↻ Metadata per row. Builder suites 189/189, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: Rebalance row (edge banner equal gaps, one-line texts). Builder suites 193/193, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: sheet metadata answer applied automatically (no draft step). Builder suites 194/194, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: artboard icon editor (Generate SVG editor reused, builderSvgEdit undo). Builder+state+history suites 264/264, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: title/subtitle case (normal/Capitalized/UPPER), sizes up to 200. Builder suites 201/201, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: icon box size in the icon quick bar. Builder suites 202/202, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: Auto rebalance checkbox + banner quick-bar Rebalance. Builder suites 204/204, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: Rebalance row for split edge banners too. Builder suites 205/205, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: new Rebalance rules (3 equal gaps, shrink-to-fit at 5 % min gap, hero/divider centred between texts). Builder suites 205/205, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: Rebalance v3 — measured ink boxes, optimal sizes from the banner space. Builder suites 204/204, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: dev-mode text boxes for the rebalance. Builder suites 206/206, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: rebalance proportions (gap %, title % of height, subtitle % of title); decline test collision fixed. Builder suites 207/207, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: title/subtitle letter spacing. Builder suites 211/211, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: rebalance centres ink boxes in Y; split banners measured + dev boxes; bannerrow.ts split. Builder suites 213/213, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: Generate metadata button in the pinned header. Builder suites pass, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: split rebalance reuses the solid row; the colour seam sits between the texts. Builder suites 214/214, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: saving a template keeps it in edit, so later changes ask again; artboard re-tracking covered by a test. Builder suites 214/214, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: rebalance middle gap = 2 × edge gaps (texts centred in their halves). Builder suites 214/214, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder: text boxes merged into ▦ Guides (one toggle + opacity); dev checkboxes removed. Builder suites 214/214, tsc/eslint/quality PASS.
+- 2026-11-15 SVG builder performance: icon sanitize cache, per-picture text subsets, stable template sample, compose-once at start. Toggle 13->1 composes, start 97->33, warm compose 18% of cold. Builder suites 216/216, tsc/eslint/quality PASS; builder fast lane dark-shell check fails identically before the change.
+- 2026-11-16 SVG builder: stage artboard strip + ＋ Artboard by the label; shared artboard pictures (start stays at 33 compositions). Builder suites 217/217, tsc/eslint/quality PASS.
+- 2026-11-16 SVG builder: Remove artboard button; add/remove artboards undoable (builderArtboards). Builder+state+history suites 285/285, tsc/eslint/quality PASS.
+- 2026-11-16 SVG builder: undo / remove of the open artboard moves the stage to the last viewed one. Builder suites 219/219, tsc/eslint/quality PASS.
+- 2026-11-16 SVG builder: ⇔ rebalance in the split block quick bar too. Builder suites 220/220, tsc/eslint/quality PASS.
+- 2026-11-16 SVG builder: template folder + template.json at creation; artboard folders artboard_NN_<title> inside it. Builder suites 219/219, tsc/eslint/quality PASS.
+- 2026-11-16 SVG builder: Location button opens the template/artboard folder in Explorer via the helper (/open-folder). Builder + helper suites 223/223 + bridge_inkscape 8/8, tsc/eslint/quality PASS.
+- 2026-11-16 Location in every tab via the helper (copy full path, open Explorer, select an existing file); docs split (rebalance page), apply.test types list. Full suite: only pre-existing failures (bridge_crash_guard, bridge_getty_web, docs_navigation pre-existing over-budget pages, fs_case_collisions, getty_web_browser/session, random_select_ui, upload_flag_viewport, verify_execution) — identical with the change stashed; tsc/eslint/quality PASS.

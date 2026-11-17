@@ -143,10 +143,10 @@ describe("Location — the folder of the file, not the run's folder (I-56)", () 
     await waitForRow();
     // The row names the very file the user's report names (`…_04_v2.svg`)…
     expect(txt(`[data-testid=svg-target-${ID}]`)).toBe(`${PIECE_DIR}/${STEM}_v2.svg`);
-    // …and Location hands over its folder — exactly, with no doubled chain.
-    expect(await location()).toBe(PIECE_FULL);
-    expect(await location()).not.toBe(RUN_FULL);
-    expect(txt("[data-testid=svg-toast]")).toContain(PIECE_FULL);
+    // …and Location hands over that existing file's full path (2026-11-16: its folder opens with it selected) — no doubled chain.
+    expect(await location()).toBe(`${PIECE_FULL}\\${STEM}_v2.svg`);
+    expect(await location()).not.toContain(RUN_FULL + "\\" + STEM);
+    await vi.waitFor(() => expect(txt("[data-testid=svg-toast]")).toContain(PIECE_FULL)); // after the helper's answer (2026-11-16)
   });
 
   it("follows the chosen version to the file, never to another folder", async () => {
@@ -154,7 +154,7 @@ describe("Location — the folder of the file, not the run's folder (I-56)", () 
     await mount(makePieceTree({ versions: 2, preferred: 1 }));
     await waitForRow();
     expect(txt(`[data-testid=svg-target-${ID}]`)).toBe(`${PIECE_DIR}/${STEM}.svg`);
-    expect(await location()).toBe(PIECE_FULL);
+    expect(await location()).toBe(`${PIECE_FULL}\\${STEM}.svg`); // that file, in the same folder
   });
 
   it("names the folder even before any SVG exists (the file still is not copied)", async () => {

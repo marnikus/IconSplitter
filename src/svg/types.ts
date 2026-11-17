@@ -39,6 +39,8 @@ export interface SvgRow {
    * restore — the row's own `status` is untouched underneath.
    */
   queued: boolean;
+  /** For a style row: the chosen AI image path of its base (stroke-only) row, for side-by-side comparison. */
+  baseAiPath?: string;
 }
 
 /** Where a confirmed batch goes: behind what waits (bulk) or first (a row's Regenerate). */
@@ -77,6 +79,7 @@ export interface RunProgress {
 import type { QueueItem } from "./runqueue";
 import type { PromptChoice } from "../lib/prompttasks";
 import type { RegenCode } from "./regencodes";
+import type { WebChatTarget } from "../lib/webchatprefs";
 
 export type { QueueItem } from "./runqueue";
 
@@ -98,6 +101,10 @@ export interface ConfirmedBatch {
   choice: PromptChoice;
   size: number;
   codes: ReadonlyMap<string, RegenCode>;
+  /** Set only by the LIVE WEB popup: the chat page that answers (2026-11-03). */
+  web?: WebChatTarget;
+  /** false only when a regeneration popup unticked "Attach the reference image". */
+  attachImage?: boolean;
 }
 
 export type Dialog =

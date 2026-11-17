@@ -14,6 +14,7 @@ import { useUpload, type UploadApi } from "./useUpload";
 import { uploadBulkSummary } from "./bulksummary";
 import UploadProgressHeaders from "./UploadProgressHeaders";
 import UploadBulkBar from "./UploadBulkBar";
+import { uploadDataRows } from "./getdatarows";
 import { resettableIds } from "./selectedsettings";
 import UploadControls from "./UploadControls";
 import UploadList from "./UploadList";
@@ -22,13 +23,18 @@ import type { UploadPromptPanelProps } from "./UploadPromptPanel";
 import type { UploadRowActions } from "./UploadRow";
 import type { UploadDiscovery, UploadExclusion } from "./discovery";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
+import { useRunning } from "../ui/rebuildwatch";
 import { useUploadHotkeys } from "./UploadHotkeys";
+import { useBusyActivity } from "../ui/useBusyActivity";
 
 export default function UploadPanel({ active = true }: { active?: boolean }) {
   const g = useUpload();
+  useBusyActivity("upload", g.busy);
   const rootRef = g.refs.root as { current: DirHandleLike | null };
   useSelectShortcuts({ activeId: g.activeId, selectActive: g.checkActive, deselectActive: g.uncheckActive, selectVisible: g.selectVisible, deselectAll: g.deselectAll }, active && g.dialog === null);
   useUploadHotkeys({ visible: g.visible, activeId: g.activeId, setActive: g.setActive }, active && g.dialog === null);
+  // A reload must not land inside a metadata/export/download run.
+  useRunning("upload", g.runningMeta + g.runningExport > 0 || g.processes.download?.status === "running");
   if (!g.supported) return <Unsupported onPick={g.chooseRoot} />;
   return (
     <div className="svg up" data-testid="upload-panel" style={thumbStyle(g.thumb)}>
@@ -69,7 +75,7 @@ function Body({ g, rootRef }: { g: UploadApi; rootRef: { current: DirHandleLike 
     defaults: g.defaults, overrides: g.overrides, applied: g.applied,
     toggleCheck: g.toggleCheck, selectRow: g.selectRow, openSettings: g.openSettings,
     requestMetadata: g.requestMetadata, acceptMetadata: g.acceptMetadata,
-    editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow,
+    editMetadata: g.editMetadata, copyMeta: g.copyMeta, exportRow: g.exportRow, removeRows: g.removeRows,
     openLocation: g.openLocation, rowBadges: g.rowBadges, toggleRowBadge: g.toggleRowBadge,
     removeRowBadgeSelected: g.removeRowBadgeSelected,
   };
@@ -93,7 +99,7 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
   const bulk = useBulkSummary(g);
   return (
     <div className="svg-bulkbar-pin" data-testid="upload-bulkbar-pin">
-      <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length}
+      <UploadBulkBar header={g.header} checkedCount={g.checked.length} visibleCount={g.visible.length} totalCount={g.rows.length}
         thumb={g.thumb} bg={g.bg} stroke={g.defaults.strokePx > 0 ? g.defaults.strokePx : null}
         onStroke={(px) => g.setDefaults({ strokePx: px ?? 0 })} progress={g.progress}
         runningMeta={g.runningMeta} runningExport={g.runningExport} downloading={g.processes.download?.status === "running"}
@@ -102,16 +108,17 @@ function PinnedBulkBar({ g }: { g: UploadApi }) {
         metaAcceptBusy={g.busy !== null || g.runningMeta + g.runningExport > 0}
         downloadFiles={bulk.download}
         overriddenCount={bulk.overridden}
-        onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible}
+        onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible} onSelectRandom={g.selectRandom} onInvert={g.invertVisible}
         onDeselectAll={g.deselectAll} onThumb={g.setThumb} onBg={g.setBg}
         onSettings={() => g.openSettings(null)}
         onResetSettings={() => g.resetOverridesSelected(g.checked)}
         onMetadata={() => g.generateMetadataSelected(g.checked)}
         onRegenerateMetadata={() => g.regenerateMetadataSelected(g.checked)}
         onAcceptMetadata={() => g.acceptMetadataSelected(g.checked)}
-        onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)}
+        onExport={() => g.exportSelected(g.checked)} onDownload={() => g.downloadSelected(g.checked)} onRemove={() => g.removeRows(g.checked)}
         onCancel={() => g.processes.download?.status === "running" ? g.cancelDownload() : g.runningMeta > 0 ? g.cancelMetadata() : g.cancelExport()}
-        rowBadges={g.rowBadges} checkedIds={g.checked} onApplyRowBadge={g.applyRowBadgeSelected} />
+        rowBadges={g.rowBadges} checkedIds={g.checked} onApplyRowBadge={g.applyRowBadgeSelected}
+        getData={() => uploadDataRows(g.rows, g.checked)} />
     </div>
   );
 }

@@ -23,7 +23,9 @@ export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata): stri
   const packet = buildXmpPacket(metadata).replace(/\n/g, eol);
   const identity = clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
     .replace(/^%%DocumentData:.*(?:\r\n|\r|\n|$)/gm, "");
-  const id = `${metadataFingerprint(metadata)}${fnv1a32(identity).toString(16).padStart(8, "0")}`;
+  // The id names what the FILE carries: the Icon Name (2026-11-08) is never written into it, so it must not
+  // reach the id — the audit rebuilds this envelope from the file's own metadata and must reproduce it exactly.
+  const id = `${metadataFingerprint({ ...metadata, name: undefined })}${fnv1a32(identity).toString(16).padStart(8, "0")}`;
   const header = embedIptcInEps(addXmpHeader(clean, eol), metadata);
   const setup = setupBlock(id, packet, eol);
   const trailer = trailerBlock(id, eol);

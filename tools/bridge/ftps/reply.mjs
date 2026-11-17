@@ -136,14 +136,18 @@ export function createReplyReader(initialStream) {
       if (queue.length > 0) return Promise.resolve(queue.shift());
       if (closedError) return Promise.reject(closedError);
       return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
-          if (waiter) waiter = null;
-          reject(new FtpsError("timeout", `FTPS server timed out after ${Math.round(timeoutMs / 1000)}s`));
-        }, timeoutMs);
-        waiter = {
-          resolve: (val) => { clearTimeout(timer); resolve(val); },
-          reject: (err) => { clearTimeout(timer); reject(err); },
+        const self = {
+          resolve: (val) => { clearTimeout(timer); settle(); resolve(val); },
+          reject: (err) => { clearTimeout(timer); settle(); reject(err); },
         };
+        // Only this call's own waiter may be dropped: a second read must never be
+        // cancelled by the first one's timer (that promise would hang forever).
+        const settle = () => { if (waiter === self) waiter = null; };
+        const timer = setTimeout(() => {
+          self.reject(new FtpsError("timeout", `FTPS server timed out after ${Math.round(timeoutMs / 1000)}s`));
+        }, timeoutMs);
+        timer.unref?.();
+        waiter = self;
       });
     },
   };

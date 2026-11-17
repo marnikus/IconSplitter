@@ -16,15 +16,22 @@ import { applySelectionOp, readSelectionPayload } from "../lib/selectiondelta";
 import type { SessionSelection } from "../lib/session";
 import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
+import { isReview } from "../lib/svgmodel";
+import { applySvgEdit } from "../svg/svgedit";
+import { applyVersionRemove } from "../svg/versionremove";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
-import { getAppState, patchBatch, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
+import { applyBuilderConfig } from "../svgBuilder/undoBinding";
+import { applyBuilderSvgEdit } from "../svgBuilder/iconedit";
+import { applyBuilderArtboards } from "../svgBuilder/artboardsundo";
+import { getAppState, patchBatch, patchBuilder, patchStockUpload, patchSvg, patchUpload, patchV2Selection, patchView, setAppState } from "./appstore";
 import { selectionTargetsKnown, type CheckableList } from "./listtargets";
 
 /** Entry kinds this app records. Anything else is refused, never guessed at. */
 export const ENTRY_TYPES = [
   "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
-  "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges",
+  "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit",
+  "builderChecked", "builderConfig", "builderSvgEdit", "builderArtboards", "svgVersionRemove",
 ] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
@@ -34,13 +41,25 @@ export async function applyEntry(entry: HistoryEntry, value: unknown): Promise<b
   return applyDomainEntry(entry, value);
 }
 
+/** The SVG builder's own entries (2026-11-15), and Generate SVG's removed versions (2026-11-16). */
+function applyBuilderEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> | null {
+  if (entry.type === "builderConfig") return applyBuilderConfig(value);
+  if (entry.type === "builderSvgEdit") return applyBuilderSvgEdit(value);
+  if (entry.type === "builderArtboards") return applyBuilderArtboards(value);
+  if (entry.type === "svgVersionRemove") return applyVersionRemove(value); // Generate SVG 🗑 (2026-11-16)
+  return null;
+}
+
 function applyDomainEntry(entry: HistoryEntry, value: unknown): boolean | Promise<boolean> {
+  const builder = applyBuilderEntry(entry, value);
+  if (builder !== null) return builder;
   switch (entry.type) {
     case "decisions": return applyDecisions(entry.ids, value);
     case "view": return applyView(value);
     case "prefs": return applyPrefs(value);
     case "sheets": return applySheets(value);
     case "svgReview": return applySvgReviewPatch(toReviewPatch(value));
+    case "svgEdit": return applySvgEdit(value);
     case "uploadSettings": return applyUploadSettings(value);
     case "uploadRowBadges": return applyRowBadgeState(value);
     default: return false; // an entry from a future schema: refuse, do not guess
@@ -59,6 +78,7 @@ function applySelectionEntry(entry: HistoryEntry, value: unknown): boolean | nul
     case "batchChecked": return applyBatchChecked(value);
     case "svgChecked": return applyTabChecked(value, () => getAppState().svg.checked, patchSvg, "generateSvg");
     case "uploadChecked": return applyTabChecked(value, () => getAppState().upload.checked, patchUpload, "upload");
+    case "builderChecked": return applyTabChecked(value, () => getAppState().builder.checked, patchBuilder, "svgBuilder");
     case "stockUploadChecked": return applyTabChecked(value, () => getAppState().stockUpload.checked, patchStockUpload, "stockUpload");
     default: return null;
   }
@@ -77,8 +97,7 @@ function toReviewPatch(value: unknown): SvgReviewPatch {
  */
 function isReviewRec(value: unknown): value is SvgReviewPatch["recs"][number] {
   if (!isRecord(value)) return false;
-  return typeof value.id === "string"
-    && (value.review === "pending" || value.review === "approved" || value.review === "declined" || value.review === "needs-review");
+  return typeof value.id === "string" && isReview(value.review);
 }
 
 async function applyDecisions(ids: readonly string[], value: unknown): Promise<boolean> {

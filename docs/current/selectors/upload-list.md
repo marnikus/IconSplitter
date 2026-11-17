@@ -16,9 +16,10 @@ Pinned: `upload-bulkbar-pin` is a sticky `.svg-bulkbar-pin`, directly inside `up
 | `upload-check-all` | header checkbox | checked / unchecked / **indeterminate**; toggles visible approved rows only, keeps hidden checks |
 | `upload-selected-count` / `upload-scope` | text | "N selected", "across N approved SVGs" |
 | `upload-select-visible` / `upload-deselect` | buttons | add visible / clear ALL checks including hidden |
+| `upload-select-random` / `upload-random-count` / `upload-random-scope` | controls | [contract](../sor/list-selection-filters.md#select-random) |
 | `upload-thumb` | `input[type=range]` | the ONE zoom value: 48–800 px step 4, display-only (never the output scale); `upload-thumb-value` is the live readout |
 | `upload-bg` | swatch group | preview background: `upload-bg-{white,black,gray,green,red}` (`aria-pressed`), `upload-bg-custom` (`input[type=color]`), `upload-bg-value` |
-| `upload-stroke-control` → `upload-stroke` / `upload-stroke-value` / `upload-stroke-reset` | export stroke width | the Generate SVG control reused (`svg/PreviewStroke`, prefix `upload`, no sheet): IS the defaults' `strokePx` — 0–50 px in the file, `default`/empty/0 = each SVG's own widths; Reset = default. The global stroke width: no row in the global dialog; one icon may pin its own in its dialog (2026-10-19) |
+| `upload-stroke-control` → `upload-stroke` / `upload-stroke-value` / `upload-stroke-reset` | export stroke width | Generate SVG's `svg/PreviewStroke` (prefix `upload`): the defaults' `strokePx` — 0–50 px, `default`/empty/0 = each SVG's own widths; Reset = default. Global width; a row may pin its own in its dialog |
 | `upload-estimate` / `upload-progress` | text | the selection line, or "{kind} {done}/{total}" while a run is in flight |
 | `upload-reset-settings` | button | "↺ Reset to inherited (N)" — N = checked icons that pin at least one parameter; deletes each one's whole override map as ONE undoable `uploadSettings` entry. Applied decorations (Shadow/corner badge/size guide and their geometry) keep applying, so the Checked-icons boxes keep their state; the stored defaults are never touched; disabled at N = 0 |
 | `upload-meta-selected` | button | "✦ Generate metadata (N)" — N = selected icons with NO metadata text yet; the paid request never replaces existing text (disabled at 0 selected; at N = 0 the status line says why nothing was sent) |
@@ -62,7 +63,7 @@ not the active row or the visible filter subset. N counts legacy drafts/invalid 
 and accepted-but-edited values; disabled with none or while work is running.
 Click validates each candidate locally; invalid fields stay unaccepted and show
 `upload-meta-validation-{id}`. The toast summarizes accepted/invalid/skipped.
-Existing packages re-embed as one sequential batch; no new AI requests.
+Existing packages re-embed as one batch; no new AI requests.
 
 ## Metadata fields (`upload-detail-{id}`, empty until generated)
 `upload-meta-empty-{id}` (with `upload-meta-gen-{id}`), the editable fields
@@ -89,6 +90,7 @@ Shared: `upload-toast` (`role="status"`), `upload-busy`. Settings/selection undo
 ([§O](shared.md#o-global-history-bar-reset-actions-verified-2026-10-01));
 metadata requests and exported files are not reversed.
 
-Download progress uses `upload-download-progress-{header,title,file,track,completed,remaining,percent,cancel,review,dismiss}` with file counts, shared theme and retained terminal state. Both header Cancel and `upload-cancel-run` stop the next copy, retaining verified files. [Progress contract](../sor/process-progress.md#upload-lifecycle).
+Download progress uses `upload-download-progress-*`. Header Cancel and `upload-cancel-run` stop the next copy, retaining verified files. [Progress contract](../sor/process-progress.md#upload-lifecycle).
 
 [State sorts](../sor/list-state-sorting.md): approval = accepted metadata.
+`upload-remove-<id>`, `upload-remove-selected`: [Remove](../sor/svg-remove-row.md#upload).

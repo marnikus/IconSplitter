@@ -67,7 +67,7 @@ describe("session process safety", () => {
       { id: "b", label: "second", status: "running", total: 4, summary: "", progress: null },
       { id: "c", label: "cancelled", status: "cancelled", total: 2, summary: "", progress: null },
     ], [waiting]);
-    expect(totals).toEqual({ done: 0, left: 9, images: 9, saved: 0, interrupted: true });
+    expect(totals).toEqual({ done: 0, left: 9, images: 9, saved: 0, cancelled: true, failed: false });
   });
 });
 

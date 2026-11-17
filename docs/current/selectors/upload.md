@@ -55,11 +55,11 @@ Progress header and cross-tab shell handles: [shared process progress](../sor/pr
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../sor/upload-file-metadata.md).
 
-Optional identity inputs (2026-10-22), owned by `UploadMetaRights.tsx`:
-`upload-meta-creator-{id}` and `upload-meta-copyright-{id}` are labeled text
-inputs under the active row's metadata fields. Blank by default, user-entered
-only, not AI-generated; use `upload-meta-accept-{id}` to persist/re-embed edits.
-They retain their values when descriptive metadata is regenerated.
+Icon Name (2026-11-08), owned by `UploadMetaFields.tsx`: `upload-meta-name-{id}`
+is the labeled "Icon Name" text input under Tags (no Copy button). It holds the
+one-word `Name:` answer and is replaced when metadata is regenerated; use
+`upload-meta-accept-{id}` to persist edits. The Creator/Copyright inputs
+(`upload-meta-creator-{id}`, `upload-meta-copyright-{id}`) were removed from the UI.
 
 Global **✓ Accept metadata (N)**: `upload-meta-accept-selected` accepts existing
 metadata for checked icons only (invalid drafts stay unaccepted, no paid calls).

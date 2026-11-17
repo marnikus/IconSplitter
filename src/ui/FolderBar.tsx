@@ -65,5 +65,5 @@ function note(info: RootPathInfo): string {
   if (info.path !== "") return "";
   // both ways out are named, because the row cannot know which one the browser
   // will allow: Rescan re-reads the clipboard, Ctrl+V needs no permission (I-52)
-  return "full path not captured — press Ctrl+Shift+C in Explorer, then Rescan (or Ctrl+V here)";
+  return "full path not found yet — start the local helper (it finds it), then Rescan";
 }

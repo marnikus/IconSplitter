@@ -12,7 +12,8 @@ export const STOCKUPLOAD_FEATURE = "stockupload";
 
 /** The CLOSED set of actions the tab may emit, in one place for the lock test. */
 export const STOCKUPLOAD_LOG_ACTIONS = [
-  "run-started", "uploaded", "failed", "page-reloaded", "batch-submitted", "batch-ready", "run-finished",
+  "run-started", "uploaded", "failed", "page-reloaded", "batch-submitted", "batch-ready", "batch-split",
+  "run-finished",
 ] as const;
 
 export type StockUploadLogAction = (typeof STOCKUPLOAD_LOG_ACTIONS)[number];
@@ -48,6 +49,17 @@ export function failedSpec(input: { target: string; file: string; reason: string
     level: "error", feature: STOCKUPLOAD_FEATURE, action: "failed",
     ids: { target: input.target, file: input.file },
     detail: `${input.target} · ${input.file} failed — ${input.reason}`,
+  };
+}
+
+/**
+ * One Getty request was too big for the helper (or was dropped): the same icons
+ * travel as two smaller batches, so no file is lost to the size of one body.
+ */
+export function batchSplitSpec(input: { target: string; note: string }): StockUploadLogSpec {
+  return {
+    level: "warn", feature: STOCKUPLOAD_FEATURE, action: "batch-split",
+    ids: { target: input.target }, detail: `${input.target}: ${input.note}`,
   };
 }
 

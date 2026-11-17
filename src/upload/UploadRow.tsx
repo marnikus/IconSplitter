@@ -26,6 +26,7 @@ import UploadMetaFields from "./UploadMetaFields";
 import type { UploadJobStatus, UploadRow } from "./types";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import UploadRowBadges from "./UploadRowBadges";
+import LazyPreview from "../ui/LazyPreview";
 
 export interface UploadRowActions {
   activeId: string | null;
@@ -47,6 +48,7 @@ export interface UploadRowActions {
   editMetadata: (id: string, patch: Partial<IconMetadata>) => void;
   copyMeta: (id: string, field: "title" | "description" | "tags") => void;
   exportRow: (id: string) => void;
+  removeRows: (ids: string[]) => void;
   rowBadges: RowBadgeState;
   toggleRowBadge: (pairId: string, badgeId: string) => void;
   removeRowBadgeSelected: (badgeId: string) => void;
@@ -84,10 +86,12 @@ const RowContent = memo(function RowContent({ row, a }: { row: UploadRow; a: Upl
   const id = row.source.id;
   const status = statusOf(row);
   return <>
-      <UploadPreview rootRef={a.rootRef} rootToken={a.rootToken} path={row.source.svgPath}
-        thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
-        label={`${row.source.svgName} v${row.source.version}`} version={row.source.version}
-        settings={rowSettings(a.defaults, id, a.overrides, a.applied)} />
+      <LazyPreview size={a.thumb}>
+        <UploadPreview rootRef={a.rootRef} rootToken={a.rootToken} path={row.source.svgPath}
+          thumb={a.thumb} bg={a.bg} testid={`upload-prev-${id}`}
+          label={`${row.source.svgName} v${row.source.version}`} version={row.source.version}
+          settings={rowSettings(a.defaults, id, a.overrides, a.applied)} />
+      </LazyPreview>
       <FileCell row={row} a={a} />
       <StatusCell row={row} status={status} />
       <MetaCell row={row} />
@@ -202,7 +206,7 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) 
   );
 }
 
-/** Metadata / Settings / Export — the row's own three actions. */
+/** Metadata / Settings / Location / Export / Remove — the row's own actions. */
 function ActionCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
   const id = row.source.id;
   const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -219,6 +223,10 @@ function ActionCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
         onClick={click(() => a.openLocation(id))}>Location</button>
       <button type="button" className="svg-btn tiny primary" data-testid={`upload-export-${id}`}
         onClick={click(() => a.exportRow(id))}>Export</button>
+      <button type="button" className="svg-btn tiny danger" data-testid={`upload-remove-${id}`} disabled={row.running !== null}
+        title={row.running !== null ? "Exporting or getting metadata — wait, or cancel the run first"
+          : "Remove from this list: declines the item in Generate SVG (Undo brings it back)"}
+        onClick={click(() => a.removeRows([id]))}>Remove</button>
     </div>
   );
 }

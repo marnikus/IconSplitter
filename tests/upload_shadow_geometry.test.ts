@@ -22,7 +22,7 @@ describe("Upload shadow geometry", () => {
       <defs><radialGradient id="upload-shadow"><stop/></radialGradient></defs>
       <rect x="20" y="20" width="60" height="60" fill="url(#upload-shadow)"/>
     </svg>`, "image/svg+xml").documentElement;
-    const ellipse = appendUploadShadow(root, { minX: 20, minY: 20, width: 60, height: 60 }, 80, 5);
+    const ellipse = appendUploadShadow(root, { minX: 20, minY: 20, width: 60, height: 60 }, { widthPct: 80, gapPct: 5 });
     expect(ellipse?.getAttribute("fill")).toBe("url(#upload-shadow-1)");
     expect(root.querySelector("rect")?.getAttribute("fill")).toBe("url(#upload-shadow)");
     expect(root.querySelectorAll("radialGradient")).toHaveLength(2);
@@ -34,7 +34,7 @@ describe("Upload shadow geometry", () => {
 
   it("refuses a shadow whose radius disappears at the export's coordinate precision", () => {
     const root = new DOMParser().parseFromString(`<svg ${NS} viewBox="0 0 1 1"/>`, "image/svg+xml").documentElement;
-    expect(appendUploadShadow(root, { minX: 0, minY: 0, width: 0.001, height: 1 }, 10, 5)).toBeNull();
+    expect(appendUploadShadow(root, { minX: 0, minY: 0, width: 0.001, height: 1 }, { widthPct: 10, gapPct: 5 })).toBeNull();
     expect(root.querySelector("ellipse, radialGradient")).toBeNull();
   });
 

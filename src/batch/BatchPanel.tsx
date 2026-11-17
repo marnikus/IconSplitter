@@ -6,14 +6,18 @@ import { useBatchView } from "./useBatchView";
 import ScanTable, { useThumbCache } from "./ScanTable";
 import BatchFilterGrid from "./BatchFilterGrid";
 import BatchBulkBar from "./BatchBulkBar";
+import { batchDataRows } from "./getdatarows";
 import BatchSourceBar from "./BatchSourceBar";
 import BatchPresetRow from "./BatchPresetRow";
 import BatchDestRow from "./BatchDestRow";
 import BatchMergeBar from "./BatchMergeBar";
 import BatchProgressHeader from "./BatchProgressHeader";
+import { setAppState } from "../state/appstore";
 import { useBatchPreview, isStaleEntry, expectedKeyFor, type PreviewEntry } from "./useBatchPreview";
 import { useBatchHotkeys } from "./useBatchHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
+import { useRunning } from "../ui/rebuildwatch";
+import { useBusyActivity } from "../ui/useBusyActivity";
 
 type View = ReturnType<typeof useBatchView>;
 type Preview = ReturnType<typeof useBatchPreview>;
@@ -34,6 +38,18 @@ function useReviewed(v: View) {
   return { onReviewed, onReviewedBatch };
 }
 function useCheckedRows(v: View) { return useMemo(() => v.core.s.rows.filter((r) => r.selected), [v.core.s.rows]); }
+/** The callbacks the list and the pinned bar need, kept out of the panel body. */
+function useRowActions(v: View, preview: Preview) {
+  const checkedRows = useCheckedRows(v);
+  return {
+    onPreview: useOnPreview(checkedRows, preview),
+    rowStale: useRowStale(v, preview),
+    onRegenerate: useOnRegenerate(checkedRows, preview),
+    onRowMergeApply: useRowMergeApply(v, preview),
+    onRowMergeReset: useRowMergeReset(v, preview),
+  };
+}
+
 function useOnPreview(checkedRows: View["core"]["s"]["rows"], preview: Preview) {
   return useCallback(() => { void preview.previewSelected(checkedRows, false); }, [checkedRows, preview]);
 }
@@ -74,21 +90,19 @@ function useRowStale(v: View, preview: Preview) {
 
 export default function BatchPanel({ active = true }: { active?: boolean }) {
   const v = useBatchView();
+  useBusyActivity("batch", v.core.s.busy);
   const thumbFor = useThumbCache(v.core.thumbUrl);
   const { onReviewed, onReviewedBatch } = useReviewed(v);
   const preview = usePreviewSetup(v, onReviewed, onReviewedBatch);
+  // A reload must not land inside a split run.
+  useRunning("batch", v.core.s.running || preview.running);
   useBatchHotkeys(v as never, active);
   useSelectShortcuts({ activeId: v.activeId, selectActive: v.checkActive, deselectActive: v.uncheckActive, selectVisible: v.checkVisible, deselectAll: v.uncheckAll }, active);
-  const checkedRows = useCheckedRows(v);
-  const onPreview = useOnPreview(checkedRows, preview);
-  const rowStale = useRowStale(v, preview);
-  const onRegenerate = useOnRegenerate(checkedRows, preview);
-  const onRowMergeApply = useRowMergeApply(v, preview);
-  const onRowMergeReset = useRowMergeReset(v, preview);
+  const { onPreview, rowStale, onRegenerate, onRowMergeApply, onRowMergeReset } = useRowActions(v, preview);
   return (
     <div className="batch-shell w-full space-y-4">
-      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={() => {}} mode="split" />
-      <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={() => {}} mode="preview" />
+      <BatchProgressHeader progress={v.core.s.progress} running={v.core.s.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={v.core.cancel} onDismiss={() => v.core.setProgress(null)} onReview={reviewBatch} mode="split" />
+      <BatchProgressHeader progress={preview.progress} running={preview.running} rows={v.core.s.rows} thumbFor={thumbFor} onCancel={preview.cancel} onDismiss={preview.dismiss} onReview={reviewBatch} mode="preview" />
       {!v.core.supported && <Unsupported />}
       <GrantBar v={v} />
 <BatchControls v={v} />
@@ -110,7 +124,7 @@ function PinnedBulkBar({ v, preview, onPreview, onRegenerate }: { v: View; previ
   const previewing = preview.isPreviewing;
   return (
     <div className="batch-bulkbar-pin" data-testid="batch-bulkbar-pin">
-      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} reviewCounts={v.reviewCounts} decidableCount={v.decidableCount} approvedSelectedCount={v.approvedSelectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} onRegenerate={onRegenerate} onDecide={(review) => v.decide(v.core.s.rows.filter((r) => r.selected).map((r) => r.relPath), review as any)} canSplit={v.approvedSelectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} canRegenerate={v.selectedCount > 0 && !busy} previewing={previewing} />
+      <BatchBulkBar header={v.header} checkedCount={v.checkedCount} visibleCount={v.visibleCount} totalCount={v.totalCount} hiddenCount={v.hiddenCount} affectedCount={v.affectedCount} thumb={v.thumb} selectedCount={v.selectedCount} reviewCounts={v.reviewCounts} decidableCount={v.decidableCount} approvedSelectedCount={v.approvedSelectedCount} onToggleAll={v.toggleAllVisible} onSelectVisible={v.checkVisible} onInvert={v.invertVisible} onDeselectAll={v.uncheckAll} onThumb={v.setThumb} onSplit={() => void v.core.run()} onPreview={onPreview} onRegenerate={onRegenerate} onDecide={(review) => v.decide(v.core.s.rows.filter((r) => r.selected).map((r) => r.relPath), review as any)} canSplit={v.approvedSelectedCount > 0 && !busy} canPreview={v.selectedCount > 0 && !busy} canRegenerate={v.selectedCount > 0 && !busy} previewing={previewing} getData={() => batchDataRows(v.core.s.rows)} />
     </div>
   );
 }
@@ -166,3 +180,7 @@ function BusyOverlay({ msg, cancel }: { msg: string; cancel: () => void }) {
   );
 }
 
+/** "Review results" on a Batch bar opens the Batch tab, wherever the bar is seen. */
+function reviewBatch(): void {
+  setAppState({ tab: "batch" });
+}

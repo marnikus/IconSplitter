@@ -1,0 +1,62 @@
+// actions/location.ts — 📂 Location (2026-11-16): show the folder of what the
+// stage edits — the open artboard's folder (else its template's), or the edited
+// template's — in Windows Explorer. The browser cannot open Explorer, so the local
+// helper does it (POST /open-folder, tools/bridge/openfolder.mjs). Without the
+// helper, or without the folder's full path, the path is copied instead and the
+// toast says why.
+import type { BuilderActionContext, BuilderActions } from "../actiontypes";
+import { revealPath } from "../../ui/locate";
+import { probePath } from "../../lib/fs";
+import { seedArtboardFolder } from "./sheetexport";
+import { ensureSheetsParent, sheetsRoot, sheetsRootPath } from "./sheetsroot";
+import { writeTemplateFolder } from "./templatefolder";
+
+/** The folder's full path: the opened folder's captured path + the relative `_artboard_sheets/…` folder. */
+export function explorerPathOf(rootPath: string, rel: string): string {
+  const windows = /^[A-Za-z]:|^\\\\/.test(rootPath);
+  const sep = windows ? "\\" : "/";
+  const base = rootPath.replace(/[\\/]+$/, "");
+  return `${base}${sep}${windows ? rel.replace(/\//g, "\\") : rel}`;
+}
+
+/** The relative folder of what the stage edits, or null when it has none yet. */
+function locationOf(ctx: BuilderActionContext): string | null {
+  const m = ctx.model;
+  const artboard = m.artboards.find((a) => a.id === m.editingArtboardId);
+  const templateId = artboard?.templateId ?? m.editingTemplateId;
+  const template = m.templates.find((t) => t.id === templateId);
+  return artboard?.folder ?? template?.folder ?? null;
+}
+
+/**
+ * Its folder on disk, made now when missing (2026-11-16): an artboard's (its
+ * template's folder first), else the edited template's — no save needed first.
+ */
+async function ensureLocation(get: () => BuilderActionContext): Promise<string | null> {
+  const m = get().model;
+  const root = sheetsRoot(get());
+  if (root === null) return null;
+  const artboardId = m.editingArtboardId;
+  const templateId = m.artboards.find((a) => a.id === artboardId)?.templateId ?? m.editingTemplateId;
+  const template = m.templates.find((t) => t.id === templateId);
+  if (template === undefined) return null;
+  const there = template.folder != null && await probePath(root, template.folder).catch(() => null) !== null;
+  // the folders made are answered directly — the store may not show them yet (2026-11-16)
+  const tplDir = there ? template.folder ?? null : await writeTemplateFolder(get, template);
+  return artboardId !== null ? await seedArtboardFolder(get, artboardId) : tplDir;
+}
+
+/** The shared Location (ui/locate.ts): the full path copied and opened in Explorer through the helper. */
+async function openLocation(get: () => BuilderActionContext): Promise<void> {
+  if (!(await ensureSheetsParent(get()))) return;
+  const made = await ensureLocation(get);
+  const ctx = get();
+  const rel = made ?? locationOf(ctx);
+  if (rel === null) return ctx.say(ctx.model.root === null ? "Open the folder first — sheets are saved inside it" : "Its folder could not be made — see the message before this one", true);
+  const root = sheetsRootPath(ctx);
+  await revealPath({ folder: root === "" ? rel : explorerPathOf(root, rel), say: ctx.say });
+}
+
+export function locationActions(get: () => BuilderActionContext): Pick<BuilderActions, "openLocation"> {
+  return { openLocation: () => { void openLocation(get); } };
+}

@@ -5,6 +5,7 @@ import { useCheckedRows } from "../ui/checkedrows";
 import { useRowPresentation } from "../ui/rowpresentation";
 import StockUploadRowView, { type StockRowPresentation } from "./StockUploadRow";
 import type { StockUploadApi } from "./useStockUpload";
+import { withRowIndexes } from "../ui/LazyPreview";
 
 function toRowPresentation(g: StockUploadApi): StockRowPresentation {
   return {
@@ -22,6 +23,8 @@ function toRowPresentation(g: StockUploadApi): StockRowPresentation {
     editMeta: g.editMeta,
     acceptMeta: g.acceptMeta,
     copyMeta: g.copyMeta,
+    uploading: g.model.uploading,
+    removeItems: g.removeItems,
   };
 }
 
@@ -33,10 +36,10 @@ function useRenderedRows(g: StockUploadApi) {
   )), [g.visible, a, register]);
   return useMemo(() => {
     const at = g.visible.findIndex((item) => item.id === g.activeId);
-    if (at < 0) return base;
+    if (at < 0) return withRowIndexes(base);
     const copy = base.slice();
     copy[at] = cloneElement(base[at], { active: true });
-    return copy;
+    return withRowIndexes(copy);
   }, [base, g.visible, g.activeId]);
 }
 
@@ -90,7 +93,7 @@ function ListFooter({ visible, total }: { visible: number; total: number }) {
   return (
     <footer className="svg-list-footer">
       <span data-testid="stock-footer-summary">Showing {visible} of {total} exported items</span>
-      <span className="svg-hints">↑↓ active · E/Q check/uncheck · click a row to edit & embed metadata</span>
+      <span className="svg-hints">↑↓ active · E/Q check/uncheck · row click selects one &amp; edits metadata</span>
     </footer>
   );
 }

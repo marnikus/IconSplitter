@@ -76,9 +76,10 @@ Version controls [accept the chosen version for actual use/export](version-accep
   `docs/archive/2026-10-20-item-review-status/`). A new valid SVG starts
   **pending**; Approve/Decline act on the selection and write the pair's single
   `review` (one history entry per gesture, undoable by source). Every version of
-  that row carries the same status. Merely viewing artwork changes nothing;
-  explicitly choosing a version now approves the item and pins that version
-  for actual use/export ([acceptance contract](version-acceptance.md)). Regenerating reopens the review for
+  that row carries the same status. Merely viewing artwork changes nothing, and
+  explicitly choosing a version only pins that version for use/export — it does
+  not approve the item ([acceptance contract](version-acceptance.md)); approval
+  is the row's own ✓ / Approve selected. Regenerating reopens the review for
   the whole row (`needs-review`) without deleting a version; a failed attempt
   changes neither the status nor the history. Files written before this change
   have no item-level key: the newest decided version's status is read once and
@@ -103,3 +104,14 @@ Version controls [accept the chosen version for actual use/export](version-accep
 * The API key is user-provided, stored in the browser's IndexedDB secret
   store (memory-only fallback), masked in the UI, redacted in every error and
   excluded from presets/reports/exports (RULE 20).
+
+## Anchor points on the preview (2026-11-05)
+
+Hover any SVG preview (row thumbnail, Code and Versions dialogs) with **Ctrl**
+held: every node shows as a small hollow circle inside the preview's own SVG
+(`src/svg/anchoroverlay.ts`, points from `src/lib/svganchors.ts`: each path
+segment's end — an arc is one node — plus line/poly points, rect corners and
+circle/ellipse quarter points, all group/element transforms applied; defs,
+clip paths, masks and symbols skipped). Inline `!important` styles beat the
+preview stroke sheet. Releasing Ctrl, leaving the preview or a window blur
+removes it; the file is never changed. Tests: `svg_anchors.test.tsx`.

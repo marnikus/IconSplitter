@@ -48,7 +48,7 @@ export function useMetaSelectionActions(latest: Latest): SelectionSlice {
     // Nothing needs a paid call: export now — and never let a draft slip out
     // silently, so the line names the icons that go without their metadata.
     const drafts = idsWithDraft(c.rows, ids).length;
-    if (drafts > 0) c.say(`${drafts} icon${drafts === 1 ? "" : "s"} have an unaccepted draft — accepting on the row includes it; this export runs without`);
+    if (drafts > 0) c.say(`${drafts} icon${drafts === 1 ? "" : "s"} have an unaccepted draft — it is saved in export.json, not in the files; ✓ Accept on the row embeds it`);
     void runExportBatch(latest, ids);
   }, [latest]);
 

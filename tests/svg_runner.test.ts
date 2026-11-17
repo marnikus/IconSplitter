@@ -421,8 +421,9 @@ describe("runGeneration — Regenerate from current SVG (batch, 2026-10-20)", ()
     expect(summary.perRequest).toBe(1);
     expect(t.calls.map((c) => c.items)).toEqual(run.sources.map((s) => [s.relPath]));
     t.calls.forEach((c, i) => {
-      expect(c.prompt.startsWith(PRESET)).toBe(true);
-      expect(c.prompt).toContain(codeOf(i + 1));
+      // the saved prompt sits at the bottom, below the icon's code (2026-11-05)
+      expect(c.prompt.endsWith(PRESET)).toBe(true);
+      expect(c.prompt.indexOf(codeOf(i + 1))).toBeLessThan(c.prompt.indexOf(PRESET));
       expect(c.prompt).not.toContain(codeOf(i + 2));
     });
   });

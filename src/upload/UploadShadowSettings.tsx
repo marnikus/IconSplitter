@@ -5,6 +5,7 @@ import {
   SHADOW_WIDTH_MAX, SHADOW_WIDTH_MIN, type UploadSettings,
 } from "../lib/upload/settings";
 import DraftNumberInput from "../ui/DraftNumberInput";
+import UploadShadowTemplateSetting from "./UploadShadowTemplateSetting";
 import { change, Marker, type UploadSettingsDialogProps } from "./settingsfield";
 
 export default function UploadShadowSettings({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
@@ -20,6 +21,7 @@ export default function UploadShadowSettings({ p, effective }: { p: UploadSettin
         <small className="up-hint">centred on the icon&apos;s painted bounds; the numbers below size it</small>
       </div>}
       <ShadowDimensions p={p} effective={effective} />
+      <UploadShadowTemplateSetting p={p} effective={effective} />
       {p.id === null && <small className="up-hint">Shadow defaults for icon settings; changing these numbers does not enable unchecked icons.</small>}
     </UploadSettingsGroup>
   );

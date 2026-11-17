@@ -10,14 +10,19 @@ import SelectionV2Panel from "../selectionv2/SelectionV2Panel";
 import SvgPanel from "../svg/SvgPanel";
 import StockUploadPanel from "../stockupload/StockUploadPanel";
 import UploadPanel from "../upload/UploadPanel";
+import SvgBuilderPanel from "../svgBuilder/SvgBuilderPanel";
 import { setAppState, type AppState } from "../state/appstore";
 import { HistoryProvider } from "../state/HistoryProvider";
 import { useAppSlice } from "../state/useAppState";
 import { usePrefsAutosave } from "../state/usePrefsAutosave";
 import { useSessionAutosave } from "../state/useSessionAutosave";
 import HistoryBar from "./HistoryBar";
+import RebuildToast, { useRebuildWatch } from "./rebuildwatch";
 import { armCompletionSound } from "./completionSound";
 import ScrollTopButton from "./ScrollTopButton";
+import ActivityBars from "./ActivityBars";
+import LazyPreviewsToggle from "./LazyPreviewsToggle";
+import { useScrollMemory } from "./scrollmemory";
 
 const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "sheets", label: "Single sheets", testid: "tab-sheets" },
@@ -25,6 +30,7 @@ const TABS: { id: AppState["tab"]; label: string; testid: string }[] = [
   { id: "selectionV2", label: "Selection V2", testid: "tab-selection-v2" },
   { id: "generateSvg", label: "Generate SVG", testid: "tab-generate-svg" },
   { id: "upload", label: "SVG to upload", testid: "tab-upload" },
+  { id: "svgBuilder", label: "SVG builder", testid: "tab-svg-builder" },
   { id: "stockUpload", label: "Upload", testid: "tab-stock-upload" },
 ];
 
@@ -39,11 +45,15 @@ export default function Workbench() {
 function Shell() {
   const tab = useAppSlice("tab");
   const mainRef = useRef<HTMLElement | null>(null);
+  const rebuild = useRebuildWatch();
   useSessionAutosave();
   usePrefsAutosave();
+  // each tab keeps its scroll position across a reload and a tab switch (2026-11-06)
+  useScrollMemory(mainRef, tab);
   return (
     <div className="app-shell bg-slate-950 text-slate-100" data-testid="app-shell" onPointerDownCapture={armCompletionSound} onKeyDownCapture={armCompletionSound}>
       <div className="progress-mounts flex flex-col gap-1">
+        <ActivityBars />
         <div id="svg-progress-mount" data-testid="svg-progress-mount"></div>
         <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
         <div id="upload-progress-mount" data-testid="upload-progress-mount"></div>
@@ -54,6 +64,8 @@ function Shell() {
         <Panels tab={tab} />
       </main>
       <LogDock />
+      {/* The rebuilt page says so for a few seconds, then the line goes away. */}
+      <RebuildToast notice={rebuild.notice} onDismiss={rebuild.dismiss} onAction={rebuild.reloadNow} />
       {/* Fixed float — kept after the layout rows so main and the dock stay adjacent (I-27). */}
       <ScrollTopButton target={mainRef} />
     </div>
@@ -65,7 +77,8 @@ function Nav({ tab }: { tab: AppState["tab"] }) {
     <nav className="border-b border-white/10 bg-slate-900/60 px-4 py-2">
       <div className="flex w-full flex-wrap items-center gap-3">
         <TabBar tab={tab} />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          <LazyPreviewsToggle />
           <HistoryBar />
         </div>
       </div>
@@ -101,6 +114,7 @@ function Panels({ tab }: { tab: AppState["tab"] }) {
         <SvgPanel active={tab === "generateSvg"} />
       </div>
       <UploadWorkspace active={tab === "upload"} />
+      <SvgBuilderWorkspace active={tab === "svgBuilder"} />
       <StockUploadWorkspace active={tab === "stockUpload"} />
     </>
   );
@@ -112,6 +126,14 @@ function UploadWorkspace({ active }: { active: boolean }) {
   useEffect(() => { if (active) setVisited(true); }, [active]);
   if (!active && !visited) return null;
   return <div className="up-shell px-4 py-3" data-testid="upload-shell" hidden={!active}><UploadPanel active={active} /></div>;
+}
+
+/** Lazy on first visit; a hidden builder keeps its composition and scan state. */
+function SvgBuilderWorkspace({ active }: { active: boolean }) {
+  const [visited, setVisited] = useState(active);
+  useEffect(() => { if (active) setVisited(true); }, [active]);
+  if (!active && !visited) return null;
+  return <div className="builder-shell px-4 py-3" data-testid="builder-shell" hidden={!active}><SvgBuilderPanel active={active} /></div>;
 }
 
 function StockUploadWorkspace({ active }: { active: boolean }) {

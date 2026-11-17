@@ -99,15 +99,15 @@ describe("explicit XMP + IPTC protocol contract in BOTH file formats", () => {
 });
 let root: Root | undefined;
 afterEach(async () => { if (root) await act(() => root!.unmount()); root = undefined; document.body.replaceChildren(); });
-it("offers explicit optional Creator/Copyright edits; identity is never generated or inferred", async () => {
+it("offers an editable one-word Icon Name and no Creator/Copyright inputs (2026-11-08)", async () => {
   const host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   const onEdit = vi.fn();
-  await act(() => root!.render(<UploadMetaFields id="test" meta={{ ...EMPTY_META, state: "generated", metadata: STOCK_TEST_META }} onEdit={onEdit} onAccept={() => {}} onCopy={() => {}} onRegenerate={() => {}} />));
-  for (const [field, value] of [["creator", META.creator], ["copyright", META.copyright]]) {
-    const input = host.querySelector(`[data-testid="upload-meta-${field}-test"]`) as HTMLInputElement;
-    expect(input).not.toBeNull();
-    expect(input.value).toBe("");
-    await act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
-    expect(onEdit).toHaveBeenCalledWith({ [field]: value });
-  }
+  await act(() => root!.render(<UploadMetaFields id="test" meta={{ ...EMPTY_META, state: "generated", metadata: { ...STOCK_TEST_META, name: "team" } }} onEdit={onEdit} onAccept={() => {}} onCopy={() => {}} onRegenerate={() => {}} />));
+  expect(host.querySelector('[data-testid="upload-meta-creator-test"]')).toBeNull();
+  expect(host.querySelector('[data-testid="upload-meta-copyright-test"]')).toBeNull();
+  const input = host.querySelector('[data-testid="upload-meta-name-test"]') as HTMLInputElement;
+  expect(input).not.toBeNull();
+  expect(input.value).toBe("team");
+  await act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "crowd"); input.dispatchEvent(new Event("input", { bubbles: true })); });
+  expect(onEdit).toHaveBeenCalledWith({ name: "crowd" });
 });

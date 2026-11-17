@@ -27,7 +27,9 @@ opt-in class as Generate SVG → Requesty; design
   unchecked. Only approved valid SVG rows can be checked; there are no A/D
   review decisions or shortcuts on this tab. Checked rows drive local
   export/download or explicitly confirmed metadata requests (RULE 20), never
-  automatic sends.
+  automatic sends. **Select random** replaces the checks with N random items
+  from the checked-only pool, or the whole list when nothing is checked
+  ([shared contract](list-selection-filters.md#select-random)).
 * In the Export settings popup, checked rows drive a local **Shadow** checkbox:
   apply/remove the template gradient below selected icons, with checked-only
   width/gap controls and a matching live export preview. The active unchecked
@@ -90,6 +92,11 @@ opt-in class as Generate SVG → Requesty; design
   unchanged. `src/upload/uploadundo.ts` applies settings live when mounted and
   writes the store directly when unmounted. Neither local files/downloads nor
   a confirmed paid metadata call can be undone.
+* Checked rows are remembered across a reload (2026-11-08): every selection
+  gesture writes the restart snapshot in the same task, and a rescan that found
+  NOTHING (unreadable folder, permission not granted yet) prunes nothing, so the
+  restored checks are never emptied by the very reload that restored them —
+  [the session contract](shared.md#the-last-selection-survives-the-reload-2026-11-08).
 
 ## Batch progress
 
@@ -103,3 +110,4 @@ The implemented [response redesign](upload-response.md) removes warm boot reload
 render-time destination planning and quadratic local-map updates, targets stale
 projection, shares popup derivation and reuses already-built preview results.
 Exact export algorithms and all controls remain; browser latency is not claimed.
+The export pipeline itself (JPEG worker pool, overlapping batch, directory cache, commit passes) is in [export speed](upload-export-speed.md).

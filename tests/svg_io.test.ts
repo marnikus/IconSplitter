@@ -689,7 +689,7 @@ const VIEW_PREFS = { thumb: 84, providerOpen: true, bg: { preset: "white", custo
 describe("state reducer and preview", () => {
   it("starts from the documented defaults and applies every action once", () => {
     const start = initialModel(CFG, "prompt", VIEW_PREFS);
-    expect(start.filter).toEqual({ generation: "all", review: "all", search: "" });
+    expect(start.filter).toEqual({ generation: "all", review: "all", search: "", style: "all" });
     expect(start.keyMask).toBe("not set");
     expect(reduceState(start, { type: "key", key: "not-a-real-key-value-1234" }).keySet).toBe(true);
     expect(reduceState(start, { type: "key", key: "not-a-real-key-value-1234" }).keyMask).not.toContain("1234567890");

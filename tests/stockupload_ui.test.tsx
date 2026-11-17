@@ -1,22 +1,28 @@
 import "fake-indexeddb/auto";
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearKnownRoots } from "../src/lib/knownroots";
-import { newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
-import { MANDATORY_TAGS } from "../src/lib/upload/meta";
+import { clearKnownRoots, rememberKnownRoot } from "../src/lib/knownroots";
+import { metadataBlock, newExportRecord, serializeExportRecord } from "../src/lib/upload/export";
+import { MANDATORY_TAGS, metadataFingerprint } from "../src/lib/upload/meta";
 import { DEFAULT_UPLOAD_SETTINGS } from "../src/lib/upload/settings";
+import { applyBadgeToIds, ensureHardcodedBadges } from "../src/lib/upload/rowbadge";
 import { HistoryProvider } from "../src/state/HistoryProvider";
 import { getAppState, resetAppStore } from "../src/state/appstore";
+import { bootStores } from "../src/state/boot";
+import { useSessionAutosave } from "../src/state/useSessionAutosave";
+import { loadSessionState } from "../src/state/sessionstore";
 import StockUploadPanel from "../src/stockupload/StockUploadPanel";
 import { resetStockHistory } from "../src/stockupload/historystore";
+import { appendStockUploadBatch, batchesForStock, resetStockUploadBatches } from "../src/stockupload/batchhistorystore";
 import { resetUploadJournal } from "../src/stockupload/journal";
 import { resetFtpCredentialsForTests } from "../src/stockupload/keystore";
-import { resetStockPresets } from "../src/stockupload/presetstore";
+import { loadStockPresetState, resetStockPresets, STOCK_PRESETS_KEY } from "../src/stockupload/presetstore";
 import HistoryBar from "../src/ui/HistoryBar";
-import { getRowBadgeState, resetRowBadges } from "../src/upload/rowbadgestore";
+import { getRowBadgeState, resetRowBadges, setRowBadgeState } from "../src/upload/rowbadgestore";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { settle, waitUntil } from "./helpers/quiet";
+import { isMultiSelect, pickOnly } from "./helpers/multiselect";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -32,7 +38,7 @@ vi.mock("../src/batch/store", async (importOriginal) => {
 
 let host: HTMLDivElement;
 let ui: Root;
-const q = (id: string) => host.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
+const q = (id: string) => document.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 
 function clickEl(el: HTMLElement): Promise<void> {
   return act(async () => {
@@ -51,6 +57,7 @@ function setInput(el: HTMLInputElement | HTMLTextAreaElement, value: string): Pr
 }
 
 function setSelect(el: HTMLSelectElement, value: string): Promise<void> {
+  if (isMultiSelect(el)) return pickOnly(document, (el as HTMLElement).dataset.testid ?? "", value);
   return act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
     setter?.call(el, value);
@@ -58,39 +65,58 @@ function setSelect(el: HTMLSelectElement, value: string): Promise<void> {
   });
 }
 
-function makeWorkspace(): FakeDir {
-  const root = new FakeDir("stock_ws");
-  const packA = new FakeDir("icons_a");
-  const expA = new FakeDir("export");
-  packA.children.set("export", expA);
-  root.children.set("icons_a", packA);
+function AutosavingStockUploadPanel() {
+  useSessionAutosave();
+  return <HistoryProvider><StockUploadPanel active /></HistoryProvider>;
+}
 
+/** Accepted metadata for a fixture row: the Upload tab never sends a row without it (2026-11-12). */
+const ROW_META = { title: "Star icon", description: "A five-point star outline.", tags: ["star", "shape", "outline", "icon", "vector"] };
+const filledMetadata = () => metadataBlock(ROW_META, {
+  prompt: "", provider: "local", model: "manual", requestId: null, usage: { input: null, output: null, total: null },
+  fingerprint: metadataFingerprint(ROW_META), validation: { ok: true, errors: [], warnings: [] },
+});
+
+function makeWorkspace(withRaster = false, itemCount = 1, withMeta = false): FakeDir {
+  const root = new FakeDir("stock_ws");
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>';
+  const raster = "fake JPEG preview bytes";
   const eps = "%!PS-Adobe-3.0 EPSF-3.0\n%%BoundingBox: 0 0 100 100\n%%EndComments\n0 0 moveto 10 10 lineto stroke\n%%EOF\n";
 
-  const rec = newExportRecord({
-    pair: { id: "item-star", base: "star_icon", suffix: "", dir: "icons_a" },
-    source: { svgPath: "icons_a/star_icon_AI.svg", version: 1, approval: "approved", fingerprint: "10:1" },
-    settings: { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, effective: DEFAULT_UPLOAD_SETTINGS, fingerprint: "f" },
-    svgo: { enabled: true, version: "3", config: "default", beforeBytes: 10, afterBytes: 10, beforeHash: "0", afterHash: "0" },
-    epsEnabled: true,
-    now: "2026-10-27T10:00:00.000Z",
-  });
-  rec.stage = "committed";
-  rec.status = "processed";
-  rec.timestamps.committedAt = "2026-10-27T10:01:00.000Z";
-  rec.outputs = {
-    svg: { path: "icons_a/export/star_icon.svg", bytes: svg.length, hash: "sha256:s" },
-    jpg: null,
-    eps: { path: "icons_a/export/star_icon.eps", bytes: eps.length, hash: "sha256:e" },
-  };
-  const json = serializeExportRecord(rec);
-  expA.children.set("export.json", new FakeFile("export.json", json.length, 1000, json));
-  expA.children.set("star_icon.svg", new FakeFile("star_icon.svg", svg.length, 1000, svg));
-  expA.children.set("star_icon.eps", new FakeFile("star_icon.eps", eps.length, 1000, eps));
-  // Unrecorded stray file in export/ -> MUST NOT create a second row
-  expA.children.set("orphan.svg", new FakeFile("orphan.svg", svg.length, 1000, svg));
+  for (let i = 0; i < itemCount; i += 1) {
+    const packName = i === 0 ? "icons_a" : `icons_${i}`;
+    const itemId = i === 0 ? "item-star" : `item-${i}`;
+    const base = i === 0 ? "star_icon" : `icon_${i}`;
+    const pack = new FakeDir(packName);
+    const exp = new FakeDir("export");
+    pack.children.set("export", exp);
+    root.children.set(packName, pack);
 
+    const rec = newExportRecord({
+      pair: { id: itemId, base, suffix: "", dir: packName },
+      source: { svgPath: `${packName}/${base}_AI.svg`, version: 1, approval: "approved", fingerprint: "10:1" },
+      settings: { defaults: DEFAULT_UPLOAD_SETTINGS, overrides: {}, effective: DEFAULT_UPLOAD_SETTINGS, fingerprint: "f" },
+      svgo: { enabled: true, version: "3", config: "default", beforeBytes: 10, afterBytes: 10, beforeHash: "0", afterHash: "0" },
+      epsEnabled: true,
+      now: "2026-10-27T10:00:00.000Z",
+    });
+    rec.stage = "committed";
+    rec.status = "processed";
+    if (withMeta) rec.metadata = filledMetadata();
+    rec.timestamps.committedAt = "2026-10-27T10:01:00.000Z";
+    rec.outputs = {
+      svg: { path: `${packName}/export/${base}.svg`, bytes: svg.length, hash: "sha256:s" },
+      jpg: withRaster ? { path: `${packName}/export/${base}.jpg`, bytes: raster.length, hash: "sha256:j" } : null,
+      eps: { path: `${packName}/export/${base}.eps`, bytes: eps.length, hash: "sha256:e" },
+    };
+    const json = serializeExportRecord(rec);
+    exp.children.set("export.json", new FakeFile("export.json", json.length, 1000, json));
+    exp.children.set(`${base}.svg`, new FakeFile(`${base}.svg`, svg.length, 1000, svg));
+    exp.children.set(`${base}.eps`, new FakeFile(`${base}.eps`, eps.length, 1000, eps));
+    if (withRaster) exp.children.set(`${base}.jpg`, new FakeFile(`${base}.jpg`, raster.length, 1000, raster));
+    // An unrecorded stray file must not create an extra row.
+    if (i === 0) exp.children.set("orphan.svg", new FakeFile("orphan.svg", svg.length, 1000, svg));
+  }
   return root;
 }
 
@@ -103,6 +129,7 @@ describe("Upload (stockUpload) tab UI", () => {
     resetRowBadges();
     resetStockPresets();
     resetStockHistory();
+    resetStockUploadBatches();
     resetUploadJournal();
     await resetFtpCredentialsForTests();
     vi.stubGlobal("showDirectoryPicker", () => Promise.reject(new Error("picker not needed")));
@@ -114,7 +141,251 @@ describe("Upload (stockUpload) tab UI", () => {
   afterEach(() => {
     act(() => ui.unmount());
     host.remove();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("opens per-stock batch history and selects only the batch items visible in the current list", async () => {
+    const ws = makeWorkspace();
+    stored.set("__stock_upload__", { source: ws });
+    rememberKnownRoot(ws, "F:\\Stocks 2026\\icons testing");
+    appendStockUploadBatch({
+      id: "run-1", stockId: "shutterstock", stockName: "Shutterstock",
+      uploadedAt: "2026-11-08T10:00:00.000Z", uploadedCount: 1, failedCount: 0,
+      cancelled: false, rootPath: "F:\\Stocks 2026\\icons testing",
+      files: [{ itemId: "item-star", fileName: "star_icon.svg", format: "svg",
+        relPath: "icons_a/export/star_icon.svg",
+        fullPath: "F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.svg" }],
+    });
+    appendStockUploadBatch({
+      id: "run-2", stockId: "adobe-stock", stockName: "Adobe Stock",
+      uploadedAt: "2026-11-08T11:00:00.000Z", uploadedCount: 0, failedCount: 1,
+      cancelled: false, rootPath: "F:\\Stocks 2026\\icons testing", files: [],
+    });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+    // The button sits in the bulk bar, right before Remove selected and Upload (2026-11-08).
+    const history = q("stock-upload-history-open")!;
+    expect(q("stock-bulk-right")!.contains(history)).toBe(true);
+    expect(history.nextElementSibling).toBe(q("stock-remove-selected"));
+    await clickEl(history);
+    expect(q("stock-upload-history-dialog")).not.toBeNull();
+    expect(q("stock-upload-history-batch-run-1")?.textContent).toContain("1 file");
+    await setSelect(q("stock-history-stock-select") as HTMLSelectElement, "adobe-stock");
+    expect(q("stock-upload-history-batch-run-2")?.textContent).toContain("0 files");
+    expect(q("stock-upload-history-batch-run-1")).toBeNull();
+    await setSelect(q("stock-history-stock-select") as HTMLSelectElement, "shutterstock");
+    await clickEl(q("stock-upload-history-batch-run-1")!);
+    expect(q("stock-history-file-run-1-0")?.textContent).toContain("star_icon.svg");
+    expect(q("stock-history-location-run-1-0")?.getAttribute("title"))
+      .toBe("F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.svg");
+    await clickEl(q("stock-history-thumb-run-1-0")!);
+    expect(q("stock-history-preview")).not.toBeNull();
+    await clickEl(q("stock-history-preview-close")!);
+    await clickEl(q("stock-history-select-files")!);
+    expect(getAppState().stockUpload.checked).toEqual(["item-star"]);
+  });
+
+  it("removes the chosen stock's badge and history records for pasted rejected files, with undo for the badge", async () => {
+    const ws = makeWorkspace(false, 3);
+    stored.set("__stock_upload__", { source: ws });
+    const file = (itemId: string, fileName: string) => ({ itemId, fileName, format: "eps" as const, relPath: null, fullPath: null });
+    appendStockUploadBatch({
+      id: "adobe-run", stockId: "adobe-stock", stockName: "Adobe Stock", uploadedAt: "2026-11-09T15:00:00.000Z",
+      uploadedCount: 3, failedCount: 0, cancelled: false, rootPath: "",
+      files: [file("item-star", "star_icon.eps"), file("item-1", "icon_1.eps"), file("item-2", "icon_2.eps")],
+    });
+    let badges = applyBadgeToIds(ensureHardcodedBadges(getRowBadgeState()), ["item-star", "item-1", "item-2"], "adobe-stock");
+    badges = applyBadgeToIds(badges, ["item-star"], "shutterstock");
+    setRowBadgeState(badges);
+    act(() => { ui.render(<HistoryProvider><HistoryBar /><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-2") !== null, "stock rows loaded");
+
+    await clickEl(q("stock-rejected-open")!);
+    expect(q("stock-rejected-process")!.hasAttribute("disabled")).toBe(true);
+    await setSelect(q("stock-rejected-stock") as HTMLSelectElement, "adobe-stock");
+    await setInput(q("stock-rejected-text") as HTMLTextAreaElement,
+      '<div role="rowheader"><span>0569-star_icon.eps</span></div><div role="gridcell"><span>Upload limit reached</span></div>'
+      + "<div role=\"rowheader\"><span>0102-unknown.eps</span></div>");
+    expect(q("stock-rejected-summary")!.textContent).toContain("1 matching item");
+    expect(q("stock-rejected-unmatched")!.textContent).toContain("unknown.eps");
+
+    // A plain comma list works the same way.
+    await setInput(q("stock-rejected-text") as HTMLTextAreaElement, "star_icon.eps, icon_1.jpg");
+    expect(q("stock-rejected-summary")!.textContent).toContain("2 matching item");
+    await clickEl(q("stock-rejected-process")!);
+
+    expect(q("stock-rejected-dialog")).toBeNull();
+    const after = getRowBadgeState();
+    expect(after.assigned["item-star"]).toEqual(["shutterstock"]);
+    expect(after.assigned["item-1"]).toBeUndefined();
+    expect(after.assigned["item-2"]).toEqual(["adobe-stock"]);
+    const run = batchesForStock("adobe-stock")[0];
+    expect(run.files.map((f) => f.itemId)).toEqual(["item-2"]);
+    expect(run).toMatchObject({ uploadedCount: 1, failedCount: 2 });
+
+    await clickEl(q("hist-undo")!);
+    expect(getRowBadgeState().assigned["item-1"]).toEqual(["adobe-stock"]);
+  });
+
+  it("replaces a 100-file history pick with row, history, and checkbox selections and restores the latest set", async () => {
+    const ws = makeWorkspace(false, 100);
+    stored.set("__stock_upload__", { source: ws });
+    const itemIds = Array.from({ length: 100 }, (_, i) => i === 0 ? "item-star" : `item-${i}`);
+    appendStockUploadBatch({
+      id: "bulk-history-run", stockId: "shutterstock", stockName: "Shutterstock",
+      uploadedAt: "2026-11-08T10:00:00.000Z", uploadedCount: 100, failedCount: 0,
+      cancelled: false, rootPath: "F:\\Stocks\\icons",
+      files: itemIds.map((itemId, i) => ({
+        itemId, fileName: `${i === 0 ? "star_icon" : `icon_${i}`}.svg`, format: "svg",
+        relPath: `icons_${i === 0 ? "a" : i}/export/${i === 0 ? "star_icon" : `icon_${i}`}.svg`,
+        fullPath: null,
+      })),
+    });
+    appendStockUploadBatch({
+      id: "newer-history-run", stockId: "shutterstock", stockName: "Shutterstock",
+      uploadedAt: "2026-11-08T11:00:00.000Z", uploadedCount: 2, failedCount: 0,
+      cancelled: false, rootPath: "F:\\Stocks\\icons",
+      files: [1, 3].map((i) => ({
+        itemId: `item-${i}`, fileName: `icon_${i}.svg`, format: "svg" as const,
+        relPath: `icons_${i}/export/icon_${i}.svg`, fullPath: null,
+      })),
+    });
+    act(() => { ui.render(<StrictMode><AutosavingStockUploadPanel /></StrictMode>); });
+    await waitUntil(() => q("stock-row-item-99") !== null, "100 stock rows loaded");
+
+    await clickEl(q("stock-upload-history-open")!);
+    await clickEl(q("stock-upload-history-batch-bulk-history-run")!);
+    await clickEl(q("stock-history-select-files")!);
+    expect(getAppState().stockUpload.checked).toHaveLength(100);
+    expect(loadSessionState().stockUpload?.checked).toHaveLength(100);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(100);
+
+    // Choosing a row after the history bulk pick replaces that old queue item-set.
+    await clickEl(q("stock-row-item-4")!);
+    expect(getAppState().stockUpload.checked).toEqual(["item-4"]);
+    expect(loadSessionState().stockUpload?.checked).toEqual(["item-4"]);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(1);
+
+    await clickEl(q("stock-upload-history-batch-newer-history-run")!);
+    await clickEl(q("stock-history-select-files")!);
+    let expected = ["item-1", "item-3"];
+    expect(getAppState().stockUpload.checked).toEqual(expected);
+    expect(loadSessionState().stockUpload?.checked).toEqual(expected);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(2);
+
+    await clickEl(q("stock-upload-history-backdrop")!);
+    await clickEl(q("stock-check-item-3")!);
+    await clickEl(q("stock-check-item-5")!);
+    expected = ["item-1", "item-5"];
+    expect(getAppState().stockUpload.checked).toEqual(expected);
+    expect(loadSessionState().stockUpload?.checked).toEqual(expected);
+    expect(host.querySelectorAll(".stock-up-row input.up-check:checked")).toHaveLength(2);
+
+    act(() => { ui.unmount(); });
+    act(() => { bootStores(); });
+    ui = createRoot(host);
+    act(() => { ui.render(<StrictMode><AutosavingStockUploadPanel /></StrictMode>); });
+    await waitUntil(() => q("stock-row-item-99") !== null, "stock rows reloaded");
+    expect(getAppState().stockUpload.checked).toEqual(expected);
+    expect(loadSessionState().stockUpload?.checked).toEqual(expected);
+    await waitUntil(() => host.querySelectorAll(".stock-up-row input.up-check:checked").length === 2, "restored checked rows projected");
+  });
+
+  it("groups stock configuration and filters into clearly labeled compact sections", async () => {
+    const ws = makeWorkspace();
+    stored.set("__stock_upload__", { source: ws });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+
+    const presets = q("stock-ftp-preset-group");
+    const connection = q("stock-ftp-connection-group");
+    const credentials = q("stock-ftp-cred-box");
+    const filters = q("stock-filters");
+    expect(presets?.querySelector("legend")?.textContent).toContain("Stock preset");
+    expect(connection?.querySelector("legend")?.textContent).toContain("Connection settings");
+    expect(connection?.querySelector("[data-testid='stock-ftp-host']")).not.toBeNull();
+    expect(credentials?.querySelector("legend")?.textContent).toContain("Sign-in & test");
+    expect(q("stock-ftp-help")?.tagName).toBe("DETAILS");
+    expect((q("stock-ftp-help") as HTMLDetailsElement).open).toBe(false);
+    expect(filters?.querySelector("legend")?.textContent).toContain("Find & filter");
+    expect(filters?.querySelector("[data-testid='stock-filter-search']")).not.toBeNull();
+    // Compact layout (2026-11-08): header with icon, then three cards side by side — Connection | Stock preset | Sign-in.
+    expect(q("stock-ftp-panel")!.querySelector(".stock-ftp-icon")).not.toBeNull();
+    const body = q("stock-ftp-body")!;
+    expect([...body.children].map((c) => (c as HTMLElement).dataset.testid))
+      .toEqual(["stock-ftp-connection-group", "stock-ftp-preset-group", "stock-ftp-cred-box"]);
+    expect(credentials!.querySelector(".stock-card-head [data-testid='stock-ftp-cred-status']")).not.toBeNull();
+    expect(presets!.querySelector("[data-testid='stock-ftp-new-name']")!.closest(".stock-new-preset")).not.toBeNull();
+  });
+
+  it("sizes the raster preview frame to the original file aspect ratio", async () => {
+    const ws = makeWorkspace(true);
+    stored.set("__stock_upload__", { source: ws });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:stock-raster-preview");
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+    await waitUntil(() => q("stock-prev-item-star")?.getAttribute("src") === "blob:stock-raster-preview", "raster preview loaded");
+
+    const image = q("stock-prev-item-star") as HTMLImageElement;
+    const zoom = Number((q("stock-upload-zoom") as HTMLInputElement).value);
+    Object.defineProperty(image, "naturalWidth", { configurable: true, value: zoom * 2 });
+    Object.defineProperty(image, "naturalHeight", { configurable: true, value: zoom });
+    await act(async () => { image.dispatchEvent(new Event("load", { bubbles: true })); });
+
+    const frame = q("stock-prev-item-star-frame")!;
+    expect(frame.style.width).toBe(`${zoom * 2}px`);
+    expect(frame.style.height).toBe(`${zoom}px`);
+  });
+
+  it("remembers the most recently selected stock preset after reload", async () => {
+    const ws = makeWorkspace();
+    stored.set("__stock_upload__", { source: ws });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+
+    await setSelect(q("stock-ftp-preset-select") as HTMLSelectElement, "getty-images-web");
+    await settle();
+    expect(JSON.parse(localStorage.getItem(STOCK_PRESETS_KEY) ?? "{}").activePresetId).toBe("getty-images-web");
+    expect(loadStockPresetState().activePresetId).toBe("getty-images-web");
+  });
+
+  it("shows an aspect-preserving hover thumbnail preview and retains click-to-enlarge", async () => {
+    const ws = makeWorkspace();
+    const folder = (ws.children.get("icons_a") as FakeDir).children.get("export") as FakeDir;
+    folder.children.set("star_icon.jpg", new FakeFile("star_icon.jpg", 12, 1000, "jpeg-preview"));
+    stored.set("__stock_upload__", { source: ws });
+    rememberKnownRoot(ws, "F:\\Stocks 2026\\icons testing");
+    appendStockUploadBatch({
+      id: "run-eps", stockId: "shutterstock", stockName: "Shutterstock",
+      uploadedAt: "2026-11-08T10:00:00.000Z", uploadedCount: 1, failedCount: 0,
+      cancelled: false, rootPath: "F:\\Stocks 2026\\icons testing",
+      files: [{ itemId: "item-star", fileName: "star_icon.eps", format: "eps",
+        relPath: "icons_a/export/star_icon.eps",
+        fullPath: "F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.eps" }],
+    });
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:history-hover-preview");
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "stock row loaded");
+    await clickEl(q("stock-upload-history-open")!);
+    await clickEl(q("stock-upload-history-batch-run-eps")!);
+    await waitUntil(() => q("stock-history-thumb-run-eps-0")?.querySelector("img") !== null, "EPS companion image loaded");
+
+    const thumb = q("stock-history-thumb-run-eps-0")!;
+    await act(async () => { thumb.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })); });
+    const hover = q("stock-history-hover-preview-run-eps-0");
+    expect(hover).not.toBeNull();
+    const hoverImage = hover?.querySelector("img");
+    expect(hoverImage?.getAttribute("src")).toBe("blob:history-hover-preview");
+    expect(hoverImage?.style.width).toBe("auto");
+    expect(hoverImage?.style.height).toBe("auto");
+
+    await clickEl(thumb);
+    expect(q("stock-history-preview")).not.toBeNull();
+    const largeImage = q("stock-history-preview")?.querySelector("img");
+    expect(largeImage?.getAttribute("src")).toBe("blob:history-hover-preview");
+    expect(largeImage?.style.width).toBe("auto");
+    expect(largeImage?.style.height).toBe("auto");
   });
 
   it("Ctrl-click removes an applied site badge from all checked Stock Upload rows", async () => {
@@ -134,22 +405,53 @@ describe("Upload (stockUpload) tab UI", () => {
     expect(getRowBadgeState().assigned["item-star"] ?? []).not.toContain("shutterstock");
   });
 
-  it("offers an opt-in combined title and discloses it before upload", async () => {
+  it("offers random 100-icon batch selection, off by default and remembered", async () => {
     stored.set("__stock_upload__", { source: makeWorkspace() });
     act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
     await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
-    const checkbox = q("stock-combine-title-description") as HTMLInputElement;
+    const box = q("stock-random-batches") as HTMLInputElement;
+    expect(box).not.toBeNull();
+    // Nobody gets a random upload order unless they ask for it.
+    expect(box.checked).toBe(false);
+    await clickEl(box);
+    expect(box.checked).toBe(true);
+    // A saved preference, so a rerun keeps drawing batches at random.
+    expect(localStorage.getItem("iconSplitter.stockUpload.prefs.v1")).toContain('"randomBatches":true');
+    // Reloading the panel reads it back instead of resetting the choice.
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "row reloaded");
+    expect((q("stock-random-batches") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("offers an opt-in combined title and discloses it before upload", async () => {
+    stored.set("__stock_upload__", { source: makeWorkspace(false, 1, true) });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
+    await clickEl(q("stock-presets-open")!);
+    const checkbox = q("stock-preset-shutterstock-title-description") as HTMLInputElement;
     expect(checkbox).not.toBeNull();
     expect(checkbox.checked).toBe(false);
     await clickEl(checkbox);
     expect(checkbox.checked).toBe(true);
+    await clickEl(q("stock-presets-close")!);
     await clickEl(q("stock-check-item-star")!);
     await clickEl(q("stock-upload-start")!);
     expect(q("stock-upload-confirm-dialog")?.textContent).toContain("Title + description");
   });
 
-  it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats", async () => {
+  it("never opens the upload confirmation for rows whose metadata is empty (2026-11-12)", async () => {
+    stored.set("__stock_upload__", { source: makeWorkspace() });
+    act(() => { ui.render(<HistoryProvider><StockUploadPanel active /></HistoryProvider>); });
+    await waitUntil(() => q("stock-row-item-star") !== null, "row loaded");
+    await clickEl(q("stock-check-item-star")!);
+    await clickEl(q("stock-upload-start")!);
+    expect(q("stock-upload-confirm-dialog")).toBeNull();
+    expect(host.textContent).toContain("None of the selected rows has accepted metadata");
+  });
+
+  it("discovers only export/+export.json items, manages badges & zoom, saves local-only credentials without expanding, edits metadata, and uploads selected formats with a history note", async () => {
     const ws = makeWorkspace();
+    rememberKnownRoot(ws, "F:\\Stocks 2026\\icons testing");
     stored.set("__stock_upload__", { source: ws });
 
     const uploadedConfigs: string[] = [];
@@ -239,25 +541,49 @@ describe("Upload (stockUpload) tab UI", () => {
     await waitUntil(() => q("stock-meta-state-item-star")?.textContent?.includes("accepted") === true, "metadata accepted");
 
     // Choose formats: SVG + EPS + ZIP (raster off since test fixture has SVG+EPS)
-    await clickEl(q("stock-format-raster")!); // uncheck default raster
-    await clickEl(q("stock-format-svg")!);    // check svg
-    await clickEl(q("stock-format-zip")!);    // check zip (eps is already checked by default)
+    await clickEl(q("stock-presets-open")!);
+    await clickEl(q("stock-preset-shutterstock-raster")!); // uncheck default raster
+    await clickEl(q("stock-preset-shutterstock-svg")!);    // check svg
+    await clickEl(q("stock-preset-shutterstock-zip")!);    // check zip (eps is already checked by default)
+    await clickEl(q("stock-presets-close")!);
     await settle();
 
-    // Click Upload -> Confirm upload -> sends 3 files (svg, eps, zip) sharing stem star_icon
+    // An existing stock badge skips this icon by default; opting into that site re-uploads it.
+    setRowBadgeState(applyBadgeToIds(getRowBadgeState(), ["item-star"], "shutterstock"));
+    await settle();
+
+    // Click Upload -> confirmation -> sends 3 files after opting into re-upload.
     await clickEl(q("stock-upload-start")!);
     await settle();
     expect(q("stock-upload-confirm-dialog")).not.toBeNull();
+    const reupload = q("stock-upload-reupload-shutterstock") as HTMLInputElement;
+    expect(reupload.checked).toBe(false);
+    expect((q("stock-upload-confirm-go") as HTMLButtonElement).disabled).toBe(true);
+    await clickEl(reupload);
+    expect((q("stock-upload-confirm-go") as HTMLButtonElement).disabled).toBe(false);
+    const uploadNote = q("stock-upload-confirm-note") as HTMLTextAreaElement;
+    expect(uploadNote).not.toBeNull();
+    await setInput(uploadNote, "Autumn catalog refresh");
     await clickEl(q("stock-upload-confirm-go")!);
     await waitUntil(() => uploadedConfigs.length === 3, "3 files uploaded");
 
     const sentFiles = uploadedConfigs.map((b64) => JSON.parse(atob(b64)).fileName as string);
     expect(sentFiles).toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
     expect(getRowBadgeState().assigned["item-star"]).toEqual([badgeId, "shutterstock"]);
+    await waitUntil(() => batchesForStock("shutterstock").length === 1, "upload batch history recorded");
+    const savedBatch = batchesForStock("shutterstock")[0];
+    expect(savedBatch).toMatchObject({ uploadedCount: 3, failedCount: 0, cancelled: false, note: "Autumn catalog refresh" });
+    expect(savedBatch.files.map((file) => file.fileName))
+      .toEqual(["star_icon.svg", "star_icon.eps", "star_icon.zip"]);
+    expect(savedBatch.files[0].fullPath)
+      .toBe("F:\\Stocks 2026\\icons testing\\icons_a\\export\\star_icon.svg");
+    await clickEl(q("stock-upload-history-open")!);
+    const savedHistoryRow = q(`stock-upload-history-batch-${savedBatch.id}`);
+    expect(savedHistoryRow?.querySelector(".stock-history-note")?.textContent).toBe("Autumn catalog refresh");
   });
 
   it("supports Adobe Stock SFTP (:22) with SFTP Member ID / generated password fields, reset defaults, and standalone vector upload", async () => {
-    const ws = makeWorkspace();
+    const ws = makeWorkspace(false, 1, true);
     stored.set("__stock_upload__", { source: ws });
 
     let testAttempts = 0;
@@ -331,8 +657,8 @@ describe("Upload (stockUpload) tab UI", () => {
     expect((q("stock-ftp-host") as HTMLInputElement).value).toBe("sftp.contributor.adobestock.com");
     expect((q("stock-ftp-port") as HTMLInputElement).value).toBe("22");
     expect((q("stock-ftp-protocol") as HTMLSelectElement).value).toBe("sftp");
-    expect(q("stock-ftp-cred-box")?.textContent).toContain("SFTP Member ID");
-    expect(q("stock-ftp-cred-box")?.textContent).toContain("Generated SFTP password");
+    expect(q("stock-ftp-cred-box")?.textContent).toContain("Member ID");
+    expect(q("stock-ftp-cred-box")?.textContent).toContain("Generated password");
 
     // Edit host and verify built-in Reset restores Adobe Stock defaults
     await setInput(q("stock-ftp-host") as HTMLInputElement, "custom.example.com");
@@ -362,8 +688,10 @@ describe("Upload (stockUpload) tab UI", () => {
     // Target Adobe Stock only (uncheck Shutterstock, check Adobe Stock) and upload SVG + EPS
     await clickEl(q("stock-target-check-shutterstock")!);
     await clickEl(q("stock-target-check-adobe-stock")!);
-    await clickEl(q("stock-format-raster")!);
-    await clickEl(q("stock-format-svg")!);
+    await clickEl(q("stock-presets-open")!);
+    await clickEl(q("stock-preset-adobe-stock-raster")!);
+    await clickEl(q("stock-preset-adobe-stock-svg")!);
+    await clickEl(q("stock-presets-close")!);
     await clickEl(q("stock-check-item-star")!);
     await settle();
 

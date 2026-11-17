@@ -985,7 +985,7 @@ it("Stop in automatic mode saves only the sent group, skips later requests and k
   await waitFor(() => q("[data-testid=svg-img-composite]") !== null, "two group preview");
   await click(q("[data-testid=svg-img-generate]")!);
   await waitFor(() => imageCalls.length === 1, "first group sent");
-  await click(q("[data-testid=svg-image-progress-stop]")!);
+  await click(q("[data-testid=svg-image-progress-cancel]")!);
   expect(txt("[data-testid=svg-image-progress-title]")).toContain("Stopping");
   await act(async () => { response.resolve(await answer()); });
   await waitFor(() => q("[data-testid=svg-busy]") === null, "sent group saved and stopped");

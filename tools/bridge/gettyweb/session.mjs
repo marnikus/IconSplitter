@@ -10,7 +10,11 @@ import path from "node:path";
 import { connectBrowser } from "./browser.mjs";
 import { openCdp } from "./cdp.mjs";
 import { restoreSessionCookies, saveSessionCookies } from "./sessioncookies.mjs";
-import { attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage } from "./contribute.mjs";
+import { createWaitControl } from "./waits.mjs";
+import {
+  attachFiles, createBatch, ensureSignedIn, finalizeBatch, finishBatch, openContributePage,
+  reattachFiles, runDriverStep,
+} from "./contribute.mjs";
 
 const LOGIN_TIMEOUT_MS = 120000;
 const UPLOAD_TIMEOUT_MS = 180000;
@@ -24,15 +28,109 @@ async function openPage(connection) {
 }
 
 /** Turns one page reading into the counts the app's progress line shows. */
-export function progressOf(read, reloads = 0) {
+export function progressOf(read, reloads = 0, batch = 0) {
   const uploaded = Array.isArray(read?.uploaded) ? read.uploaded.length : 0;
   const failed = Array.isArray(read?.failed) ? read.failed.length : 0;
   const listed = Array.isArray(read?.namesSeen) ? read.namesSeen.length : 0;
   const total = listed + (Array.isArray(read?.missing) ? read.missing.length : 0);
-  // Getty's own "Ready to submit" validation, the only proof a file may be sent;
+  // Getty's own "Ready to submit" validation, the only proof a run is finished;
   // reported only once it exists, so a reading without it stays the old shape.
+  // `uploaded` stays the earlier "the picture is there" count, which is what
+  // lets the metadata step start as soon as the last file lands.
   const ready = Array.isArray(read?.readyToSubmit) ? read.readyToSubmit.length : 0;
-  return { total, uploaded, failed, listed, ...(ready > 0 ? { ready } : {}), reloads };
+  // `batch` says which 100-icon batch the counts belong to: the app keeps the
+  // bar's total across batches instead of restarting it at every new batch.
+  return { total, uploaded, failed, listed, ...(ready > 0 ? { ready } : {}), reloads, ...(batch > 0 ? { batch } : {}) };
+}
+
+/**
+ * The live counts plus what the run waits for right now (2026-11-12): the wait
+ * (its reason, what comes next, the attempt, the time left) and what the run is
+ * doing once a wait is over. Counts only and our own wording — nothing else.
+ */
+export function withWaitInfo(progress, waits) {
+  if (!progress) return progress ?? null;
+  const info = waits.current();
+  return { ...progress, ...(info?.wait ? { wait: info.wait } : {}), ...(info?.activity ? { activity: info.activity } : {}) };
+}
+
+/**
+ * What the run may call uploaded. The last reading of the run wins: it is taken
+ * after the grid-wide metadata save, so it is the one that can show Getty's
+ * "Ready to submit" icon — and a file without that icon is never in this list.
+ * A page that renders no contribution cards cannot report the icon at all; only
+ * then does the arrived count stand in, and the answer is already marked
+ * unverified.
+ */
+export function acceptedOf(done, attachResult) {
+  const settled = done?.report?.readiness?.state ?? attachResult?.state ?? null;
+  if (settled === null) return [];
+  const unverified = done?.report?.readiness?.verified === false;
+  if (unverified) return Array.isArray(settled.uploaded) ? settled.uploaded : [];
+  return Array.isArray(settled.readyToSubmit) ? settled.readyToSubmit : [];
+}
+
+/** The run's contributions Getty did not validate, by stem. */
+export function notReadyOf(done) {
+  const notReady = done?.report?.readiness?.notReady;
+  return Array.isArray(notReady) ? notReady.filter((name) => typeof name === "string" && name !== "") : [];
+}
+
+/**
+ * The batch's names without the contributions Getty never validated
+ * (2026-11-12): the finish step then submits what is ready instead of waiting on
+ * a card that already failed its gate — those files go to a later batch.
+ */
+export function withoutStems(names, stems) {
+  const drop = new Set((Array.isArray(stems) ? stems : []).map(stemOf));
+  if (drop.size === 0) return names;
+  return names.filter((name) => !drop.has(stemOf(name)));
+}
+
+/** A file name without its folder or extension, for matching against the page. */
+function stemOf(fileName) {
+  const leaf = String(fileName ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = leaf.lastIndexOf(".");
+  return (dot > 0 ? leaf.slice(0, dot) : leaf).trim().toLowerCase();
+}
+
+/**
+ * The repair the readiness gate may call: it re-attaches the staged copy of the
+ * files Getty never validated, matched by **stem** (a JPEG/EPS pair is one card).
+ * Nothing is re-staged and no drawer is re-typed here — `contribute` saves the
+ * metadata again after the files are back on the page.
+ */
+export function repairTargets(files, paths, names) {
+  const wanted = [];
+  for (const name of Array.isArray(names) ? names : []) {
+    const stem = stemOf(name);
+    const index = Array.isArray(files) ? files.findIndex((file) => stemOf(file?.name) === stem) : -1;
+    const staged = index >= 0 && Array.isArray(paths) ? paths[index] : undefined;
+    if (typeof staged === "string") wanted.push({ name: files[index].name, path: staged });
+  }
+  return wanted;
+}
+
+export function repairCapability(connection, sessionId, files, paths, options = {}) {
+  if (!Array.isArray(files) || files.length === 0 || !Array.isArray(paths)) return undefined;
+  return async (names) => {
+    const wanted = repairTargets(files, paths, names);
+    if (wanted.length === 0) return { ok: false };
+    const done = await reattachFiles(connection, sessionId, wanted, options);
+    return { ok: done.ok === true };
+  };
+}
+
+/**
+ * The per-batch state a new batch must start from: batch 1's id, its file names
+ * and its counts would otherwise make Getty refuse to finish batch 2.
+ */
+export function resetBatchState(state) {
+  state.batchId = null;
+  state.expected = [];
+  state.progress = null;
+  state.reloads = 0;
+  return state;
 }
 
 /** The readiness pacing a caller may inject; production keeps the real windows. */
@@ -182,8 +280,22 @@ export async function openGettySession(options) {
 function buildSession(ctx) {
   const { connection, page, options, cleanup } = ctx;
   const tempDir = mkdtempSync(path.join(tmpdir(), "getty-web-files-"));
-  const state = { batchId: null, expected: [], progress: null, reloads: 0 };
+  const state = { batchId: null, expected: [], progress: null, reloads: 0, batchNo: 0 };
+  // What the retry timers wait for, shared by every loop of this session (waits.mjs).
+  const waits = createWaitControl();
+  // Kept for the finish call: the same staged copies are re-uploaded if the page
+  // still shows a card without Getty's "Ready to submit" icon.
+  const staged = { files: [], paths: [] };
   let closed = false;
+  const createOwnBatch = async (input) => {
+    const created = await createBatch(connection, page.sessionId, {
+      batchName: input.batchName, submissionType: input.submissionType,
+      briefCode: input.briefCode, onProgress: options.onProgress, signal: options.signal,
+      timeoutMs: options.batchTimeoutMs,
+    });
+    if (created.ok) state.batchId = created.batchId;
+    return created;
+  };
   const dropTemp = () => {
     try { rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp already gone */ }
   };
@@ -192,13 +304,26 @@ function buildSession(ctx) {
     /** Creates the batch once for the whole run. */
     async ensureBatch(input) {
       if (state.batchId !== null) return { ok: true, batchId: state.batchId };
-      const created = await createBatch(connection, page.sessionId, {
-        batchName: input.batchName, submissionType: input.submissionType,
-        briefCode: input.briefCode, onProgress: options.onProgress, signal: options.signal,
-        timeoutMs: options.batchTimeoutMs,
-      });
-      if (created.ok) state.batchId = created.batchId;
-      return created;
+      return createOwnBatch(input);
+    },
+    /**
+     * Starts the **next** batch of a long run in this same signed-in session. The
+     * previous batch was completed, so its id, its file names and its progress
+     * must not leak into the new one: Getty would refuse to finish a batch whose
+     * cards belong to another. One sign-in, N batches.
+     */
+    async startBatch(input) {
+      resetBatchState(state);
+      waits.end();
+      // The previous batch's staged copies belong to a finished batch; the repair
+      // hook must only ever re-attach files of the batch that is open now.
+      staged.files = [];
+      staged.paths = [];
+      // The completed batch is still on screen; Create Batch lives on the
+      // contributor page, so go back there before opening the dialog.
+      await openContributePage(connection, page.sessionId, options.url).catch(() => null);
+      await runDriverStep(connection, page.sessionId, "dismissPageDialogs").catch(() => null);
+      return createOwnBatch(input);
     },
     /**
      * Stages every icon of the run, then hands them to Getty in one attach — all
@@ -214,32 +339,65 @@ function buildSession(ctx) {
         }
       }
       const paths = stageIcons(tempDir, icons).flat();
+      staged.files = files;
+      staged.paths = paths;
       state.reloads = 0;
-      state.progress = { phase: "uploading", total: files.length, uploaded: 0, failed: 0, listed: 0, reloads: 0 };
+      // A new batch of the same run: its counts are its own, never the last one's.
+      state.batchNo += 1;
+      const at = (read) => progressOf(read, state.reloads, state.batchNo);
+      state.progress = { phase: "uploading", total: files.length, uploaded: 0, failed: 0, listed: 0, reloads: 0, batch: state.batchNo };
       const result = await attachFiles(connection, page.sessionId, {
         paths, names: files.map((file) => file.name),
         timeoutMs: uploadTimeoutFor(files.length, options.uploadTimeoutMs ?? UPLOAD_TIMEOUT_MS),
         readyTimeoutMs: options.readyTimeoutMs,
         // Polled by the app, so the panel shows what Getty reports while it runs.
-        onState: (read) => { state.progress = { ...progressOf(read, state.reloads), phase: "uploading" }; },
+        onState: (read) => { state.progress = { ...at(read), phase: "uploading" }; },
         onReload: (count) => { state.reloads = count; },
-        onProgress: options.onProgress, signal: options.signal,
+        onProgress: options.onProgress, signal: options.signal, waits,
       });
+      waits.end();
       if (!result.ok) {
-        state.progress = { ...progressOf(result.state, state.reloads), phase: "failed" };
+        state.progress = { ...at(result.state), phase: "failed" };
         return { ...result, batchId: state.batchId };
       }
-      state.progress = { ...progressOf(result.state, state.reloads), phase: "metadata" };
+      state.progress = { ...at(result.state), phase: "metadata" };
+      // Every card that turns "Ready to submit" after the save moves the bar.
+      let lastRead = result.state;
+      const onState = (read) => { lastRead = read; state.progress = { ...at(read), phase: "metadata" }; };
+      // A reload of a stuck batch page is counted in the same run total, so the
+      // panel can say the page was reloaded instead of showing a silent wait.
+      const baseReloads = state.reloads;
+      const onReload = (count) => {
+        state.reloads = baseReloads + count;
+        state.progress = { ...at(lastRead), phase: "metadata" };
+      };
       const done = await finalizeBatch(connection, page.sessionId, {
         files, failed: result.state?.failed ?? [], complete: input.complete === true,
-        onProgress: options.onProgress, signal: options.signal, ...readyOptionsOf(options),
+        // Cards without a picture have no drawer to fill: the walk jumps over
+        // them and the readiness ladder's re-upload is what brings them back.
+        uploaded: result.state?.uploaded ?? [],
+        onProgress: options.onProgress, signal: options.signal, onState, onReload, waits, ...readyOptionsOf(options),
+        // One counter for the whole batch: a reload during the metadata walk and
+        // one during the readiness gate both show up in the panel's total.
+        reloadMeter: { count: 0 },
+        // A card Getty never validates (or rejected) is re-uploaded from its own
+        // staged copy instead of being reported as uploaded.
+        repair: repairCapability(connection, page.sessionId, files, paths, { onState, onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs, waits }),
       });
+      waits.end();
       // The phase says whether Getty validated every card, not just that the
       // request returned: a failed readiness leaves the run unfinished.
-      state.progress = { ...progressOf(done.report?.readiness?.state ?? result.state, state.reloads), phase: done.ok ? "done" : "failed" };
+      // What counts as uploaded is the last reading, taken after the metadata was
+      // saved: a file is accepted only when its card shows "Ready to submit".
+      // That reading is also the batch's final count — the next batch adds onto it.
+      const settledState = done.report?.readiness?.state ?? lastRead ?? result.state;
+      state.progress = { ...at(settledState), phase: done.ok ? "done" : "failed" };
+      const notReady = notReadyOf(done);
+      state.expected = withoutStems(state.expected, notReady);
       return {
         ...done, state: { ...result.state, ...done.report?.state }, report: done.report,
-        accepted: result.state?.uploaded ?? [], failed: result.state?.failures ?? [], batchId: state.batchId,
+        accepted: acceptedOf(done, result), failed: settledState?.failures ?? result.state?.failures ?? [],
+        notReady, batchId: state.batchId,
       };
     },
     /**
@@ -247,17 +405,26 @@ function buildSession(ctx) {
      * after the first icon is what used to lock the batch and drop the rest.
      */
     async finish(input = {}) {
+      const baseReloads = state.reloads;
+      // The finish gate moves the bar too, and may type the app's metadata again.
+      const onState = (read) => { state.progress = { ...progressOf(read, state.reloads, state.batchNo), phase: "metadata" }; };
       const result = await finishBatch(connection, page.sessionId, {
         expected: input.expected ?? state.expected, signal: input.signal ?? options.signal,
-        onProgress: options.onProgress, ...readyOptionsOf(options),
-      });
-      state.progress = { ...(state.progress ?? progressOf(null, state.reloads)), phase: result.ok ? "done" : "failed" };
+        onProgress: options.onProgress, waits, onState, files: staged.files, ...readyOptionsOf(options),
+        onReload: (count) => { state.reloads = baseReloads + count; },
+        repair: repairCapability(connection, page.sessionId, staged.files, staged.paths, {
+          onProgress: options.onProgress, signal: options.signal, pollMs: options.pollMs, waits, onState,
+        }),
+      }).finally(() => waits.end());
+      state.progress = { ...(state.progress ?? progressOf(null, state.reloads, state.batchNo)), phase: result.ok ? "done" : "failed" };
       return result;
     },
     /** Names this session has uploaded so far, for the finish report. */
     get expected() { return [...state.expected]; },
     /** Live per-file progress of the upload, polled by the app for its panel. */
-    get progress() { return state.progress ? { ...state.progress } : null; },
+    get progress() { return withWaitInfo(state.progress ? { ...state.progress } : null, waits); },
+    /** "Retry now": cuts the running retry timer short; false when none is running. */
+    skipWait() { return waits.skip(); },
     close() {
       if (closed) return;
       closed = true;

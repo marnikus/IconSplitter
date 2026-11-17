@@ -36,8 +36,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   to "nobody chose" (the newest valid version). It is written through
   `saveMetaAt` (tmp → verify → overwrite), off the undo timeline, and the
   version chooser refuses honestly when it cannot be written. Explicit chip /
-  history choice now [accepts it for actual use/export](../version-acceptance.md):
-  choice and item approval save together; displaying a default approves nothing.
+  history choice [chooses it for actual use/export](../version-acceptance.md) and
+  saves ONLY the pointer (2026-11-02): the item's review is untouched, so
+  approving stays the row's own button. Displaying a default and choosing a
+  version both approve nothing.
 
 <a id="i-57"></a>
 * **I-57 — processes outlive the tab (updated 2026-10-24).** Workbench mounts

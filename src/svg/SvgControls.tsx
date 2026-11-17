@@ -5,11 +5,10 @@
 // lives only on this device), then the filter/sort/search row. No rule lives
 // here — every value comes from the hook and every change goes back to it.
 
-import { STATE_SORT_OPTIONS } from "../lib/statesort";
 import type { KeySource } from "../lib/keyvault";
 import { ConnectionRow, ImageSettingsGrid } from "./SvgConnections";
 import type { Connection, ConnectionKind } from "../lib/svgconnections";
-import { NumberField, Select } from "../ui/fields";
+import { NumberField } from "../ui/fields";
 import { KeyEditor, useKeyDraft, KeySlot, type KeySlotText } from "../ui/KeySlot";
 
 import {
@@ -20,7 +19,8 @@ import { stallLabel, stallNote } from "../lib/effortlimits";
 import { DEFAULT_SVG_PROMPT } from "../lib/svgprompt";
 import type { PromptWindowProps } from "../ui/PromptWindow";
 import SvgPromptZone from "./SvgPromptZone";
-import type { SvgListFilter, SvgSort } from "../lib/svglist";
+import type { SvgDir, SvgListFilter, SvgSort } from "../lib/svglist";
+import SvgListFilters from "./SvgListFilters";
 import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import SvgSampling from "./SvgSampling";
 import SourceLine, { type SvgCounts } from "./SourceLine";
@@ -69,6 +69,8 @@ export interface SvgControlsProps {
   onProviderOpen: (open: boolean) => void;
   onFilter: (patch: Partial<SvgListFilter>) => void;
   onSort: (sort: SvgSort) => void;
+  sortDir: SvgDir;
+  onSortDir: (dir: SvgDir) => void;
   onClearFilters: () => void;
 }
 
@@ -87,8 +89,8 @@ export default function SvgControls(p: SvgControlsProps) {
           onConfig={p.onConfig} onParams={p.onParams} onRefreshModels={p.onRefreshModels}
           onDismissNote={p.onDismissNote} onSaveKey={p.onSaveKey} onForgetKey={p.onForgetKey} onToggleOpen={p.onProviderOpen} />
       </div>
-      <FilterLine filter={p.filter} sort={p.sort} shown={p.shown} total={p.total}
-        onFilter={p.onFilter} onSort={p.onSort} onClear={p.onClearFilters} />
+      <SvgListFilters filter={p.filter} sort={p.sort} sortDir={p.sortDir} shown={p.shown} total={p.total}
+        onFilter={p.onFilter} onSort={p.onSort} onSortDir={p.onSortDir} onClear={p.onClearFilters} />
     </section>
   );
 }
@@ -248,34 +250,6 @@ function keyNote(source: KeySource): string {
   if (source === "unreadable") return "this device's storage is unreadable here (private mode?)";
   return "local only · excluded from Git · logs · exports";
 }
-
-function FilterLine({ filter, sort, shown, total, onFilter, onSort, onClear }: {
-  filter: SvgListFilter; sort: SvgSort; shown: number; total: number;
-  onFilter: (patch: Partial<SvgListFilter>) => void; onSort: (s: SvgSort) => void; onClear: () => void;
-}) {
-  return (
-    <div className="svg-filters">
-      <Select label="Generation" testid="svg-filter-generation" value={filter.generation}
-        options={[["all", "All states"], ["not-generated", "Not generated"], ["generating", "Generating"], ["generated", "Generated"], ["failed", "Failed"]]}
-        onChange={(v) => onFilter({ generation: v as SvgListFilter["generation"] })} />
-      <Select label="Review" testid="svg-filter-review" value={filter.review}
-        options={[["all", "All reviews"], ["pending", "Pending"], ["approved", "Approved"], ["declined", "Declined"], ["needs-review", "Regenerated — new review"]]}
-        onChange={(v) => onFilter({ review: v as SvgListFilter["review"] })} />
-      <Select label="Sort by" testid="svg-sort" value={sort}
-        options={[["date", "Newest generated"], ["name", "Filename"], ["generation", "Generation status"], ["review", "Review status"], ["cost", "Cost"], ...STATE_SORT_OPTIONS]}
-        onChange={(v) => onSort(v as SvgSort)} />
-      <label className="svg-field">
-        <span className="svg-label">Search</span>
-        <input className="svg-input" data-testid="svg-search" type="search" aria-label="Search sources"
-          placeholder="Filename, folder, version or status…" value={filter.search}
-          onChange={(e) => onFilter({ search: e.target.value })} />
-      </label>
-      <span className="svg-result-copy" data-testid="svg-shown">Showing {shown} of {total}</span>
-      <button type="button" className="svg-btn" data-testid="svg-clear-filters" onClick={onClear}>× Clear filters</button>
-    </div>
-  );
-}
-
 
 /** Re-exported so the panel can restore the default prompt without an import. */
 export { DEFAULT_SVG_PROMPT };

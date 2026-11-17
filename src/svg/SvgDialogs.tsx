@@ -9,6 +9,7 @@ import type { ModelCaps, SamplingParams } from "../lib/modelcaps";
 import type { SvgConfig } from "../lib/svgconfig";
 import type { DirHandleLike } from "../lib/fs";
 import SvgPreviewBox from "./SvgPreview";
+import { useWebChatPrefs } from "./webchatstore";
 import SvgConfirm from "./SvgConfirm";
 import SvgImgConfirm from "./SvgImgConfirm";
 import type { Connection } from "../lib/svgconnections";
@@ -49,10 +50,12 @@ export default function SvgDialogs(p: SvgDialogsProps) {
   // The task memory and the regen size are read when a dialog opens, so an
   // entry saved by another popup a moment ago is already in force (RULE 24).
   const stored = useMemo(() => dialog === null ? null : loadTaskPrompts(), [dialog]);
+  // "Generate with web page" picks the LIVE WEB variant of the same popup (2026-11-03).
+  const web = useWebChatPrefs().enabled;
   if (dialog === null || stored === null) return null;
   if (dialog.kind === "confirm") {
     return <SvgConfirm ids={dialog.ids} operation={dialog.operation} rows={p.rows} config={p.config} caps={p.caps} params={p.params}
-      rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} taskEntries={stored}
+      rootRef={p.rootRef} running={p.running} presets={p.presets} prompt={p.prompt} taskEntries={stored} web={web}
       onTaskEntry={(task: PromptTaskId, entry: TaskPromptEntry) => { saveTaskEntry(task, entry); }}
       onConfirm={p.onConfirm} onDismiss={p.onDismiss} />;
   }

@@ -13,7 +13,7 @@ import { parseAiName } from "../lib/naming";
 import { pairId } from "../lib/pairing";
 import { preferredVersion, svgStem } from "../lib/svgfile";
 import type { PairMeta } from "../lib/pairmeta";
-import { loadMetaAt } from "../selection/pairstore";
+import { loadPairFiles } from "../selection/pairstore";
 import type { SvgVersion } from "../lib/svgmodel";
 
 /** The export folder is never a discovery source (no export loops). */
@@ -68,15 +68,25 @@ export interface UploadDiscovery {
   unreadable: { relPath: string; reason: string }[];
 }
 
+/** Optional scope changes for another tab; defaults preserve upload behaviour. */
+export interface DiscoveryOptions {
+  /** Extra ignored directory names, e.g. the builder's own output folder. */
+  ignoreDirs?: readonly string[];
+  /** Override the split-scope rule; `undefined` keeps the folder's own rule. */
+  hideOutside?: boolean;
+}
+
 /** Scans the root: every approved item with a valid SVG, in deterministic order. */
-export async function discoverUploadSources(root: DirHandleLike): Promise<UploadDiscovery> {
-  const tree = await readDirTree(root, EXPORT_IGNORE);
-  const entries = walkTree(tree, EXPORT_IGNORE);
+export async function discoverUploadSources(root: DirHandleLike, options: DiscoveryOptions = {}): Promise<UploadDiscovery> {
+  const ignore = [...new Set([...EXPORT_IGNORE, ...(options.ignoreDirs ?? [])])];
+  const tree = await readDirTree(root, ignore);
+  const entries = walkTree(tree, ignore);
   const rule = scopeOf(directoryNames(tree), root.name);
+  const hideOutside = options.hideOutside ?? rule.hideOutside;
   const loaded = await loadSidecars(root, entries);
   const svgs = svgFilesOf(entries);
   const byStem = groupByStem(svgs);
-  const collected = collectAll(loaded, byStem, rule.hideOutside);
+  const collected = collectAll(loaded, byStem, hideOutside);
   return {
     rows: sortRows(collected.rows),
     excluded: sortExclusions(collected.excluded),
@@ -131,14 +141,10 @@ function unreadableOf(entries: readonly FileEntry[]): { relPath: string; reason:
 interface LoadedSidecar { meta: PairMeta; path: string; corrupt: boolean }
 
 /** Every `.svg.json` the walk found, read and rebased onto this root (I-49). */
+/** Every pair file, through the shared parallel + session-cached loader (2026-11-06). */
 async function loadSidecars(root: DirHandleLike, entries: readonly FileEntry[]): Promise<LoadedSidecar[]> {
-  const out: LoadedSidecar[] = [];
-  for (const e of entries) {
-    if (!e.name.toLowerCase().endsWith(".svg.json")) continue;
-    const read = await loadMetaAt(root, e.relPath);
-    out.push({ meta: read.meta as PairMeta, path: e.relPath, corrupt: read.corrupt || read.meta === null });
-  }
-  return out;
+  const reads = await loadPairFiles(root, entries);
+  return [...reads].map(([path, read]) => ({ meta: read.meta as PairMeta, path, corrupt: read.corrupt || read.meta === null }));
 }
 
 interface SvgFile {

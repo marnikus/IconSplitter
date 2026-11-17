@@ -1,4 +1,4 @@
-import { completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";
+import { completionAudio, flushCompletionAudio, recordCompletionAudio, settleCompletionAudio } from "./helpers/completionAudio";
 // batch_preview_restart.test.tsx — TDD for stored split previews (2026-10-15):
 // previews survive a page restart and render without any user action; only
 // "Regenerate splits" re-renders and REWRITES the stored record; "Preview
@@ -256,6 +256,7 @@ describe("stored split previews (restart)", () => {
     expect(first?.count).toBe(1);
     await settle(60);
     recordCompletionAudio();
+    await settleCompletionAudio(); // only the regenerate's own cue is counted
     await click(q("[data-testid=batch-regenerate]")!); // same session, warm LRU
     await settle(1200);
     const second = await storedRecord("regen_warm_root", "icon-a_AI.png");

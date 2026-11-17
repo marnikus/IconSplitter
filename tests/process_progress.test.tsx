@@ -39,7 +39,8 @@ describe("shared batch process progress", () => {
     const host = document.createElement("div");
     const root = createRoot(host);
     act(() => root.render(<ProcessProgressBar prefix="task" theme="svg" title="Processing icons" detail="fog.svg"
-      done={1} total={4} remaining={3} percent={25} leading={<span>icon</span>} actions={<button>Cancel</button>} />));
+      done={1} total={4} remaining={3} percent={25} leading={<span>icon</span>} status="running" runId="r"
+      onCancel={() => undefined} onReview={() => undefined} onDismiss={() => undefined} cancelLabel="Cancel" />));
     const bar = host.querySelector('[role="progressbar"]')!;
     expect(bar.getAttribute("aria-label")).toBe("Processing icons");
     expect(bar.getAttribute("aria-valuenow")).toBe("25");

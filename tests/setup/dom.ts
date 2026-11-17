@@ -41,3 +41,18 @@ afterEach(async () => {
   if (left.length > 0) await act(async () => { for (const root of left) root.unmount(); });
   document.body.replaceChildren();
 });
+
+// The local helper on THIS machine must never act for a test (2026-11-16): a test
+// that clicks 📂 Location without its own fetch stub used to reach a running
+// helper and open real Explorer windows. Folder-opening and folder-finding calls
+// are answered here instead; a test's own vi.stubGlobal("fetch", …) still wins.
+{
+  const real = globalThis.fetch?.bind(globalThis);
+  const HELPER_ONLY = /\/(open-folder|find-folder)(\?|$)/;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (HELPER_ONLY.test(url)) return new Response(JSON.stringify({ ok: false, reason: "tests never open or search real folders" }), { status: 200 });
+    if (real === undefined) throw new TypeError("fetch is not available");
+    return real(input, init);
+  }) as typeof fetch;
+}

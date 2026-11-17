@@ -1,3 +1,4 @@
+import type { WaitControl } from "./waits.mjs";
 export function runDriverStep(connection: any, sessionId: string, name: string, arg?: unknown): Promise<any>;
 export function openContributePage(connection: any, sessionId: string, url: string): Promise<any>;
 export function ensureSignedIn(connection: any, sessionId: string, options: {
@@ -18,6 +19,8 @@ export function createBatch(connection: any, sessionId: string, options: any): P
 export function attachFiles(connection: any, sessionId: string, options: {
   /** How long the page may stay silent before it is reloaded and retried. */
   stallMs?: number;
+  /** Tells the app what the retry timers wait for, and lets "Retry now" skip one. */
+  waits?: WaitControl;
   onReload?: (reloads: number) => void;
   paths: string[];
   names: string[];
@@ -27,7 +30,13 @@ export function attachFiles(connection: any, sessionId: string, options: {
   pollMs?: number;
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
-}): Promise<{ ok: boolean; code?: string; reason?: string | null; state: any }>;
+  /**
+   * Files still without Getty's "Ready to submit" icon when the wait's bound
+   * passed. They are not claimed as uploaded; the metadata save is what makes
+   * Getty validate them, so the run goes on to it.
+   */
+  pending?: string[];
+}): Promise<{ ok: boolean; code?: string; reason?: string | null; state: any; pending?: string[] }>;
 /** Getty's own Date Created rendering, e.g. "10/10/2026 00:00:00 +0000". */
 export function gettyCreatedDate(now?: Date): string;
 export function contributionCount(names: string[]): number;
@@ -42,6 +51,7 @@ export function notReadyContributions(expected: string[], state: any): string[];
  * stays unvalidated. `verified:false` means the page could not report readiness.
  */
 export function finishBatch(connection: any, sessionId: string, options?: {
+  waits?: WaitControl;
   expected?: string[];
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
@@ -57,14 +67,57 @@ export function finishBatch(connection: any, sessionId: string, options?: {
   readyTimeoutMs?: number;
   /** How many times Save metadata may be pressed again (default 2). */
   readyResaves?: number;
+  /** How many times the unvalidated files may be re-uploaded (default 1). */
+  readyRepairs?: number;
+  /** How many times a stuck batch page is reloaded (default 2; 0 only in tests). */
+  readyReloads?: number;
+  /** One counter shared by the walk and the readiness gate, for the panel's total. */
+  reloadMeter?: { count: number };
+  /** Told the running reload count of this batch, so the panel can show it. */
+  onReload?: (count: number) => void;
+  /**
+   * Re-uploads the named contributions from their staged copies. Without it the
+   * run reports them instead of retrying.
+   */
+  repair?: (names: string[]) => Promise<{ ok: boolean }>;
 }): Promise<any>;
+/**
+ * Re-attaches already-staged files to Getty's uploader. This is the repair for a
+ * contribution that never turned "Ready to submit" (or that Getty rejected):
+ * only the named files go back, and the caller re-saves their metadata after.
+ */
+export function reattachFiles(
+  connection: any,
+  sessionId: string,
+  files: Array<{ name: string; path: string }>,
+  options?: {
+    waits?: WaitControl;
+    pollMs?: number;
+    /** How long the re-attached files may take to come back on the page. */
+    retryTimeoutMs?: number;
+    /** How long Getty's uploader may take to reappear for the retry. */
+    uploaderTimeoutMs?: number;
+    onProgress?: (note: string) => void;
+    onState?: (state: any) => void;
+    signal?: AbortSignal;
+  },
+): Promise<{ ok: boolean; code?: string; reason?: string; state: any }>;
+
 export function finalizeBatch(connection: any, sessionId: string, options: {
+  waits?: WaitControl;
   files: Array<{
     name: string;
     metadata: { title: string; description: string; keywords: string[]; dateCreated?: string } | null;
   }>;
   /** Names Getty itself marked "Upload failed": the batch is then not submitted. */
   failed?: string[];
+  /**
+   * Names whose card already shows its picture. A file without one has no drawer
+   * to fill, so the metadata walk jumps over it instead of reloading for it.
+   */
+  uploaded?: string[];
+  /** How many times the metadata walk may restart from the first file (default 1). */
+  metadataRestarts?: number;
   complete?: boolean;
   /** How long one clicked card's drawer may stay disabled before it is reported. */
   editorTimeoutMs?: number;
@@ -81,6 +134,17 @@ export function finalizeBatch(connection: any, sessionId: string, options: {
   readyTimeoutMs?: number;
   /** How many times Save metadata may be pressed again (default 2). */
   readyResaves?: number;
+  /** How many times the unvalidated files may be re-uploaded (default 1). */
+  readyRepairs?: number;
+  /** How many times a stuck batch page is reloaded (default 2; 0 only in tests). */
+  readyReloads?: number;
+  /**
+   * Re-uploads the named contributions from their staged copies. Without it the
+   * run reports them instead of retrying.
+   */
+  repair?: (names: string[]) => Promise<{ ok: boolean }>;
+  /** Every fresh page reading, so a panel bar can follow the chips as they land. */
+  onState?: (state: any) => void;
   onProgress?: (note: string) => void;
   signal?: AbortSignal;
 }): Promise<any>;

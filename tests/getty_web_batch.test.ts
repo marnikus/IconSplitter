@@ -1,7 +1,8 @@
 // Real serialized driver steps and CDP expressions against the supplied MUI
 // dialog shape. No queued success replies that could hide selector errors.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { attachFiles, createBatch, finishBatch } from "../tools/bridge/gettyweb/contribute.mjs";
+import { attachFiles, createBatch, finishBatch, reattachFiles } from "../tools/bridge/gettyweb/contribute.mjs";
+import { createWaitControl } from "../tools/bridge/gettyweb/waits.mjs";
 
 const TYPE = "iStock creative illustration";
 const DIALOG = `<div role="dialog" aria-labelledby="create-batch-dialog" aria-modal="true">
@@ -184,15 +185,17 @@ it("waits for the hidden contribution uploader instead of using an existing rele
 });
 
 // The captured batch page lists a vector pair once — under the EPS name — and the
-// card carries a not_ready_to_submit flag while Getty processes the image.
-// A card Getty accepted renders its thumbnail; a rejected one says "Upload failed".
-const card = (name: string, processing = false, failed = false) => `
+// card carries a not_ready_to_submit flag while Getty processes the image and a
+// "Ready to submit" icon once it validated it. A rejected card says "Upload
+// failed". Every card renders a thumbnail, so a picture never decides anything.
+const READY_ICON = '<svg data-cy="pending-icon" aria-label="Ready to submit"></svg>';
+const card = (name: string, status: "ready" | "processing" | "failed" | "blank" = "ready") => `
   <div data-cy="grid-row"><div data-cy="item-card">
     <div data-cy="image-card">
-      ${failed ? "<p>Upload failed</p>" : `<img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/${name}.jpg">`}
+      ${status === "failed" ? "<p>Upload failed</p>" : status === "blank" ? "" : `<img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/${name}.jpg">`}
     </div>
     <div data-cy="item-info">
-      ${processing ? '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>' : ""}
+      ${status === "ready" ? READY_ICON : status === "processing" ? '<svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>' : ""}
       <p data-cy="contribution-file-name">${name}</p>
       <p>ID: FSPID51446</p>
     </div>
@@ -200,13 +203,16 @@ const card = (name: string, processing = false, failed = false) => `
 
 /** A page that lists the contribution only after `delayMs`, like Getty does. */
 class LateCardPage extends DomConnection {
-  constructor(private readonly delayMs: number, private readonly name = "icon-map-pin_5_01.eps", private readonly processing = false) {
+  constructor(
+    private readonly delayMs: number, private readonly name = "icon-map-pin_5_01.eps",
+    private readonly status: "ready" | "processing" = "ready",
+  ) {
     super();
   }
   override async send(method: string, params: Record<string, unknown>) {
     const answer = await super.send(method, params);
     if (method === "DOM.setFileInputFiles") {
-      setTimeout(() => document.body.insertAdjacentHTML("beforeend", card(this.name, this.processing)), this.delayMs);
+      setTimeout(() => document.body.insertAdjacentHTML("beforeend", card(this.name, this.status)), this.delayMs);
     }
     return answer;
   }
@@ -272,6 +278,29 @@ class FrozenReadPage extends DomConnection {
   attachments = 0;
 }
 
+/**
+ * A batch page that lists the pair straight away but never gives it a picture —
+ * the stuck state a real run sits in for minutes — and answers a reload with the
+ * card Getty only renders on a fresh page load.
+ */
+class BlankPicturePage extends DomConnection {
+  reloads = 0;
+  constructor(private readonly name = "a.eps") {
+    super();
+  }
+  override async send(method: string, params: Record<string, unknown>) {
+    if (method === "Page.reload") {
+      this.reloads += 1;
+      document.body.innerHTML = UPLOADER;
+      document.body.insertAdjacentHTML("beforeend", card(this.name));
+      return {};
+    }
+    const answer = await super.send(method, params);
+    if (method === "DOM.setFileInputFiles") document.body.insertAdjacentHTML("beforeend", card(this.name, "blank"));
+    return answer;
+  }
+}
+
 const PAIR = ["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"];
 const UPLOADER = `<button data-cy="open-upload-dialog-button">Upload</button>
   <input type="file" multiple data-cy="upload-button-file-input" style="display:none">`;
@@ -299,7 +328,7 @@ describe("Getty web upload verification", () => {
       expect(settled.ok).toBe(true);
       expect(settled.state).toMatchObject({ contributions: ["icon-map-pin_5_01.eps"], fileCount: 1, ready: true });
       expect(settled.state.namesSeen).toEqual(PAIR);
-      // A picture in the card is what counts as uploaded.
+      // Getty's own "Ready to submit" icon on the card is what counts as uploaded.
       expect(settled.state.uploaded).toEqual(PAIR);
       expect(settled.state.failed).toEqual([]);
       expect(progress.some((line) => /Getty listed 2\/2/.test(line))).toBe(true);
@@ -348,24 +377,25 @@ describe("Getty web upload verification", () => {
     expect(result.state.readyToSubmit).toEqual(["icon-map-pin_5_01.jpg", "icon-map-pin_5_01.eps"]);
   });
 
-  it("reports each file as it lands, then counts only the ones with a thumbnail", async () => {
+  it("starts the metadata step on the picture, without waiting for the validation chip", async () => {
     vi.useFakeTimers();
     try {
       mountBatchPage();
-      const page = new LateCardPage(1000, "icon-map-pin_5_01.eps", true);
-      const progress: string[] = [];
+      // The card renders its picture at once but stays not_ready_to_submit — the
+      // real order on Getty, where the chip only appears after the metadata save.
+      // Waiting for it here is what froze the run before the timestamp step.
+      const page = new LateCardPage(1000, "icon-map-pin_5_01.eps", "processing");
       const result = attachFiles(page, "page", {
         paths: ["/staged/icon-map-pin_5_01.jpg"], names: ["icon-map-pin_5_01.jpg"],
-        readyTimeoutMs: 3000, onProgress: (line: string) => progress.push(line),
+        readyTimeoutMs: 300000,
       });
-      await vi.advanceTimersByTimeAsync(5000);
+      await vi.advanceTimersByTimeAsync(2000);
       const done = await result;
       expect(done.ok).toBe(true);
-      // The thumbnail is there, so the file counts as uploaded even while Getty
-      // still reports it as processing — and the panel said so as it happened.
+      // Arrived (so the metadata can start) but not yet validated.
       expect(done.state.uploaded).toEqual(["icon-map-pin_5_01.jpg"]);
-      expect(done.state.processing).toBe(true);
-      expect(progress.some((line) => /Getty uploaded 1\/1/.test(line))).toBe(true);
+      expect(done.state.readyToSubmit).toEqual([]);
+      expect(done.state.awaitingReady).toEqual(["icon-map-pin_5_01.jpg"]);
     } finally {
       vi.useRealTimers();
     }
@@ -373,7 +403,7 @@ describe("Getty web upload verification", () => {
 
   it("never counts a card reading Upload failed as uploaded, and names its id", async () => {
     mountBatchPage();
-    document.body.insertAdjacentHTML("beforeend", card("icon-megaphone_5_01.eps", false, true));
+    document.body.insertAdjacentHTML("beforeend", card("icon-megaphone_5_01.eps", "failed"));
     const result = await attachFiles(new DomConnection(), "page", { pollMs: 1,
       paths: ["/staged/icon-megaphone_5_01.jpg", "/staged/icon-megaphone_5_01.eps"],
       names: ["icon-megaphone_5_01.jpg", "icon-megaphone_5_01.eps"],
@@ -385,9 +415,9 @@ describe("Getty web upload verification", () => {
     expect(result.state.failures).toEqual([{ name: "icon-megaphone_5_01.eps", id: "FSPID51446" }]);
   });
 
-  it("keeps waiting and then says which files never showed a thumbnail", async () => {
-    // The user's "wait for the full upload": a listed card without a picture is
-    // not an upload, so the run must not report success while it stays empty.
+  it("waits for the picture and then says which files never arrived", async () => {
+    // The user's "wait for the full upload": a listed card with neither a picture
+    // nor a validation chip proves nothing, so it is never reported as uploaded.
     vi.useFakeTimers();
     try {
       mountBatchPage();
@@ -412,12 +442,96 @@ describe("Getty web upload verification", () => {
       await vi.advanceTimersByTimeAsync(4000);
       const done = await result;
       expect(done).toMatchObject({ ok: false, code: "timeout" });
-      expect(done.reason).toContain("thumbnail");
+      expect(done.reason).toContain("did not show a picture");
       expect(done.state.uploaded).toEqual([]);
-      expect(progress.some((line) => /still processing/.test(line))).toBe(true);
+      expect(done.state.processingNames).toEqual(["sleepy_09.jpg"]);
+      // It kept reading the page for the whole bound instead of giving up at once.
+      expect(progress.filter((line) => /Getty uploaded 0\/1/.test(line)).length).toBeGreaterThan(1);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("re-uploads only the file Getty never marked ready, from its staged copy", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new DomConnection();
+      const original = page.send.bind(page);
+      page.send = async (method: string, params: Record<string, unknown>) => {
+        const answer = await original(method, params);
+        if (method === "DOM.setFileInputFiles") {
+          // Getty lists the re-uploaded contribution again, this time validated.
+          document.body.insertAdjacentHTML("beforeend", card("icon-map-pin_6_03_v4.eps"));
+        }
+        return answer;
+      };
+      const progress: string[] = [];
+      const pending = reattachFiles(page, "page", [
+        { name: "icon-map-pin_6_03_v4.eps", path: "/staged/1/icon-map-pin_6_03_v4.eps" },
+        { name: "icon-map-pin_6_03_v4.jpg", path: "/staged/1/icon-map-pin_6_03_v4.jpg" },
+      ], { pollMs: 5, retryTimeoutMs: 2000, onProgress: (line: string) => progress.push(line) });
+      await vi.advanceTimersByTimeAsync(3000);
+      const done = await pending;
+      expect(done.ok).toBe(true);
+      // Only the stuck pair went back to the uploader — not the whole batch.
+      expect(page.attached).toEqual(["/staged/1/icon-map-pin_6_03_v4.eps", "/staged/1/icon-map-pin_6_03_v4.jpg"]);
+      expect(page.attachmentCalls).toBe(1);
+      expect(progress.some((line) => /re-uploading 2 file\(s\)/.test(line))).toBe(true);
+      // Both files of the pair are covered by the one re-validated card.
+      expect(done.state.readyToSubmit).toEqual(["icon-map-pin_6_03_v4.eps", "icon-map-pin_6_03_v4.jpg"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("says so when Getty's uploader is not there for the re-upload", async () => {
+    const page = new DomConnection();
+    // The page that comes back after the retry has no contribution uploader.
+    document.body.innerHTML = "<p>no uploader on this page</p>";
+    const done = await reattachFiles(page, "page", [
+      { name: "a.eps", path: "/staged/a.eps" },
+    ], { pollMs: 1, uploaderTimeoutMs: 1, retryTimeoutMs: 10 });
+    expect(done).toMatchObject({ ok: false, code: "page" });
+    expect(done.reason).toContain("did not come back for the retry");
+  });
+
+  it("counts down the wait for Getty's uploader during a re-attach, and lets the user skip it", async () => {
+    // 2026-11-12: "Re-attaching 28 file(s)…" sat there with no counter and no way out.
+    const page = new DomConnection();
+    document.body.innerHTML = "<p>the uploader has not come back yet</p>";
+    const waits = createWaitControl();
+    const seen: Array<{ kind: string; remainingMs: number; skippable: boolean }> = [];
+    const timer = setInterval(() => {
+      const now = waits.current()?.wait;
+      if (now?.kind === "reattach") { seen.push(now); waits.skip(); }
+    }, 5);
+    const started = Date.now();
+    const done = await reattachFiles(page, "page", [{ name: "a.eps", path: "/staged/a.eps" }], {
+      pollMs: 5, uploaderTimeoutMs: 60_000, retryTimeoutMs: 60_000, waits,
+    }).finally(() => clearInterval(timer));
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(seen[0]).toMatchObject({ kind: "reattach", skippable: true });
+    expect(seen[0].remainingMs).toBeGreaterThan(50_000);
+    expect(done).toMatchObject({ ok: false, code: "skipped" });
+  });
+
+  it("counts down the wait for re-uploaded files to come back, and lets the user skip it", async () => {
+    mountBatchPage();
+    const page = new DomConnection();
+    const waits = createWaitControl();
+    const seen: Array<{ kind: string; skippable: boolean }> = [];
+    const timer = setInterval(() => {
+      const now = waits.current()?.wait;
+      if (now?.kind === "reupload") { seen.push(now); waits.skip(); }
+    }, 5);
+    const started = Date.now();
+    const done = await reattachFiles(page, "page", [{ name: "ghost_01.eps", path: "/staged/ghost_01.eps" }], {
+      pollMs: 5, uploaderTimeoutMs: 1_000, retryTimeoutMs: 60_000, waits,
+    }).finally(() => clearInterval(timer));
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(seen[0]).toMatchObject({ kind: "reupload", skippable: true });
+    expect(done).toMatchObject({ ok: false, code: "skipped" });
   });
 
   it("fails with the count when a card never appears", async () => {
@@ -441,10 +555,12 @@ describe("Getty web upload verification", () => {
 });
 
 describe("completing one batch for several icons", () => {
+  // A listed, validated card: finish refuses to submit while any card lacks it.
   const card = (name: string) => `
     <div data-cy="grid-row"><div data-cy="item-card">
       <div data-cy="image-card"></div>
-      <p data-cy="contribution-file-name">${name}</p>
+      <div data-cy="item-info"><svg data-cy="pending-icon" aria-label="Ready to submit"></svg>
+      <p data-cy="contribution-file-name">${name}</p></div>
     </div></div>`;
   const submit = `<button data-cy="open-upload-dialog-button">Upload</button>
     <button type="button">SUBMIT</button><p>0 Not submitted</p>`;
@@ -471,6 +587,25 @@ describe("completing one batch for several icons", () => {
     expect(clicks).toBe(0);
   });
 
+  it("refuses to submit a batch whose card never showed Ready to submit", async () => {
+    document.body.innerHTML = submit + card("icon-map-pin_5_01.eps") + `
+      <div data-cy="grid-row"><div data-cy="item-card">
+        <div data-cy="image-card"><img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/2.jpg"></div>
+        <div data-cy="item-info"><svg data-cy="not-ready-icon" aria-label="not_ready_to_submit"></svg>
+        <p data-cy="contribution-file-name">icon-map-pin_5_02.eps</p></div>
+      </div></div>`;
+    let clicks = 0;
+    document.querySelectorAll("button")[1].addEventListener("click", () => { clicks += 1; });
+    const result = await finishBatch(new DomConnection(), "page", {
+      pollMs: 1, settleMs: 0, expected: EXPECTED, readyResaves: 0, readyTimeoutMs: 50,
+    });
+    // A thumbnail is not proof: Getty has not validated this file, so the SUBMIT
+    // control must not be pressed for it.
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
+    expect(result.reason).toContain("Ready to submit");
+    expect(clicks).toBe(0);
+  });
+
   it("submits once when every contribution is listed, and reports the result", async () => {
     document.body.innerHTML = submit + card("icon-map-pin_5_01.eps") + card("icon-map-pin_5_02.eps");
     document.querySelectorAll("button")[1].addEventListener("click", () => {
@@ -482,12 +617,12 @@ describe("completing one batch for several icons", () => {
     expect(result.report.state.submitted).toBe(true);
   });
 
-  it("settles a captured batch page that mixes thumbnails with Upload failed", async () => {
+  it("settles a captured batch page that mixes Ready-to-submit cards with Upload failed", async () => {
     mountBatchPage();
     const withThumbnail = (name: string) => `
       <div data-cy="grid-row"><div data-cy="item-card">
         <div data-cy="image-card"><img data-cy="image-thumbnail" alt="icon" src="https://media.gettyimages.com/id/${name}.jpg"></div>
-        <p data-cy="contribution-file-name">${name}</p><p>ID: 2302602190</p>
+        <div data-cy="item-info">${READY_ICON}<p data-cy="contribution-file-name">${name}</p><p>ID: 2302602190</p></div>
       </div></div>`;
     const rejected = (name: string) => `
       <div data-cy="grid-row"><div data-cy="item-card">
@@ -504,7 +639,7 @@ describe("completing one batch for several icons", () => {
       paths: names.map((name) => `/staged/${name}`), names, timeoutMs: 2000, readyTimeoutMs: 500,
     });
     expect(result.ok).toBe(true);
-    // Two names prove an upload, two are a rejection Getty itself named.
+    // Two names carry Getty's icon, two are a rejection Getty itself named.
     expect(result.state.uploaded).toEqual(["icon-steps-to-goal_8_01_v2.jpg", "icon-steps-to-goal_8_01_v2.eps"]);
     expect(result.state.failed).toEqual(["icon-sync-arrows_10_01.jpg", "icon-sync-arrows_10_01.eps"]);
     expect(result.state.failures).toEqual([{ name: "icon-sync-arrows_10_01.eps", id: "2302602220" }]);
@@ -622,6 +757,30 @@ describe("completing one batch for several icons", () => {
     expect(clicks).toBe(0);
   });
 
+  it("reloads a page whose listed card never gets its picture", async () => {
+    // A run that waits out the whole bound on a blank card never finishes: the
+    // reload is what makes Getty render it. Time alone must not be the answer.
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new BlankPicturePage();
+      const notes: string[] = [];
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg", "/staged/a.eps"], names: ["a.jpg", "a.eps"],
+        timeoutMs: 60000, readyTimeoutMs: 120000, stallMs: 5000,
+        onProgress: (note: string) => notes.push(note),
+      });
+      await vi.advanceTimersByTimeAsync(20000);
+      const settled = await result;
+      expect(settled.ok).toBe(true);
+      expect(page.reloads).toBe(1);
+      expect(notes.some((note) => /reload/i.test(note))).toBe(true);
+      expect(settled.state.uploaded).toContain("a.eps");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reloads the page after 30 s without progress and re-attaches only what is missing", async () => {
     vi.useFakeTimers();
     try {
@@ -643,6 +802,60 @@ describe("completing one batch for several icons", () => {
       ]);
       // The a.eps card covers the whole first pair; b.jpg has its own.
       expect(settled.state.uploaded).toEqual(["a.jpg", "a.eps", "b.jpg"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("counts down to the reload while no file appears, and says it is the reload", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new SilentPageThenCards();
+      const waits = createWaitControl();
+      const left: number[] = [];
+      let attempt: unknown = null;
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg", "/staged/a.eps", "/staged/b.jpg"], names: ["a.jpg", "a.eps", "b.jpg"],
+        timeoutMs: 120000, readyTimeoutMs: 2000, stallMs: 30000, waits,
+        onProgress: () => {
+          const wait = waits.current()?.wait;
+          if (wait === undefined) return;
+          left.push(wait.remainingMs);
+          attempt = { next: wait.next, attempt: wait.attempt, of: wait.of, skippable: wait.skippable };
+        },
+      });
+      await vi.advanceTimersByTimeAsync(11000);
+      expect(left.length).toBeGreaterThan(3);
+      expect(left[0]).toBeGreaterThan(left[left.length - 1]); // it counts down
+      expect(left[0] - left[left.length - 1]).toBeGreaterThanOrEqual(8000);
+      expect(attempt).toMatchObject({ attempt: 1, of: 2, skippable: true });
+      expect((attempt as { next: string }).next).toMatch(/reload the Getty page/);
+      expect(page.reloads).toBe(0); // 30 s have not passed: nothing was reloaded yet
+      await vi.advanceTimersByTimeAsync(30000);
+      expect((await result).ok).toBe(true);
+      expect(page.reloads).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Retry now skips the stall timer: the reload happens at once, not after 30 s", async () => {
+    vi.useFakeTimers();
+    try {
+      mountBatchPage();
+      const page = new SilentPageThenCards();
+      const waits = createWaitControl();
+      const result = attachFiles(page, "page", {
+        paths: ["/staged/a.jpg", "/staged/a.eps", "/staged/b.jpg"], names: ["a.jpg", "a.eps", "b.jpg"],
+        timeoutMs: 120000, readyTimeoutMs: 2000, stallMs: 30000, waits,
+        onProgress: () => { if (waits.current()?.wait !== undefined) waits.skip(); },
+      });
+      await vi.advanceTimersByTimeAsync(4000); // far below the 30 s window
+      const settled = await result;
+      expect(settled.ok).toBe(true);
+      expect(page.reloads).toBe(1);
+      expect(waits.current()).toBeNull();
     } finally {
       vi.useRealTimers();
     }

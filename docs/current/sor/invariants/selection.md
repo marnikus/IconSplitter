@@ -38,6 +38,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   directory names and direct saved-version reads are unaffected. Generate SVG's
   separate discovery still omits canonical positive `_AI_vN.png` files directly
   in `AI source regeneration versions`; this does not change its storage layout.
+  An image a pair file records in its own `imageVersions` is that pair's history,
+  never a pair of its own: both tabs take it from one rule module
+  (`src/lib/imageartifact.ts`), so registering sources can never grow the review
+  list ([policy](../selection.md#behaviour)).
 
 <a id="i-40"></a>
 * **I-40 (the scope is visible, RULE 12):** the Selection V2 toolbar states the
@@ -71,6 +75,17 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   unreadable pair file is named (banner + log + row status) and the in-memory
   decision is kept, never silently turned into `pending`; a failed write keeps
   the decision in memory and `Retry` rewrites exactly the pairs that failed.
+
+<a id="i-85"></a>
+* **I-83 (a split folder reviews its own piece, RULE 3/12, 2026-11-02):** inside a
+  Batch split folder (`…/split_NN/`) Selection V2 lists exactly one artwork — the
+  piece that folder was written for (`<stem>_NN.<image ext>`) with the reference
+  copy the Batch placed beside it. Every other image there (an unnumbered `_AI`
+  copy, a registered variant, an older build's `<stem>_NN_v2.png`) is that pair's
+  history or noise, never a row of its own; the same holds when the picked root
+  *is* the split folder. The piece's own `.svg` artifact and its pair file are read
+  as before. A folder that never saw a Batch keeps every pair it has, where the
+  recorded-variant rule still applies. One rule: `lib/splitscope.isSplitPiece`.
 
 <a id="i-55"></a>
 * **I-55 (paired thumbnail zoom):** Selection V2 and Generate SVG share the 48–800 px thumbnail range, clamping and two-slot layout (`src/lib/zoom.ts`, `src/ui/PairedThumbs.tsx`). Each image keeps its own aspect ratio, never stretches or upscales beyond its natural size; an 800 px pair scrolls horizontally rather than silently shrinking.

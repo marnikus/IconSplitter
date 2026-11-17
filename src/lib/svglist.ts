@@ -4,18 +4,45 @@
 // the logic stays testable without a DOM (RULE 3/8) and the UI keeps no rule.
 
 import { isSelectionSort, isStateSort, sortByFlag, type StateSort } from "./statesort";
+import { matchesSearch } from "./textsearch";
+import { anyOf, type Multi } from "./multifilter";
+import { REVIEW_LABEL, type ReviewStatus } from "./svgmodel";
 
-export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed" | "unknown";
-export type ReviewFilter = "all" | "pending" | "approved" | "declined" | "needs-review";
-export type SvgSort = StateSort | "date" | "name" | "generation" | "review" | "cost";
-
-export interface SvgListFilter {
-  generation: GenFilter;
-  review: ReviewFilter;
-  search: string;
+/** The status as people read it ("Regenerate SVG — overlaps"); "all" has none. */
+function reviewLabel(review: ReviewFilter): string {
+  return review === "all" ? "" : REVIEW_LABEL[review];
 }
 
-export const ALL_SVG_FILTER: SvgListFilter = { generation: "all", review: "all", search: "" };
+export type GenFilter = "all" | "not-generated" | "generating" | "generated" | "failed" | "unknown";
+export type ReviewFilter = "all" | ReviewStatus;
+export type SvgSort =
+  | StateSort
+  | "date"
+  | "name"
+  | "generation"
+  | "review"
+  | "cost"
+  /** When the SVG the row shows was created/added (a found file keeps its own time). */
+  | "svg-created"
+  /** When the AI source the row shows was created. */
+  | "ai-created";
+
+/** The one direction control: applies to whichever order and filter is in force. */
+export type SvgDir = "asc" | "desc";
+
+/** Image style filter (2026-11-16): filter by style ("base" or "style:<name>") and/or state ("ai", "svg", "both"). */
+export type StyleFilter = "all" | "base" | "ai" | "svg" | "both" | "styled" | "none" | `style:${string}`;
+
+export interface SvgListFilter {
+  /** One state, several (Generating + Generated), or all — lib/multifilter. */
+  generation: Multi<GenFilter>;
+  review: Multi<ReviewFilter>;
+  search: string;
+  /** Optional: older saved views have none (= all). */
+  style?: Multi<StyleFilter>;
+}
+
+export const ALL_SVG_FILTER: SvgListFilter = { generation: "all", review: "all", search: "", style: "all" };
 
 /** The row fields a filter or sort may look at. */
 export interface SvgListRow {
@@ -33,24 +60,54 @@ export interface SvgListRow {
   /** Total tokens of the newest version, or null when not reported. */
   tokens: number | null;
   version: number;
+  /** Epoch ms the shown SVG was created/added; null when the row has no SVG. */
+  svgCreatedAt: number | null;
+  /** Epoch ms the shown AI source was created; null when that cannot be known. */
+  aiCreatedAt: number | null;
+  /** In the picked image style: not this style, its AI source only, or its SVG generated too. */
+  style?: "none" | "ai" | "svg";
+  /** Active style name on this row ("base" or registered style name). */
+  styleName?: string;
+  /** Whether this row has an AI source image. */
+  hasAi?: boolean;
+  /** Whether this row has a generated SVG. */
+  hasSvg?: boolean;
 }
 
 export function applySvgFilters(rows: readonly SvgListRow[], f: SvgListFilter): SvgListRow[] {
-  const needle = f.search.trim().toLowerCase();
-  return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, needle));
+  return rows.filter((r) => inGeneration(r, f.generation) && inReview(r, f.review) && inSearch(r, f.search) && inStyle(r, f.style));
 }
 
-function inGeneration(row: SvgListRow, want: GenFilter): boolean {
-  return want === "all" || row.generation === want;
+function inStyle(row: SvgListRow, want: Multi<StyleFilter> | undefined): boolean {
+  if (want === undefined || want === "all") return true;
+  const list = Array.isArray(want) ? want : [want];
+  if (list.length === 0 || list.includes("all")) return true;
+  const styles = list.filter((w) => w === "base" || w.startsWith("style:")).map((w) => (w === "base" ? "base" : w.slice(6)));
+  const states = list.filter((w) => w === "ai" || w === "svg" || w === "both" || w === "styled" || w === "none");
+  if (styles.length > 0 && !styles.includes(row.styleName ?? "base")) return false;
+  if (states.length === 0) return true;
+  const hasAi = row.hasAi ?? (row.style === "ai");
+  const hasSvg = row.hasSvg ?? (row.style === "svg");
+  return states.some((s) => {
+    if (s === "ai") return hasAi;
+    if (s === "svg") return hasSvg;
+    if (s === "both") return hasAi && hasSvg;
+    if (s === "styled") return (row.style ?? "none") !== "none" || (hasAi && hasSvg);
+    return (row.style ?? "none") === "none";
+  });
 }
 
-function inReview(row: SvgListRow, want: ReviewFilter): boolean {
-  return want === "all" || row.review === want;
+function inGeneration(row: SvgListRow, want: Multi<GenFilter>): boolean {
+  return anyOf(want, "all", (w) => row.generation === w);
 }
 
-function inSearch(row: SvgListRow, needle: string): boolean {
-  if (needle === "") return true;
-  return `${row.name} ${row.relPath} v${row.version} ${row.generation} ${row.review}`.toLowerCase().includes(needle);
+function inReview(row: SvgListRow, want: Multi<ReviewFilter>): boolean {
+  return anyOf(want, "all", (w) => row.review === w);
+}
+
+/** File name, folder, shown version and both status words (lib/textsearch). */
+function inSearch(row: SvgListRow, query: string): boolean {
+  return matchesSearch(query, [row.name, row.relPath, `v${row.version}`, row.generation, row.review, reviewLabel(row.review)]);
 }
 
 /**
@@ -66,32 +123,108 @@ export function pinOrder(previous: readonly string[], sorted: readonly string[])
   return [...kept, ...sorted.filter((id) => !seen.has(id))];
 }
 
-/** Sorts a copy — the caller's array is never reordered in place. */
-export function sortSvgRows(rows: readonly SvgListRow[], sort: SvgSort, checked: readonly string[] = []): SvgListRow[] {
+/**
+ * Each order's own direction: what a user expects when they pick it. The
+ * direction control starts here and can then be flipped for ANY order, so the
+ * arrow never depends on which sort or filter happens to be selected.
+ */
+const NATURAL_DIR: Record<SvgSort, SvgDir> = {
+  name: "asc",
+  generation: "asc",
+  review: "asc",
+  date: "desc",
+  cost: "desc",
+  "svg-created": "desc",
+  "ai-created": "desc",
+  selected: "desc",
+  unselected: "desc",
+  unapproved: "desc",
+  approved: "desc",
+};
+
+export function naturalDir(sort: SvgSort): SvgDir {
+  return NATURAL_DIR[sort] ?? "desc";
+}
+
+/** The direction the user picked, or that order's own direction when they have not. */
+export function sortDirOf(sort: SvgSort, dir?: SvgDir | null): SvgDir {
+  return dir ?? naturalDir(sort);
+}
+
+/**
+ * Sorts a copy — the caller's array is never reordered in place. `dir` reverses
+ * whichever order is chosen; a row with no timestamp at all is last in BOTH
+ * directions (an unknown age is never claimed to be the oldest or the newest),
+ * and equal rows fall back to the path so an order is never left to chance.
+ */
+export function sortSvgRows(
+  rows: readonly SvgListRow[], sort: SvgSort, checked: readonly string[] = [], dir?: SvgDir | null,
+): SvgListRow[] {
   if (isStateSort(sort)) {
+    // A group's own label says which block comes first; the arrow swaps the
+    // blocks and never scrambles the readable name order inside one.
     const selected = new Set(checked);
-    return sortByFlag(sortSvgRows(rows, "name"), (r) => isSelectionSort(sort)
-      ? selected.has(r.id) : r.review === "approved", sort === "selected" || sort === "approved");
+    const own = sort === "selected" || sort === "approved";
+    return sortByFlag(baseOrder(rows), (r) => isSelectionSort(sort)
+      ? selected.has(r.id) : r.review === "approved", flipped(sort, dir) ? !own : own);
   }
   const out = [...rows];
-  out.sort((a, b) => compare(a, b, sort));
+  out.sort((a, b) => compare(a, b, sort, flipped(sort, dir)));
   return out;
+}
+
+/** True when the user's direction is the opposite of the order's own direction. */
+function flipped(sort: SvgSort, dir?: SvgDir | null): boolean {
+  return dir !== null && dir !== undefined && dir !== naturalDir(sort);
+}
+
+/** The base order a grouped sort falls back on: the name, so groups are stable. */
+function baseOrder(rows: readonly SvgListRow[]): SvgListRow[] {
+  return sortSvgRows(rows, "name");
 }
 
 /** One comparator per sort order, so adding an order never deepens a branch. */
 const COMPARATORS: Record<Exclude<SvgSort, StateSort>, (a: SvgListRow, b: SvgListRow) => number> = {
-  name: (a, b) => (a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0),
+  name: (a, b) => comparePath(a, b),
   cost: (a, b) => (b.cost ?? -1) - (a.cost ?? -1),
   date: (a, b) => (b.generatedAt ?? 0) - (a.generatedAt ?? 0),
+  "svg-created": (a, b) => timeOrder(a.svgCreatedAt, b.svgCreatedAt),
+  "ai-created": (a, b) => timeOrder(a.aiCreatedAt, b.aiCreatedAt),
   review: (a, b) => rank(a.review) - rank(b.review),
   generation: (a, b) => rank(a.generation) - rank(b.generation),
 };
 
-function compare(a: SvgListRow, b: SvgListRow, sort: Exclude<SvgSort, StateSort>): number {
-  return COMPARATORS[sort](a, b);
+/** Newest first for known times; an unknown time is always after a known one. */
+function timeOrder(a: number | null, b: number | null): number {
+  if (a === null || b === null) return Number(a === null) - Number(b === null);
+  return b - a;
 }
 
-const REVIEW_RANK: Record<ReviewFilter, number> = { all: 0, pending: 1, approved: 2, declined: 3, "needs-review": 4 };
+function comparePath(a: SvgListRow, b: SvgListRow): number {
+  return a.relPath < b.relPath ? -1 : a.relPath > b.relPath ? 1 : 0;
+}
+
+function compare(a: SvgListRow, b: SvgListRow, sort: Exclude<SvgSort, StateSort>, reverse: boolean): number {
+  // An unknown time is neither the newest nor the oldest: it stays last.
+  if (TIME_SORTS.has(sort)) {
+    const unknown = unknownTime(a, b, sort);
+    if (unknown !== 0) return unknown;
+  }
+  const primary = COMPARATORS[sort](a, b);
+  if (primary !== 0) return reverse ? -primary : primary;
+  // Never left to chance: two equal rows keep a stable, readable order.
+  return comparePath(a, b);
+}
+
+const TIME_SORTS = new Set<SvgSort>(["svg-created", "ai-created"]);
+
+/** 1 when only `a` has no time, -1 when only `b` has none, 0 when both are known. */
+function unknownTime(a: SvgListRow, b: SvgListRow, sort: SvgSort): number {
+  const [x, y] = sort === "svg-created" ? [a.svgCreatedAt, b.svgCreatedAt] : [a.aiCreatedAt, b.aiCreatedAt];
+  return Number(x === null) - Number(y === null);
+}
+
+const REVIEW_RANK: Record<ReviewFilter, number> = { all: 0, pending: 1, approved: 2, declined: 3, "needs-review": 4, "regen-overlaps": 5, "regen-geometry": 6 };
 const GEN_RANK: Record<GenFilter, number> = { all: 0, "not-generated": 1, generating: 2, generated: 3, failed: 4, unknown: 5 };
 
 function rank(value: string): number {

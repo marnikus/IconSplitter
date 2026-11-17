@@ -1,5 +1,33 @@
 # Review-list state sorting
 
+## The one direction arrow (2026-11-02)
+
+Generate SVG's list carries a single direction control (`svg-sort-dir`) beside
+Sort by. It reverses whichever order is in force — value orders, the two
+created-time orders and the four grouped state sorts — and it is applied after
+the filters, so "newest first" and every other direction also holds inside a
+narrowed list. Picking another order restores that order's own direction
+(newest/highest first for time, cost and groups; A→Z for filename, generation
+and review). A flipped group **swaps its blocks** and keeps the names readable
+inside each block. Rows with no timestamp at all stay last in both directions,
+and equal rows fall back to the path, so an order is never left to chance.
+`naturalDir`/`sortDirOf` in `lib/svglist.ts` are the single source of those
+rules; the model stores `sortDir` beside `sort` and repins on both changes.
+
+## Created-time orders (2026-11-02)
+
+**SVG created** (`svg-created`) and **AI source created** (`ai-created`) sort by
+when the artwork the row shows actually came into being, not by when a record was
+written:
+
+- SVG: the shown version's own file time. A version **registered** from disk keeps
+  the file's `lastModified` (`fileTime`, additive in the version record); a
+  generated version uses its completion time, else its request time. Registering
+  a year-old artwork therefore sorts as last year's work.
+- AI source: the accepted image version's `updatedAt` (found files keep their own
+  file time too), else the AI file's modification time from the scan fingerprint.
+- A row with no SVG has no `svg-created` time and sorts last, never first.
+
 Applies to Batch, Selection V2, Generate SVG and SVG to upload. Single sheets has
 no checkable review list and is unchanged. These are **sorts, not filters**: no
 rows disappear, checks do not change, and active/anchor remain independent.

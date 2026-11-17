@@ -4,14 +4,17 @@ import { compareNames } from "../lib/scan";
 import type { ExportedItem, UploadFormatKey } from "../lib/stockupload/types";
 import type { IconMetadata, MetadataValidation } from "../lib/upload/meta";
 import { metadataRights } from "../lib/upload/rights";
-import { badgesOf, rowMatchesBadge, type RowBadgeState } from "../lib/upload/rowbadge";
+import { badgesOf, rowMatchesBadges, type RowBadgeState } from "../lib/upload/rowbadge";
+import { anyOf, type Multi } from "../lib/multifilter";
+import { matchesSearch } from "../lib/textsearch";
 
 export type StockUploadSort = "name" | "path" | "selected";
 
 export interface StockListFilter {
   search: string;
-  badge: string;
-  format: "all" | UploadFormatKey;
+  /** One badge filter or several (lib/multifilter). */
+  badge: Multi<string>;
+  format: Multi<"all" | UploadFormatKey>;
 }
 
 export const ALL_STOCK_FILTER: StockListFilter = {
@@ -44,6 +47,7 @@ export function initialMetaDraft(item: ExportedItem): StockMetaDraft {
       title: recMeta.title,
       description: recMeta.description,
       tags: [...recMeta.tags],
+      ...(recMeta.name ? { name: recMeta.name } : {}),
       ...metadataRights(recMeta),
     },
     edited: false,
@@ -58,12 +62,10 @@ function hasFormat(item: ExportedItem, fmt: UploadFormatKey): boolean {
   return item.files[fmt] !== null;
 }
 
-function matchesSearch(item: ExportedItem, needle: string): boolean {
-  const q = needle.trim().toLowerCase();
-  if (q === "") return true;
-  const title = item.record.metadata?.title ?? "";
-  const tags = item.record.metadata?.tags.join(" ") ?? "";
-  return `${item.stem} ${item.exportDir} ${title} ${tags}`.toLowerCase().includes(q);
+/** Name, folder, title, tags, metadata state and source approval (lib/textsearch). */
+function inSearch(item: ExportedItem, query: string): boolean {
+  const meta = item.record.metadata;
+  return matchesSearch(query, [item.stem, item.exportDir, meta?.title, meta?.tags, meta?.state, item.record.source?.approval]);
 }
 
 export function filterAndSortItems(args: {
@@ -75,9 +77,9 @@ export function filterAndSortItems(args: {
 }): ExportedItem[] {
   const checkedSet = new Set(args.checked);
   const filtered = args.items.filter((item) =>
-    matchesSearch(item, args.filter.search)
-    && rowMatchesBadge(badgesOf(args.rowBadges, item.id), args.filter.badge)
-    && (args.filter.format === "all" || hasFormat(item, args.filter.format)),
+    inSearch(item, args.filter.search)
+    && rowMatchesBadges(badgesOf(args.rowBadges, item.id), args.filter.badge)
+    && anyOf(args.filter.format, "all", (w) => hasFormat(item, w as UploadFormatKey)),
   );
   return filtered.sort((a, b) => {
     if (args.sort === "selected") {

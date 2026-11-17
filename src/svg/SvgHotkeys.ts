@@ -9,6 +9,8 @@ import { nextVisibleId } from "../lib/reviewselect";
 import { isNativeListKeyTarget } from "../ui/rowgesture";
 import type { ReviewStatus } from "../lib/svgfile";
 import { shownVersion } from "./rowmodel";
+import { openSvgEditor } from "./pathedit/editmodalstore";
+import { editableRow } from "./pathedit/editnav";
 import type { SvgRow } from "./types";
 
 export interface SvgHotActions {
@@ -50,7 +52,8 @@ export function useSvgHotkeys(actions: SvgHotActions, enabled = true): void {
 /** Shortcuts belong to the list, never to a chord or to text being composed. */
 function swallowed(e: KeyboardEvent): boolean {
   if (e.ctrlKey || e.metaKey || e.altKey || isTextField(e.target)) return true;
-  const nativeKey = e.key === " " || e.key === "ArrowDown" || e.key === "ArrowUp";
+  // Enter on a focused button keeps doing what the button does (2026-11-06)
+  const nativeKey = e.key === " " || e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp";
   return nativeKey && isNativeListKeyTarget(e.target);
 }
 
@@ -62,6 +65,8 @@ const ROW_KEYS: Record<string, (row: SvgRow, a: SvgHotActions) => void> = {
   d: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "declined"); },
   w: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "needs-review"); },
   v: (row, a) => { const v = shownVersion(row); if (v !== null) a.showCode(row.source.id, v.version); },
+  // Enter opens the active row in the SVG edit mode (2026-11-06)
+  enter: (row) => { if (editableRow(row)) openSvgEditor(row.source.id); },
 };
 
 function runRowKey(e: KeyboardEvent, row: SvgRow, a: SvgHotActions): void {

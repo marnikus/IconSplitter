@@ -8,6 +8,7 @@ import { FakeDir, FakeFile } from "./helpers/fakefs";
 import {
   installSvgPanelHooks, COURT, FOG, makeRoot, mount, q, settle,
 } from "./helpers/svgpanel";
+import { isMultiSelect, pickOnly } from "./helpers/multiselect";
 
 installSvgPanelHooks();
 
@@ -55,6 +56,7 @@ async function key(name: string): Promise<void> {
   await settle();
 }
 async function choose(testId: string, value: string): Promise<void> {
+  if (isMultiSelect(q(`[data-testid=${testId}]`))) { await pickOnly(document, testId, value); await settle(); return; }
   await act(async () => {
     const el = q(`[data-testid=${testId}]`) as HTMLSelectElement;
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(el, value);

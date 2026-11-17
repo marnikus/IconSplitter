@@ -17,6 +17,8 @@ export interface PlanInput {
   settingsFp: string;
   metadataFp: string;
   hasMetadata: boolean;
+  /** What export.json's metadata block should hold: accepted text, else a saved draft, else "" (2026-11-13). */
+  recordMetadataFp?: string;
   optimize: boolean;
   includeSvg?: boolean;
   includeJpeg?: boolean;
@@ -46,6 +48,16 @@ export interface StagePlan {
  * touches the SVG and the JPEG's XMP/IPTC on a metadata change, but
  * repairing an SVG/EPS readback never rewrites an intact JPEG.
  */
+/**
+ * The fingerprint of the metadata the record's FILES carry: only an accepted
+ * block is embedded. A saved draft (state "invalid"/"generated", 2026-11-13)
+ * lives in export.json alone, so it counts as "nothing embedded" ("").
+ */
+export function embeddedMetadataFp(record: Pick<ExportRecord, "metadata">): string {
+  const block = record.metadata;
+  return block !== null && block.state === "accepted" ? block.fingerprint : "";
+}
+
 export function planStages(record: ExportRecord | null, input: PlanInput): StagePlan {
   const need = new Set<Stage>();
   const rebuild = { svg: false, jpg: false, eps: false };
@@ -84,6 +96,8 @@ function hasDisabledOutputs(record: ExportRecord, input: PlanInput): boolean {
 
 function planDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
   planMetadataDelta(record, input, need, rebuild);
+  // A draft export.json does not hold yet is a record-only commit: no file is rebuilt.
+  if (input.recordMetadataFp !== undefined && (record.metadata?.fingerprint ?? "") !== input.recordMetadataFp) need.add("commit");
   planSvgOptimizeDelta(record, input, need, rebuild);
   planEpsToolDelta(record, input, need, rebuild);
   planMissingOutputs(input, need, rebuild);
@@ -91,7 +105,7 @@ function planDeltas(record: ExportRecord, input: PlanInput, need: Set<Stage>, re
 
 function planMetadataDelta(record: ExportRecord, input: PlanInput, need: Set<Stage>, rebuild: StagePlan["rebuild"]): void {
   const metadataFp = input.hasMetadata ? input.metadataFp : "";
-  if ((record.metadata?.fingerprint ?? "") === metadataFp) return;
+  if (embeddedMetadataFp(record) === metadataFp) return;
   need.add("embed");
   rebuild.svg = input.includeSvg !== false;
   rebuild.jpg = input.includeJpeg !== false;

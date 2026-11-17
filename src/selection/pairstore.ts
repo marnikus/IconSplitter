@@ -15,6 +15,8 @@ import {
 import { rebaseMeta } from "../lib/pairrebase";
 import { parseDecisions, type ReviewRecord } from "../lib/reviewfile";
 import type { FileEntry } from "../lib/scan";
+import { mapLimited } from "../lib/limiter";
+import { cachedPairRead, forgetPairFile, rememberPairRead } from "./paircache";
 
 /** The one global file older builds wrote; read-only from here on. */
 export const LEGACY_FILE = "review-decisions.json";
@@ -37,7 +39,11 @@ export async function loadPairDecisions(root: DirHandleLike, entries: readonly F
   const metas = new Map<string, PairMeta>();
   const carried = new Map<string, string>(); // rebased id -> the id the file itself named
   const corruptFiles: string[] = [];
-  for (const relPath of pairFilePaths(entries)) await readInto(root, relPath, { metas, carried, corrupt: corruptFiles });
+  const reads = await loadPairFiles(root, entries);
+  for (const relPath of pairFilePaths(entries)) {
+    const read = reads.get(relPath);
+    if (read !== undefined) collectRead(relPath, read, { metas, carried, corrupt: corruptFiles });
+  }
   const legacy = await readLegacy(root);
   return {
     metas,
@@ -63,8 +69,27 @@ interface PairReads {
   corrupt: string[];
 }
 
-async function readInto(root: DirHandleLike, relPath: string, into: PairReads): Promise<void> {
-  const read = await loadMetaAt(root, relPath);
+/** Pair files read at once by one scan; the drive answers each with latency. */
+const PAIR_READ_CONCURRENCY = 16;
+
+/**
+ * Every pair file of a walk, read in parallel (2026-11-06) and served from the
+ * session cache (paircache) while its size and mtime are what the walk just saw
+ * — a rescan of an unchanged folder reads none. In path order, by relPath.
+ */
+export async function loadPairFiles(root: DirHandleLike, entries: readonly FileEntry[]): Promise<Map<string, MetaRead>> {
+  const files = entries.filter((e) => e.name.toLowerCase().endsWith(".svg.json"));
+  const reads = await mapLimited(files, PAIR_READ_CONCURRENCY, async (e) => {
+    const hit = e.error === null ? cachedPairRead(root, e.relPath, e) : null;
+    if (hit !== null) return hit;
+    const read = await loadMetaAt(root, e.relPath);
+    if (e.error === null) rememberPairRead(root, e.relPath, e, read);
+    return read;
+  });
+  return new Map(files.map((e, i) => [e.relPath, reads[i]]));
+}
+
+function collectRead(relPath: string, read: MetaRead, into: PairReads): void {
   if (read.missing) return;
   if (read.corrupt || read.meta === null) {
     into.corrupt.push(relPath);
@@ -182,6 +207,7 @@ export async function savePairDecision(root: DirHandleLike, pair: ReviewPair, me
 
 /** Writes a pair file at an explicit path (generation, review, undo). */
 export async function saveMetaAt(root: DirHandleLike, relPath: string, meta: PairMeta): Promise<void> {
+  forgetPairFile(relPath); // no scan may serve the version this write replaces
   const dir = await dirAt(root, relPath);
   if (dir === null) throw new Error("the pair's folder is gone");
   const text = serializePairMeta(meta);

@@ -37,16 +37,16 @@ Every current page is ≤ 9 KB; never load a whole directory.
 
 | Task | Current owner |
 |---|---|
-| One of the five tabs | the tab's row in [the router](docs/current/README.md#1-task-read-packs) |
+| One of the seven tabs | the tab's row in [the router](docs/current/README.md#1-task-read-packs) |
 | Persistence, pair history or root paths | [`sor/STORAGE.md`](docs/current/sor/STORAGE.md), [path invariants](docs/current/sor/invariants/paths.md) |
 | Which file / test owns X | [owners](docs/current/sor/OWNERS.md), [tests](docs/current/sor/TESTS.md) |
 | Commands, build or gates | [`CODE_VERIFICATION.md`](docs/current/CODE_VERIFICATION.md) |
 | Design handoff | [`design/README.md`](design/README.md), then the matching `SPEC.md` |
 
 `src/lib/` owns pixel math, filesystem/pair logic and other pure algorithms.
-Tabs live in `src/App.tsx`, `src/{batch,selection,selectionv2,svg,upload}/`;
+Tabs live in `src/App.tsx`, `src/{batch,selection,selectionv2,svg,upload,stockupload,svgBuilder}/`;
 shared state, UI and logs live in `src/{state,ui,log}/`. Tests are in `tests/`.
-The five modes and precise source/test owners are linked from the current-doc router.
+The seven modes and precise source/test owners are linked from the current-doc router.
 
 ## Finish a change
 

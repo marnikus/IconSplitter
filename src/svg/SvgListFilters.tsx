@@ -1,0 +1,89 @@
+// SvgListFilters.tsx — the list's own controls: what to show, in which order, and
+// the ONE direction arrow (2026-11-02). Split out of SvgControls so the order
+// rules (including the two created-times) are not buried in the provider card,
+// and so the arrow the user flips applies to whichever order and filter is in
+// force rather than to one hard-wired default.
+import { Select } from "../ui/fields";
+import { STATE_SORT_OPTIONS } from "../lib/statesort";
+import { sortDirOf, type SvgDir, type SvgListFilter, type SvgSort } from "../lib/svglist";
+import { REVIEW_LABEL, REVIEW_STATUSES } from "../lib/svgmodel";
+
+/** Every review status, in the model's order, under its one label. */
+const REVIEW_OPTIONS: [string, string][] = [["all", "All reviews"], ...REVIEW_STATUSES.map((s): [string, string] => [s, REVIEW_LABEL[s]])];
+import SearchField from "../ui/SearchField";
+import MultiSelect from "../ui/MultiSelect";
+import { useStylePrefs } from "./styles";
+
+/** Style filter (2026-11-16): filter by style (Base · Line Stroke or registered styles) and/or state (AI source, SVG generated, both). */
+function StyleFilterSelect({ filter, onFilter }: { filter: SvgListFilter; onFilter: (patch: Partial<SvgListFilter>) => void }) {
+  const { styles } = useStylePrefs();
+  const options: [string, string][] = [
+    ["all", "All styles"],
+    ["base", "Base · Line Stroke"],
+    ...styles.map((s): [string, string] => [`style:${s}`, s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())]),
+    ["ai", "AI source"],
+    ["svg", "SVG generated"],
+    ["both", "Both (AI + SVG)"],
+  ];
+  return <MultiSelect label="Style" testid="svg-filter-style" value={filter.style}
+    options={options}
+    onChange={(v) => onFilter({ style: v as SvgListFilter["style"] })} />;
+}
+
+/** Every order the list offers: files, time, cost, status and the two groups. */
+const SORT_OPTIONS: [SvgSort, string][] = [
+  ["date", "Newest generated"],
+  ["svg-created", "SVG created (file time)"],
+  ["ai-created", "AI source created"],
+  ["name", "Filename"],
+  ["generation", "Generation status"],
+  ["review", "Review status"],
+  ["cost", "Cost"],
+  ...STATE_SORT_OPTIONS,
+];
+
+/**
+ * The one direction arrow: it reverses whichever order is in force, before or
+ * after a filter, so the user never has to guess what "descending" means for a
+ * sort. The label says it out loud and the arrow shows it.
+ */
+function SortDirection({ dir, onDir }: { dir: SvgDir; onDir: (d: SvgDir) => void }) {
+  const next: SvgDir = dir === "asc" ? "desc" : "asc";
+  return (
+    <button type="button" className="svg-btn" data-testid="svg-sort-dir" data-dir={dir}
+      aria-label={`Sort direction: ${dir === "asc" ? "ascending" : "descending"} — click for ${next === "asc" ? "ascending" : "descending"}`}
+      title={`Sort direction: ${dir === "asc" ? "ascending (A→Z, oldest, lowest)" : "descending (Z→A, newest, highest)"}`}
+      onClick={() => onDir(next)}>
+      {dir === "asc" ? "↑ Ascending" : "↓ Descending"}
+    </button>
+  );
+}
+
+export default function SvgListFilters({ filter, sort, sortDir, shown, total, onFilter, onSort, onSortDir, onClear }: {
+  filter: SvgListFilter; sort: SvgSort; sortDir: SvgDir; shown: number; total: number;
+  onFilter: (patch: Partial<SvgListFilter>) => void; onSort: (s: SvgSort) => void;
+  onSortDir: (d: SvgDir) => void; onClear: () => void;
+}) {
+  const dir = sortDirOf(sort, sortDir);
+  return (
+    <div className="svg-filters">
+      <MultiSelect label="Generation" testid="svg-filter-generation" value={filter.generation}
+        options={[["all", "All states"], ["not-generated", "Not generated"], ["generating", "Generating"], ["generated", "Generated"], ["failed", "Failed"]]}
+        onChange={(v) => onFilter({ generation: v as SvgListFilter["generation"] })} />
+      <MultiSelect label="Review" testid="svg-filter-review" value={filter.review}
+        options={REVIEW_OPTIONS}
+        onChange={(v) => onFilter({ review: v as SvgListFilter["review"] })} />
+      <StyleFilterSelect filter={filter} onFilter={onFilter} />
+      <Select label="Sort by" testid="svg-sort" value={sort}
+        options={SORT_OPTIONS}
+        onChange={(v) => onSort(v as SvgSort)} />
+      <SortDirection dir={dir} onDir={onSortDir} />
+      <SearchField testid="svg-search" value={filter.search} placeholder="Filename, folder, version or status…"
+        onChange={(search) => onFilter({ search })} />
+      <span className="svg-result-copy" data-testid="svg-shown">Showing {shown} of {total}</span>
+      <button type="button" className="svg-btn" data-testid="svg-clear-filters" onClick={onClear}>× Clear filters</button>
+    </div>
+  );
+}
+
+

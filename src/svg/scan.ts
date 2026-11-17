@@ -17,10 +17,13 @@ import { discoverApprovedSources, type Discovery, type SvgSource } from "./sourc
 import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
 import { metaPathFor } from "../lib/pairmeta";
+import { STYLE_ID_SEP } from "../lib/svgstyles";
+import { styledRows, stylePrefs } from "./styles";
 
 import { saveSourceIndex, type IndexEntry } from "../state/sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
-import type { PairMeta } from "../lib/pairmeta";
+import { metaPathForAi, type PairMeta } from "../lib/pairmeta";
+import { loadMetaAt } from "../selection/pairstore";
 import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
 
@@ -55,6 +58,8 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters, audible = false
   s.setBusy("Scanning approved sources…");
   try {
     const found = await discoverApprovedSources(root);
+    const styles = stylePrefs().styles;
+    if (styles.length > 0) await loadStyleMetas(root, found, styles);
     const loaded = loadRows(found);
     if (!scanMayCommit(refs, ticket.id)) return; // a newer scan took over
     const key = scanKey(root.name, found, loaded.rows);
@@ -87,6 +92,27 @@ interface LoadedRows {
   metas: [string, PairMeta | null][];
 }
 
+/** Load existing `_<style>` pair files for all registered styles so style rows survive app restarts. */
+async function loadStyleMetas(root: DirHandleLike, found: Discovery, styles: readonly string[]): Promise<void> {
+  const paths: string[] = [];
+  for (const source of found.sources) {
+    for (const style of styles) {
+      const styleDir = source.dirPath === "" ? `_${style}` : `${source.dirPath}/_${style}`;
+      paths.push(metaPathForAi(`${styleDir}/${source.stem}_${style}.png`));
+    }
+  }
+  const CONCURRENCY = 16;
+  let next = 0;
+  const worker = async () => {
+    while (next < paths.length) {
+      const p = paths[next++];
+      const res = await loadMetaAt(root, p).catch(() => null);
+      if (res?.meta) found.metas.set(res.meta.id, res.meta);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, paths.length) }, worker));
+}
+
 /**
  * Rows from the records discovery ALREADY read: one pass over the pair files
  * serves both, so a scan reads each file once and can never show a row whose
@@ -99,7 +125,11 @@ function loadRows(found: Discovery): LoadedRows {
     metas.push([source.id, meta]);
     return toRow(source, meta, found.corruptFiles.includes(metaPathOf(source)));
   });
-  return { rows, metas };
+  // the image style picked in the pinned bar (2026-11-16): rows that have it show it, with their style pair files
+  const style = stylePrefs().active;
+  const styled = styledRows(rows, (id) => found.metas.get(id), style);
+  for (const r of styled) if (r.source.id.includes(STYLE_ID_SEP)) metas.push([r.source.id, r.meta]);
+  return { rows: styled, metas };
 }
 
 /** Everything one commit needs, so the commit stays one parameter (RULE 16). */

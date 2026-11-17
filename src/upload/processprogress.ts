@@ -1,6 +1,6 @@
 // Upload adapters for the generic batch reporter. Each process owns its slot.
 import { createProcessReporter, type ProcessProgress } from "../lib/processprogress";
-import { startCompletionSound } from "../ui/completionSound";
+import { armCompletionSound, notifyCompletion } from "../ui/completionSound";
 import type { UploadCtx } from "./actions";
 
 export type UploadProcessKind = "metadata" | "export" | "download";
@@ -33,13 +33,17 @@ export function dismissProcess(state: UploadProgressState, kind: UploadProcessKi
   return progressState({ ...state.processes, [kind]: null });
 }
 
-/** All runner publications take the same reducer path. Nothing is persisted or sent. */
+/**
+ * All runner publications take the same reducer path. Nothing is persisted or sent.
+ * The cue is keyed by the reporter's own run id, so the finished bar (which carries
+ * that id) and this call are one sound, not two.
+ */
 export function startUploadProgress(c: UploadCtx, kind: UploadProcessKind, total: number) {
   let start = true;
-  const finish = total > 0 ? startCompletionSound() : () => undefined;
+  armCompletionSound();
   return createProcessReporter(total, (progress) => {
     c.dispatch({ type: "process", kind, progress, start });
     start = false;
-    if (progress.status !== "running") finish(progress.status === "cancelled");
+    if (progress.status !== "running" && total > 0) notifyCompletion(progress.runId, progress.status === "cancelled");
   });
 }

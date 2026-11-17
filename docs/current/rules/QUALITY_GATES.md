@@ -90,6 +90,17 @@ Baseline at adoption (2026-09-30): `src/App.tsx` = 598 lines, `src/lib/detect.ts
 4. **Measure** before claiming done: `npx tsc --noEmit`, lint, `vitest` (once present).
 5. **Update current docs** in the same change (RULE 17).
 
+### 16.6a Paths must not differ only in case (2026-11-02)
+
+The build must work on the contributor's Windows machine, not only on Linux. Two
+modules whose paths differ only by letter case (`RegisterProgress.tsx` vs
+`registerprogress.ts`) fold into one file there, so `./RegisterProgress` bound to
+the model and rollup failed with "default is not exported". Name sibling modules
+apart by more than case (`SvgRegisterProgress.tsx` beside `registerprogress.ts`,
+as `imgprogress.ts` sits beside `SvgImageProgress.tsx`).
+`tests/fs_case_collisions.test.ts` fails on any such pair, and on a relative
+import that only resolves by folding, so the mistake is caught here first.
+
 ### 16.7 Acceptance checklist (self-review before claiming done)
 
 ```text

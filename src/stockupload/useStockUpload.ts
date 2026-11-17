@@ -1,15 +1,17 @@
 // useStockUpload.ts — flat orchestration hook for the "Upload" (stockUpload) tab.
 
+import { LIST_VIEW_KEYS, useSaveListView } from "../state/listviewstore";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from "react";
 import { fsSupported } from "../batch/picker";
 import type { DirHandleLike } from "../lib/fs";
-import { pruneRowSelection } from "../lib/reviewselect";
+import { pruneRowSelection, sameRowSelection } from "../lib/reviewselect";
+import { dropFromMulti } from "../lib/multifilter";
 import type { StockDiscovery } from "../lib/stockupload/discovery";
 import type { ExportedItem, StockPresetState } from "../lib/stockupload/types";
 import { ensureHardcodedBadges, ensureNamedBadge, type RowBadgeState } from "../lib/upload/rowbadge";
 import { useHistoryActions } from "../state/HistoryProvider";
 import { getAppState, patchStockUpload } from "../state/appstore";
-import { rememberListTargets } from "../state/listtargets";
+import { listTargetsKnown, rememberListTargets } from "../state/listtargets";
 import { useAppSlice } from "../state/useAppState";
 import { getRowBadgeState, setRowBadgeState, subscribeRowBadges } from "../upload/rowbadgestore";
 import { useStockFtpActions, type StockFtpActions } from "./ftpactions";
@@ -22,6 +24,7 @@ import { useStockPanelOps, type StockPanelOps } from "./panelops";
 import { getStockPresetState, subscribeStockPresets } from "./presetstore";
 import { filterAndSortItems, stockHeaderState } from "./rowlist";
 import { bootStockRoot, scanStockUpload } from "./scan";
+import { useStockRemoveAction, useStockReviewFollower } from "./removerows";
 import {
   useStockRowBadgeActions, useStockSelectionActions,
   type StockBadgeApi, type StockSelectionApi,
@@ -38,17 +41,27 @@ export interface StockUploadApi extends StockSelectionApi, StockBadgeApi, StockF
   checked: string[];
   activeId: string | null;
   header: "none" | "some" | "all";
+  /** Remove from this list = decline the source item in Generate SVG (Undo brings it back). */
+  removeItems: (ids: string[]) => void;
+}
+
+/**
+ * Drops checks a rescan no longer knows. Writes ONLY a real prune (an unchanged selection is no gesture, so an
+ * idle page finishing a scan cannot claim the snapshot), and the first scan after start that found nothing
+ * prunes nothing (2026-11-08).
+ */
+export function commitKnownSelection(knownIds: readonly string[]): void {
+  const firstScan = !listTargetsKnown("stockUpload");
+  rememberListTargets("stockUpload", knownIds);
+  if (knownIds.length === 0 && firstScan) return;
+  const cur = getAppState().stockUpload;
+  const before = { checked: cur.checked, active: cur.activeId, anchor: cur.anchorId };
+  const pruned = pruneRowSelection(before, new Set(knownIds));
+  if (!sameRowSelection(before, pruned)) patchStockUpload({ checked: pruned.checked, activeId: pruned.active, anchorId: pruned.anchor });
 }
 
 function applyDiscoveredItems(found: StockDiscovery, dispatch: (a: StockModelAction) => void): void {
-  const knownIds = found.items.map((it) => it.id);
-  rememberListTargets("stockUpload", knownIds);
-  const cur = getAppState().stockUpload;
-  const pruned = pruneRowSelection(
-    { checked: cur.checked, active: cur.activeId, anchor: cur.anchorId },
-    new Set(knownIds),
-  );
-  patchStockUpload({ checked: pruned.checked, activeId: pruned.active, anchorId: pruned.anchor });
+  commitKnownSelection(found.items.map((it) => it.id));
   dispatch({ type: "patch", patch: { discovery: found } });
 }
 
@@ -124,8 +137,15 @@ function useDerivedList(
   return { items, visible, header };
 }
 
+/** A deleted badge leaves the badge filter; the rest of the picks stay. */
+function dropBadgeFromFilter(model: StockUploadModel, dispatch: (a: StockModelAction) => void, id: string): void {
+  const badge = dropFromMulti(model.filter.badge, id, "all");
+  if (badge !== model.filter.badge) dispatch({ type: "filter", patch: { badge } });
+}
+
 export function useStockUpload(): StockUploadApi {
   const [model, dispatch] = useReducer(reduceStockModel, undefined, initialStockModel);
+  useSaveListView(LIST_VIEW_KEYS.stock, { filter: model.filter, sort: model.sort });
   const refs = useRef<StockRefs | null>(null);
   if (refs.current === null) refs.current = createStockRefs();
   const r = refs.current;
@@ -137,19 +157,40 @@ export function useStockUpload(): StockUploadApi {
   const runScan = useScanTrigger(r, dispatch, say);
   useBootEffects(r, presetState.presets, dispatch, runScan);
   const { items, visible, header } = useDerivedList(model, selSlice.checked, rowBadges);
-  const selection = useStockSelectionActions(visible, hist);
-  const badges = useStockRowBadgeActions(hist, say, (id) => {
-    if (model.filter.badge === id) dispatch({ type: "filter", patch: { badge: "all" } });
-  });
+  const selection = useStockSelectionActions(items, visible, hist, say);
+  const badges = useStockRowBadgeActions(hist, say, (id) => dropBadgeFromFilter(model, dispatch, id));
   const ftp = useStockFtpActions({
     presetState, bridgeUrl: model.prefs.bridgeUrl, rootRef: r.root, say,
     setCredSaved: (id, saved) => dispatch({ type: "cred", id, saved }),
     setTestStatus: (testStatus) => dispatch({ type: "patch", patch: { testStatus } }),
   });
-  const ops = useStockPanelOps({ model, items, checked: selSlice.checked, presetState, r, dispatch, say, runScan });
+  const ops = useStockPanelOps({ model, items, checked: selSlice.checked, presetState, rowBadges, r, dispatch, say, runScan });
+  const removeItems = useRemoveItems({ model, items, r, dispatch, runScan, say, hist });
   return {
     supported: fsSupported(), model, rootRef: r.root, presetState, rowBadges,
     items, visible, checked: selSlice.checked, activeId: selSlice.activeId, header,
-    ...selection, ...badges, ...ftp, ...ops,
+    ...selection, ...badges, ...ftp, ...ops, removeItems,
   };
+}
+
+interface RemoveParts {
+  model: StockUploadModel;
+  items: ExportedItem[];
+  r: StockRefs;
+  dispatch: (a: StockModelAction) => void;
+  runScan: (audible?: boolean) => void;
+  say: (m: string, err?: boolean) => void;
+  hist: ReturnType<typeof useHistoryActions>;
+}
+
+/** Remove + the list following every written item decision (a click, an undo, a redo). */
+function useRemoveItems(p: RemoveParts): (ids: string[]) => void {
+  const setItems = (next: ExportedItem[]) => {
+    if (p.model.discovery === null) return;
+    p.r.scan.scanKey.current = null; // the list no longer matches the last scan: the next one must apply
+    p.dispatch({ type: "patch", patch: { discovery: { ...p.model.discovery, items: next } } });
+  };
+  const rescanIfOpen = () => { if (getAppState().tab === "stockUpload" && !p.model.uploading) p.runScan(false); };
+  useStockReviewFollower({ items: p.items, setItems, rescanIfOpen });
+  return useStockRemoveAction({ items: p.items, uploading: p.model.uploading, say: p.say, hist: p.hist });
 }

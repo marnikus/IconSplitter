@@ -5,7 +5,8 @@
 // (user-visible outputs still go through writeFileNew — RULE 23).
 
 import type { AiImageEntry } from "../lib/scan";
-import { blankState, mergeScan, parseState, serializeState, type SourceStatus, type BatchReviewStatus } from "../lib/statefile";
+import { blankState, mergeScan, parseState, serializeState, type SourceStatus, type BatchReviewStatus, type StateFile } from "../lib/statefile";
+import { mapLimited } from "../lib/limiter";
 import { probePath, tryGetFile, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 
 export interface StateKey {
@@ -42,10 +43,20 @@ export interface SyncArgs {
  */
 export async function syncAndCollect(args: SyncArgs): Promise<SyncResult> {
   const ctx: SyncCtx = { ...args, result: { statuses: new Map(), reviews: new Map(), keys: [] } };
-  const groups = groupByState(args.images, args.prevKeys);
-  for (const g of groups.values()) await syncOne(ctx, g);
+  const groups = [...groupByState(args.images, args.prevKeys).values()];
+  // Groups sync in parallel (2026-11-06); results are merged in group order.
+  const states = await mapLimited(groups, SYNC_CONCURRENCY, (g) => syncOne(ctx, g));
+  groups.forEach((g, i) => {
+    const state = states[i];
+    if (state === null) return;
+    recordStatuses(state, ctx.result);
+    ctx.result.keys.push({ dirPath: g.dirPath, base: g.base });
+  });
   return ctx.result;
 }
+
+/** State files synced at once; the drive answers each with latency. */
+const SYNC_CONCURRENCY = 16;
 
 interface SyncCtx extends SyncArgs {
   result: SyncResult;
@@ -77,16 +88,27 @@ function ensureGroup(groups: Map<string, Group>, dirPath: string, base: string):
   return g;
 }
 
-async function syncOne(ctx: SyncCtx, g: Group): Promise<void> {
+/**
+ * One group's merged state, written only when it CHANGED (2026-11-06): every
+ * scan stamps the file's top-level `updated`, so comparing whole files always
+ * differed and every scan rewrote every state file — hundreds of writes (each a
+ * cloud upload on a synced folder) that also moved every modification time.
+ * null when the source folder vanished since the scan.
+ */
+async function syncOne(ctx: SyncCtx, g: Group): Promise<StateFile | null> {
   const dir = g.dirPath === "" ? ctx.root : await probePath(ctx.root, g.dirPath);
-  if (!dir) return; // source folder vanished since the scan — nothing to update
+  if (!dir) return null; // source folder vanished since the scan — nothing to update
   const prev = await readPrev(dir, `${g.base}.json`);
   const merged = mergeScan(prev ?? blankState(g.base), g.items, ctx.now);
   const withStatus = applyOverrides(merged, ctx.overrides);
   const withReview = applyReviewOverrides(withStatus, ctx.reviewOverrides ?? new Map(), ctx.now);
-  recordStatuses(withReview, ctx.result);
-  ctx.result.keys.push({ dirPath: g.dirPath, base: g.base });
-  await writeFileOverwrite(dir, `${g.base}.json`, jsonBlob(serializeState(withReview)));
+  if (!sameExceptScanTime(prev, withReview)) await writeFileOverwrite(dir, `${g.base}.json`, jsonBlob(serializeState(withReview)));
+  return withReview;
+}
+
+/** Nothing but the scan's own top-level timestamp would change: no write. */
+function sameExceptScanTime(prev: StateFile | null, next: StateFile): boolean {
+  return prev !== null && serializeState({ ...next, updated: prev.updated }) === serializeState(prev);
 }
 
 function applyOverrides(state: ReturnType<typeof mergeScan>, overrides: Map<string, SourceStatus>) {

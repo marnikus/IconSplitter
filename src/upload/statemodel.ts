@@ -4,6 +4,8 @@
 // the rules testable without a DOM and keeps the hook itself tiny. Mirrors
 // svg/statemodel; the selection lives in the appstore upload slice (session).
 
+import { loadUploadListView } from "./listview";
+import { LIST_VIEW_KEYS, useSaveListView } from "../state/listviewstore";
 import { applyProcessUpdate, dismissProcess, type ProcessUpdate, type UploadProcessKind, type UploadProgressState } from "./processprogress";
 import type { KeySource } from "../lib/keyvault";
 import type { SentPreview } from "../lib/upload/sentpreview";
@@ -20,7 +22,7 @@ import type { PromptPreset } from "../lib/upload/promptpresets";
 import type { OverridesMap, UploadSettingsState } from "./settingsstore";
 import type { UploadPrefs } from "./prefsstore";
 import {
-  ALL_UPLOAD_FILTER, IDLE_MODEL_CHECK,
+  IDLE_MODEL_CHECK,
   type ModelCheck, type Toast, type UploadDialog, type UploadListFilter,
   type UploadMetaState, type UploadRow, type UploadSort,
 } from "./types";
@@ -199,12 +201,15 @@ export function initialModel(boot: Boot): UploadModel {
     gemini: boot.gemini, modelCheck: IDLE_MODEL_CHECK, prompt: boot.prompt, presets: boot.presets,
     presetPick: "", keyMask: "not set", keySet: false, keySource: "none", rootToken: 0,
     thumb: boot.prefs.thumbHeight, providerOpen: boot.prefs.providerOpen, bg: boot.prefs.previewBg,
-    filter: ALL_UPLOAD_FILTER, sort: "name", dialog: null,
+    ...loadUploadListView(), dialog: null,
     runningMeta: 0, runningExport: 0, progress: null, processes: { metadata: null, export: null, download: null },
   };
 }
 
 /** One hook, one line of state: the panel never holds a second copy. */
 export function useUploadModel(boot: Boot): [UploadModel, Dispatch<UploadAction>] {
-  return useReducer(reduceState, boot, initialModel);
+  const state = useReducer(reduceState, boot, initialModel);
+  const [m] = state;
+  useSaveListView(LIST_VIEW_KEYS.upload, { filter: m.filter, sort: m.sort });
+  return state;
 }

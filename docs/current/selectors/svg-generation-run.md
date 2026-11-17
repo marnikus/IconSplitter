@@ -60,6 +60,17 @@ Pinned above tab header, portalled to `#svg-progress-mount` in Workbench, visibl
 
 Cancel flow: `svg-progress-cancel` → `svg-cancel-dialog` with current thumbnail, counts, note "Unsent requests will be removed..." → `svg-cancel-confirm` calls `cancelRun` (drops waiting SVG jobs then aborts active SVG jobs only; keeps saved; image process is independent), `svg-cancel-keep` closes dialog (Esc also).
 
+### Register progress — `src/svg/SvgRegisterProgress.tsx` (2026-11-02)
+
+Both register passes report through the shared bar, portalled to
+`#svg-progress-mount` beside the run header. Prefix `register-svg` (existing
+SVGs) or `register-images` (existing AI sources), same suffixes as above:
+`-header`, `-title`, `-file` (pair being read), `-track`, `-completed` ("N
+registered · K skipped"), `-remaining` ("3 remaining"), `-note` ("N new files
+registered" so far this run; "no new files yet"), `-percent`, `-cancel`, `-review` and `-dismiss`
+(✕; a finished bar stays until then). A finished bar plays the completion cue
+once, keyed by the pass id; a cancelled pass stays silent.
+
 Shared surfaces: `svg-warn-{noteId}` (`pairfile` — the pair files that could not
 be parsed, I-43 / `problems` — the
 listed sources that need attention, with the first reasons spelled out /

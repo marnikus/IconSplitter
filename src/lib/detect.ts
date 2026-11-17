@@ -144,8 +144,11 @@ function secondPass(args: { dil: Uint8Array; grid: Grid; labels: Int32Array; par
   const maxInk = Math.max(0, ...inks); const valid = inks.map((v) => v >= maxInk * 0.015 && v > 0);
   return { labels, valid, count: valid.filter(Boolean).length, minX, maxX, minY, maxY };
 }
-function labelUF(dil: Uint8Array, grid: Grid): Labeling {
-  const { gw, gh } = grid; const tot = gw * gh; const labels = new Int32Array(tot).fill(-1); const parent = new Int32Array(tot);
+interface LabelBufs { labels: Int32Array; parent: Int32Array }
+function labelUF(dil: Uint8Array, grid: Grid, bufs?: LabelBufs): Labeling {
+  const { gw, gh } = grid; const tot = gw * gh;
+  const labels = bufs?.labels ?? new Int32Array(tot); labels.fill(-1);
+  const parent = bufs?.parent ?? new Int32Array(tot);
   const next = firstPass({ dil, gw, gh, labels, parent });
   return secondPass({ dil, grid, labels, parent, next });
 }
@@ -174,20 +177,22 @@ type Run = { start: number; end: number; count: number };
 function filterBySizeGrid(lab: Labeling, f: number, imgW: number, imgH: number): number {
   let cnt = 0; for (let i = 0; i < lab.valid.length; i++) { if (!lab.valid[i]) continue; const w = (lab.maxX[i] - lab.minX[i] + 1) * f, h = (lab.maxY[i] - lab.minY[i] + 1) * f; if (w < imgW * 0.08 || h < imgH * 0.08) continue; if (w > imgW * 0.85 && h > imgH * 0.85) continue; if ((w > imgW * 0.9 || h > imgH * 0.9) && w * h > imgW * imgH * 0.5) continue; cnt++; } return cnt;
 }
-type CountArgs = { ctx: Grid; f: number; a: Analysis; r: number; bufs: DilateBufs };
-function countFast(args: CountArgs): number { const { ctx, f, a, r, bufs } = args; const dil = dilateBuf(ctx.cells, { gw: ctx.gw, gh: ctx.gh }, r, bufs); const lab = labelUF(dil, ctx); return filterBySizeGrid(lab, f, a.w, a.h); }
+type CountArgs = { ctx: Grid; f: number; a: Analysis; r: number; bufs: DilateBufs; labelBufs: LabelBufs };
+function countFast(args: CountArgs): number { const { ctx, f, a, r, bufs, labelBufs } = args; const dil = dilateBuf(ctx.cells, { gw: ctx.gw, gh: ctx.gh }, r, bufs); const lab = labelUF(dil, ctx, labelBufs); return filterBySizeGrid(lab, f, a.w, a.h); }
 function nextR(r: number) { return r < 10 ? r + 1 : r + 2; }
 function buildRuns(series: number[]): Run[] { const runs: Run[] = []; for (let i = 0; i < series.length; i++) { const last = runs[runs.length - 1]; if (last && last.count === series[i]) last.end = i; else runs.push({ start: i, end: i, count: series[i] }); } return runs; }
 function bestRun(runs: Run[]): Run { const cand = runs.filter((r) => r.count >= 2); const pool = cand.length ? cand : runs; let best = pool[0]; if (!best) return { start: 0, end: 0, count: 1 }; for (const r of pool) { const len = r.end - r.start, bestLen = best.end - best.start; if (len > bestLen) best = r; else if (len === bestLen && r.count > best.count) best = r; } return best; }
 function buildSeriesFastSync(ctx: Grid, rMax: number, f: number, a: Analysis) {
   const series: number[] = []; let ones = 0; const bufs = { tmp: new Uint8Array(ctx.gw * ctx.gh), out: new Uint8Array(ctx.gw * ctx.gh) };
-  for (let r = 1; r <= rMax; r = nextR(r)) { const c = countFast({ ctx, f, a, r, bufs }); series.push(c); if (c === 1) { ones++; if (ones >= 3) break; } else ones = 0; const best = bestRun(buildRuns(series)); if (best && best.count === 4 && best.end - best.start >= 2 && c < 4 && c <= 2) break; }
+  const labelBufs = { labels: new Int32Array(ctx.gw * ctx.gh), parent: new Int32Array(ctx.gw * ctx.gh) };
+  for (let r = 1; r <= rMax; r = nextR(r)) { const c = countFast({ ctx, f, a, r, bufs, labelBufs }); series.push(c); if (c === 1) { ones++; if (ones >= 3) break; } else ones = 0; const best = bestRun(buildRuns(series)); if (best && best.count === 4 && best.end - best.start >= 2 && c < 4 && c <= 2) break; }
   return buildRuns(series);
 }
 async function buildSeriesFastAsync(ctx: Grid, rMax: number, f: number, a: Analysis) {
   const series: number[] = []; let ones = 0; const bufs = { tmp: new Uint8Array(ctx.gw * ctx.gh), out: new Uint8Array(ctx.gw * ctx.gh) };
+  const labelBufs = { labels: new Int32Array(ctx.gw * ctx.gh), parent: new Int32Array(ctx.gw * ctx.gh) };
   const breathe = yieldBudget();
-  for (let r = 1; r <= rMax; r = nextR(r)) { const c = countFast({ ctx, f, a, r, bufs }); series.push(c); if (c === 1) { ones++; if (ones >= 3) break; } else ones = 0; const best = bestRun(buildRuns(series)); if (best && best.count === 4 && best.end - best.start >= 2 && c < 4 && c <= 2) break; await breathe(); }
+  for (let r = 1; r <= rMax; r = nextR(r)) { const c = countFast({ ctx, f, a, r, bufs, labelBufs }); series.push(c); if (c === 1) { ones++; if (ones >= 3) break; } else ones = 0; const best = bestRun(buildRuns(series)); if (best && best.count === 4 && best.end - best.start >= 2 && c < 4 && c <= 2) break; await breathe(); }
   return buildRuns(series);
 }
 function updateBoundsPx(x: number, y: number, l: number, b: { minX: number[]; minY: number[]; maxX: number[]; maxY: number[]; ink: number[]; }) { if (x < b.minX[l]) b.minX[l] = x; if (x > b.maxX[l]) b.maxX[l] = x; if (y < b.minY[l]) b.minY[l] = y; if (y > b.maxY[l]) b.maxY[l] = y; b.ink[l]++; }

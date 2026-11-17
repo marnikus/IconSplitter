@@ -12,23 +12,39 @@
 //              [--getty-profile <dir>]  (reuse a profile so Getty remembers it)
 //              [--getty-check]  (launch, verify the DevTools socket, exit)
 //              [--getty-reset]  (end a stuck Getty browser, clear its profile)
+//   ChatGPT web SVG generation: [--aichat-profile <dir>] [--aichat-headless]
+//              [--aichat-cdp <loopback devtools url>]
 //   env: INKSCAPE_PATH, BRIDGE_TIMEOUT_MS (60000), BRIDGE_MAX_BYTES (20 MB)
+//
+// 2026-11-01: whitespace-only touch, on purpose — it moves the helper code stamp so
+// one real cycle runs end to end: exit 75 -> supervisor rebuilds the app -> the open
+// page sees the new `served` stamp on /health -> it reloads itself and says so.
 
 import { createServer, request as httpRequest } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { isDistStale, rebuildDistAsync } from "./distfresh.mjs";
+import { appWatchPaths, servedBundle } from "./distfresh.mjs";
+import { buildAppStaged } from "./appbuild.mjs";
+import { watchAppSources, watchOwnCode } from "./autoupdate.mjs";
+import { installCrashGuards } from "./guards.mjs";
+import { readCommit } from "./updatewatch.mjs";
 import { handleEspOAuthCallback, handleEspOAuthStart, handleEspOAuthStatus } from "./esp/oauth.mjs";
 import { connectBrowser, findBrowser, resetProfile, resolveProfileDir } from "./gettyweb/browser.mjs";
 import { openCdp } from "./gettyweb/cdp.mjs";
 import {
-  gettyWebHealth, handleGettyWebClose, handleGettyWebFinish, handleGettyWebProgress,
+  gettyWebBusy, gettyWebHealth, handleGettyWebClose, handleGettyWebFinish, handleGettyWebProgress, handleGettyWebSkipWait,
+  releaseIdleSessions,
   handleGettyWebTest, handleGettyWebUpload,
 } from "./gettyweb/routes.mjs";
 import { cdpFailureReason } from "./gettyweb/session.mjs";
+import {
+  aichatBusy, aichatHealth, handleAichatCancel, handleAichatClose, handleAichatProgress, handleAichatSend,
+} from "./aichat/routes.mjs";
 import { convertEps, findInkscape } from "./inkscape.mjs";
 import { handleFtpsClose, handleFtpsTest, handleFtpsUpload } from "./ftps/routes.mjs";
+import { handleOpenFolder } from "./openfolder.mjs";
+import { handleFindFolder } from "./findfolder.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..");
@@ -58,9 +74,23 @@ function applyGettyFlags(parsed) {
   if (typeof parsed["getty-profile"] === "string" && parsed["getty-profile"] !== "") {
     process.env.GETTY_WEB_PROFILE = parsed["getty-profile"];
   }
+  applyAichatFlags(parsed);
+}
+
+/** ChatGPT web flags: the sign-in profile, a hidden window, an attach endpoint. */
+function applyAichatFlags(parsed) {
+  if (typeof parsed["aichat-profile"] === "string" && parsed["aichat-profile"] !== "") process.env.AICHAT_PROFILE = parsed["aichat-profile"];
+  if (["1", "true", true].includes(parsed["aichat-headless"])) process.env.AICHAT_HEADLESS = "1";
+  if (typeof parsed["aichat-cdp"] === "string" && parsed["aichat-cdp"] !== "") process.env.AICHAT_CDP = parsed["aichat-cdp"];
 }
 
 const args = parseArgs(process.argv.slice(2));
+// `--self-test` (2026-11-13): every module above has loaded — the running helper
+// asks this of NEW code before it hands over, so a broken commit never crash-loops.
+if (args["self-test"] === true) {
+  console.log("helper self-test: all modules load");
+  process.exit(0);
+}
 applyGettyFlags(args);
 const config = {
   port: Number(args.port ?? process.env.BRIDGE_PORT ?? DEFAULT_PORT),
@@ -70,7 +100,26 @@ const config = {
   timeoutMs: Number(process.env.BRIDGE_TIMEOUT_MS ?? 60000),
   maxBytes: Number(process.env.BRIDGE_MAX_BYTES ?? 20 * 1024 * 1024),
   ftpMaxBytes: Number(process.env.BRIDGE_FTP_MAX_BYTES ?? 120 * 1024 * 1024),
+  // A Getty batch is up to 100 pairs of files, so its request is far bigger than
+  // one FTPS file; the app also caps a batch's bytes, this is the backstop.
+  gettyMaxBytes: Number(process.env.GETTY_WEB_MAX_BYTES ?? 256 * 1024 * 1024),
   tmpRoot: process.env.BRIDGE_TMP,
+  // A `git pull` under a running helper must not leave the old code in memory: the
+  // helper watches its own files and asks the launcher for a restart in place.
+  updateWatch: args["no-update-watch"] === undefined && process.env.BRIDGE_NO_UPDATE_WATCH !== "1",
+  updateCheckMs: Math.max(200, Number(args["update-check-ms"] ?? process.env.BRIDGE_UPDATE_CHECK_MS ?? 10_000) || 10_000),
+  // An update waits until the watched files stayed the same this long (an edit or a pull in progress).
+  updateQuietMs: Math.max(0, Number(args["update-quiet-ms"] ?? process.env.BRIDGE_UPDATE_QUIET_MS ?? 20_000) || 0),
+  selfTestScript: typeof args["self-test-script"] === "string" ? path.resolve(args["self-test-script"]) : path.join(HERE, "server.mjs"),
+  watchDirs: typeof args["watch-dir"] === "string" ? [path.resolve(args["watch-dir"])] : [HERE],
+  // A pull that changes only the APP cannot wait for someone to press F5: the
+  // helper rebuilds the bundle in place so the open page reloads onto it. The
+  // helper itself does not restart for app code — an upload keeps its window.
+  appWatch: args["no-app-watch"] === undefined && process.env.BRIDGE_NO_APP_WATCH !== "1",
+  appDirs: typeof args["app-dir"] === "string" ? [path.resolve(args["app-dir"])] : appWatchPaths(REPO_ROOT),
+  buildCmd: typeof args["build-cmd"] === "string" ? args["build-cmd"] : (process.env.BRIDGE_BUILD_CMD ?? "npm run build"),
+  buildCwd: typeof args["build-cwd"] === "string" ? path.resolve(args["build-cwd"]) : REPO_ROOT,
+  restarts: Math.max(0, Number(process.env.BRIDGE_RESTARTS ?? 0) || 0),
 };
 
 let queue = Promise.resolve(); // one conversion at a time; the batch is sequential anyway
@@ -91,38 +140,41 @@ function cors(req, res) {
 
 function json(res, status, body) {
   const text = JSON.stringify(body);
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(text) });
+  res.writeHead(status, {
+    "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(text),
+    "cache-control": "no-store",
+  });
   res.end(text);
   return Buffer.byteLength(text);
 }
 
-/** Reads the body up to the limit; null when it is larger (the caller answers 413 and the connection closes). */
+/**
+ * Reads a body up to `limit`; resolves null when it is larger, so the caller can
+ * answer 413. An oversized body is **drained, not aborted**: closing the socket
+ * mid-upload turns the helper's own answer into a network error the browser can
+ * only report as "cannot reach the helper" (what a 209-icon run used to see).
+ */
 function readBody(req, limit) {
-  if (Number(req.headers["content-length"] ?? 0) > limit) return Promise.resolve(null);
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let size = 0;
-    req.on("data", (chunk) => {
-      size += chunk.length;
-      if (size > limit) { req.pause(); resolve(null); return; }
-      chunks.push(chunk);
-    });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
-  });
+  return readUpTo(req, limit, (chunks) => Buffer.concat(chunks).toString("utf8"));
 }
 
 function readBinaryBody(req, limit) {
-  if (Number(req.headers["content-length"] ?? 0) > limit) return Promise.resolve(null);
+  return readUpTo(req, limit, (chunks) => Buffer.concat(chunks));
+}
+
+function readUpTo(req, limit, join) {
+  // A declared length already over the limit still gets read to the end, so the
+  // 413 is a real response the app can show instead of a reset connection.
+  let tooBig = Number(req.headers["content-length"] ?? 0) > limit;
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
     req.on("data", (chunk) => {
       size += chunk.length;
-      if (size > limit) { req.pause(); resolve(null); return; }
+      if (tooBig || size > limit) { tooBig = true; chunks.length = 0; return; }
       chunks.push(chunk);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("end", () => resolve(tooBig ? null : join(chunks)));
     req.on("error", reject);
   });
 }
@@ -131,7 +183,15 @@ function health(res, port) {
   const inkscape = findInkscape(config.inkscape);
   return json(res, 200, {
     ok: inkscape.found, inkscape, ftps: { ready: true }, sftp: { ready: true }, esp: { ready: true },
-    gettyWeb: gettyWebHealth(), port,
+    gettyWeb: gettyWebHealth(), aichat: aichatHealth(), port,
+    // The app can tell a helper that just picked up a new build from one that
+    // needs the window closed by hand.
+    // `served` is the bundle at `/` right now: the open tab compares its own stamp
+    // with this one, so a rebuild it did not ask for ends in a reload, not a stale page.
+    update: {
+      watching: config.updateWatch, commit: readCommit(REPO_ROOT), restarts: config.restarts,
+      served: servedBundle(path.join(config.dist, "index.html")),
+    },
   });
 }
 
@@ -164,13 +224,13 @@ function enqueue(job) {
 async function serveDist(url, res) {
   const rel = url === "/" ? "index.html" : decodeURIComponent(url.slice(1));
   const file = path.resolve(config.dist, rel);
-  if (rel === "index.html" && config.autoBuildDist) {
-    const watch = [path.join(REPO_ROOT, "src"), path.join(REPO_ROOT, "index.html")];
-    if (isDistStale(file, watch)) {
-      console.log("Source files are newer than dist/index.html — rebuilding latest UI (`npm run build`)...");
-      const built = await rebuildDistAsync(REPO_ROOT);
-      if (!built.ok) console.error(`Auto-build failed: ${built.reason}`);
-    }
+  // Only a MISSING bundle is built on request (2026-11-13). A stale one is served
+  // as it is: the app watcher rebuilds it once the change is committed and quiet —
+  // a page load must never build a half-written edit.
+  if (rel === "index.html" && config.autoBuildDist && !existsSync(file)) {
+    console.log(`no built app yet — building it (${config.buildCmd})...`);
+    const built = await buildAppStaged({ cmd: config.buildCmd, cwd: config.buildCwd, dist: config.dist, appDirs: config.appDirs });
+    if (!built.ok) console.error(`Auto-build failed: ${built.reason}`);
   }
   if (!file.startsWith(config.dist + path.sep) || !existsSync(file) || !statSync(file).isFile()) {
     const hint = rel === "index.html" ? `no built app at ${config.dist} — run "npm run build" (or run_app_inkscape.bat) first` : "not found";
@@ -204,14 +264,48 @@ async function route(req, res, port) {
   if (req.method === "POST" && url === "/ftps/upload") return handleFtpsUpload(req, res, config.ftpMaxBytes, json);
   if (req.method === "POST" && url === "/ftps/close") return handleFtpsClose(req, res, json);
   if (req.method === "POST" && url === "/getty-web/upload") {
-    return handleGettyWebUpload(req, res, readBinaryBody, json, config.ftpMaxBytes);
+    return handleGettyWebUpload(req, res, readBinaryBody, json, config.gettyMaxBytes);
   }
   if (req.method === "POST" && url === "/getty-web/test") return handleGettyWebTest(req, res, readBody, json);
   if (req.method === "POST" && url === "/getty-web/finish") return handleGettyWebFinish(req, res, readBody, json);
   if (req.method === "POST" && url === "/getty-web/close") return handleGettyWebClose(req, res, readBody, json);
   if (req.method === "GET" && url === "/getty-web/progress") return handleGettyWebProgress(req, res, json);
+  if (req.method === "POST" && url === "/getty-web/skip-wait") return handleGettyWebSkipWait(req, res, readBody, json);
+  if (req.method === "POST" && url === "/aichat/send") return handleAichatSend(req, res, readBody, json);
+  if (req.method === "GET" && url === "/aichat/progress") return handleAichatProgress(req, res, json);
+  if (req.method === "POST" && url === "/aichat/cancel") return handleAichatCancel(req, res, readBody, json);
+  if (req.method === "POST" && url === "/aichat/close") return handleAichatClose(req, res, readBody, json);
+  if (req.method === "POST" && url === "/open-folder") return handleOpenFolder(req, res, readBody, json);
+  if (req.method === "POST" && url === "/find-folder") return handleFindFolder(req, res, readBody, json);
   if (req.method === "GET") return serveDist(url, res);
   return json(res, 404, { reason: "not found" });
+}
+
+/**
+ * A socket that the user already cancelled can fail long after its request
+ * answered — a `STOR` reply timer that fires after `/ftps/close`, a data channel
+ * that stalls mid-handshake. Node's default is to kill the process for that, which
+ * is how one 30 s timeout ended a whole run. The helper logs the line and keeps
+ * serving instead; the request that owned the socket already has its own failure.
+ */
+installCrashGuards(process, { log: (line) => console.error(`helper: ${line}`) });
+
+/** Requests being served right now: a restart waits for them. */
+let inFlight = 0;
+
+/** True while an upload is moving, seen either as a request or as a live session. */
+function busyWithUpload() {
+  return inFlight > 0 || gettyWebBusy() || aichatBusy();
+}
+
+/** The update watchers (autoupdate.mjs): committed + quiet code only, self-tested, staged builds. */
+function startUpdateWatchers() {
+  const log = (line) => console.log(line);
+  const error = (line) => console.error(line);
+  watchOwnCode({
+    config, repoRoot: REPO_ROOT, busy: busyWithUpload, release: releaseIdleSessions, exit: (code) => process.exit(code), log, error,
+  });
+  watchAppSources({ config, repoRoot: REPO_ROOT, log, error });
 }
 
 function logLine(req, res, started, bytes) {
@@ -219,14 +313,18 @@ function logLine(req, res, started, bytes) {
   console.log(`${new Date().toISOString()} ${req.method} ${(req.url ?? "/").split("?")[0]} → ${res.statusCode} · ${ms} ms · ${bytes} B`);
 }
 
-const server = createServer((req, res) => {
+// The Getty manifest now travels in the body; a generously raised header cap keeps
+// an older app working, and stops Node answering 431 before a route can explain.
+const server = createServer({ maxHeaderSize: 1024 * 1024 }, (req, res) => {
   const started = Date.now();
+  inFlight += 1;
   route(req, res, server.address()?.port ?? config.port)
     .then((bytes) => logLine(req, res, started, bytes ?? 0))
     .catch((error) => {
       if (!res.headersSent) json(res, 500, { reason: `helper error: ${error.message}` });
       logLine(req, res, started, 0);
-    });
+    })
+    .finally(() => { inFlight -= 1; });
 });
 
 let retriedReplace = false;
@@ -253,7 +351,15 @@ function startListening() {
     } else {
       console.log("Getty web browser: throwaway profile — pass --getty-profile <folder> to keep the Getty sign-in between runs");
     }
+    const chat = aichatHealth();
+    console.log(`ChatGPT web generation: ${chat.headed ? "visible" : "hidden"} browser, sign-in kept in ${chat.profile}`);
     console.log(`Local helper listening on http://127.0.0.1:${port}  (loopback only)`);
+    startUpdateWatchers();
+    if (config.updateWatch) {
+      const commit = readCommit(REPO_ROOT);
+      const app = config.appWatch ? "new app code is rebuilt here and the open page reloads itself onto it" : "app code is not watched";
+      console.log(`Update watch: ON — committed changes only: new helper code restarts it here after a self-test; ${app}${commit === null ? "" : ` (now at ${commit})`}`);
+    }
   });
 }
 

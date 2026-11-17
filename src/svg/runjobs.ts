@@ -7,13 +7,16 @@ import { inIdOrder } from "../lib/selectionorder";
 import { redact } from "../lib/svgsecret";
 import { newRunId } from "./journal";
 import { jobStore, parallelLimit, releaseJobRows, sourceKeys, sourcesBusy, type SvgJob, type RunSnapshot } from "./jobstate";
-import { jobEvent, syncForeground } from "./jobprogress";
+import { endedProgress, jobEvent, syncForeground } from "./jobprogress";
 import { runGeneration, message, type RunSummary } from "./runner";
 import { withRunLog } from "./runlog";
 import { summaryLine } from "./runstate";
 import { setQueue, type RunCtx } from "./runcontext";
 import type { QueueItem } from "./runqueue";
 import { notifyCompletion } from "../ui/completionSound";
+import { saveWebChatUrl } from "./webchatstore";
+import { createWebTransport } from "./runweb";
+import type { WebTransport } from "./runtypes";
 
 /** Start every eligible independent job; synchronous leases precede all awaits. */
 export function pumpRuns(c: RunCtx): void {
@@ -48,9 +51,9 @@ async function executeRun(snapshot: RunSnapshot, item: QueueItem, job: SvgJob): 
   try {
     const summary = await runGeneration({ root, apiKey: key, runId: job.id,
       config: { ...c.m.config, imagesPerRequest: item.regen?.kind === "current-svg" ? item.regen.size : c.m.config.imagesPerRequest }, caps: c.m.caps, params: c.m.params,
-      prompt: c.m.prompt, regen: item.regen ?? MAIN_PLAN, promptChoice: item.prompt, regenCodes: item.codes,
+      prompt: c.m.prompt, regen: item.regen ?? MAIN_PLAN, promptChoice: item.prompt, regenCodes: item.codes, attachImage: item.attachImage,
       sources: inIdOrder(c.rows, item.ids, (r) => r.source.id).map((r) => r.source), metas: c.refs.metas,
-      onRequestController: (controller) => { job.requestController = controller; },
+      onRequestController: (controller) => { job.requestController = controller; }, web: webTransportOf(item, (line) => c.say(line)),
       signal: job.controller.signal, onEvent: withRunLog((event) => jobEvent(c, job, event)) });
     job.outcomes = summary.outcomes;
     job.status = summary.cancelled ? "cancelled" : summary.saved === 0 && summary.problems.length > 0 ? "failed" : "finished";
@@ -65,12 +68,26 @@ async function executeRun(snapshot: RunSnapshot, item: QueueItem, job: SvgJob): 
   }
 }
 
+/**
+ * The web transport of a LIVE WEB batch (2026-11-03), else undefined (the API).
+ * Its own copy of the frozen target, so a restarted chat moves only this run —
+ * and the stored setting, which is what the next confirmation shows.
+ */
+export function webTransportOf(item: QueueItem, say: (line: string) => void): WebTransport | undefined {
+  if (item.web === null) return undefined;
+  return createWebTransport(item.web, {
+    onChatUrl: (url) => { saveWebChatUrl(url); say("ChatGPT web: no reply in time — continued in a new chat; its URL is now the saved chat URL"); },
+  });
+}
+
 function finishJob(c: RunCtx, job: SvgJob): void {
   const owned = job.keys.filter((key) => jobStore(c.refs).locks.get(key) === job.id);
   if (job.status !== "finished") dropUncertainWaiters(c, owned);
   // Aborted/exceptional items not delivered by a terminal event must not stay generating.
   c.setRowsFn((rows) => rows.map((row) => row.running && jobStore(c.refs).locks.get(sourceKeys(c, [row.source.id])[0]) === job.id
     ? { ...row, running: false, status: "unknown", error: "Run ended without a confirmed result — not resent" } : row));
+  // Every ended run leaves a bar (cancelled ones too), even one that never reached its first request.
+  job.progress = endedProgress(job);
   // Marked terminal already: sync before waking so no new job inherits this controller.
   syncForeground(c);
   releaseJobRows(c.refs, job, job.keys);

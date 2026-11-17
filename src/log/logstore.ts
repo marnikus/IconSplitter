@@ -12,6 +12,7 @@ import {
   type LogEntry, type LogPayload, type LogSpec,
 } from "../lib/log";
 import { readKey, writeKey } from "../state/safestorage";
+import { registerStorageCompactor } from "../state/storagebudget";
 
 export const LOG_KEY = "iconSplitter.log.v1";
 /** A burst of run events becomes one write; pagehide/unmount flushes the rest. */
@@ -75,6 +76,19 @@ export function flushLog(): void {
   cancelTimer();
   writeKey(LOG_KEY, serializeLog(state));
 }
+
+/** Storage is full: keep (and persist) only the newest entries, so the log cannot refill the quota. */
+const COMPACT_KEEP = 100;
+function compactForStorage(): string | null {
+  if (state.entries.length <= COMPACT_KEEP && readKey(LOG_KEY) === null) return null;
+  cancelTimer();
+  state = { ...state, entries: state.entries.slice(-COMPACT_KEEP) };
+  try { localStorage.removeItem(LOG_KEY); } catch { /* blocked storage */ }
+  writeKey(LOG_KEY, serializeLog(state));
+  notify();
+  return `${LOG_KEY} (kept the newest ${COMPACT_KEEP} entries)`;
+}
+registerStorageCompactor(compactForStorage);
 
 /** Boot and test isolation: re-read storage (a restart, honestly simulated). */
 export function resetLogStore(): void {

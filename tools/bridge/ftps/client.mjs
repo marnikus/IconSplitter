@@ -8,6 +8,7 @@ import { negotiatePassivePort } from "./pasv.mjs";
 import {
   FtpsError, assertSafeCommandToken, assertSafeFileName, createReplyReader, describeSocketError,
 } from "./reply.mjs";
+import { observed } from "../guards.mjs";
 
 function certSha256Of(tlsSocket) {
   const peer = tlsSocket.getPeerCertificate(true);
@@ -141,7 +142,10 @@ export async function openFtpsSession(cfg) {
         const dataTcp = await connectTcp(host, dataPort, timeoutMs);
         onAbortHook?.(() => { dataTcp.destroy(); reader.stream.destroy(); });
 
-        const storPromise = sendCmd(`STOR ${safeName}`);
+        // Started before the data channel's TLS handshake finishes, so its reply
+        // may be refused while that handshake is still running: keep it observed,
+        // or a stall becomes an unhandled rejection that kills the helper.
+        const storPromise = observed(sendCmd(`STOR ${safeName}`));
         let dataStream = dataTcp;
         if (tlsControl) {
           dataStream = await upgradeToTls(dataTcp, host, timeoutMs, tlsControl.getSession());

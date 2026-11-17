@@ -5,6 +5,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { finalizeBatch, gettyCreatedDate } from "../tools/bridge/gettyweb/contribute.mjs";
+import { createWaitControl } from "../tools/bridge/gettyweb/waits.mjs";
 import { gettyWebCreatedDate } from "../src/lib/stockupload/gettyweb";
 import type { CdpConnection } from "../tools/bridge/gettyweb/cdp.mjs";
 
@@ -13,17 +14,28 @@ const META = { title: "Charity hand icon", description: "Open palm holding a hea
 class FakeConnection {
   steps: string[] = [];
   expressions: string[] = [];
+  /** Every CDP method, so a page reload is visible next to the page steps. */
+  calls: string[] = [];
+  /** Methods and page steps in the order they happened, for the ladder's order. */
+  timeline: string[] = [];
   queue: Record<string, unknown[]>;
   constructor(queue: Record<string, unknown[]>) {
     this.queue = queue;
   }
   send(method: string, params: Record<string, unknown>): Promise<unknown> {
-    if (method !== "Runtime.evaluate") return Promise.resolve({});
+    this.calls.push(method);
+    if (method !== "Runtime.evaluate") {
+      this.timeline.push(method);
+      return Promise.resolve({});
+    }
     const expression = String(params.expression);
+    // A reloaded page is usable again: that is what the helper waits for.
+    if (expression.includes("document.readyState")) return Promise.resolve({ result: { value: true } });
     this.expressions.push(expression);
     const tail = expression.slice(expression.lastIndexOf("\n;return ("));
     const name = /\(function (\w+)/.exec(tail)?.[1] ?? "unknown";
     this.steps.push(name);
+    this.timeline.push(name);
     const value = this.queue[name]?.shift() ?? null;
     return Promise.resolve({ result: { value } });
   }
@@ -172,7 +184,8 @@ describe("Getty web automatic finalize", () => {
     });
     expect(result.ok).toBe(true);
     expect(cdp.steps.filter((step) => step === "selectAllContributions")).toHaveLength(2);
-    expect(cdp.steps.filter((step) => step === "saveMetadataEditor")).toHaveLength(3);
+    // drawer, grid, the not-ready card's drawer typed again (2026-11-12), grid again
+    expect(cdp.steps.filter((step) => step === "saveMetadataEditor")).toHaveLength(4);
     if (result.ok) {
       expect(result.report.readiness).toMatchObject({ ok: true, verified: true, notReady: [], resaves: 1 });
       expect(result.report.completion).toMatchObject({ clicked: true });
@@ -188,7 +201,7 @@ describe("Getty web automatic finalize", () => {
     const progress: string[] = [];
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: true,
-      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 20, readyRetryMs: 0, readyTimeoutMs: 100, readyResaves: 1,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 20, readyRetryMs: 0, readyTimeoutMs: 100, readyResaves: 1, readyReloads: 0,
       onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
     });
     expect(result.ok).toBe(false);
@@ -202,6 +215,60 @@ describe("Getty web automatic finalize", () => {
     expect(cdp.steps).not.toContain("completeBatch");
     expect(cdp.steps.filter((step) => step === "selectAllContributions")).toHaveLength(2);
     expect(progress.some((line) => /not ready to submit/.test(line))).toBe(true);
+  });
+
+  it("presses Save metadata again when the grid save left a card not ready", async () => {
+    // Getty flips a card to "Ready to submit" only once its metadata is saved
+    // again. The run must re-save after the retry window and re-check the card —
+    // and it must not click Complete before that card is ready.
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: [{ selected: 1, method: "select-all" }, { selected: 1, method: "select-all" }],
+      saveMetadataEditor: [
+        { saved: true, label: "Save" }, { saved: true, label: "Save metadata" }, { saved: true, label: "Save metadata" },
+      ],
+      readUploadState: [
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] },
+      ],
+      completeBatch: [{ clicked: true, label: "Submit batch" }],
+      confirmCompletion: [{ confirmed: true, label: "Submit", dialog: true }],
+      readCompletionState: [{ submitted: true, canComplete: false }],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // Two grid-wide saves: the bulk one and the retry that flipped the card.
+    expect(cdp.steps.filter((step) => step === "selectAllContributions")).toHaveLength(2);
+    const reselect = cdp.steps.lastIndexOf("readUploadState");
+    expect(cdp.steps.slice(reselect)).toContain("completeBatch");
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, notReady: [], resaves: 1 });
+  });
+
+  it("never clicks Complete while a card still lacks its Ready to submit chip", async () => {
+    const queue = {
+      ...successQueue(),
+      readUploadState: [{ cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] }],
+    };
+    const cdp = connection(queue);
+    const progress: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 5, readyRetryMs: 0, readyTimeoutMs: 40, readyResaves: 1,
+      onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("timeout");
+      expect(result.reason).toContain("Ready to submit");
+      expect(result.reason).toContain("star_01");
+    }
+    expect(cdp.steps).not.toContain("completeBatch");
+    expect(progress.some((line) => /saving the metadata again/.test(line))).toBe(true);
   });
 
   it("keeps the engine and the helper's Date Created identical", () => {
@@ -267,15 +334,21 @@ describe("Getty web automatic finalize", () => {
       ...successQueue(),
       openFileMetadata: [
         { opened: true, method: "card", label: "star_01.jpg" }, { opened: true, method: "card", label: "star_01.jpg" },
+        { opened: true, method: "card", label: "star_01.jpg" }, { opened: true, method: "card", label: "star_01.jpg" },
       ],
-      metadataEditorReady: [{ ready: false, present: true }, { ready: false, present: true }],
+      metadataEditorReady: [
+        { ready: false, present: true }, { ready: false, present: true },
+        { ready: false, present: true }, { ready: false, present: true },
+      ],
     };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
       editorPollMs: 0, editorTimeoutMs: 0, signal: new AbortController().signal,
     });
-    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(2);
+    // Two clicks, then the page is reloaded and the walk starts again.
+    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(4);
+    expect(cdp.calls).toContain("Page.reload");
     expect(cdp.steps).not.toContain("fillMetadataFields");
     if (result.ok) {
       expect(result.report.metadata).toEqual([{ name: "star_01.jpg", status: "editor-not-ready" }]);
@@ -284,9 +357,97 @@ describe("Getty web automatic finalize", () => {
     }
   });
 
+  it("reloads the page when a drawer is still a loading skeleton and starts the files again", async () => {
+    // Getty renders the drawer as MUI skeleton placeholders while the file it
+    // belongs to is still being processed. The run used to step over that file
+    // and carry on, which left the files before it without their Date Created.
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: true, method: "button" }, { opened: true, method: "button" },
+        { opened: true, method: "button" }, { opened: true, method: "button" },
+      ],
+      metadataEditorReady: [
+        { ready: true, present: true }, { ready: false, present: false, skeleton: true },
+        { ready: true, present: true }, { ready: true, present: true },
+      ],
+      fillMetadataFields: [
+        { filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } },
+        { filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } },
+        { filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } },
+      ],
+      saveMetadataEditor: [
+        { saved: true, label: "Save" }, { saved: true, label: "Save" },
+        { saved: true, label: "Save" }, { saved: true, label: "Save metadata" },
+      ],
+      closeMetadataEditor: [{ closed: true }, { closed: true }, { closed: true }],
+      selectAllContributions: [{ selected: 2, method: "select-all" }],
+    };
+    const cdp = connection(queue);
+    const progress: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      complete: false, settleMs: 0, bulkSaveSettleMs: 0,
+      onProgress: (line: string) => progress.push(line), signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // A drawer that is only skeletons is the page's problem, so it is reloaded.
+    expect(cdp.calls).toContain("Page.reload");
+    // …and the walk starts again at the FIRST file instead of the next one.
+    const opened = cdp.expressions.filter((expression) => expression.includes("openFileMetadata"))
+      .map((expression) => /"fileName":"([^"]+)"/.exec(expression)?.[1]);
+    expect(opened).toEqual(["star_01.jpg", "moon_02.jpg", "star_01.jpg", "moon_02.jpg"]);
+    expect(progress.some((line) => /loading skeleton/.test(line))).toBe(true);
+    if (result.ok) {
+      expect(result.report.metadata).toEqual([
+        { name: "star_01.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
+        { name: "moon_02.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
+      ]);
+    }
+  });
+
+  it("skips a file whose card never got its picture instead of reloading for it", async () => {
+    // "Jump over only files that have no thumbnail": there is no drawer to fill
+    // for a card whose bytes never arrived, and reloading cannot create one.
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [{ opened: true, method: "button" }],
+      metadataEditorReady: [{ ready: true, present: true }],
+      fillMetadataFields: [{ filled: { title: true, description: true, keywords: true }, present: { title: true, description: true, keywords: true } }],
+      saveMetadataEditor: [{ saved: true, label: "Save" }, { saved: true, label: "Save metadata" }],
+      closeMetadataEditor: [{ closed: true }],
+      selectAllContributions: [{ selected: 1, method: "select-all" }],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "moon_02.jpg", metadata: META }],
+      uploaded: ["star_01.jpg"], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    expect(cdp.calls).not.toContain("Page.reload");
+    expect(cdp.steps.filter((step) => step === "openFileMetadata")).toHaveLength(1);
+    if (result.ok) {
+      expect(result.report.metadata).toEqual([
+        { name: "star_01.jpg", status: "saved", fields: { title: true, description: true, keywords: true } },
+        { name: "moon_02.jpg", status: "no-thumbnail" },
+      ]);
+    }
+  });
+
   it("reports a drawer that never unlocks instead of claiming the file is ready", async () => {
-    // Both clicks land on a drawer Getty keeps disabled.
-    const queue = { ...successQueue(), metadataEditorReady: [{ ready: false, present: true }, { ready: false, present: true }] };
+    // Both clicks land on a drawer Getty keeps disabled, on both walks.
+    const queue = {
+      ...successQueue(),
+      openFileMetadata: [
+        { opened: true, method: "button" }, { opened: true, method: "button" },
+        { opened: true, method: "button" }, { opened: true, method: "button" },
+      ],
+      metadataEditorReady: [
+        { ready: false, present: true }, { ready: false, present: true },
+        { ready: false, present: true }, { ready: false, present: true },
+      ],
+    };
     const cdp = connection(queue);
     const result = await finalizeBatch(cdp, "page-1", {
       files: [{ name: "star_01.jpg", metadata: META }], complete: false, settleMs: 0, bulkSaveSettleMs: 0,
@@ -336,6 +497,167 @@ describe("Getty web automatic finalize", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.report.metadata[0]).not.toHaveProperty("keywords");
+  });
+
+  it("re-uploads a rejected card instead of giving up on the batch", async () => {
+    // The user's batch had one "Upload failed" card and one card stuck on
+    // not_ready_to_submit; both must go back to the uploader, not be reported as
+    // finished and not end the run on the spot.
+    const queue = {
+      ...successQueue(),
+      // After the re-upload the card is validated: the reading says so.
+      readUploadState: [{ cardsPresent: true, readyToSubmit: ["star_01.jpg", "broken_02.jpg"], awaitingReady: [], failed: [] }],
+    };
+    const cdp = connection(queue);
+    const repaired: string[][] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }, { name: "broken_02.jpg", metadata: META }],
+      failed: ["broken_02.jpg"], complete: true, settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1,
+      repair: async (names: string[]) => { repaired.push(names); return { ok: true }; },
+      signal: new AbortController().signal,
+    });
+    expect(repaired).toEqual([["broken_02.jpg"]]);
+    expect(result.ok).toBe(true);
+    expect(cdp.steps).toContain("completeBatch");
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, notReady: [] });
+  });
+
+  it("keeps refusing when the re-uploaded card stays Upload failed", async () => {
+    const queue = {
+      ...successQueue(),
+      readUploadState: [{ cardsPresent: true, readyToSubmit: [], awaitingReady: [], failed: ["broken_02.jpg"] }],
+    };
+    const cdp = connection(queue);
+    let repairs = 0;
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "broken_02.jpg", metadata: META }],
+      failed: ["broken_02.jpg"], complete: true, settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1,
+      repair: async () => { repairs += 1; return { ok: true }; },
+      signal: new AbortController().signal,
+    });
+    expect(repairs).toBe(1);
+    expect(result).toMatchObject({ ok: false, code: "page" });
+    if (!result.ok) expect(result.reason).toContain("Upload failed");
+    expect(cdp.steps).not.toContain("completeBatch");
+  });
+
+  it("reloads the batch page when a card stays not ready through both re-saves", async () => {
+    // Getty stops re-reading its own validation until the page is loaded again:
+    // the reload is the recovery that turns the card, and it must happen before
+    // the run gives up on the file.
+    const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      readUploadState: [notReady, notReady, notReady, notReady, { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] }],
+    };
+    const cdp = connection(queue);
+    const notes: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0, readyTimeoutMs: 60000,
+      onProgress: (line: string) => notes.push(line),
+      signal: new AbortController().signal,
+    });
+    expect(cdp.calls).toContain("Page.reload");
+    expect(notes.some((line) => /reload/i.test(line))).toBe(true);
+    // The reload is followed by applying the metadata again, then the cards are
+    // read: a fresh page only re-validates a card whose metadata it was given.
+    const afterReload = cdp.timeline.slice(cdp.timeline.lastIndexOf("Page.reload"));
+    expect(afterReload).toContain("selectAllContributions");
+    expect(afterReload).toContain("saveMetadataEditor");
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, notReady: [], resaves: 2 });
+  });
+
+  it("says what the readiness ladder waits for and what it does next; Retry now skips the timer", async () => {
+    // The retry window is a minute: only the skip lets the ladder move on in time.
+    const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      readUploadState: [notReady, notReady, notReady, notReady, { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] }],
+    };
+    const cdp = connection(queue);
+    const waits = createWaitControl();
+    const told: Array<{ next: string; attempt?: number; of?: number; remainingMs: number; skippable: boolean }> = [];
+    const doing: string[] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 60_000, readyTimeoutMs: 600_000, waits,
+      onState: () => {
+        const now = waits.current();
+        if (now?.wait !== undefined) { told.push(now.wait); waits.skip(); }
+        if (now?.activity !== undefined) doing.push(now.activity);
+      },
+      signal: new AbortController().signal,
+    });
+    expect(result.ok).toBe(true);
+    // the first timer is the re-save, the second the page reload — each with its attempt and a counter
+    expect(told[0]).toMatchObject({ attempt: 1, of: 5, skippable: true });
+    expect(told[0].next).toMatch(/Save metadata again/);
+    expect(told[0].remainingMs).toBeGreaterThan(50_000);
+    expect(told.some((w) => /reload the Getty page/.test(w.next) && w.attempt === 2)).toBe(true);
+    expect(cdp.calls).toContain("Page.reload");
+    expect(doing.some((line) => /Reloading the Getty page/.test(line))).toBe(true);
+    expect(waits.current()).toBeNull(); // nothing is left waiting once the gate has answered
+  });
+
+  it("always reloads a stuck batch page at least once before giving up on it", async () => {
+    // The per-batch guarantee: a batch whose cards never turn gets its page
+    // reloaded even when no re-save or re-upload is left in the plan, and only
+    // then is it reported — never silently handed to the next 100-icon batch.
+    const notReady = { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] };
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      readUploadState: [notReady],
+    };
+    const cdp = connection(queue);
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0,
+      readyTimeoutMs: 40, readyResaves: 0, readyRepairs: 0,
+      signal: new AbortController().signal,
+    });
+    expect(cdp.calls.filter((call) => call === "Page.reload").length).toBeGreaterThanOrEqual(1);
+    expect(result).toMatchObject({ ok: false, code: "timeout" });
+    if (!result.ok) expect(result.report.readiness).toMatchObject({ ok: false, resaves: 0, repairs: 0, notReady: ["star_01"] });
+    expect(cdp.steps).not.toContain("completeBatch");
+  });
+
+  it("re-uploads a card that never turns Ready to submit, then finishes", async () => {
+    const queue = {
+      ...successQueue(),
+      selectAllContributions: Array.from({ length: 8 }, () => ({ selected: 1, method: "select-all" })),
+      saveMetadataEditor: Array.from({ length: 8 }, () => ({ saved: true, label: "Save metadata" })),
+      // Two re-saves and two page reloads change nothing; the card only validates
+      // after the re-upload, which is exactly the ladder's last step.
+      readUploadState: [
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: [], awaitingReady: ["star_01.jpg"] },
+        { cardsPresent: true, readyToSubmit: ["star_01.jpg"], awaitingReady: [] },
+      ],
+    };
+    const cdp = connection(queue);
+    const repaired: string[][] = [];
+    const result = await finalizeBatch(cdp, "page-1", {
+      files: [{ name: "star_01.jpg", metadata: META }], complete: true,
+      settleMs: 0, bulkSaveSettleMs: 0, pollMs: 1, readyRetryMs: 0, readyTimeoutMs: 60000,
+      repair: async (names: string[]) => { repaired.push(names); return { ok: true }; },
+      signal: new AbortController().signal,
+    });
+    // The re-saves come first, then the file itself is sent back to Getty.
+    expect(repaired).toEqual([["star_01"]]);
+    expect(cdp.steps.filter((step: string) => step === "selectAllContributions").length).toBeGreaterThan(2);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.report.readiness).toMatchObject({ ok: true, resaves: 2, repairs: 1 });
   });
 
   it("refuses to submit while Getty reports an Upload failed card", async () => {

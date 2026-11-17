@@ -86,7 +86,8 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   `export`) that contain a valid committed `export.json`, and includes only
   output files both recorded in `export.json` and physically present (`size >
   0`) inside that `export` folder. Unrecorded stray files in `export/` and
-  upstream files outside `export/` are never listed. Pinned by
+  upstream files outside `export/` are never listed. An export whose source
+  pair file is found and not approved is hidden ([remove](../svg-remove-row.md#upload)). Pinned by
   `stockupload_discovery` and `stockupload_ui`.
 
 <a id="i-81"></a>
@@ -97,3 +98,36 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition.
   unavailable), never in `localStorage`, `export.json`, presets, or logs, and are
   never expanded or echoed back in the UI after saving. Pinned by
   `stockupload_credvault`, `secret_hygiene`, and `stockupload_ui`.
+
+<a id="i-82"></a>
+* **I-82 (a Getty web run is closed batches of at most 100 uploads, RULE 4/13 —
+  2026-10-30):** one icon is one upload — its JPEG plus its optional matching EPS,
+  listed once by Getty — so a batch holds at most **100 icons** (≤ 200 files),
+  never 200 icons; `GETTY_WEB_MAX_BATCH_ICONS` and the helper's `MAX_ICONS` must
+  agree and the pair is never split across batches. Each batch is uploaded with
+  `newBatch: true` (the helper resets the previous batch id, expected names and
+  counts), then **completed before the next is created**; a refused finish leaves
+  its batch open and claims nothing. An icon with no thumbnail or "Upload failed"
+  is **re-queued, not reported**, for at most two attempts: queued icons fill the
+  remaining room of a later primary batch, leftovers become the run's final
+  `retry` batch(es), and only a terminal outcome writes the row. `auth`,
+  `browser` and `helper-down` stop the run; every unreached icon is reported failed
+  with that reason. A session with a request in flight is never swept by the idle
+  timer. Pinned by `getty_web_chunk`, `stockupload_getty_web`,
+  `getty_web_upload`, `bridge_getty_web` and `getty_web_session`.
+
+<a id="i-83"></a>
+* **I-83 (the Getty web request keeps its per-icon manifest in the body, never a
+  header, RULE 4/7 — 2026-10-30):** `x-getty-web-config` carries settings,
+  credentials and `manifestBytes` only (< 8 KB); the manifest is the **last
+  `manifestBytes` bytes of the body**, after the staged file bytes. `configFromBody` rebuilds
+  the config before validating, an older `icons` header still works, and the
+  helper's own `maxHeaderSize` is 1 MB as defence. Pinned by `getty_web_upload`
+  (header < 8 KB, body > 200 KB) and `bridge_getty_web` (200 KB manifest).
+
+<a id="i-84"></a>
+* **I-84 (a stuck Getty batch page is reloaded before it is written off,
+  2026-10-30):** cards that never turn "Ready to submit" get, per batch and in
+  order, a re-save, a **reload plus re-save** (twice), then a re-upload from the
+  staged copy; a listed card with no picture is that same stall. Pinned by
+  `getty_web_finalize` and `getty_web_batch`.

@@ -187,14 +187,16 @@ describe("SVG-to-upload row selection", () => {
     await key("ArrowDown");
     expect(state()).toEqual({ checked: [], active: COURT, anchor: null });
     await clickRow(ZEN);
-    await search("o"); // court and fog, not the other filenames
-    expect(visibleIds()).toEqual([COURT, FOG]);
+    // Search also matches status words now ("not-exported" holds an "o"), so a
+    // file name narrows the list: only fog stays visible.
+    await search("fog");
+    expect(visibleIds()).toEqual([FOG]);
     await key("ArrowDown"); // active ZEN is hidden: start at the first visible row
-    expect(state()).toEqual({ checked: [], active: COURT, anchor: ZEN });
-    await key("ArrowDown");
+    expect(state()).toEqual({ checked: [], active: FOG, anchor: ZEN });
+    await key("ArrowDown"); // never onto a hidden row
     expect(state()).toEqual({ checked: [], active: FOG, anchor: ZEN });
     await key("ArrowUp");
-    expect(state()).toEqual({ checked: [], active: COURT, anchor: ZEN });
+    expect(state()).toEqual({ checked: [], active: FOG, anchor: ZEN });
   });
 
   it("settings dialog blocks Q/E and arrows; shortcuts resume when it closes", async () => {

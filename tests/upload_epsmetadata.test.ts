@@ -106,3 +106,20 @@ describe("EPS XMP metadata", () => {
     expect(verifyEpsMetadata(second, edited)).toBe(true);
   });
 });
+
+describe("EPS envelope with an Icon Name (2026-11-08)", () => {
+  // The name lives in the UI, the cache and export.json — it is NOT written into the file. The envelope's
+  // identity must therefore not depend on it, or the audit that rebuilds the envelope from the file's own
+  // metadata could never reproduce what was embedded ("EPS metadata envelope is not verified vector-only content").
+  const NAMED: IconMetadata = { ...META, name: "team" };
+
+  it("a named icon's EPS passes the vector-only audit and the metadata readback", () => {
+    const eps = embedXmpMetadataInEps(EPS, NAMED);
+    expect(verifyEpsDocument(eps).errors).toEqual([]);
+    expect(verifyEpsMetadata(eps, NAMED)).toBe(true);
+  });
+
+  it("the file is byte-identical with or without the name, so the name changes nothing on disk", () => {
+    expect(embedXmpMetadataInEps(EPS, NAMED)).toBe(embedXmpMetadataInEps(EPS, META));
+  });
+});

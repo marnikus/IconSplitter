@@ -11,20 +11,23 @@ import { ALL_FILTER, type ViewPair } from "../lib/reviewfilter";
 import { selectIntent } from "../lib/reviewselect";
 import { isNativeListKeyTarget } from "../ui/rowgesture";
 import CompareView from "../selection/CompareView";
-import { copyFolderText } from "../lib/copypath";
+import { locateFolder } from "../ui/locate";
 import { hotTarget, isTextField, runHotAction } from "../selection/hotkeys";
 import StatusFooter from "../selection/StatusFooter";
 import { CorruptNote, Overlays, PairFilesNote, WriteBanner } from "../selection/Surfaces";
 import { useSideThumbs, type SideThumbFor } from "../selection/thumbs";
 import { OpenFolderButton } from "../ui/FolderBar";
 import BulkBar from "./BulkBar";
+import { pairDataRows } from "./getdatarows";
 import FilterGrid from "./FilterGrid";
 import ReviewList from "./ReviewList";
 import SourceBar from "./SourceBar";
 import { useSelectionV2, type SelectionV2Api } from "./useSelectionV2";
+import { useBusyActivity } from "../ui/useBusyActivity";
 
 export default function SelectionV2Panel() {
   const v = useSelectionV2();
+  useBusyActivity("selection", v.core.s.busy);
   const thumbFor = useSideThumbs(v.core.rootRef);
   const [bulkArmed, setBulkArmed] = useState(false);
   useHotkeys(v, !bulkArmed);
@@ -69,10 +72,10 @@ function Body({ v, thumbFor, onBulkArmed }: { v: SelectionV2Api; thumbFor: SideT
       <BulkBar header={v.header} checkedCount={v.checked.length} affectedCount={v.affected.length}
         blockedCount={v.blockedCount} hiddenCount={v.hiddenCount} visibleCount={v.core.visible.length}
         thumb={v.prefs.thumbHeight}
-        onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckVisible())} onSelectVisible={v.checkVisible}
+        onToggleAll={(on) => (on ? v.checkVisible() : v.uncheckVisible())} onSelectVisible={v.checkVisible} onInvert={v.invertVisible}
         onDeselectAll={v.uncheckAll} onThumb={v.setThumb}
         onDecide={(d) => v.core.decideBulk(v.affected, d)} onReset={() => v.core.resetBulk(v.affected)}
-        onArmedChange={onBulkArmed} />
+        onArmedChange={onBulkArmed} getData={() => pairDataRows(v.core.s.pairs, v.checked)} />
       <ReviewList rows={v.core.visible} total={v.core.s.pairs.length} activeId={v.core.s.selectedId}
         checked={v.checked} thumb={v.prefs.thumbHeight} autoNext={v.core.s.autoNext} thumbFor={thumbFor}
         setAutoNext={(on) => v.core.patch({ autoNext: on })} onRowClick={(id, mods) => v.selectRow(id, selectIntent(mods))}
@@ -83,7 +86,7 @@ function Body({ v, thumbFor, onBulkArmed }: { v: SelectionV2Api; thumbFor: SideT
 }
 
 function openSide(v: SelectionV2Api, relPath: string): void {
-  void copyFolderText(v.core.rootRef.current, relPath, v.core.say);
+  void locateFolder(v.core.rootRef.current, relPath, v.core.say);
 }
 
 function CompareBody({ v }: { v: SelectionV2Api }) {

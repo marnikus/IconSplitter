@@ -2,7 +2,7 @@
 
 Jump to a domain; validate everything read from storage (RULE 13). Image-edit keys carry metadata only, never image bytes or prompts.
 
-**Detail pages:** [Generate SVG and image edits](storage/svg.md) · [SVG to upload](storage/upload.md).
+**Detail pages:** [Generate SVG and image edits](storage/svg.md) · [SVG to upload](storage/upload.md) · [SVG builder](storage/svg-builder.md).
 
 ## Batch and sheets
 
@@ -30,8 +30,28 @@ Jump to a domain; validate everything read from storage (RULE 13). Image-edit ke
 |---|---|---|
 | IndexedDB `iconSplitter/rootpaths` | the picked folders' real full paths, records `[{ handle, path, how }]` — one per folder HANDLE (I-63) | normalised + validated on write and read (I-29/I-39); identity is `isSameEntry`, never the name; capped at 20; never leaves the browser. The old name-keyed `localStorage iconSplitter.rootpaths.v1` is **never read** (a guess may not survive as data, I-59) |
 | localStorage `iconSplitter.log.v1` | the global activity log: `{ v, max, minimized, entries }` | validated + re-sanitised on read; foreign version or corrupt JSON → the default state (I-25); cap 50–1000 governs display and storage; no key, header, data URL or payload may enter it (I-24) |
+| localStorage `iconSplitter.session.v1` | the restart snapshot: last tab, the review view, the sheet options and each list tab's **checked ids** + active id + anchor (`svg`, `upload`, `builder`, `stockUpload`, `batch`, `v2`) | validated field by field on read (`lib/session`, RULE 13); a selection change is written in the same task, everything else after 250 ms; the write is read back and retried once (`state/sessionstore.ts`); a page never overwrites a snapshot another page stamped after its own last selection change (`lib/sessionorder`) |
 
 Original Selection tab removal: stored `tab: "selection"` is read as
 `selectionV2`; the existing `selection` session view slice remains V2's filter,
 sort, active row and comparison state. Obsolete `collapsed` state is dropped.
 No session schema/key, shared root handle or pair-sidecar deletion is performed.
+
+## Stock Upload
+
+| Where | What | Rules |
+|---|---|---|
+| localStorage `iconSplitter.stockUpload.batches.v1` | bounded (200 records), validated per-target upload-run history: stock/run IDs and name snapshot, timestamp, success/failure counts, cancellation flag, optional upload note (max 1000 characters), relative file paths, and captured full paths when known | append-only run records, except **Remove unsuccessful uploads**, which takes refused items' files out of one stock's runs and adds them to the failed count; old rows without notes remain valid; successful file entries only; no credentials or image bytes; a full path is built only from the exact path captured for that root handle, otherwise only the relative path is retained |
+
+## SVG builder
+
+| Where | What | Rules |
+|---|---|---|
+| `iconSplitter.svgBuilder.config.v1` | validated sheet config | one owner: `src/svgBuilder/configstore.ts` |
+| `iconSplitter.svgBuilder.prefs.v1` | zoom, card open state, thumb size | display-only, validated |
+| `iconSplitter.svgBuilder.prompt.v1` / `.prompts.v1` | sheet prompt and presets | no key or image bytes |
+| `iconSplitter.svgBuilder.listView.v1` | library query/category/sort | display-only, validated |
+| IndexedDB `iconSplitter/handles["__svgBuilder__"]` | builder root | falls back to older roots; permission re-requested |
+| shared Gemini config + key vault | endpoint/model/limits and API key | no second builder key store; masked, redacted, local |
+
+See [the builder storage page](storage/svg-builder.md) for the full contract.

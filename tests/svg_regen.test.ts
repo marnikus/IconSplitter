@@ -89,16 +89,24 @@ describe("requestSizeFor — one icon per request in the current-SVG mode", () =
   });
 });
 
-describe("currentSvgPrompt — the saved prompt, the icon's name, then the code", () => {
+describe("currentSvgPrompt — the icon's name, its code, then the saved prompt at the bottom", () => {
   const code = "<svg viewBox=\"0 0 24 24\"><path d=\"M2 2h20\"/></svg>";
 
-  it("carries the trimmed prompt, the name line and the SVG code verbatim, in that order", () => {
+  it("puts the name line first, the SVG code verbatim next, and the trimmed prompt last (2026-11-05)", () => {
     const text = currentSvgPrompt("  Make it bolder.  ", "icon-1_AI", code);
     const at = (s: string) => text.indexOf(s);
-    expect(text.startsWith("Make it bolder.")).toBe(true);
-    expect(at("Icon name (use it as the SVG <title>): icon-1_AI")).toBeGreaterThan(at("Make it bolder."));
+    expect(text.startsWith("Icon name (use it as the SVG <title>): icon-1_AI")).toBe(true);
     expect(at(code)).toBeGreaterThan(at("Icon name (use it as the SVG <title>): icon-1_AI"));
-    expect(text.endsWith(code)).toBe(true);
+    expect(at("Regenerate it from the attached image following these instructions:")).toBeGreaterThan(at(code));
+    expect(text.endsWith("Make it bolder.")).toBe(true);
+    expect(text).not.toContain("instructions above");
+  });
+
+  it("never mentions an attached image when none is sent", () => {
+    const text = currentSvgPrompt("Make it bolder.", "icon-1_AI", code, false);
+    expect(text).not.toContain("attached image");
+    expect(text).toContain("no image is attached");
+    expect(text.endsWith("Make it bolder.")).toBe(true);
   });
 });
 

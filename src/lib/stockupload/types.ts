@@ -29,11 +29,17 @@ export interface StockFtpPreset {
   timeoutMs: number;
 }
 
+export interface StockTargetOptions {
+  formats: StockFormatFlags;
+  combineTitleDescription: boolean;
+}
+
 export interface StockPresetState {
   v: 1 | 2 | 3;
   presets: StockFtpPreset[];
   activePresetId: string;
   checkedTargets: string[];
+  targetOptions?: Record<string, StockTargetOptions>;
   formats: StockFormatFlags;
 }
 
@@ -60,6 +66,12 @@ export interface ExportedItem {
   record: ExportRecord;
   files: ExportedFiles;
   missingRecorded: string[];
+  /**
+   * The source item's pair file under the scanned folder (its approval lives
+   * there), or null when it is not under this folder — e.g. an export folder
+   * picked on its own. Absent when the scan did not look (2026-11-06).
+   */
+  source?: { id: string; metaPath: string } | null;
 }
 
 export type StockUploadOutcome = "uploaded" | "partial" | "failed" | "interrupted";

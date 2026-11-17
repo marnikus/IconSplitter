@@ -1,12 +1,19 @@
 // StockUploadControls.tsx — top controls of the "Upload" tab: Open folder +
-// full root path, Rescan, counts, StockFtpPanel, and general Badge / Sort bar.
+// full root path, Rescan, counts, grouped StockFtpPanel, and Find & filter bar.
 
-import type { UploadFormatKey } from "../lib/stockupload/types";
+
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
 import StockFtpPanel from "./StockFtpPanel";
-import type { StockUploadSort } from "./rowlist";
+import type { StockListFilter, StockUploadSort } from "./rowlist";
 import { stockAuditLine } from "./scan";
 import type { StockUploadApi } from "./useStockUpload";
+import SearchField from "../ui/SearchField";
+import MultiSelect from "../ui/MultiSelect";
+import { badgeFilterOptions } from "../upload/UploadRowBadgeFilter";
+
+const FORMAT_OPTS: [string, string][] = [
+  ["all", "Any format"], ["raster", "Has JPEG/PNG"], ["svg", "Has SVG"], ["eps", "Has EPS"], ["zip", "ZIP available"],
+];
 
 export default function StockUploadControls({ g }: { g: StockUploadApi }) {
   return (
@@ -59,11 +66,14 @@ function SourceBar({ g }: { g: StockUploadApi }) {
 
 function FilterBar({ g }: { g: StockUploadApi }) {
   return (
-    <div className="svg-toolbar" data-testid="stock-filters">
-      <SearchAndFormatFilters g={g} />
-      <BadgeFilterControl g={g} />
-      <SortAndResetControls g={g} />
-    </div>
+    <fieldset className="stock-filter-section" data-testid="stock-filters">
+      <legend>Find &amp; filter</legend>
+      <div className="stock-filter-grid">
+        <SearchAndFormatFilters g={g} />
+        <BadgeFilterControl g={g} />
+        <SortAndResetControls g={g} />
+      </div>
+    </fieldset>
   );
 }
 
@@ -71,23 +81,10 @@ function SearchAndFormatFilters({ g }: { g: StockUploadApi }) {
   const f = g.model.filter;
   return (
     <>
-      <label className="svg-field">
-        <span className="svg-label">Search</span>
-        <input className="svg-input" type="search" placeholder="Name, folder, title, tag…"
-          data-testid="stock-filter-search" value={f.search}
-          onChange={(e) => g.setFilter({ search: e.target.value })} />
-      </label>
-      <label className="svg-field">
-        <span className="svg-label">Format present</span>
-        <select className="svg-input" data-testid="stock-filter-format" value={f.format}
-          onChange={(e) => g.setFilter({ format: e.target.value as "all" | UploadFormatKey })}>
-          <option value="all">Any format</option>
-          <option value="raster">Has JPEG/PNG</option>
-          <option value="svg">Has SVG</option>
-          <option value="eps">Has EPS</option>
-          <option value="zip">ZIP available</option>
-        </select>
-      </label>
+      <SearchField testid="stock-filter-search" value={f.search} placeholder="Name, folder, title, tag or status…"
+        onChange={(search) => g.setFilter({ search })} />
+      <MultiSelect label="Format present" testid="stock-filter-format" value={f.format}
+        options={FORMAT_OPTS} onChange={(format) => g.setFilter({ format: format as StockListFilter["format"] })} />
     </>
   );
 }
@@ -95,16 +92,8 @@ function SearchAndFormatFilters({ g }: { g: StockUploadApi }) {
 function BadgeFilterControl({ g }: { g: StockUploadApi }) {
   return (
     <>
-      <label className="svg-field">
-        <span className="svg-label">Badge</span>
-        <select className="svg-input" data-testid="stock-filter-badge" aria-label="Badge" value={g.model.filter.badge}
-          onChange={(e) => g.setFilter({ badge: e.target.value })}>
-          <option value="all">All badges</option>
-          <option value="none">No badges</option>
-          <option value="any">Any badge</option>
-          {g.rowBadges.catalog.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </select>
-      </label>
+      <MultiSelect label="Badge" testid="stock-filter-badge" value={g.model.filter.badge}
+        options={badgeFilterOptions(g.rowBadges.catalog)} onChange={(badge) => g.setFilter({ badge })} />
       <button type="button" className="svg-btn" data-testid="stock-rowbadges-open" onClick={g.openRowBadges}>
         Badges…
       </button>

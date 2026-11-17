@@ -123,27 +123,23 @@ function fileStem(name) {
 
 const CARD_NAME = '[data-cy="contribution-file-name"]';
 /**
- * Getty's own validation icon is the ONLY proof that a file may be submitted: the
+ * Getty's own validation icon is the ONLY proof that a file was uploaded: the
  * captured page renders a `pending-icon` labelled "Ready to submit" once the
- * metadata is saved, and a `not-ready-icon` before that. A thumbnail says Getty
- * took the bytes; it never says the contribution passed validation.
+ * metadata is saved, and a `not-ready-icon` before that. A thumbnail says nothing
+ * — the page draws one for files it later rejects.
  */
 const CARD_READY = '[data-cy="pending-icon"][aria-label="Ready to submit"], [aria-label="Ready to submit"]';
 const CARD_PROCESSING = '[data-cy="not-ready-icon"], [aria-label="not_ready_to_submit"]';
-// The captured batch page shows "Upload failed" instead of a picture, and a
-// successful contribution renders its thumbnail. That picture, not the arrival of
-// the row, is the proof that Getty accepted the file.
+// Getty rejects a contribution by replacing its card with "Upload failed"; that
+// node (and its text) is the only other terminal state a card can show.
 const CARD_FAILED = /upload failed|failed to upload|upload error/i;
 // The captured page marks a rejected contribution with this node, whose text is
 // "Upload failed"; the text alone is also matched, for a layout that drops it.
 const CARD_FAILED_NODE = '[data-cy="invalid-file-media"], [data-cy*="invalid-file"], [data-cy*="upload-failed"]';
+// Getty renders the contribution's own picture once the bytes are in. That is
+// what starts the metadata step; the "Ready to submit" chip (below) is what ends
+// the run, and it only appears after the metadata is saved.
 const CARD_THUMBNAIL = '[data-cy="image-thumbnail"], [data-cy="image-card"] img, img';
-
-/** The contribution id Getty prints under a name (`ID: FSPID51446`). */
-function cardIdOf(scope) {
-  const match = /ID:\s*([A-Za-z0-9_-]{3,})/.exec(textOf(scope));
-  return match ? match[1] : null;
-}
 
 /** A real picture in the card: a loaded/remote/embedded image, not a placeholder. */
 function cardHasThumbnail(scope) {
@@ -151,6 +147,12 @@ function cardHasThumbnail(scope) {
   if (!img) return false;
   const src = String(img.currentSrc || img.getAttribute("src") || "");
   return img.naturalWidth > 0 || /^(https?:|data:|blob:)/.test(src);
+}
+
+/** The contribution id Getty prints under a name (`ID: FSPID51446`). */
+function cardIdOf(scope) {
+  const match = /ID:\s*([A-Za-z0-9_-]{3,})/.exec(textOf(scope));
+  return match ? match[1] : null;
 }
 
 /** One entry per contribution card the batch page lists, with what it shows. */
@@ -181,14 +183,15 @@ function mentionsStem(text, stem) {
 
 /**
  * How one file of this call stands right now: not on the page yet, failed on
- * Getty's side, uploaded (its card shows a picture) or still processing.
+ * Getty's side, uploaded (Getty rendered its picture, or already validated it) or
+ * still processing. The picture is what lets the metadata step start at once —
+ * waiting for the validation chip there would deadlock, because Getty only shows
+ * that chip **after** the metadata is saved.
  */
 function fileStatus(cards, name) {
   const card = cards.find((entry) => entry.stem === fileStem(name)) ?? null;
   if (!card) return "pending";
   if (card.failed) return "failed";
-  // Getty's own "Ready to submit" validation means the bytes arrived and were
-  // processed, so a validated card counts even before its picture renders.
   return card.thumbnail || card.ready ? "uploaded" : "processing";
 }
 
@@ -398,17 +401,19 @@ export function submitBatchCreation() {
 }
 
 /**
- * What the batch page shows for the files just handed to it. A contribution
- * counts as uploaded the moment its card is listed, even while Getty is still
- * processing it (`processing`), because the bytes are already on Getty's side.
+ * What the batch page shows for the files just handed to it. `uploaded` means
+ * the file arrived (a picture, or a card Getty already validated) and is what the
+ * metadata step waits for; `readyToSubmit` means Getty validated it and is the
+ * only thing that may finish a run.
  */
 export function readUploadState({ names }) {
   const body = textOf(document.body).slice(0, 200000);
   const wanted = Array.isArray(names) ? names.filter((n) => typeof n === "string" && n !== "") : [];
   const cards = uploadCards();
   const lower = body.toLowerCase();
-  // A page without cards (older layout) has no thumbnail to check: a name in the
-  // text is all the proof there is, so it keeps the old "listed means uploaded".
+  // A page without cards (older layout) has neither a picture nor a chip to read,
+  // so a name in the text is all there is: it proves the row is listed, and
+  // readiness is then reported as unverified instead of guessed.
   const statusOf = (name) => (cards.length > 0
     ? fileStatus(cards, name)
     : (mentionsStem(lower, fileStem(name)) ? "uploaded" : "pending"));
@@ -430,13 +435,13 @@ export function readUploadState({ names }) {
     url: location.href,
     namesSeen: wanted.filter(listed),
     missing: wanted.filter((name) => !listed(name)),
-    /** Names whose card shows a picture: Getty took them, and the app may say so. */
+    /** Names whose card shows a picture (or a validated chip): the bytes are in. */
     uploaded: byStatus("uploaded"),
     /** Names Getty answered with "Upload failed" — never counted as uploaded. */
     failed: byStatus("failed"),
-    /** Listed, no picture yet: recognition or the thumbnail is still coming. */
+    /** Listed, no "Ready to submit" icon yet: Getty is still ingesting it. */
     processingNames: byStatus("processing"),
-    /** Names whose card shows Getty's "Ready to submit" validation icon. */
+    /** Names Getty validated — the only proof a run is finished. */
     readyToSubmit: wanted.filter(readyName),
     /** Uploaded, not rejected, but still without that icon — not submittable yet. */
     awaitingReady: wanted.filter(awaitingName),
@@ -524,7 +529,10 @@ export function metadataEditorReady() {
   const fields = [...(form ?? document).querySelectorAll("input, textarea, [contenteditable=true]")].filter(shown);
   const present = fields.length > 0;
   const editable = fields.some((el) => !el.disabled && !el.readOnly && seenField(el));
-  return { ready: present && editable, present };
+  // Getty paints the drawer as MUI skeleton bars while it still fetches the
+  // file's data; nothing can be typed into that, and no poll window helps.
+  const loading = document.querySelector('[data-cy="metadata-skeleton"]') !== null;
+  return { ready: present && editable, present, skeleton: loading && !editable };
 }
 
 /** One of the drawer fields the run fills (title, caption, date, keywords). */
@@ -743,8 +751,8 @@ export const PAGE_PRELUDE = [
   + `\nconst CARD_READY = ${JSON.stringify(CARD_READY)};`
   + `\nconst CARD_PROCESSING = ${JSON.stringify(CARD_PROCESSING)};`
   + `\nconst CARD_FAILED = ${CARD_FAILED.toString()};`
-  + `\nconst CARD_THUMBNAIL = ${JSON.stringify(CARD_THUMBNAIL)};`
   + `\nconst CARD_FAILED_NODE = ${JSON.stringify(CARD_FAILED_NODE)};`
+  + `\nconst CARD_THUMBNAIL = ${JSON.stringify(CARD_THUMBNAIL)};`
   + `\nconst COMPLETE_LABEL = ${COMPLETE_LABEL.toString()};`
   + `\n${usable.toString()}`;
 

@@ -1042,6 +1042,26 @@
 .svg-scope-copy { color: var(--v2-muted); font-size: 10px; }
 .svg-divider { width: 1px; height: 25px; background: var(--v2-line); }
 
+/* The general .svg-input is full-width for form fields. Keep the count picker
+   compact and inline in the bulk bar rather than letting it push controls down. */
+.svg-toolbar.svg-random-select {
+  width: auto;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.svg-random-select > .svg-input {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  flex: 0 0 72px;
+  padding: 0 7px;
+  text-align: center;
+}
+.svg-random-select > .svg-btn { min-height: 30px; padding: 6px 10px; }
+.svg-random-select > .svg-scope-copy { white-space: nowrap; }
+
 .svg-zoom { display: flex; align-items: center; gap: 8px; color: var(--v2-muted); font-size: 10px; }
 .svg-zoom label { font-weight: 700; letter-spacing: 0.08em; }
 .svg-zoom input[type="range"] { width: 126px; accent-color: var(--v2-purple); }
@@ -1084,16 +1104,38 @@
 .svg-progress-text { display: grid; gap: 2px; min-width: 0; }
 .svg-progress-text strong { font-size: 11px; color: var(--v2-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .svg-progress-text strong.success { color: #7ee3b6; }
+.svg-progress-text strong.error { color: #ff9aa5; }
 .svg-progress-file { color: var(--v2-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .svg-progress-center { display: grid; gap: 4px; }
 .svg-progress-track { height: 6px; border-radius: 999px; background: #1e293b; overflow: hidden; }
 .svg-progress-fill { height: 100%; background: #745cff; transition: width 0.3s; }
+/* An activity with no count yet: a sliding segment says "working", never a fake %. */
+.svg-progress-track.indeterminate .svg-progress-fill, .batch-progress-track.indeterminate .batch-progress-fill {
+  width: 35%; animation: progress-indeterminate 1.2s ease-in-out infinite;
+}
+@keyframes progress-indeterminate { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) {
+  .svg-progress-track.indeterminate .svg-progress-fill, .batch-progress-track.indeterminate .batch-progress-fill { animation: none; width: 100%; opacity: 0.5; }
+}
 .svg-progress-header.complete .svg-progress-fill { background: #32d68b; }
+/* A run that lost files is never green: red track, red title, red percent. */
+.svg-progress-header.failed { background: #1c1418; }
+.svg-progress-header.failed .svg-progress-fill { background: #f0596a; }
+.svg-progress-header.failed .svg-progress-percent { color: #ff9aa5; }
+.svg-progress-header.failed .svg-progress-check { background: #3a1720; color: #ff9aa5; }
 .svg-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
+/* "N new files registered": what the run produced, not only what is left. */
+.svg-progress-stats .svg-progress-note { color: #7ee3b6; white-space: nowrap; }
 .svg-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 .svg-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
 .svg-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }
 .svg-progress-close:hover { color: var(--v2-text); }
+/* One bar on top (2026-11-09): the others stay mounted but hidden; ▲/▼ + a note on the main one. */
+.process-progress-header[hidden] { display: none; }
+.bar-stack-arrows { display: inline-flex; flex-direction: column; gap: 0; }
+.bar-stack-arrow { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; font-size: 8px; line-height: 10px; padding: 0 4px; }
+.bar-stack-arrow:hover { color: var(--v2-text); }
+.bar-stack-note { color: var(--v2-purple-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .batch-progress-header {
   display: grid;
   grid-template-columns: 260px 1fr 180px;
@@ -1119,6 +1161,7 @@
 .batch-progress-fill { height: 100%; background: #32d68b; transition: width 0.3s; }
 .batch-progress-header.complete .batch-progress-fill { background: #32d68b; }
 .batch-progress-stats { display: flex; gap: 12px; color: var(--v2-muted); font-size: 10px; }
+.batch-progress-stats .batch-progress-note { color: #7ee3b6; white-space: nowrap; }
 .batch-progress-right { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
 .batch-progress-percent { color: var(--v2-muted); font-variant-numeric: tabular-nums; }
 .batch-progress-close { border: 0; background: transparent; color: var(--v2-muted); cursor: pointer; padding: 4px; }
@@ -1374,7 +1417,14 @@
 
 .svg-row.declined::after { background: var(--v2-red); }
 .svg-row.needs-review::after { background: var(--v2-yellow); }
+/* Regenerate marks (2026-11-06): orange = shapes overlap, cyan = wrong geometry. */
+.svg-row.regen-overlaps::after, .svg-row.regen-geometry::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 2px; }
+.svg-row.regen-overlaps::after { background: #ff9f43; }
+.svg-row.regen-geometry::after { background: #39c5e6; }
+.svg-badge.regen-overlaps, .svg-btn.regen-overlaps { color: #ff9f43; background: #3d2814; border-color: #6e4721; }
+.svg-badge.regen-geometry, .svg-btn.regen-geometry { color: #39c5e6; background: #12313a; border-color: #215967; }
 .svg-check { width: 15px; height: 15px; accent-color: var(--v2-purple); }
+.svg-web-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 
 .svg-preview-frame {
   border-radius: 5px;
@@ -1668,6 +1718,40 @@
 .svg-history tr.failed td { color: var(--v2-red); }
 
 .svg-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+.stock-history-modal { width: min(900px, 94vw); }
+.stock-history-picker { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--v2-line); font-size: 10px; }
+.stock-history-picker .svg-input { width: min(320px, 70vw); }
+.stock-history-batches { max-height: 190px; overflow: auto; border-bottom: 1px solid var(--v2-line); }
+.stock-history-batch { width: 100%; min-height: 46px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(90px, 1fr) auto; align-items: center; gap: 12px; padding: 6px 16px; border: 0; border-bottom: 1px solid #192138; background: transparent; color: var(--v2-text); text-align: left; cursor: pointer; }
+.stock-history-batch:hover, .stock-history-batch.active { background: #151e34; }
+.stock-history-batch strong, .stock-history-batch small { display: block; }
+.stock-history-batch strong { font-size: 10px; }
+.stock-history-batch small, .stock-history-note, .stock-history-outcome, .stock-history-detail header > span { color: var(--v2-muted-2); font-size: 9px; }
+.stock-history-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-history-empty { padding: 14px 16px; }
+.stock-history-detail { padding: 10px 16px 16px; }
+.stock-history-detail > header { display: flex; align-items: center; gap: 12px; min-height: 32px; margin-bottom: 5px; font-size: 10px; }
+.stock-history-detail > header .svg-btn { margin-left: auto; }
+.stock-history-copy-status { display: block; min-height: 18px; color: var(--v2-muted-2); font-size: 9px; }
+.stock-history-files { max-height: 44vh; overflow: auto; border: 1px solid var(--v2-line); border-radius: 5px; }
+.stock-history-file { min-height: 30px; display: grid; grid-template-columns: 28px minmax(120px, 220px) minmax(100px, 1fr) auto; align-items: center; gap: 7px; padding: 2px 6px; border-bottom: 1px solid #192138; font-size: 9px; }
+.stock-history-file:last-child { border-bottom: 0; }
+.stock-history-thumb { width: 24px; height: 24px; display: grid; place-items: center; overflow: hidden; border: 1px solid var(--v2-line); border-radius: 3px; padding: 0; background: #080c16; color: var(--v2-muted-2); cursor: zoom-in; font-size: 7px; }
+.stock-history-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.stock-history-hover-preview { position: fixed; z-index: 23; max-width: min(240px, 70vw); max-height: 200px; padding: 5px; border: 1px solid var(--v2-line-strong); border-radius: 5px; background: #080c16; box-shadow: 0 8px 28px #000a; pointer-events: none; }
+.stock-history-hover-preview img { display: block; width: auto; height: auto; max-width: min(220px, 68vw); max-height: 180px; object-fit: contain; }
+.stock-history-file-name, .stock-history-file-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-history-file-path { color: var(--v2-muted-2); }
+.stock-history-preview-backdrop { z-index: 22; }
+.stock-history-preview-modal { width: min(760px, 92vw); }
+.stock-history-large-preview { min-height: 240px; display: grid; place-items: center; padding: 20px; }
+.stock-history-large-preview img { width: auto; height: auto; max-width: 100%; max-height: 68vh; object-fit: contain; background: #080c16; }
+.stock-history-large-preview p { color: var(--v2-muted-2); font-size: 11px; }
+.stock-upload-confirm-note-field { display: grid; gap: 5px; padding: 0 16px 14px; }
+.stock-upload-confirm-note-field label { display: flex; align-items: baseline; gap: 7px; color: var(--v2-text); font-size: 10px; }
+.stock-upload-confirm-note-field label span { color: var(--v2-muted-2); font-size: 8px; }
+.stock-upload-confirm-note-field .svg-input { width: 100%; min-height: 52px; resize: vertical; }
 
 .svg-toast {
   position: fixed;
@@ -2090,3 +2174,321 @@
 .stock-test-banner.err { background: rgba(255, 92, 92, 0.14); border-color: rgba(255, 92, 92, 0.55); color: #ff8585; }
 .stock-test-banner.busy { background: rgba(94, 158, 255, 0.14); border-color: rgba(94, 158, 255, 0.45); color: #9cc4ff; }
 
+/* A row preview waiting to come near (ui/LazyPreview): same size, deliberately quiet. */
+.lazy-preview { display: inline-block; flex: none; border-radius: 6px; background: rgba(127, 127, 127, 0.08); }
+
+/* Multi-choice filter dropdown (ui/MultiSelect, 2026-11-06). */
+.multi-select { position: relative; }
+.multi-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; text-align: left; cursor: pointer; }
+.multi-select-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multi-select-menu {
+  position: absolute; z-index: 60; top: 100%; left: 0; min-width: 100%; margin-top: 4px; padding: 4px;
+  max-height: 320px; overflow: auto; background: var(--v2-surface); border: 1px solid var(--v2-line);
+  border-radius: 8px; box-shadow: 0 10px 24px rgb(0 0 0 / 45%);
+}
+.multi-select-option { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; white-space: nowrap; color: var(--v2-text); font-size: 13px; cursor: pointer; }
+.multi-select-option:hover { background: #1d1944; }
+.multi-select-option.all { border-bottom: 1px solid var(--v2-line); border-radius: 6px 6px 0 0; margin-bottom: 2px; }
+.multi-select-option input { accent-color: var(--v2-purple); }
+
+/* Full-screen SVG edit mode (svg/pathedit, 2026-11-06): every control outside the artboard. */
+.svg-edit-modal { position: fixed; inset: 0; z-index: 1000; background: rgb(5 8 18 / 94%); display: flex; }
+.svg-edit-surface { position: relative; flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; min-height: 0; }
+.svg-edit-toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px;
+  background: var(--v2-surface); border: 1px solid var(--v2-line);
+}
+.svg-edit-position { color: var(--v2-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svg-edit-spacer { flex: 1; }
+.svg-edit-cutnote { color: var(--v2-muted); font-size: 12px; white-space: nowrap; }
+.svg-edit-cancel { background: none; border: 0; color: var(--v2-text); font-size: 12px; text-decoration: underline; cursor: pointer; padding: 2px 4px; }
+.svg-edit-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 14px; }
+/* a 72 px pasteboard ring (a spread shadow: it paints UNDER the art, so lines beyond the border show on it) round the artboard (2026-11-10) */
+.svg-edit-board { position: relative; background: #fff; border-radius: 4px; box-shadow: 0 0 0 72px #858b99; }
+.svg-edit-board.contrast { outline: 1px solid #8aa0c8; } /* a dark background keeps black artwork findable */
+/* the board paints the chosen PREVIEW BG: the preview's own transparency checkerboard must not cover it */
+.svg-edit-board .svg-preview { background: none; }
+.svg-preview.editing { cursor: crosshair; touch-action: none; user-select: none; overflow: visible; }
+.svg-edit-arrow {
+  width: 44px; height: 88px; border-radius: 10px; border: 1px solid var(--v2-line); background: var(--v2-surface);
+  color: var(--v2-text); font-size: 34px; line-height: 1; cursor: pointer;
+}
+.svg-edit-arrow:disabled { opacity: 0.3; cursor: default; }
+.svg-edit-hint {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); margin: 0; padding: 4px 10px; border-radius: 6px;
+  background: rgb(12 18 34 / 88%); color: var(--v2-text); font-size: 12px; pointer-events: none; white-space: nowrap;
+}
+.svg-edit-legend {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 14px; padding: 8px 12px;
+  border-radius: 8px; background: var(--v2-surface); border: 1px solid var(--v2-line); font-size: 12px; color: var(--v2-text);
+}
+.svg-edit-key { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+.svg-edit-key-icon { width: 16px; text-align: center; color: #8fb8ff; }
+.svg-edit-key kbd {
+  padding: 1px 6px; border-radius: 4px; border: 1px solid var(--v2-line); background: #0f1830; font-family: inherit; font-size: 11px; color: #cfe0ff;
+}
+.svg-edit-leave {
+  position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  max-width: 460px; padding: 16px; border-radius: 10px; background: var(--v2-surface); border: 1px solid var(--v2-line); box-shadow: 0 10px 30px rgb(0 0 0 / 60%);
+}
+.svg-edit-leave p { flex-basis: 100%; margin: 0 0 4px; color: var(--v2-text); }
+.svg-edit-waiting { margin: auto; display: grid; gap: 10px; justify-items: center; color: var(--v2-text); }
+.svg-edit-settings { position: relative; }
+.svg-edit-settings-pop {
+  position: absolute; z-index: 60; top: 100%; right: 0; margin-top: 6px; width: 240px; display: grid; gap: 8px; padding: 10px;
+  background: var(--v2-surface); border: 1px solid var(--v2-line); border-radius: 8px; box-shadow: 0 10px 24px rgb(0 0 0 / 45%);
+}
+.svg-edit-settings-pop small { color: var(--v2-muted); }
+
+/* Ctrl + scroll zoom inside a preview frame (ui/usePreviewZoom, 2026-11-06). */
+.svg-zoom-box { position: relative; overflow: hidden; }
+/* the frame clips 72 px beyond the artboard, no closer: lines, anchors and handles out there stay visible and editable */
+.svg-edit-board { clip-path: inset(-72px); }
+/* the layer that takes the pointer over that margin; the art sits above it (it comes later in the board) */
+/* The Getty web upload's wait line (2026-11-12): what it waits for, a counter, the next step. */
+.getty-wait { color: #f4c36b; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.getty-wait.doing { color: #8fb8ff; }
+.getty-wait small { color: var(--v2-muted); }
+.svg-edit-pasteboard { position: absolute; inset: -72px; cursor: crosshair; touch-action: none; user-select: none; }
+/* the margin reaches 72 px under its neighbours: the bar, the arrows, the AI panel and the legend paint (and click) above it */
+.svg-edit-toolbar, .svg-edit-legend, .svg-edit-arrow, .svg-edit-aside { position: relative; z-index: 2; }
+.zoom-reset {
+  position: absolute; top: 4px; right: 4px; z-index: 3; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--v2-line);
+  background: rgb(12 18 34 / 88%); color: var(--v2-text); font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+
+/* Tail cutter (svg/tailcut, 2026-11-06). */
+.svg-field-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--v2-text); }
+.svg-cut-none { color: var(--v2-muted); font-size: 11px; }
+
+/* The AI source beside the edit artboard (svg/pathedit/AiSourcePanel, 2026-11-06). */
+.svg-edit-aside { align-self: flex-start; width: 360px; flex: none; }
+.svg-edit-ai { position: relative; margin: 0; aspect-ratio: 1; background: #fff; border-radius: 4px; box-shadow: 0 10px 30px rgb(0 0 0 / 50%); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.svg-edit-ai img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.svg-edit-ai-tag { position: absolute; top: 6px; left: 6px; padding: 1px 5px; border-radius: 4px; background: rgb(12 18 34 / 85%); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: .04em; }
+.svg-edit-ai-missing { color: #667; font-size: 12px; }
+
+.stock-presets-overlay {
+  position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(0, 0, 0, .65);
+}
+.stock-presets-dialog {
+  width: min(850px, 100%); max-height: 85vh; overflow: auto; padding: 20px;
+  background: #0d1425; border: 1px solid #263754; border-radius: 12px; color: #dce6f8;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .5);
+}
+.stock-presets-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.stock-presets-header h2 { margin: 0; font-size: 18px; }
+.stock-presets-header p { margin: 5px 0 0; color: #9cacc8; font-size: 12px; }
+.stock-presets-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #263754; }
+.stock-presets-name { width: 190px; flex: 0 0 190px; font-size: 12px; }
+.stock-presets-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.stock-presets-options .svg-chip { cursor: pointer; }
+@media (max-width: 600px) {
+  .stock-presets-row { align-items: flex-start; flex-direction: column; }
+  .stock-presets-name { width: auto; flex: auto; }
+}
+
+/* Stock Upload setup (2026-11-08 compact redesign): a header (icon, stock name +
+   method · endpoint, quick stock switch, Minimize), then three cards side by
+   side — Connection settings | Stock preset + Add preset | Sign-in & test — and
+   the one-row Find & filter card. Same controls as before; layout only. */
+.stock-ftp-provider { flex: 1 1 100%; min-width: 0; padding: 9px 10px; gap: 8px; }
+.stock-ftp-provider-top {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.stock-ftp-icon {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 7px;
+  background: color-mix(in srgb, var(--v2-purple) 22%, var(--v2-surface-2)); color: var(--v2-purple-2); font-size: 14px;
+}
+.stock-provider-summary { display: grid; gap: 1px; min-width: 0; overflow: hidden; }
+.stock-provider-summary strong { color: var(--v2-text); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stock-provider-summary > span { min-width: 0; overflow: hidden; color: var(--v2-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.stock-quick-switch { display: inline-flex; gap: 4px; min-width: 0; flex-wrap: nowrap; }
+.stock-quick-switch .svg-btn { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stock-ftp-toggle { white-space: nowrap; }
+
+.stock-ftp-body {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.45fr) minmax(300px, 1.45fr);
+  gap: 8px;
+  align-items: start;
+}
+
+/* the cards: the legend sits INSIDE the card as its heading */
+.stock-ftp-section,
+.stock-filter-section {
+  position: relative;
+  min-width: 0;
+  margin: 0;
+  padding: 9px 11px 10px;
+  border: 1px solid var(--v2-line);
+  border-radius: 7px;
+  background: #0b1220;
+}
+.stock-ftp-section legend,
+.stock-filter-section legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 7px;
+  padding: 0;
+  color: var(--v2-muted-2);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+/* every card child sits BELOW the floated heading (a grid beside a float shrinks to a sliver) */
+.stock-ftp-section > :not(legend),
+.stock-filter-section > :not(legend) { clear: both; }
+.stock-card-head { position: absolute; top: 7px; right: 10px; }
+.stock-card-head .svg-badge { white-space: nowrap; font-size: 9px; }
+.stock-ftp-section .svg-label,
+.stock-filter-section .svg-label { margin-bottom: 3px; font-size: 9px; letter-spacing: .02em; text-transform: none; }
+.stock-ftp-section .svg-input,
+.stock-filter-section .svg-input { height: 28px; padding-inline: 8px; font-size: 10px; }
+.stock-ftp-section .svg-btn.tiny { min-height: 26px; padding: 4px 9px; font-size: 9px; }
+
+/* Connection settings: two compact rows (Host · Port · Protocol / path · TLS · helper) */
+.stock-connection-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px 8px;
+  align-items: end;
+}
+.stock-connection-grid .svg-field { min-width: 0; grid-column: span 2; }
+.stock-connection-grid .stock-f-host { grid-column: span 3; }
+.stock-connection-grid .stock-f-port { grid-column: span 1; }
+.stock-connection-grid .stock-f-protocol { grid-column: span 2; }
+.stock-connection-grid .stock-f-pin { grid-column: 1 / -1; }
+
+/* Stock preset | Add preset, split by a hairline */
+.stock-preset-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.stock-preset-main { display: grid; grid-template-columns: minmax(130px, 1fr) auto; gap: 6px; align-items: end; min-width: 0; }
+.stock-preset-select { min-width: 0; }
+.stock-preset-actions,
+.stock-credential-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.stock-new-preset {
+  display: grid; grid-template-columns: minmax(110px, 1fr) auto; gap: 5px 6px; align-items: end; min-width: 0;
+  padding-left: 12px; border-left: 1px solid var(--v2-line);
+}
+.stock-new-preset .stock-subhead { grid-column: 1 / -1; }
+.stock-subhead { color: var(--v2-muted-2); font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+.stock-new-preset .svg-field { min-width: 0; }
+
+/* Sign-in & test: account | password, then Save · Forget … Test connection */
+.stock-credential-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 8px;
+  align-items: end;
+}
+.stock-credential-row.esp { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stock-credential-actions { grid-column: 1 / -1; min-width: 0; }
+.stock-credential-actions [data-testid="stock-ftp-test"] { margin-left: auto; }
+.stock-ftp-help { margin-top: 6px; color: var(--v2-muted); font-size: 9px; }
+.stock-ftp-help summary { width: fit-content; color: var(--v2-muted-2); cursor: pointer; }
+.stock-ftp-help .up-hint { display: block; max-width: 1200px; margin-top: 5px; }
+.stock-test-banner { margin-top: 6px; }
+
+/* Find & filter: one row — wide search, then the filters and actions */
+.stock-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(120px, 150px) minmax(120px, 150px) auto minmax(120px, 150px) auto;
+  gap: 8px;
+  align-items: end;
+}
+.stock-filter-grid > *,
+.stock-filter-grid .svg-field,
+.stock-filter-grid .multi-select { min-width: 0; }
+
+@media (max-width: 1350px) {
+  .stock-ftp-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stock-ftp-body > [data-testid="stock-ftp-cred-box"] { grid-column: 1 / -1; }
+}
+@media (max-width: 1200px) {
+  .stock-filter-grid { grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(120px, 150px)); }
+}
+@media (max-width: 900px) {
+  .stock-ftp-body { grid-template-columns: minmax(0, 1fr); }
+  .stock-preset-row { grid-template-columns: minmax(0, 1fr); }
+  .stock-new-preset { padding-left: 0; border-left: 0; }
+}
+@media (max-width: 760px) {
+  .stock-ftp-provider-top { display: flex; flex-wrap: wrap; }
+  .stock-provider-summary { flex: 1 1 60%; }
+  .stock-quick-switch { flex-wrap: wrap; }
+  .stock-ftp-toggle { margin-left: auto; }
+  .stock-connection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stock-connection-grid .svg-field, .stock-connection-grid .stock-f-host,
+  .stock-connection-grid .stock-f-port, .stock-connection-grid .stock-f-protocol { grid-column: span 1; }
+  .stock-filter-grid { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(115px, 150px)); }
+}
+@media (max-width: 500px) {
+  .stock-preset-main,
+  .stock-connection-grid,
+  .stock-filter-grid,
+  .stock-new-preset,
+  .stock-credential-row,
+  .stock-credential-row.esp { grid-template-columns: minmax(0, 1fr); }
+  .stock-card-head { position: static; margin-bottom: 6px; }
+}
+
+.stock-upload-reupload {
+  min-width: 0;
+  margin: 0 0 10px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--v2-line);
+  border-radius: 7px;
+  background: #0b1220;
+}
+.stock-upload-reupload legend { padding: 0 5px; color: var(--v2-muted-2); font-size: 10px; font-weight: 800; }
+.stock-upload-reupload > p { margin: 0 0 7px; color: var(--v2-muted); font-size: 11px; }
+.stock-upload-reupload-list { display: grid; gap: 5px; }
+.stock-upload-reupload-list label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--v2-line);
+  border-radius: 5px;
+  color: var(--v2-text);
+  font-size: 11px;
+  cursor: pointer;
+}
+.stock-upload-reupload-list input { margin: 2px 0 0; }
+
+/* Image style switch (Generate SVG pinned bar, 2026-11-16): the app's dark menu, not the native list. */
+.svg-style-bar { display: contents; }
+.svg-style-switch { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.svg-style-label { font-size: 10px; font-weight: 700; letter-spacing: .12em; color: var(--v2-muted, #8b8fb0); }
+.svg-style-trigger { display: inline-flex; align-items: center; gap: 8px; min-width: 170px; height: 32px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--v2-line, #2a2f55); background: #0d1024; color: var(--v2-text, #e8e9ff); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background .15s; text-transform: capitalize; }
+.svg-style-trigger:hover { border-color: #5b54d6; background: #12153a; }
+.svg-style-trigger[aria-expanded="true"] { border-color: var(--v2-purple, #7c6cff); box-shadow: 0 0 0 3px rgba(124, 108, 255, .22); }
+.svg-style-dot { width: 8px; height: 8px; border-radius: 50%; background: #9aa0c8; flex: none; }
+.svg-style-trigger.is-style .svg-style-dot { background: linear-gradient(135deg, #4fc3ff, #b26bff); box-shadow: 0 0 6px rgba(124, 108, 255, .7); }
+.svg-style-caret { margin-left: auto; opacity: .7; font-size: 11px; }
+.svg-style-menu { position: absolute; top: calc(100% + 6px); left: 44px; z-index: 60; min-width: 210px; padding: 6px; border-radius: 12px;
+  background: #0b0e22; border: 1px solid #2a2f55; box-shadow: 0 14px 34px rgba(0, 0, 0, .55); display: flex; flex-direction: column; gap: 2px; }
+.svg-style-option { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--v2-text, #e8e9ff); font-size: 13px; text-align: left; cursor: pointer; text-transform: capitalize; }
+.svg-style-option:hover { background: #1d1944; }
+.svg-style-option.is-active { background: rgba(124, 108, 255, .18); color: #fff; }
+.svg-style-option.is-base { border-bottom: 1px solid #1f2447; border-radius: 8px 8px 0 0; margin-bottom: 2px; }
+.svg-style-check { width: 14px; color: var(--v2-purple, #7c6cff); font-weight: 700; }
+
+/* 🗑 on version chips (2026-11-16) */
+.svg-chip-with-trash { display: inline-flex; align-items: center; gap: 1px; }
+.svg-chip-trash { border: 0; background: transparent; padding: 0 3px; font-size: 10px; line-height: 1; opacity: .45; cursor: pointer; filter: grayscale(1); }
+.svg-chip-trash:hover { opacity: 1; filter: none; }

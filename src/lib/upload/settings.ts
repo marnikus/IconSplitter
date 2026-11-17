@@ -13,6 +13,7 @@ import { normalizeHex } from "../svgbackground";
 import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
 import { DEFAULT_CONVERTER, parseConverterId } from "./epsconv/registry";
+import { readShadowTemplateSetting } from "./shadowtemplate";
 import type { EpsConverterId } from "./epsconv/types";
 import { normalizeSizeGuide, readSizeGuideOverrides, SIZE_GUIDE_DEFAULTS, SIZE_GUIDE_FIELDS, type SizeGuideSettings } from "./settingssizeguide";
 import {
@@ -92,6 +93,8 @@ export interface UploadSettings extends SizeGuideSettings, BadgeSettings {
   shadowWidthPct: number;
   /** Clear gap below the final painted icon as a percentage of icon height. */
   shadowGapPct: number;
+  /** Empty selects the bundled shadow graphic; otherwise a validated user SVG (one ellipse, one radial gradient). */
+  shadowTemplateSvg: string;
 
 }
 
@@ -130,6 +133,7 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   shadowEnabled: false,
   shadowWidthPct: SHADOW_WIDTH_DEFAULT,
   shadowGapPct: SHADOW_GAP_DEFAULT,
+  shadowTemplateSvg: "",
   ...BADGE_DEFAULTS,
   ...SIZE_GUIDE_DEFAULTS,
 };
@@ -178,6 +182,7 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     shadowEnabled: false, // Only an icon override can opt in; persisted defaults must never enable unchecked icons.
     shadowWidthPct: clampShadowWidthPct(raw.shadowWidthPct),
     shadowGapPct: clampShadowGapPct(raw.shadowGapPct),
+    shadowTemplateSvg: readShadowTemplateSetting(raw.shadowTemplateSvg) ?? "",
     ...normalizeBadge(raw),
     ...normalizeSizeGuide(raw), // opt-in per icon: a stored `sizeGuideEnabled: true` reads back false
   };
@@ -192,6 +197,8 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   Object.assign(out, readStrokeCapOverride(raw));
   readPaints(raw, out);
   readArtboard(raw, out);
+  const shadowTemplate = readShadowTemplateSetting(raw.shadowTemplateSvg);
+  if (shadowTemplate !== null) out.shadowTemplateSvg = shadowTemplate;
   Object.assign(out, readBadgeOverrides(raw));
   Object.assign(out, readSizeGuideOverrides(raw));
   if (typeof raw.epsConverter === "string" && parseConverterId(raw.epsConverter) === raw.epsConverter) out.epsConverter = raw.epsConverter;
@@ -261,7 +268,7 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
   "paddingPct", "background", "strokePx", "strokeColor", "strokeLinecap", "jpegMegapixels", "jpegQuality",
   "optimizeSvg", "includeSvg", "includeJpeg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
-  "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct",
+  "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct", "shadowTemplateSvg",
   "badgeEnabled", "badgeTemplateSvg", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
   ...SIZE_GUIDE_FIELDS,
 ];

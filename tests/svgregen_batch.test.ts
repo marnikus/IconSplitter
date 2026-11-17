@@ -50,15 +50,16 @@ describe("clampRegenPerRequest — the ONE configured size (2026-10-20)", () => 
   });
 });
 
-describe("regenBatchPrompt — the preset, the manifest, the rules, then every code", () => {
+describe("regenBatchPrompt — the manifest, the rules, every code, then the preset at the bottom", () => {
   it("a one-icon request is exactly the single-icon text (today's behaviour)", () => {
     expect(regenBatchPrompt(PRESET.text, items([CODE_A]))).toBe(currentSvgPrompt(PRESET.text, "icon-a_AI", CODE_A));
   });
 
   it("names every position in the manifest and carries every code verbatim", () => {
     const text = regenBatchPrompt(PRESET.text, items([CODE_A, CODE_B]));
-    expect(text.startsWith("Make the strokes bolder.")).toBe(true);
-    expect(text).toContain("Here is a batch of 2 icons to regenerate");
+    expect(text.startsWith("Here is a batch of 2 icons to regenerate")).toBe(true);
+    expect(text.endsWith("Make the strokes bolder.")).toBe(true);
+    expect(text.indexOf("Make the strokes bolder.")).toBeGreaterThan(text.indexOf(CODE_B));
     expect(text).toContain("1 — icon-a_AI");
     expect(text).toContain("2 — icon-b_AI");
     expect(text).toContain("Current SVG code for position 1 (icon-a_AI):");
@@ -73,6 +74,14 @@ describe("regenBatchPrompt — the preset, the manifest, the rules, then every c
     expect(text).toContain("Each SVG's <title> must be exactly the name of its position");
     expect(text).toContain("Do not merge, move, swap, add, remove or renumber icons.");
     expect(text.toLowerCase()).toContain("no commentary");
+    expect(text).not.toContain("instructions above");
+  });
+
+  it("drops the grid wording when no image is sent", () => {
+    const text = regenBatchPrompt(PRESET.text, items([CODE_A, CODE_B]), false);
+    expect(text).not.toContain("attached grid");
+    expect(text).toContain("No image is attached");
+    expect(text.endsWith("Make the strokes bolder.")).toBe(true);
   });
 });
 

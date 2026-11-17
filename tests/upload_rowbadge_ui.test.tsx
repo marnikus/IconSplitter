@@ -17,6 +17,7 @@ import { BinDir, BinFile } from "./helpers/binfakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
 import { settle, waitUntil } from "./helpers/quiet";
+import { pickOnly } from "./helpers/multiselect";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -162,17 +163,10 @@ describe("upload row badges", () => {
     await click("upload-rowbadge-apply-rb1");
     expect(q(`upload-rowbadge-chip-${FOG}-rb1`)).not.toBeNull();
     expect(q(`upload-rowbadge-chip-${COURT}-rb1`)).not.toBeNull();
-    const select = q("upload-filter-badge") as HTMLSelectElement;
-    await act(async () => {
-      nativeValue(select, "none");
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pickOnly(document, "upload-filter-badge", "none");
     await settle(0);
     expect(q(`upload-row-${FOG}`)).toBeNull();
-    await act(async () => {
-      nativeValue(select, "rb1");
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pickOnly(document, "upload-filter-badge", "rb1");
     await settle(0);
     expect(q(`upload-row-${FOG}`)).not.toBeNull();
     expect(q(`upload-row-${COURT}`)).not.toBeNull();
@@ -234,11 +228,7 @@ describe("upload row badges", () => {
     expect((q("upload-rowbadge-apply") as HTMLButtonElement).disabled).toBe(false);
     await click(`upload-rowbadge-toggle-${FOG}`);
     await click(`upload-rowbadge-option-${FOG}-rb1`);
-    const select = q("upload-filter-badge") as HTMLSelectElement;
-    await act(async () => {
-      nativeValue(select, "any");
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pickOnly(document, "upload-filter-badge", "any");
     await settle(0);
     expect(q(`upload-row-${FOG}`)).not.toBeNull();
     expect(q(`upload-row-${COURT}`)).toBeNull();
@@ -263,11 +253,7 @@ describe("upload row badges", () => {
     expect(q("upload-rowbadge-dialog")).toBeNull();
     await click(`upload-rowbadge-toggle-${FOG}`);
     await click(`upload-rowbadge-option-${FOG}-rb1`);
-    const select = q("upload-filter-badge") as HTMLSelectElement;
-    await act(async () => {
-      nativeValue(select, "rb1");
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await pickOnly(document, "upload-filter-badge", "rb1");
     await settle(0);
     expect(q(`upload-row-${COURT}`)).toBeNull();
     await click("upload-rowbadges-open");

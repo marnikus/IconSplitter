@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findBrowser, parseCdpEndpoint, resolveProfileDir } from "../tools/bridge/gettyweb/browser.mjs";
-import { contributeUrlOf, iconsFromBody } from "../tools/bridge/gettyweb/routes.mjs";
-import { safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
+import { contributeUrlOf, failurePayload, iconsFromBody, iconsFromConfig, mayReleaseSession } from "../tools/bridge/gettyweb/routes.mjs";
+import { resetBatchState, safeStagedName, uploadTimeoutFor } from "../tools/bridge/gettyweb/session.mjs";
 import { GETTY_WEB_PRESET } from "../src/lib/stockupload/presets";
 
 const SERVER = path.resolve("tools/bridge/server.mjs");
@@ -20,10 +20,13 @@ const NO_BROWSER = "/nonexistent/getty-web-browser";
 interface Helper { url: string; child: ChildProcess; log: string[]; tmp: string }
 const live: Helper[] = [];
 
-async function startHelper(extraArgs: string[] = []): Promise<Helper> {
+async function startHelper(
+  extraArgs: string[] = [],
+  extraEnv: Record<string, string | undefined> = {},
+): Promise<Helper> {
   const tmp = mkdtempSync(path.join(tmpdir(), "getty-web-bridge-test-"));
   const child = spawn(process.execPath, [SERVER, "--port", "0", ...extraArgs], {
-    env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", BRIDGE_TMP: tmp, GETTY_WEB_BROWSER: NO_BROWSER },
+    env: { ...process.env, INKSCAPE_PATH: "/nonexistent/inkscape", BRIDGE_TMP: tmp, GETTY_WEB_BROWSER: NO_BROWSER, ...extraEnv },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const log: string[] = [];
@@ -174,6 +177,13 @@ describe("Getty web helper routes", () => {
     expect(tested.status).toBe(503);
   });
 
+  it("has no wait to skip for a run that is not uploading", async () => {
+    const helper = await startHelper();
+    const res = await fetch(`${helper.url}/getty-web/skip-wait`, { method: "POST", body: JSON.stringify({ sessionKey: "run-1" }) });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ ok: false, code: "bad-request" });
+  });
+
   it("has no progress to report for a run that is not uploading", async () => {
     const helper = await startHelper();
     const res = await fetch(`${helper.url}/getty-web/progress?sessionKey=run-1`);
@@ -277,5 +287,112 @@ describe("Getty web pure route helpers", () => {
     const found = findBrowser({ GETTY_WEB_BROWSER: NO_BROWSER, PATH: "" });
     expect(found.found).toBe(false);
     if (!found.found) expect(found.fix).toContain("GETTY_WEB_CDP");
+  });
+});
+
+// Getty takes 100 uploads per batch and a JPEG + EPS pair counts once, so the
+// helper must count icons — not allow 200 icons / 400 files in one request.
+describe("Getty web batch limits in the helper", () => {
+  const icon = (i: number, withEps: boolean) => ({
+    files: withEps
+      ? [{ name: `icon_${i}.jpeg`, bytes: 1 }, { name: `icon_${i}.eps`, bytes: 1 }]
+      : [{ name: `icon_${i}.jpeg`, bytes: 1 }],
+  });
+  const configOf = (count: number, withEps = false) => ({
+    icons: Array.from({ length: count }, (_v, i) => icon(i, withEps)),
+  });
+
+  it("accepts one batch's 100 uploads and refuses the 101st", () => {
+    expect(iconsFromConfig(configOf(100))).not.toBeNull();
+    expect(iconsFromConfig(configOf(101))).toBeNull();
+    // 100 pairs are 100 uploads / 200 physical files: still one batch.
+    const pairs = iconsFromConfig(configOf(100, true));
+    expect(pairs).toHaveLength(100);
+    expect(pairs?.[0].files).toHaveLength(2);
+    expect(iconsFromConfig(configOf(101, true))).toBeNull();
+  });
+
+  it("reports what a failed batch had already accepted, without a secret", () => {
+    const cfg = { username: "contributor@example.com", password: "GettyPass!42" };
+    const payload = failurePayload({
+      code: "timeout",
+      reason: "the page stopped after GettyPass!42 was typed",
+      state: { uploaded: ["icon_1.jpeg"], failures: [{ name: "icon_2.eps", id: "FSPID9" }], namesSeen: ["icon_1.jpeg", "icon_2.eps"] },
+    }, cfg);
+    expect(payload).toMatchObject({
+      ok: false, code: "timeout",
+      accepted: ["icon_1.jpeg"], failed: [{ name: "icon_2.eps", id: "FSPID9" }],
+      seen: ["icon_1.jpeg", "icon_2.eps"],
+    });
+    expect(payload.reason).not.toContain("GettyPass!42");
+    // A failure with no page reading claims nothing.
+    expect(failurePayload(null, cfg)).toMatchObject({ ok: false, code: "page", accepted: [], failed: [], seen: [] });
+  });
+
+  it("starts the next batch from a clean slate, keeping only the browser", () => {
+    // Batch 1's id, names and counts belong to batch 1: `finish` refuses while a
+    // card of *its* batch is missing, so a stale name would block batch 2.
+    const state = { batchId: "68445204", expected: ["icon_1.jpeg"], progress: { phase: "done" }, reloads: 2 };
+    expect(resetBatchState(state)).toEqual({ batchId: null, expected: [], progress: null, reloads: 0 });
+  });
+
+  it("tells the app what one upload request may weigh", async () => {
+    // The app sizes its batches to this; a helper that stays silent is an older
+    // build, and the app then assumes the small cap rather than overfilling it.
+    const helper = await startHelper([], { GETTY_WEB_MAX_BYTES: "2048" });
+    const res = await fetch(`${helper.url}/health`);
+    const body = await res.json() as { gettyWeb?: { maxBytes?: number } };
+    expect(body.gettyWeb?.maxBytes).toBe(2048);
+  });
+
+  it("answers an oversized batch with a 413 instead of dropping the connection", async () => {
+    // The symptom a 209-icon run hit: the helper refused by content-length before
+    // reading the body, closed the socket mid-upload, and the browser could only
+    // report a network error. The answer must arrive as a real response.
+    const helper = await startHelper([], { GETTY_WEB_MAX_BYTES: "1024" });
+    const res = await fetch(`${helper.url}/getty-web/upload`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-getty-web-config": configHeader(gettyConfig({ icons: [{ files: [{ name: "icon_1.jpeg", bytes: 2048 }] }] })),
+      },
+      body: new Uint8Array(64 * 1024),
+    });
+    expect(res.status).toBe(413);
+    const body = await res.json() as { code?: string; reason?: string };
+    expect(body.code).toBe("bad-request");
+    expect(body.reason).toContain("GETTY_WEB_MAX_BYTES");
+  });
+
+  it("reads a 200 KB icon manifest from the body, not from a header Node caps at 16 KB", async () => {
+    // A 100-icon batch with 2 KB descriptions was a ~290 KB base64 header: Node
+    // answered 431 and destroyed the socket before the route ran, so a 209-icon
+    // run never opened a browser. The manifest now rides at the end of the body.
+    const helper = await startHelper();
+    const icons = Array.from({ length: 100 }, (_v, i) => ({
+      files: [{ name: `icon_${i}.jpeg`, bytes: 1 }],
+      metadata: { title: `title ${i}`, description: "d".repeat(2000), keywords: ["k1"] },
+    }));
+    const manifest = Buffer.from(JSON.stringify({ icons }), "utf8");
+    const res = await fetch(`${helper.url}/getty-web/upload`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/octet-stream",
+        "x-getty-web-config": configHeader(gettyConfig({ manifestBytes: manifest.length })),
+      },
+      body: Buffer.concat([Buffer.alloc(icons.length, 1), manifest]),
+    });
+    expect(manifest.length).toBeGreaterThan(200 * 1024);
+    // The route ran: with no browser installed it answers its browser 503.
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ ok: false, code: "browser" });
+  });
+
+  it("never sweeps a session that has a request in flight", () => {
+    // A 100-icon batch outlives the five idle minutes; closing it mid-batch would
+    // lose the run.
+    expect(mayReleaseSession({ busy: true })).toBe(false);
+    expect(mayReleaseSession({ busy: false })).toBe(true);
+    expect(mayReleaseSession(undefined)).toBe(true);
   });
 });

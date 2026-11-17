@@ -7,6 +7,7 @@ import {
 import { getAppState } from "../state/appstore";
 import type { HistoryActions } from "../state/HistoryProvider";
 import { getRowBadgeState, setRowBadgeState } from "./rowbadgestore";
+import { dropFromMulti } from "../lib/multifilter";
 import type { UploadActions, UploadCtx } from "./actions";
 
 export type RowBadgeActions = Pick<UploadActions,
@@ -46,7 +47,8 @@ function useRemove(latest: Latest) {
     const ctx = latest.current;
     const before = getRowBadgeState();
     commit({ ctx, before, after: removeBadge(before, id), label: "Remove badge", ids: [id] });
-    if (ctx.m.filter.badge === id) ctx.dispatch({ type: "filter", patch: { badge: "all" } });
+    const badge = dropFromMulti(ctx.m.filter.badge, id, "all");
+    if (badge !== ctx.m.filter.badge) ctx.dispatch({ type: "filter", patch: { badge } });
   }, [latest]);
 }
 

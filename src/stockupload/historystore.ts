@@ -72,6 +72,20 @@ export function recordSiteUploadStatus(itemId: string, targetId: string, status:
   persist({ ...current, [itemId]: { ...prevItem, [targetId]: status } });
 }
 
+/** Turns this stock's saved status of the given items into "failed" with the site's reason; returns how many changed. */
+export function markSitesRejected(itemIds: readonly string[], targetId: string, reason: string): number {
+  const next = { ...current };
+  let changed = 0;
+  for (const id of itemIds) {
+    const site = current[id]?.[targetId];
+    if (!site || site.status === "failed") continue;
+    next[id] = { ...current[id], [targetId]: { ...site, status: "failed", error: reason.slice(0, 300) } };
+    changed += 1;
+  }
+  if (changed > 0) persist(next);
+  return changed;
+}
+
 export function subscribeStockHistory(fn: () => void): () => void {
   listeners.add(fn);
   return () => { listeners.delete(fn); };

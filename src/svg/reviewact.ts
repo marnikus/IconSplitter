@@ -1,4 +1,5 @@
 import { withCompletionSound } from "../ui/completionSound";
+import { withActivity } from "../lib/activity";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
 // reviewact.ts — the SVG review decision and its undo path (prompt §15, RULE 12).
 // Owns: approving/declining ONE item at a time (2026-10-20). The status belongs
@@ -9,12 +10,12 @@ import { reserveSources, SOURCE_BUSY } from "./jobstate";
 
 import { useEffect, useRef } from "react";
 import { withReview, type PairMeta } from "../lib/pairmeta";
-import type { ReviewStatus } from "../lib/svgmodel";
+import { REVIEW_LABEL, type ReviewStatus } from "../lib/svgmodel";
 import { nextPendingBelow } from "../lib/reviewselect";
 import { getAppState, patchSvg } from "../state/appstore";
 import { saveMetaAt } from "../selection/pairstore";
 import { shownVersion, withMeta } from "./rowmodel";
-import { bindSvgReviewApplier, type SvgReviewPatch, type SvgReviewRec } from "./reviewundo";
+import { announceSvgReviews, bindSvgReviewApplier, writeReviewsToFiles, type SvgReviewPatch, type SvgReviewRec } from "./reviewundo";
 import { metaForSource } from "./sources";
 import type { DirHandleLike } from "../lib/fs";
 import type { SvgRefs, SvgRow } from "./types";
@@ -57,6 +58,9 @@ export async function applyReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Pro
 async function writeReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Promise<boolean> {
   const root = s.refs.root.current as DirHandleLike | null;
   let changed = false;
+  // an item this list does not show (another tab's Remove) goes straight to its file
+  const unlisted = patch.recs.filter((rec) => !s.rows.some((r) => r.source.id === rec.id));
+  if (unlisted.length > 0) changed = await writeReviewsToFiles(unlisted);
   for (const rec of patch.recs) {
     const row = s.rows.find((r) => r.source.id === rec.id);
     if (!row || row.review === rec.review) continue;
@@ -84,9 +88,10 @@ async function saveReviewDecision(s: ReviewCtx, ids: string[], decision: ReviewS
   const recs = rows.map((r) => recOf(r, decision));
   const activeBefore = getAppState().svg.activeId;
   await withCompletionSound(async () => {
-    await writeAll(s, rows, decision);
+    await withActivity("svg", `Saving review decision · ${rows.length} item${rows.length === 1 ? "" : "s"}…`, () => writeAll(s, rows, decision));
     patchRows(s, rows, decision);
     pushEntry(s, rows, decision, recs);
+    announceSvgReviews(recs);
     if (getAppState().svg.activeId === activeBefore) advanceSvgReview(s, ids, decision);
   });
 }
@@ -107,10 +112,18 @@ function pushEntry(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus, recs: S
   s.say(`${n} SVG${n === 1 ? "" : "s"} marked ${decision}`);
   s.hist.push({
     type: "svgReview",
-    label: `${decision === "approved" ? "Approve" : decision === "declined" ? "Decline" : "Needs review"} ${n} SVG${n === 1 ? "" : "s"}`,
+    label: `${decisionVerb(decision)} ${n} SVG${n === 1 ? "" : "s"}`,
     origin: getAppState().tab, ids: recs.map((r) => r.id),
     before: { recs: before }, after: { recs },
   });
+}
+
+/** The history label's verb; the two regenerate marks use their own names. */
+function decisionVerb(decision: ReviewStatus): string {
+  if (decision === "approved") return "Approve";
+  if (decision === "declined") return "Decline";
+  if (decision === "needs-review") return "Needs review";
+  return `Mark ${REVIEW_LABEL[decision]} on`;
 }
 
 function rowOf(s: ReviewCtx, id: string): SvgRow | undefined {
@@ -146,7 +159,8 @@ export type { SvgSource };
 
 /** Use the displayed order captured before writing; never navigate for bulk/reset. */
 function advanceSvgReview(s: ReviewCtx, ids: string[], decision: ReviewStatus): void {
-  if (ids.length !== 1 || !s.visible || (decision !== "approved" && decision !== "declined")) return;
+  // a real decision moves on to the next pending row; pending / needs-review stay
+  if (ids.length !== 1 || !s.visible || decision === "pending" || decision === "needs-review") return;
   const next = nextPendingBelow(s.visible, ids[0], (r) => r.source.id, (r) => (s.refs.metas.get(r.source.id)?.review ?? r.review) === "pending" && shownVersion(r) !== null);
   if (next) patchSvg({ activeId: next });
 }

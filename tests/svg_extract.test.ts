@@ -200,7 +200,7 @@ describe("svgfile", () => {
     // One status per ITEM: the second generation reopens the review, so no
     // version disagrees with another (2026-10-20).
     expect(s.review).toBe("pending");
-    expect(tallyReviews(s.versions)).toEqual({ pending: 2, approved: 0, declined: 0, "needs-review": 0 });
+    expect(tallyReviews(s.versions)).toEqual({ pending: 2, approved: 0, declined: 0, "needs-review": 0, "regen-overlaps": 0, "regen-geometry": 0 });
     const failed = withVersion(s, rec(3, { status: "failed", validation: { ok: false, errors: ["x"], warnings: [], icons: 0 } }));
     expect(newestValid(failed.versions)?.version).toBe(2);
     expect(newestValid([])).toBeNull();

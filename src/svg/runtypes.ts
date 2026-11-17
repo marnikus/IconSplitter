@@ -58,8 +58,47 @@ export interface RunArgs {
   metas: Map<string, PairMeta | null>;
   onEvent: (event: RunEvent) => void;
   signal: AbortSignal;
+  /**
+   * false = text-only regeneration: no contact sheet is built and no image is
+   * sent, only the prompt and the current SVG code (2026-11-05). Absent = true.
+   */
+  attachImage?: boolean;
   /** Request-local cancellation never aborts the owning run. Cleared in finally. */
   onRequestController?: (controller: AbortController | null) => void;
+  /**
+   * Generate through the user's ChatGPT page via the local helper instead of
+   * the provider API (2026-11-03). One icon per request; no key, no cost.
+   */
+  web?: WebTransport;
+}
+
+/** One request handed to the web transport: the text, the picture, its name and its cancel. */
+export interface WebRequest {
+  prompt: string;
+  /** The request's reference image as a PNG data URL; null = text only. */
+  image: string | null;
+  /** Names the turn for the helper's progress and cancel. */
+  key: string;
+  signal: AbortSignal;
+  /** What the activity bar calls this request (the icon's name). */
+  label?: string;
+}
+
+/** The same answer shape the API path gives the run: reply text, or a classified failure. */
+export type WebSend =
+  | { ok: true; text: string; usage: Usage; requestId: string | null }
+  | { ok: false; error: string; failure: Failure["kind"]; retryAfterMs: null };
+
+/**
+ * Who answers instead of the provider API (runweb.ts createWebTransport). It
+ * keeps its own state (the chat it is in); the run only calls it.
+ */
+export interface WebTransport {
+  /** Recorded as each version's model: what answered, never the API model. */
+  readonly model: string;
+  /** Recorded as each version's provider ("Web: chatgpt.com"); follows a restarted chat. */
+  provider(): string;
+  send(request: WebRequest): Promise<WebSend>;
 }
 
 export interface RunSummary {

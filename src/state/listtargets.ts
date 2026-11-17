@@ -2,17 +2,23 @@
 
 import { pruneRowSelection, sameRowSelection, type RowSelection } from "../lib/reviewselect";
 
-export type CheckableList = "generateSvg" | "upload" | "stockUpload";
+export type CheckableList = "generateSvg" | "upload" | "svgBuilder" | "stockUpload";
 
 const targets: Record<CheckableList, ReadonlySet<string> | null> = {
   generateSvg: null,
   upload: null,
+  svgBuilder: null,
   stockUpload: null,
 };
 
 /** A completed scan, including an empty one, replaces the known source set. */
 export function rememberListTargets(tab: CheckableList, ids: readonly string[]): void {
   targets[tab] = new Set(ids);
+}
+
+/** True once a scan has reported this list's sources (the first scan after start has not). */
+export function listTargetsKnown(tab: CheckableList): boolean {
+  return targets[tab] !== null;
 }
 
 /** Before a scan there is no authority; afterwards stale history is refused. */
@@ -25,5 +31,6 @@ export function selectionTargetsKnown(tab: CheckableList, selection: RowSelectio
 export function resetListTargets(): void {
   targets.generateSvg = null;
   targets.upload = null;
+  targets.svgBuilder = null;
   targets.stockUpload = null;
 }

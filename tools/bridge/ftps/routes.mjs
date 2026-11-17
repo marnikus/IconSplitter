@@ -20,7 +20,9 @@ function scrubSecrets(text, cfg) {
   let out = typeof text === "string" && text.trim() !== "" ? text.trim() : "Connection failed";
   for (const raw of [cfg?.password, cfg?.apiSecret, cfg?.apiKey, cfg?.username]) {
     const s = typeof raw === "string" ? raw.trim() : "";
-    if (s !== "") out = out.split(s).join("••••••••");
+    // Under four characters a "secret" is more likely to be a letter inside the
+    // sentence than a credential: masking it garbles the reason without hiding it.
+    if (s.length >= 4) out = out.split(s).join("••••••••");
   }
   return out;
 }

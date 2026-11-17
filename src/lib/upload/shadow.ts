@@ -1,10 +1,13 @@
 /// <reference types="vite/client" />
-// The Upload shadow is vector geometry copied from the shipped SVG template.
-// Its user-space radial gradient is normalized to the ellipse's bounding box
-// before the artboard fit, so neither transforms nor raster effects are needed.
+// The Upload shadow is vector geometry. By default it is copied from the shipped SVG template:
+// its user-space radial gradient is normalized to the ellipse's bounding box before the artboard
+// fit, so neither transforms nor raster effects are needed. A user's own template (any vector SVG,
+// 2026-11-08) is placed by customshadow.ts instead; the default's output is unchanged.
 import shadowTemplate from "../../svg/templates/shadow.svg?raw";
+import { appendCustomShadow } from "./customshadow";
 import { fmt } from "./geom";
 import type { Bounds } from "./geom/bounds";
+import { defineCopyStroke } from "./sizeguidecopy";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const SHADOW_ID = "upload-shadow";
@@ -22,8 +25,39 @@ interface ShadowGeometry {
   ry: number;
 }
 
-/** Add the template shadow behind the icon, sized from the *shipped* icon bounds. */
-export function appendUploadShadow(root: Element, icon: Bounds, widthPct: number, gapPct: number): Element | null {
+/** The shadow's size, place and graphic: widths/gaps in %, the template setting (`""` = the bundled graphic). */
+export interface ShadowSpec { widthPct: number; gapPct: number; templateSvg?: string; expand?: boolean }
+
+/** Add the shadow behind the icon, sized from the *shipped* icon bounds: the bundled ellipse, or the user's template. */
+export function appendUploadShadow(root: Element, icon: Bounds, spec: ShadowSpec): Element | null {
+  const templateSvg = spec.templateSvg ?? "";
+  return templateSvg === "" ? appendBundledShadow(root, icon, spec.widthPct, spec.gapPct) : appendCustomShadow(root, icon, { ...spec, templateSvg });
+}
+
+/**
+ * The stroke hoist (one stroke definition per file) must not see a user's shadow: its paint is its
+ * own and the icon's hoisted stroke must neither include nor repaint it. A custom shadow is lifted
+ * out for the hoist and put back in place with its own stroke definition; the bundled ellipse is
+ * explicitly stroke-free, as it always was.
+ */
+export function hoistAroundShadow<T>(root: Element, shadow: Element | undefined, hoist: () => T): T {
+  if (shadow === undefined || shadow.nodeName !== "g") {
+    const result = hoist();
+    shadow?.setAttribute("stroke", "none");
+    return result;
+  }
+  const next = shadow.nextSibling;
+  shadow.remove();
+  try {
+    return hoist();
+  } finally {
+    root.insertBefore(shadow, next);
+    defineCopyStroke(shadow);
+  }
+}
+
+/** Add the bundled template shadow: the original, unchanged path. */
+function appendBundledShadow(root: Element, icon: Bounds, widthPct: number, gapPct: number): Element | null {
   const template = readShadowTemplate();
   const width = icon.width * widthPct / 100;
   if (template === null || !(width > 0) || !(icon.height > 0) || !Number.isFinite(gapPct)) return null;

@@ -40,18 +40,22 @@ function certify(distance: number, radius: number, tolerance: number): boolean |
 
 export function cubicDistanceWithin(s: Cubic, p: Pt, tolerance: number): boolean {
   const reach = speedBound(s);
-  const scale = Math.max(1, ...s.p0.map(Math.abs), ...s.p1.map(Math.abs), ...s.p2.map(Math.abs), ...s.p3.map(Math.abs), ...p.map(Math.abs));
+  // The largest coordinate magnitude (floored at 1): the rounding slack's scale. No arrays, no spreads — this runs
+  // for every sampled point of every offset segment (2026-11-08, export speed); the value is the same.
+  const scale = Math.max(
+    1, Math.abs(s.p0[0]), Math.abs(s.p0[1]), Math.abs(s.p1[0]), Math.abs(s.p1[1]), Math.abs(s.p2[0]), Math.abs(s.p2[1]),
+    Math.abs(s.p3[0]), Math.abs(s.p3[1]), Math.abs(p[0]), Math.abs(p[1]),
+  );
   const slack = 64 * Number.EPSILON * scale;
-  const f = (t: number) => squaredDistance(s, p, t);
   let lo = 0, hi = 1;
   for (let i = 0; i < 40; i++) {
     if (i >= 8 && i % 4 === 0) {
-      const decision = certify(Math.sqrt(f((lo + hi) / 2)), reach * (hi - lo) / 2 + slack, tolerance);
+      const decision = certify(Math.sqrt(squaredDistance(s, p, (lo + hi) / 2)), reach * (hi - lo) / 2 + slack, tolerance);
       if (decision !== undefined) return decision;
     }
     const m1 = lo + (hi - lo) * 0.382;
     const m2 = lo + (hi - lo) * 0.618;
-    if (f(m1) < f(m2)) hi = m2; else lo = m1;
+    if (squaredDistance(s, p, m1) < squaredDistance(s, p, m2)) hi = m2; else lo = m1;
   }
-  return Math.sqrt(f((lo + hi) / 2)) <= tolerance;
+  return Math.sqrt(squaredDistance(s, p, (lo + hi) / 2)) <= tolerance;
 }

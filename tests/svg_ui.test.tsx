@@ -11,6 +11,7 @@ import {
   installSvgPanelHooks, SIDECAR, SAVED_SVG, COURT, FOG, fakeKey, host, input, makeRoot, mount, mountPick, q,
   renderPanel, selectEffort, settle, stubClipboard, text, type, unmountPanel, useDeviceStorage,
 } from "./helpers/svgpanel";
+import { pickOnly } from "./helpers/multiselect";
 
 installSvgPanelHooks();
 
@@ -115,7 +116,7 @@ describe("the folder control and the path row", () => {
   it("names the folder and says when no full path was captured (RULE 4)", async () => {
     await mount(await makeRoot());
     expect(text("[data-testid=svg-folder-path]")).toContain("split_root");
-    expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
+    expect(text("[data-testid=svg-folder-path]")).toContain("full path not found yet");
   });
 
   it("never completes a copied PARENT into a guess — the row says 'not captured' instead (I-59)", async () => {
@@ -124,7 +125,7 @@ describe("the folder control and the path row", () => {
     try {
       await mountPick(root);
       expect(text("[data-testid=svg-folder-path]")).not.toContain("icons testing");
-      expect(text("[data-testid=svg-folder-path]")).toContain("full path not captured");
+      expect(text("[data-testid=svg-folder-path]")).toContain("full path not found yet");
     } finally {
       Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true });
     }
@@ -231,8 +232,7 @@ describe("Generate SVG panel", () => {
 
   it("filters the list and clears back to every approved source", async () => {
     await mount(await makeRoot());
-    const gen = q("[data-testid=svg-filter-generation]") as HTMLSelectElement;
-    await act(async () => { gen.value = "generated"; gen.dispatchEvent(new Event("change", { bubbles: true })); });
+    await pickOnly(document, "svg-filter-generation", "generated");
     await settle();
     expect(host.querySelectorAll(".svg-row")).toHaveLength(1);
     expect(q("[data-testid=svg-footer-summary]")?.textContent).toContain("Showing 1 of 2");

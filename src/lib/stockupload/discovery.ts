@@ -2,6 +2,10 @@
 // Rule: ONLY directories named "export" are inspected, and ONLY files that are
 // both recorded as exported outputs in that folder's `export.json` AND present
 // inside that `export` folder on disk are included.
+// 2026-11-06: an export is also hidden when its source item's pair file is
+// found under the folder and is no longer approved in Generate SVG (Remove in
+// SVG to upload / Upload declines it there). The pair-file reader is injected
+// (`sourcePairs`) — this module stays pure.
 
 import { readDirTree, readTextAt, type DirHandleLike } from "../fs";
 import { isRecord } from "../isrecord";
@@ -16,6 +20,32 @@ export interface StockDiscoveryAudit {
   unrecordedFiles: number;
   missingRecordedFiles: number;
   duplicateIds: number;
+  /** Exports hidden because their source item is no longer approved. */
+  declinedSources: number;
+}
+
+/** A pair file found by the walk: the item's id, its path, and whether it is approved. */
+export interface SourcePair { id: string; metaPath: string; approved: boolean }
+
+/** Reads the walk's pair files; keyed by `sourcePairKey`. */
+export type SourcePairLookup = (root: DirHandleLike, entries: readonly FileEntry[]) => Promise<Map<string, SourcePair>>;
+
+export interface StockDiscoveryOptions {
+  sourcePairs?: SourcePairLookup;
+}
+
+/** One key for a pair, from its folder (relative to the scanned root), base and suffix. */
+export function sourcePairKey(dir: string, base: string, suffix: string): string {
+  return `${dir}
+${base}
+${suffix}`;
+}
+
+/** The folder holding the pair an export folder belongs to; null = above the scanned root. */
+function pairDirOf(exportDir: string): string | null {
+  if (exportDir === "") return null;
+  const at = exportDir.lastIndexOf("/");
+  return at < 0 ? "" : exportDir.slice(0, at);
 }
 
 export interface StockDiscovery {
@@ -143,21 +173,22 @@ async function readFolderRecord(
   }
 }
 
-export async function discoverExportedItems(root: DirHandleLike): Promise<StockDiscovery> {
+export async function discoverExportedItems(root: DirHandleLike, opts: StockDiscoveryOptions = {}): Promise<StockDiscovery> {
   const tree = await readDirTree(root, []);
   const entries = walkTree(tree, []);
   const buckets = groupExportDirs(entries, root.name);
+  const pairs = opts.sourcePairs ? await opts.sourcePairs(root, entries) : null;
   const items: ExportedItem[] = [];
   const corruptRecords: string[] = [];
   const unreadable: string[] = [];
   const seenIds = new Set<string>();
   const audit: StockDiscoveryAudit = {
     exportFolders: buckets.length, items: 0, uncommittedRecords: 0,
-    unrecordedFiles: 0, missingRecordedFiles: 0, duplicateIds: 0,
+    unrecordedFiles: 0, missingRecordedFiles: 0, duplicateIds: 0, declinedSources: 0,
   };
 
   for (const bucket of buckets) {
-    await collectBucket(root, bucket, { items, corruptRecords, unreadable, seenIds, audit });
+    await collectBucket(root, bucket, { items, corruptRecords, unreadable, seenIds, audit, pairs });
   }
   items.sort((a, b) => compareNames(a.recordPath, b.recordPath) || compareNames(a.id, b.id));
   audit.items = items.length;
@@ -170,18 +201,37 @@ interface CollectState {
   unreadable: string[];
   seenIds: Set<string>;
   audit: StockDiscoveryAudit;
+  /** null = the scan did not look for source pairs. */
+  pairs: Map<string, SourcePair> | null;
+}
+
+/** The export's source pair, when the scan looked and found it. */
+function sourceOf(st: CollectState, bucket: ExportFolderBucket, record: ExportRecord): SourcePair | null {
+  const dir = pairDirOf(bucket.exportDir);
+  if (st.pairs === null || dir === null) return null;
+  return st.pairs.get(sourcePairKey(dir, record.pair.base, record.pair.suffix)) ?? null;
+}
+
+/** A folder whose export.json could not be used: counted or named, never guessed. */
+function noteUnusable(bucket: ExportFolderBucket, loaded: { kind: "corrupt" | "unreadable"; path: string } | { kind: "none" }, st: CollectState): void {
+  if (loaded.kind === "none") st.audit.unrecordedFiles += countUnrecorded(bucket, new Set());
+  else if (loaded.kind === "unreadable") st.unreadable.push(loaded.path);
+  else st.corruptRecords.push(loaded.path);
+}
+
+/** Why a readable record is not listed (counted in the audit), or false when it may be. */
+function skipRecord(st: CollectState, record: ExportRecord, source: SourcePair | null): boolean {
+  if (!isCommittedExport(record)) { st.audit.uncommittedRecords += 1; return true; }
+  if (st.seenIds.has(record.pair.id)) { st.audit.duplicateIds += 1; return true; }
+  if (source !== null && !source.approved) { st.audit.declinedSources += 1; return true; }
+  return false;
 }
 
 async function collectBucket(root: DirHandleLike, bucket: ExportFolderBucket, st: CollectState): Promise<void> {
   const loaded = await readFolderRecord(root, bucket);
-  if (loaded.kind !== "ok") {
-    if (loaded.kind === "none") st.audit.unrecordedFiles += countUnrecorded(bucket, new Set());
-    else if (loaded.kind === "unreadable") st.unreadable.push(loaded.path);
-    else st.corruptRecords.push(loaded.path);
-    return;
-  }
-  if (!isCommittedExport(loaded.record)) { st.audit.uncommittedRecords += 1; return; }
-  if (st.seenIds.has(loaded.record.pair.id)) { st.audit.duplicateIds += 1; return; }
+  if (loaded.kind !== "ok") { noteUnusable(bucket, loaded, st); return; }
+  const source = sourceOf(st, bucket, loaded.record);
+  if (skipRecord(st, loaded.record, source)) return;
 
   const resolved = resolveOutputs(bucket, loaded.record);
   st.audit.unrecordedFiles += countUnrecorded(bucket, resolved.claimed);
@@ -197,5 +247,6 @@ async function collectBucket(root: DirHandleLike, bucket: ExportFolderBucket, st
     record: loaded.record,
     files: resolved.files,
     missingRecorded: resolved.missing,
+    ...(st.pairs === null ? {} : { source: source === null ? null : { id: source.id, metaPath: source.metaPath } }),
   });
 }
