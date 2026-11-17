@@ -53,3 +53,14 @@ row. Source: `src/svg/styles.ts`, `src/lib/svgstyles.ts`.
   checked and active IDs to available rows and de-duplicates checks.
 * Switching styles moves checks and the active row with the rows
   (`switchStyle`); rows without the picked style stay in their own style.
+* **Fault-isolated registration**: the selected item folders are processed with
+  bounded concurrency; within an item, each `_<style>` folder is isolated, so a
+  failed metadata read/write does not hide successful sibling styles. Failures
+  are counted as skipped in the register progress and summarized in the final
+  message (up to three folder details); successfully written styles are retained
+  even if another folder fails.
+* **All-styles row construction**: base rows are built once, then style metadata
+  is looked up directly for each base/style pair. This avoids constructing and
+  discarding a full temporary row array for every style and appends each found
+  style row into its base's output list. Corrupt base pair files preserve the
+  same corruption marker in either view.
