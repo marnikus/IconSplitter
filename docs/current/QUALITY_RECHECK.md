@@ -5421,3 +5421,51 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
   1453+1779+1516 tests) and one complete run with `--coverage.all=false`:
   470 files / 4748 tests, exit 0, lines 95.22 % against the 80 % threshold.
 - Pushed as merge `5868019` plus the doc-budget repair `9c2e7c2`.
+## 2026-11-17 — ONE 🗑 per versioned preview, in its bottom-right corner (user decision)
+
+- Request: "do not use trash can for every version near but put it icon to the
+  preview in right bottom corner instead" — understand, deep-research, document,
+  then implement by TDD.
+- Contract written down BEFORE code: one 🗑 per preview that has versions, in its
+  bottom-right corner, removing the version THAT preview shows — the SVG
+  preview's shown version, the AI source's accepted main regeneration; absent
+  while the original is the main image. Same owner (`versionremove`), same move
+  to `.removed versions`, same single Undo step. The cans beside every version
+  chip, the per-version trash testids and the `.svg-chip-with-trash` wrappers are
+  gone.
+- Implementation: new `src/svg/previewtrash.tsx` holds `CornerTrash` and the two
+  answers it needs — `svgCorner(target, id)` and `aiCorner(meta, id)`, the latter
+  reading `mainVersionOf` (the same "the pointer must name a done version, else
+  the original is main" rule as `svgimgreg.mainImageOf`), so chips and can can
+  never disagree about what is on screen. `SvgThumbs` renders plain chips again
+  and passes the can as a slot child: inside `svg-prev-frame-{id}` on the SVG
+  side, inside `svg-ai-{id}` beside `<Thumb>` on the AI side, both anchored by
+  `.pair-thumb` (`position: relative`); CSS `.pair-thumb-trash` replaces
+  `.svg-chip-with-trash` / `.svg-chip-trash`. Testids are now
+  `svg-ver-trash-{sourceId}` / `svg-ai-trash-{sourceId}` (no `-version` suffix).
+  The can stops click and double-click propagation, so it never opens the SVG
+  editor or toggles the row.
+- Measured: red first — 5 failing witnesses across `svg_version_chips` (no chip
+  carries a can; zero `.svg-chip-with-trash`; the corner removes the shown
+  version, and after switching to v2 it removes v2 leaving [1,3,4] with chips
+  [1,4]; Undo restores), `svg_style_persist` (the corner can inside the AI slot
+  keeps the Base · Stroke face — the bug it was written for — and rests while the
+  original is main) and `svg_register_images_ui` (the corner can moves the
+  registered PNG to `.removed versions`, drops the chip and the record; Undo
+  brings both back). Green: those 3 suites 31/31, all `svg*` + pathedit suites
+  116 files / 1119 tests, full suite 470 files / 4751 tests, `docs_navigation`
+  4/4 (rows page 6442 B of the 9000 B budget). Gates: `tsc --noEmit` clean,
+  `npm run lint` 0 errors (the 26 warnings are pre-existing, incl. `SvgThumbs`
+  complexity 12 — unchanged from HEAD, verified by linting the HEAD copy),
+  `quality:changed` GATE PASSED after the extraction (`SvgThumbs.tsx` 280 lines
+  — the recorded baseline is 122, so the file must stay under the 300-line
+  `fileWarn` or the ratchet fails; `previewtrash.tsx` 44 lines), build PASS.
+  Coverage: the istanbul lane starved one timing suite
+  (`batch_nonblocking` — passes alone in 1.5 s, also with v8 instrumentation), so
+  the documented v8 substitute ran complete and green: `PERF_BUDGETS=coverage
+  npx vitest run --coverage --coverage.provider=v8 --coverage.all=false` →
+  470 files / 4751 tests, exit 0.
+- Docs: selector row for both corner testids in
+  `selectors/svg-generation-list-rows.md`; the variant-removal sentence in
+  `sor/svg-styles.md` now names the corner can.
+
