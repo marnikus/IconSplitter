@@ -82,7 +82,7 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   ];
   return (
     <div className="svg-pair-with-bar">
-      <PairedThumbs slots={slots as [PreviewSlot, PreviewSlot]} />
+      <PairedThumbs slots={slots} />
       <PairBars ai={aiBar} aiWidth={aiBox.width} svg={svgBar} svgWidth={svgSide.width} />
     </div>
   );

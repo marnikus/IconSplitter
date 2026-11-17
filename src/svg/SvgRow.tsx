@@ -74,7 +74,7 @@ export default memo(SvgRowView);
 const RowContent = memo(function RowContent({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
   const id = row.source.id;
   return <>
-      <LazyPreview size={a.thumb} width={a.thumb * 2 + 24}>
+      <LazyPreview size={a.thumb} width={row.baseAiPath ? a.thumb * 3 + 36 : a.thumb * 2 + 24}>
         <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg}
           aiActions={{ running: a.imgRunning.includes(id), onMain: a.setImageVersion }}
           onPreferSvg={(sourceId, version) => void a.preferVersion(sourceId, version)} />

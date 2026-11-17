@@ -30,11 +30,10 @@ export interface PreviewSlot {
   children: ReactNode;
 }
 
-export default function PairedThumbs({ slots }: { slots: [PreviewSlot, PreviewSlot] }) {
+export default function PairedThumbs({ slots }: { slots: PreviewSlot[] }) {
   return (
     <div className="pair-thumbs">
-      <Slot slot={slots[0]} />
-      <Slot slot={slots[1]} />
+      {slots.map((slot, i) => <Slot key={slot.testid ?? i} slot={slot} />)}
     </div>
   );
 }
