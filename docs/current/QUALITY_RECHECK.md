@@ -5469,3 +5469,43 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
   `selectors/svg-generation-list-rows.md`; the variant-removal sentence in
   `sor/svg-styles.md` now names the corner can.
 
+## 2026-11-17 — Paste from the clipboard over any row preview (user feature)
+
+- Request: copy SVG code or a PNG image to the buffer and paste it into any row
+  preview (Base · Stroke, AI source, SVG), overwriting the file it shows; a
+  small Paste button per preview (mockup: bottom-right corner). Understand,
+  research, document, then TDD. Three product decisions asked and taken: the
+  overwrite is recoverable; Paste on a "No SVG" preview creates v1 through the
+  registration owner; no new in-app Copy control (PNGs enter the buffer from
+  outside, SVG code via the existing Copy button).
+- Implementation: `src/svg/pasteoverwrite.ts` owns the gesture (binding lent by
+  the panel like versionremove; clipboard readers; staging in
+  `.removed versions/.paste-<stamp>`; proof via `imgfiles.isReadablePng`;
+  validation via `svgvalidate.validateSvg`; `applyPasteOverwrite` for the new
+  `svgPasteOverwrite` entry type in `state/apply.ts`). The corner is one
+  cluster (`previewtrash.tsx` Corner + PasteButton): 🗑 left of Paste, Paste
+  rightmost; testids `svg-paste-{base|ai|svg}-{sourceId}`. Overwrite = move old
+  bytes to `.removed versions/<name>.overwritten-<stamp>` + move the staged
+  paste in; undo/redo are pure move swaps, timeline holds paths and pair files
+  only. Paste-creates-v1 writes `svgfile.svgFileName(stem, 1)` and lets
+  `registerexisting.runRegisterFor` record it; the entry carries both meta
+  states. Cache freshness: `usesvgtext.bumpSvgFile` and a new per-path
+  generation in `selection/thumbs.ts` (`bumpSideThumb`, checked by
+  `useSideThumbs`, subscribed by `useimageurl`).
+- Measured: red first — 5 witnesses in `tests/svg_paste_overwrite.test.tsx`
+  (cluster order with the 🗑 left of Paste; PNG overwrite with the old bytes
+  parked and undo/redo swapping; SVG overwrite + undo; paste-creates-v1 with
+  chip v1 and undo removing file+record; four refusals — text on a PNG
+  preview, an image on the SVG preview, code failing the gate, a JPEG item —
+  each one error toast and no write). Green: that suite 5/5, then full suite
+  471 files / 4756 tests; `apply.test.ts` registry list extended with the new
+  entry type; `docs_navigation` 4/4 after README router label trims kept the
+  router under its 5000 B budget (5040 → 4992). Gates: tsc clean, lint 0 errors
+  (26 pre-existing warnings; one new `no-useless-assignment` fixed), build
+  PASS, `quality:changed` GATE PASSED after the RULE 19 split of pasteInto into
+  planOf/targetFor/stagePayload with a Plan object (pasteoverwrite.ts 208
+  lines, all functions inside limits). Coverage: v8 substitute complete run
+  `--coverage.all=false` → 471 files / 4756 tests, lines 97.98 % (threshold
+  80 %). Pushed as `0187bbb` in the same step as the commit (push-after-every-
+  commit rule).
+
