@@ -5400,3 +5400,24 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - `npx tsc --noEmit`: passed in 38.5 s; `npm run lint`: passed in 35.1 s (26 existing warnings); changed-file quality gate against `2ee7b0c7baba7e4c0ed51e176561c72a0831d450`: passed in 1.1 s.
 - `npm run verify:fast`: not green; the complete coverage test worker was killed after 1366.9 s. Its production build lane passed in 13.1 s. No full verification pass is claimed.
 - Final rerun after the offline test transport change: 5 focused files / 37 tests passed in 6.36 s; types passed in 37.2 s; lint passed in 34.4 s; explicit-base changed quality gate passed in 1.9 s.
+
+## 2026-11-17 — merge of arena/00f3f234-iconsplitter (style review rows, hardened registration)
+
+- Merged `efc0e2a` (independent style review rows + hardened style registration,
+  based on `2ee7b0c`) into this branch. The only conflict was this append-only
+  log: both entries kept, mine then theirs.
+- Their branch left two pages over the 9 000-byte agent read budget (its own log
+  says its verify never went green): `TEST_HARNESS.md` 9310 B and
+  `sor/tests/svg.md` 9369 B. Compressed prose-only, every fact kept:
+  8988 B and 8969 B; `docs_navigation` 4/4 again (RULE 18).
+- Measured on the merged tree: focused style/register/pair suites 103/103
+  (svg_styles, svg_style_persist, svg_row_bar_alignment, svg_register_images
+  + ui, pairmeta, pairstore, svg_scan); Types/Lint/Quality gate/Perf/Build
+  lanes PASS. The Tests+coverage lane cannot complete istanbul in this 4 GB
+  sandbox (OOM-killed twice; under istanbul load two wall-clock watcher suites —
+  bridge_update_watch, getty_web_signin — missed real-time deadlines though both
+  pass alone in 1.1 s / 2.7 s), so the suite ran green under the config's
+  documented v8 provider: three serial ranged passes (157+193+120 files;
+  1453+1779+1516 tests) and one complete run with `--coverage.all=false`:
+  470 files / 4748 tests, exit 0, lines 95.22 % against the 80 % threshold.
+- Pushed as merge `5868019` plus the doc-budget repair `9c2e7c2`.
