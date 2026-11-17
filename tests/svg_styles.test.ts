@@ -78,3 +78,22 @@ describe("the style filter (2026-11-16)", () => {
     expect(applySvgFilters([{ ...row("a", "none"), styleName: "base", hasAi: true }, { ...row("b~colored_wiggle", "ai"), styleName: "colored_wiggle", hasAi: true }], { ...ALL_SVG_FILTER, style: ["style:colored_wiggle", "ai"] }).map((r) => r.id)).toEqual(["b~colored_wiggle"]);
   });
 });
+
+describe("style persistence and 3-slot preview", () => {
+  it("PairedThumbs renders all 3 slots when Base · Stroke, AI source, and SVG are passed", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { default: PairedThumbs } = await import("../src/ui/PairedThumbs");
+    const html = renderToStaticMarkup(
+      PairedThumbs({
+        slots: [
+          { tag: "Base · Stroke", testid: "slot-base", width: 100, height: 100, children: null },
+          { tag: "AI source", testid: "slot-ai", width: 100, height: 100, children: null },
+          { tag: "SVG", testid: "slot-svg", width: 100, height: 100, children: null },
+        ],
+      }),
+    );
+    expect(html).toContain("Base · Stroke");
+    expect(html).toContain("AI source");
+    expect(html).toContain("SVG");
+  });
+});
