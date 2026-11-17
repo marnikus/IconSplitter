@@ -94,7 +94,15 @@ describe("removing a style variant keeps the Base · Stroke preview", () => {
   it("🗑 on a variant drops that version only — the base face stays, and Undo restores it", async () => {
     const root = await mountStyleRow();
     expect(slots()).toHaveLength(3);
-    await click(q(`[data-testid="svg-ai-trash-${SID}-2"]`)!);
+    // one 🗑 for the whole preview, in its corner — never one beside every chip
+    expect(document.querySelectorAll(".svg-chip-with-trash")).toHaveLength(0);
+    const corner = q(`[data-testid="svg-ai-trash-${SID}"]`);
+    expect(corner).not.toBeNull();
+    expect(q(`[data-testid="svg-ai-${SID}"]`)?.contains(corner as Node)).toBe(true);
+    // the corner can removes the version the preview shows — so show v2 first
+    await click(q(`[data-testid="svg-ai-chip-${SID}-2"]`)!);
+    await settle();
+    await click(q(`[data-testid="svg-ai-trash-${SID}"]`)!);
     await settle();
     expect(styleMeta(root).imageVersions.map((v) => v.version)).toEqual([1]);
     expect(q(`[data-testid="svg-row-${SID}"]`)).not.toBeNull();
@@ -105,6 +113,13 @@ describe("removing a style variant keeps the Base · Stroke preview", () => {
     expect(styleMeta(root).imageVersions.map((v) => v.version)).toEqual([1, 2]);
     expect(baseSlot()).not.toBeNull();
     expect(slots()).toHaveLength(3);
+  });
+
+  it("the corner 🗑 rests while the original is the main image — it removes versions, not the original", async () => {
+    await mountStyleRow();
+    await click(q(`[data-testid="svg-ai-chip-${SID}-orig"]`)!);
+    await settle();
+    expect(q(`[data-testid="svg-ai-trash-${SID}"]`)).toBeNull();
   });
 });
 

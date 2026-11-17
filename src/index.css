@@ -2491,7 +2491,7 @@
 .svg-style-option.is-base { border-bottom: 1px solid #1f2447; border-radius: 8px 8px 0 0; margin-bottom: 2px; }
 .svg-style-check { width: 14px; color: var(--v2-purple, #7c6cff); font-weight: 700; }
 
-/* 🗑 on version chips (2026-11-16) */
-.svg-chip-with-trash { display: inline-flex; align-items: center; gap: 1px; }
-.svg-chip-trash { border: 0; background: transparent; padding: 0 3px; font-size: 10px; line-height: 1; opacity: .45; cursor: pointer; filter: grayscale(1); }
-.svg-chip-trash:hover { opacity: 1; filter: none; }
+/* ONE 🗑 per versioned preview, in its bottom-right corner (2026-11-17): quiet until hovered.
+   It replaced the can that sat beside every version chip (2026-11-16). */
+.pair-thumb-trash { position: absolute; right: 4px; bottom: 4px; border: 0; border-radius: 4px; background: rgb(3 7 18 / 62%); padding: 2px 4px; font-size: 10px; line-height: 1; opacity: .5; cursor: pointer; filter: grayscale(1); }
+.pair-thumb-trash:hover { opacity: 1; filter: none; }

@@ -19,7 +19,7 @@
 // Stroke preview has no versions of its own — a chip set can never land under
 // a preview it does not belong to, whatever the number of previews.
 
-import { removeVersion, type VersionKind } from "./versionremove";
+import { aiCorner, mainVersionOf, svgCorner } from "./previewtrash";
 import { useCallback, useState, type ReactNode } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
@@ -71,14 +71,14 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
   const { review, marks } = useRowTailMarks(id, target?.svgPath ?? "", svg, useCutSettings());
   // double-click on the SVG opens it in the edit mode (2026-11-06)
   const onOpen = editBlocked(row, svg) === null ? () => openSvgEditor(id) : undefined;
-  const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg), marks, onOpen };
+  const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg), marks, onOpen,
+    trash: svgCorner(target, id) };
   const svgSide = svgSlot(slotArgs);
   const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
   const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />, review);
   // ONE list of sides: each preview slot + the bar cell under it (2026-11-17).
   const sides: PreviewSide[] = [...(row.baseAiPath ? [baseSide(row, id, aiBox, baseAi)] : []),
-    { slot: { tag: "AI source", testid: `svg-ai-${id}`, width: aiBox.width, height: aiBox.height,
-      children: <Thumb url={ai} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={setAiNat} /> }, bar: aiBar },
+    aiSide({ row, id, box: aiBox, url: ai, onDims: setAiNat, bar: aiBar }),
     { slot: svgSide, bar: svgBar }];
   return (
     <div className="svg-pair-with-bar">
@@ -104,6 +104,27 @@ function baseSide(row: SvgRow, id: string, box: { width: number; height: number 
   };
 }
 
+/** Everything the AI source side of a row is drawn from. */
+interface AiSideArgs {
+  row: SvgRow;
+  id: string;
+  box: { width: number; height: number };
+  url: string | null;
+  /** Reports the raster's own pixel size, which sets the box. */
+  onDims: (d: Dims | null) => void;
+  bar: ReactNode;
+}
+
+/** The AI source side: the main image, with the corner 🗑 of the accepted regeneration. */
+function aiSide({ row, id, box, url, onDims, bar }: AiSideArgs): PreviewSide {
+  return {
+    slot: { tag: "AI source", testid: `svg-ai-${id}`, width: box.width, height: box.height,
+      children: <><Thumb url={url} alt={row.source.name} testid={`svg-ai-img-${id}`} onDims={onDims} />
+        {aiCorner(row.meta, id)}</> },
+    bar,
+  };
+}
+
 /** Everything the SVG side of a row is drawn from — nothing else is read. */
 interface SvgSlotArgs {
   svg: string | null;
@@ -116,10 +137,12 @@ interface SvgSlotArgs {
   marks?: TailMarks;
   /** Double-click opens the SVG edit mode; absent when this row cannot be edited now. */
   onOpen?: () => void;
+  /** The corner 🗑 for the shown version; absent when the preview has none. */
+  trash?: ReactNode;
 }
 
 /** The SVG side: the framed document, in the box its own ratio asks for. */
-function svgSlot({ svg, thumb, id, stem, version, frame, marks, onOpen }: SvgSlotArgs): PreviewSlot {
+function svgSlot({ svg, thumb, id, stem, version, frame, marks, onOpen, trash }: SvgSlotArgs): PreviewSlot {
   const box = svgBox(svg, thumb);
   const className = `svg-preview-frame${frame.outline ? " contrast" : ""}`;
   return {
@@ -135,6 +158,7 @@ function svgSlot({ svg, thumb, id, stem, version, frame, marks, onOpen }: SvgSlo
         onDoubleClick={(e) => { if (onOpen) { e.stopPropagation(); onOpen(); } }}>
         <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`} marks={marks}
       label={`${stem} SVG v${version}`} version={version} strokeSheet={SVG_STROKE_SHEET} />
+        {trash}
       </div>
     ),
   };
@@ -214,17 +238,14 @@ function VersionChips({ row, onMain }: { row: SvgRow; onMain: AiBarActions["onMa
   const versions = row.meta?.imageVersions.filter((v) => v.status === "done") ?? [];
   if (versions.length === 0) return null;
   const id = row.source.id;
-  const preferred = row.meta?.imagePreferred ?? null;
-  // the same rule as svgimgreg.mainImageOf: a pointer to no done version means the original
-  const main = versions.some((v) => v.version === preferred) ? preferred : null;
+  const main = mainVersionOf(row.meta);
   const chip = (key: string, text: string, version: number | null) => (
     <button key={key} type="button" className={`svg-btn tiny${main === version ? " primary" : ""}`}
       data-testid={`svg-ai-chip-${id}-${key}`} data-active={main === version ? "true" : "false"}
       title={main === version ? "Accept this version as the AI source" : "Accept and use this version as the AI source"}
       onClick={(e) => { e.stopPropagation(); onMain(id, version); }}>{text}</button>
   );
-  return <>{chip("orig", "original", null)}{versions.map((v) => <span key={v.version} className="svg-chip-with-trash">
-    {chip(String(v.version), `v${v.version}`, v.version)}<TrashChip id={id} kind="image" version={v.version} /></span>)}</>;
+  return <>{chip("orig", "original", null)}{versions.map((v) => chip(String(v.version), `v${v.version}`, v.version))}</>;
 }
 
 /**
@@ -236,7 +257,7 @@ function VersionChips({ row, onMain }: { row: SvgRow; onMain: AiBarActions["onMa
  */
 function SvgVersionChips({ row, onPrefer }: { row: SvgRow; onPrefer: (id: string, version: number) => void }) {
   const usable = (row.meta?.versions ?? []).filter((v) => v.status === "generated" && v.validation.ok);
-  if (usable.length < 1) return null; // one version still gets its 🗑 (2026-11-16)
+  if (usable.length < 1) return null; // the 🗑 lives on the preview corner, not here (2026-11-17)
   const id = row.source.id;
   const shown = shownVersion(row)?.version ?? null;
   return (
@@ -246,20 +267,13 @@ function SvgVersionChips({ row, onPrefer }: { row: SvgRow; onPrefer: (id: string
         // The stored choice, not the approval: choosing never approves the row.
         const chosen = row.meta?.preferred === version;
         return (
-          <span key={version} className="svg-chip-with-trash"><button type="button" className={`svg-btn tiny${on ? " primary" : ""}`}
+          <button key={version} type="button" className={`svg-btn tiny${on ? " primary" : ""}`}
             data-testid={`svg-ver-chip-${id}-${version}`} data-active={on ? "true" : "false"} aria-pressed={on}
             title={chosen ? "This SVG version is the one the row shows and exports" : "Show this SVG version — choosing does not approve the row"}
             onClick={(e) => { e.stopPropagation(); if (!chosen) onPrefer(id, version); }}>v{version}</button>
-            <TrashChip id={id} kind="svg" version={version} /></span>
         );
       })}
     </div>
   );
 }
 
-/** 🗑 beside a version chip (2026-11-16): that version leaves the row and its folder — Undo brings it back. */
-function TrashChip({ id, kind, version }: { id: string; kind: VersionKind; version: number }) {
-  return <button type="button" className="svg-chip-trash" data-testid={`svg-${kind === "svg" ? "ver" : "ai"}-trash-${id}-${version}`}
-    title={`Remove ${kind === "svg" ? "SVG" : "AI source"} v${version} from this item and its folder (moved to .removed versions; Undo brings it back)`}
-    aria-label={`Remove v${version}`} onClick={(e) => { e.stopPropagation(); void removeVersion(id, kind, version); }}>🗑</button>;
-}

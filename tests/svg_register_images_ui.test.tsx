@@ -233,7 +233,7 @@ describe("the button in the tab", () => {
     await unmountPanel();
   });
 
-  it("🗑 on an AI source version chip moves it out of the folder and the row; Undo brings both back (2026-11-16)", async () => {
+  it("🗑 in the AI preview's corner moves the version out of the folder and the row; Undo brings both back (2026-11-17)", async () => {
     const root = splitRoot();
     await mount(root);
     await act(async () => input(`[data-testid=svg-check-${SPLIT_ID}]`).click());
@@ -242,7 +242,11 @@ describe("the button in the tab", () => {
     await settle();
     const dir = root.children.get("split_01") as FakeDir;
     expect(dir.children.has("download-icon-01_AI.png")).toBe(true);
-    await click(q(`[data-testid=svg-ai-trash-${SPLIT_ID}-1]`) as HTMLElement);
+    // the corner 🗑 removes the version the preview shows — the original is still main, so it rests
+    expect(q(`[data-testid=svg-ai-trash-${SPLIT_ID}]`)).toBeNull();
+    await click(q(`[data-testid=svg-ai-chip-${SPLIT_ID}-1]`) as HTMLElement);
+    await settle();
+    await click(q(`[data-testid=svg-ai-trash-${SPLIT_ID}]`) as HTMLElement); // the preview's corner 🗑 (2026-11-17)
     await vi.waitFor(() => expect(dir.children.has("download-icon-01_AI.png")).toBe(false));
     expect((dir.children.get(".removed versions") as FakeDir).children.has("download-icon-01_AI.png")).toBe(true);
     await vi.waitFor(() => expect(q(`[data-testid=svg-ai-chip-${SPLIT_ID}-1]`)).toBeNull());

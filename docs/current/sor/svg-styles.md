@@ -32,8 +32,9 @@ row. Source: `src/svg/styles.ts`, `src/lib/svgstyles.ts`.
 * **The chosen variant is the source**: the chips under the AI-source preview
   accept a variant as main (`imagePreferred`); the row shows it and the next
   generation vectorizes it (`mainImageOf`, RC8) — choosing never approves the
-  row. Removing a variant (🗑) moves its file to `.removed versions` and undoes
-  as one history step ([version removal](version-acceptance.md)).
+  row. Removing a variant (the 🗑 in the style AI preview's bottom-right corner,
+  2026-11-17 — never a can beside every chip) moves its file to `.removed
+  versions` and undoes as one history step ([version removal](version-acceptance.md)).
 * **One style, or review every style separately**: the pinned `svg-style-select`
   menu keeps its single-style choices and adds **All styles · separate rows**.
   That view renders each base line-stroke pair and each registered style pair
