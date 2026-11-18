@@ -12,6 +12,7 @@ import { mainImageOf } from "../lib/svgimgreg";
 import { metaPathForAi, newPairMeta, sideOf, type PairMeta } from "../lib/pairmeta";
 import { svgStem } from "../lib/svgfile";
 import { baseRowId, styleFilesOf, styleOfFolder, styleRowId, variantVersions, type StyleFiles } from "../lib/svgstyles";
+import { isGoneSinceScan } from "../selection/offline";
 import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
 import { getAppState, patchSvg } from "../state/appstore";
 import { beginRegister } from "./registerprogress";
@@ -58,9 +59,12 @@ export function styleSourceOf(base: SvgSource, meta: PairMeta): SvgSource {
 
 /** Every row in the active style when it has it, else as it is (base). */
 export function styledRows(bases: readonly SvgRow[], metaOf: (id: string) => PairMeta | null | undefined, style: string | null): SvgRow[] {
-  if (style === null) return [...bases];
-  return bases.map((row) => {
-    const meta = metaOf(styleRowId(row.source.id, style));
+  // a pair declined since the last scan is out of EVERY mode until a scan or an undo says otherwise (2026-11-17)
+  const alive = bases.filter((row) => !isGoneSinceScan(row.source.id));
+  if (style === null) return [...alive];
+  return alive.map((row) => {
+    const id = styleRowId(row.source.id, style);
+    const meta = isGoneSinceScan(id) ? null : metaOf(id);
     return meta == null ? row : styleRow(row, meta, metaOf);
   });
 }
@@ -109,7 +113,8 @@ export function rowsForStyle(discovery: Discovery, refs: SvgRefs, style: string 
 }
 
 function baseRows(discovery: Discovery, metaOf: (id: string) => PairMeta | null | undefined): SvgRow[] {
-  return discovery.sources.map((source) => toRow(source, metaOf(source.id) ?? null, discovery.corruptFiles?.includes(source.metaPath) ?? false));
+  return discovery.sources.filter((source) => !isGoneSinceScan(source.id))
+    .map((source) => toRow(source, metaOf(source.id) ?? null, discovery.corruptFiles?.includes(source.metaPath) ?? false));
 }
 
 /** Base and each registered style become separate rows with their own pair-file review status. */
@@ -118,7 +123,8 @@ export function rowsForAllStyles(discovery: Discovery, metaOf: (id: string) => P
   const byBase = new Map<string, SvgRow[]>();
   for (const style of styles) {
     for (const base of bases) {
-      const meta = metaOf(styleRowId(base.source.id, style));
+      const styleId = styleRowId(base.source.id, style);
+      const meta = isGoneSinceScan(styleId) ? null : metaOf(styleId);
       if (meta == null) continue;
       const row = styleRow(base, meta, metaOf);
       const rows = byBase.get(base.source.id) ?? [];

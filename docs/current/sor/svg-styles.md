@@ -65,3 +65,17 @@ row. Source: `src/svg/styles.ts`, `src/lib/svgstyles.ts`.
   discarding a full temporary row array for every style and appends each found
   style row into its base's output list. Corrupt base pair files preserve the
   same corruption marker in either view.
+* **Remove works in every mode, and removes the item fully (2026-11-17)**:
+  `removerows.ts` declines the row's BASE pair AND every registered style pair
+  its folder holds (`familyOf`, style files found by the registration's own
+  naming rule), as ONE "decisions" history entry — so a Remove pressed while a
+  style is picked, or in the all-styles list, takes the row out of every mode,
+  and one Undo brings every pair back. The toast names the style pairs it
+  declined with the row.
+* **No resurrection on a style switch (2026-11-17)**: a style switch rebuilds
+  the rows from the scan's records, which still call a pair removed meanwhile
+  approved. `selection/offline.ts` keeps the decisions written since the last
+  scan (`isGoneSinceScan`); `styles.ts` (`styledRows`, `baseRows`,
+  `rowsForAllStyles`) skips those pairs in every mode, and a scan commit
+  (`scan.ts`) clears the overlay once it has read every pair file fresh. An
+  undo writes "approved" through the same path, so the row returns at once.

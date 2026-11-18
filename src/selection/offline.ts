@@ -65,6 +65,20 @@ export interface WrittenDecision {
 const writtenListeners = new Set<(written: WrittenDecision[]) => void>();
 
 /**
+ * Decisions written to files since the last scan read them (2026-11-17): a
+ * style switch rebuilds the rows from the scan's records, which still call a
+ * pair removed meanwhile approved — this overlay keeps such a pair out of every
+ * rebuild until the next scan (or an undo) says otherwise.
+ */
+const writtenSinceScan = new Map<string, Decision>();
+export function isGoneSinceScan(id: string): boolean {
+  const d = writtenSinceScan.get(id);
+  return d !== undefined && d !== "approved";
+}
+/** A scan has read every pair file fresh: the overlay has nothing to add. */
+export function clearDecisionsSinceScan(): void { writtenSinceScan.clear(); }
+
+/**
  * Hears every decision written to files here — a Generate SVG Remove, or an
  * undo/redo pressed while no Selection panel is mounted — so another tab's list
  * can follow (a pair that is no longer approved leaves Generate SVG).
@@ -96,7 +110,10 @@ async function applyToFiles(touched: readonly string[], patch: DecisionPatch): P
     const rec = named.get(id) ?? pendingRecord(id);
     if (rec !== null && (await writeUnderAny(roots, rec))) written.push({ id, decision: rec.decision });
   }
-  if (written.length > 0) for (const listener of writtenListeners) listener(written);
+  if (written.length > 0) {
+    for (const w of written) writtenSinceScan.set(w.id, w.decision);
+    for (const listener of writtenListeners) listener(written);
+  }
   return written.length > 0;
 }
 

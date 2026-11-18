@@ -18,6 +18,7 @@ import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
 import { metaPathFor } from "../lib/pairmeta";
 import { STYLE_ID_SEP, styleRowId } from "../lib/svgstyles";
+import { clearDecisionsSinceScan } from "../selection/offline";
 import { rowsForAllStyles, styledRows, styleMetaPathAt, stylePrefs } from "./styles";
 
 import { saveSourceIndex, type IndexEntry } from "../state/sourceindex";
@@ -145,6 +146,7 @@ interface Commit {
 
 /** The single commit: state first, then the cache that must never fail a scan. */
 function commit(c: Commit): void {
+  clearDecisionsSinceScan(); // the records below were just read from the files (2026-11-17)
   for (const [id, meta] of c.loaded.metas) c.refs.metas.set(id, meta);
   c.setters.setRows(c.loaded.rows);
   c.setters.setDiscovery(c.discovery);

@@ -5509,8 +5509,6 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
   80 %). Pushed as `0187bbb` in the same step as the commit (push-after-every-
   commit rule).
 
-<<<<<<< HEAD
-=======
 
 ## 2026-11-17 — production React in tests, and the everyday scoping lane (harness speed)
 
@@ -5615,4 +5613,28 @@ column sizes from the column width (the row's `titleFillPct` mirror) explodes th
 wrap and was dropped for keep-the-user's-sizes plus shrink-only; a ring-less
 split column broke the opaque-ink guarantee, so the column's tall block keeps its
 double ring in the readable ink, unlike the thin row block.
->>>>>>> 60b710569c8b61284840d030a8f2260db6b8b61c
+
+## 2026-11-17 — Remove in every mode, removing the row fully (Generate SVG styles)
+
+Blind spot: Remove declined only the pair file of the row on screen. In a style
+mode that was the style pair alone — the base stayed approved, so the row came
+back on the next rebuild ("cannot remove in style mode"); in base mode the
+style pairs stayed approved, so switching to a style brought the row back
+("remove in base leaves the style row"). Style switches rebuild rows from the
+scan's records, which never see decisions written after the scan.
+
+What changed: `removerows.ts` `familyOf` expands a removal to the base pair plus
+every style pair the folder holds (found by `styleMetaPathAt`, the
+registration's naming rule), declined as one history entry — one undo restores
+them all; `selection/offline.ts` keeps decisions written since the last scan
+(`isGoneSinceScan`, cleared by the scan commit) and `styles.ts` skips those
+pairs in `styledRows` / `baseRows` / `rowsForAllStyles`, so no rebuild
+resurrects a removed row in any mode.
+
+Witnesses first: `tests/svg_remove_row_styles.test.ts` (4 tests; 3 RED before
+the fix — the style pair stayed approved, the rebuild returned the row). They
+pin the real style-pair identity: the file carries the BASE row's base/suffix
+with its own face in `_<style>` (`pairrebase.ts` re-derives `<pairId(base
+folder)>~<style>` on read) — a fixture parsed from the style image name gets a
+different id and silently declines the wrong file. Evidence: the styles and
+remove clusters 47 passed; docs inside caps (`sor/svg-styles.md` ~5.7 kB).
