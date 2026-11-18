@@ -86,6 +86,7 @@ node tools/quality.mjs --json           # machine-readable
 
 ```bash
 npm test                     # vitest run
+npm run test:affected        # only the tests a working-tree change can observe
 ```
 
 Projects, shared setup, `settle`/`waitUntil` and how to keep the run short:
@@ -97,12 +98,23 @@ deleted, it is not a test.
 
 `vitest.config.ts` sets `silent: "passed-only"` (2026-10-08): a PASSING test's
 console output is not streamed to the reporter, a FAILING one still prints
-everything it logged. The DOM suites emit thousands of React `act()` warnings,
-and streaming them all left an `onUserConsoleLog` message in flight when a
-worker was torn down — vitest then reported `EnvironmentTeardownError: Closing
-rpc while "onUserConsoleLog" was pending` and exited non-zero on a fully green
-run. Debug with `console.log` as usual: the output appears whenever the test
-fails, and always with `--reporter=verbose` for a single file you are chasing.
+everything it logged — streaming thousands of messages once left an
+`onUserConsoleLog` in flight when a worker was torn down, so vitest exited
+non-zero on a green run (`EnvironmentTeardownError`). Debug with `console.log`
+as usual, and with `--reporter=verbose` for a single file you are chasing.
+
+**Everyday scoping (2026-11-17).** `test:affected` walks the real import graph
+of `src`, `tests` and `tools` and runs only the tests that can observe the
+change; `test:affected:list` previews, `--base <ref>`, `--files` and `--json`
+scope explicitly. Measured here: a component edit 35 of 473 files in 33 s
+(-67% of the 100 s complete run), a widely imported library 184 files in 61 s
+(-39%), a test helper 12 files. It runs the COMPLETE suite whenever scoping
+cannot prove a test unaffected: a harness-wide change (`vitest.config.ts`,
+`tests/setup/**`, `package.json`, `tsconfig*`, the gate tools), a path outside
+`src|tests|tools|docs`, a deletion, an unresolvable base, or a docs edit (routed
+to the tests that read docs). `npm test`, `npm run verify` and CI still run
+everything — this lane never gates. `tests/affected_scope.test.ts` pins the
+graph and every escalation.
 
 ### 6. Coverage (RULE 16.3)
 

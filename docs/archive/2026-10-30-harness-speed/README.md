@@ -179,3 +179,22 @@ lane runner always sets it.
   on one fast-forward (§6); `tests/harness_quiet.test.ts` regression test.
 - `docs/current/TEST_HARNESS.md` — evidence, pacing-knob contract, measured
   numbers (kept inside the 9 000-byte agent read budget).
+
+## Moved here from TEST_HARNESS.md §5 (2026-11-17)
+
+## 5. Real computation, not cheaper fake tests
+
+`src/lib/upload/geom/expand/offsetcheck.ts` optimizes actual shipped geometry,
+not a testing substitute: same Bernstein arithmetic order, no vector/weight
+allocation per distance iteration, independent checks short-circuit on failure,
+a conservative derivative interval bound may certify the unchanged tolerance
+decision. Near-threshold, uncertain and nonfinite cases keep the original
+forty-step search; TOL0.01, check positions, subdivision/depth8 and output
+geometry are unchanged. Original281edd6 hashes for36 deterministic cases and648
+near-threshold comparisons guard equivalence. A focused geometry speedup is never
+overall verification evidence.
+
+Rejected: non-contextified custom VM (microbenchmark faster, actual suite not),
+global threads/V8, four-worker oversubscription, automatic pending-work
+cancellation. No custom DOM/provider/dependency/pool switch ships.
+

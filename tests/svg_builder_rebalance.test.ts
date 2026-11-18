@@ -61,12 +61,12 @@ describe("rebalance a top / bottom banner row", () => {
     expect(rule).toBeCloseTo((t1 + s0) / 2, 0);
   });
 
-  it("without a browser measurer it still lays out (estimated); edge banners only", () => {
+  it("without a browser measurer it still lays out (estimated); every banner but a plain grid", () => {
     const { svg } = sheet({ title: "a much longer title than before for this sheet", titleWidth: 120, autoRebalance: true });
     expect(lines(svg, "title")).toBe(1);
     expect(canRebalance({ position: "top", style: "solid" })).toBe(true);
-    expect(canRebalance({ position: "left", style: "solid" })).toBe(false);
-    expect(parseSheetConfig({ banner: {} }).banner).toMatchObject({ edgeSpread: false, autoRebalance: false });
+    expect(canRebalance({ position: "left", style: "solid" })).toBe(true); // columns carry the rule too (2026-11-17)
+    expect(parseSheetConfig({ banner: {} }).banner).toMatchObject({ edgeSpread: false, autoRebalance: true }); // the rule is the default (2026-11-17)
   });
 
   it("dev mode: the algorithm's ink boxes and gaps, exactly where it put the texts (2026-11-15)", () => {
@@ -79,7 +79,7 @@ describe("rebalance a top / bottom banner row", () => {
     expect(boxes.gaps).toHaveLength(3);
     expect(boxes.gaps[1].width).toBeCloseTo(2 * boxes.gaps[0].width, 1); // edge · double · edge
     expect(boxes.gaps[2].width).toBeCloseTo(boxes.gaps[0].width, 1);
-    expect(spreadInkBoxes(parseSheetConfig({ ...config, banner: { ...config.banner, edgeSpread: false } }), computeLayout(config))).toBeNull();
+    expect(spreadInkBoxes(parseSheetConfig({ ...config, banner: { ...config.banner, edgeSpread: false, autoRebalance: false } }), computeLayout(config))).toBeNull();
   });
 
   it("the user sets the gap %, the title % of the banner height and the subtitle % of the title (2026-11-15)", () => {

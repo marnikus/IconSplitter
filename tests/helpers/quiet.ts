@@ -1,4 +1,4 @@
-// quiet.ts — "settle until the app is quiet" for DOM tests (TEST_HARNESS.md §3).
+// quiet.ts — "settle until the app is quiet" for DOM tests (TEST_HARNESS.md §4).
 // A fixed `sleep(1200)` after a click waits the worst case on every run. This
 // helper waits only while the app still has work queued: a pending
 // setImmediate (fake-indexeddb, React's scheduler) or a timer due inside the
@@ -57,6 +57,14 @@ export function installQuietTracking(): void {
   wrapImmediate(globalThis);
 }
 
+/**
+ * How many global timers quiet is currently tracking. The harness act drain
+ * (tests/setup/reactprod.ts) must leave this untouched: a turn quiet can see
+ * counts as app work, so it would reset settle()'s "quiet for three turns"
+ * accounting and spin every settle to its ceiling.
+ */
+export const trackedTimerCount = (): number => timers.size;
+
 /** The earliest timer due by `deadline` (virtual ms), if any. */
 function nextTimer(deadline: number): Pending | undefined {
   let next: Pending | undefined;
@@ -99,6 +107,20 @@ export async function settle(maxMs = 80): Promise<void> {
   while (calm < 3 && realNow() < stopAt) calm = (await step(deadline)) ? 0 : calm + 1;
 }
 
+/**
+ * Believe `pred` only once the app is quiet. Dev React's `act` flushed the
+ * scheduler synchronously, so one observation was enough; the production harness
+ * (tests/setup/reactprod.ts) can only yield scheduler turns, so a store can
+ * publish a state before the work that state describes has landed — a template
+ * folder existed while its export files were still being written. `settle(0)`
+ * drains what is already due (React's scheduler callback, IndexedDB immediates)
+ * and fast-forwards nothing, so no timer expires early.
+ */
+async function confirmed(pred: () => boolean): Promise<boolean> {
+  await act(async () => { await new Promise<void>((r) => realSetImmediate(r)); });
+  return pred();
+}
+
 /** Steps the app (as settle does) until `pred` holds; fails after `budgetMs` of app time. */
 export async function waitUntil(pred: () => boolean, what: string, budgetMs = 4000): Promise<void> {
   let deadline = now() + budgetMs;
@@ -107,7 +129,7 @@ export async function waitUntil(pred: () => boolean, what: string, budgetMs = 40
     // Readiness may already be queued in a Promise/React commit. Observe that
     // work before selecting a future timer (otherwise a toast can expire first).
     await act(async () => { await new Promise<void>((r) => realSetImmediate(r)); });
-    if (pred()) return;
+    if (pred() && (await confirmed(pred))) return;
     const before = warp;
     if (!(await step(deadline))) await act(async () => { await new Promise((r) => realSetTimeout(r, 1)); });
     // Fast-forwarding to a timer is not waiting: give the budget back, or one

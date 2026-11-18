@@ -6,6 +6,7 @@
 // Pure: validation on read (RULE 13), names, apply and the block's preview.
 import { isRecord } from "../isrecord";
 import { DEFAULT_CONFIG, applyCopy, copyConfig, parseSheetConfig } from "./config";
+import { canRebalance } from "./rebalance";
 import { composeSheet } from "./compose";
 import { computeLayout } from "./layout";
 import { round } from "./markup";
@@ -42,7 +43,9 @@ export function lookOf(config: SheetConfig): SheetConfig {
   const look = copyConfig(parseSheetConfig(config));
   const title = look.banner.title.trim() === "" ? DEFAULT_CONFIG.banner.title : look.banner.title;
   const subtitle = look.banner.subtitle.trim() === "" ? DEFAULT_CONFIG.banner.subtitle : look.banner.subtitle;
-  return { ...look, banner: { ...look.banner, title, subtitle, heroIconId: null } };
+  // The reference text rule rides with every template a row or column can carry (2026-11-17).
+  const autoRebalance = canRebalance(look.banner) ? true : look.banner.autoRebalance;
+  return { ...look, banner: { ...look.banner, title, subtitle, heroIconId: null, autoRebalance } };
 }
 
 /** The template as its own sheet: its look with its sample words — what editing it and its block show. */

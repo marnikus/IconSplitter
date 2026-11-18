@@ -5509,3 +5509,110 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
   80 %). Pushed as `0187bbb` in the same step as the commit (push-after-every-
   commit rule).
 
+<<<<<<< HEAD
+=======
+
+## 2026-11-17 — production React in tests, and the everyday scoping lane (harness speed)
+
+- Request: cut complete-retest time. Two levers, both measured on this host
+  (2 vCPU, 3.8 GiB, warm cache, `mainWorkerBudget()` = 2): run the production
+  React the app ships, then scope the everyday retest by import graph.
+- Production React (`76a1cb4`): tests ran React's development builds, so
+  dev-only validation, owner stacks and warnings were about two thirds of
+  React's CPU in DOM tests — owner-stack capture alone ~20%, already suppressed
+  by poking React internals in `tests/setup/dom.ts` (now deleted as dead).
+  `test.env.NODE_ENV="production"` is set for the WORKER only (the packages pick
+  their build from NODE_ENV and require each other natively, where aliases do
+  not reach; production in the config process breaks vite's `node:` resolution)
+  and `esbuild.jsxDev:false` compiles test JSX with the production transform
+  `npm run build` emits. Production ships no `act` and 162 test files import it,
+  so `react` resolves to `tests/setup/reactprod.ts`: the real module plus ONE
+  harness `act` — sync callbacks commit before it returns (`flushSync`), keeping
+  the un-awaited `act(() => render(...))` in `beforeEach`; async ones resolve
+  after three `node:timers` turns, which `quiet.ts` cannot see (a global-timer
+  drain reset its calm accounting: 25.3 s → 53.9 s and three elapsed-clock
+  tests timing out).
+- Blind spots checked: production has no synchronous passive-effect flush, so an
+  effect lands on the NEXT turn and a sync `act` shows pre-effect DOM. That is
+  the one intentional difference from dev `act`, asserted rather than hidden —
+  `tests/harness_prod_react.test.tsx` pins the build (`captureOwnerStack`
+  absent), both commit contracts, the completeness of the re-export against a
+  native `require`, and that the drain stays invisible to `quiet`. Rejected and
+  recorded in `docs/archive/2026-11-17-harness-production-react/`: aliasing the
+  production cjs (two React copies, null dispatcher), `export * from` for
+  `@types/react` (TS2498), a repeated `flushSync` as an effect flush, an ambient
+  `declare module`.
+- The faster `act` exposed a latent race, not a new one: `svg_builder_artboards`
+  waited for a folder name that `+ Artboard` stores at creation, while the
+  export's writes land behind `useSvgBuilder`'s 600 ms sheet sync (named by
+  recording the stack of every 100–2000 ms timer). It now settles the app's own
+  window; every assertion is unchanged and no magic turn count was introduced.
+- Scoping lane (`tools/affected-tests.mjs`, `npm run test:affected`): walks the
+  real import graph of `src`, `tests` and `tools` — every specifier form in use
+  (`import`, `export … from`, `import type`, `import *`, side-effect, dynamic
+  `import()`, `require()`, `vi.mock()`) — and runs only the tests that can
+  observe a change. Escalates to the COMPLETE suite whenever scoping cannot
+  prove a test unaffected: a harness-wide change (`vitest.config.ts`,
+  `tests/setup/**`, `package.json`, `tsconfig*`, the gate tools), a path outside
+  `src|tests|tools|docs`, a deletion, an unresolvable base, or a docs edit
+  (routed to the tests that read docs). `npm test`, `npm run verify` and CI are
+  untouched: the lane never gates, so no test can be scoped out of a gate.
+- Measured: red first (the new tool did not exist), then 15/15 in
+  `tests/affected_scope.test.ts` including the graph over the real repository
+  and every escalation. Cuts, warm: a component edit 35 of 473 files in 33 s
+  (-67% of the 100 s complete run), a widely imported library 184 files in 61 s
+  (-39%), `svgvalidate` 1561 tests green via `--run`. Complete suite 473 files /
+  4776 tests green in 106.9 s (host variance over the 99.5 s prod-React run;
+  the new test costs 254 ms). Production React alone: 117.2 s → 100.1 s wall and
+  190.4 s → 160.8 s CPU (-14.6% / -15.5%). The -80% target is NOT met and 160.8 s
+  of CPU over 2 cores leaves an 80 s wall floor, so CPU work alone cannot reach
+  it here — the everyday retest is scoped instead. Gates: tsc clean, lint 0
+  errors (26 pre-existing warnings; one new unused import fixed), quality GATE
+  PASSED, build PASS, `npm run verify` ALL LANES PASSED in 2 m 31.8 s after a
+  first run whose only failure was the known `batch_nonblocking` starvation
+  flake under istanbul on 2 cores (it passed uninstrumented and on re-run).
+  Docs: `CODE_VERIFICATION.md` §5 (8884 B) and `TEST_HARNESS.md` §1 (8993 B,
+  under the 9000 B cap; the byte-squeeze typos it inherited — `for36`,
+  `threshold80%` — repaired), `docs_navigation` 4/4.
+
+## 2026-11-17 — the reference text rule on column banners, and as the default (builder)
+
+Blind spot: the reference spacing rule (edge g · title · 2g · subtitle · g between
+the REAL ink edges, the ink centred on the banner's middle line, the hero or
+divider in the middle of the double gap) lived only where a user had switched it
+on, and only for top / bottom rows. Left / right banners kept fixed gaps, saved
+templates kept whatever they stored, and new designs started without the rule —
+so the one correct template in the reference stayed an exception.
+
+What changed: `rebalance.ts` grew `isColumn`, `linesFor`, `blockInk`, `fitColumn`
+and `rebalanceSpan`; `canRebalance` now covers every banner but a plain grid.
+`banner.ts` grew `columnGeometry`, `spreadSide`, `splitSpreadSide`: the rule with
+the axes swapped — gaps measured vertically over the banner height, every wrapped
+line's ink centred on the column's middle line, the hero's double ring (solid and
+split block, in the block's readable ink) or the divider in the middle of the
+double gap, a split seam ending there. The column keeps the user's sizes, shrunk
+by one factor only when the gaps would fall below the Gap % of the height.
+`DEFAULT_CONFIG.banner.autoRebalance` is now on, every preset inherits it, and
+`templates.ts` `lookOf` migrates every saved row / column template to it on read;
+a stored sheet keeps an explicit opt-out, and Auto rebalance off plus Centred row
+still returns the legacy placement. ▦ Guides draws the column's ink blocks and
+vertical gap bars with their px (`SvgBuilderTextBoxes`).
+
+Witnesses first, then code: `tests/svg_builder_column_spread.test.ts` (9 tests,
+all RED before the engine: gap ratios 1:2:1 measured vertically, per-line ink
+centring, hero / divider at the middle of the double gap, the one-factor shrink,
+the split seam and its readable ink, the guides' bars, `canRebalance`, the new
+default and the template migration). Pins that the rule legitimately owns were
+updated, never weakened: the row test's `canRebalance(left)` and default pins, the
+quick-edit "side banner has no row" pins (a column carries the rule now), and the
+placement / wrap-width mechanism tests opt out with `autoRebalance: false` — the
+rule ignores stored moves and widths while it is on, by design.
+
+Evidence: complete suite 473 files / 4782 passed (the 3 `quality_base` failures
+are the dirty-tree gate, green once committed); `tsc --noEmit` clean; docs inside
+their caps (`sor/svg-builder-rebalance.md` 6622 B). Dead ends recorded: growing
+column sizes from the column width (the row's `titleFillPct` mirror) explodes the
+wrap and was dropped for keep-the-user's-sizes plus shrink-only; a ring-less
+split column broke the opaque-ink guarantee, so the column's tall block keeps its
+double ring in the readable ink, unlike the thin row block.
+>>>>>>> 60b710569c8b61284840d030a8f2260db6b8b61c

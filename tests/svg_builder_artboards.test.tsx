@@ -369,7 +369,15 @@ describe("final artboards — the list under the templates", () => {
     await clickWith(`builder-artboard-check-${a2.id}`, {});
     await click("builder-export-selected");
     const dir = (node: FakeDir | undefined, name: string) => node?.children.get(name) as FakeDir | undefined;
-    await waitUntil(() => savedArtboards().every((a) => typeof (a as { folder?: string | null }).folder === "string"), "both exported");
+    // The export's writes land behind the builder's 600 ms sheet-sync debounce
+    // (useSvgBuilder.ts), so settle that window rather than poll the folder
+    // name: "+ Artboard" already remembers `folder` when the artboard is created
+    // (actions/sheetexport.ts), so that signal was true before anything was
+    // written. The slower dev-React act masked the race by letting the writes
+    // land first (TEST_HARNESS.md §2). settle() warps app time, not wall time,
+    // and still stops as soon as the app is quiet.
+    await settle(1000);
+    expect(savedArtboards().every((a) => typeof (a as { folder?: string | null }).folder === "string")).toBe(true);
     const f1 = (savedArtboards()[0] as unknown as { folder: string }).folder;
     const f2 = (savedArtboards()[1] as unknown as { folder: string }).folder;
     expect(f1.startsWith(`${tplDir}/artboard_01_`)).toBe(true); // inside the template's folder, numbered, with its title

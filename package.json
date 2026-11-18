@@ -20,6 +20,8 @@
     "coverage": "vitest run --coverage",
     "quality": "node tools/quality.mjs",
     "quality:changed": "node tools/quality.mjs --changed --allow-legacy",
+    "test:affected": "node tools/affected-tests.mjs --run",
+    "test:affected:list": "node tools/affected-tests.mjs",
     "verify": "node tools/verify.mjs --full",
     "verify:fast": "node tools/verify.mjs",
     "hooks:install": "bash tools/install_hooks.sh"

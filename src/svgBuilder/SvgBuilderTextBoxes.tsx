@@ -16,9 +16,13 @@ export default function SvgBuilderTextBoxes({ b, zoom }: { b: BuilderApi; zoom: 
   return <svg className="bld-guides" data-testid="builder-text-boxes" viewBox={`0 0 ${width} ${height}`} width={width} height={height} aria-hidden="true" strokeWidth={px}
     style={{ opacity: b.prefs.guideOpacity / 100 }}>
     {[boxes.title, boxes.sub].map((r, i) => <rect key={i} data-ink={i === 0 ? "title" : "subtitle"} x={r.x} y={r.y} width={r.width} height={r.height} fill="none" stroke={RED} />)}
-    {boxes.gaps.map((g, i) => <g key={`g${i}`} data-gap={i}>
-      <rect x={g.x} y={g.y} width={Math.max(0, g.width)} height={g.height} fill={RED} />
-      <text x={g.x + g.width / 2} y={g.y - 4 * px} fill={RED} fontSize={10 * px} textAnchor="middle">{Math.round(g.width)}</text>
-    </g>)}
+    {boxes.gaps.map((g, i) => {
+      const vertical = g.height > g.width; // a column's gaps run down the middle line (2026-11-17)
+      return <g key={`g${i}`} data-gap={i}>
+        <rect x={g.x} y={g.y} width={Math.max(0, g.width)} height={Math.max(0, g.height)} fill={RED} />
+        <text x={vertical ? g.x + g.width / 2 + 4 * px : g.x + g.width / 2} y={vertical ? g.y + g.height / 2 : g.y - 4 * px}
+          fill={RED} fontSize={10 * px} textAnchor={vertical ? "start" : "middle"}>{Math.round(vertical ? g.height : g.width)}</text>
+      </g>;
+    })}
   </svg>;
 }
