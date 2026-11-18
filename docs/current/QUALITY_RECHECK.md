@@ -5572,3 +5572,44 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
   Docs: `CODE_VERIFICATION.md` §5 (8884 B) and `TEST_HARNESS.md` §1 (8993 B,
   under the 9000 B cap; the byte-squeeze typos it inherited — `for36`,
   `threshold80%` — repaired), `docs_navigation` 4/4.
+
+## 2026-11-17 — the reference text rule on column banners, and as the default (builder)
+
+Blind spot: the reference spacing rule (edge g · title · 2g · subtitle · g between
+the REAL ink edges, the ink centred on the banner's middle line, the hero or
+divider in the middle of the double gap) lived only where a user had switched it
+on, and only for top / bottom rows. Left / right banners kept fixed gaps, saved
+templates kept whatever they stored, and new designs started without the rule —
+so the one correct template in the reference stayed an exception.
+
+What changed: `rebalance.ts` grew `isColumn`, `linesFor`, `blockInk`, `fitColumn`
+and `rebalanceSpan`; `canRebalance` now covers every banner but a plain grid.
+`banner.ts` grew `columnGeometry`, `spreadSide`, `splitSpreadSide`: the rule with
+the axes swapped — gaps measured vertically over the banner height, every wrapped
+line's ink centred on the column's middle line, the hero's double ring (solid and
+split block, in the block's readable ink) or the divider in the middle of the
+double gap, a split seam ending there. The column keeps the user's sizes, shrunk
+by one factor only when the gaps would fall below the Gap % of the height.
+`DEFAULT_CONFIG.banner.autoRebalance` is now on, every preset inherits it, and
+`templates.ts` `lookOf` migrates every saved row / column template to it on read;
+a stored sheet keeps an explicit opt-out, and Auto rebalance off plus Centred row
+still returns the legacy placement. ▦ Guides draws the column's ink blocks and
+vertical gap bars with their px (`SvgBuilderTextBoxes`).
+
+Witnesses first, then code: `tests/svg_builder_column_spread.test.ts` (9 tests,
+all RED before the engine: gap ratios 1:2:1 measured vertically, per-line ink
+centring, hero / divider at the middle of the double gap, the one-factor shrink,
+the split seam and its readable ink, the guides' bars, `canRebalance`, the new
+default and the template migration). Pins that the rule legitimately owns were
+updated, never weakened: the row test's `canRebalance(left)` and default pins, the
+quick-edit "side banner has no row" pins (a column carries the rule now), and the
+placement / wrap-width mechanism tests opt out with `autoRebalance: false` — the
+rule ignores stored moves and widths while it is on, by design.
+
+Evidence: complete suite 473 files / 4782 passed (the 3 `quality_base` failures
+are the dirty-tree gate, green once committed); `tsc --noEmit` clean; docs inside
+their caps (`sor/svg-builder-rebalance.md` 6622 B). Dead ends recorded: growing
+column sizes from the column width (the row's `titleFillPct` mirror) explodes the
+wrap and was dropped for keep-the-user's-sizes plus shrink-only; a ring-less
+split column broke the opaque-ink guarantee, so the column's tall block keeps its
+double ring in the readable ink, unlike the thin row block.

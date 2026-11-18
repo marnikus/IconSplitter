@@ -10,7 +10,7 @@ import { composeSheet } from "../src/lib/svgBuilder/compose";
 
 const LONG = "why it so long text used here";
 function titleLines(banner: Partial<typeof DEFAULT_CONFIG.banner>): number {
-  const config = parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, position: "top", size: 120, title: LONG, ...banner } });
+  const config = parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, position: "top", size: 120, title: LONG, autoRebalance: false, ...banner } }); // the wrap widths, with the spread rule opted out
   const svg = composeSheet({ config, layout: computeLayout(config), assets: [], placedIds: [], svgTexts: {} }).svg;
   const block = /data-banner-text="title"[\s\S]*?<\/g>/.exec(svg)?.[0] ?? "";
   return (block.match(/<text/g) ?? []).length;

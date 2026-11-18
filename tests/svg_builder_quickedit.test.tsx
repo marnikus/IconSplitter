@@ -534,7 +534,7 @@ describe("number boxes apply as you type", () => {
 
   it("⇔ Rebalance row (top banner): one click spreads the row evenly with each text on one line; one undo step (2026-11-15)", async () => {
     await openLibrary();
-    expect(q("builder-banner-rebalance")).toBeNull(); // the default side banner has no row
+    expect(q("builder-banner-rebalance")).not.toBeNull(); // the default side banner is a column: it carries the rule (2026-11-17)
     await click("builder-layout-masthead"); // a top banner
     if (q("builder-banner-style") === null) { // the Banner section folded: open it
       await act(async () => { q("builder-section-banner")!.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
@@ -586,8 +586,8 @@ describe("number boxes apply as you type", () => {
   it("the banner's quick bar has ⇔: Rebalance now and an Auto rebalance checkbox (top banner) (2026-11-15)", async () => {
     await openLibrary();
     await hover(shadow().querySelector('[data-banner="true"] > rect')!);
-    expect(q("builder-quick-rebalance")).toBeNull(); // a side banner has no row
-    const top = { ...config(), banner: { ...config().banner, position: "top", style: "solid", size: 90 } };
+    expect(q("builder-quick-rebalance")).not.toBeNull(); // a side banner is a column: it carries the rule (2026-11-17)
+    const top = { ...config(), banner: { ...config().banner, position: "top", style: "solid", size: 90, autoRebalance: false } };
     localStorage.setItem("iconSplitter.svgBuilder.config.v1", JSON.stringify(top));
     act(() => ui.unmount());
     ui = createRoot(host);

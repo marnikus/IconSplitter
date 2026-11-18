@@ -312,7 +312,7 @@ import { bannerMarkup } from "../src/lib/svgBuilder/banner";
 describe("text placement — the pure part", () => {
   const box = { x: 0, y: 0, width: 1080, height: 76 };
   const draw = (patch: Partial<typeof DEFAULT_CONFIG.banner>) => bannerMarkup({
-    banner: { ...DEFAULT_CONFIG.banner, position: "top", style: "split", ...patch }, box, artboardWidth: 1080,
+    banner: { ...DEFAULT_CONFIG.banner, position: "top", style: "split", autoRebalance: false, ...patch }, box, artboardWidth: 1080,
     title: "GLYPH / ICON SHEET", subtitle: "Approved SVG assets", hero: () => "",
   });
 
@@ -332,7 +332,7 @@ describe("text placement — the pure part", () => {
     expect(moved).toContain('<g data-banner-text="title" transform="translate(25 0)">');
     expect(moved).toContain('<g data-banner-text="subtitle" transform="translate(20 -3)">');
     const side = bannerMarkup({
-      banner: { ...DEFAULT_CONFIG.banner, position: "left", style: "solid", textPadding: 30 }, box: { x: 0, y: 0, width: 242, height: 660 },
+      banner: { ...DEFAULT_CONFIG.banner, position: "left", style: "solid", textPadding: 30, autoRebalance: false }, box: { x: 0, y: 0, width: 242, height: 660 },
       artboardWidth: 1080, title: "Food Icon Assets", subtitle: "Editable stroke", hero: () => "",
     });
     expect(side).toContain('<g data-banner-text="title" transform="translate(0 30)">'); // a side banner: down
@@ -351,6 +351,11 @@ const shadowSvg = () => q("builder-artboard")!.querySelector(".bld-artboard-svg"
 
 describe("text placement and in-place editing — on the sheet", () => {
   it("Move X / Y and Text padding change the drawn sheet", async () => {
+    // the placement mechanism, with the spread rule opted out (it owns the moves while on)
+    localStorage.setItem("iconSplitter.svgBuilder.config.v1", JSON.stringify({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, autoRebalance: false } }));
+    act(() => ui.unmount());
+    ui = createRoot(host);
+    act(() => { ui.render(<Workbench />); });
     await openLibrary();
     await typeInto("builder-title-move-x", "15");
     await waitUntil(() => shadowSvg().innerHTML.includes('data-banner-text="title" transform="translate(15 0)"'), "title moved");

@@ -1,5 +1,6 @@
 // SvgBuilderCustomizeStyle.tsx — "Icon style" and "Banner" sections of the
 // Customize column (reference controls and order).
+import { rebalanceSpan } from "../lib/svgBuilder/rebalance";
 import { RANGES, bannerRange, clampTo } from "../lib/svgBuilder/ranges";
 import type { BannerPosition, SheetConfig, TitleFace } from "../lib/svgBuilder/types";
 import type { Edit } from "./SvgBuilderCustomize";
@@ -70,7 +71,7 @@ function BannerControls({ b, edit }: { b: BuilderApi; edit: Edit }) {
         onChange={(subtitleSize) => edit("banner", { subtitleSize }, true)} />
     </div>
     <TextStyle n={n} edit={edit} />
-    <TextPlacement n={n} edit={edit} rowWidth={b.config.artboard.width} />
+    <TextPlacement n={n} edit={edit} span={rebalanceSpan(n, b.layout.banner, b.config.artboard)} />
     <Toggle label="Hero glyph" checked={n.hero} testid="builder-hero" onChange={(hero) => edit("banner", { hero })} />
     {n.hero && <HeroSelect b={b} edit={edit} />}
     {n.hero && <HeroStyle n={n} edit={edit} />}
