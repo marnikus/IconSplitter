@@ -52,7 +52,8 @@ export function linesFor(banner: Banner, which: "title" | "subtitle", boxWidth: 
 }
 
 /** A text block's ink height and widest line ink at `size`: `step` per extra line (title 1.03, subtitle 1.55). */
-export function blockInk(banner: Banner, which: "title" | "subtitle", boxWidth: number, size: number, step: number): { height: number; width: number; ascent: number; descent: number; lines: string[] } {
+export function blockInk(banner: Banner, which: "title" | "subtitle", o: { boxWidth: number; size: number; step: number }): { height: number; width: number; ascent: number; descent: number; lines: string[] } {
+  const { boxWidth, size, step } = o;
   const lines = linesFor(banner, which, boxWidth, size);
   if (lines.length === 0) return { height: 0, width: 0, ascent: 0, descent: 0, lines };
   const style = which === "title" ? titleStyle(banner) : subtitleStyle(banner);
@@ -82,8 +83,8 @@ export interface ColumnFit { titleSize: number; subtitleSize: number; gap: numbe
 export function fitColumn(banner: Banner, height: number, boxWidth: number, heroHeight = 0): ColumnFit {
   const hasSub = applyCase(banner.subtitle.trim(), banner.subtitleCase) !== "";
   const needed = columnNeeded(banner, height, heroHeight, hasSub);
-  const blocks = (t: number, s: number) => blockInk(banner, "title", boxWidth, t, 1.03).height
-    + (hasSub ? blockInk(banner, "subtitle", boxWidth, s, 1.55).height : 0);
+  const blocks = (t: number, s: number) => blockInk(banner, "title", { boxWidth, size: t, step: 1.03 }).height
+    + (hasSub ? blockInk(banner, "subtitle", { boxWidth, size: s, step: 1.55 }).height : 0);
   const gapOf = (t: number, s: number) => (height - blocks(t, s)) / 4;
   let titleSize = clampTo(RANGES.titleSize, banner.titleSize);
   let subtitleSize = clampTo(RANGES.subtitleSize, banner.subtitleSize);
