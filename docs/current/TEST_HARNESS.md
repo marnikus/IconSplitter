@@ -4,134 +4,146 @@ Harness configuration, verification runner and quiet-helper contracts.
 Commands/gates: [Code Verification](CODE_VERIFICATION.md).
 Feature tests: [test index](sor/TESTS.md).
 
-## 1. Current evidence (2026-10-30)
+## 1. Current evidence (2026-11-17)
 
-**Both 40% attempts failed; the second measures 7.5%.** `verify:fast` medians
-117.44s -> 108.61s (clean runs 109.80/107.42) on 2 vCPU/Node22.22.3: the Getty bridge shed ~30s of real
-production sleep (22.65s->0.25s, 7.98s->0.63s), but the suite is CPU-bound --
-167s CPU for a 93s run (85-90% packing), 132.6s of it real test bodies that
-render the actual panel (react-dom dev 23%, DOM 16%, GC 13% of samples).
-`isolate:false` (106s), other pools, group merges and optimizer bundling were
-slower. 40% needs fewer/scaled-down rendering tests or 4 vCPU:
-[plan and rejected experiments](../archive/2026-10-30-harness-speed/README.md).
+**Production React cut the complete suite by 15%.** Warm run, 2 vCPU/3.8 GiB,
+472 files / 4761 tests green: 117.2 s → 100.1 s wall, 190.4 s → 160.8 s CPU, and
+the 40-file `tests/svg_*` slice -21%. React-heavy files gain, pure-logic ones do
+not: 160.8 s of CPU over 2 cores leaves an 80 s wall floor, so CPU work alone
+cannot reach -80%.
 
-2026-10-25 attempt: warm 94.00s -> 91.23s (2.95%), cold 129.92 -> 117.85; target
-was <=56.40s ([plan](../archive/2026-10-25-harness-40/README.md),
-[results](../archive/2026-10-25-harness-40/results.md)). Host variation is
-large -- **never advertise a guaranteed multiplier**; opt-in `--overlap`
-(82.05s vs 82.37s) is noise, not the default. No Windows guarantee.
+The everyday retest is therefore scoped: `npm run test:affected` walks the real
+import graph and runs only the tests a change can observe, and the COMPLETE suite
+whenever it cannot prove a test unaffected — a harness-wide change, a path
+outside `src|tests|tools|docs`, a deletion, an unresolvable base, or a docs edit
+(routed to the tests that read docs). Gates never scope. Measured cuts and
+escalations: [CODE_VERIFICATION.md](CODE_VERIFICATION.md) §5;
+`tests/affected_scope.test.ts` pins the graph and every escalation.
+
+Archived: [2026-10-30](../archive/2026-10-30-harness-speed/README.md) measured
+7.5% against a 40% target and [2026-10-25](../archive/2026-10-25-harness-40/README.md)
+2.95% warm — CPU-bound, and `isolate:false`, other pools, merges and bundling
+were all slower. Host variation is large — **never advertise a guaranteed
+multiplier**; `--overlap` (82.05 s vs 82.37 s) is noise, not the default; no
+Windows guarantee.
 
 ## 2. Isolated projects and resource budget
 
 | Project | Inventory | Pool/group |
 |---|---|---|
-| `main` | all tests except the two inventories below | `vmThreads`, group0 |
-| `geometry` | `GEOMETRY_TESTS`: centred-fit/auto-repair and isolation canaries | `threads`, group1 |
-| `native` | unchanged five `NATIVE_TESTS` | `threads`, one worker, group2 |
+| `main` | all tests except the two inventories below | `vmThreads`, group 0 |
+| `geometry` | `GEOMETRY_TESTS`: centred-fit/auto-repair and isolation canaries | `threads`, group 1 |
+| `native` | the unchanged five `NATIVE_TESTS` | `threads`, one worker, group 2 |
 
-- Every file belongs to exactly one project. Groups run sequentially, not
-  competing pools. Native files also run serially. All retain `isolate:true`.
-- Main/geometry inherit min(4,available CPUs,75%RAM/768MiB) workers, floor1.
-  Do not add workers on a two-core host without complete-run measurements.
-- Main VMs reuse external DOM/React imports, but give each file a fresh module
-  graph, global context and DOM. Native realms support Buffer/typed-array checks.
-- A **first-line** `// @vitest-environment node` skips all DOM/React setup.
-  Use it for files that do not touch document/window.
-- `fsModuleCache:true` reuses transforms in `node_modules/.vitest-cache`.
-  First transforms after config changes are not fully warmed measurements.
-- Mixed pool types in one group cause costly worker respawning.
-  Add timing/realm files to `NATIVE_TESTS`, measured CPU files to `GEOMETRY_TESTS`.
+- Each file belongs to exactly one project; groups run sequentially, not as
+  competing pools, native files serially, all with `isolate:true`.
+- Main/geometry inherit min(4, CPUs, 75% RAM/768 MiB) workers, floor 1; add none
+  on a two-core host without complete-run measurements.
+- Main VMs reuse external DOM/React imports while giving each file a fresh module
+  graph, context and DOM; native realms support Buffer checks.
+- A **first-line** `// @vitest-environment node` skips all DOM/React setup; use it
+  for files that touch no document/window.
+- `fsModuleCache:true` reuses transforms in `node_modules/.vitest-cache`; a first
+  run after a config change is not a warmed measurement.
+- Mixed pools in one group respawn workers costily: timing/realm files go to
+  `NATIVE_TESTS`, measured CPU files to `GEOMETRY_TESTS`.
+- Rejected, measured: custom VM (faster in a microbenchmark, not in the suite),
+  global threads/V8, four-worker oversubscription, pending-work cancellation; no
+  custom DOM/provider/pool switch ships.
+
+### Production React, and the one harness `act`
+
+Tests run the PRODUCTION react/react-dom/scheduler the app ships; dev-only
+validation, owner stacks and warnings were about two thirds of React's CPU.
+`tests/harness_prod_react.test.tsx` pins every fact;
+[the archive](../archive/2026-11-17-harness-production-react/README.md) records
+the measurements, what failed, and the flake this exposed.
+
+- `test.env.NODE_ENV="production"` in the WORKER only: the packages pick their
+  build from NODE_ENV and require each other natively, where aliases do not
+  reach, so only a worker-wide value lands them on ONE copy. The config process
+  stays `test` — production there breaks vite's `node:` resolution.
+- `esbuild.jsxDev:false` compiles test JSX with the production transform
+  `npm run build` uses.
+- `react` resolves to `tests/setup/reactprod.ts`: the real module plus ONE `act`
+  (production ships none; 162 files import it). SYNC callbacks commit before
+  `act` returns (`flushSync`), so an un-awaited `act(() => render(...))` still
+  shows DOM; ASYNC ones resolve after three `node:timers` turns — never global
+  timers, which `quiet.ts` counts as app work (25.3 s → 53.9 s). With no
+  synchronous passive-effect flush in production, an effect lands on the NEXT
+  turn: the one intentional difference from dev `act`.
+- Wait for the outcome an assertion checks; a signal true before the action
+  starts passes on harness speed alone.
 
 ## 3. Verification architecture
 
-Default `npm run verify` retains canonical sequential commands: types, lint,
+`npm run verify` keeps the canonical sequential gates: types, lint,
 changed-quality, native uninstrumented performance alarms, one complete coverage
-suite, build. `verify:fast` omits only the additional uninstrumented native lane.
-No test/coverage/build success is cached. Every native algorithm/budget still runs.
-
-`npm run verify -- --overlap` (>=2CPUs, >=3GiB) runs native alarms alone first,
-then the serial Types→Lint→Quality→Build queue beside one coverage run: at most
-one static command and one Vitest live, own worker budget. Not a speed promise.
-
-- `--serial` overrides overlap. Inadequate resources fall back to serial.
-- `--plan [--json]` lists commands with `executionGroup`/`executionMode`;
-  canonical order is not overlapping start order.
-- Coverage gets `PERF_BUDGETS=coverage`; native alarms do not. No verifier lane
-  overlaps the uninstrumented native stage.
-- All gate failures propagate, including executable-start errors; other gates
-  still diagnose failures. Unknown groups fail closed, never silently skip work.
-- SIGINT/SIGTERM cancel owned child process trees and prevent subsequent starts.
-  Windows uses taskkill tree cleanup; Windows timing is not validated here.
-- Overlap interleaves logs; named start/finish records identify lanes.
+suite, build. `verify:fast` omits only the extra native lane; no success is
+cached, every native algorithm/budget still runs. `--overlap` runs native alarms
+alone first, then the serial Types→Lint→Quality→Build queue beside one coverage
+run — one static command and one Vitest live at most, not a speed promise;
+`--serial` overrides it and inadequate resources fall back to serial. Coverage
+gets `PERF_BUDGETS=coverage` and native alarms do not, so no lane overlaps the
+uninstrumented native stage. Every gate failure propagates, including
+executable-start errors, and unknown groups fail closed. Runner mechanics,
+caches, signals and the plan contract:
+[CODE_VERIFICATION.md](CODE_VERIFICATION.md) §8.
 
 ## 4. DOM setup and readiness
 
-`tests/setup/harness.ts` loads DOM setup only when document exists. DOM setup:
+`tests/setup/harness.ts` loads DOM setup only when document exists:
 
-1. Disables React19 dev-only owner-stack capture (Error per JSX element).
-   `REACT_OWNER_STACKS=1` restores warning component-stack diagnostics.
-2. Installs quiet tracking before application modules capture timers/immediates.
-3. Tracks actual createRoot results, unmounts leftovers after each test, clears
-   document.body. Leaked roots otherwise render throughout the rest of a file.
+1. Installs quiet tracking before modules capture timers/immediates.
+2. Tracks createRoot results, unmounts leftovers after each test, clears
+   document.body; leaked roots otherwise render through the rest of a file.
+3. Keeps the live network offline: unstubbed Requesty discovery gets an empty
+   local catalog, other external requests fail closed (loopback tests remain);
+   `vi.stubGlobal("fetch", …)` overrides per test.
 
 | Helper | Contract |
 |---|---|
-| `settle(maxMs=80)` | three calm turns inside act; accelerate timers due within maxMs, bounded by max(maxMs,250) real ms |
-| `waitUntil(pred,what,budgetMs=4000)` | flush queued Promise/React/immediate work, recheck readiness BEFORE advancing a future timer; throw `never reached: what` on timeout |
+| `settle(maxMs=80)` | three calm turns inside act; accelerate timers due within maxMs, bounded by max(maxMs, 250) ms |
+| `waitUntil(pred, what, budgetMs=4000)` | flush queued Promise/React/immediate work, recheck BEFORE advancing a future timer; `never reached: what` on timeout |
 
-A step drains immediates first (IndexedDB/React) and only advances an eligible
-timer when otherwise idle; a timer beyond the window is left alone. A
-fast-forward never consumes `waitUntil`'s app window. `settle(0)` is a
-one-tick-style settle; never poll inside one long act callback, since React
-cannot commit until it returns. Wait for state, not a guessed turn count.
+A step drains immediates first (IndexedDB/React) and advances an eligible timer
+only when idle; a timer beyond the window is left alone, and a fast-forward never
+consumes `waitUntil`'s app window. Never poll inside one long act callback —
+React cannot commit until it returns.
 
-**Do not indiscriminately cancel pending work between cases.** Cancel the
-shared IndexedDB immediates and later transactions deadlock; blanket timeout
-cancellation has no proved benefit. Both prototypes were rejected.
+**Do not indiscriminately cancel pending work between cases.** Cancel the shared
+IndexedDB immediates and later transactions deadlock; blanket cancellation has no
+proved benefit.
 
-**Real production pacing is injectable, never deleted.** Getty's 700ms Complete
-settle, 1500ms bulk Save and 1000ms poll are options (`settleMs`,
-`bulkSaveSettleMs`, `pollMs`) that tests set to single digits;
-`getty_web_finalize` proves the real defaults still apply under fake timers.
-Never zero a default to win time, and never fake-timer a whole suite file.
+**Real production pacing is injectable, never deleted.** Getty's 700 ms Complete
+settle, 1500 ms bulk Save and 1000 ms poll are options (`settleMs`,
+`bulkSaveSettleMs`, `pollMs`) that tests set to single digits; `getty_web_finalize`
+proves the defaults still apply. Never zero a default to win time, never
+fake-timer a whole file.
 
 ## 5. Real computation, not cheaper fake tests
 
-`src/lib/upload/geom/expand/offsetcheck.ts` optimizes actual shipped geometry,
-not a testing substitute. It keeps the same Bernstein arithmetic order without
-allocating vector/weight arrays in every distance iteration; independent offset
-checks short-circuit on failure. A conservative derivative interval bound may
-certify the unchanged tolerance decision, with rounding slack. Uncertain,
-near-threshold and nonfinite cases retain the original forty-step search.
-TOL0.01, check positions, subdivision/depth8 and output geometry are unchanged.
-
-This **is application computational code**, not merely harness configuration.
-Original281edd6 hashes for36 deterministic cases and648 near-threshold
-comparisons guard equivalence; real SVG/EPS regressions stay intact. A focused
-geometry speedup is never overall verification evidence.
-
-Rejected: non-contextified custom VM (microbenchmark faster, actual suite not),
-global threads/V8, four-worker oversubscription, automatic pending-work cancellation.
-No custom DOM/provider/dependency/pool switch ships.
+Speed may come from real shipped code, never from a cheaper test. The
+`offsetcheck.ts` geometry optimization (order, tolerance and output unchanged,
+guarded by equivalence hashes over 684 cases) is in
+[the 2026-10-30 archive](../archive/2026-10-30-harness-speed/README.md); a
+focused geometry speedup is never overall evidence.
 
 ## 6. Coverage and caches
 
-- Official Istanbul5.0.3, unchanged `src/lib/**`, line threshold80%. Current
-  aggregate95.33%stmt/89.74%branch/98.20%fn/98.29%line; all new kernel functions
-  and lines100%. The reference95.32/89.72/98.20/98.29 scope gains one real module;
-  no source omission, assertion deletion or uncovered-code waiver.
-- Independent audit: `PERF_BUDGETS=coverage npx vitest run --coverage
-  --coverage.provider=v8` (set/remove the variable around it; never leave it set
-  for native budgets). Provider branch accounting can differ.
-- Compiler-owned TypeScript incremental and content-keyed ESLint caches live in
-  `node_modules/.cache/verify`. Source/config/tool edits invalidate them.
-- `npm run verify -- --cold` bypasses these and filesystem transforms, not gates.
-  `npm run setup` also clears installed caches with npm ci.
-- Policy/Node/isolation canaries guard exact-once inventory, realms and teardown;
-  real coverage canaries reject uncovered branches/functions. Static-cache
-  canaries prove edits invalidate cached checking, including restored timestamps.
-- `verify_execution` uses real child fixtures to test resource fallback, order,
-  native quarantine, overlap, cancellation, spawn errors and failure propagation.
+- Istanbul 5.0.3 over `src/lib/**`, line threshold 80%; aggregate
+  95.33% stmt / 89.74% branch / 98.20% fn / 98.29% line, never lower. No source
+  omission, assertion deletion or uncovered-code waiver. Audit with
+  `PERF_BUDGETS=coverage npx vitest run --coverage --coverage.provider=v8`
+  (never leave it set for native budgets); branch accounting can differ.
+- TypeScript incremental and content-keyed ESLint caches live in
+  `node_modules/.cache/verify`; source/config/tool edits invalidate them and
+  static-cache canaries prove it. `verify -- --cold` bypasses caches, not gates;
+  `npm run setup` clears them.
+- Policy/Node/isolation canaries guard exact-once inventory, realms and teardown,
+  coverage canaries reject uncovered branches/functions, and `verify_execution`
+  uses real child fixtures for fallback, order, native quarantine, overlap,
+  cancellation and propagation.
 
 ## 7. Reproduce and profile
 
@@ -141,12 +153,9 @@ node tools/harness-benchmark.mjs --compare before.json after1.json after2.json -
 npx vitest run --reporter=default --reporter=json --outputFile.json=report.json
 ```
 
-The recorder measures the actual command/exit/environment. The comparator uses
-candidate median, rejects failed/incompatible evidence, defaults to60% reduction.
-Use exactly one finite target: `--required-reduction` in(0,100), or
-`--required-speedup` >1 (e.g.1.4 means40% throughput gain, not40% less time).
-Compare each reference run when multiple baseline reports exist; do not forge a
-single schema1 "median run". Keep all failures and cache states, not a best run.
-JSON reporter exposes per-file start/end and per-test durations. Phase percentages
-sum tracked worker time, NOT wall-time shares. CPU profiles distinguish real work
-from setup; actual complete-run evidence is required to accept any optimization.
+The recorder measures the actual command/exit/environment; the comparator uses
+medians (60% default), rejecting failed or incompatible evidence. Use exactly
+one finite target: `--required-reduction` in (0,100) or `--required-speedup` > 1
+(1.4 = a 40% throughput gain, not 40% less time). Compare every baseline, never
+keep only the best, and accept an optimization only on complete-run evidence.
+Phase percentages sum tracked worker time, NOT wall-time shares.

@@ -5277,3 +5277,298 @@ Verified: focused Upload/Stock Upload suites 3 files / 98 tests PASS; TypeScript
 - 2026-11-16 SVG builder: template folder + template.json at creation; artboard folders artboard_NN_<title> inside it. Builder suites 219/219, tsc/eslint/quality PASS.
 - 2026-11-16 SVG builder: Location button opens the template/artboard folder in Explorer via the helper (/open-folder). Builder + helper suites 223/223 + bridge_inkscape 8/8, tsc/eslint/quality PASS.
 - 2026-11-16 Location in every tab via the helper (copy full path, open Explorer, select an existing file); docs split (rebalance page), apply.test types list. Full suite: only pre-existing failures (bridge_crash_guard, bridge_getty_web, docs_navigation pre-existing over-budget pages, fs_case_collisions, getty_web_browser/session, random_select_ui, upload_flag_viewport, verify_execution) — identical with the change stashed; tsc/eslint/quality PASS.
+
+## 2026-11-17 — row preview strips: one bar cell per preview slot
+
+- Report: in a row shown in a registered image style (three previews — Base ·
+  Stroke, AI source, SVG) the strip under the previews kept exactly two cells,
+  so the image/style version chips landed under Base · Stroke and Edit + the
+  SVG version chips under AI source; the SVG preview had nothing under it.
+- Fix: `SvgThumbs` builds ONE list of sides (preview slot + the bar under it)
+  and `PairBars` (`svgeditslot.tsx`) draws one cell per side in slot order and
+  exactly the slot's width; `.svg-pair-bar` lost its 96 px min-width so a cell
+  can never be wider than the preview above it. The style chips keep their
+  meaning: the picked version is the main image the next run vectorizes
+  (`mainImageOf`, read by `runbatch`/`SvgConfirmPager`).
+- Measured: new `tests/svg_row_bar_alignment.test.tsx` 5/5 (red first: 3
+  failures naming the shifted chips), neighbours green — svg_version_chips +
+  svg_versions_ui + svg_imgreg_ui + paired_thumbs + svg_styles +
+  svg_preview_stroke 79/79, svg_ui + svg_ui_config + tailcut_ui +
+  lazy_previews + svg_row_gestures 74/74; `npm run lint` 0 errors,
+  `quality:changed` PASS, `tsc --noEmit` clean, build PASS. Docs: rows table
+  split into `selectors/svg-generation-list-rows.md` (RULE 18 read budget),
+  placement stated in `selectors/svg-image-edits.md`,
+  `sor/svg-generation-results.md`; two pages already over the 9 000-byte
+  budget at HEAD (`sor/bridge-helper.md`, `sor/tests/upload.md`) compressed
+  prose-only back under it, and the pre-existing red
+  `svg_register_images_ui` cue-count fixed with the harness's own
+  `settleCompletionAudio`. Still red at HEAD and untouched (product-semantics
+  question, reported): `random_select_ui` stockUpload plain-click expectation
+  vs `selectionactions.selectRow`'s "plain pick replaces the queued set".
+
+## 2026-11-17 — Stock Upload row gestures back under RULE 25 (user decision)
+
+- Conflict pinned at HEAD: `selectionactions.selectRow` made a plain row click
+  replace the queued upload set (`checked: [id]`) while frozen RULE 25 (which
+  names SVG-to-upload) and `tests/random_select_ui.test.tsx` say a plain click
+  only activates/anchors; `stockupload_ui` pinned the override, so the suite
+  could not go green either way. User chose RULE 25.
+- Fix: the override is gone — `selectRow` commits `applyRowGesture` unchanged;
+  `stockupload_ui` now expects the 100-row queue to survive a plain click with
+  `activeId` moved; `selectors/stock-upload.md` states the gesture rule.
+- Measured: random_select_ui 8/8 (red witness before), stockupload_ui 12/12,
+  all 26 stockupload_* suites 174/174, apply + session_review_fixes +
+  upload_remove_row green; `npm run verify` (full: types, lint, quality
+  gate, perf budgets native, 4731 tests + coverage, build) ALL LANES PASSED.
+
+## 2026-11-17 — Style rows keep their Base · Stroke face and survive a restart
+
+- Both reports reproduced red first in the new `tests/svg_style_persist.test.tsx`
+  (witness: UI behaviour + `styles.rebuiltRow` units, RULE 8).
+- Bug 1 (removing any style AI variant also killed the Base · Stroke preview):
+  every in-place row rebuild used a plain `toRow(source, meta, false)`, which
+  cannot know the row is a STYLE row, so `baseAiPath` was dropped and the third
+  preview never came back. Fix: one owner — `styles.rebuiltRow(row, meta,
+  corrupt, metaOf)` re-attaches the base face (`baseFaceOf` reads the BASE pair
+  file, falling back to the row's previous face), and `versionremove`,
+  `registerexisting`, `registerimages`, `runstate` ("item-saved",
+  `reloadSidecars`) and `jobprogress` all route through it (`RunSetters.metaOf`,
+  supplied by `jobSetters` from `refs.metas`). `styledRows` uses the same rule.
+- Bug 2 (a restart lost recently registered style images until re-registered):
+  two causes. `scan.loadStyleMetas` guessed ONE pair-file name
+  (`_<style>/<stem>_<style>.png`), so a style main carrying a version
+  (`fog_AI_v2_colored_wiggle.png` — what registration itself writes) was never
+  found; now `styles.styleMetaPathAt` asks the folder for its names and resolves
+  them through the SAME rule registration uses (`styleNameOf(styleFilesOf(…))`).
+  And `lib/pairrebase.rebaseMeta` (I-49) re-derived the id from the file's own
+  directory, flattening `<pairId>~<style>`; the pair half is now re-derived from
+  the folder one level up (the base pair lives beside `_<style>`) with the style
+  half kept, so a style id survives every write/read round-trip.
+- Also fixed a pre-existing race the full lane hit (fails at the previous commit
+  too, proven with `git stash -u`): `upload_ui` "bulk Generate and Regenerate"
+  waited on the ONE shared `export.json` per row, so the second row's wait passed
+  before its SVG was written. It now waits on that row's own SVG plus "no run in
+  flight" (the SVG alone is written mid-export, so the next click would hit the
+  in-flight guard); 86/86 three runs in a row.
+- Measured: svg_style_persist 5/5 (red first: 2 behaviour failures), pair
+  identity neighbours 250/250 across 19 suites (pairing, pairmeta, pairstore,
+  selection_state, session*, svg_scan, svg_register_*, svg_runner, svg_regen,
+  svg_styles, svg_row_bar_alignment, svg_versions_ui, svg_version_chips);
+  `npm run verify` (full: types, lint, quality gate, perf budgets native,
+  4736 tests + coverage, build, docs budgets, navigation) ALL LANES PASSED.
+  Docs (RULE 17): new `sor/svg-styles.md` states the style contract, linked from
+  `selectors/svg-generation.md`; `selectors/svg-generation-list-rows.md` records
+  that the Base · Stroke face survives rebuilds and restarts. `registerStyles`
+  was over the 30-line gate once `styles.ts` became changed, so its per-folder
+  unit moved into `registerOne` (RULE 19 order).
+
+## 2026-11-17 — a chosen AI-source version stays previewable across roots and repairs
+
+- Report: a row's v2 AI source sits in the folder (and in the pair file) yet the
+  preview says Unreadable while the original still shows; re-registering the AI
+  sources changed nothing. Reproduced red first (RULE 8) in three witnesses:
+  `pairmeta.test.ts` (rebase of `imageVersions`), `svg_register_images.test.ts`
+  (repair plan + summary lines) and `svg_register_images_ui.test.tsx` (the whole
+  pass re-points a stale record and the preview resolver finds it again).
+- Cause 1: `lib/pairrebase.rebaseMeta` (I-49) re-pointed the faces and the SVG
+  versions but NOT `imageVersions[].file`, so any root picked again left every
+  chosen regeneration pointing at the old root — unreadable — while the rebased
+  original kept working. `rebaseImageVersion` now follows the folder for records
+  in the pair's folder or its `AI source regeneration versions` folder and leaves
+  any other record untouched (re-pointing it would be a guess).
+- Cause 2: the register pass could not heal a stale record — a name the pair file
+  already records is "known" (skipped) and `planImageRepairs` only refound FAILED
+  attempts. It now also re-points a record whose stored path the scanned folders
+  no longer hold when they hold the same name; re-pointing never moves the main
+  pointer on its own (only a re-found failed attempt does), and the toast counts
+  repairs apart from registrations (`imageSummary`, split per RULE 19 after it
+  crossed CC 10).
+- Measured: 6 red witnesses before the fix; after it pairmeta +
+  svg_register_images + svg_register_images_ui + svg_imgreg_ui + svgimgreg
+  131/131, scan/selection/session/batch neighbours 155/155 across 16 suites;
+  `npm run verify` lanes Types/Lint/Quality gate/Perf/Build PASS, and the
+  Tests+coverage lane — istanbul OOM-killed twice in this 4 GB sandbox (Killed,
+  exit 137, no test failure; it passed on the parent commit in the earlier,
+  larger sandbox) — re-run complete over the same suite with the config's
+  documented v8 provider: 470 files / 4746 tests, exit 0; docs_navigation
+  (byte budgets + links) 4/4.
+- Docs (RULE 17): `sor/invariants/paths-scope.md` I-49 now names the AI-source
+  history among the re-pointed paths; `sor/svg-image-edits.md` states the
+  re-point rule, that it never moves the main pointer, and the split toast.
+### 2026-11-17 — independent style review rows
+- Focused SVG style/review regression set: 5 files, 37 tests passed in 6.49 s.
+- `npx tsc --noEmit`: passed in 38.5 s; `npm run lint`: passed in 35.1 s (26 existing warnings); changed-file quality gate against `2ee7b0c7baba7e4c0ed51e176561c72a0831d450`: passed in 1.1 s.
+- `npm run verify:fast`: not green; the complete coverage test worker was killed after 1366.9 s. Its production build lane passed in 13.1 s. No full verification pass is claimed.
+- Final rerun after the offline test transport change: 5 focused files / 37 tests passed in 6.36 s; types passed in 37.2 s; lint passed in 34.4 s; explicit-base changed quality gate passed in 1.9 s.
+
+## 2026-11-17 — merge of arena/00f3f234-iconsplitter (style review rows, hardened registration)
+
+- Merged `efc0e2a` (independent style review rows + hardened style registration,
+  based on `2ee7b0c`) into this branch. The only conflict was this append-only
+  log: both entries kept, mine then theirs.
+- Their branch left two pages over the 9 000-byte agent read budget (its own log
+  says its verify never went green): `TEST_HARNESS.md` 9310 B and
+  `sor/tests/svg.md` 9369 B. Compressed prose-only, every fact kept:
+  8988 B and 8969 B; `docs_navigation` 4/4 again (RULE 18).
+- Measured on the merged tree: focused style/register/pair suites 103/103
+  (svg_styles, svg_style_persist, svg_row_bar_alignment, svg_register_images
+  + ui, pairmeta, pairstore, svg_scan); Types/Lint/Quality gate/Perf/Build
+  lanes PASS. The Tests+coverage lane cannot complete istanbul in this 4 GB
+  sandbox (OOM-killed twice; under istanbul load two wall-clock watcher suites —
+  bridge_update_watch, getty_web_signin — missed real-time deadlines though both
+  pass alone in 1.1 s / 2.7 s), so the suite ran green under the config's
+  documented v8 provider: three serial ranged passes (157+193+120 files;
+  1453+1779+1516 tests) and one complete run with `--coverage.all=false`:
+  470 files / 4748 tests, exit 0, lines 95.22 % against the 80 % threshold.
+- Pushed as merge `5868019` plus the doc-budget repair `9c2e7c2`.
+## 2026-11-17 — ONE 🗑 per versioned preview, in its bottom-right corner (user decision)
+
+- Request: "do not use trash can for every version near but put it icon to the
+  preview in right bottom corner instead" — understand, deep-research, document,
+  then implement by TDD.
+- Contract written down BEFORE code: one 🗑 per preview that has versions, in its
+  bottom-right corner, removing the version THAT preview shows — the SVG
+  preview's shown version, the AI source's accepted main regeneration; absent
+  while the original is the main image. Same owner (`versionremove`), same move
+  to `.removed versions`, same single Undo step. The cans beside every version
+  chip, the per-version trash testids and the `.svg-chip-with-trash` wrappers are
+  gone.
+- Implementation: new `src/svg/previewtrash.tsx` holds `CornerTrash` and the two
+  answers it needs — `svgCorner(target, id)` and `aiCorner(meta, id)`, the latter
+  reading `mainVersionOf` (the same "the pointer must name a done version, else
+  the original is main" rule as `svgimgreg.mainImageOf`), so chips and can can
+  never disagree about what is on screen. `SvgThumbs` renders plain chips again
+  and passes the can as a slot child: inside `svg-prev-frame-{id}` on the SVG
+  side, inside `svg-ai-{id}` beside `<Thumb>` on the AI side, both anchored by
+  `.pair-thumb` (`position: relative`); CSS `.pair-thumb-trash` replaces
+  `.svg-chip-with-trash` / `.svg-chip-trash`. Testids are now
+  `svg-ver-trash-{sourceId}` / `svg-ai-trash-{sourceId}` (no `-version` suffix).
+  The can stops click and double-click propagation, so it never opens the SVG
+  editor or toggles the row.
+- Measured: red first — 5 failing witnesses across `svg_version_chips` (no chip
+  carries a can; zero `.svg-chip-with-trash`; the corner removes the shown
+  version, and after switching to v2 it removes v2 leaving [1,3,4] with chips
+  [1,4]; Undo restores), `svg_style_persist` (the corner can inside the AI slot
+  keeps the Base · Stroke face — the bug it was written for — and rests while the
+  original is main) and `svg_register_images_ui` (the corner can moves the
+  registered PNG to `.removed versions`, drops the chip and the record; Undo
+  brings both back). Green: those 3 suites 31/31, all `svg*` + pathedit suites
+  116 files / 1119 tests, full suite 470 files / 4751 tests, `docs_navigation`
+  4/4 (rows page 6442 B of the 9000 B budget). Gates: `tsc --noEmit` clean,
+  `npm run lint` 0 errors (the 26 warnings are pre-existing, incl. `SvgThumbs`
+  complexity 12 — unchanged from HEAD, verified by linting the HEAD copy),
+  `quality:changed` GATE PASSED after the extraction (`SvgThumbs.tsx` 280 lines
+  — the recorded baseline is 122, so the file must stay under the 300-line
+  `fileWarn` or the ratchet fails; `previewtrash.tsx` 44 lines), build PASS.
+  Coverage: the istanbul lane starved one timing suite
+  (`batch_nonblocking` — passes alone in 1.5 s, also with v8 instrumentation), so
+  the documented v8 substitute ran complete and green: `PERF_BUDGETS=coverage
+  npx vitest run --coverage --coverage.provider=v8 --coverage.all=false` →
+  470 files / 4751 tests, exit 0.
+- Docs: selector row for both corner testids in
+  `selectors/svg-generation-list-rows.md`; the variant-removal sentence in
+  `sor/svg-styles.md` now names the corner can.
+
+## 2026-11-17 — Paste from the clipboard over any row preview (user feature)
+
+- Request: copy SVG code or a PNG image to the buffer and paste it into any row
+  preview (Base · Stroke, AI source, SVG), overwriting the file it shows; a
+  small Paste button per preview (mockup: bottom-right corner). Understand,
+  research, document, then TDD. Three product decisions asked and taken: the
+  overwrite is recoverable; Paste on a "No SVG" preview creates v1 through the
+  registration owner; no new in-app Copy control (PNGs enter the buffer from
+  outside, SVG code via the existing Copy button).
+- Implementation: `src/svg/pasteoverwrite.ts` owns the gesture (binding lent by
+  the panel like versionremove; clipboard readers; staging in
+  `.removed versions/.paste-<stamp>`; proof via `imgfiles.isReadablePng`;
+  validation via `svgvalidate.validateSvg`; `applyPasteOverwrite` for the new
+  `svgPasteOverwrite` entry type in `state/apply.ts`). The corner is one
+  cluster (`previewtrash.tsx` Corner + PasteButton): 🗑 left of Paste, Paste
+  rightmost; testids `svg-paste-{base|ai|svg}-{sourceId}`. Overwrite = move old
+  bytes to `.removed versions/<name>.overwritten-<stamp>` + move the staged
+  paste in; undo/redo are pure move swaps, timeline holds paths and pair files
+  only. Paste-creates-v1 writes `svgfile.svgFileName(stem, 1)` and lets
+  `registerexisting.runRegisterFor` record it; the entry carries both meta
+  states. Cache freshness: `usesvgtext.bumpSvgFile` and a new per-path
+  generation in `selection/thumbs.ts` (`bumpSideThumb`, checked by
+  `useSideThumbs`, subscribed by `useimageurl`).
+- Measured: red first — 5 witnesses in `tests/svg_paste_overwrite.test.tsx`
+  (cluster order with the 🗑 left of Paste; PNG overwrite with the old bytes
+  parked and undo/redo swapping; SVG overwrite + undo; paste-creates-v1 with
+  chip v1 and undo removing file+record; four refusals — text on a PNG
+  preview, an image on the SVG preview, code failing the gate, a JPEG item —
+  each one error toast and no write). Green: that suite 5/5, then full suite
+  471 files / 4756 tests; `apply.test.ts` registry list extended with the new
+  entry type; `docs_navigation` 4/4 after README router label trims kept the
+  router under its 5000 B budget (5040 → 4992). Gates: tsc clean, lint 0 errors
+  (26 pre-existing warnings; one new `no-useless-assignment` fixed), build
+  PASS, `quality:changed` GATE PASSED after the RULE 19 split of pasteInto into
+  planOf/targetFor/stagePayload with a Plan object (pasteoverwrite.ts 208
+  lines, all functions inside limits). Coverage: v8 substitute complete run
+  `--coverage.all=false` → 471 files / 4756 tests, lines 97.98 % (threshold
+  80 %). Pushed as `0187bbb` in the same step as the commit (push-after-every-
+  commit rule).
+
+
+## 2026-11-17 — production React in tests, and the everyday scoping lane (harness speed)
+
+- Request: cut complete-retest time. Two levers, both measured on this host
+  (2 vCPU, 3.8 GiB, warm cache, `mainWorkerBudget()` = 2): run the production
+  React the app ships, then scope the everyday retest by import graph.
+- Production React (`76a1cb4`): tests ran React's development builds, so
+  dev-only validation, owner stacks and warnings were about two thirds of
+  React's CPU in DOM tests — owner-stack capture alone ~20%, already suppressed
+  by poking React internals in `tests/setup/dom.ts` (now deleted as dead).
+  `test.env.NODE_ENV="production"` is set for the WORKER only (the packages pick
+  their build from NODE_ENV and require each other natively, where aliases do
+  not reach; production in the config process breaks vite's `node:` resolution)
+  and `esbuild.jsxDev:false` compiles test JSX with the production transform
+  `npm run build` emits. Production ships no `act` and 162 test files import it,
+  so `react` resolves to `tests/setup/reactprod.ts`: the real module plus ONE
+  harness `act` — sync callbacks commit before it returns (`flushSync`), keeping
+  the un-awaited `act(() => render(...))` in `beforeEach`; async ones resolve
+  after three `node:timers` turns, which `quiet.ts` cannot see (a global-timer
+  drain reset its calm accounting: 25.3 s → 53.9 s and three elapsed-clock
+  tests timing out).
+- Blind spots checked: production has no synchronous passive-effect flush, so an
+  effect lands on the NEXT turn and a sync `act` shows pre-effect DOM. That is
+  the one intentional difference from dev `act`, asserted rather than hidden —
+  `tests/harness_prod_react.test.tsx` pins the build (`captureOwnerStack`
+  absent), both commit contracts, the completeness of the re-export against a
+  native `require`, and that the drain stays invisible to `quiet`. Rejected and
+  recorded in `docs/archive/2026-11-17-harness-production-react/`: aliasing the
+  production cjs (two React copies, null dispatcher), `export * from` for
+  `@types/react` (TS2498), a repeated `flushSync` as an effect flush, an ambient
+  `declare module`.
+- The faster `act` exposed a latent race, not a new one: `svg_builder_artboards`
+  waited for a folder name that `+ Artboard` stores at creation, while the
+  export's writes land behind `useSvgBuilder`'s 600 ms sheet sync (named by
+  recording the stack of every 100–2000 ms timer). It now settles the app's own
+  window; every assertion is unchanged and no magic turn count was introduced.
+- Scoping lane (`tools/affected-tests.mjs`, `npm run test:affected`): walks the
+  real import graph of `src`, `tests` and `tools` — every specifier form in use
+  (`import`, `export … from`, `import type`, `import *`, side-effect, dynamic
+  `import()`, `require()`, `vi.mock()`) — and runs only the tests that can
+  observe a change. Escalates to the COMPLETE suite whenever scoping cannot
+  prove a test unaffected: a harness-wide change (`vitest.config.ts`,
+  `tests/setup/**`, `package.json`, `tsconfig*`, the gate tools), a path outside
+  `src|tests|tools|docs`, a deletion, an unresolvable base, or a docs edit
+  (routed to the tests that read docs). `npm test`, `npm run verify` and CI are
+  untouched: the lane never gates, so no test can be scoped out of a gate.
+- Measured: red first (the new tool did not exist), then 15/15 in
+  `tests/affected_scope.test.ts` including the graph over the real repository
+  and every escalation. Cuts, warm: a component edit 35 of 473 files in 33 s
+  (-67% of the 100 s complete run), a widely imported library 184 files in 61 s
+  (-39%), `svgvalidate` 1561 tests green via `--run`. Complete suite 473 files /
+  4776 tests green in 106.9 s (host variance over the 99.5 s prod-React run;
+  the new test costs 254 ms). Production React alone: 117.2 s → 100.1 s wall and
+  190.4 s → 160.8 s CPU (-14.6% / -15.5%). The -80% target is NOT met and 160.8 s
+  of CPU over 2 cores leaves an 80 s wall floor, so CPU work alone cannot reach
+  it here — the everyday retest is scoped instead. Gates: tsc clean, lint 0
+  errors (26 pre-existing warnings; one new unused import fixed), quality GATE
+  PASSED, build PASS, `npm run verify` ALL LANES PASSED in 2 m 31.8 s after a
+  first run whose only failure was the known `batch_nonblocking` starvation
+  flake under istanbul on 2 cores (it passed uninstrumented and on re-run).
+  Docs: `CODE_VERIFICATION.md` §5 (8884 B) and `TEST_HARNESS.md` §1 (8993 B,
+  under the 9000 B cap; the byte-squeeze typos it inherited — `for36`,
+  `threshold80%` — repaired), `docs_navigation` 4/4.

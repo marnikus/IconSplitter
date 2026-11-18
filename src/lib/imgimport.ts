@@ -162,6 +162,8 @@ export interface ImageTally {
   folders: number;
   /** The version now shown as the main image, when one was registered. */
   shown: number | null;
+  /** Records re-pointed at the file their folder holds (2026-11-17). */
+  repaired?: number;
   /** The one pair this was about, when a single row was selected. */
   stem?: string;
   /** The pair's own AI file, so a no-op can point at what is already there. */
@@ -172,16 +174,34 @@ export interface ImageTally {
 
 /** One honest line for the toast: what happened, and what did not (RULE 9). */
 export function imageSummary(t: ImageTally): { text: string; err: boolean } {
-  if (t.registered > 0) {
-    const main = t.shown === null ? "the main image did not change" : `v${t.shown} is now the main image`;
-    const skipped = t.skipped === 0 ? "" : ` · ${t.skipped} skipped (not a readable PNG)`;
-    return {
-      text: `${t.registered} existing AI source${t.registered === 1 ? "" : "s"} registered — ${main}${skipped}${otherNote(t.others ?? [])}`,
-      err: false,
-    };
-  }
+  const repaired = t.repaired ?? 0;
+  if (t.registered > 0) return { text: `${registeredLine(t)}${repairNote(repaired)}${otherNote(t.others ?? [])}`, err: false };
+  if (repaired > 0) return { text: repairedLine(repaired, t), err: false };
   if (t.skipped > 0) return { text: `${t.skipped} PNG file${t.skipped === 1 ? "" : "s"} found but none could be registered`, err: true };
   return { text: nothingText(t), err: false };
+}
+
+/** New records: how many landed and what the main image did. */
+function registeredLine(t: ImageTally): string {
+  return `${t.registered} existing AI source${t.registered === 1 ? "" : "s"} registered — ${mainLine(t)}${skipNote(t)}`;
+}
+
+/** Re-pointed records: the same honesty, named as repairs, not registrations. */
+function repairedLine(repaired: number, t: ImageTally): string {
+  return `${repaired} recorded AI source${repaired === 1 ? "" : "s"} re-pointed at the folder — ${mainLine(t)}${skipNote(t)}`;
+}
+
+function mainLine(t: ImageTally): string {
+  return t.shown === null ? "the main image did not change" : `v${t.shown} is now the main image`;
+}
+
+function skipNote(t: ImageTally): string {
+  return t.skipped === 0 ? "" : ` · ${t.skipped} skipped (not a readable PNG)`;
+}
+
+/** The repair count rides along a registration line; alone it is its own line. */
+function repairNote(repaired: number): string {
+  return repaired === 0 ? "" : ` · ${repaired} recorded re-pointed at ${repaired === 1 ? "its" : "their"} folder`;
 }
 
 /** The other PNGs seen, said briefly so a wrong file is noticed at once. */
@@ -203,14 +223,27 @@ function nothingText(t: ImageTally): string {
   return line;
 }
 
+/** One record the folder can put right again, and what was wrong with it. */
+export interface ImageRepair extends FreshImage {
+  /** True when the record was a FAILED attempt whose image later appeared. */
+  wasFailed: boolean;
+}
+
 /**
- * Hidden AI sources (2026-11-06): a version recorded as failed whose file IS in
- * the folder is checked again; a readable PNG becomes a usable version.
+ * Records the folder can put right again (2026-11-06, extended 2026-11-17):
+ * a version recorded as failed whose file IS in the folder is checked again,
+ * and a record whose stored path the scanned folders no longer hold is
+ * re-pointed at the file they DO hold under the same name — a version an older
+ * build wrote, or a folder moved between roots, stops being an unreadable
+ * preview. A record whose stored path is right is left alone, and a file no
+ * folder holds is said, never guessed.
  */
-export function planImageRepairs(files: readonly ScannedImage[], versions: readonly ImageVersion[]): FreshImage[] {
+export function planImageRepairs(files: readonly ScannedImage[], versions: readonly ImageVersion[]): ImageRepair[] {
   return versions.flatMap((v) => {
-    if (v.status !== "failed" || v.file === "") return [];
+    if (v.file === "") return [];
+    const failed = v.status === "failed";
+    if (!failed && files.some((f) => f.path === v.file)) return [];
     const file = files.find((f) => f.name.toLowerCase() === nameOf(v.file).toLowerCase());
-    return file === undefined ? [] : [{ ...file, version: v.version }];
+    return file === undefined ? [] : [{ ...file, version: v.version, wasFailed: failed }];
   });
 }

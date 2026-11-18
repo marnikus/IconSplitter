@@ -190,10 +190,39 @@ describe("SVG version chips under the SVG preview", () => {
     expect(chip(2)?.getAttribute("data-active")).toBe("true");
   });
 
-  it("a single valid version keeps its one chip — for its 🗑 (2026-11-16)", async () => {
+  it("a single valid version keeps its one chip, and the preview corner keeps its 🗑 (2026-11-17)", async () => {
     await mountRoot(makeRoot(true));
     expect(previewVersion()).toBe("1");
     expect(chipIds()).toEqual([`svg-ver-chip-${FOG}-1`]);
-    expect(q(`[data-testid=svg-ver-trash-${FOG}-1]`)).not.toBeNull();
+    expect(q(`[data-testid=svg-ver-trash-${FOG}-1]`)).toBeNull(); // no can beside the chip
+    const corner = q(`[data-testid=svg-ver-trash-${FOG}]`);
+    expect(corner).not.toBeNull();
+    expect(q(`[data-testid=svg-prev-frame-${FOG}]`)?.contains(corner as Node)).toBe(true);
+  });
+});
+
+describe("the 🗑 lives in the preview's corner, not beside every chip (2026-11-17)", () => {
+  it("no version chip carries its own trash can any more", async () => {
+    await mountRoot(makeRoot());
+    expect(document.querySelectorAll(".svg-chip-with-trash")).toHaveLength(0);
+    expect(q(`[data-testid=svg-ver-trash-${FOG}-1]`)).toBeNull();
+    expect(q(`[data-testid=svg-ver-trash-${FOG}-2]`)).toBeNull();
+    expect(q(`[data-testid=svg-ver-trash-${FOG}-4]`)).toBeNull();
+  });
+
+  it("the corner 🗑 removes the version the preview shows — after a switch, the new one", async () => {
+    const root = makeRoot();
+    await mountRoot(root);
+    expect(previewVersion()).toBe("4");
+    await click(chip(2)!);
+    await settle();
+    expect(previewVersion()).toBe("2");
+    await click(q(`[data-testid=svg-ver-trash-${FOG}]`)!);
+    await settle();
+    expect(sidecar(root).versions.map((v) => v.version)).toEqual([1, 3, 4]);
+    expect(chipIds()).toEqual([`svg-ver-chip-${FOG}-1`, `svg-ver-chip-${FOG}-4`]);
+    await click(q("[data-testid=hist-undo]")!);
+    await settle();
+    expect(sidecar(root).versions.map((v) => v.version)).toEqual([1, 2, 3, 4]);
   });
 });

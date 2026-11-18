@@ -11,30 +11,26 @@ Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and revie
   stall-window floors; the label/note/hint wording, including "outcome unknown
   — nothing was resent")
 * `svg_runner.test.ts` — the run end to end over an in-memory FS and a fake
-  **streaming** transport: 8 images as 2×4, 9 images as 4+4+1, 23 images as
-  4+4+4+4+4+3, the user's batch size at every effort tier, per-request tokens
-  and cost kept apart, a failed request leaving the successful one's four files
-  untouched, a live request that runs 120× past the configured window (keepalive
-  + deltas under fake timers), a silent stream reported as outcome unknown in
-  one attempt only (retries notwithstanding), the journal written with the
-  request id and cleared on completion, and a mid-stream cancel keeping the
-  finished request while clearing the journal
+  **streaming** transport: 8/9/23 images as 2×4, 4+4+1, 4+4+4+4+4+3, the batch size
+  at every tier, per-request tokens and cost kept apart, a failed request leaving
+  the successful one's files untouched, a request 120× past the window (keepalive +
+  deltas under fake timers), a silent stream = outcome unknown in one attempt only,
+  the journal written with the request id and cleared on completion, a mid-stream
+  cancel keeping the finished request while clearing the journal
 * `svg_stream.test.ts` / `svg_stream_read.test.ts` — the SSE parser (chunk
-  boundaries, deltas, `: keepalive`, usage, `[DONE]`, error payload, counted
-  bad frames) and the reader over a real `ReadableStream` (idle watchdog,
-  stall, abort, JSON fallback, request id from header or stream, `onId`)
-* `svg_journal.test.ts` / `svg_recovery.test.ts` — the in-flight journal
-  (validated reads, corrupt = empty, id attached late, finished request
-  removed, honest summary) and the restart recovery (rows marked Unknown with
-  the id, never Failed; "no request id" said plainly)
+  boundaries, deltas, `: keepalive`, usage, `[DONE]`, error payload, counted bad
+  frames) and the reader over a real `ReadableStream` (watchdog, stall, abort,
+  JSON fallback, request id from header or stream, `onId`)
+* `svg_journal.test.ts` / `svg_recovery.test.ts` — the in-flight journal (validated
+  reads, corrupt = empty, id attached late, finished request removed, honest
+  summary) and restart recovery (rows Unknown with the id, never Failed)
 * `svg_strip.test.tsx` — the run strip: elapsed ticking once a second (and
   shared with the bulk bar), Cancel only while running, a finished request
   whose outcome is unknown named as such with its own elapsed time
-* `svg_confirm.test.tsx` — the confirmation: request count + tier limit, one
-  page per request with its own composite and exact ordered filenames,
-  pagination, the empty cells of a partial last page, confirm/cancel, nothing
-  sent by opening it, an honest message when a composite cannot be built, and
-  the 1/3/4/5/8/9-image matrix walked page by page
+* `svg_confirm.test.tsx` — the confirmation: request count + tier limit, one page
+  per request with its own composite and exact ordered filenames, pagination, the
+  empty cells of a partial last page, confirm/cancel, nothing sent by opening it,
+  an honest message when a composite cannot be built
 * `svg_lib.test.ts`, `svg_extract.test.ts`, `svg_send.test.ts`,
   `svg_canvas.test.ts` — the SVG pure layer: provider defaults + the verified
   model id, prompt/manifest text, response split + name/title matching,
@@ -55,38 +51,40 @@ Focused test inventory; [all tests](../TESTS.md). Prompt, regeneration and revie
 * `svg_cost_io.test.ts` — cost through the real write path: provider-reported
   numbers stored as reported, a batch share stored as Estimated, the rate card
   used only when nothing was reported, a charged-but-invalid result keeping its
-  usage, the sidecar read back after a "restart", and a legacy record without
-  cost reading as unknown instead of crashing a row
+  usage, the sidecar read back after a "restart", a legacy record without cost
+  reading as unknown, not crashing a row
 * `svg_scan.test.ts` — the scan orchestrator (RULE 8): one complete snapshot
   per commit, a boot/rescan of an unchanged folder rebuilding identical rows,
   the overlap gate, and the key that decides "nothing changed"
 * `svg_io.test.ts` — the SVG IO layer: approved-only discovery + every approved
   pair kept with its per-file reasons (missing AI image, unreadable file,
   record-only pair), byte-identical discovery whatever the enumeration order,
-  a scan that writes nothing, scan + remembered root, row model, the
-  write order (validate first, never overwrite, failure records), runner
-  events, the review decision + its undo patch, the state reducer, preview
+  a scan that writes nothing, scan + remembered root, row model, the write order
+  (validate first, never overwrite, failure records), runner events, the review
+  decision + undo patch, the state reducer, preview
 * `svg_preview.test.ts` — the preview pipeline end to end: a document without
   `xmlns`, an XML prolog / doctype / comment, an unbound `xlink` prefix, px
   `width`/`height` with no `viewBox`, `%` sizes with no box, varied boxes
   (24×24 / 64×32 / 512×128 / negative origin), `currentColor` resolved as a
-  standalone document resolves it (never an app-chosen ink — explicit colours
-  and the author's own `color:` survive byte-for-byte), an author
-  `style` that would fight the fit, script/`on*`/`javascript:`/remote-URL
-  removal, safe vs importing `@import`/`url()` stylesheets, id scoping (in
-  markup and inside `<style>`), and every failure reason (empty ≠ broken);
-  plus `previewTargetOf` — the one version the row previews and copies — the
-  CSS contracts (one `--svg-thumb` value behind both previews and the row, no
-  `filter` on the artwork, the contrast hint as a frame outline), and a
-  multicolour document (gradient stops, fills, strokes, dash, opacity) carried
-  through with only its ids scoped
+  standalone document resolves it (never an app-chosen ink — explicit colours and
+  the author's `color:` survive byte-for-byte), an author `style` fighting the
+  fit, script/`on*`/`javascript:`/remote-URL removal, safe vs importing
+  `@import`/`url()` stylesheets, id scoping (markup and `<style>`), every failure
+  reason (empty ≠ broken); plus `previewTargetOf` (the one version the row
+  previews and copies), the CSS contracts (one `--svg-thumb` value behind both
+  previews and the row, no `filter` on the artwork, the contrast hint as a frame
+  outline), and a multicolour document carried through with only its ids scoped
 * `svg_queue_ui.test.tsx` — the real panel + streaming transport: bulk Generate
   still includes existing and empty rows; bulk Regenerate filters a mixed
   selection to several existing SVGs, confirms the exact preview/request, leaves
-  the empty row untouched, and appends behind an in-flight request; a row's
+  the empty row untouched, appends behind an in-flight request; a row's
   Regenerate still jumps to the front
 * `svg_version_chips.test.tsx` — valid/active chips switch preview, tag and pair
   file; dialog path preserved
+* `svg_styles` / `svg_style_persist` / `svg_row_bar_alignment` — style pair identity
+  and restart, three-slot alignment, All styles mode (base + registered styles as
+  separate labeled rows, restored after remount, approval only in its own pair
+  file, single-style behavior intact)
 * `svg_pinned_bulkbar.test.tsx` — sticky bulk bar above rows, direct child of tab
 * `svg_row_gestures.test.tsx` — RULE 25: modifiers, hidden checks, Q/E, A/D/W, dialog isolation and SVG-only undo
 * `svg_preview_stroke.test.tsx` — parse, shared thumbnail style without rewrite,

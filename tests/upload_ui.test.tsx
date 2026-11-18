@@ -389,6 +389,15 @@ function fileText(root: BinDir, relPath: string): string {
   return ((node as BinDir).children.get(parts.at(-1)!) as BinFile).text;
 }
 
+/**
+ * One row's exported SVG, or "" while it is not there yet — the per-row signal a
+ * re-export wait needs, because `export.json` is ONE record shared by every row.
+ */
+function exportedSvg(root: BinDir, name: string): string {
+  const dir = (root.children.get(DIR) as BinDir).children.get("export") as BinDir | undefined;
+  return (dir?.children.get(`${name}.svg`) as BinFile | undefined)?.text ?? "";
+}
+
 beforeEach(() => {
   localStorage.clear();
   stored.clear();
@@ -1651,10 +1660,15 @@ describe("new metadata is accepted automatically", () => {
     // the accepted text is stored for the row; the files wait for an explicit export
     const cached = JSON.parse(localStorage.getItem("iconSplitter.upload.meta.v1")!);
     expect(Object.values(cached.cache).map((v) => (v as { state: string }).state)).toEqual(["accepted"]); // both rows share one source, so one entry
-    for (const id of [FOG, ARCH]) {
+    // Each row's OWN SVG plus "no run in flight" is the wait's signal: export.json is one
+    // shared record (it already holds the answer after the first row, so waiting on it let
+    // the second row's write still be in flight — 2026-11-17 flake), and the SVG alone is
+    // written mid-export, so the next click would hit the in-flight guard.
+    for (const [id, name] of [[FOG, "fog"], [ARCH, "arch"]] as const) {
       await click(`[data-testid=upload-export-${id}]`);
-      await waitFor(() => JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata?.response === GOOD_ANSWER, "explicit export stores the metadata block");
+      await waitFor(() => exportedSvg(root, name).includes("Minimal line icon of growth and speed") && q("[data-testid=upload-progress]") === null, `${name}.svg re-exported with the accepted metadata`);
     }
+    expect(JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata?.response).toBe(GOOD_ANSWER);
     for (const name of ["fog", "arch"]) {
       expect(fileText(root, `${DIR}/export/${name}.svg`)).toContain("Minimal line icon of growth and speed");
     }
@@ -1672,10 +1686,12 @@ describe("new metadata is accepted automatically", () => {
     expect(["fog", "arch"].map((name) => fileText(root, `${DIR}/export/${name}.svg`))).toEqual(svgAccepted); // no automatic re-export
     expect(JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata.response).toBe(GOOD_ANSWER);
     expect(text(`[data-testid=upload-meta-cell-${COURT}]`)).toContain("empty");
-    for (const id of [FOG, ARCH]) {
+    const renewed = GOOD_ANSWER.replace("growth and speed", "a renewed business strategy");
+    for (const [id, name] of [[FOG, "fog"], [ARCH, "arch"]] as const) {
       await click(`[data-testid=upload-export-${id}]`);
-      await waitFor(() => JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata?.response === GOOD_ANSWER.replace("growth and speed", "a renewed business strategy"), "the regenerated answer stored by the explicit export");
+      await waitFor(() => exportedSvg(root, name).includes("renewed business strategy") && q("[data-testid=upload-progress]") === null, `${name}.svg re-exported with the regenerated metadata`);
     }
+    expect(JSON.parse(fileText(root, `${DIR}/export/export.json`)).metadata?.response).toBe(renewed);
     for (const name of ["fog", "arch"]) expect(fileText(root, `${DIR}/export/${name}.svg`)).toContain("renewed business strategy");
     expect(((root.children.get(DIR) as BinDir).children.get("export") as BinDir).children.has("court.svg")).toBe(false);
     expect(first.calls).toHaveLength(2); expect(next.calls).toHaveLength(2);

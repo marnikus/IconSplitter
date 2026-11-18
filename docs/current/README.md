@@ -9,7 +9,7 @@ Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
 | Single sheets | [sor/sheets](sor/sheets.md) → [selectors/sheets](selectors/sheets.md) | — | [core](sor/invariants/core.md) |
 | Batch folders | [sor/batch](sor/batch.md) → [selectors/batch](selectors/batch.md) | [four-point](sor/topics/four-point-batch.md) · [export names](sor/topics/export-naming.md) | [batch](sor/invariants/batch.md) |
 | Selection V2 | [sor/selection](sor/selection.md) → [selectors/selection](selectors/selection.md) | [pair files](sor/topics/pair-files.md) | [selection](sor/invariants/selection.md) |
-| Generate SVG | [sor/svg-generation](sor/svg-generation.md) → [selectors/svg-generation](selectors/svg-generation.md) | [results](sor/svg-generation-results.md) · [prompts](sor/svg-generation-prompts.md) · [run control](sor/svg-parallel-runs.md) · [web mode](sor/svg-web-generation.md) · [path editor](sor/svg-path-editor.md) · [tail cutter](sor/svg-tail-cutter.md) · [preview zoom](sor/preview-zoom.md) · [list](selectors/svg-generation-list.md) · [run](selectors/svg-generation-run.md) · [dialogs](selectors/svg-generation-dialogs.md) | [svg](sor/invariants/svg.md) · [run](sor/invariants/svg-run.md) |
+| Generate SVG | [sor/svg-generation](sor/svg-generation.md) → [selectors/svg-generation](selectors/svg-generation.md) | [results](sor/svg-generation-results.md) · [prompts](sor/svg-generation-prompts.md) · [runs](sor/svg-parallel-runs.md) · [web](sor/svg-web-generation.md) · [editor](sor/svg-path-editor.md) · [tailcut](sor/svg-tail-cutter.md) · [zoom](sor/preview-zoom.md) · [paste](sor/svg-clipboard-paste.md) · [list](selectors/svg-generation-list.md) · [rows](selectors/svg-generation-list-rows.md) · [run](selectors/svg-generation-run.md) · [dialogs](selectors/svg-generation-dialogs.md) | [svg](sor/invariants/svg.md) · [run](sor/invariants/svg-run.md) |
 | AI-source image edits | [sor/svg-image-edits](sor/svg-image-edits.md) → [selectors/svg-image-edits](selectors/svg-image-edits.md) | [storage](sor/storage/svg.md) · [auto apply](sor/svg-image-auto-apply.md) | [I-71/I-72](sor/invariants/svg-image-edits.md) |
 | SVG to upload | [sor/upload](sor/upload.md) → [selectors/upload](selectors/upload.md) | [response](sor/upload-response.md) · [settings](sor/upload-settings.md) · [presets](sor/upload-settings-presets.md) · [metadata](sor/upload-metadata.md) · [export](sor/upload-export.md) · [EPS](sor/upload-eps.md) · [list](selectors/upload-list.md) · [dialogs](selectors/upload-dialogs.md) | [upload](sor/invariants/upload.md) |
 | SVG builder | [sor/svg-builder](sor/svg-builder.md) → [selectors/svg-builder](selectors/svg-builder.md) | [index](sor/svg-builder-index.md) · [presets](sor/svg-builder-presets.md) · [quick edit](sor/svg-builder-quickedit.md) · [editing](sor/svg-builder-editing.md) · [owners](sor/owners/svg-builder.md) · [storage](sor/storage/svg-builder.md) · [tests](sor/tests/svg-builder.md) | [shared](sor/invariants/shared.md) |
@@ -34,10 +34,10 @@ Start at [AGENTS](../../AGENTS.md). Pick a task row. Pages ≤ 9 KB.
 
 ## 3. Conventions
 
-- `name.md` links to `name-<part>.md` and back; `owners/`, `storage/`, `tests/` and `invariants/` use one page per area.
+- `name.md` links to `name-<part>.md` and back; `owners/`, `storage/`, `tests/`, `invariants/`: one page per area.
 - Link to each fact's one owner; split pages above 9 KB into `-<part>` siblings (RULE 17/18).
 - [SYSTEM_OF_RECORD](SYSTEM_OF_RECORD.md) and [UI_SELECTORS](UI_SELECTORS.md) only preserve legacy anchors.
 
 ## 4. Do not load
 
-`QUALITY_RECHECK.md` (append one dated entry without reading), `docs/archive/**`, `design/**/*.html` and `dist/` unless needed. [Deep dives](sor/topics/README.md) are background; current contracts win.
+`QUALITY_RECHECK.md` (append one dated entry without reading), `docs/archive/**`, `design/**/*.html`, `dist/` unless needed. [Deep dives](sor/topics/README.md) are background; current contracts win.

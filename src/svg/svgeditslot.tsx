@@ -31,11 +31,21 @@ function TailReviewBadge({ id, review, busy }: { id: string; review: TailReview;
   );
 }
 
-export function PairBars({ ai, aiWidth, svg, svgWidth }: { ai: ReactNode; aiWidth: number; svg: ReactNode; svgWidth: number }) {
+/** One bar cell per preview slot (2026-11-17): each cell carries the width of
+    the slot above it, so every chip set stays under the preview it switches —
+    two previews, or three with a Base · Stroke side, alike. */
+export interface PairBarCell {
+  /** The px width of the preview slot this cell sits under. */
+  width: number;
+  children: ReactNode;
+}
+
+export function PairBars({ cells }: { cells: readonly PairBarCell[] }) {
   return (
     <div className="svg-pair-bars">
-      <div className="svg-pair-bar" style={{ width: `${aiWidth}px` }}>{ai}</div>
-      <div className="svg-pair-bar" style={{ width: `${svgWidth}px` }}>{svg}</div>
+      {cells.map((cell, i) => (
+        <div key={i} className="svg-pair-bar" style={{ width: `${cell.width}px` }}>{cell.children}</div>
+      ))}
     </div>
   );
 }

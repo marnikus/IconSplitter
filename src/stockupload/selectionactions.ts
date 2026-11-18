@@ -114,14 +114,11 @@ function buildActiveRowGestures(
       if (b.active) commitSelection(ref.current.hist, { ...b, checked: setChecked(b.checked, [b.active], false) }, "Deselect active row");
     },
     selectRow: (id, intent) => {
-      const before = currentSelection();
-      // In Stock Upload, a plain row pick replaces the queued upload set; the
-      // checkbox is the additive/toggle affordance for composing a larger set.
-      const gesture = applyRowGesture(before, { id, intent, visibleIds: ids() });
-      const after = intent === "replace" && gesture !== before
-        ? { ...gesture, checked: [id] }
-        : gesture;
-      commitSelection(ref.current.hist, after, intent === "replace" ? "Select row" : "Select range");
+      // RULE 25, like every other checkable list: a plain click (or Enter)
+      // activates and anchors; checks change only through the checkbox,
+      // modifier clicks or Q/E — never as a side effect of activating.
+      const gesture = applyRowGesture(currentSelection(), { id, intent, visibleIds: ids() });
+      commitSelection(ref.current.hist, gesture, intent === "replace" ? "Select row" : "Select range");
     },
     setActive: (id) => commitSelection(ref.current.hist, { ...currentSelection(), active: id }, "Move active row", "active"),
   };

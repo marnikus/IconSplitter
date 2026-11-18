@@ -18,7 +18,7 @@
   (restart → interrupted, corrupt → empty)
 * `upload_discovery.test.ts` — item-approval gates; [accepted source identity](../version-acceptance.md),
   legacy newest-valid fallback, missing/unreadable accepted files and exclusions.
-* Named row labels: [contract](../upload-row-badges.md); Ctrl-click/undo UI coverage is in `upload_rowbadge_ui.test.tsx`, and retry re-assignment in `stockupload_runner.test.ts`.
+* Named row labels: [contract](../upload-row-badges.md); Ctrl-click/undo UI in `upload_rowbadge_ui.test.tsx`, retry re-assignment in `stockupload_runner.test.ts`.
 * `upload_rowmodel.test.ts` — row assembly from a real export.json + source
   hash, exact staleness (source/settings/metadata fingerprints), the metadata
   state a record carries, filters/sort/header/counts (incl. a failed run with
@@ -104,7 +104,7 @@ Metadata/export/download progress, cancellation, handoff and hidden-tab tests: [
 
 Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../upload-file-metadata.md).
 
-Adobe saved-page regression and opt-in LIVE upload validation (local reader is not Adobe acceptance): [validation guide](../upload-adobe-validation.md).
+Adobe saved-page regression and opt-in LIVE upload validation (local reader is not Adobe acceptance): [guide](../upload-adobe-validation.md).
 
 
 User-defined badge validation, editor, persistence/undo/live preview and actual

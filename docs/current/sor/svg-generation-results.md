@@ -9,6 +9,16 @@ Version controls [accept the chosen version for actual use/export](version-accep
   natural height; vector art keeps its viewBox ratio. A wide pair at 800 px
   scrolls sideways rather than shrinking, stretching or overlapping the
   next slot; the preview size never changes exported SVG bytes.
+* The strip under the previews keeps ONE bar cell per preview slot (2026-11-17;
+  user report: a style row shows three previews — Base · Stroke, AI source,
+  SVG — and the old fixed two-cell strip shifted every chip set one slot to
+  the left): `SvgThumbs` builds ONE list of sides, each a preview slot plus the
+  bar under it, and `PairBars` (`src/svg/svgeditslot.tsx`) draws one cell per
+  side in slot order and exactly the slot's width. The image/style version
+  chips therefore sit under the AI-source preview they switch — and the picked
+  version stays the main image the next generation vectorizes (`mainImageOf`,
+  RC8), as before — Edit and the SVG version chips under the SVG preview, and
+  a Base · Stroke preview keeps an empty cell of its own.
 * Every result is validated (well-formed XML, exactly one `<svg>` root, valid
   `viewBox` or documented dimensions, no scripts/event handlers/unsafe
   external URLs/executable content, visible geometry) before anything is

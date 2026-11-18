@@ -21,9 +21,8 @@ app from the same origin. `GET /health` is the probe.
 
 The supervisor (`tools/bridge/supervise.mjs`) is the window the user keeps open: it
 runs the helper and starts it again when it asks for a restart (exit `75`, §3) or
-crashed. A crash is retried up to `--max-restarts` (10) times; more than ten restarts
-inside a minute stop the loop with a message, so a broken build is visible instead of
-spinning. `--once` runs the helper once; any argument the supervisor does not consume
+crashed. A crash is retried up to `--max-restarts` (10) times; more than ten in a
+minute stop the loop with a message, so a broken build is visible instead of spinning. `--once` runs the helper once; any argument the supervisor does not consume
 (`--getty-headed`, `--getty-profile …`, `--port …`) goes to the helper unchanged.
 
 ## 3. A `git pull` restarts it in place
@@ -57,9 +56,9 @@ code used to leave the old code in memory until the window was closed by hand.
 
 ## 3b. A pull that changes only the APP rebuilds the bundle in place
 
-The restart above is for helper code. App commits (`src/`, `index.html`) used to
-reach the page only when `index.html` was asked for again, so an open window kept the
-previous build (reported 2026-11-02, "pulled but it did not rebuild"). The same 10 s
+The restart above is for helper code. App commits (`src/`, `index.html`) reached the
+page only when `index.html` was asked for again, so an open window kept the previous
+build (reported 2026-11-02). The same 10 s
 tick now compares the app stamp (`APP_WATCH`, the list the build stamps into the page)
 with the one inside `dist/index.html` (`isDistStale`):
 
@@ -102,9 +101,9 @@ restart (§3). The open tab swaps by itself and says so in one short line.
   the helper is serving. Every 15 s the page compares the two
   (`src/lib/updatewatch.ts`, `src/lib/runbusy.ts`, `src/ui/rebuildwatch.tsx`).
 - Equal stamps: nothing happens. Different: a bar says `New build found — reloading
-  this page now`, and the page reloads after ~0.9 s so the line can be read; the page
-  that comes back says `New build is running — rebuilt from <commit> at HH:MM` for
-  8 s (the note travels through `sessionStorage`).
+  this page now`, and the page reloads after ~0.9 s; the page that comes back says
+  `New build is running — rebuilt from <commit> at HH:MM` for 8 s (the note travels
+  through `sessionStorage`).
 - **Never mid-run.** While an upload, a split run or a generation is in flight the bar
   says `reloading when this run finishes` and offers `Reload now`; the reload goes as
   the last run ends, so no transfer is cut and no queue is lost. `✕` drops the bar.

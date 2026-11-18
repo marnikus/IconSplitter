@@ -18,7 +18,11 @@
     /* Path mapping */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      // Runtime alias only (vitest.config.ts): the harness act shim re-exports
+      // the real production react package under this name, so it borrows
+      // react's own types instead of declaring an ambient module.
+      "react-prod": ["node_modules/@types/react"]
     },
 
     /* Linting */

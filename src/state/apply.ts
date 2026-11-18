@@ -18,6 +18,7 @@ import { applyDecisionPatch, type DecisionPatch } from "../selection/offline";
 import { applySvgReviewPatch, type SvgReviewPatch } from "../svg/reviewundo";
 import { isReview } from "../lib/svgmodel";
 import { applySvgEdit } from "../svg/svgedit";
+import { applyPasteOverwrite } from "../svg/pasteoverwrite";
 import { applyVersionRemove } from "../svg/versionremove";
 import { applyUploadSettingsPatch, toUploadSettingsPatch } from "../upload/uploadundo";
 import { applyRowBadgeState } from "../upload/rowbadgeundo";
@@ -32,6 +33,7 @@ export const ENTRY_TYPES = [
   "decisions", "checked", "batchChecked", "svgChecked", "uploadChecked", "stockUploadChecked",
   "view", "prefs", "sheets", "svgReview", "uploadSettings", "uploadRowBadges", "svgEdit",
   "builderChecked", "builderConfig", "builderSvgEdit", "builderArtboards", "svgVersionRemove",
+  "svgPasteOverwrite",
 ] as const;
 
 /** Apply one side of an entry (`before` for undo, `after` for redo). */
@@ -47,6 +49,7 @@ function applyBuilderEntry(entry: HistoryEntry, value: unknown): boolean | Promi
   if (entry.type === "builderSvgEdit") return applyBuilderSvgEdit(value);
   if (entry.type === "builderArtboards") return applyBuilderArtboards(value);
   if (entry.type === "svgVersionRemove") return applyVersionRemove(value); // Generate SVG 🗑 (2026-11-16)
+  if (entry.type === "svgPasteOverwrite") return applyPasteOverwrite(value); // Paste over a preview (2026-11-17)
   return null;
 }
 

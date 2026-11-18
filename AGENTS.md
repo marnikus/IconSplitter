@@ -57,8 +57,11 @@ separately and report that failure; never claim the aggregate gate passed.
 Update the owning current pages, selector handles and doc route in the same
 change (RULE 17). Append one measured dated entry to
 `docs/current/QUALITY_RECHECK.md` **without reading that ledger**. Commit only
-coherent scoped changes with `Verified:` and the required attribution; push the
-current branch when the task is finished. Never silently discard others' work.
+coherent scoped changes with `Verified:` and the required attribution.
+**Push the current branch after EVERY finished commit** (user rule, 2026-11-17) —
+a commit is not finished until `git push origin <current branch>` has succeeded;
+never batch commits up and push only at the end of a task. Never silently
+discard others' work.
 
 **Do not load as ordinary context:** `docs/current/QUALITY_RECHECK.md`,
 `docs/archive/**` (open one named historical document only when required),

@@ -27,6 +27,7 @@ function jobSetters(c: RunCtx, job: SvgJob): RunSetters {
     setProgress: (p) => { job.progress = p; if (front()) c.setProgress(p); },
     setProgressFn: (fn) => { job.progress = fn(job.progress); if (front()) c.setProgress(job.progress); },
     setCurrent: (id) => { job.current = id; if (front()) c.setCurrent(id); },
+    metaOf: (id) => c.refs.metas.get(id),
   };
 }
 

@@ -1487,6 +1487,7 @@
 }
 
 .svg-file-main { min-width: 0; }
+.svg-row-style-label { color: #c4b5fd; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
 
 .svg-file-name {
   overflow: hidden;
@@ -2119,11 +2120,13 @@
    cell — never a 9th grid cell — and `contain: inline-size` keeps it from
    widening the max-content preview column: it takes the pair's width and wraps. */
 .svg-pair-with-bar { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-/* The strip under the pair (2026-10-19): one cell per preview, as wide as it and
-   with .pair-thumbs' gap, so each set of chips sits under the image it switches;
-   96 px keeps chips readable at the smallest zoom. */
+/* The strip under the previews (2026-10-19): one cell per preview slot, in the
+   slots' own order and exactly as wide as each of them (2026-11-17: a row in a
+   registered style shows three previews, so a fixed two-cell strip shifted
+   every chip set one slot to the left), with .pair-thumbs' gap, so each set of
+   chips sits under the image it switches; chips wrap inside their own cell. */
 .svg-pair-bars { display: flex; align-items: flex-start; gap: 8px; }
-.svg-pair-bar { flex: none; min-width: 96px; }
+.svg-pair-bar { flex: none; min-width: 0; }
 .svg-ai-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; contain: inline-size; }
 .svg-ai-bar .svg-progress-mini { width: 48px; margin-top: 0; }
 .svg-ai-bar .svg-progress-mini span { animation: v2-pulse 1.2s ease-in-out infinite; }
@@ -2488,7 +2491,10 @@
 .svg-style-option.is-base { border-bottom: 1px solid #1f2447; border-radius: 8px 8px 0 0; margin-bottom: 2px; }
 .svg-style-check { width: 14px; color: var(--v2-purple, #7c6cff); font-weight: 700; }
 
-/* 🗑 on version chips (2026-11-16) */
-.svg-chip-with-trash { display: inline-flex; align-items: center; gap: 1px; }
-.svg-chip-trash { border: 0; background: transparent; padding: 0 3px; font-size: 10px; line-height: 1; opacity: .45; cursor: pointer; filter: grayscale(1); }
-.svg-chip-trash:hover { opacity: 1; filter: none; }
+/* The corner cluster of one preview (2026-11-17): the 🗑 (where the preview has
+   a version to remove) left of Paste; Paste is always the rightmost button. */
+.pair-thumb-corner { position: absolute; right: 4px; bottom: 4px; display: flex; align-items: center; gap: 4px; }
+.pair-thumb-trash { border: 0; border-radius: 4px; background: rgb(3 7 18 / 62%); padding: 2px 4px; font-size: 10px; line-height: 1; opacity: .5; cursor: pointer; filter: grayscale(1); }
+.pair-thumb-trash:hover { opacity: 1; filter: none; }
+.pair-thumb-paste { display: inline-flex; align-items: center; gap: 4px; border: 0; border-radius: 5px; background: rgb(35 39 54 / 92%); color: #eef0f6; padding: 3px 8px; font-size: 11px; line-height: 1.2; cursor: pointer; }
+.pair-thumb-paste:hover { background: rgb(52 58 78 / 94%); }

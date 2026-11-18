@@ -37,7 +37,13 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   approved — therefore follows the folder between roots; a pair file that names an
   id no scan of this root would produce (a legacy record) still answers for that
   id when the legacy file is merged (`pairstore.loadPairDecisions` keeps the id
-  each file carried).
+  each file carried). Since 2026-11-17 the pair's AI-source history follows too:
+  each `imageVersions` record whose file sits in the pair's folder or in its
+  `AI source regeneration versions` folder is re-pointed at that folder in the
+  reading root (a regeneration keeps its version folder, a registered copy keeps
+  sitting beside the pair); a record whose folder is neither is left exactly as
+  stored — re-pointing it would be a guess. Without this, a root picked again
+  left every chosen regeneration unreadable while the original still showed.
 
 <a id="i-50"></a>
 * **I-50 (a run stamp anywhere in the set is evidence, RULE 3/12):** `scopeOf`
