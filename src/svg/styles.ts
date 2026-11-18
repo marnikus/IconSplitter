@@ -59,8 +59,7 @@ export function styleSourceOf(base: SvgSource, meta: PairMeta): SvgSource {
 
 /** Every row in the active style when it has it, else as it is (base). */
 export function styledRows(bases: readonly SvgRow[], metaOf: (id: string) => PairMeta | null | undefined, style: string | null): SvgRow[] {
-  // a pair declined since the last scan is out of EVERY mode until a scan or an undo says otherwise (2026-11-17)
-  const alive = bases.filter((row) => !isGoneSinceScan(row.source.id));
+  const alive = bases.filter((row) => !isGoneSinceScan(row.source.id)); // declined since the scan: out of every mode (2026-11-17)
   if (style === null) return [...alive];
   return alive.map((row) => {
     const id = styleRowId(row.source.id, style);
@@ -100,8 +99,7 @@ export async function styleMetaPathAt(root: DirHandleLike, dirPath: string, stem
   const rel = dirPath === "" ? `_${style}` : `${dirPath}/_${style}`;
   const dir = await probePath(root, rel).catch(() => null);
   if (dir === null || dir.kind !== "directory") return null;
-  const names: string[] = [];
-  for await (const [name, h] of dir.entries()) if (h.kind === "file") names.push(name);
+  const names: string[] = []; for await (const [name, h] of dir.entries()) if (h.kind === "file") names.push(name);
   const name = styleNameOf(styleFilesOf(stem, style, names));
   return name === null ? null : metaPathForAi(`${rel}/${name}`);
 }
@@ -113,8 +111,7 @@ export function rowsForStyle(discovery: Discovery, refs: SvgRefs, style: string 
 }
 
 function baseRows(discovery: Discovery, metaOf: (id: string) => PairMeta | null | undefined): SvgRow[] {
-  return discovery.sources.filter((source) => !isGoneSinceScan(source.id))
-    .map((source) => toRow(source, metaOf(source.id) ?? null, discovery.corruptFiles?.includes(source.metaPath) ?? false));
+  return discovery.sources.filter((s) => !isGoneSinceScan(s.id)).map((source) => toRow(source, metaOf(source.id) ?? null, discovery.corruptFiles?.includes(source.metaPath) ?? false));
 }
 
 /** Base and each registered style become separate rows with their own pair-file review status. */
@@ -124,12 +121,9 @@ export function rowsForAllStyles(discovery: Discovery, metaOf: (id: string) => P
   for (const style of styles) {
     for (const base of bases) {
       const styleId = styleRowId(base.source.id, style);
-      const meta = isGoneSinceScan(styleId) ? null : metaOf(styleId);
+      const meta = isGoneSinceScan(styleId) ? null : metaOf(styleId); // a removed style never rejoins the all-styles list
       if (meta == null) continue;
-      const row = styleRow(base, meta, metaOf);
-      const rows = byBase.get(base.source.id) ?? [];
-      rows.push(row);
-      byBase.set(base.source.id, rows);
+      byBase.set(base.source.id, [...(byBase.get(base.source.id) ?? []), styleRow(base, meta, metaOf)]);
     }
   }
   return bases.flatMap((base) => [base, ...(byBase.get(base.source.id) ?? [])]);
@@ -145,7 +139,7 @@ const withDir = (dir: string, name: string) => (dir === "" ? name : `${dir}/${na
 /** The style's stem: its own image's name, else its first variant's without `_NN`. */
 function styleNameOf(files: StyleFiles): string | null {
   if (files.main !== null) return files.main;
-  const first = files.variants[0]?.name;
+  const first = files.variants[0]?.name; // else the first variant's name without `_NN`
   return first === undefined ? null : first.replace(/_\d+(\.[^.]+)$/, "$1");
 }
 

@@ -51,27 +51,35 @@ async function recordsOf(c: RemoveCtx, metaPath: string, known: PairMeta | null,
  * Style pairs are read from disk by the registration's own naming rule when the
  * scan's records do not hold them (a base-mode scan never reads style files).
  */
+async function baseMember(c: RemoveCtx, rows: readonly SvgRow[], baseId: string, root: DirHandleLike | null): Promise<{ meta: PairMeta; metaPath: string } | null> {
+  const listed = rows.find((r) => r.source.id === baseId);
+  const known = (c.refs.metas.get(baseId) as PairMeta | undefined) ?? listed?.meta ?? null;
+  const metaPath = listed?.source.metaPath ?? (known === null ? "" : metaPathForAi(known.ai.relPath));
+  const meta = known ?? (root === null || metaPath === "" ? null : (await loadMetaAt(root, metaPath).catch(() => null))?.meta ?? null);
+  return meta === null ? null : { meta, metaPath };
+}
+
+/** One registered style pair the row's folder holds: the scan's records, else the disk by the registration's naming rule. */
+async function styleMember(c: RemoveCtx, root: DirHandleLike | null, at: { id: string; meta: PairMeta }, style: string): Promise<{ meta: PairMeta; metaPath: string } | null> {
+  const id = styleRowId(at.id, style);
+  const known = (c.refs.metas.get(id) as PairMeta | undefined) ?? null;
+  if (known !== null) return { meta: known, metaPath: metaPathForAi(known.ai.relPath) };
+  if (root === null) return null;
+  const path = await styleMetaPathAt(root, at.meta.dirPath, svgStem(at.meta.ai.name), style);
+  if (path === null) return null;
+  const read = await loadMetaAt(root, path).catch(() => null);
+  return read?.meta?.id === id ? { meta: read.meta, metaPath: path } : null;
+}
+
 async function familyOf(c: RemoveCtx, rows: readonly SvgRow[], root: DirHandleLike | null): Promise<Map<string, { meta: PairMeta; metaPath: string }>> {
   const out = new Map<string, { meta: PairMeta; metaPath: string }>();
   for (const baseId of new Set(rows.map((r) => baseRowId(r.source.id)))) {
-    const listed = rows.find((r) => r.source.id === baseId);
-    let meta: PairMeta | null = (c.refs.metas.get(baseId) as PairMeta | undefined) ?? listed?.meta ?? null;
-    let metaPath = listed?.source.metaPath ?? (meta === null ? "" : metaPathForAi(meta.ai.relPath));
-    if (meta === null && root !== null && metaPath !== "") meta = (await loadMetaAt(root, metaPath).catch(() => null))?.meta ?? null;
-    if (meta === null) continue; // an unknown base: nothing to decline
-    out.set(baseId, { meta, metaPath });
+    const base = await baseMember(c, rows, baseId, root);
+    if (base === null) continue; // an unknown base: nothing to decline
+    out.set(baseId, base);
     for (const style of stylePrefs().styles) {
-      const id = styleRowId(baseId, style);
-      let styled: PairMeta | null = (c.refs.metas.get(id) as PairMeta | undefined) ?? null;
-      let styledPath = styled === null ? null : metaPathForAi(styled.ai.relPath);
-      if (styled === null && root !== null) {
-        const path = await styleMetaPathAt(root, meta.dirPath, svgStem(meta.ai.name), style);
-        if (path !== null) {
-          const read = await loadMetaAt(root, path).catch(() => null);
-          if (read?.meta?.id === id) { styled = read.meta; styledPath = path; }
-        }
-      }
-      if (styled !== null && styledPath !== null) out.set(id, { meta: styled, metaPath: styledPath });
+      const member = await styleMember(c, root, { id: baseId, meta: base.meta }, style);
+      if (member !== null) out.set(styleRowId(baseId, style), member);
     }
   }
   return out;
