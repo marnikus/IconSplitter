@@ -7,20 +7,19 @@
 // Paints are source/transparent/artwork sentinels or a normalized hex.
 
 import { normalizePadding, paddingEqual, readPaddingOverride, type Padding } from "./padding";
+import { DEFAULT_FORMAT_OPTIONS, FORMAT_OPTION_FIELDS, normalizeFormatOptions, readFormatOverrides, type ExportFormatOptions } from "../exportformats";
 import { BADGE_DEFAULTS, normalizeBadge, readBadgeOverrides, type BadgeSettings } from "./settingsbadge";
 import { normalizeStrokeLinecap, readStrokeCapOverride, type StrokeLinecap } from "./strokecaps";
 import { normalizeHex } from "../svgbackground";
 import { isRecord } from "../isrecord";
 import { artboardsEqual, clampArtboard, CONTENT_ARTBOARD, type Artboard } from "./artboard";
-import { DEFAULT_CONVERTER, parseConverterId } from "./epsconv/registry";
 import { readShadowTemplateSetting } from "./shadowtemplate";
-import type { EpsConverterId } from "./epsconv/types";
 import { normalizeSizeGuide, readSizeGuideOverrides, SIZE_GUIDE_DEFAULTS, SIZE_GUIDE_FIELDS, type SizeGuideSettings } from "./settingssizeguide";
 import {
-  ARTBOARD_MP_DEFAULT, MP_DEFAULT, PADDING_DEFAULT,
-  QUALITY_DEFAULT, SHADOW_GAP_DEFAULT, SHADOW_WIDTH_DEFAULT, STROKE_DEFAULT,
-  clampArtboardMegapixels, clampBadgeOffsetPct, clampBadgeWidthPct, clampMegapixels,
-  clampQuality, clampShadowGapPct, clampShadowWidthPct, clampStrokePx,
+  ARTBOARD_MP_DEFAULT, PADDING_DEFAULT,
+  SHADOW_GAP_DEFAULT, SHADOW_WIDTH_DEFAULT, STROKE_DEFAULT,
+  clampArtboardMegapixels, clampBadgeOffsetPct, clampBadgeWidthPct,
+  clampShadowGapPct, clampShadowWidthPct, clampStrokePx,
 } from "./settingsnumbers";
 
 export * from "./settingsnumbers";
@@ -37,7 +36,7 @@ export {
 
 export { BADGE_CORNERS, BADGE_CORNER_DEFAULT, parseBadgeCorner } from "./settingsbadge";
 
-export interface UploadSettings extends SizeGuideSettings, BadgeSettings {
+export interface UploadSettings extends SizeGuideSettings, BadgeSettings, ExportFormatOptions {
   /** Independent percentages (legacy number = uniform); null keeps source margins. */
   paddingPct: Padding;
   /** `default` (no artboard rect, 2026-10-19), `transparent`, or the opaque hex the export SVG/EPS paint and the JPEG flattens onto. */
@@ -52,25 +51,6 @@ export interface UploadSettings extends SizeGuideSettings, BadgeSettings {
   strokeColor: string;
   /** Source caps, or one endpoint shape for every exported stroke. */
   strokeLinecap: StrokeLinecap;
-  /** JPEG target resolution in megapixels (default 15.1). */
-  jpegMegapixels: number;
-  /** JPEG quality 0..1. */
-  jpegQuality: number;
-  /** Optimize the export SVG copy with SVGO (default on). */
-  optimizeSvg: boolean;
-  /** Deliver SVG/JPEG files (both default on, including legacy saved settings). */
-  includeSvg: boolean;
-  includeJpeg: boolean;
-  /** Also write a genuine EPS (default off). */
-  includeEps: boolean;
-  /** Which converter writes that EPS (2026-10-09): the built-in subset writer, or Inkscape through the local helper. */
-  epsConverter: EpsConverterId;
-  /**
-   * Expand every visible stroke into a filled shape (2026-10-09, what some
-   * stocks require): the SVG, JPEG and EPS all ship without strokes. Off = the
-   * strokes stay strokes.
-   */
-  expandStrokes: boolean;
   /** The artboard the export is built at: content-hugging, or an exact px size. */
   artboard: Artboard;
   /**
@@ -81,12 +61,6 @@ export interface UploadSettings extends SizeGuideSettings, BadgeSettings {
   scaleToMegapixels: boolean;
   /** The megapixel target of that scaling (default 5, 1…64); dormant while the box is off. */
   artboardMegapixels: number;
-  /**
-   * When the artboard pins a px size, render the JPEG at exactly those px
-   * (default). Switching it off keeps the artboard's RATIO but renders at
-   * `jpegMegapixels` instead — a small artboard must never cap the resolution.
-   */
-  jpegMatchArtboard: boolean;
   /** A template-based gradient ellipse centred below the painted icon. */
   shadowEnabled: boolean;
   /** Painted shadow width as a percentage of the final painted icon width. */
@@ -118,16 +92,8 @@ export const DEFAULT_UPLOAD_SETTINGS: UploadSettings = {
   strokePx: STROKE_DEFAULT,
   strokeColor: STROKE_COLOR_DEFAULT,
   strokeLinecap: "source",
-  jpegMegapixels: MP_DEFAULT,
-  jpegQuality: QUALITY_DEFAULT,
-  optimizeSvg: true,
-  includeSvg: true,
-  includeJpeg: true,
-  includeEps: false,
-  epsConverter: DEFAULT_CONVERTER,
-  expandStrokes: false,
+  ...DEFAULT_FORMAT_OPTIONS,
   artboard: { ...CONTENT_ARTBOARD },
-  jpegMatchArtboard: true,
   scaleToMegapixels: false,
   artboardMegapixels: ARTBOARD_MP_DEFAULT,
   shadowEnabled: false,
@@ -167,16 +133,8 @@ export function normalizeSettings(raw: unknown): UploadSettings {
     strokePx: clampStrokePx(raw.strokePx ?? raw.strokePt), // strokePt: the pre-2026-10-08 name, same number
     strokeColor: readPaint(raw.strokeColor, STROKE_COLOR_ARTWORK) ?? STROKE_COLOR_DEFAULT,
     strokeLinecap: normalizeStrokeLinecap(raw.strokeLinecap),
-    jpegMegapixels: clampMegapixels(raw.jpegMegapixels),
-    jpegQuality: clampQuality(raw.jpegQuality),
-    optimizeSvg: raw.optimizeSvg !== false,
-    includeSvg: raw.includeSvg !== false,
-    includeJpeg: raw.includeJpeg !== false,
-    includeEps: raw.includeEps === true,
-    epsConverter: parseConverterId(raw.epsConverter),
-    expandStrokes: raw.expandStrokes === true,
+    ...normalizeFormatOptions(raw),
     artboard: clampArtboard(raw.artboard),
-    jpegMatchArtboard: raw.jpegMatchArtboard !== false,
     scaleToMegapixels: raw.scaleToMegapixels === true,
     artboardMegapixels: clampArtboardMegapixels(raw.artboardMegapixels),
     shadowEnabled: false, // Only an icon override can opt in; persisted defaults must never enable unchecked icons.
@@ -201,14 +159,12 @@ export function parseOverrides(raw: unknown): SettingsOverrides {
   if (shadowTemplate !== null) out.shadowTemplateSvg = shadowTemplate;
   Object.assign(out, readBadgeOverrides(raw));
   Object.assign(out, readSizeGuideOverrides(raw));
-  if (typeof raw.epsConverter === "string" && parseConverterId(raw.epsConverter) === raw.epsConverter) out.epsConverter = raw.epsConverter;
+  Object.assign(out, readFormatOverrides(raw));
   return out;
 }
 
 /** The numeric fields and their clamps; `strokePx` (an icon's own width) is read with its alias below. */
 const NUMERIC_FIELDS: [string, (value: number) => number][] = [
-  ["jpegMegapixels", clampMegapixels],
-  ["jpegQuality", clampQuality],
   ["artboardMegapixels", clampArtboardMegapixels],
   ["shadowWidthPct", clampShadowWidthPct],
   ["shadowGapPct", clampShadowGapPct],
@@ -266,8 +222,8 @@ export function overrideKeys(overrides: SettingsOverrides): (keyof UploadSetting
 
 /** Every overrideable field, in canonical order — the ONE list undo equality and `settingsEqual` derive from. */
 export const SETTINGS_FIELDS: (keyof UploadSettings)[] = [
-  "paddingPct", "background", "strokePx", "strokeColor", "strokeLinecap", "jpegMegapixels", "jpegQuality",
-  "optimizeSvg", "includeSvg", "includeJpeg", "includeEps", "artboard", "jpegMatchArtboard", "epsConverter", "expandStrokes",
+  ...FORMAT_OPTION_FIELDS,
+  "paddingPct", "background", "strokePx", "strokeColor", "strokeLinecap", "artboard",
   "scaleToMegapixels", "artboardMegapixels", "shadowEnabled", "shadowWidthPct", "shadowGapPct", "shadowTemplateSvg",
   "badgeEnabled", "badgeTemplateSvg", "badgeCorner", "badgeWidthPct", "badgeOffsetXPct", "badgeOffsetYPct",
   ...SIZE_GUIDE_FIELDS,

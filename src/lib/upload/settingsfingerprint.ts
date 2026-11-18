@@ -13,6 +13,15 @@ const templateHash = fnv1a32(shadowTemplate).toString(16);
 const sizeGuideTemplateHash = fnv1a32(sizeLabelSmall + sizeLabelLarge).toString(16);
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
+/** The 2026-11-09…17 geometry additions: stroke expansion, text outlines, the full-artboard rescale. */
+function expansionTokens(s: UploadSettings): unknown[] {
+  return [
+    ...(s.expandStrokes ? ["expand"] : []),
+    ...(s.expandText ? ["expandtext"] : []),
+    ...(s.rescaleArtboard ? [["rescale", round3(s.rescaleMegapixels), s.rescaleStrokes]] : []),
+  ];
+}
+
 export function settingsFingerprint(s: UploadSettings): string {
   const canonical = JSON.stringify([
     paddingToken(s.paddingPct), s.background, round3(s.strokePx), s.strokeColor,
@@ -21,7 +30,7 @@ export function settingsFingerprint(s: UploadSettings): string {
     [s.artboard.mode, s.artboard.size, s.artboard.width, s.artboard.height],
     // The converter is a tool choice, not geometry. Older fingerprints must not move.
     ...(s.strokeLinecap !== "source" ? [["linecap", s.strokeLinecap]] : []),
-    ...(s.expandStrokes ? ["expand"] : []),
+    ...expansionTokens(s),
     ...(s.scaleToMegapixels ? [["mp", round3(s.artboardMegapixels)]] : []),
     // The bundled graphic keeps its old hash (existing packages stay current); a user template hashes its own code.
     ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, s.shadowTemplateSvg ? fnv1a32(s.shadowTemplateSvg).toString(16) : templateHash]] : []),

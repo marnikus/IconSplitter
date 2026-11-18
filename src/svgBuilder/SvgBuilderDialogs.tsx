@@ -4,6 +4,7 @@ import SvgBuilderBrief from "./SvgBuilderBrief";
 import SvgBuilderPresetJson from "./SvgBuilderPresetJson";
 import SvgBuilderArtboardMeta from "./SvgBuilderArtboardMeta";
 import SvgBuilderLeaveDialog from "./SvgBuilderLeaveDialog";
+import SvgBuilderFormatDialog from "./SvgBuilderFormatDialog";
 import { DEFAULT_ARTBOARD_SUBTITLE } from "../lib/svgBuilder/metadata";
 import type { BuilderApi } from "./useSvgBuilder";
 
@@ -12,6 +13,7 @@ export default function SvgBuilderDialogs({ b }: { b: BuilderApi }) {
   if (b.dialog === "preset") return <SvgBuilderPresetJson b={b} />;
   if (b.dialog === "artboards-metadata") return <SvgBuilderArtboardMeta b={b} />;
   if (b.dialog === "leave-template") return <SvgBuilderLeaveDialog b={b} />;
+  if (b.dialog === "export-formats") return <SvgBuilderFormatDialog b={b} />;
   if (b.dialog !== "metadata") return null;
   return <MetadataDialog b={b} />;
 }

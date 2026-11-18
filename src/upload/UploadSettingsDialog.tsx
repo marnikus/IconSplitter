@@ -15,14 +15,15 @@
 import UploadSettingsPresets from "./UploadSettingsPresets";
 import UploadPaddingSetting from "./UploadPaddingSetting";
 import {
-  artboardSize, clampMegapixels, clampQuality, clampStrokePx, STROKE_MAX, STROKE_MIN,
+  artboardSize, clampMegapixels, clampQuality, clampRescaleMegapixels, clampStrokePx, STROKE_MAX, STROKE_MIN,
   MP_MAX, MP_MIN, QUALITY_MAX, QUALITY_MIN,
   type UploadSettings,
 } from "../lib/upload/settings";
 import { AS_IS_SETTINGS, isAsIs } from "../lib/upload/asis";
 import { paintClash } from "../lib/upload/paintclash";
 import DraftNumberInput from "../ui/DraftNumberInput";
-import { Marker, change, changeMany, ToggleSetting, type UploadSettingsDialogProps } from "./settingsfield";
+import { Marker, change, changeMany, ToggleSetting, type SettingsFieldProps, type UploadSettingsDialogProps } from "./settingsfield";
+import { ExportNumberRow } from "../ui/exportrows";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
 import UploadFormatSettings from "./UploadFormatSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
@@ -102,9 +103,24 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
         hint={isAsIs(effective) ? "skipped while every visual setting is default — the SVG ships as is" : "the export copy only — viewBox, geometry, strokes and metadata are preserved"} />
       <ToggleSetting p={p} effective={effective} field="expandStrokes" label="Expand strokes to fills" testid="expand"
         hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
+      <ToggleSetting p={p} effective={effective} field="expandText" label="Expand text to fills" testid="expandtext"
+        hint="text becomes filled glyph outlines; what cannot be outlined fails that stage honestly" />
+      <ToggleSetting p={p} effective={effective} field="rescaleArtboard" label="Rescale artboard to MP" testid="rescale"
+        hint="the full artboard keeps its ratio and grows until its area is the megapixel target" />
+      {effective.rescaleArtboard && <RescaleSettings p={p} effective={effective} />}
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );
+}
+
+/** The rescale's own numbers, shown only while its box is ticked (RULE 10). */
+function RescaleSettings({ p, effective }: SettingsFieldProps) {
+  return <>
+    <NumberSetting p={p} effective={effective} field="rescaleMegapixels" label="Rescale target (MP)" testid="rescale-mp"
+      min={MP_MIN} max={MP_MAX} step={1} clamp={clampRescaleMegapixels} hint="the artboard area in megapixels (1 – 64)" />
+    <ToggleSetting p={p} effective={effective} field="rescaleStrokes" label="Scale strokes proportionally" testid="rescale-strokes"
+      hint="untick and every stroke keeps its printed px while the artboard rescales" />
+  </>;
 }
 
 /** Keep geometry alongside a stacked paint column rather than below a tall padding row. */
@@ -174,15 +190,10 @@ function NumberSetting({ p, effective, field, label, testid, min, max, step, cla
   label: string; testid: string; min: number; max: number; step: number;
   clamp: (v: unknown) => number; hint: string;
 }) {
-  const value = effective[field] as number;
   return (
-    <label className="svg-field up-set-field">
-      <span className="svg-label">{label}<Marker p={p} field={field} testid={testid} /></span>
-      <input className="svg-input" data-testid={`upload-set-${testid}`} type="number" aria-label={label}
-        min={min} max={max} step={step} value={value}
-        onChange={(e) => change(p, field, clamp(Number(e.target.value)))} />
-      <small className="up-hint">{hint}</small>
-    </label>
+    <ExportNumberRow label={label} hint={hint} testid={`upload-set-${testid}`} min={min} max={max} step={step}
+      value={effective[field] as number} marker={<Marker p={p} field={field} testid={testid} />}
+      onChange={(value) => change(p, field, clamp(value))} />
   );
 }
 

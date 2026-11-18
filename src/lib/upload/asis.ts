@@ -16,7 +16,16 @@ export const AS_IS_SETTINGS: Pick<UploadSettings, "paddingPct" | "background" | 
 
 /** True when the export would change nothing visual: the approved SVG ships as it is. */
 export function isAsIs(s: UploadSettings): boolean {
+  return visualDefaults(s) && additionsOff(s);
+}
+
+/** Every paint/placement field at its "leave the source alone" value. */
+function visualDefaults(s: UploadSettings): boolean {
   return s.paddingPct === null && s.background === BACKGROUND_SOURCE && s.strokePx === 0
-    && s.strokeColor === STROKE_COLOR_ARTWORK && s.strokeLinecap === "source" && s.artboard.mode === "source"
-    && !s.expandStrokes && !s.shadowEnabled && !s.badgeEnabled && !s.sizeGuideEnabled;
+    && s.strokeColor === STROKE_COLOR_ARTWORK && s.strokeLinecap === "source" && s.artboard.mode === "source";
+}
+
+/** Nothing added on top: no expansion, no rescale, no decoration (2026-11-17: text and rescale included). */
+function additionsOff(s: UploadSettings): boolean {
+  return !s.expandStrokes && !s.expandText && !s.rescaleArtboard && !s.shadowEnabled && !s.badgeEnabled && !s.sizeGuideEnabled;
 }

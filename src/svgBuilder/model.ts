@@ -24,7 +24,7 @@ import type { FinalArtboard } from "../lib/svgBuilder/artboards";
 import type { RowSelection } from "../lib/reviewselect";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 
-export type BuilderDialog = "none" | "metadata" | "brief" | "preset" | "artboards-metadata" | "leave-template";
+export type BuilderDialog = "none" | "metadata" | "brief" | "preset" | "artboards-metadata" | "leave-template" | "export-formats";
 
 /** Where the user was going when a changed template asked Save / Discard (2026-11-14). */
 export interface LeaveTarget { kind: "template" | "artboard" | "add-artboard"; id: string }

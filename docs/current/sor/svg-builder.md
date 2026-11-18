@@ -42,3 +42,5 @@ The **metadata widget** sits right after the folder bar: the shared `PromptWindo
 | presentation | `src/svgBuilder/SvgBuilder*.tsx`, `briefText.ts`, `svgBuilder.css` |
 
 `npm run test:builder:fast` is an extra Node smoke lane (esbuild bundle; `?raw` imports load as text); it does not replace the Vitest suites. See [Code Verification](../CODE_VERIFICATION.md).
+
+* **Export formats** (2026-11-17): the builder stock package and the SVG to upload flow share ONE format domain — [export formats](export-formats.md).

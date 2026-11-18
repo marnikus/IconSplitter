@@ -6,6 +6,7 @@
 // rows (UploadPaintSettings) cannot drift apart.
 
 import type { DecorationValues } from "../lib/upload/decorations";
+import { ExportCheckRow } from "../ui/exportrows";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { SelectedShadow } from "./shadowselection";
 import type { SelectedBadge } from "./badgeselection";
@@ -77,13 +78,8 @@ export function ToggleSetting({ p, effective, field, label, testid, hint }: {
   p: UploadSettingsDialogProps; effective: UploadSettings; field: keyof UploadSettings;
   label: string; testid: string; hint: string;
 }) {
-  const value = effective[field] as boolean;
   return (
-    <label className="svg-field up-set-field">
-      <span className="svg-label">{label}<Marker p={p} field={field} testid={testid} /></span>
-      <input data-testid={`upload-set-${testid}`} type="checkbox" aria-label={label} checked={value}
-        onChange={(e) => change(p, field, e.target.checked)} />
-      <small className="up-hint">{hint}</small>
-    </label>
+    <ExportCheckRow label={label} hint={hint} testid={`upload-set-${testid}`} checked={effective[field] as boolean}
+      marker={<Marker p={p} field={field} testid={testid} />} onChange={(value) => change(p, field, value)} />
   );
 }

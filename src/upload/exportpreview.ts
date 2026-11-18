@@ -51,6 +51,8 @@ function buildPreview(key: string, source: string, settings: UploadSettings): Ex
   if (cached !== undefined) return cached;
   const prepared = prepareExportSvg(source, settings);
   const value = prepared.ok ? { svg: prepared.svg, note: paintClash(settings) } : { svg: source, note: `export preview unavailable — ${prepared.detail}` };
+  // A cold font cache is not a verdict: retry on the next tick once warm.
+  if (!prepared.ok && settings.expandText && /outlin/i.test(prepared.detail)) return value;
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
   cache.set(key, value);
   return value;

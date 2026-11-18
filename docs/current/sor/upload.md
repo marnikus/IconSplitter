@@ -111,3 +111,5 @@ render-time destination planning and quadratic local-map updates, targets stale
 projection, shares popup derivation and reuses already-built preview results.
 Exact export algorithms and all controls remain; browser latency is not claimed.
 The export pipeline itself (JPEG worker pool, overlapping batch, directory cache, commit passes) is in [export speed](upload-export-speed.md).
+
+The format decisions (SVG/JPEG/EPS flags, converter, JPEG MP and quality, SVGO, stroke and text expansion, artboard rescale) are shared with the sheet builder: [export formats](export-formats.md).

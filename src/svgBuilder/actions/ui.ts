@@ -2,11 +2,12 @@
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveBuilderPrefs } from "../prefsstore";
 
-type UiActions = Pick<BuilderActions, "openBrief" | "openMetadata" | "closeDialog" | "say" | "openIconEditor">;
+type UiActions = Pick<BuilderActions, "openBrief" | "openMetadata" | "closeDialog" | "say" | "openIconEditor" | "openExportFormats">;
 
 export function uiActions(get: () => BuilderActionContext): UiActions {
   return {
     openBrief: () => get().dispatch({ dialog: "brief" }),
+    openExportFormats: () => get().dispatch({ dialog: "export-formats" }),
     openIconEditor: (id) => get().dispatch({ editingIconId: id }),
     openMetadata: () => { const c = get(); const next = { ...c.model.prefs, metaOpen: true }; c.dispatch({ prefs: next }); saveBuilderPrefs(next); },
     say: (message, error) => get().say(message, error),

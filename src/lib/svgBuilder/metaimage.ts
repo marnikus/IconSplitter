@@ -16,10 +16,5 @@ export function iconsOnlyConfig(config: SheetConfig): SheetConfig {
 }
 
 /** The largest size with the same aspect whose pixel count stays within `maxPixels` (default 1 MP). */
-export function megapixelSize(width: number, height: number, maxPixels = 1_000_000): { width: number; height: number } {
-  const ratio = width / Math.max(1, height);
-  let w = Math.max(1, Math.floor(Math.sqrt(maxPixels * ratio)));
-  let h = Math.max(1, Math.floor(w / ratio));
-  while (w * h > maxPixels) { w -= 1; h = Math.max(1, Math.floor(w / ratio)); }
-  return { width: w, height: h };
-}
+/** The shared megapixel sizing lives in the export-format domain (2026-11-17). */
+export { megapixelSize } from "../exportformats";

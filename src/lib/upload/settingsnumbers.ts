@@ -9,6 +9,8 @@ export const MP_MIN = 1;
 export const MP_MAX = 64;
 export const MP_DEFAULT = 15.1;
 export const ARTBOARD_MP_DEFAULT = 5;
+/** The full-artboard rescale target (2026-11-17): 20 MP by default, same public range as the JPEG MP. */
+export const RESCALE_MP_DEFAULT = 20;
 export const QUALITY_MIN = 0.5;
 export const QUALITY_MAX = 1;
 export const QUALITY_DEFAULT = 0.92;
@@ -44,6 +46,7 @@ export const clampPaddingPct = (value: unknown) => clampNum(value, PADDING_MIN, 
 export const clampStrokePx = (value: unknown) => clampNum(value, STROKE_MIN, STROKE_MAX, STROKE_DEFAULT);
 export const clampMegapixels = (value: unknown) => clampNum(value, MP_MIN, MP_MAX, MP_DEFAULT);
 export const clampArtboardMegapixels = (value: unknown) => clampNum(value, MP_MIN, MP_MAX, ARTBOARD_MP_DEFAULT);
+export const clampRescaleMegapixels = (value: unknown) => clampNum(value, MP_MIN, MP_MAX, RESCALE_MP_DEFAULT);
 export const clampQuality = (value: unknown) => clampNum(value, QUALITY_MIN, QUALITY_MAX, QUALITY_DEFAULT);
 export const clampShadowWidthPct = (value: unknown) => clampNum(value, SHADOW_WIDTH_MIN, SHADOW_WIDTH_MAX, SHADOW_WIDTH_DEFAULT);
 export const clampShadowGapPct = (value: unknown) => clampNum(value, SHADOW_GAP_MIN, SHADOW_GAP_MAX, SHADOW_GAP_DEFAULT);

@@ -40,6 +40,7 @@ describe("defaults and clamps", () => {
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
       epsConverter: "builtin", expandStrokes: false, // 2026-10-09
+      expandText: false, rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true, // 2026-11-17
       scaleToMegapixels: false, artboardMegapixels: 5, // 2026-10-09 (I-62)
       shadowEnabled: false, shadowWidthPct: 80, shadowGapPct: 5, shadowTemplateSvg: "",
       badgeEnabled: false, badgeTemplateSvg: "", badgeCorner: "bottom-right", badgeWidthPct: 40, badgeOffsetXPct: 3, badgeOffsetYPct: 3,

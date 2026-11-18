@@ -5,6 +5,7 @@
 
 import { verifyEpsDocument } from "../lib/upload/eps";
 import { prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
+import { warmTextFonts } from "../lib/upload/textoutline";
 import { pinnedDimensions, targetDimensions } from "../lib/upload/geom";
 import { rasterizeJpeg, type RasterRecord } from "../lib/upload/raster";
 import { optimizeSvg, recordAfterClean, type OptimizeRecord } from "../lib/upload/optimize";
@@ -75,6 +76,7 @@ export async function buildArtifacts(plan: StagePlan, ctx: StageContext): Promis
 
 /** prepare + optimize: the export SVG text every later stage derives from. */
 async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
+  if (ctx.settings.expandText) await warmTextFonts(ctx.sourceText); // the outliner is sync; fonts load here
   const prepared = prepareExportSvg(ctx.sourceText, ctx.settings);
   if (!prepared.ok) throw new StageError("prepare", `${prepared.code}: ${prepared.detail}`);
   art.prepared = prepared;

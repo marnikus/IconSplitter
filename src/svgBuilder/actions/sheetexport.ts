@@ -14,6 +14,8 @@ import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
 import { loadBridgeConfig } from "../../upload/configstore";
 import { loadUploadSettings } from "../../upload/settingsstore";
+import { loadBuilderFormats } from "../formatstore";
+import { warmTextFonts } from "../../lib/upload/textoutline";
 import { buildSheetPackage } from "../sheetpackage";
 import { writeArtboardSeed, writeSheetExport, writeSheetMetadata, type SheetMetaFile } from "../sheetwriter";
 import { recordUse } from "../usagestore";
@@ -61,7 +63,8 @@ async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboar
   if (folder === null) return [`${artboard.name}: its template is gone`];
   const config = artboardConfig(template, artboard);
   const doc = composeSheet({ config, layout: computeLayout(config), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts: texts, metadata: artboard.metadata });
-  const settings = loadUploadSettings().defaults;
+  const settings = { ...loadUploadSettings().defaults, ...loadBuilderFormats() };
+  if (settings.expandText) await warmTextFonts(doc.svg); // the outliner is sync; fonts load here
   const pkg = await buildSheetPackage({ svg: doc.svg, metadata: artboard.metadata, settings, folder, stem: sheetStem(folder), pairId: artboard.id,
     now: now.toISOString(), prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(settings.epsConverter) });
   await writeSheetExport(root, folder, pkg.files);

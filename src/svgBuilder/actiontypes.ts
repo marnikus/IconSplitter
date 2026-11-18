@@ -103,6 +103,7 @@ export interface BuilderActions {
   savePreset: () => void;
   loadPreset: (text: string) => void;
   openBrief: () => void;
+  openExportFormats: () => void;
   /** "Icons indexing": vectorise every approved icon whose index is missing or stale. */
   startIndexing: () => void;
   cancelIndexing: () => void;
