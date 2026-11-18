@@ -67,44 +67,6 @@ export function blockInk(banner: Banner, which: "title" | "subtitle", o: { boxWi
   return { height: (lines.length - 1) * size * step + ascent + descent, width, ascent, descent, lines };
 }
 
-/** The smallest edge gap the column allows: the row's minimum, on the height (2026-11-17). */
-function columnNeeded(banner: Banner, span: number, heroSpan: number, hasSub: boolean): number {
-  const min = Math.max(12, span * (banner.rowGapPct ?? ROW_MIN_GAP * 100) / 100);
-  return heroSpan > 0 && hasSub ? Math.max(min, heroSpan / 2 + min) : min;
-}
-
-export interface ColumnFit { titleSize: number; subtitleSize: number; gap: number }
-
-/**
- * The column's sizes and edge gap (2026-11-17): the user's sizes, shrunk by ONE
- * factor (whole pixels, down) only as far as the vertical gaps need — edge g,
- * title block, 2g (holding the hero), subtitle block, g over the banner height.
- */
-export function fitColumn(banner: Banner, height: number, boxWidth: number, heroHeight = 0): ColumnFit {
-  const hasSub = applyCase(banner.subtitle.trim(), banner.subtitleCase) !== "";
-  const needed = columnNeeded(banner, height, heroHeight, hasSub);
-  const blocks = (t: number, s: number) => blockInk(banner, "title", { boxWidth, size: t, step: 1.03 }).height
-    + (hasSub ? blockInk(banner, "subtitle", { boxWidth, size: s, step: 1.55 }).height : 0);
-  const gapOf = (t: number, s: number) => (height - blocks(t, s)) / 4;
-  let titleSize = clampTo(RANGES.titleSize, banner.titleSize);
-  let subtitleSize = clampTo(RANGES.subtitleSize, banner.subtitleSize);
-  let lo = 0.02, hi = 1;
-  if (gapOf(titleSize, subtitleSize) < needed) {
-    for (let i = 0; i < 34; i += 1) {
-      const mid = (lo + hi) / 2;
-      const t = Math.max(1, Math.floor(titleSize * mid)), s = Math.max(1, Math.floor(subtitleSize * mid));
-      if (gapOf(t, s) >= needed) lo = mid; else hi = mid;
-    }
-    titleSize = Math.max(1, Math.floor(titleSize * lo));
-    subtitleSize = Math.max(1, Math.floor(subtitleSize * lo));
-    while (gapOf(titleSize, subtitleSize) < needed && (titleSize > 1 || subtitleSize > 1)) {
-      titleSize = Math.max(1, titleSize - 1);
-      subtitleSize = Math.max(1, subtitleSize - 1);
-    }
-  }
-  return { titleSize, subtitleSize, gap: gapOf(titleSize, subtitleSize) };
-}
-
 /** How the banner draws its title and subtitle (banner.ts titleText / subtitleText). */
 export function titleStyle(banner: Pick<Banner, "titleFace" | "titleTracking">): InkStyle {
   const serif = banner.titleFace === "serif";
@@ -145,6 +107,41 @@ export function fitBanner(banner: Banner, width: number, heroWidth = 0): BannerF
 /** A box width that keeps `text` on one line (banner.ts wraps at width ÷ charWidth characters). */
 function oneLine(text: string, charWidth: number): number {
   return Math.round(clampTo(RANGES.textWidth, Math.ceil(text.trim().length * charWidth) + 2));
+}
+
+/** The largest one shrink factor (whole pixels, down) that keeps x at or above the minimum edge. */
+function shrinkFactor(fits: (factor: number) => boolean): number {
+  let lo = 0.02, hi = 1;
+  for (let i = 0; i < 34; i += 1) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+  return lo;
+}
+
+export interface ColumnFit { titleSize: number; subtitleSize: number; gap: number }
+
+/**
+ * The column's sizes and edge gap (2026-11-18, reference frame): the stack —
+ * hero glyph, accent rule, title, subtitle — takes x on the top and bottom
+ * edges and 1/3 · x between every two neighbouring objects that are present,
+ * so x follows from the banner's height and the objects' ink. The user's sizes
+ * stay, shrunk by ONE factor (whole pixels, down) only when x would fall below
+ * the Gap % of the height.
+ */
+export function fitColumn(banner: Banner, height: number, boxWidth: number, o: { hero: number; rule: number }): ColumnFit {
+  const hasTitle = applyCase(banner.title.trim(), banner.titleCase) !== "";
+  const hasSub = applyCase(banner.subtitle.trim(), banner.subtitleCase) !== "";
+  const objects = (o.hero > 0 ? 1 : 0) + (o.rule > 0 ? 1 : 0) + (hasTitle ? 1 : 0) + (hasSub ? 1 : 0);
+  const denom = 2 + Math.max(0, objects - 1) / 3; // two edges + a third of x per neighbour gap
+  const needed = Math.max(12, height * (banner.rowGapPct ?? ROW_MIN_GAP * 100) / 100);
+  const blocks = (t: number, sz: number) => (hasTitle ? blockInk(banner, "title", { boxWidth, size: t, step: 1.03 }).height : 0)
+    + (hasSub ? blockInk(banner, "subtitle", { boxWidth, size: sz, step: 1.55 }).height : 0);
+  const xOf = (t: number, sz: number) => (height - o.hero - o.rule - blocks(t, sz)) / denom;
+  const titleSize = clampTo(RANGES.titleSize, banner.titleSize);
+  const subtitleSize = clampTo(RANGES.subtitleSize, banner.subtitleSize);
+  if (xOf(titleSize, subtitleSize) >= needed) return { titleSize, subtitleSize, gap: xOf(titleSize, subtitleSize) };
+  const f = shrinkFactor((f) => xOf(Math.max(1, Math.floor(titleSize * f)), Math.max(1, Math.floor(subtitleSize * f))) >= needed);
+  let t = Math.max(1, Math.floor(titleSize * f)), sz = Math.max(1, Math.floor(subtitleSize * f));
+  while (xOf(t, sz) < needed && (t > 1 || sz > 1)) { t = Math.max(1, t - 1); sz = Math.max(1, sz - 1); }
+  return { titleSize: t, subtitleSize: sz, gap: xOf(t, sz) };
 }
 
 /**

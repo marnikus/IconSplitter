@@ -1,21 +1,22 @@
 // @vitest-environment happy-dom
-// svg_builder_column_spread.test.ts — the reference text rule on vertical column
-// banners (left / right, 2026-11-17): the same principle as the edge row, with the
-// axes swapped — the distances (edge g · title · 2g · subtitle · g) are measured
-// VERTICALLY between the texts' real ink blocks, every line's ink is centred on
-// the column's middle line (X), and the hero glyph (else the divider) sits exactly
-// in the middle of the double gap. ▦ Guides shows the ink blocks and the gaps with
-// their px, exactly as for the row. The rule is also the DEFAULT for new designs
-// and migrates every saved template with a banner it applies to.
+// svg_builder_column_spread.test.ts — the reference rule on vertical column
+// banners (2026-11-17, redefined against the reference frame): the column is a
+// STACK — hero glyph, accent rule, title, subtitle — spaced vertically with
+//   x        on the top and bottom edges,
+//   1/3 · x  between every two neighbouring objects that are present,
+// so turning the hero or the rule off keeps 1/3 · x between the rest and x on
+// the edges (x follows from the banner's height and the objects' ink). Every
+// line's ink is centred on the column's middle line; ▦ Guides draws the ink
+// blocks and the vertical gap bars with their px. The rule is the default for
+// new designs and migrates every saved template with a row or column banner.
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_CONFIG, applyPresetConfig, parseSheetConfig } from "../src/lib/svgBuilder/config";
+import { DEFAULT_CONFIG, applyPresetConfig, parseSheetConfig, readableInk } from "../src/lib/svgBuilder/config";
 import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { composeSheet } from "../src/lib/svgBuilder/compose";
 import { setTextMeasurer } from "../src/lib/svgBuilder/measure";
 import { canRebalance } from "../src/lib/svgBuilder/rebalance";
 import { spreadInkBoxes } from "../src/lib/svgBuilder/banner";
 import { newTemplate, parseTemplates } from "../src/lib/svgBuilder/templates";
-import { readableInk } from "../src/lib/svgBuilder/config";
 
 // The same fake measurer the row tests use: ink 0.5 × size per character, from 0.05 × size.
 const ink = (text: string, size: number) => ({ width: text.length * size * 0.5, left: size * 0.05, ascent: size * 0.7, descent: size * 0.02 });
@@ -30,93 +31,120 @@ const sheet = (banner: Partial<typeof DEFAULT_CONFIG.banner>, artboard: Partial<
 /** The drawn texts of one block: [x, baseline y, size] per line. */
 const linesOf = (svg: string, which: string) => [...(new RegExp(`data-banner-text="${which}"[\\s\\S]*?</g>`).exec(svg)?.[0] ?? "").matchAll(/<text x="([\d.-]+)" y="([\d.-]+)"[^>]*font-size="([\d.-]+)"/g)]
   .map((m) => ({ x: Number(m[1]), y: Number(m[2]), size: Number(m[3]) }));
+const heroCyOf = (svg: string) => Number(/<circle cx="[\d.-]+" cy="([\d.-]+)"[^>]*data-banner-ring/.exec(svg)![1]);
+const ruleYOf = (svg: string) => Number(/<rect x="[\d.-]+" y="([\d.-]+)"[^>]*data-accent-rule/.exec(svg)![1]);
 
-describe("the reference rule on a vertical column banner", () => {
-  it("spaces the ink blocks edge g · title · 2g · subtitle · g, measured vertically", () => {
+/** The stack's geometry as the reference defines it: x on the edges, 1/3 · x between neighbours. */
+function stack(box: { y: number; height: number }, heights: readonly number[]) {
+  const x = (box.height - heights.reduce((s, h) => s + h, 0)) / (2 + (heights.length - 1) / 3);
+  const tops: number[] = [];
+  let cur = box.y + x;
+  for (const h of heights) { tops.push(cur); cur += h + x / 3; }
+  return { x, tops };
+}
+const T = (size: number) => size * 0.72; // one title line's ink with the fake measurer
+const S = (size: number) => size * 0.72; // one subtitle line's ink
+const HERO_D = 118; // ring diameter at a 242-wide column (heroSize)
+const RULE_H = 2;
+
+describe("the reference stack on a vertical column banner", () => {
+  it("hero, accent rule, title, subtitle: x on the edges, 1/3 · x between neighbours", () => {
     setTextMeasurer(ink);
-    const { config, layout, svg } = sheet({ edgeSpread: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
+    const { layout, svg } = sheet({ edgeSpread: true, hero: true, divider: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
     const box = layout.banner!;
-    const tl = linesOf(svg, "title"), sl = linesOf(svg, "subtitle");
-    const tTop = tl[0].y - tl[0].size * 0.7, tBot = tl[tl.length - 1].y + tl[tl.length - 1].size * 0.02;
-    const sTop = sl[0].y - sl[0].size * 0.7, sBot = sl[sl.length - 1].y + sl[sl.length - 1].size * 0.02;
-    const g = (box.height - (tBot - tTop) - (sBot - sTop)) / 4;
-    expect(g).toBeGreaterThan(0);
-    expect(tTop - box.y).toBeCloseTo(g, 0); // one space on the top edge
-    expect(sTop - tBot).toBeCloseTo(2 * g, 0); // twice the space between the texts
-    expect(box.y + box.height - sBot).toBeCloseTo(g, 0); // one space on the bottom edge
-    expect(config.banner.titleSize).toBe(32); // the column keeps the user's sizes…
-    expect(config.banner.subtitleSize).toBe(9);
+    const { x, tops } = stack(box, [HERO_D, RULE_H, T(32), S(9)]);
+    expect(heroCyOf(svg)).toBeCloseTo(tops[0] + HERO_D / 2, 0);
+    expect(ruleYOf(svg)).toBeCloseTo(tops[1], 0);
+    expect(linesOf(svg, "title")[0].y - 32 * 0.7).toBeCloseTo(tops[2], 0); // the title's ink top
+    expect(linesOf(svg, "subtitle")[0].y - 9 * 0.7).toBeCloseTo(tops[3], 0);
+    expect(tops[3] + S(9) + x).toBeCloseTo(box.y + box.height, 0); // and x on the bottom edge
+    expect(x).toBeGreaterThan(0);
+  });
+
+  it("hero off: the rule, the title and the subtitle keep 1/3 · x between them, x on the edges", () => {
+    setTextMeasurer(ink);
+    const { layout, svg } = sheet({ edgeSpread: true, hero: false, divider: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
+    const box = layout.banner!;
+    const { x, tops } = stack(box, [RULE_H, T(32), S(9)]);
+    expect(ruleYOf(svg)).toBeCloseTo(tops[0], 0);
+    expect(linesOf(svg, "title")[0].y - 32 * 0.7).toBeCloseTo(tops[1], 0);
+    expect(linesOf(svg, "subtitle")[0].y - 9 * 0.7).toBeCloseTo(tops[2], 0);
+    expect(tops[2] + S(9) + x).toBeCloseTo(box.y + box.height, 0);
+  });
+
+  it("rule off: hero, title and subtitle keep 1/3 · x between them, x on the edges", () => {
+    setTextMeasurer(ink);
+    const { layout, svg } = sheet({ edgeSpread: true, hero: true, divider: false, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
+    const box = layout.banner!;
+    const { x, tops } = stack(box, [HERO_D, T(32), S(9)]);
+    expect(heroCyOf(svg)).toBeCloseTo(tops[0] + HERO_D / 2, 0);
+    expect(linesOf(svg, "title")[0].y - 32 * 0.7).toBeCloseTo(tops[1], 0);
+    expect(linesOf(svg, "subtitle")[0].y - 9 * 0.7).toBeCloseTo(tops[2], 0);
+    expect(tops[2] + S(9) + x).toBeCloseTo(box.y + box.height, 0);
+  });
+
+  it("texts alone: x on the edges and 1/3 · x between the two ink blocks", () => {
+    setTextMeasurer(ink);
+    const { layout, svg } = sheet({ edgeSpread: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
+    const box = layout.banner!;
+    const { x, tops } = stack(box, [T(32), S(9)]);
+    expect(linesOf(svg, "title")[0].y - 32 * 0.7).toBeCloseTo(tops[0], 0);
+    expect(linesOf(svg, "subtitle")[0].y - 9 * 0.7).toBeCloseTo(tops[1], 0);
+    expect(tops[1] + S(9) + x).toBeCloseTo(box.y + box.height, 0);
   });
 
   it("centres every line's ink on the column's middle line (X)", () => {
     setTextMeasurer(ink);
     const { layout, svg } = sheet({ edgeSpread: true, titleWidth: 200, subtitleWidth: 60, titleSize: 32, subtitleSize: 9 });
     const cx = layout.banner!.x + layout.banner!.width / 2;
-    for (const line of linesOf(svg, "title")) {
-      const w = 10 * line.size * 0.5; // "ICON SHEET" on one line (titleWidth 200)
-      expect(line.x + line.size * 0.05 + w / 2).toBeCloseTo(cx, 0);
-    }
+    for (const line of linesOf(svg, "title")) expect(line.x + line.size * 0.05 + (10 * line.size * 0.5) / 2).toBeCloseTo(cx, 0);
     const subs = linesOf(svg, "subtitle");
     expect(subs.length).toBe(3); // subtitleWidth 60 wraps EDITABLE / STROKE / WIDTH
-    for (const line of subs) {
-      const w = line === subs[0] ? 8 * line.size * 0.5 : line === subs[1] ? 6 * line.size * 0.5 : 5 * line.size * 0.5;
-      expect(line.x + line.size * 0.05 + w / 2).toBeCloseTo(cx, 0);
-    }
+    const widths = [8, 6, 5];
+    subs.forEach((line, i) => expect(line.x + line.size * 0.05 + (widths[i] * line.size * 0.5) / 2).toBeCloseTo(cx, 0));
   });
 
-  it("puts the divider, else the hero, exactly in the middle of the double gap", () => {
+  it("shrinks both sizes by one factor when the stack cannot hold the minimum edge", () => {
     setTextMeasurer(ink);
-    const rule = sheet({ edgeSpread: true, divider: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
-    const tl = linesOf(rule.svg, "title"), sl = linesOf(rule.svg, "subtitle");
-    const tBot = tl[0].y + tl[0].size * 0.02, sTop = sl[0].y - sl[0].size * 0.7;
-    const at = /<rect x="[\d.-]+" y="([\d.-]+)"[^>]*data-accent-rule/.exec(rule.svg)!;
-    expect(Number(at[1]) + 1).toBeCloseTo((tBot + sTop) / 2, 0);
-    const hero = sheet({ edgeSpread: true, hero: true, divider: false, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
-    const ht = linesOf(hero.svg, "title"), hs = linesOf(hero.svg, "subtitle");
-    const hBot = ht[0].y + ht[0].size * 0.02, hTopS = hs[0].y - hs[0].size * 0.7;
-    const cy = Number(/<circle cx="[\d.-]+" cy="([\d.-]+)"[^>]*data-banner-ring/.exec(hero.svg)![1]);
-    expect(cy).toBeCloseTo((hBot + hTopS) / 2, 0);
-  });
-
-  it("shrinks both sizes by one factor when the gaps fall below the minimum", () => {
-    setTextMeasurer(ink);
-    const { layout, svg } = sheet({ edgeSpread: true, titleWidth: 400, subtitleWidth: 400, titleSize: 120, subtitleSize: 60 },
+    const { layout, svg } = sheet({ edgeSpread: true, hero: true, divider: true, titleWidth: 400, subtitleWidth: 400, titleSize: 120, subtitleSize: 60 },
       { height: 240 });
     const box = layout.banner!;
-    const tl = linesOf(svg, "title"), sl = linesOf(svg, "subtitle");
-    const ts = tl[0].size, ss = sl[0].size;
+    const ts = linesOf(svg, "title")[0].size, ss = linesOf(svg, "subtitle")[0].size;
     expect(ts).toBeLessThan(120); // shrunk…
     expect(ss / ts).toBeCloseTo(0.5, 1); // …by one factor
-    const tTop = tl[0].y - ts * 0.7, sBot = sl[0].y + ss * 0.02;
-    const g = Math.min(tTop - box.y, box.y + box.height - sBot);
-    expect(g).toBeGreaterThanOrEqual(box.height * 0.05 - 0.5);
+    const { x } = stack(box, [HERO_D, RULE_H, ts * 0.72, ss * 0.72]);
+    expect(x).toBeGreaterThanOrEqual(box.height * 0.05 - 0.5); // the Gap % minimum holds
   });
 
-  it("split column: the colour seam takes the divider's place in the middle of the double gap", () => {
+  it("split column: the seam sits in the middle of the title–subtitle gap, the title on its colour", () => {
     setTextMeasurer(ink);
-    const { config, svg } = sheet({ style: "split", edgeSpread: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
+    const { config, layout, svg } = sheet({ style: "split", edgeSpread: true, hero: true, divider: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
+    const box = layout.banner!;
+    const { x, tops } = stack(box, [HERO_D, RULE_H, T(32), S(9)]);
+    const seam = tops[3] - x / 6; // the middle of the gap between the texts
     const block = /<rect x="([\d.-]+)" y="([\d.-]+)" width="([\d.-]+)" height="([\d.-]+)"[^>]*data-split-block/.exec(svg)!;
-    const seam = Number(block[2]) + Number(block[4]);
-    const tl = linesOf(svg, "title"), sl = linesOf(svg, "subtitle");
-    const tBot = tl[0].y + tl[0].size * 0.02, sTop = sl[0].y - sl[0].size * 0.7;
-    expect(seam).toBeCloseTo((tBot + sTop) / 2, 0);
-    expect(tl[0].y).toBeLessThan(seam); // the title stays on its colour
-    expect(sl[0].y).toBeGreaterThan(seam);
+    expect(Number(block[2]) + Number(block[4])).toBeCloseTo(seam, 0);
+    expect(heroCyOf(svg)).toBeCloseTo(tops[0] + HERO_D / 2, 0); // the hero keeps its stack place, on the block
+    expect(linesOf(svg, "title")[0].y).toBeLessThan(seam);
+    expect(linesOf(svg, "subtitle")[0].y).toBeGreaterThan(seam);
     const fill = /data-banner-text="title"[\s\S]*?<text[^>]*fill="([^"]+)"/.exec(svg)![1].toUpperCase();
     expect(fill).toBe(readableInk(config.banner.accent).toUpperCase());
   });
 
-  it("▦ Guides: the ink blocks and the three vertical gaps, with the middle one double", () => {
+  it("▦ Guides: the ink blocks and one vertical bar per gap — edges x, neighbours 1/3 · x", () => {
     setTextMeasurer(ink);
-    const { config, layout } = sheet({ edgeSpread: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
+    const { config, layout } = sheet({ edgeSpread: true, hero: true, divider: true, titleWidth: 200, subtitleWidth: 200, titleSize: 32, subtitleSize: 9 });
     const boxes = spreadInkBoxes(config, layout)!;
-    expect(boxes.gaps).toHaveLength(3);
+    expect(boxes.gaps).toHaveLength(5); // edge · three neighbours · edge
     for (const g of boxes.gaps) expect(g.height).toBeGreaterThan(g.width); // vertical bars
-    expect(boxes.gaps[1].height).toBeCloseTo(2 * boxes.gaps[0].height, 0);
-    expect(boxes.gaps[2].height).toBeCloseTo(boxes.gaps[0].height, 0);
+    const [e0, u0, u1, u2, e1] = boxes.gaps.map((g) => g.height);
+    expect(u0).toBeCloseTo(e0 / 3, 0);
+    expect(u1).toBeCloseTo(e0 / 3, 0);
+    expect(u2).toBeCloseTo(e0 / 3, 0);
+    expect(e1).toBeCloseTo(e0, 0);
     const svg = composeSheet({ config, layout, assets: [], placedIds: [], svgTexts: {} }).svg;
-    const tl = linesOf(svg, "title")[0];
-    expect(boxes.title.y).toBeCloseTo(tl.y - tl.size * 0.7, 0); // exactly the drawn ink
+    const title = linesOf(svg, "title")[0];
+    expect(boxes.title.y).toBeCloseTo(title.y - title.size * 0.7, 0); // exactly the drawn ink
     expect(boxes.title.x + boxes.title.width / 2).toBeCloseTo(layout.banner!.x + layout.banner!.width / 2, 0);
     expect(spreadInkBoxes(parseSheetConfig({ ...config, banner: { ...config.banner, edgeSpread: false, autoRebalance: false } }), layout)).toBeNull();
   });
