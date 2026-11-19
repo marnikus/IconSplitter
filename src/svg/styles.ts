@@ -64,7 +64,7 @@ export function styledRows(bases: readonly SvgRow[], metaOf: (id: string) => Pai
   return alive.map((row) => {
     const id = styleRowId(row.source.id, style);
     const meta = isGoneSinceScan(id) ? null : metaOf(id);
-    return meta == null ? row : styleRow(row, meta, metaOf);
+    return meta == null || meta.decision === "declined" ? row : styleRow(row, meta, metaOf); // a declined style pair never renders (2026-11-18)
   });
 }
 
@@ -122,7 +122,7 @@ export function rowsForAllStyles(discovery: Discovery, metaOf: (id: string) => P
     for (const base of bases) {
       const styleId = styleRowId(base.source.id, style);
       const meta = isGoneSinceScan(styleId) ? null : metaOf(styleId); // a removed style never rejoins the all-styles list
-      if (meta == null) continue;
+      if (meta == null || meta.decision === "declined") continue; // declined on disk = not listed (2026-11-18)
       byBase.set(base.source.id, [...(byBase.get(base.source.id) ?? []), styleRow(base, meta, metaOf)]);
     }
   }

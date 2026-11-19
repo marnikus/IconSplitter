@@ -79,3 +79,16 @@ row. Source: `src/svg/styles.ts`, `src/lib/svgstyles.ts`.
   `rowsForAllStyles`) skips those pairs in every mode, and a scan commit
   (`scan.ts`) clears the overlay once it has read every pair file fresh. An
   undo writes "approved" through the same path, so the row returns at once.
+* **Remove reaches the style pair's OWN file (2026-11-18)**: registration
+  names the style image but never hashes it (`sideOf(rel, "")`, no source
+  side), so `pairRefOf`'s unhashed-face guard made `toRecord` refuse its
+  record and a Remove declined only the BASE pair — the toast said "Removed"
+  while the style row stayed listed and its file stayed approved.
+  `removerows.ts` (`recordOf`) falls back to a record built from the pair
+  file's own names whenever a face is named but unhashed, so every family
+  member's decline reaches its file, the listed row leaves at once, and one
+  Undo restores them all. A style pair declined on disk never renders as a
+  style row again (`styledRows`, `rowsForAllStyles`): the picked style falls
+  back to the base row and the all-styles list drops it until it is
+  re-approved. Witness: `svg_remove_row_style_live.test.ts` drives the REAL
+  `registerStyles` writer, then the real removal chain.

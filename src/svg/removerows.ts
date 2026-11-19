@@ -14,6 +14,7 @@ import { baseRowId, styleRowId } from "../lib/svgstyles";
 import { loadMetaAt, pairRefOf } from "../selection/pairstore";
 import { styleMetaPathAt, stylePrefs } from "./styles";
 import type { DirHandleLike } from "../lib/fs";
+import type { ReviewPair } from "../lib/pairing";
 import type { ReviewRecord } from "../lib/reviewfile";
 import { withActivity } from "../lib/activity";
 import { applyDecisionPatch, onDecisionsWritten, type WrittenDecision } from "../selection/offline";
@@ -41,7 +42,24 @@ async function recordsOf(c: RemoveCtx, metaPath: string, known: PairMeta | null,
   const meta = onDisk ?? known;
   if (meta === null) return { before: null, after: null };
   const pair = pairRefOf(meta);
-  return { before: toRecord(meta, pair), after: toRecord(withDecision(meta, "declined", nowIso), pair) };
+  return { before: recordOf(meta, pair), after: recordOf(withDecision(meta, "declined", nowIso), pair) };
+}
+
+/**
+ * The pair's own record — or, when `toRecord` refuses a face that is named but
+ * was never hashed (a registered style pair: `sideOf(rel, "")`, 2026-11-18), a
+ * record built from the names its pair file itself carries, so a removal's
+ * decline reaches that file too and the listed row leaves with it. Pending
+ * still owns no record (I-13).
+ */
+function recordOf(meta: PairMeta, pair: ReviewPair): ReviewRecord | null {
+  const own = toRecord(meta, pair);
+  if (own !== null) return own;
+  if (meta.decision === null || meta.decision === "pending") return null;
+  const ai = meta.ai.relPath === "" ? null : meta.ai.relPath;
+  const source = meta.source?.relPath || null;
+  if (ai === null && source === null) return null;
+  return { pair_id: meta.id, source, ai_result: ai, decision: meta.decision, reviewed_at: meta.reviewedAt ?? new Date(0).toISOString() };
 }
 
 /**
