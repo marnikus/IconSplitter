@@ -137,13 +137,14 @@ describe("Generate SVG row selection", () => {
     expect(state().active).toBe(FOG);
   });
 
-  it("A/D review only a valid active SVG; an empty row cannot be reviewed", async () => {
+  it("A/W need a generated SVG; D can decline an item before an SVG exists", async () => {
     await mount(await fourSources());
     await clickRow(COURT); // no generated SVG
     await key("a");
-    await key("d");
     await key("w");
     expect(q(`[data-testid=svg-review-${COURT}]`)?.textContent).toContain("Pending");
+    await key("d");
+    expect(q(`[data-testid=svg-review-${COURT}]`)?.textContent).toContain("Declined");
     await clickRow(FOG);
     await key("a");
     expect(q(`[data-testid=svg-review-${FOG}]`)?.textContent).toContain("Approved");
@@ -151,7 +152,7 @@ describe("Generate SVG row selection", () => {
     expect(q(`[data-testid=svg-review-${FOG}]`)?.textContent).toContain("Declined");
     await key("w");
     expect(q(`[data-testid=svg-review-${FOG}]`)?.textContent).toContain("new review");
-    expect(q(`[data-testid=svg-review-${COURT}]`)?.textContent).toContain("Pending");
+    expect(q(`[data-testid=svg-review-${COURT}]`)?.textContent).toContain("Declined");
   });
 
   it("blocks Q/E, Space and review shortcuts behind the code dialog, then restores them on close", async () => {
