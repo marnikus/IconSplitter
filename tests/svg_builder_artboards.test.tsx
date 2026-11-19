@@ -377,6 +377,11 @@ describe("final artboards — the list under the templates", () => {
     // land first (TEST_HARNESS.md §2). settle() warps app time, not wall time,
     // and still stops as soon as the app is quiet.
     await settle(1000);
+    // The export's own toast is the signal that EVERY artboard's writes have
+    // landed (2026-11-18): the package pipeline awaits real host turns (JPEG /
+    // EPS work), and a quiet-looking app can precede its final `say` — reading
+    // the toast right after settle saw the previous one ("Artboard … added").
+    await waitUntil(() => /exported/i.test(text("builder-toast")), "export finished");
     expect(savedArtboards().every((a) => typeof (a as { folder?: string | null }).folder === "string")).toBe(true);
     const f1 = (savedArtboards()[0] as unknown as { folder: string }).folder;
     const f2 = (savedArtboards()[1] as unknown as { folder: string }).folder;
