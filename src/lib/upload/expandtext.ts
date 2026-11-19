@@ -98,11 +98,18 @@ function replaceRuns(root: Element, jobs: Job[]): void {
   }
 }
 
-export function expandTextToFills(svg: string): ExpandTextResult {
+/**
+ * `deps.outliner` overrides the ambient outliner for ONE call (2026-11-19): the
+ * builder's EPS stage outlines into a throw-away copy and must never change what
+ * the rest of the app's exports use, and a caller with none says so with `null`.
+ */
+export interface ExpandTextDeps { outliner: TextOutliner | null }
+
+export function expandTextToFills(svg: string, deps?: ExpandTextDeps): ExpandTextResult {
   const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
   const texts = Array.from(root.getElementsByTagName("text"));
   if (texts.length === 0) return { ok: true, svg, runs: 0 };
-  const outliner = textOutliner();
+  const outliner = deps === undefined ? textOutliner() : deps.outliner;
   if (outliner === null) return { ok: false, svg, reason: "no text outliner is available on this machine — the fonts of this document cannot be outlined here" };
   const collected = collectJobs(texts, outliner);
   if ("reason" in collected) return { ok: false, svg, reason: collected.reason };

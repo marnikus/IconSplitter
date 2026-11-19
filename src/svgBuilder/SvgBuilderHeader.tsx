@@ -3,6 +3,8 @@
 // Prompt brief, Sheet metadata (AI, ours) and the Export dropdown.
 import { useOptionalHistoryView } from "../state/HistoryProvider";
 import { sheetCopy } from "../lib/svgBuilder/compose";
+import { formatSummary } from "../lib/exportformats";
+import { useBuilderFormats } from "./formatstore";
 import SvgBuilderExportMenu from "./SvgBuilderExportMenu";
 import { IndexingControl, RegisterControl } from "./SvgBuilderControls";
 import type { BuilderApi } from "./useSvgBuilder";
@@ -40,11 +42,17 @@ function GenerateSelected({ b }: { b: BuilderApi }) {
     onClick={run}>✦ Generate metadata{ids.length > 0 ? ` (${ids.length})` : ""}</button>;
 }
 
-/** Export all selected (2026-11-14): the checked artboards (else the open one) into `_artboard_sheets` in the folder. */
+/**
+ * Export all selected (2026-11-14): the checked artboards (else the open one)
+ * into `_artboard_sheets` in the folder, carrying the chosen formats
+ * (2026-11-19) — the title names them, so the button never promises an EPS the
+ * settings have switched off.
+ */
 function ExportSelected({ b }: { b: BuilderApi }) {
   const count = b.artboardSel.checked.length > 0 ? b.artboardSel.checked.length : b.editingArtboardId !== null ? 1 : 0;
+  const { value: formats } = useBuilderFormats();
   return <button type="button" className="svg-btn primary" data-testid="builder-export-selected" disabled={count === 0 || b.root === null || b.busy !== null}
-    title="Save each checked artboard (else the open one) as SVG + JPG + EPS + PNG + export.json under _artboard_sheets in the folder"
+    title={`Save each checked artboard (else the open one) as ${formatSummary(formats)} + PNG + export.json under _artboard_sheets in the folder (Export ▾ · Export settings…)`}
     onClick={b.actions.exportSelectedArtboards}>⇪ Export all selected{count > 0 ? ` (${count})` : ""}</button>;
 }
 

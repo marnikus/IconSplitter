@@ -30,7 +30,12 @@ const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
 describe("the builder package follows the format options", () => {
   it("writes SVG, JPEG, EPS and PNG per the flags", async () => {
+    // The SHEET carries live <text>; the built-in EPS subset cannot write it, so
+    // this case supplies the outliner the browser provides (2026-11-19). The
+    // EPS-with-text contract itself is pinned in builder_export_package.test.ts.
+    setTextOutliner(() => ({ d: "M0 0 L40 0", width: 40 }));
     const all = await buildSheetPackage(args({ includeEps: true }), deps({}));
+    setTextOutliner(null);
     expect(all.files.map((f) => f.name).sort()).toEqual(["export.json", "sheet.eps", "sheet.jpg", "sheet.png", "sheet.svg"]);
     const noSvg = await buildSheetPackage(args({ includeSvg: false }), deps({}));
     expect(file(noSvg, ".svg")).toBeUndefined();

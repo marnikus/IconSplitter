@@ -1,8 +1,12 @@
 // SvgBuilderExportMenu.tsx — the reference "Export ▾" dropdown ("Export sheet"):
-// Editable SVG · PNG 2× · Copy SVG markup · Save preset, plus our Load preset.
-// Every delivery is verified first; nothing is written into the scanned root.
+// Editable SVG · PNG 2× · Copy SVG markup · Export settings… · presets. Every
+// delivery is verified first; nothing is written into the scanned root.
+// 2026-11-19: the settings item names the formats the next package carries, so
+// the popup is reachable AND its state is visible without opening it.
 import { useRef, useState } from "react";
+import { formatSummary } from "../lib/exportformats";
 import { useDismiss } from "../ui/usedismiss";
+import { useBuilderFormats } from "./formatstore";
 import type { BuilderApi } from "./useSvgBuilder";
 
 interface Item { id: string; label: string; hint: string; run: () => void }
@@ -13,11 +17,12 @@ export default function SvgBuilderExportMenu({ b }: { b: BuilderApi }) {
   const file = useRef<HTMLInputElement | null>(null);
   useDismiss(box, open, () => setOpen(false));
   const { width, height } = b.config.artboard;
+  const { value: formats } = useBuilderFormats();
   const items: Item[] = [
     { id: "svg", label: "Editable SVG", hint: "Paths, strokes and text", run: b.actions.exportSvg },
     { id: "png", label: "PNG — 2×", hint: `${width * 2} × ${height * 2}px`, run: b.actions.exportPng },
     { id: "copy", label: "Copy SVG markup", hint: "Paste into your design tool", run: b.actions.copySvg },
-    { id: "formats", label: "Export settings…", hint: "SVG / JPEG / EPS, quality, expansion, rescale", run: b.actions.openExportFormats },
+    { id: "formats", label: "Export settings…", hint: `${formatSummary(formats)} · quality, expansion, rescale`, run: b.actions.openExportFormats },
     { id: "preset", label: "Save preset", hint: "Settings, text, icons by name (.json)", run: b.actions.savePreset },
     { id: "preset-json", label: "Preset JSON…", hint: "Edit or paste JSON, then apply", run: b.actions.openPresetJson },
     { id: "load", label: "Load preset", hint: "Restore a saved .json preset", run: () => file.current?.click() },

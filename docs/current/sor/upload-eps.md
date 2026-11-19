@@ -4,6 +4,10 @@ The optional EPS path in [SVG to upload](upload.md); exports are local and valid
 
 Inherited caps/joins and forced endpoint modes: [stroke endpoints](upload-stroke-endpoints.md).
 
+Live `<text>` is outside the built-in writer's subset (the upload flow's switch
+is **Expand text to fills**). A builder sheet always has text, so it gets its own
+rule: [export formats](export-formats.md).
+
 ## Converter choices
 
 The built-in browser writer supports native Level 3 vector gradients, including

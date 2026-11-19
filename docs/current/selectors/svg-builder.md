@@ -16,7 +16,8 @@
 | `builder-brief` / `builder-corrected-brief` | open `builder-brief-dialog` | header / stage bottom-right |
 | `builder-open-preset-json` / `builder-export-preset-json` | `{ } Preset JSON` | dialog `builder-preset-json`: `builder-preset-json-text`, `-apply`, `-refresh`, `-copy`, `-copy-ai`, `-download`, `-close`, `-status`, `-help` |
 | `builder-open-metadata` | Sheet metadata | unfolds `builder-meta-widget` |
-| `builder-export-toggle` | `Export ▾` | menu `builder-export-menu`: `builder-export-svg`, `-png`, `-copy`, `-preset`, `-load` (`role=menuitem`); `builder-preset-file` hidden input |
+| `builder-export-toggle` | `Export ▾` | menu `builder-export-menu`: `builder-export-svg`, `-png`, `-copy`, `-formats` (hint = `formatSummary`), `-preset`, `-preset-json`, `-load` (`role=menuitem`); `builder-preset-file` hidden input |
+| `builder-format-backdrop` / `builder-format-dialog` | Export settings POPUP (2026-11-19) | real modal: `.bld-backdrop` + `role="dialog" aria-modal`; Escape, backdrop press and `builder-format-close` close it. `builder-format-summary` names the artboard px (rescaled from W×H). Rows are the SHARED upload-dialog groups: `bld-set-svg`, `-jpeg`, `-eps`, `-eps-converter` (+ `upload-eps-helper*` while Inkscape is chosen), `-mp`, `-mp-match`, `-quality`, `-optimize`, `-expand`, `-expandtext`, `-rescale`, `-rescale-mp`, `-rescale-strokes`, `-formats-warning` (only when all are off). One testid per field |
 | `builder-toast` / `builder-busy` / `builder-status-text` | toast zone | 4.2 s toast; errors stay |
 | `history-bar` | global undo bar | shared with every tab |
 

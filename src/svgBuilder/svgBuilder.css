@@ -46,6 +46,17 @@
 .bld-menu-item span { color: var(--v2-muted); font-size: 9px; }
 .bld-menu-item:hover { background: var(--v2-surface-3); }
 
+/* Export settings popup (2026-11-19) ─────────────────────────────────────
+   A real modal: the dialog sat in the panel's grid before, so it never showed
+   on top. The rows come from the SHARED ui/exportrows groups (the upload
+   dialog's own), laid out in the app's .up-set-grid; only the shell is the
+   builder's, and every colour stays an app token. */
+.bld-format-dialog { width: min(880px, 96vw); max-height: 88vh; overflow: auto; }
+.bld-format-dialog .up-set-grid { margin: 4px 0 0; }
+.bld-format-dialog .up-hint { display: block; margin-top: 4px; line-height: 1.45; }
+.bld-format-dialog .up-set-field input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--v2-purple); }
+.bld-format-dialog .svg-input { width: 100%; }
+
 /* workspace: library | stage | customize ──────────────────────────────── */
 .bld-workspace { display: grid; grid-template-columns: 300px minmax(0, 1fr) 320px; gap: 10px; height: calc(100vh - 250px); min-height: 560px; }
 .bld-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--v2-line); border-radius: var(--v2-radius); background: var(--v2-surface); }

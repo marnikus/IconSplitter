@@ -14,18 +14,13 @@
 
 import UploadSettingsPresets from "./UploadSettingsPresets";
 import UploadPaddingSetting from "./UploadPaddingSetting";
-import {
-  artboardSize, clampMegapixels, clampQuality, clampRescaleMegapixels, clampStrokePx, STROKE_MAX, STROKE_MIN,
-  MP_MAX, MP_MIN, QUALITY_MAX, QUALITY_MIN,
-  type UploadSettings,
-} from "../lib/upload/settings";
+import { clampStrokePx, STROKE_MAX, STROKE_MIN, type UploadSettings } from "../lib/upload/settings";
 import { AS_IS_SETTINGS, isAsIs } from "../lib/upload/asis";
 import { paintClash } from "../lib/upload/paintclash";
 import DraftNumberInput from "../ui/DraftNumberInput";
-import { Marker, change, changeMany, ToggleSetting, type SettingsFieldProps, type UploadSettingsDialogProps } from "./settingsfield";
-import { ExportNumberRow } from "../ui/exportrows";
+import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
-import UploadFormatSettings from "./UploadFormatSettings";
+import UploadFormatSettings, { UploadJpegSettings, UploadTransformSettings } from "./UploadFormatSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
 import UploadShadowSettings from "./UploadShadowSettings";
 import UploadBadgeSettings from "./UploadBadgeSettings";
@@ -96,31 +91,11 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <UploadBadgeSettings p={p} effective={effective} />
       <UploadSizeGuideSettings p={p} effective={effective} />
       <UploadFormatSettings p={p} effective={effective} />
-      <MegapixelSetting p={p} effective={effective} />
-      <NumberSetting p={p} effective={effective} field="jpegQuality" label="JPEG quality" testid="quality"
-        min={QUALITY_MIN} max={QUALITY_MAX} step={0.01} clamp={clampQuality} hint="0.5 – 1" />
-      <ToggleSetting p={p} effective={effective} field="optimizeSvg" label="Optimize SVG (SVGO)" testid="optimize"
-        hint={isAsIs(effective) ? "skipped while every visual setting is default — the SVG ships as is" : "the export copy only — viewBox, geometry, strokes and metadata are preserved"} />
-      <ToggleSetting p={p} effective={effective} field="expandStrokes" label="Expand strokes to fills" testid="expand"
-        hint="strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes" />
-      <ToggleSetting p={p} effective={effective} field="expandText" label="Expand text to fills" testid="expandtext"
-        hint="text becomes filled glyph outlines; what cannot be outlined fails that stage honestly" />
-      <ToggleSetting p={p} effective={effective} field="rescaleArtboard" label="Rescale artboard to MP" testid="rescale"
-        hint="the full artboard keeps its ratio and grows until its area is the megapixel target" />
-      {effective.rescaleArtboard && <RescaleSettings p={p} effective={effective} />}
+      <UploadJpegSettings p={p} effective={effective} />
+      <UploadTransformSettings p={p} effective={effective} />
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );
-}
-
-/** The rescale's own numbers, shown only while its box is ticked (RULE 10). */
-function RescaleSettings({ p, effective }: SettingsFieldProps) {
-  return <>
-    <NumberSetting p={p} effective={effective} field="rescaleMegapixels" label="Rescale target (MP)" testid="rescale-mp"
-      min={MP_MIN} max={MP_MAX} step={1} clamp={clampRescaleMegapixels} hint="the artboard area in megapixels (1 – 64)" />
-    <ToggleSetting p={p} effective={effective} field="rescaleStrokes" label="Scale strokes proportionally" testid="rescale-strokes"
-      hint="untick and every stroke keeps its printed px while the artboard rescales" />
-  </>;
 }
 
 /** Keep geometry alongside a stacked paint column rather than below a tall padding row. */
@@ -182,68 +157,4 @@ function IconStrokeSetting({ p, id }: { p: UploadSettingsDialogProps; id: string
 function PaintClashNote({ effective }: { effective: UploadSettings }) {
   const clash = paintClash(effective);
   return clash === null ? null : <p className="svg-warning" role="alert" data-testid="upload-set-paint-clash">⚠ {clash}</p>;
-}
-
-/** One numeric setting: live, clamped at the moment of change (RULE 13). */
-function NumberSetting({ p, effective, field, label, testid, min, max, step, clamp, hint }: {
-  p: UploadSettingsDialogProps; effective: UploadSettings; field: keyof UploadSettings;
-  label: string; testid: string; min: number; max: number; step: number;
-  clamp: (v: unknown) => number; hint: string;
-}) {
-  return (
-    <ExportNumberRow label={label} hint={hint} testid={`upload-set-${testid}`} min={min} max={max} step={step}
-      value={effective[field] as number} marker={<Marker p={p} field={field} testid={testid} />}
-      onChange={(value) => change(p, field, clamp(value))} />
-  );
-}
-
-/**
- * The JPEG resolution. NEVER blocked (2026-10-08): a small artboard must not cap
- * it, so the field always accepts a number. When the artboard pins a px size the
- * checkbox says whether the JPEG follows it (the default) or renders at the
- * megapixels the user typed, keeping the artboard's ratio.
- */
-function MegapixelSetting({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  const pinned = artboardSize(effective.artboard);
-  // Typing a resolution is the user deciding for the megapixels: one gesture,
-  // so it also unticks "same size as the artboard" in the same change.
-  const onPixels = (value: number) => {
-    const megapixels = clampMegapixels(value);
-    if (pinned === null) return change(p, "jpegMegapixels", megapixels);
-    changeMany(p, { jpegMegapixels: megapixels, jpegMatchArtboard: false });
-  };
-  return (
-    <div className="svg-field up-set-field">
-      <span className="svg-label">JPEG (MP)<Marker p={p} field="jpegMegapixels" testid="mp" /></span>
-      <input className="svg-input" data-testid="upload-set-mp" type="number" aria-label="JPEG megapixels"
-        min={MP_MIN} max={MP_MAX} step={0.1} value={effective.jpegMegapixels}
-        onChange={(e) => onPixels(Number(e.target.value))} />
-      {pinned !== null && <MatchArtboard p={p} effective={effective} />}
-      <small className="up-hint" data-testid="upload-set-mp-note">
-        {pinned === null
-          ? "rendered from the vectors at this resolution (default 15.1)"
-          : mpNote(pinned, effective.jpegMatchArtboard)}
-      </small>
-    </div>
-  );
-}
-
-/** The choice a pinned artboard creates: same px as the artboard, or the MP above. */
-function MatchArtboard({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
-  return (
-    <label className="up-hint up-set-field">
-      <input data-testid="upload-set-mp-match" type="checkbox" aria-label="Same size as the artboard"
-        checked={effective.jpegMatchArtboard}
-        onChange={(e) => change(p, "jpegMatchArtboard", e.target.checked)} />
-      {" same size as the artboard"}
-      <Marker p={p} field="jpegMatchArtboard" testid="mp-match" />
-    </label>
-  );
-}
-
-/** What the JPEG will really be, given the artboard and the resolution choice. */
-function mpNote(pinned: { width: number; height: number }, match = true): string {
-  return match
-    ? `the JPEG is the artboard itself: ${pinned.width}×${pinned.height} px — untick for a bigger file`
-    : "rendered from the vectors at this resolution, at the artboard's aspect ratio";
 }

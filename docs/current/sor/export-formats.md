@@ -28,6 +28,28 @@ Stored payloads validate per field (one bad field costs one default); the
 upload flow additionally overrides them per icon, and every output-affecting
 field enters `settingsFingerprint` (`expandText`, `rescale*` included).
 
+## One row implementation (2026-11-19)
+
+The rows are not written twice. `ui/exportrows.tsx` owns three row GROUPS —
+`FormatDeliveryRows` (SVG / JPEG / EPS + the converter), `FormatJpegRows` (MP,
+the artboard-match box, quality) and `FormatTransformRows` (SVGO, stroke
+expansion, text expansion, the rescale and its two rows) — plus
+`FormatOffWarning`. Each takes a `FormatRowWiring`: the testid prefix
+(`upload-set` / `bld-set`), the options and the flow's ONE write path, with an
+optional marker slot (the upload scope's inherited/overridden chip). The upload
+dialog groups them through `upload/UploadFormatSettings.tsx`
+(`UploadFormatSettings` / `UploadJpegSettings` / `UploadTransformSettings`, wired
+to `changeMany` + `Marker`); the builder dialog renders the same groups straight
+over its own store (`svgBuilder/formatstore.ts` `useBuilderFormats`).
+
+Both dialogs therefore read the identical wording and hints, and both refuse the
+all-off state BEFORE any file work: `FormatOffWarning` in the popup
+(`upload-set-formats-warning` / `bld-set-formats-warning`) and
+`hasOutputFormats` in the runner. `formatSummary` names what a run will ship
+("SVG + JPEG + EPS", else "no formats") for the menu and the toasts, and
+`jpegBoxFor` / `rescaledArtboard` produce the exact px the JPEG hint prints, so
+the number a user reads is the number the file gets.
+
 ## Where each flow consumes them
 
 - **Upload**: `UploadSettings` extends the interface; `prepare.ts` ends with
@@ -35,12 +57,17 @@ field enters `settingsFingerprint` (`expandText`, `rescale*` included).
   EPS/JPEG stages read the same fields as before.
 - **Builder**: its own persisted store (`svgBuilder/formatstore.ts`, one storage
   key, validated on read) feeds the **Export settings…** item of the builder's
-  Export menu — the same rows, same hints, shared row components
-  (`ui/exportrows.tsx`, the upload dialog's toggles/numbers wrap them). The
-  stock package (`sheetpackage.ts`) honours every field: flags gate the files,
-  `optimizeSvg` records a real SVGO block in export.json, `expandStrokes` /
-  `expandText` / rescale transform the composed sheet BEFORE it is packaged,
-  and `jpegMatchArtboard` decides the JPEG px (artboard px, else MP).
+  Export menu, which opens a real modal (`.bld-backdrop`, `role="dialog"`,
+  Escape / backdrop press close it) — the same rows and hints as the upload
+  dialog. The stock package (`sheetpackage.ts`) honours every field: flags gate
+  the files, `optimizeSvg` records a real SVGO block in export.json,
+  `expandStrokes` / `expandText` / rescale transform the composed sheet BEFORE it
+  is packaged, and `jpegMatchArtboard` decides the JPEG px (artboard px after any
+  rescale, else MP). A sheet's settings are the builder's OWN over the neutral
+  defaults (`svgBuilder/formatwiring.ts` `builderExportSettings`): the upload
+  tab's background, padding, artboard, shadow and badge never shape a sheet's
+  files or its recorded settings. `tools.text` and `tools.rescale` record what
+  the two new stages really did.
 - The Export menu's quick downloads (Editable SVG, PNG 2×, clipboard) stay
   untouched previews; the PACKAGE is what the options shape.
 
@@ -69,3 +96,29 @@ font for a run. The SVG, JPEG and EPS then all ship without live text.
 Every stage that cannot write its file reports a named problem with its fix
 and the rest of the package still ships (`partial` in export.json); a format
 switched off writes nothing and leaves the previous package's file untouched.
+
+## A sheet's EPS carries text (2026-11-19)
+
+Every composed sheet has live `<text>` (banner title, subtitle, captions) and the
+built-in Level-3 writer's documented subset ends at shapes, so before this the
+EPS stage answered `<text> is outside the EPS subset` and a builder package went
+`partial` with no `.eps` — at every setting, EPS converter included.
+
+`lib/svgBuilder/epsoutline.ts` `outlineForEps` decides the EPS stage's document:
+for the **built-in** converter it runs the SHARED `expandTextToFills` (the upload
+tab's own code, never a second outliner) on the copy handed to the writer only,
+and reports `EPS_TEXT_FIX` as an EPS auto-fix → `tools.eps.fixes` (informed,
+never asked, RULE 22/24). The shipped SVG and JPEG keep their live text unless
+**Expand text to fills** is on. **Inkscape** receives the untouched sheet: its CLI
+already outlines text (`--export-text-to-path`). What cannot be outlined (no
+outliner on the machine, no font for a run) leaves the document untouched and
+fails just that stage with the reason AND `EPS_TEXT_HINT` — the two honest ways
+out: untick Also write EPS, tick Expand text to fills, or choose Inkscape.
+
+`needsTextFonts` says when a run must warm the font cache first (the outliner is
+sync): Expand text to fills, or an EPS through the built-in converter. Both the
+upload runner (`upload/exportstages.ts`) and the builder action
+(`svgBuilder/actions/sheetexport.ts`) ask it before preparing. An EPS-only
+request that cannot be written still fails the whole package (`partial`/`failed`
+honesty is unchanged for the upload flow); a builder package always writes its
+SVG/JPEG, so a refused EPS is `partial` with the rest delivered.

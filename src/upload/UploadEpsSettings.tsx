@@ -22,13 +22,13 @@ export function ConverterSetting({ p, effective }: SettingsFieldProps) {
         {CONVERTER_IDS.map((id) => <option key={id} value={id}>{CONVERTERS[id].label}</option>)}
       </select>
       <small className="up-hint">who writes the EPS when "Also write EPS" is on — the built-in subset writer, or Inkscape on this machine</small>
-      {effective.epsConverter === "inkscape" && <HelperRow />}
+      {effective.epsConverter === "inkscape" && <ConverterHelperRow />}
     </div>
   );
 }
 
-/** The helper's URL, a Check button and the live state line. */
-function HelperRow() {
+/** The helper's URL, a Check button and the live state line (the builder dialog shows this too). */
+export function ConverterHelperRow() {
   const [url, setUrl] = useState(() => loadBridgeConfig().url);
   const [state, setState] = useState<ConverterState | null>(null);
   const probe = useCallback(async (at: string) => {

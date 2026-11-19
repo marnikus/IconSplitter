@@ -40,7 +40,8 @@ The **metadata widget** sits right after the folder bar: the shared `PromptWindo
 | provider bridge | `src/svgBuilder/{preview,runSheetMetadata}.ts` |
 | state / actions | `src/svgBuilder/{model,useSvgBuilder,useBuilder*,undoBinding,actions/*}.ts` |
 | presentation | `src/svgBuilder/SvgBuilder*.tsx`, `briefText.ts`, `svgBuilder.css` |
+| export settings | `svgBuilder/formatstore.ts` (store + `useBuilderFormats`), `formatwiring.ts`, `lib/svgBuilder/epsoutline.ts`, `lib/svgBuilder/sheetpackage.ts`, shared rows in `ui/exportrows.tsx` |
 
 `npm run test:builder:fast` is an extra Node smoke lane (esbuild bundle; `?raw` imports load as text); it does not replace the Vitest suites. See [Code Verification](../CODE_VERIFICATION.md).
 
-* **Export formats** (2026-11-17): the builder stock package and the SVG to upload flow share ONE format domain — [export formats](export-formats.md).
+* **Export formats** (2026-11-17, repaired 2026-11-19): the builder stock package and the SVG to upload flow share ONE format domain — [export formats](export-formats.md). **Export ▾ · Export settings…** opens a real modal (`.bld-backdrop`, `role="dialog"`, Escape and a backdrop press close it) with the SAME row groups the upload dialog renders; its menu hint names the formats the next package carries. A sheet's files use the builder's own stored options over the neutral defaults, never the upload tab's decoration; every format off is refused by name before any file work. A sheet always carries live text, so the EPS stage outlines a COPY for the built-in converter (reported in `tools.eps.fixes`), Inkscape gets the untouched sheet, and a refusal fails only the EPS (`partial`, SVG/JPEG still ship).
