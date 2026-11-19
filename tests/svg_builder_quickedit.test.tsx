@@ -635,7 +635,11 @@ describe("number boxes apply as you type", () => {
     await click("builder-quick-text");
     await slide("builder-quick-gap", "12");
     expect(config().banner.titleTracking).toBe(12);
-    expect(shadow().querySelector('[data-banner-text="title"] text')?.getAttribute("letter-spacing")).toBe("0.075em");
+    // 12/100 em on the reference -0.045 → 0.075 em, written in px at the run's own
+    // size (2026-11-19) so the shared outliner adds that spacing instead of 0.
+    const run = shadow().querySelector('[data-banner-text="title"] text')!;
+    const size = Number(run.getAttribute("font-size"));
+    expect(Number(run.getAttribute("letter-spacing")) / size).toBeCloseTo(0.075, 3);
   });
 
   it("split banners: the coloured block's quick bar has ⇔ too, with the same panel (2026-11-16)", async () => {

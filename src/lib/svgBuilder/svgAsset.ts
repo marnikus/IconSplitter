@@ -66,19 +66,27 @@ function sanitize(code: string, assetId: string, index: number): Sanitized {
 export function cellGroupOf(args: CellSvgArgs): CellSvgResult {
   const s = sanitizedOf(args.code, args.asset.id, args.frame.index);
   if (!s.ok) return s;
-  return { ok: true, html: groupOf(args, s.children, s.box, transformOf(args.frame, s.box)) };
+  const fit = fitOf(args.frame, s.box);
+  return { ok: true, html: groupOf({ args, children: s.children, box: s.box, transform: transformOf(fit), fit }) };
 }
 
-function groupOf(args: CellSvgArgs, children: string, box: readonly number[], transform: string): string {
-  const style = args.style;
-  const attrs = [
-    `data-asset-id="${attr(args.asset.id)}"`, 'data-approved="true"',
-    `data-cell-index="${args.frame.index}"`, `transform="${transform}"`,
-    'fill="none"', 'stroke="currentColor"', `color="${attr(style.color)}"`,
-    `stroke-width="${style.strokeWidth}"`, `stroke-linecap="${style.linecap}"`,
-    `stroke-linejoin="${style.linecap === "square" ? "miter" : "round"}"`, `data-view-box="${attr(box.join(" "))}"`,
-  ];
-  return `<g ${attrs.join(" ")}>${children}</g>`;
+interface CellMarkup { args: CellSvgArgs; children: string; box: readonly number[]; transform: string; fit: Fit }
+
+function groupOf(m: CellMarkup): string {
+  const attrs = [`transform="${m.transform}"`, ...identOf(m.args, m.box), ...paintOf(m.args.style, m.fit)];
+  return `<g ${attrs.join(" ")}>${m.children}</g>`;
+}
+
+/** Which icon this is and where it came from — the sheet's own traceability (never exported words). */
+function identOf(args: CellSvgArgs, box: readonly number[]): string[] {
+  return [`data-asset-id="${attr(args.asset.id)}"`, 'data-approved="true"',
+    `data-cell-index="${args.frame.index}"`, 'fill="none"', `data-view-box="${attr(box.join(" "))}"`];
+}
+
+/** The pen the cell paints: one colour, one final width (see `finalWidthOf`). */
+function paintOf(style: CellSvgArgs["style"], fit: Fit): string[] {
+  return ['stroke="currentColor"', `color="${attr(style.color)}"`, `stroke-width="${finalWidthOf(style.strokeWidth, fit)}"`,
+    `stroke-linecap="${style.linecap}"`, `stroke-linejoin="${style.linecap === "square" ? "miter" : "round"}"`];
 }
 
 function childrenOf(root: Element): string {
@@ -96,7 +104,10 @@ function recolor(root: Element): void {
     if (!DRAWABLE.has(name(el))) continue;
     el.setAttribute("fill", "none");
     el.setAttribute("stroke", "currentColor");
-    el.setAttribute("vector-effect", "non-scaling-stroke");
+    // NO `vector-effect` (2026-11-19): it did nothing — the cell group carries the
+    // `scale()` that fits the artwork — and its presence claimed a pen the file
+    // did not paint. The group's own width is written in final px instead.
+    el.removeAttribute("vector-effect");
   }
 }
 
@@ -122,14 +133,33 @@ function rewriteRefs(el: Element, ids: ReadonlyMap<string, string>): void {
   }
 }
 
+/** The scale the artwork is fitted at, and the box it lands in: `glyph` px inside the `size` box. */
+interface Fit { scale: number; glyph: number; size: number; dx: number; dy: number }
+
 /** Stroke-aware bounds: the artwork fits `frame.glyph`, centred inside the `frame.size` box. */
-function transformOf(frame: CellFrame, box: readonly number[]): string {
+function fitOf(frame: CellFrame, box: readonly number[]): Fit {
   const [, , width, height] = box;
   const glyph = frame.glyph > 0 ? Math.min(frame.glyph, frame.size) : frame.size;
   const scale = Math.min(glyph / width, glyph / height);
-  const dx = frame.x + (frame.size - width * scale) / 2 - box[0] * scale;
-  const dy = frame.y + (frame.size - height * scale) / 2 - box[1] * scale;
-  return `translate(${round(dx)} ${round(dy)}) scale(${round(scale)})`;
+  return { scale, glyph, size: frame.size, dx: frame.x + (frame.size - width * scale) / 2 - box[0] * scale,
+    dy: frame.y + (frame.size - height * scale) / 2 - box[1] * scale };
+}
+
+const transformOf = (fit: Fit): string => `translate(${round(fit.dx)} ${round(fit.dy)}) scale(${round(fit.scale)})`;
+
+/**
+ * The user's px, written so the FILE paints it (2026-11-19). The cell group carries
+ * the fitting `scale()` (a 24 px icon in an 80 px box is scaled 3.24×), so a width
+ * written verbatim was multiplied by it: a "1 px" stroke painted 3.24 px on the
+ * sheet, and that local number went straight into the shipped SVG and the EPS — a
+ * pen the user never chose, unrelated to the editor's number. A stroke is an
+ * ABSOLUTE width (the same rule the SVG-to-upload flow applies: one final px), so
+ * the width written here is the user's px DIVIDED by that scale: after the group's
+ * own transform multiplies it back, the artboard, the JPEG, the SVG and the EPS all
+ * paint exactly the px the user typed.
+ */
+function finalWidthOf(userPx: number, fit: Fit): string {
+  return String(Number((userPx / fit.scale).toFixed(4)));
 }
 
 /** A stroke-only 24×24 preview: the library tile shows exactly what the artboard will draw. */

@@ -97,6 +97,22 @@ Every stage that cannot write its file reports a named problem with its fix
 and the rest of the package still ships (`partial` in export.json); a format
 switched off writes nothing and leaves the previous package's file untouched.
 
+## The sheet's own pen and spacing (2026-11-19)
+
+Two numbers the editor shows used to disagree with the files:
+
+* **Stroke width.** A cell group is fitted with a `scale()`, so a `stroke-width`
+  written verbatim was multiplied by it: "1 px" painted 3.2 px on the sheet, and
+  that local number went straight into the SVG and the EPS. A stroke is absolute,
+  so `svgAsset.ts` now writes `userPx / fit.scale` — the group's own transform
+  multiplies it back, and the printed pen is the user's px everywhere (the same
+  rule the upload flow applies to its global stroke).
+* **Letter spacing.** The sheet wrote `0.025em`; `expandtext.ts` read a bare
+  number, so `0.025em` → `NaN` → **0** per glyph, and every EPS (a sheet always
+  outlines for the built-in converter) shipped without the spacing. The sheet now
+  writes px at the run's own size, and `letterSpacingPx` still resolves `em`,
+  `px` and bare lengths for foreign documents.
+
 ## A sheet's EPS carries text (2026-11-19)
 
 Every composed sheet has live `<text>` (banner title, subtitle, captions) and the

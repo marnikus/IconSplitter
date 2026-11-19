@@ -467,7 +467,13 @@ describe("hero style", () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg>';
     const doc = composeSheet({ config, layout: computeLayout(config), assets: [asset], placedIds: ["a"], svgTexts: { a: svg } });
     const hero = /data-banner-hero="true">[\s\S]*?<\/g><\/g>/.exec(doc.svg)?.[0] ?? doc.svg;
-    expect(hero).toContain('stroke-width="2.5"');
+    // The hero glyph's pen is the user's 2.5 px DIVIDED by the cell's own fit
+    // (2026-11-19): the group's scale multiplies it back, so the sheet paints the
+    // 2.5 px the editor shows — and the SVG/EPS carry that same final pen.
+    const fit = Number(/scale\(([\d.]+)\)/.exec(hero)?.[1] ?? NaN);
+    const written = Number(/stroke-width="([\d.]+)" stroke-linecap/.exec(hero)?.[1] ?? NaN);
+    expect(fit).toBeGreaterThan(1);
+    expect(written * fit).toBeCloseTo(2.5, 2);
   });
 
   it("gaps go up to 200 px (2026-11-14; was 60)", () => {

@@ -5638,3 +5638,34 @@ with its own face in `_<style>` (`pairrebase.ts` re-derives `<pairId(base
 folder)>~<style>` on read) — a fixture parsed from the style image name gets a
 different id and silently declines the wrong file. Evidence: the styles and
 remove clusters 47 passed; docs inside caps (`sor/svg-styles.md` ~5.7 kB).
+
+## 2026-11-19 — builder export: own toolbar button, exact stroke, exact spacing
+
+Reported by the user, reproduced as red tests first, then fixed.
+
+- **⚙ Export settings is its own toolbar button** (`builder-format-open`) beside
+  Export ▾; it and the menu item call the same `openExportFormats`, and both name
+  `formatSummary`. The popup itself is the real `.bld-backdrop` modal from the
+  earlier commit. Tests: `builder_export_settings_ui.test.tsx` (13),
+  `builder_export_dialog.test.tsx` (4, the real panel).
+- **Stroke width is the user's px, everywhere.** `svgAsset.ts` wrote the width
+  verbatim on a group that is fitted with `scale()`, so a "1 px" icon painted
+  3.24 px on the sheet and that local number went into the SVG and the EPS; a
+  dead `vector-effect="non-scaling-stroke"` on inner shapes claimed otherwise.
+  The width is now `userPx / fit.scale` (no `vector-effect`), so the printed pen
+  is the setting for every width and every box. Measured end-to-end in
+  `builder_export_stroke.test.tsx` (5): the composed group, the EPS
+  `setlinewidth` (0.482 → 0.75 pt printed for a 1 px stroke, was 2.075) and the
+  tile preview.
+- **Letter spacing survives the files.** The sheet wrote `0.025em`;
+  `expandtext.ts` read a bare number (`NaN → 0`), so every EPS lost the spacing
+  the artboard showed. `markup.ts` now writes px at the run's own size (title,
+  subtitle, captions) and `letterSpacingPx` resolves `em`/`px`/bare lengths for
+  foreign documents. `builder_export_spacing.test.ts` (5).
+  Three older tests pinned the em string itself (`svg_builder_tracking`,
+  `svg_builder_quickedit`, `svg_builder_templates` hero stroke) and now assert
+  the em *value* and the px/scale product — the same intent, at the file's own
+  numbers.
+
+Gates: `tsc --noEmit` clean · eslint 0 errors · `tools/quality.mjs --changed`
+GATE PASSED · `npm run build` OK · full suite 488 files / 4881 tests green.

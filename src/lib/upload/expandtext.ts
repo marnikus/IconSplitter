@@ -41,6 +41,21 @@ const num = (value: string | null, fallback: number): number => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+/**
+ * `letter-spacing` as PX per glyph (2026-11-19). The sheet writes px, but a
+ * third-party document may write `0.1em`, `2px` or a bare number — every form
+ * is resolved here against the run's own font size, so the outlines get the
+ * spacing the file asked for instead of a silent 0.
+ */
+export function letterSpacingPx(raw: string | null, size: number): number {
+  const text = (raw ?? "").trim();
+  if (text === "" || text.toLowerCase() === "normal") return 0;
+  const n = Number.parseFloat(text);
+  if (!Number.isFinite(n)) return 0;
+  if (/em$/i.test(text)) return n * size;
+  return n; // px (the app's own form) and unitless numbers are already px
+}
+
 function runOf(el: Element): TextRun {
   const anchor = el.getAttribute("text-anchor");
   return {
@@ -51,7 +66,7 @@ function runOf(el: Element): TextRun {
     weight: num(el.getAttribute("font-weight"), 400),
     family: el.getAttribute("font-family") ?? "",
     anchor: anchor === "middle" || anchor === "end" ? anchor : "start",
-    letterSpacing: num(el.getAttribute("letter-spacing"), 0),
+    letterSpacing: letterSpacingPx(el.getAttribute("letter-spacing"), num(el.getAttribute("font-size"), 16)),
     fill: el.getAttribute("fill") ?? "#000000",
     fillOpacity: el.getAttribute("fill-opacity"),
     opacity: el.getAttribute("opacity"),

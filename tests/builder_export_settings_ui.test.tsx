@@ -6,9 +6,10 @@
 // hint names the sheet's real px, and the all-off state is a named alert.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BuilderFormatSettings } from "../src/svgBuilder/SvgBuilderFormatDialog";
 import SvgBuilderExportMenu from "../src/svgBuilder/SvgBuilderExportMenu";
+import { FormatSettingsButton } from "../src/svgBuilder/SvgBuilderHeader";
 import { DEFAULT_FORMAT_OPTIONS, type ExportFormatOptions } from "../src/lib/exportformats";
 import { ConverterSetting } from "../src/upload/UploadEpsSettings";
 import type { UploadSettingsDialogProps } from "../src/upload/settingsfield";
@@ -158,5 +159,27 @@ describe("the Export menu", () => {
     act(() => { (q("builder-export-toggle") as HTMLButtonElement).click(); });
     const hint = q("builder-export-formats")!.querySelector("span")!.textContent ?? "";
     expect(hint).toContain("SVG + JPEG"); // the stored defaults
+  });
+});
+
+describe("the settings are one gesture away in the toolbar", () => {
+  it("ships a SEPARATED ⚙ Export settings button beside Export ▾, naming the formats", async () => {
+    const api = { busy: null, actions: { openExportFormats: () => undefined } } as unknown as Pick<BuilderApi, "busy" | "actions">;
+    act(() => root.render(<FormatSettingsButton b={api} />));
+    const button = q("builder-format-open") as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    expect(button!.textContent).toContain("Export settings");
+    expect(button!.title).toContain("SVG + JPEG"); // the stored defaults, said out loud
+    // a real button, not an item inside the Export ▾ dropdown
+    expect(button!.closest(".bld-menu")).toBeNull();
+    expect(button!.getAttribute("role")).toBeNull();
+  });
+
+  it("opens the same popup the menu item does", async () => {
+    const open = vi.fn();
+    const api = { busy: null, actions: { openExportFormats: open } } as unknown as Pick<BuilderApi, "busy" | "actions">;
+    act(() => root.render(<FormatSettingsButton b={api} />));
+    await act(async () => { (q("builder-format-open") as HTMLButtonElement).click(); });
+    expect(open).toHaveBeenCalledTimes(1);
   });
 });

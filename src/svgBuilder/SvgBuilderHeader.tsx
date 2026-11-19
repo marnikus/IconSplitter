@@ -27,10 +27,26 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
         title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>
       <SvgBuilderExportMenu b={b} />
+      <FormatSettingsButton b={b} />
       <GenerateSelected b={b} />
       <ExportSelected b={b} />
     </div>
   </header>;
+}
+
+/**
+ * ⚙ Export settings (2026-11-19): its OWN toolbar button, beside Export ▾. The
+ * settings decided which files a package carries and how they are cut, but they
+ * lived only inside the Export ▾ menu, where nobody found them — the toolbar is
+ * where every other switch of this header lives. Same action as the menu item
+ * (`openExportFormats`), and the title names the formats the toolbar's own
+ * "Export all selected" will ship.
+ */
+export function FormatSettingsButton({ b }: { b: Pick<BuilderApi, "busy" | "actions"> }) {
+  const { value: formats } = useBuilderFormats();
+  return <button type="button" className="svg-btn" data-testid="builder-format-open" disabled={b.busy !== null}
+    title={`Export settings — ${formatSummary(formats)}: SVG, JPEG, EPS, quality, expansion, rescale for the next package`}
+    onClick={b.actions.openExportFormats}>⚙ Export settings</button>;
 }
 
 /** ✦ Generate metadata (2026-11-15): the checked artboards, else the open one, else the current sheet — the exact-request confirmation first. */

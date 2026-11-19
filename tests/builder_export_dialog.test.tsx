@@ -92,6 +92,15 @@ describe("the builder's Export settings popup", () => {
     expect(q("builder-format-backdrop")).not.toBeNull();
   });
 
+  it("is reachable from the separated toolbar button, not only from the Export menu", async () => {
+    await click("tab-svg-builder");
+    await click("builder-open-folder");
+    await waitUntil(() => q("builder-artboard") !== null, "sheet composed");
+    await click("builder-format-open");
+    expect(q("builder-format-dialog")).not.toBeNull();
+    expect(q("builder-format-dialog")!.closest(".bld-backdrop")).not.toBeNull();
+  });
+
   it("closes on Escape and on the Close button", async () => {
     await openPopup();
     await act(async () => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });

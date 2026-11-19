@@ -17,6 +17,7 @@
 | `builder-open-preset-json` / `builder-export-preset-json` | `{ } Preset JSON` | dialog `builder-preset-json`: `builder-preset-json-text`, `-apply`, `-refresh`, `-copy`, `-copy-ai`, `-download`, `-close`, `-status`, `-help` |
 | `builder-open-metadata` | Sheet metadata | unfolds `builder-meta-widget` |
 | `builder-export-toggle` | `Export ▾` | menu `builder-export-menu`: `builder-export-svg`, `-png`, `-copy`, `-formats` (hint = `formatSummary`), `-preset`, `-preset-json`, `-load` (`role=menuitem`); `builder-preset-file` hidden input |
+| `builder-format-open` | ⚙ Export settings | its OWN header button (2026-11-19), beside `builder-export-toggle`; same action as the menu item; `title` names `formatSummary` |
 | `builder-format-backdrop` / `builder-format-dialog` | Export settings POPUP (2026-11-19) | real modal: `.bld-backdrop` + `role="dialog" aria-modal`; Escape, backdrop press and `builder-format-close` close it. `builder-format-summary` names the artboard px (rescaled from W×H). Rows are the SHARED upload-dialog groups: `bld-set-svg`, `-jpeg`, `-eps`, `-eps-converter` (+ `upload-eps-helper*` while Inkscape is chosen), `-mp`, `-mp-match`, `-quality`, `-optimize`, `-expand`, `-expandtext`, `-rescale`, `-rescale-mp`, `-rescale-strokes`, `-formats-warning` (only when all are off). One testid per field |
 | `builder-toast` / `builder-busy` / `builder-status-text` | toast zone | 4.2 s toast; errors stay |
 | `history-bar` | global undo bar | shared with every tab |
@@ -62,7 +63,7 @@
 | `builder-columns` / `builder-rows` | steppers | `-dec`, `-inc`, `-value` |
 | `builder-gap-x` / `builder-gap-y` / `builder-caption-size` | sliders | `{id}-value` pill |
 | `builder-captions` | switch | `role=switch`; `builder-caption-controls`, `builder-caption-ink`, `builder-caption-case` |
-| `builder-icon-box` / `builder-stroke-width` / `builder-stroke-color` / `builder-linecap` | Icon style | |
+| `builder-icon-box` / `builder-stroke-width` / `builder-stroke-color` / `builder-linecap` | Icon style | the width is the px the sheet PAINTS: the cell's written `stroke-width` ÷ its `scale()` gives it back exactly (2026-11-19) |
 | `builder-banner-position` / `builder-banner-style` / `builder-banner-size` | Banner | `builder-banner-hidden` when None |
 | `builder-banner-bg` / `builder-accent` / `builder-title-ink` / `builder-subtitle-ink` | colour chips | |
 | `builder-title` / `builder-subtitle` / `builder-title-size` / `builder-subtitle-size` / `builder-title-face` | banner copy | |
