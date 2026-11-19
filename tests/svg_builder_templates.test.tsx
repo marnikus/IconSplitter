@@ -467,7 +467,12 @@ describe("hero style", () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg>';
     const doc = composeSheet({ config, layout: computeLayout(config), assets: [asset], placedIds: ["a"], svgTexts: { a: svg } });
     const hero = /data-banner-hero="true">[\s\S]*?<\/g><\/g>/.exec(doc.svg)?.[0] ?? doc.svg;
-    expect(hero).toContain('stroke-width="2.5"');
+    // The pen is authored in artboard px and written in the cell's own scale
+    // (2026-11-19): local × scale is the 2.5 px the panel set, in every format.
+    const cell = /<g data-asset-id[^>]*>/.exec(hero)?.[0] ?? "";
+    const local = Number(/stroke-width="([\d.]+)"/.exec(cell)?.[1]);
+    const scale = Number(/scale\(([\d.]+)\)/.exec(cell)?.[1]);
+    expect(local * scale).toBeCloseTo(2.5, 3);
   });
 
   it("gaps go up to 200 px (2026-11-14; was 60)", () => {

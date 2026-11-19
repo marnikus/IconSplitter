@@ -126,3 +126,25 @@ export function megapixelSize(width: number, height: number, maxPixels = 1_000_0
 export function jpegTargetSize(width: number, height: number, o: Pick<ExportFormatOptions, "jpegMatchArtboard" | "jpegMegapixels">): { width: number; height: number } {
   return o.jpegMatchArtboard ? { width, height } : megapixelSize(width, height, o.jpegMegapixels * 1_000_000);
 }
+
+/**
+ * The artboard the export really has: its own px, or the rescale's px while
+ * that box is on. Both dialogs name this size in the JPEG row, so the hint and
+ * the packaged JPEG read the same numbers.
+ */
+export function exportArtboardSize(
+  size: { width: number; height: number },
+  o: Pick<ExportFormatOptions, "rescaleArtboard" | "rescaleMegapixels">,
+): { width: number; height: number } {
+  if (!o.rescaleArtboard) return { width: size.width, height: size.height };
+  const scaled = rescaleSize(size.width, size.height, o.rescaleMegapixels);
+  return { width: scaled.width, height: scaled.height };
+}
+
+/** What the JPEG row says it will write: the artboard's own px, or the MP rule at its ratio. */
+export function jpegNote(size: { width: number; height: number } | null, match = true): string {
+  if (size === null) return "rendered from the vectors at this resolution (default 15.1)";
+  return match
+    ? `the JPEG is the artboard itself: ${size.width}×${size.height} px — untick for a bigger file`
+    : "rendered from the vectors at this resolution, at the artboard's aspect ratio";
+}

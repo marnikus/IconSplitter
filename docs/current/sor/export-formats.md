@@ -24,6 +24,30 @@ own export settings dialog can never drift apart.
 | `rescaleMegapixels` | 20 | the target area of that rescale (1…64); dormant while the box is off |
 | `rescaleStrokes` | on | while rescaling: scale stroke widths proportionally; untick and every stroke keeps its printed px (widths ÷ factor) |
 
+## 2026-11-19 — what was actually broken
+
+The builder's `Export settings…` item existed but shipped four defects; all are
+fixed and pinned by tests:
+
+1. **The dialog could not be seen.** `BuilderFormatSettings` returned a bare
+   `.bld-modal` with no `.bld-backdrop`, and `.bld-modal` has no positioning of
+   its own — so the "modal" rendered inline at the bottom of the scrolling
+   panel. It is now a backdrop-wrapped `aria-modal` dialog closed by Close,
+   Escape and a backdrop press (the panel's other dialogs' contract).
+2. **The JPEG rows were duplicated.** The dialog rendered one component that
+   already contained `JPEG (MP)` / `same size as the artboard` / `JPEG quality`
+   and then a second component with the same three rows (duplicate test ids,
+   two inputs writing the same value). Now every row comes from the ONE shared
+   sheet and a test asserts exactly one of each.
+3. **The JPEG hint never named the real file.** The row said only "untick for a
+   bigger file". The shared sheet computes `exportArtboardSize(artboard,
+   options)` — the artboard's px, or the RESCALED px while `rescaleArtboard` is
+   on — and names it (`5500×3000 px`, `4472×4472 px` for 1000² @ 20 MP).
+4. **EPS looked unavailable.** With the built-in writer a sheet's live banner
+   text fails the EPS stage; the dialog now warns before the export and names
+   both fixes, the Export menu offers the package with the formats it will
+   carry, and the Inkscape helper row shows live availability.
+
 Stored payloads validate per field (one bad field costs one default); the
 upload flow additionally overrides them per icon, and every output-affecting
 field enters `settingsFingerprint` (`expandText`, `rescale*` included).
@@ -35,14 +59,58 @@ field enters `settingsFingerprint` (`expandText`, `rescale*` included).
   EPS/JPEG stages read the same fields as before.
 - **Builder**: its own persisted store (`svgBuilder/formatstore.ts`, one storage
   key, validated on read) feeds the **Export settings…** item of the builder's
-  Export menu — the same rows, same hints, shared row components
-  (`ui/exportrows.tsx`, the upload dialog's toggles/numbers wrap them). The
-  stock package (`sheetpackage.ts`) honours every field: flags gate the files,
-  `optimizeSvg` records a real SVGO block in export.json, `expandStrokes` /
-  `expandText` / rescale transform the composed sheet BEFORE it is packaged,
-  and `jpegMatchArtboard` decides the JPEG px (artboard px, else MP).
-- The Export menu's quick downloads (Editable SVG, PNG 2×, clipboard) stay
-  untouched previews; the PACKAGE is what the options shape.
+  Export menu. The dialog is a real MODAL (`.bld-backdrop`, `aria-modal`,
+  Escape / backdrop / Close) and renders the SAME sheet component the upload
+  dialog renders — `ui/exportsheet.tsx` `ExportFormatSheet` — under its own
+  test-id scope (`bld-set-*`; the upload dialog passes `upload-set`), with its
+  own store write path and no marker. The stock package (`sheetpackage.ts`)
+  honours every field: flags gate the files, `optimizeSvg` records a real SVGO
+  block in export.json, `expandStrokes` / `expandText` / rescale transform the
+  composed sheet BEFORE it is packaged, and `jpegMatchArtboard` decides the
+  JPEG px (artboard px, else MP).
+- The Export menu's preview items (Editable SVG, PNG 2×, clipboard) stay
+  untouched previews; the **Export package** item runs `exportSelectedArtboards`
+  and names the formats that package will really carry (`SVG · JPEG · EPS
+  (Inkscape CLI (local helper))`, `SVG off` for a switch that is off), so a
+  format is never invisible nor implied when it is off.
+
+## Ownership (one row, one owner)
+
+| Piece | Owner |
+| --- | --- |
+| the options, their defaults/validation, `exportArtboardSize`, `jpegNote` | `src/lib/exportformats.ts` |
+| the rows both dialogs render (flags, EPS writer + helper, JPEG px/match/quality, SVGO, expansions, rescale) | `src/ui/exportsheet.tsx` |
+| the pure row markup (checkbox/number/select) | `src/ui/exportrows.tsx` |
+| the Inkscape helper row (URL, Check, live state + fix) | `src/ui/epshelper.tsx` |
+| the upload dialog's marker + live defaults/override write path | `src/upload/settingsfield.tsx` (`UploadSettingsDialog` wraps the sheet) |
+| the builder's own persisted options | `src/svgBuilder/formatstore.ts` |
+| the builder dialog (modal + EPS live-text note) and the menu plan | `src/svgBuilder/SvgBuilderFormatDialog.tsx`, `SvgBuilderExportMenu.tsx` |
+
+## EPS availability (what a builder export really writes)
+
+The built-in writer is a PostScript subset: **live `<text>` is outside it**
+(`<text> is outside the EPS subset`). A composed sheet always carries its banner
+title/subtitle as text, so `Also write EPS` with the built-in converter and
+`Expand text to fills` unticked fails THAT stage honestly (the rest of the
+package still ships, `partial`). The builder dialog says this BEFORE the export
+(`builder-format-eps-note`) and names both fixes: tick **Expand text to fills**
+(words ship as outlines) or choose the **Inkscape CLI** helper, whose row
+(`bld-eps-helper`) reports live whether that machine can write it. The upload
+flow keeps its per-row, per-icon honesty (a failing EPS is named on the row).
+
+## Stroke width and tracking (2026-11-19)
+
+Widths are authored in ARTBOARD px, but the cell `<g>` scales the icon's own
+viewBox into its cell, so the written `stroke-width` is that px ÷ the cell
+scale: the painted width is what the panel set — 1 px stays 1 px in the SVG and
+the EPS. The old `vector-effect="non-scaling-stroke"` stood in for this and only
+the browser honoured it (the EPS painted width × scale, and expanded outlines
+baked the heavier pen); nothing in the sheet relies on it now.
+
+Tracking is an em length (`0.025em` for `7/100 em`) and is read through
+`lib/upload/geom/length.ts` (em/rem/ex/ch/%, signed, px and unitless) — plain
+`Number("0.025em")` is NaN, which silently became 0, so expanded text (and every
+EPS, which needs it) lost the spacing. The outliner gets the run's px spacing.
 
 ## Rescale rule
 

@@ -5638,3 +5638,32 @@ with its own face in `_<style>` (`pairrebase.ts` re-derives `<pairId(base
 folder)>~<style>` on read) — a fixture parsed from the style image name gets a
 different id and silently declines the wrong file. Evidence: the styles and
 remove clusters 47 passed; docs inside caps (`sor/svg-styles.md` ~5.7 kB).
+
+## 2026-11-19 — builder export fidelity (stroke px, tracking, shared popup)
+
+Measured on the branch sandbox (`npm ci` node_modules, Chromium-less happy-dom lanes):
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `npx vitest run` (full) | 486 files, 4868 tests — 1 failed | the failure is `tests/algo_efficiency.test.ts` "synthetic 1000px 4-icon grid detects <200ms" at 200.1–209 ms; the same 3/3 failures reproduce on the base commit in this sandbox (215.9 / 200.5 / 205.7 ms), so it is this machine's speed, not the change |
+| new `tests/export_stroke_width.test.ts` | 6 passed | painted width = set px for 1 / 1.4 / 2.5, no `non-scaling-stroke`, EPS pen widths equal the SVG's, expansion adds exactly pen/2 |
+| new `tests/export_text_spacing.test.ts` | 6 passed | `0.07em`→7 px, `0.025em`→0.8 px, style form, negative and px forms; package runs carry the sheet's em value; plain SVG unchanged |
+| `tests/svg_builder_workspace.test.tsx` | 16 passed | new toolbar `builder-export-settings` (outside the dropdown) opens the shared popup |
+| `tests/builder_export_settings_ui.test.tsx` | 10 passed | popup shell = `.svg-backdrop` > `.svg-modal` > head (`aria-labelledby`) + body, body clicks ignored |
+| `tests/svg_builder*.test.ts*` + `tests/export_*.test.ts*` | 36 files, 284 tests passed | 27.2 s |
+| `tests/upload_*.test.ts*`, `svgpreview*`, `eps*`, `rescale*` | 109 files, 1412 tests passed | 42.3 s |
+| `tests/upload_*.test.tsx`, `export_sheet_ui` | 22 files, 232 tests passed | 24.6 s |
+| `npm run test:builder:fast` | 14 passed, 0 failed | 373.8 ms |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 warnings, all pre-existing (`versionremove.ts`, `runmetadata.ts`, …) |
+| `node tools/quality.mjs --changed` | GATE PASSED | 13 changed prod files, largest 184 lines / 29 fns (`sheetexport.ts`) |
+| `npm run build` | 3,614.78 kB `dist/index.html`, 15.6 s | — |
+| `npm run verify:fast` | ALL LANES PASSED | 221 s |
+| `tests/docs_navigation.test.ts` | 4 passed | every edited `docs/current/` page stays under the 9,000 B gate |
+
+Stroke fidelity: the composed cell now writes `stroke-width = set px ÷ the cell
+transform's scale` and carries no `vector-effect`, so the SVG, the EPS, the JPEG
+raster and stroke expansion all paint the px the artboard set. Tracking: em
+lengths are parsed by `lib/upload/geom/length.ts` before the outliner sees them.
+Popup: `ui/exportmodal.tsx` is the one shell for the upload dialog and the
+builder's own `⚙ Export settings` toolbar button.

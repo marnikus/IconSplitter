@@ -5,6 +5,8 @@
 // refusal is named BEFORE the tree is touched (RULE 4/15): a stroked text,
 // tspan children, no outliner at all, or no outlines for a run's font.
 import { browserTextOutliner } from "./textoutline";
+import { lengthPx } from "./geom/length";
+import { ownPresentation } from "./geom/stroke";
 
 export interface TextRun {
   value: string;
@@ -43,15 +45,16 @@ const num = (value: string | null, fallback: number): number => {
 
 function runOf(el: Element): TextRun {
   const anchor = el.getAttribute("text-anchor");
+  const size = num(el.getAttribute("font-size"), 16);
   return {
     value: el.textContent ?? "",
     x: num(el.getAttribute("x"), 0),
     y: num(el.getAttribute("y"), 0),
-    size: num(el.getAttribute("font-size"), 16),
+    size,
     weight: num(el.getAttribute("font-weight"), 400),
     family: el.getAttribute("font-family") ?? "",
     anchor: anchor === "middle" || anchor === "end" ? anchor : "start",
-    letterSpacing: num(el.getAttribute("letter-spacing"), 0),
+    letterSpacing: lengthPx(ownPresentation(el, "letter-spacing"), size) ?? 0,
     fill: el.getAttribute("fill") ?? "#000000",
     fillOpacity: el.getAttribute("fill-opacity"),
     opacity: el.getAttribute("opacity"),

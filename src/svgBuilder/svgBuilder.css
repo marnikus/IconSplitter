@@ -192,6 +192,10 @@
 .bld-toast.is-busy { color: var(--v2-purple-2); }
 
 /* dialogs ──────────────────────────────────────────────────────────────── */
+/* The export settings popup is the upload flow's `.svg-backdrop`/`.svg-modal`
+   (ui/exportmodal.tsx); only its stacking order is the builder's own, above the
+   sticky header (20) and the Export menu (40). */
+.bld-export-backdrop { z-index: 80; }
 .bld-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: #03060fcc; backdrop-filter: blur(3px); }
 .bld-modal { width: min(1000px, 96vw); max-height: 92vh; overflow: auto; display: grid; gap: 12px; padding: 16px; border: 1px solid var(--v2-line-strong); border-radius: 10px; background: var(--v2-surface); color: var(--v2-text); box-shadow: 0 24px 80px #000b; }
 .bld-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
