@@ -92,3 +92,13 @@ row. Source: `src/svg/styles.ts`, `src/lib/svgstyles.ts`.
   back to the base row and the all-styles list drops it until it is
   re-approved. Witness: `svg_remove_row_style_live.test.ts` drives the REAL
   `registerStyles` writer, then the real removal chain.
+* **Selected AI source version (`imagePreferred`) preserved across switches,
+  reviews, and SVG generation (2026-11-17)**: every discovered style pair file
+  is committed to `refs.metas` on scan (`scan.ts`) and synced on style switch
+  (`styles.ts`), and `runbatch.ts` ensures an item's `.svg.json` is loaded
+  before building the composite or saving a version, so vectorization and
+  external tools always read and preserve the selected `imagePreferred`
+  variant in `_<style>/<style stem>.svg.json`. When a style pair has only
+  numbered variants (`ai.fingerprint === ""`) and `imagePreferred` is `null`,
+  the first completed variant is filled into `imagePreferred`.
+

@@ -14,9 +14,10 @@ import { REVIEW_LABEL, type ReviewStatus } from "../lib/svgmodel";
 import { nextPendingBelow } from "../lib/reviewselect";
 import { getAppState, patchSvg } from "../state/appstore";
 import { saveMetaAt } from "../selection/pairstore";
-import { shownVersion, withMeta } from "./rowmodel";
+import { shownVersion } from "./rowmodel";
 import { announceSvgReviews, bindSvgReviewApplier, writeReviewsToFiles, type SvgReviewPatch, type SvgReviewRec } from "./reviewundo";
 import { metaForSource } from "./sources";
+import { rebuiltRow } from "./styles";
 import type { DirHandleLike } from "../lib/fs";
 import type { SvgRefs, SvgRow } from "./types";
 import type { SvgSource } from "./sources";
@@ -45,7 +46,9 @@ export interface ReviewCtx {
 
 /** The pair's record, or a fresh one when the pair has none yet. */
 function metaOf(s: ReviewCtx, row: SvgRow): PairMeta {
-  return s.refs.metas.get(row.source.id) ?? row.meta ?? metaForSource(row.source, null);
+  const m = s.refs.metas.get(row.source.id) ?? row.meta ?? metaForSource(row.source, null);
+  if (m.imagePreferred !== null || m.ai.fingerprint !== "") return m;
+  return { ...m, imagePreferred: m.imageVersions.find((v) => v.status === "done")?.version ?? null };
 }
 
 /** Undo/redo entry point: set the recorded item status on every named source. */
@@ -69,7 +72,7 @@ async function writeReviewPatch(s: ReviewCtx, patch: SvgReviewPatch): Promise<bo
     const next = withReview(metaOf(s, row), rec.review);
     s.refs.metas.set(rec.id, next);
     if (root) await saveMetaAt(root, row.source.metaPath, next);
-    s.setRowsFn((rows) => rows.map((r) => (r.source.id === rec.id ? withMeta(r, next) : r)));
+    s.setRowsFn((rows) => rows.map((r) => (r.source.id === rec.id ? rebuiltRow(r, next, false, (id) => s.refs.metas.get(id)) : r)));
     changed = true;
   }
   return changed;
@@ -105,7 +108,7 @@ function patchRows(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus): void {
   s.setRowsFn((all) => all.map((r) => {
     const hit = rows.find((x) => x.source.id === r.source.id);
     const meta = s.refs.metas.get(r.source.id);
-    return hit && meta ? withMeta(r, meta) : r;
+    return hit && meta ? rebuiltRow(r, meta, false, (id) => s.refs.metas.get(id)) : r;
   }));
 }
 

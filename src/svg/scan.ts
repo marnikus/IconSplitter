@@ -131,6 +131,7 @@ function loadRows(found: Discovery): LoadedRows {
   const styled = prefs.showAll
     ? rowsForAllStyles(found, metaOf, prefs.styles)
     : styledRows(rows, metaOf, prefs.active);
+  for (const [id, meta] of found.metas) metas.push([id, meta]);
   for (const r of styled) if (r.source.id.includes(STYLE_ID_SEP)) metas.push([r.source.id, r.meta]);
   return { rows: styled, metas };
 }
