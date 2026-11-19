@@ -62,7 +62,7 @@ const ROW_KEYS: Record<string, (row: SvgRow, a: SvgHotActions) => void> = {
   " ": (row, a) => a.toggleCheck(row.source.id),
   g: (row, a) => a.generate([row.source.id]),
   a: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "approved"); },
-  d: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "declined"); },
+  d: (row, a) => a.decide([row.source.id], "declined"),
   w: (row, a) => { if (shownVersion(row) !== null) a.decide([row.source.id], "needs-review"); },
   v: (row, a) => { const v = shownVersion(row); if (v !== null) a.showCode(row.source.id, v.version); },
   // Enter opens the active row in the SVG edit mode (2026-11-06)

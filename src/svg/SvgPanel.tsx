@@ -26,10 +26,9 @@ import { useSvgHotkeys } from "./SvgHotkeys";
 import { useSelectShortcuts } from "../lib/selectshortcuts";
 import { useRunning } from "../ui/rebuildwatch";
 import { idsWithGeneratedSvg } from "./rowmodel";
-import { countsOf, decidableCount } from "./panelcounts";
+import { countsOf, decidableCount, declinableCount } from "./panelcounts";
 import SvgList from "./SvgList";
 import type { Discovery, SourceProblem } from "./sources";
-
 import { exclusionSummary } from "./sourcelist";
 import { useBusyActivity } from "../ui/useBusyActivity";
 import SvgEditModal from "./pathedit/SvgEditModal";
@@ -108,6 +107,7 @@ function Controls({ g, root }: { g: SvgGenApi; root: DirHandleLike | null }) {
 /** Everything that only exists once a root is picked. */
 function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike | null } }) {
   const decidable = useMemo(() => decidableCount(g.rows, g.affected), [g.rows, g.affected]);
+  const declinable = useMemo(() => declinableCount(g.rows, g.affected), [g.rows, g.affected]);
   const regenerable = useMemo(() => idsWithGeneratedSvg(g.rows, g.checked).length, [g.rows, g.checked]);
   if (g.rootName === "") return <PickRoot onPick={g.chooseRoot} />;
   const actions = panelRowActions(g, rootRef);
@@ -115,7 +115,7 @@ function Body({ g, rootRef }: { g: SvgGenApi; rootRef: { current: DirHandleLike 
     <>
       <div className="svg-bulkbar-pin" data-testid="svg-bulkbar-pin">
         <SvgBulkBar header={g.header} checkedCount={g.checked.length} regenerableCount={regenerable}
-          requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidable}
+          requestCount={g.requests} visibleCount={g.visible.length} decidableCount={decidable} declinableCount={declinable}
           thumb={g.thumb} bg={g.bg} stroke={g.stroke} onStroke={g.setPreviewStroke} model={modelLabel(g.config.model)} totals={g.totals}
           progress={g.progress} running={g.running} imageActive={g.busy?.startsWith("Regenerating AI sources") ?? false}
           onToggleAll={(on) => (on ? g.selectVisible() : g.uncheckVisible())} onSelectVisible={g.selectVisible} onInvert={g.invertVisible}

@@ -24,3 +24,19 @@ No shortcut keys (A/D/W stay as they are). Handles: `svg-regen-overlaps-<id>`,
 `svg-regen-geometry-<id>`, `svg-regen-overlaps-selected`,
 `svg-regen-geometry-selected`; badge/row classes `regen-overlaps`,
 `regen-geometry`. Tests: `svg_regen_statuses.test.ts`.
+
+## Deciding before an SVG exists (2026-11-17)
+
+An AI image concept can be wrong before any vector is drawn, so ✕ decline —
+and the ↺ reset back to no decision — judge the ITEM, not an SVG: both work
+on a row with no generated version, as a row button, in the bulk bar
+(`Decline selected`) and on the `d` hotkey. Approve, ⚠ needs-review and the
+two regen marks judge an SVG and stay disabled until the row shows one
+(`declinableCount` vs `decidableCount`; `reviewact.ts` `SVG_JUDGED`).
+A pre-generation decline writes the pair file's `review` through the same
+path as any decision (one `svgReview` entry, undoable, announced); the
+Selection decision stays approved, so the row keeps its place in the list
+with a Declined badge — and SVG to upload skips it like every unapproved
+item. Toast and history say "item(s)" when any touched row has no SVG yet,
+"SVG(s)" when all of them do. Handle: `svg-review-reset-<id>`.
+Tests: `svg_review_before_svg.test.tsx`.

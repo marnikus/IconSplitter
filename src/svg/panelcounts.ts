@@ -36,3 +36,13 @@ export function decidableCount(rows: readonly SvgRow[], affected: readonly strin
   for (const id of affected) if (decidable.has(id)) count += 1;
   return count;
 }
+
+/** Selected rows in the list — any row can be declined, even before an SVG exists (2026-11-17). */
+export function declinableCount(rows: readonly SvgRow[], affected: readonly string[]): number {
+  if (affected.length === 0) return 0;
+  const known = new Set<string>();
+  for (const r of rows) known.add(r.source.id);
+  let count = 0;
+  for (const id of affected) if (known.has(id)) count += 1;
+  return count;
+}

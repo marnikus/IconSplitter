@@ -128,8 +128,10 @@ function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
         title="Regenerated — new review" onClick={click(() => a.decide([id], "needs-review"))}>⚠</button>
       <button type="button" className="svg-btn tiny success" data-testid={`svg-approve-${id}`} disabled={shown === null}
         onClick={click(() => a.decide([id], "approved"))}>✓</button>
-      <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`} disabled={shown === null}
-        onClick={click(() => a.decide([id], "declined"))}>✕</button>
+      <button type="button" className="svg-btn tiny danger" data-testid={`svg-decline-${id}`}
+        title="Decline this item (even before an SVG is generated)" onClick={click(() => a.decide([id], "declined"))}>✕</button>
+      <button type="button" className="svg-btn tiny" data-testid={`svg-review-reset-${id}`}
+        title="Reset to no decision (Pending)" onClick={click(() => a.decide([id], "pending"))}>↺</button>
       <RegenStatusButtons id={id} disabled={shown === null} decide={a.decide} />
       <span className="svg-decision-sep" aria-hidden="true" />
       <ImageRegenButton id={id} running={a.imgRunning.includes(id)} onClick={click(() => a.requestImageRegen([id]))} />

@@ -82,8 +82,11 @@ export async function decideReview(s: ReviewCtx, ids: string[], decision: Review
   try { await saveReviewDecision(s, ids, decision); } finally { release(); }
 }
 
+/** Decisions that judge a drawn SVG; decline and reset judge the item itself (2026-11-17). */
+const SVG_JUDGED = new Set<ReviewStatus>(["approved", "needs-review", "regen-overlaps", "regen-geometry"]);
+
 async function saveReviewDecision(s: ReviewCtx, ids: string[], decision: ReviewStatus): Promise<void> {
-  const rows = ids.map((id) => rowOf(s, id)).filter(hasSvg);
+  const rows = ids.map((id) => rowOf(s, id)).filter((r): r is SvgRow => canDecide(r, decision));
   if (rows.length === 0) return s.say("No generated SVG to review yet", true);
   const recs = rows.map((r) => recOf(r, decision));
   const activeBefore = getAppState().svg.activeId;
@@ -109,10 +112,11 @@ function patchRows(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus): void {
 function pushEntry(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus, recs: SvgReviewRec[]): void {
   const before = rows.map((r) => recOf(r, r.review));
   const n = recs.length;
-  s.say(`${n} SVG${n === 1 ? "" : "s"} marked ${decision}`);
+  const noun = rows.every((r) => shownVersion(r) !== null) ? `SVG${n === 1 ? "" : "s"}` : `item${n === 1 ? "" : "s"}`;
+  s.say(decision === "pending" ? `${n} ${noun} reset to no decision` : `${n} ${noun} marked ${decision}`);
   s.hist.push({
     type: "svgReview",
-    label: `${decisionVerb(decision)} ${n} SVG${n === 1 ? "" : "s"}`,
+    label: `${decisionVerb(decision)} ${n} ${noun}`,
     origin: getAppState().tab, ids: recs.map((r) => r.id),
     before: { recs: before }, after: { recs },
   });
@@ -122,6 +126,7 @@ function pushEntry(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus, recs: S
 function decisionVerb(decision: ReviewStatus): string {
   if (decision === "approved") return "Approve";
   if (decision === "declined") return "Decline";
+  if (decision === "pending") return "Reset";
   if (decision === "needs-review") return "Needs review";
   return `Mark ${REVIEW_LABEL[decision]} on`;
 }
@@ -130,8 +135,8 @@ function rowOf(s: ReviewCtx, id: string): SvgRow | undefined {
   return s.rows.find((r) => r.source.id === id);
 }
 
-function hasSvg(row: SvgRow | undefined): row is SvgRow {
-  return row !== undefined && shownVersion(row) !== null;
+function canDecide(row: SvgRow | undefined, decision: ReviewStatus): row is SvgRow {
+  return row !== undefined && (!SVG_JUDGED.has(decision) || shownVersion(row) !== null);
 }
 
 /** One history record per row: which source, and the item status it had. */
@@ -143,7 +148,7 @@ function recOf(row: SvgRow, review: ReviewStatus): SvgReviewRec {
 async function writeAll(s: ReviewCtx, rows: SvgRow[], decision: ReviewStatus): Promise<void> {
   const root = s.refs.root.current as DirHandleLike | null;
   for (const row of rows) {
-    if (shownVersion(row) === null) continue; // decided rows always have one; a rescan may race
+    if (SVG_JUDGED.has(decision) && shownVersion(row) === null) continue; // SVG-judged rows need one; a rescan may race
     const next = withReview(metaOf(s, row), decision);
     s.refs.metas.set(row.source.id, next);
     try {

@@ -35,6 +35,8 @@ export interface SvgBulkBarProps {
   requestCount: number;
   visibleCount: number;
   decidableCount: number;
+  /** Selected rows that can be declined — even before an SVG exists (2026-11-17). */
+  declinableCount?: number;
   thumb: number;
   bg: PreviewBackground;
   /** Preview-only stroke width for every row thumbnail; null = each file's own. */
@@ -143,7 +145,7 @@ function BulkActions({ p }: { p: SvgBulkBarProps }) {
       <button type="button" className="svg-btn success" data-testid="svg-approve-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("approved")}>✓ Approve selected</button>
       <button type="button" className="svg-btn danger" data-testid="svg-decline-selected"
-        disabled={p.decidableCount === 0} onClick={() => p.onDecide("declined")}>✕ Decline selected</button>
+        disabled={(p.declinableCount ?? p.decidableCount) === 0} onClick={() => p.onDecide("declined")}>✕ Decline selected</button>
       <button type="button" className="svg-btn regen-overlaps" data-testid="svg-regen-overlaps-selected"
         disabled={p.decidableCount === 0} onClick={() => p.onDecide("regen-overlaps")}
         title="Mark the selected SVGs: regenerate — shapes overlap">⧉ Regen overlaps</button>
