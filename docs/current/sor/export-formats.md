@@ -26,31 +26,26 @@ own export settings dialog can never drift apart.
 
 ## 2026-11-19 — what was actually broken
 
-The builder's `Export settings…` item existed but shipped four defects; all are
-fixed and pinned by tests:
+Five defects, all fixed and pinned by tests:
 
-1. **The dialog could not be seen.** `BuilderFormatSettings` returned a bare
-   `.bld-modal` with no `.bld-backdrop`, and `.bld-modal` has no positioning of
-   its own — so the "modal" rendered inline at the bottom of the scrolling
-   panel. It is now a backdrop-wrapped `aria-modal` dialog closed by Close,
-   Escape and a backdrop press (the panel's other dialogs' contract).
-2. **The JPEG rows were duplicated.** The dialog rendered one component that
-   already contained `JPEG (MP)` / `same size as the artboard` / `JPEG quality`
-   and then a second component with the same three rows (duplicate test ids,
-   two inputs writing the same value). Now every row comes from the ONE shared
-   sheet and a test asserts exactly one of each.
-3. **The JPEG hint never named the real file.** The row said only "untick for a
-   bigger file". The shared sheet computes `exportArtboardSize(artboard,
-   options)` — the artboard's px, or the RESCALED px while `rescaleArtboard` is
-   on — and names it (`5500×3000 px`, `4472×4472 px` for 1000² @ 20 MP).
-4. **EPS looked unavailable.** With the built-in writer a sheet's live banner
-   text fails the EPS stage; the dialog now warns before the export and names
-   both fixes, the Export menu offers the package with the formats it will
-   carry, and the Inkscape helper row shows live availability.
-
-Stored payloads validate per field (one bad field costs one default); the
-upload flow additionally overrides them per icon, and every output-affecting
-field enters `settingsFingerprint` (`expandText`, `rescale*` included).
+1. **The settings were hidden and misplaced.** They existed only as an Export ▾
+   item and rendered as a builder-only card. `ui/exportmodal.tsx` is now the ONE
+   popup (backdrop, `.svg-modal`, sticky head with `aria-labelledby`, Close,
+   Escape, backdrop) that the upload dialog also renders, opened from its own
+   `⚙ Export settings` header button (`builder-export-settings`) as well as
+   from the menu.
+2. **The JPEG rows were duplicated** (two components, same three rows, same
+   test ids). Every row now comes from the one shared sheet.
+3. **The JPEG hint never named the real file** — now `exportArtboardSize`, so
+   the artboard's px (rescaled px while rescale is on) is named.
+4. **EPS looked unavailable** — the dialog warns before the export, names both
+   fixes, and the helper row reports live availability.
+5. **Exports ignored the ink.** Cells are drawn `stroke="currentColor"` +
+   `color="#…"`, which only a browser resolves: the saved SVG shipped
+   `currentColor` (Illustrator paints it black), and SVGO rewrote hex to names
+   (`#ffa500` → `orange`) that the EPS writer cannot read. `prepareSheetSvg`
+   now runs `lib/upload/solidpaint.ts` FIRST (every format gets real hex) and
+   the optimizer keeps hex (`convertColors: {shortname: false, names2hex: true}`).
 
 ## Where each flow consumes them
 
@@ -59,9 +54,8 @@ field enters `settingsFingerprint` (`expandText`, `rescale*` included).
   EPS/JPEG stages read the same fields as before.
 - **Builder**: its own persisted store (`svgBuilder/formatstore.ts`, one storage
   key, validated on read) feeds the **Export settings…** item of the builder's
-  Export menu. The dialog is a real MODAL (`.bld-backdrop`, `aria-modal`,
-  Escape / backdrop / Close) and renders the SAME sheet component the upload
-  dialog renders — `ui/exportsheet.tsx` `ExportFormatSheet` — under its own
+  Export menu and from the header button. The popup IS the upload dialog's own
+  shell (`ui/exportmodal.tsx`) and renders the SAME sheet component — `ui/exportsheet.tsx` `ExportFormatSheet` — under its own
   test-id scope (`bld-set-*`; the upload dialog passes `upload-set`), with its
   own store write path and no marker. The stock package (`sheetpackage.ts`)
   honours every field: flags gate the files, `optimizeSvg` records a real SVGO
@@ -98,7 +92,7 @@ package still ships, `partial`). The builder dialog says this BEFORE the export
 (`bld-eps-helper`) reports live whether that machine can write it. The upload
 flow keeps its per-row, per-icon honesty (a failing EPS is named on the row).
 
-## Stroke width and tracking (2026-11-19)
+## Stroke width, tracking and ink (2026-11-19)
 
 Widths are authored in ARTBOARD px, but the cell `<g>` scales the icon's own
 viewBox into its cell, so the written `stroke-width` is that px ÷ the cell
@@ -111,6 +105,11 @@ Tracking is an em length (`0.025em` for `7/100 em`) and is read through
 `lib/upload/geom/length.ts` (em/rem/ex/ch/%, signed, px and unitless) — plain
 `Number("0.025em")` is NaN, which silently became 0, so expanded text (and every
 EPS, which needs it) lost the spacing. The outliner gets the run's px spacing.
+
+Ink: a saved file never carries `currentColor` (resolved to the nearest
+`color` on `stroke`, `fill`, `stop-color`, `flood-color` and inline style) and
+never a CSS colour name, so the artboard's or a template's colour is what the
+SVG, the JPEG and the EPS paint.
 
 ## Rescale rule
 

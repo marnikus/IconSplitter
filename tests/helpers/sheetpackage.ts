@@ -18,6 +18,8 @@ export const ICON_ASSET: BuilderIconAsset = {
 
 export interface SheetPatch {
   strokeWidth?: number;
+  /** The icon ink (the artboard's stroke colour). */
+  ink?: string;
   titleTracking?: number;
   subtitleTracking?: number;
 }
@@ -26,7 +28,11 @@ export interface SheetPatch {
 export function sheetSvg(patch: SheetPatch = {}): string {
   const config = parseSheetConfig({
     ...DEFAULT_CONFIG,
-    icons: { ...DEFAULT_CONFIG.icons, ...(patch.strokeWidth === undefined ? {} : { strokeWidth: patch.strokeWidth }) },
+    icons: {
+      ...DEFAULT_CONFIG.icons,
+      ...(patch.strokeWidth === undefined ? {} : { strokeWidth: patch.strokeWidth }),
+      ...(patch.ink === undefined ? {} : { color: patch.ink }),
+    },
     banner: {
       ...DEFAULT_CONFIG.banner,
       ...(patch.titleTracking === undefined ? {} : { titleTracking: patch.titleTracking }),

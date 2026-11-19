@@ -6,6 +6,7 @@
 // reported and left out; the rest still ships ("partial"). The browser renderers
 // and the converter are injected for tests.
 import { embedMetadataInSvg } from "../lib/upload/embed";
+import { solidPaint } from "../lib/upload/solidpaint";
 import { expandStrokes } from "../lib/upload/expand";
 import { expandTextToFills } from "../lib/upload/expandtext";
 import { rescaleSvg } from "../lib/upload/rescale";
@@ -38,16 +39,7 @@ export interface SheetPackageDeps {
 
 const text = (s: string) => new TextEncoder().encode(s);
 
-/** `stroke`/`fill="currentColor"` → the nearest ancestor's `color` (the EPS writers need real paint). */
-export function solidPaint(svg: string): string {
-  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
-  for (const el of Array.from(doc.getElementsByTagName("*"))) {
-    const colour = el.closest("[color]")?.getAttribute("color");
-    if (colour == null) continue;
-    for (const attr of ["stroke", "fill"]) if (el.getAttribute(attr) === "currentColor") el.setAttribute(attr, colour);
-  }
-  return new XMLSerializer().serializeToString(doc.documentElement);
-}
+export { solidPaint } from "../lib/upload/solidpaint";
 
 function sizeOf(svg: string): { width: number; height: number; background: string } {
   const num = (name: string, fallback: number) => Number(new RegExp(`\\b${name}=["'](\\d+(?:\\.\\d+)?)["']`).exec(svg)?.[1] ?? fallback);
@@ -62,7 +54,10 @@ const SVGO_OFF: OptimizeRecord = { enabled: false, version: "none", config: "{}"
  * each refusal named before anything ships.
  */
 export async function prepareSheetSvg(svg: string, settings: UploadSettings): Promise<{ ok: true; svg: string; svgo: OptimizeRecord } | { ok: false; reason: string }> {
-  let out = svg;
+  // First, the ink: the artboard's `currentColor` becomes real hex, so the SVG
+  // the user opens, the JPEG the browser rasterises and the EPS the writer
+  // parses all paint the colour the panel (or a template) set (2026-11-19).
+  let out = solidPaint(svg);
   if (settings.expandStrokes) {
     const doc = new DOMParser().parseFromString(out, "image/svg+xml");
     const expanded = expandStrokes(doc.documentElement);

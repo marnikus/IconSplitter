@@ -5667,3 +5667,25 @@ raster and stroke expansion all paint the px the artboard set. Tracking: em
 lengths are parsed by `lib/upload/geom/length.ts` before the outliner sees them.
 Popup: `ui/exportmodal.tsx` is the one shell for the upload dialog and the
 builder's own `⚙ Export settings` toolbar button.
+
+## 2026-11-19 (b) — exported ink, and the EPS colour-name trap
+
+Measured in the same sandbox, on top of the entry above:
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `npx vitest run` (full) | **487 files, 4872 tests, all passed** | 153.05 s (the earlier run's lone `algo_efficiency` failure was a stray concurrent `vitest` process from a killed command; clean, the same suite is green) |
+| new `tests/export_stroke_color.test.ts` | 4 passed | red before the fix: saved SVG kept `currentColor`; with `#ffa500` the EPS stage failed with `unsupported paint: orange` |
+| `tests/svg_builder*.test.ts*` + `tests/export_*.test.ts*` + `upload_optimize*` + `upload_prepare*` | 40 files, 346 tests passed | 27.1 s |
+| `npm run test:builder:fast` | 14 passed, 0 failed | 337.0 ms |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `solidpaint.ts` 33 lines / 3 fns, `sheetpackage.ts` now 161 lines / 16 fns |
+| `npm run build` | 3,615.18 kB `dist/index.html` | 15.6 s |
+| `npm run verify:fast` | ALL LANES PASSED | 225 s |
+| `tests/docs_navigation.test.ts` | 4 passed | export-formats 8,787 B, svg-builder 8,810 B — both under the 9,000 B gate |
+
+The ink pass (`lib/upload/solidpaint.ts`) runs FIRST in `prepareSheetSvg`, so the
+SVG, the JPEG raster and the EPS all get the artboard's real hex; the optimizer
+keeps hex (`convertColors: { shortname: false, names2hex: true }`) so the EPS
+writer never meets a name it cannot parse (`#ffa500` → `orange` before).
