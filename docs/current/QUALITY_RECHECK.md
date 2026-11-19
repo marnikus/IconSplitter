@@ -5669,3 +5669,6 @@ Reported by the user, reproduced as red tests first, then fixed.
 
 Gates: `tsc --noEmit` clean · eslint 0 errors · `tools/quality.mjs --changed`
 GATE PASSED · `npm run build` OK · full suite 488 files / 4881 tests green.
+- **A hero glyph no longer blocks the EPS stage** (`builder_export_hero_eps.test.tsx`,
+  1): the hero's pen reached `writeEps` as `currentColor` and was refused; the
+  package's `solidPaint` pass resolves it, and the pen survives as the setting.
