@@ -170,7 +170,7 @@ export interface ImageMain {
  * generation vectorizes it — one rule, so the two can never disagree.
  */
 export function mainImageOf(meta: ImageMain | null, original: string): string {
-  return meta === null ? original : preferredImagePath(meta.imageVersions, meta.imagePreferred, original);
+  return meta === null ? original : preferredImagePath(meta.imageVersions ?? [], meta.imagePreferred ?? null, original);
 }
 
 /**

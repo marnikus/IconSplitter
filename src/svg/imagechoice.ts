@@ -5,11 +5,11 @@ import type { DirHandleLike } from "../lib/fs";
 import { withDecision, type PairMeta } from "../lib/pairmeta";
 import { mainImageOf } from "../lib/svgimgreg";
 import { log } from "../log/logstore";
-import { saveMetaAt } from "../selection/pairstore";
+import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
 import type { SvgCtx } from "./actions";
 import { readReferenceImage } from "./imgregfiles";
 import { reserveSources, SOURCE_BUSY } from "./jobstate";
-import { withMeta } from "./rowmodel";
+import { rebuiltRow } from "./styles";
 import type { SvgRow } from "./types";
 
 export type ImageChoiceCtx = Pick<SvgCtx, "refs" | "rows" | "say" | "setRowsFn">;
@@ -25,7 +25,7 @@ async function saveMainImage(c: ImageChoiceCtx, id: string, version: number | nu
   const root = c.refs.root.current as DirHandleLike | null;
   const row = c.rows.find((r) => r.source.id === id);
   if (root === null || row === undefined) return c.say("No folder is open — the choice cannot be saved", true);
-  const prev = c.refs.metas.get(id) ?? row.meta;
+  const prev = c.refs.metas.get(id) ?? row.meta ?? (await loadMetaAt(root, row.source.metaPath)).meta;
   if (prev === null) return c.say("This pair has no record file yet — regenerate its image first", true);
   const error = await imageChoiceError(root, row, prev, version);
   if (error !== null) return c.say(error, true);
@@ -36,7 +36,7 @@ async function saveMainImage(c: ImageChoiceCtx, id: string, version: number | nu
     return c.say(`The choice for ${row.source.name} could not be saved — nothing changed`, true);
   }
   c.refs.metas.set(id, meta);
-  c.setRowsFn((rs) => rs.map((r) => (r.source.id === id ? withMeta(r, meta) : r)));
+  c.setRowsFn((rs) => rs.map((r) => (r.source.id === id ? rebuiltRow(r, meta, false, (x) => c.refs.metas.get(x)) : r)));
   log({ feature: "svg", action: "image-main", ids: { source: id }, detail: version === null ? "accepted original" : `accepted v${version}` });
   c.say(version === null ? "AI source: the original is accepted as main" : `AI source: v${version} is accepted as main — the SVG generation uses it`);
 }

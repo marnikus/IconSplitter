@@ -5689,3 +5689,27 @@ The ink pass (`lib/upload/solidpaint.ts`) runs FIRST in `prepareSheetSvg`, so th
 SVG, the JPEG raster and the EPS all get the artboard's real hex; the optimizer
 keeps hex (`convertColors: { shortname: false, names2hex: true }`) so the EPS
 writer never meets a name it cannot parse (`#ffa500` → `orange` before).
+
+## 2026-11-19 (c) — style-mode `imagePreferred` carried onto this branch
+
+The base branch's `ae07946` ("preserve and fill selected style AI source version
+in `.svg.json`") is cherry-picked here unchanged; measured after the pick:
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `npx vitest run` (full) | **488 files, 4875 tests, all passed** | 131.6 s on an idle 2-CPU sandbox |
+| new `tests/svg_style_image_preferred.test.tsx` | 3 passed | Base → Style switch keeps `imagePreferred`, SVG generation uses it, numbered-only style fills it |
+| `tests/svg_*`, scan/style/version/pair suites | 128 files, 1293 tests passed | 61.3 s |
+| `npm run test:builder:fast` | 14 passed, 0 failed | 459.1 ms |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `styles.ts` 298 lines / 53 fns, `scan.ts` 224 / 21, `runbatch.ts` 256 / 25 |
+| `npm run build` | 3,615.4 kB `dist/index.html` | 14.7 s |
+| `npm run verify:fast` | ALL LANES PASSED | 210 s |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-styles.md` 7,726 B |
+
+Method note (RULE 15): two full runs first showed `algo_efficiency`,
+`getty_web_batch` and `tailcut_speed` timing out. They passed standalone, and
+the cause was a leaked `tools/bridge/server.mjs --watch-dir /tmp/helper-watch-*`
+process from an earlier interrupted run spinning at 56 % CPU on this 2-CPU box.
+Killed, the same suite is fully green; no budget or test was changed to hide it.
