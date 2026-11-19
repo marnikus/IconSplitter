@@ -23,6 +23,7 @@ own export settings dialog can never drift apart.
 | `rescaleArtboard` | off | NEW: rescale the FULL artboard, keeping its ratio, until its area is `rescaleMegapixels` (1000×1000 @ 20 MP → 4472×4472) |
 | `rescaleMegapixels` | 20 | the target area of that rescale (1…64); dormant while the box is off |
 | `rescaleStrokes` | on | while rescaling: scale stroke widths proportionally; untick and every stroke keeps its printed px (widths ÷ factor) |
+| `cleanExport` | off here, **on in the builder** | clean the delivered SVG and EPS before they are saved: strip the generator's fingerprints and keep ONLY title, description and tags as metadata (see below) |
 
 Stored payloads validate per field (one bad field costs one default); the
 upload flow additionally overrides them per icon, and every output-affecting
@@ -101,17 +102,11 @@ switched off writes nothing and leaves the previous package's file untouched.
 
 Two numbers the editor shows used to disagree with the files:
 
-* **Stroke width.** A cell group is fitted with a `scale()`, so a `stroke-width`
-  written verbatim was multiplied by it: "1 px" painted 3.2 px on the sheet, and
-  that local number went straight into the SVG and the EPS. A stroke is absolute,
-  so `svgAsset.ts` now writes `userPx / fit.scale` — the group's own transform
-  multiplies it back, and the printed pen is the user's px everywhere (the same
-  rule the upload flow applies to its global stroke).
-* **Letter spacing.** The sheet wrote `0.025em`; `expandtext.ts` read a bare
-  number, so `0.025em` → `NaN` → **0** per glyph, and every EPS (a sheet always
-  outlines for the built-in converter) shipped without the spacing. The sheet now
-  writes px at the run's own size, and `letterSpacingPx` still resolves `em`,
-  `px` and bare lengths for foreign documents.
+* **Stroke width.** The cell group's `scale()` multiplied a verbatim
+  `stroke-width`, so "1 px" painted 3.2 px and that number reached the files;
+  `svgAsset.ts` writes `userPx / fit.scale`.
+* **Letter spacing.** `0.025em` → `NaN` → 0 per glyph in `expandtext.ts`; the
+  sheet now writes px at the run's size.
 
 ## A sheet's EPS carries text (2026-11-19)
 
@@ -132,9 +127,17 @@ fails just that stage with the reason AND `EPS_TEXT_HINT` — the two honest way
 out: untick Also write EPS, tick Expand text to fills, or choose Inkscape.
 
 `needsTextFonts` says when a run must warm the font cache first (the outliner is
-sync): Expand text to fills, or an EPS through the built-in converter. Both the
-upload runner (`upload/exportstages.ts`) and the builder action
-(`svgBuilder/actions/sheetexport.ts`) ask it before preparing. An EPS-only
-request that cannot be written still fails the whole package (`partial`/`failed`
-honesty is unchanged for the upload flow); a builder package always writes its
-SVG/JPEG, so a refused EPS is `partial` with the rest delivered.
+sync): Expand text to fills, or an EPS through the built-in converter. Both
+runners ask before preparing. A builder package always writes its SVG/JPEG, so a
+refused EPS is `partial` with the rest delivered.
+
+## Cleaning the delivered files (2026-11-19)
+
+**Clean up final SVG and EPS** (`cleanExport`, `bld-set-clean`): ON for the
+builder, OFF in the shared domain. `svgclean.ts` (3-decimal numbers,
+`cleandom.cleanExportDom` drops `data-*`/`aria-*`/`class`/`role`, extra
+`<metadata>`, repeated `xmlns`; only DC title/description/subject kept) and
+`epsclean.ts` (rebuild via `embedXmpMetadataInEps(…, {clean:true})`: one carrier,
+no `IconSplitter`/`%%Creator`, still a verifiable EPS 10). Validation compares
+`shippedMetadata(...)`. Plan:
+`docs/archive/2026-11-19-stock-clean-export/design.md`.

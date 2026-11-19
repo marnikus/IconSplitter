@@ -6,18 +6,32 @@
 // 2026-11-19: `useBuilderFormats` gives the dialog one live value + one write
 // path, so a gesture re-renders the popup and persists in the same tick.
 import { useState } from "react";
-import { normalizeFormatOptions, type ExportFormatOptions } from "../lib/exportformats";
+import { normalizeFormatOptions, readFormatOverrides, type ExportFormatOptions } from "../lib/exportformats";
 import { readKey, writeKey } from "../state/safestorage";
 
 export const BUILDER_FORMATS_KEY = "iconSplitter.builder.formats.v1";
 
+/**
+ * The builder's documented defaults: the shared domain with the clean-up ON —
+ * a stock sheet ships clean unless the user unticks it (2026-11-19). A stored
+ * payload is read as OVERRIDES, so a field saved before it existed keeps this
+ * default instead of "off because the key was missing".
+ */
+export function builderFormatDefaults(): ExportFormatOptions {
+  return { ...normalizeFormatOptions(null), cleanExport: true };
+}
+
 export function loadBuilderFormats(): ExportFormatOptions {
+  const defaults = builderFormatDefaults();
   const raw = readKey(BUILDER_FORMATS_KEY);
-  if (raw === null) return normalizeFormatOptions(null);
+  if (raw === null) return defaults;
   try {
-    return normalizeFormatOptions(JSON.parse(raw));
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null
+      ? { ...defaults, ...readFormatOverrides(parsed as Record<string, unknown>) }
+      : defaults;
   } catch {
-    return normalizeFormatOptions(null);
+    return defaults;
   }
 }
 

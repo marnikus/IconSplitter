@@ -147,6 +147,9 @@ export function FormatTransformRows({ w }: { w: FormatRowWiring }) {
   const v = w.value;
   const mark = w.marker;
   return <>
+    <ExportCheckRow testid={id(w, "clean")} label="Clean up final SVG and EPS" checked={v.cleanExport} marker={mark?.("cleanExport", "clean")}
+      onChange={(next) => w.onChange({ cleanExport: next })}
+      hint="strips the generator's fingerprints before saving (data-* attributes, repeated namespaces, float-math junk) and keeps only the title, description and tags as metadata" />
     <ExportCheckRow testid={id(w, "optimize")} label="Optimize SVG (SVGO)" checked={v.optimizeSvg} marker={mark?.("optimizeSvg", "optimize")}
       onChange={(next) => w.onChange({ optimizeSvg: next })}
       hint="the export copy only — viewBox, geometry, strokes and metadata are preserved" />

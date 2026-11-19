@@ -5672,3 +5672,39 @@ GATE PASSED · `npm run build` OK · full suite 488 files / 4881 tests green.
 - **A hero glyph no longer blocks the EPS stage** (`builder_export_hero_eps.test.ts`,
   1): the hero's pen reached `writeEps` as `currentColor` and was refused; the
   package's `solidPaint` pass resolves it, and the pen survives as the setting.
+
+## 2026-11-19 — clean final SVG and EPS (builder export, round 3)
+
+The user's ask: "add these filters to clean final EPS and SVG before they are
+saved", as a checkbox, keeping ONLY title, description and tags as metadata.
+
+- **`cleanExport`** joins `ExportFormatOptions` (row `bld-set-clean`, and the
+  upload dialog renders it too). ON is the builder's default
+  (`formatstore.builderFormatDefaults`), OFF in the shared domain, so the upload
+  tab's long-standing delivered bytes never move. `settingsFingerprint` pins only
+  `clean: true`; the historical default fingerprint `36232c04` is unchanged.
+- **SVG**: `lib/upload/svgclean.ts` `cleanExportSvg(svg, meta?)` — ≤3-decimal
+  numbers, then the existing `cleandom.cleanExportDom` (data-*/aria-*/class/role,
+  extra `<metadata>`, repeated namespaces, junk elements; referenced ids → a,b,…),
+  then only DC title/description/subject re-embedded, `enforceExportSvg` still
+  passes. Non-SVG refused by name.
+- **EPS**: `lib/upload/epsclean.ts` `cleanExportEps` rebuilds through
+  `embedXmpMetadataInEps(…, {clean:true})` — ONE carrier (pdfmark XMP stream,
+  `DocMeta`/`DocStream`), no `%%Creator`/`%%CreationDate`/`%ADO_ContainsXMP`/
+  Photoshop/IPTC block/`x:xmptk`, byte-stable (idempotent), `verifyEpsDocument`
+  still green. `verifiedEpsArtwork` rebuilds both envelopes; `verifyEpsMetadata`
+  accepts the clean single-carrier form and refuses a second copy.
+- **Three real bugs** surfaced by the work: `svgdom.isNamespaceDecl` matched only
+  `xmlns:*` (so the DOM-stitch's repeated default `xmlns` survived while
+  `hoistNamespaces` deleted the genuine one — now both handled), and `clean.ts`
+  called the root default `xmlns` "unused". `attributeViolations`/`namespaceViolations`
+  plus `insideMetadata` scoping keep the DC block legal.
+- Validation compares `shippedMetadata(...)` (title/description/tags), never a
+  field the cleaner removed.
+
+Tests: `export_clean_dom.test.ts` (8), `export_clean_eps.test.ts` (5),
+`builder_export_clean.test.tsx` (4, incl. the `bld-set-clean` gesture).
+`builder_sheetpackage_formats.test.ts` still pins the FORMAT CHAIN only.
+
+Gates: `tsc --noEmit` clean · `tools/quality.mjs --changed` GATE PASSED ·
+`npm run build` OK · full suite 492 files / 4899 tests green.

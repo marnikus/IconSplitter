@@ -38,19 +38,28 @@ export interface ExportFormatOptions {
   rescaleMegapixels: number;
   /** While rescaling: scale stroke widths proportionally; off = every stroke keeps its printed px. */
   rescaleStrokes: boolean;
+  /**
+   * Clean the delivered SVG and EPS: strip the generator's fingerprints
+   * (custom `data-*`, stitched per-element `xmlns`, float-math junk, duplicate
+   * metadata carriers) and keep ONLY title, description and tags as metadata.
+   */
+  cleanExport: boolean;
 }
 
 export const DEFAULT_FORMAT_OPTIONS: ExportFormatOptions = {
   includeSvg: true, includeJpeg: true, includeEps: false, epsConverter: DEFAULT_CONVERTER,
   jpegMegapixels: MP_DEFAULT, jpegQuality: QUALITY_DEFAULT, jpegMatchArtboard: true,
   optimizeSvg: true, expandStrokes: false, expandText: false,
-  rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true,
+  // Off in the shared domain: the upload tab's delivered files keep their
+  // identity fields (its own long-standing contract). The builder turns it ON
+  // as ITS default (formatstore.ts) — a stock sheet ships clean.
+  rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true, cleanExport: false,
 };
 
 /** Boolean fields, in the order the dialogs show them. */
 export const FORMAT_FLAGS = [
   "includeSvg", "includeJpeg", "includeEps", "jpegMatchArtboard", "optimizeSvg",
-  "expandStrokes", "expandText", "rescaleArtboard", "rescaleStrokes",
+  "expandStrokes", "expandText", "rescaleArtboard", "rescaleStrokes", "cleanExport",
 ] as const;
 
 /** Fields that default ON read back on unless stored `false`; the rest read back off unless stored `true`. */

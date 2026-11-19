@@ -32,6 +32,16 @@ Back to the [test index](../TESTS.md) and [behaviour contract](../svg-builder.md
 
 The finish gate also runs `npx tsc --noEmit`, `npm run lint`, the explicit changed-file quality gate, `npm run verify:fast` and `npm run verify`. The dated measurement is appended to `QUALITY_RECHECK.md`.
 
+## Clean export (2026-11-19)
+
+`export_clean_dom.test.ts` (the SVG: fingerprints gone, ≤3 decimals, one
+`xmlns`, only title/description/tags, idempotent, non-SVG refused),
+`export_clean_eps.test.ts` (no `IconSplitter`/`%%Creator`/Photoshop block, ONE
+XMP packet, DSC + `verifyEpsDocument` still pass, idempotent) and
+`builder_export_clean.test.tsx` (the `bld-set-clean` row + its store write, and
+the builder's package shipping cleaned SVG and EPS, fingerprints intact with the
+box off).
+
 ## Fast lane
 
 `npm run test:builder:fast` runs `tools/builder-fast-test.mjs`: esbuild bundles `tools/builder-fast.spec.ts` into one Node ESM file, with `tools/builder-fast-hook.ts` supplying an in-memory API for the static panel render. The 14 assertions exercise the real pure domain, recursive discovery, validated session/undo payloads, injected sheet preview, one-request Gemini guard, export verification and the dark panel handles. The full Vitest UI suite still mounts Workbench with the real hook, so this is a smoke lane, not a coverage reduction.

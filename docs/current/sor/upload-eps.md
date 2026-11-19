@@ -8,6 +8,11 @@ Live `<text>` is outside the built-in writer's subset (the upload flow's switch
 is **Expand text to fills**). A builder sheet always has text, so it gets its own
 rule: [export formats](export-formats.md).
 
+## The clean envelope (2026-11-19)
+
+**Clean up final SVG and EPS** rebuilds the EPS: no `%%Creator`, no Photoshop
+block. See [export formats](export-formats.md).
+
 ## Converter choices
 
 The built-in browser writer supports native Level 3 vector gradients, including

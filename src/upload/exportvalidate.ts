@@ -13,17 +13,19 @@ import { verifyEpsDocument } from "../lib/upload/eps";
 import { verifyEpsMetadata } from "../lib/upload/epsmetadata";
 import type { IconMetadata } from "../lib/upload/meta";
 import type { CommitValidation } from "./exportcommit";
-import type { Artifacts } from "./exportstages";
+import { shippedMetadata, type Artifacts } from "./exportstages";
 
 export interface ArtifactValidation extends CommitValidation {
   errors: string[];
 }
 
 /** Validation runs BEFORE commit: a failed check commits nothing. */
-export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null): ArtifactValidation {
+export function validateArtifacts(art: Artifacts, metadata: IconMetadata | null, cleanExport = false): ArtifactValidation {
   const errors: string[] = [];
-  const svgReadback = readbackCheck(art.svgOut, metadata, errors);
-  const epsReadback = epsMetadataCheck(art.epsText, metadata, errors);
+  // A cleaned file carries only the shipped fields, so that is what must read back.
+  const expected = cleanExport && metadata !== null ? shippedMetadata(metadata) : metadata;
+  const svgReadback = readbackCheck(art.svgOut, expected, errors);
+  const epsReadback = epsMetadataCheck(art.epsText, expected, errors);
   const epsDocument = art.epsFailure === null && epsCheck(art.epsText, errors);
   return {
     svg: svgCheck(art.svgOut, errors, art.prepared?.ok === true && art.prepared.asIs),

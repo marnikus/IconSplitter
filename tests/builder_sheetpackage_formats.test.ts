@@ -10,6 +10,9 @@ import { setTextOutliner } from "../src/lib/upload/expandtext";
 import { loadBuilderFormats, saveBuilderFormats } from "../src/svgBuilder/formatstore";
 import { DEFAULT_FORMAT_OPTIONS, type ExportFormatOptions } from "../src/lib/exportformats";
 
+// These cases pin the FORMAT CHAIN (flags, SVGO, expansion, rescale), so the
+// clean pass is off here; the cleanup itself is pinned in
+// export_clean_dom/eps tests and builder_export_clean.test.ts (2026-11-19).
 const SHEET = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><!-- note --><rect x="1" y="1" width="9" height="9" fill="none" stroke="#000000" stroke-width="2"/><text x="10" y="50" fill="#123456" font-size="12">Hi</text></svg>';
 
 const deps = (seen: { jpeg?: { width: number; height: number } }) => ({

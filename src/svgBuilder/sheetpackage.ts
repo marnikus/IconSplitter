@@ -23,6 +23,10 @@ import { settingsFingerprint } from "../lib/upload/settingsfingerprint";
 import type { ConvertResult, EpsConvertInput } from "../lib/upload/epsconv/types";
 import type { SheetMetadata } from "../lib/svgBuilder/types";
 import { sheetPngBlob } from "./exporter";
+import { cleanExportSvg } from "../lib/upload/svgclean";
+import { cleanExportEps } from "../lib/upload/epsclean";
+import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
+import { shippedMetadata } from "../upload/exportstages";
 
 export interface SheetFile { name: string; bytes: Uint8Array }
 export interface SheetPackage { files: SheetFile[]; record: ExportRecord; problems: string[] }
@@ -132,13 +136,28 @@ async function renderJpegFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: Ic
  * shipped SVG/JPEG keep their text. Any refusal leaves the document untouched
  * and fails only this stage — the rest of the package still ships.
  */
-async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps): Promise<Part> {
+async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: IconMetadata | null): Promise<Part> {
   const name = `${a.stem}.eps`;
   if (!a.settings.includeEps) return { name, bytes: null, problem: null };
   const outlined = outlineForEps(solidPaint(a.svg), a.settings);
   if (!outlined.ok) return { name, bytes: null, problem: `EPS: ${outlined.reason} — ${outlined.fix}`, fixes: [] };
   const input = { svg: outlined.svg, background: flattenColor(sizeOf(a.svg).background), title: name, createdAt: a.now };
-  return runConverter(name, d.eps, input, outlined.fixes);
+  const part = await runConverter(name, d.eps, input, outlined.fixes);
+  return a.settings.cleanExport === false ? part : cleanedEps(part, meta);
+}
+
+/**
+ * The delivered EPS (2026-11-19): title, description and tags only, one carrier,
+ * no producer fingerprint. A file the clean pass cannot verify is reported and
+ * left out — the rest of the package still ships (this stage's own rule).
+ */
+function cleanedEps(part: Part, meta: IconMetadata | null): Part {
+  if (part.bytes === null) return part;
+  const eps = new TextDecoder().decode(part.bytes);
+  const carrier = meta === null ? eps : embedXmpMetadataInEps(eps, shippedMetadata(meta));
+  const cleaned = cleanExportEps(carrier);
+  if (!cleaned.ok) return { name: part.name, bytes: null, problem: `EPS: ${cleaned.reason}`, fixes: part.fixes };
+  return { ...part, bytes: text(cleaned.eps) };
 }
 
 /** One converter call, its auto-fixes merged, and every failure named (never guessed at). */
@@ -210,6 +229,20 @@ async function recordOf(
     timestamps: { ...base.timestamps, committedAt: a.now } };
 }
 
+/** The shipped SVG: cleaned (fingerprints gone, title/description/tags only) unless the box is off. */
+async function cleanedSvgFile(a: SheetPackageArgs, svg: string, meta: IconMetadata | null): Promise<Part> {
+  const name = `${a.stem}.svg`;
+  if (meta === null) {
+    if (a.settings.cleanExport === false) return { name, bytes: text(svg), problem: null };
+    const cleaned = cleanExportSvg(svg);
+    return cleaned.ok ? { name, bytes: text(cleaned.svg), problem: null } : { name, bytes: null, problem: `SVG: ${cleaned.reason}` };
+  }
+  const embedded = embedMetadataInSvg(svg, meta);
+  if (a.settings.cleanExport === false) return { name, bytes: text(embedded), problem: null };
+  const cleaned = cleanExportSvg(embedded, shippedMetadata(meta));
+  return cleaned.ok ? { name, bytes: text(cleaned.svg), problem: null } : { name, bytes: null, problem: `SVG: ${cleaned.reason}` };
+}
+
 const NOTHING_TRANSFORM: SheetTransform = { strokes: 0, textsOutlined: 0, rescale: null };
 
 /** The named refusals that write no file at all: all formats off, or a refused preparation. */
@@ -226,10 +259,8 @@ export async function buildSheetPackage(a: SheetPackageArgs, d: SheetPackageDeps
   const prepared = await prepareSheetSvg(a.svg, a.settings);
   if (!prepared.ok) return refusedPackage(a, meta, prepared.reason);
   const worked: SheetPackageArgs = { ...a, svg: prepared.svg };
-  const svg: Part = a.settings.includeSvg
-    ? { name: `${a.stem}.svg`, bytes: text(meta === null ? prepared.svg : embedMetadataInSvg(prepared.svg, meta)), problem: null }
-    : { name: `${a.stem}.svg`, bytes: null, problem: null };
-  const [jpg, eps, png] = await Promise.all([renderJpegFile(worked, d, meta), convertEpsFile(worked, d), renderPngFile(worked, d)]);
+  const svg: Part = a.settings.includeSvg ? await cleanedSvgFile(a, prepared.svg, meta) : { name: `${a.stem}.svg`, bytes: null, problem: null };
+  const [jpg, eps, png] = await Promise.all([renderJpegFile(worked, d, meta), convertEpsFile(worked, d, meta), renderPngFile(worked, d)]);
   const record = await recordOf(a, { svg, jpg, eps }, meta, prepared);
   const files = [svg, jpg, eps, png].filter((p): p is Part & { bytes: Uint8Array } => p.bytes !== null).map((p) => ({ name: p.name, bytes: p.bytes }));
   files.push({ name: "export.json", bytes: text(serializeExportRecord(record)) });

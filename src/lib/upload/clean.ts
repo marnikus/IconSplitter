@@ -115,7 +115,7 @@ function elementViolations(elements: Element[]): string[] {
 
 /** One attribute: foreign, naming-only, or fine. `xlink:href` is real SVG. */
 function attributeViolations(name: string): string[] {
-  if (name.startsWith("xmlns:") || name.startsWith("xlink:")) return [];
+  if (isNamespaceDecl(name) || name.startsWith("xlink:")) return [];
   if (name.includes(":")) return [`the foreign attribute ${name} is editor bloat`];
   if (BLOAT_ATTRS.includes(name) || name.startsWith("data-") || name.startsWith("aria-")) {
     return [`the attribute ${name} is naming, never rendering`];
@@ -134,7 +134,12 @@ function namespaceViolations(elements: Element[]): string[] {
   const out: string[] = [];
   for (const el of elements) {
     for (const name of attributeNames(el).filter(isNamespaceDecl)) {
-      if (el.parentElement !== null) out.push(`the namespace declaration ${name} must be on the root, not on <${el.nodeName}>`);
+      // The default namespace inside the metadata block is that vocabulary's own
+      // business (a serializer emits it per element); only the SVG subtree must
+      // declare it once (2026-11-19).
+      if (el.parentElement !== null && !(name === "xmlns" && insideMetadata(el))) {
+        out.push(`the namespace declaration ${name} must be on the root, not on <${el.nodeName}>`);
+      } else if (name === "xmlns") continue; // the default namespace IS the document's own: never "unused"
       else if (!used.has(name.slice("xmlns:".length))) {
         out.push(`the namespace declaration ${name} (${el.getAttribute(name) ?? ""}) is unused`);
       }
