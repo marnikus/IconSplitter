@@ -127,26 +127,24 @@ export function jpegTargetSize(width: number, height: number, o: Pick<ExportForm
   return o.jpegMatchArtboard ? { width, height } : megapixelSize(width, height, o.jpegMegapixels * 1_000_000);
 }
 
-export type ArtboardBox = { width: number; height: number };
-
-/** The artboard the package really ships: the rescale's px while it is on, else the composed px. */
-export function rescaledArtboard(width: number, height: number, o: Pick<ExportFormatOptions, "rescaleArtboard" | "rescaleMegapixels">): ArtboardBox & { factor: number } {
-  return o.rescaleArtboard ? rescaleSize(width, height, o.rescaleMegapixels) : { width, height, factor: 1 };
-}
-
 /**
- * The JPEG the options spell out for a composed `width × height` sheet — the
- * rescale first (it decides the artboard), then the match/MP choice. Both the
- * stage and the settings row's hint read THIS, so the number the user reads is
- * the number the file gets (2026-11-19).
+ * The artboard the export really has: its own px, or the rescale's px while
+ * that box is on. Both dialogs name this size in the JPEG row, so the hint and
+ * the packaged JPEG read the same numbers.
  */
-export function jpegBoxFor(o: ExportFormatOptions, width: number, height: number): ArtboardBox {
-  const art = rescaledArtboard(width, height, o);
-  return jpegTargetSize(art.width, art.height, o);
+export function exportArtboardSize(
+  size: { width: number; height: number },
+  o: Pick<ExportFormatOptions, "rescaleArtboard" | "rescaleMegapixels">,
+): { width: number; height: number } {
+  if (!o.rescaleArtboard) return { width: size.width, height: size.height };
+  const scaled = rescaleSize(size.width, size.height, o.rescaleMegapixels);
+  return { width: scaled.width, height: scaled.height };
 }
 
-/** What a run will ship, in the reference sheet's order — "no formats" when nothing is ticked. */
-export function formatSummary(o: Pick<ExportFormatOptions, "includeSvg" | "includeJpeg" | "includeEps">): string {
-  const names = [o.includeSvg ? "SVG" : null, o.includeJpeg ? "JPEG" : null, o.includeEps ? "EPS" : null].filter((n) => n !== null);
-  return names.length === 0 ? "no formats" : names.join(" + ");
+/** What the JPEG row says it will write: the artboard's own px, or the MP rule at its ratio. */
+export function jpegNote(size: { width: number; height: number } | null, match = true): string {
+  if (size === null) return "rendered from the vectors at this resolution (default 15.1)";
+  return match
+    ? `the JPEG is the artboard itself: ${size.width}×${size.height} px — untick for a bigger file`
+    : "rendered from the vectors at this resolution, at the artboard's aspect ratio";
 }

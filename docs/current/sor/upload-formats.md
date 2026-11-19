@@ -62,8 +62,12 @@ unchanged.
   requested disk probes; `exportmetadata.ts` owns requested-carrier readback.
 - `src/upload/exportstages.ts` owns intermediate preparation, requested artifacts
   and EPS-only failure; `exportcommit.ts` owns enabled-only writes/record entries.
-- `src/upload/UploadFormatSettings.tsx` owns choices and warning;
-  `settingsfield.tsx` shares boolean control/marker/write plumbing.
+- `src/ui/exportsheet.tsx` owns the format rows and the no-output warning BOTH
+  dialogs render (the builder passes `scope="bld-set"` and its own store; the
+  upload dialog passes `upload-set` plus its marker/write path from
+  `settingsfield.tsx`, which owns the inherited/overridden marker and the ONE
+  live write path); `src/ui/epshelper.tsx` owns the Inkscape helper row both
+  flows show.
   `metaselect.ts` filters paid export metadata by each row's effective formats;
   `exportactions.ts`/`uploadlog.ts` count genuine failures in the final summary.
 - `tests/upload_output_formats.test.ts`: all seven real pipeline sets, actual

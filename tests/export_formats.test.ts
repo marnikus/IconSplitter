@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_FORMAT_OPTIONS, normalizeFormatOptions, rescaleSize, formatOptionsEqual,
+  exportArtboardSize, jpegNote,
   type ExportFormatOptions,
 } from "../src/lib/exportformats";
 import {
@@ -67,5 +68,21 @@ describe("the shared format options", () => {
     expect(wide.width * wide.height).toBeLessThanOrEqual(15.1 * 1_000_000);
     expect(Math.abs(wide.width / wide.height - 5500 / 3000)).toBeLessThan(0.01);
     expect(rescaleSize(1000, 1000, 20).factor).toBeCloseTo(4.4721, 3);
+  });
+});
+
+describe("the artboard the export really has", () => {
+  it("is the artboard's own px, or its rescaled px while the rescale box is on", () => {
+    const box = { width: 1000, height: 1000 };
+    expect(exportArtboardSize(box, { rescaleArtboard: false, rescaleMegapixels: 20 })).toEqual({ width: 1000, height: 1000 });
+    expect(exportArtboardSize(box, { rescaleArtboard: true, rescaleMegapixels: 20 })).toEqual({ width: 4472, height: 4472 });
+    const wide = exportArtboardSize({ width: 5500, height: 3000 }, { rescaleArtboard: false, rescaleMegapixels: 20 });
+    expect(wide).toEqual({ width: 5500, height: 3000 });
+  });
+
+  it("names the JPEG's real size in its own note, and the MP rule when it does not match", () => {
+    expect(jpegNote({ width: 5500, height: 3000 }, true)).toBe("the JPEG is the artboard itself: 5500×3000 px — untick for a bigger file");
+    expect(jpegNote({ width: 5500, height: 3000 }, false)).toBe("rendered from the vectors at this resolution, at the artboard's aspect ratio");
+    expect(jpegNote(null, true)).toBe("rendered from the vectors at this resolution (default 15.1)");
   });
 });

@@ -1,12 +1,16 @@
 // UploadSettingsDialog.tsx — the export settings dialog (design §4.1): global
 // defaults (from the toolbar) or one icon's overrides (from its row), with the
 // inherited/overridden marker per field, and Reset-to-defaults for the icon
-// scope. Field changes are live (RULE 24): the global scope edits the defaults,
+// scope. The popup shell itself is ONE component (`ui/exportmodal.tsx`) the
+// sheet builder's Export settings renders too (2026-11-19). Field changes are live (RULE 24): the global scope edits the defaults,
 // the icon scope pins the field into that icon's override — both validated by
 // lib/upload/settings. The shared row plumbing lives in settingsfield.tsx, the
 // two paint rows (background, stroke colour) in UploadPaintSettings.tsx, the
-// EPS converter list + Inkscape helper row in UploadEpsSettings.tsx, the
-// artboard block + "Scale to N MP" row in UploadArtboardSettings.tsx.
+// artboard block + "Scale to N MP" row in UploadArtboardSettings.tsx. The
+// format rows are NOT written here any more: they are the ONE shared sheet
+// (ui/exportsheet.tsx), which this dialog wraps with its inherited/overridden
+// marker and its live write path while the sheet builder renders the same sheet
+// straight over its own store (2026-11-17).
 // 2026-10-19 (archive/2026-10-19-upload-default-settings): every visual row has
 // a "default" (leave the source's own), "All default" sets them at once (the
 // export is then the approved SVG, as is), and the global stroke WIDTH is the
@@ -14,13 +18,14 @@
 
 import UploadSettingsPresets from "./UploadSettingsPresets";
 import UploadPaddingSetting from "./UploadPaddingSetting";
-import { clampStrokePx, STROKE_MAX, STROKE_MIN, type UploadSettings } from "../lib/upload/settings";
+import { artboardSize, clampStrokePx, STROKE_MAX, STROKE_MIN, type UploadSettings } from "../lib/upload/settings";
 import { AS_IS_SETTINGS, isAsIs } from "../lib/upload/asis";
 import { paintClash } from "../lib/upload/paintclash";
 import DraftNumberInput from "../ui/DraftNumberInput";
 import { Marker, change, changeMany, type UploadSettingsDialogProps } from "./settingsfield";
+import ExportModal from "../ui/exportmodal";
+import { ExportFormatSheet } from "../ui/exportsheet";
 import { BackgroundSetting, StrokeColorSetting } from "./UploadPaintSettings";
-import UploadFormatSettings, { UploadJpegSettings, UploadTransformSettings } from "./UploadFormatSettings";
 import { ArtboardSetting } from "./UploadArtboardSettings";
 import UploadShadowSettings from "./UploadShadowSettings";
 import UploadBadgeSettings from "./UploadBadgeSettings";
@@ -33,16 +38,11 @@ export default function UploadSettingsDialog(p: UploadSettingsDialogProps) {
   // defaults ← the decorations a global control applied ← this icon's own pins
   const effective = { ...p.defaults, ...p.applied, ...p.overrides };
   return (
-    <div className="svg-backdrop" data-testid="upload-dialog-backdrop" onClick={p.onClose}>
-      <section className="svg-modal" role="dialog" aria-modal="true" aria-labelledby="upload-dialog-title"
-        onClick={(e) => e.stopPropagation()}>
-        <header className="svg-modal-head">
-          <h2 id="upload-dialog-title">Export settings{p.id === null ? " — global defaults" : ` — ${p.scope}`}</h2>
-          <button type="button" className="svg-btn tiny" data-testid="upload-set-close" onClick={p.onClose}>Close</button>
-        </header>
-        <DialogBody p={p} effective={effective} />
-      </section>
-    </div>
+    <ExportModal title={`Export settings${p.id === null ? " — global defaults" : ` — ${p.scope}`}`}
+      titleId="upload-dialog-title" testid="upload-dialog-card" backdropTestid="upload-dialog-backdrop"
+      closeTestid="upload-set-close" onClose={p.onClose}>
+      <DialogBody p={p} effective={effective} />
+    </ExportModal>
   );
 }
 
@@ -82,7 +82,7 @@ function ApplyLocalSettings({ p }: { p: UploadSettingsDialogProps }) {
   );
 }
 
-/** The settings, one field component each; the paint rows come from UploadPaintSettings. */
+/** The settings grid: the shared format sheet, then the paint rows. */
 function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effective: UploadSettings }) {
   return (
     <div className="up-set-grid">
@@ -90,9 +90,10 @@ function SettingsGrid({ p, effective }: { p: UploadSettingsDialogProps; effectiv
       <UploadShadowSettings p={p} effective={effective} />
       <UploadBadgeSettings p={p} effective={effective} />
       <UploadSizeGuideSettings p={p} effective={effective} />
-      <UploadFormatSettings p={p} effective={effective} />
-      <UploadJpegSettings p={p} effective={effective} />
-      <UploadTransformSettings p={p} effective={effective} />
+      <ExportFormatSheet scope="upload-set" value={effective} artboard={artboardSize(effective.artboard)}
+        patch={(patch) => changeMany(p, patch)}
+        marker={(field, testid) => <Marker p={p} field={field} testid={testid} />}
+        optimizeHint={isAsIs(effective) ? "skipped while every visual setting is default — the SVG ships as is" : undefined} />
       <BackgroundSetting p={p} effective={effective} />
     </div>
   );

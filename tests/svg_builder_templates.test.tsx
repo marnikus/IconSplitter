@@ -467,13 +467,12 @@ describe("hero style", () => {
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3z"/></svg>';
     const doc = composeSheet({ config, layout: computeLayout(config), assets: [asset], placedIds: ["a"], svgTexts: { a: svg } });
     const hero = /data-banner-hero="true">[\s\S]*?<\/g><\/g>/.exec(doc.svg)?.[0] ?? doc.svg;
-    // The hero glyph's pen is the user's 2.5 px DIVIDED by the cell's own fit
-    // (2026-11-19): the group's scale multiplies it back, so the sheet paints the
-    // 2.5 px the editor shows — and the SVG/EPS carry that same final pen.
-    const fit = Number(/scale\(([\d.]+)\)/.exec(hero)?.[1] ?? NaN);
-    const written = Number(/stroke-width="([\d.]+)" stroke-linecap/.exec(hero)?.[1] ?? NaN);
-    expect(fit).toBeGreaterThan(1);
-    expect(written * fit).toBeCloseTo(2.5, 2);
+    // The pen is authored in artboard px and written in the cell's own scale
+    // (2026-11-19): local × scale is the 2.5 px the panel set, in every format.
+    const cell = /<g data-asset-id[^>]*>/.exec(hero)?.[0] ?? "";
+    const local = Number(/stroke-width="([\d.]+)"/.exec(cell)?.[1]);
+    const scale = Number(/scale\(([\d.]+)\)/.exec(cell)?.[1]);
+    expect(local * scale).toBeCloseTo(2.5, 3);
   });
 
   it("gaps go up to 200 px (2026-11-14; was 60)", () => {

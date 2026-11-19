@@ -9,6 +9,8 @@ import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/
 import { setTextOutliner } from "../src/lib/upload/expandtext";
 import { loadBuilderFormats, saveBuilderFormats } from "../src/svgBuilder/formatstore";
 import { DEFAULT_FORMAT_OPTIONS, type ExportFormatOptions } from "../src/lib/exportformats";
+import { sheetSettings } from "../src/svgBuilder/actions/sheetexport";
+import { builtinConverter } from "../src/lib/upload/epsconv/builtin";
 
 const SHEET = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><!-- note --><rect x="1" y="1" width="9" height="9" fill="none" stroke="#000000" stroke-width="2"/><text x="10" y="50" fill="#123456" font-size="12">Hi</text></svg>';
 
@@ -81,6 +83,16 @@ describe("the builder package follows the format options", () => {
     expect(seenBox.jpeg).toMatchObject({ width: 200, height: 100 });
   });
 
+  it("names the built-in EPS writer's real limit: live text is outside its subset, and the rest still ships", async () => {
+    const out = await buildSheetPackage(args({ includeEps: true, expandText: false }),
+      { ...deps({}), eps: (input: { svg: string; background: string; title: string }) =>
+        builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") }) });
+    expect(out.files.some((f) => f.name.endsWith(".eps"))).toBe(false);
+    expect(out.problems.join(" ")).toMatch(/EPS: <text> is outside the EPS subset/);
+    expect(out.record.status).toBe("partial");
+    expect(out.files.some((f) => f.name.endsWith(".svg"))).toBe(true); // the rest is untouched
+  });
+
   it("ships nothing but a named problem when an expansion is refused", async () => {
     setTextOutliner(() => null);
     const out = await buildSheetPackage(args({ expandText: true }), deps({}));
@@ -92,6 +104,12 @@ describe("the builder package follows the format options", () => {
 });
 
 describe("the builder's own persisted format store", () => {
+  it("is what Export all selected reads — the upload tab's visual defaults under the builder's formats", () => {
+    saveBuilderFormats({ ...DEFAULT_FORMAT_OPTIONS, includeEps: true, epsConverter: "inkscape", expandText: true });
+    expect(sheetSettings()).toMatchObject({ includeEps: true, epsConverter: "inkscape", expandText: true });
+    expect(sheetSettings().includeSvg).toBe(true); // untouched format fields come from the builder's defaults
+  });
+
   it("round-trips the options and falls back to the defaults on garbage", () => {
     const next: ExportFormatOptions = { ...DEFAULT_FORMAT_OPTIONS, includeEps: true, jpegQuality: 0.7, expandText: true };
     saveBuilderFormats(next);

@@ -13,11 +13,9 @@ import { converterOf } from "../../lib/upload/epsconv/registry";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
 import { loadBridgeConfig } from "../../upload/configstore";
-import { formatSummary } from "../../lib/exportformats";
-import { hasOutputFormats, NO_OUTPUT_FORMATS } from "../../lib/upload/formats";
+import { loadUploadSettings } from "../../upload/settingsstore";
+import type { UploadSettings } from "../../lib/upload/settings";
 import { loadBuilderFormats } from "../formatstore";
-import { builderExportSettings } from "../formatwiring";
-import { needsTextFonts } from "../../lib/svgBuilder/epsoutline";
 import { warmTextFonts } from "../../lib/upload/textoutline";
 import { buildSheetPackage } from "../sheetpackage";
 import { writeArtboardSeed, writeSheetExport, writeSheetMetadata, type SheetMetaFile } from "../sheetwriter";
@@ -53,6 +51,16 @@ function remember(ctx: BuilderActionContext, id: string, patch: Partial<FinalArt
   saveArtboards(artboards);
 }
 
+/**
+ * The settings the builder's package reads (2026-11-19): the SVG to upload tab's
+ * visual defaults (stroke, background, artboard…) under the builder's OWN
+ * format store, so the Export settings dialog shapes the package at once. One
+ * owner, so the test of that wiring cannot drift from the export.
+ */
+export function sheetSettings(): UploadSettings {
+  return { ...loadUploadSettings().defaults, ...loadBuilderFormats() };
+}
+
 const epsOf = (converter: Parameters<typeof converterOf>[0]) => (input: Parameters<ReturnType<typeof converterOf>["convert"]>[0]) =>
   converterOf(converter).convert(input, { bridgeUrl: loadBridgeConfig().url, fetch: (url, init) => globalThis.fetch(url, init) });
 
@@ -66,13 +74,8 @@ async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboar
   if (folder === null) return [`${artboard.name}: its template is gone`];
   const config = artboardConfig(template, artboard);
   const doc = composeSheet({ config, layout: computeLayout(config), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts: texts, metadata: artboard.metadata });
-  // The sheet's OWN formats over the neutral defaults (2026-11-19): the upload
-  // tab's background/padding/artboard/decorations never shape a sheet's files.
-  const formats = loadBuilderFormats();
-  const settings = builderExportSettings(formats);
-  // The outliner is sync over a cache: warm it whenever this package will outline
-  // — Expand text to fills, or the built-in EPS stage's text pass (2026-11-19).
-  if (needsTextFonts(settings)) await warmTextFonts(doc.svg);
+  const settings = sheetSettings();
+  if (settings.expandText) await warmTextFonts(doc.svg); // the outliner is sync; fonts load here
   const pkg = await buildSheetPackage({ svg: doc.svg, metadata: artboard.metadata, settings, folder, stem: sheetStem(folder), pairId: artboard.id,
     now: now.toISOString(), prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(settings.epsConverter) });
   await writeSheetExport(root, folder, pkg.files);
@@ -98,10 +101,7 @@ async function exportSelected(get: () => BuilderActionContext): Promise<void> {
   if (sheetsRoot(ctx) === null) return;
   const targets = targetsOf(ctx);
   if (targets.length === 0) return ctx.say("Check the artboards to export first", true);
-  const formats = loadBuilderFormats();
-  // Nothing ticked is not an empty success: say what to pick before any file work.
-  if (!hasOutputFormats(formats)) return ctx.say(`${NO_OUTPUT_FORMATS} — open Export ▾ · Export settings…`, true);
-  ctx.setBusy(`Exporting ${targets.length} artboard(s) as ${formatSummary(formats)} into _artboard_sheets…`);
+  ctx.setBusy(`Exporting ${targets.length} artboard(s) into _artboard_sheets…`);
   const problems: string[] = [];
   try {
     const texts = await svgTextsFor(ctx, targets);
@@ -113,9 +113,7 @@ async function exportSelected(get: () => BuilderActionContext): Promise<void> {
   } finally {
     get().setBusy(null);
   }
-  get().say(problems.length === 0
-    ? `${targets.length} artboard(s) exported as ${formatSummary(formats)} into _artboard_sheets`
-    : `Exported with problems — ${problems.join("; ")}`, problems.length > 0);
+  get().say(problems.length === 0 ? `${targets.length} artboard(s) exported into _artboard_sheets` : `Exported with problems — ${problems.join("; ")}`, problems.length > 0);
 }
 
 /** The store catches up with a just-added artboard (a few ticks at most). */

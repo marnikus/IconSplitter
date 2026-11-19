@@ -1,6 +1,7 @@
 // SvgBuilderHeader.tsx — the reference header row: "COLLECTION / 01 · LIVE" +
 // sheet title, then Undo / Redo (global timeline), SEED #### (re-roll),
-// Prompt brief, Sheet metadata (AI, ours) and the Export dropdown.
+// Prompt brief, Sheet metadata (AI, ours), a separate Export settings button
+// (the upload flow's own popup, 2026-11-19) and the Export dropdown.
 import { useOptionalHistoryView } from "../state/HistoryProvider";
 import { sheetCopy } from "../lib/svgBuilder/compose";
 import { formatSummary } from "../lib/exportformats";
@@ -26,6 +27,9 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <button type="button" className="svg-btn" data-testid="builder-brief" onClick={b.actions.openBrief}>▤ Prompt brief</button>
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
         title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>
+      <button type="button" className="svg-btn" data-testid="builder-export-settings"
+        title="What the next export writes: SVG / JPEG / EPS, quality, expansion, rescale — the same popup the SVG to upload tab opens"
+        onClick={b.actions.openExportFormats}>⚙ Export settings</button>
       <SvgBuilderExportMenu b={b} />
       <FormatSettingsButton b={b} />
       <GenerateSelected b={b} />
