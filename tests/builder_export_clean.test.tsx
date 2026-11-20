@@ -81,7 +81,7 @@ async function openPopup(): Promise<void> {
   await click("tab-svg-builder");
   await click("builder-open-folder");
   await waitUntil(() => q("builder-artboard") !== null, "sheet composed");
-  await click("builder-format-open");
+  await click("builder-export-settings");
 }
 
 describe("the clean-up checkbox in the builder's export settings", () => {

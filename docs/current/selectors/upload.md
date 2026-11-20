@@ -13,6 +13,11 @@ Source: `UploadControls.tsx`, `UploadBulkBar.tsx`, `UploadList.tsx`,
 grammar with the expandable metadata detail, the package-status badge colours
 and the settings dialog's inherited/overridden markers.
 
+Export settings popup (2026-11-19): `upload-dialog-backdrop` → `upload-dialog-card`
+(`section.svg-modal`, the shared `ui/exportmodal.tsx` shell the sheet builder's
+Export settings renders too) → `.svg-modal-head h2#upload-dialog-title` +
+`upload-set-close`; `.svg-modal-body` holds every row.
+
 Source bar (always rendered — `upload-open-folder` is the one way in;
 `upload-root-empty` / `upload-unsupported` are the two empty states):
 
@@ -70,3 +75,10 @@ Automatic non-uniform-stroke repair adds no UI control or confirmation. The real
 row preview (`upload-prev-{id}`) shows the prepared vectors and does not render
 `upload-prev-{id}-note` as unavailable for a successfully repaired stroke.
 [Detection, source-width/final-width policy and regression owners](../sor/upload-auto-repair.md#non-uniform-stroke-transforms).
+
+The format rows in the settings dialog (SVG/JPEG/EPS flags, `upload-set-eps-converter`,
+JPEG `upload-set-{mp,mp-match,mp-note}`, `upload-set-quality`, optimize/expand/rescale,
+`upload-set-formats-warning`) are the ONE shared sheet `src/ui/exportsheet.tsx`; the
+sheet builder's dialog renders the same component under `bld-set-*` (2026-11-19).
+The MP note names the real px — `the JPEG is the artboard itself: 1024×576 px …`,
+or the rescaled px while the rescale box is on.

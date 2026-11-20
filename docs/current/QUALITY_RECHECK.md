@@ -5639,39 +5639,27 @@ folder)>~<style>` on read) — a fixture parsed from the style image name gets a
 different id and silently declines the wrong file. Evidence: the styles and
 remove clusters 47 passed; docs inside caps (`sor/svg-styles.md` ~5.7 kB).
 
-## 2026-11-19 — builder export: own toolbar button, exact stroke, exact spacing
+## 2026-11-19 — builder export fidelity (stroke px, tracking, shared popup)
 
-Reported by the user, reproduced as red tests first, then fixed.
+Measured on the branch sandbox (`npm ci` node_modules, Chromium-less happy-dom lanes):
 
-- **⚙ Export settings is its own toolbar button** (`builder-format-open`) beside
-  Export ▾; it and the menu item call the same `openExportFormats`, and both name
-  `formatSummary`. The popup itself is the real `.bld-backdrop` modal from the
-  earlier commit. Tests: `builder_export_settings_ui.test.tsx` (13),
-  `builder_export_dialog.test.tsx` (4, the real panel).
-- **Stroke width is the user's px, everywhere.** `svgAsset.ts` wrote the width
-  verbatim on a group that is fitted with `scale()`, so a "1 px" icon painted
-  3.24 px on the sheet and that local number went into the SVG and the EPS; a
-  dead `vector-effect="non-scaling-stroke"` on inner shapes claimed otherwise.
-  The width is now `userPx / fit.scale` (no `vector-effect`), so the printed pen
-  is the setting for every width and every box. Measured end-to-end in
-  `builder_export_stroke.test.tsx` (5): the composed group, the EPS
-  `setlinewidth` (0.482 → 0.75 pt printed for a 1 px stroke, was 2.075) and the
-  tile preview.
-- **Letter spacing survives the files.** The sheet wrote `0.025em`;
-  `expandtext.ts` read a bare number (`NaN → 0`), so every EPS lost the spacing
-  the artboard showed. `markup.ts` now writes px at the run's own size (title,
-  subtitle, captions) and `letterSpacingPx` resolves `em`/`px`/bare lengths for
-  foreign documents. `builder_export_spacing.test.ts` (5).
-  Three older tests pinned the em string itself (`svg_builder_tracking`,
-  `svg_builder_quickedit`, `svg_builder_templates` hero stroke) and now assert
-  the em *value* and the px/scale product — the same intent, at the file's own
-  numbers.
-
-Gates: `tsc --noEmit` clean · eslint 0 errors · `tools/quality.mjs --changed`
-GATE PASSED · `npm run build` OK · full suite 488 files / 4881 tests green.
-- **A hero glyph no longer blocks the EPS stage** (`builder_export_hero_eps.test.ts`,
-  1): the hero's pen reached `writeEps` as `currentColor` and was refused; the
-  package's `solidPaint` pass resolves it, and the pen survives as the setting.
+| Lane | Result | Measurement |
+|---|---|---|
+| `npx vitest run` (full) | 486 files, 4868 tests — 1 failed | the failure is `tests/algo_efficiency.test.ts` "synthetic 1000px 4-icon grid detects <200ms" at 200.1–209 ms; the same 3/3 failures reproduce on the base commit in this sandbox (215.9 / 200.5 / 205.7 ms), so it is this machine's speed, not the change |
+| new `tests/export_stroke_width.test.ts` | 6 passed | painted width = set px for 1 / 1.4 / 2.5, no `non-scaling-stroke`, EPS pen widths equal the SVG's, expansion adds exactly pen/2 |
+| new `tests/export_text_spacing.test.ts` | 6 passed | `0.07em`→7 px, `0.025em`→0.8 px, style form, negative and px forms; package runs carry the sheet's em value; plain SVG unchanged |
+| `tests/svg_builder_workspace.test.tsx` | 16 passed | new toolbar `builder-export-settings` (outside the dropdown) opens the shared popup |
+| `tests/builder_export_settings_ui.test.tsx` | 10 passed | popup shell = `.svg-backdrop` > `.svg-modal` > head (`aria-labelledby`) + body, body clicks ignored |
+| `tests/svg_builder*.test.ts*` + `tests/export_*.test.ts*` | 36 files, 284 tests passed | 27.2 s |
+| `tests/upload_*.test.ts*`, `svgpreview*`, `eps*`, `rescale*` | 109 files, 1412 tests passed | 42.3 s |
+| `tests/upload_*.test.tsx`, `export_sheet_ui` | 22 files, 232 tests passed | 24.6 s |
+| `npm run test:builder:fast` | 14 passed, 0 failed | 373.8 ms |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 warnings, all pre-existing (`versionremove.ts`, `runmetadata.ts`, …) |
+| `node tools/quality.mjs --changed` | GATE PASSED | 13 changed prod files, largest 184 lines / 29 fns (`sheetexport.ts`) |
+| `npm run build` | 3,614.78 kB `dist/index.html`, 15.6 s | — |
+| `npm run verify:fast` | ALL LANES PASSED | 221 s |
+| `tests/docs_navigation.test.ts` | 4 passed | every edited `docs/current/` page stays under the 9,000 B gate |
 
 ## 2026-11-19 — clean final SVG and EPS (builder export, round 3)
 
@@ -5706,5 +5694,24 @@ Tests: `export_clean_dom.test.ts` (8), `export_clean_eps.test.ts` (5),
 `builder_export_clean.test.tsx` (4, incl. the `bld-set-clean` gesture).
 `builder_sheetpackage_formats.test.ts` still pins the FORMAT CHAIN only.
 
-Gates: `tsc --noEmit` clean · `tools/quality.mjs --changed` GATE PASSED ·
-`npm run build` OK · full suite 492 files / 4899 tests green.
+Gates after the merge with the export-settings popup work (2026-11-19):
+`tsc --noEmit` clean · `npm run lint` 0 errors (27 pre-existing warnings) ·
+`tools/quality.mjs --changed` GATE PASSED · `npm run build` OK ·
+full suite **495 files / 4919 tests green**.
+
+The merge itself needed three repairs (type-broken tree on arrival):
+`expandTextToFills(svg, {outliner})` (the EPS stage's pinned outliner),
+`rescaledArtboard`/`jpegBoxFor`/`formatSummary`/`ArtboardBox` (one JPEG-box
+calculator both the row hint and the stage read), and the helper row's import
+(`ui/epshelper.tsx`, not the removed `upload/UploadEpsSettings`). Tests updated
+where they pinned the superseded shape: spacing is asserted in px (the sheet no
+longer writes `em`), the JPEG hint is read from `bld-set-mp-note`, the popup from
+the one `builder-export-settings` button, and a refused outline names the real
+reason. Docs trimmed back under the 9 000 B page gate.
+
+Stroke fidelity: the composed cell now writes `stroke-width = set px ÷ the cell
+transform's scale` and carries no `vector-effect`, so the SVG, the EPS, the JPEG
+raster and stroke expansion all paint the px the artboard set. Tracking: em
+lengths are parsed by `lib/upload/geom/length.ts` before the outliner sees them.
+Popup: `ui/exportmodal.tsx` is the one shell for the upload dialog and the
+builder's own `⚙ Export settings` toolbar button.

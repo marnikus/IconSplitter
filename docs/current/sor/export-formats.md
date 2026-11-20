@@ -23,33 +23,18 @@ own export settings dialog can never drift apart.
 | `rescaleArtboard` | off | NEW: rescale the FULL artboard, keeping its ratio, until its area is `rescaleMegapixels` (1000×1000 @ 20 MP → 4472×4472) |
 | `rescaleMegapixels` | 20 | the target area of that rescale (1…64); dormant while the box is off |
 | `rescaleStrokes` | on | while rescaling: scale stroke widths proportionally; untick and every stroke keeps its printed px (widths ÷ factor) |
-| `cleanExport` | off here, **on in the builder** | clean the delivered SVG and EPS before they are saved: strip the generator's fingerprints and keep ONLY title, description and tags as metadata (see below) |
+| `cleanExport` | off here, **on in the builder** | clean the delivered SVG and EPS before saving: strip the generator's fingerprints, keep ONLY title, description and tags as metadata (see below) |
+
+## 2026-11-19 — what was actually broken
+
+The builder's `Export settings…` shipped four defects, all fixed and pinned: an
+inline `.bld-modal` with no backdrop (invisible), duplicated JPEG rows, a JPEG
+hint that never named the real px, and an EPS that looked unavailable with live
+text on the built-in writer (the dialog now warns and names both fixes).
 
 Stored payloads validate per field (one bad field costs one default); the
 upload flow additionally overrides them per icon, and every output-affecting
 field enters `settingsFingerprint` (`expandText`, `rescale*` included).
-
-## One row implementation (2026-11-19)
-
-The rows are not written twice. `ui/exportrows.tsx` owns three row GROUPS —
-`FormatDeliveryRows` (SVG / JPEG / EPS + the converter), `FormatJpegRows` (MP,
-the artboard-match box, quality) and `FormatTransformRows` (SVGO, stroke
-expansion, text expansion, the rescale and its two rows) — plus
-`FormatOffWarning`. Each takes a `FormatRowWiring`: the testid prefix
-(`upload-set` / `bld-set`), the options and the flow's ONE write path, with an
-optional marker slot (the upload scope's inherited/overridden chip). The upload
-dialog groups them through `upload/UploadFormatSettings.tsx`
-(`UploadFormatSettings` / `UploadJpegSettings` / `UploadTransformSettings`, wired
-to `changeMany` + `Marker`); the builder dialog renders the same groups straight
-over its own store (`svgBuilder/formatstore.ts` `useBuilderFormats`).
-
-Both dialogs therefore read the identical wording and hints, and both refuse the
-all-off state BEFORE any file work: `FormatOffWarning` in the popup
-(`upload-set-formats-warning` / `bld-set-formats-warning`) and
-`hasOutputFormats` in the runner. `formatSummary` names what a run will ship
-("SVG + JPEG + EPS", else "no formats") for the menu and the toasts, and
-`jpegBoxFor` / `rescaledArtboard` produce the exact px the JPEG hint prints, so
-the number a user reads is the number the file gets.
 
 ## Where each flow consumes them
 
@@ -58,19 +43,58 @@ the number a user reads is the number the file gets.
   EPS/JPEG stages read the same fields as before.
 - **Builder**: its own persisted store (`svgBuilder/formatstore.ts`, one storage
   key, validated on read) feeds the **Export settings…** item of the builder's
-  Export menu, which opens a real modal (`.bld-backdrop`, `role="dialog"`,
-  Escape / backdrop press close it) — the same rows and hints as the upload
-  dialog. The stock package (`sheetpackage.ts`) honours every field: flags gate
-  the files, `optimizeSvg` records a real SVGO block in export.json,
-  `expandStrokes` / `expandText` / rescale transform the composed sheet BEFORE it
-  is packaged, and `jpegMatchArtboard` decides the JPEG px (artboard px after any
-  rescale, else MP). A sheet's settings are the builder's OWN over the neutral
-  defaults (`svgBuilder/formatwiring.ts` `builderExportSettings`): the upload
-  tab's background, padding, artboard, shadow and badge never shape a sheet's
-  files or its recorded settings. `tools.text` and `tools.rescale` record what
-  the two new stages really did.
-- The Export menu's quick downloads (Editable SVG, PNG 2×, clipboard) stay
-  untouched previews; the PACKAGE is what the options shape.
+  Export menu. The dialog is a real MODAL (`.bld-backdrop`, `aria-modal`,
+  Escape / backdrop / Close) and renders the SAME sheet component the upload
+  dialog renders — `ui/exportsheet.tsx` `ExportFormatSheet` — under its own
+  test-id scope (`bld-set-*`; the upload dialog passes `upload-set`), with its
+  own store write path and no marker. The stock package (`sheetpackage.ts`)
+  honours every field: flags gate the files, `optimizeSvg` records a real SVGO
+  block in export.json, `expandStrokes` / `expandText` / rescale transform the
+  composed sheet BEFORE it is packaged, and `jpegMatchArtboard` decides the
+  JPEG px (artboard px, else MP).
+- The Export menu's preview items (Editable SVG, PNG 2×, clipboard) stay
+  untouched previews; the **Export package** item runs `exportSelectedArtboards`
+  and names the formats that package will really carry (`SVG · JPEG · EPS
+  (Inkscape CLI (local helper))`, `SVG off` for a switch that is off), so a
+  format is never invisible nor implied when it is off.
+
+## Ownership (one row, one owner)
+
+| Piece | Owner |
+| --- | --- |
+| the options, their defaults/validation, `exportArtboardSize`, `jpegNote` | `src/lib/exportformats.ts` |
+| the rows both dialogs render (flags, EPS writer + helper, JPEG px/match/quality, clean, SVGO, expansions, rescale) | `src/ui/exportsheet.tsx` (builder groups: `src/ui/exportrows.tsx`) |
+| the pure row markup (checkbox/number/select) | `src/ui/exportrows.tsx` |
+| the Inkscape helper row (URL, Check, live state + fix) | `src/ui/epshelper.tsx` |
+| the upload dialog's marker + live defaults/override write path | `src/upload/settingsfield.tsx` (`UploadSettingsDialog` wraps the sheet) |
+| the builder's own persisted options | `src/svgBuilder/formatstore.ts` |
+| the builder dialog (modal + EPS live-text note) and the menu plan | `src/svgBuilder/SvgBuilderFormatDialog.tsx`, `SvgBuilderExportMenu.tsx` |
+
+## EPS availability (what a builder export really writes)
+
+The built-in writer is a PostScript subset: **live `<text>` is outside it**
+(`<text> is outside the EPS subset`). A composed sheet always carries its banner
+title/subtitle as text, so `Also write EPS` with the built-in converter and
+`Expand text to fills` unticked fails THAT stage honestly (the rest of the
+package still ships, `partial`). The builder dialog says this BEFORE the export
+(`builder-format-eps-note`) and names both fixes: tick **Expand text to fills**
+(words ship as outlines) or choose the **Inkscape CLI** helper, whose row
+(`bld-eps-helper`) reports live whether that machine can write it. The upload
+flow keeps its per-row, per-icon honesty (a failing EPS is named on the row).
+
+## Stroke width and tracking (2026-11-19)
+
+Widths are authored in ARTBOARD px, but the cell `<g>` scales the icon's own
+viewBox into its cell, so the written `stroke-width` is that px ÷ the cell
+scale: the painted width is what the panel set — 1 px stays 1 px in the SVG and
+the EPS. The old `vector-effect="non-scaling-stroke"` stood in for this and only
+the browser honoured it (the EPS painted width × scale, and expanded outlines
+baked the heavier pen); nothing in the sheet relies on it now.
+
+Tracking is an em length (`0.025em` for `7/100 em`) and is read through
+`lib/upload/geom/length.ts` (em/rem/ex/ch/%, signed, px and unitless) — plain
+`Number("0.025em")` is NaN, which silently became 0, so expanded text (and every
+EPS, which needs it) lost the spacing. The outliner gets the run's px spacing.
 
 ## Rescale rule
 
@@ -98,46 +122,14 @@ Every stage that cannot write its file reports a named problem with its fix
 and the rest of the package still ships (`partial` in export.json); a format
 switched off writes nothing and leaves the previous package's file untouched.
 
-## The sheet's own pen and spacing (2026-11-19)
-
-Two numbers the editor shows used to disagree with the files:
-
-* **Stroke width.** The cell group's `scale()` multiplied a verbatim
-  `stroke-width`, so "1 px" painted 3.2 px and that number reached the files;
-  `svgAsset.ts` writes `userPx / fit.scale`.
-* **Letter spacing.** `0.025em` → `NaN` → 0 per glyph in `expandtext.ts`; the
-  sheet now writes px at the run's size.
-
-## A sheet's EPS carries text (2026-11-19)
-
-Every composed sheet has live `<text>` (banner title, subtitle, captions) and the
-built-in Level-3 writer's documented subset ends at shapes, so before this the
-EPS stage answered `<text> is outside the EPS subset` and a builder package went
-`partial` with no `.eps` — at every setting, EPS converter included.
-
-`lib/svgBuilder/epsoutline.ts` `outlineForEps` decides the EPS stage's document:
-for the **built-in** converter it runs the SHARED `expandTextToFills` (the upload
-tab's own code, never a second outliner) on the copy handed to the writer only,
-and reports `EPS_TEXT_FIX` as an EPS auto-fix → `tools.eps.fixes` (informed,
-never asked, RULE 22/24). The shipped SVG and JPEG keep their live text unless
-**Expand text to fills** is on. **Inkscape** receives the untouched sheet: its CLI
-already outlines text (`--export-text-to-path`). What cannot be outlined (no
-outliner on the machine, no font for a run) leaves the document untouched and
-fails just that stage with the reason AND `EPS_TEXT_HINT` — the two honest ways
-out: untick Also write EPS, tick Expand text to fills, or choose Inkscape.
-
-`needsTextFonts` says when a run must warm the font cache first (the outliner is
-sync): Expand text to fills, or an EPS through the built-in converter. Both
-runners ask before preparing. A builder package always writes its SVG/JPEG, so a
-refused EPS is `partial` with the rest delivered.
-
 ## Cleaning the delivered files (2026-11-19)
 
-**Clean up final SVG and EPS** (`cleanExport`, `bld-set-clean`): ON for the
-builder, OFF in the shared domain. `svgclean.ts` (3-decimal numbers,
-`cleandom.cleanExportDom` drops `data-*`/`aria-*`/`class`/`role`, extra
-`<metadata>`, repeated `xmlns`; only DC title/description/subject kept) and
-`epsclean.ts` (rebuild via `embedXmpMetadataInEps(…, {clean:true})`: one carrier,
-no `IconSplitter`/`%%Creator`, still a verifiable EPS 10). Validation compares
-`shippedMetadata(...)`. Plan:
-`docs/archive/2026-11-19-stock-clean-export/design.md`.
+**Clean up final SVG and EPS** (row `bld-set-clean`, ON as the builder's default,
+OFF in the shared domain so the upload tab's delivered bytes never move):
+`lib/upload/svgclean.ts` `cleanExportSvg` rounds numbers to 3 decimals, runs the
+existing `cleandom.cleanExportDom` (drops `data-*`/`aria-*`/`class`/`role`, extra
+`<metadata>`, repeated namespaces) and re-embeds ONLY DC title/description/
+subject; `lib/upload/epsclean.ts` `cleanExportEps` rebuilds the file through
+`embedXmpMetadataInEps(…, {clean:true})` — one carrier, no `%%Creator`/
+`x:xmptk`/Photoshop block, still a verifiable EPS 10. Validation compares
+`shippedMetadata(...)`.

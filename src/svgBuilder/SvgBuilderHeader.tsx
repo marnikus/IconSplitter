@@ -1,6 +1,7 @@
 // SvgBuilderHeader.tsx — the reference header row: "COLLECTION / 01 · LIVE" +
 // sheet title, then Undo / Redo (global timeline), SEED #### (re-roll),
-// Prompt brief, Sheet metadata (AI, ours) and the Export dropdown.
+// Prompt brief, Sheet metadata (AI, ours), a separate Export settings button
+// (the upload flow's own popup, 2026-11-19) and the Export dropdown.
 import { useOptionalHistoryView } from "../state/HistoryProvider";
 import { sheetCopy } from "../lib/svgBuilder/compose";
 import { formatSummary } from "../lib/exportformats";
@@ -26,8 +27,8 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <button type="button" className="svg-btn" data-testid="builder-brief" onClick={b.actions.openBrief}>▤ Prompt brief</button>
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
         title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>
-      <SvgBuilderExportMenu b={b} />
       <FormatSettingsButton b={b} />
+      <SvgBuilderExportMenu b={b} />
       <GenerateSelected b={b} />
       <ExportSelected b={b} />
     </div>
@@ -44,7 +45,7 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
  */
 export function FormatSettingsButton({ b }: { b: Pick<BuilderApi, "busy" | "actions"> }) {
   const { value: formats } = useBuilderFormats();
-  return <button type="button" className="svg-btn" data-testid="builder-format-open" disabled={b.busy !== null}
+  return <button type="button" className="svg-btn" data-testid="builder-export-settings" disabled={b.busy !== null}
     title={`Export settings — ${formatSummary(formats)}: SVG, JPEG, EPS, quality, expansion, rescale for the next package`}
     onClick={b.actions.openExportFormats}>⚙ Export settings</button>;
 }

@@ -3,7 +3,7 @@
 // "Export settings…" in the builder's Export ▾ menu showed nothing, because the
 // dialog was a `position: static` section appended at the bottom of the
 // builder's own grid. This mounts the REAL panel over a real scanned library and
-// asserts the popup lives inside `.bld-backdrop`, carries `aria-modal`, closes on
+// asserts the popup lives inside the builder's backdrop, carries `aria-modal`, closes on
 // Escape, and that one gesture lands in the builder's own store.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -88,7 +88,9 @@ describe("the builder's Export settings popup", () => {
     expect(dialog!.getAttribute("role")).toBe("dialog");
     expect(dialog!.getAttribute("aria-modal")).toBe("true");
     // the reported defect: a static section appended to the panel's grid
-    expect(dialog!.closest(".bld-backdrop")).not.toBeNull();
+    // the builder's own stacking backdrop (the shared shell paints `.svg-backdrop`)
+    expect(dialog!.closest(".svg-backdrop")).not.toBeNull();
+    expect(dialog!.closest(".bld-export-backdrop")).not.toBeNull();
     expect(q("builder-format-backdrop")).not.toBeNull();
   });
 
@@ -96,9 +98,9 @@ describe("the builder's Export settings popup", () => {
     await click("tab-svg-builder");
     await click("builder-open-folder");
     await waitUntil(() => q("builder-artboard") !== null, "sheet composed");
-    await click("builder-format-open");
+    await click("builder-export-settings");
     expect(q("builder-format-dialog")).not.toBeNull();
-    expect(q("builder-format-dialog")!.closest(".bld-backdrop")).not.toBeNull();
+    expect(q("builder-format-dialog")!.closest(".svg-backdrop")).not.toBeNull();
   });
 
   it("closes on Escape and on the Close button", async () => {
@@ -119,7 +121,8 @@ describe("the builder's Export settings popup", () => {
     expect(loadBuilderFormats().includeEps).toBe(true);
     expect(JSON.parse(localStorage.getItem(BUILDER_FORMATS_KEY) ?? "{}")).toMatchObject({ includeEps: true });
     await click("bld-set-rescale");
-    const hint = q("bld-set-mp-match")!.closest("label")!.querySelector("small")!.textContent ?? "";
+    // the shared sheet names the file's real px in its own note
+    const hint = q("bld-set-mp-note")!.textContent ?? "";
     expect(hint).toMatch(/\d+×\d+ px/);
   });
 });

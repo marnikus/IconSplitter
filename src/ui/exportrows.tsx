@@ -14,7 +14,7 @@ import {
 } from "../lib/exportformats";
 import { CONVERTERS, CONVERTER_IDS, parseConverterId } from "../lib/upload/epsconv/registry";
 import { hasOutputFormats, NO_OUTPUT_FORMATS } from "../lib/upload/formats";
-import { ConverterHelperRow } from "../upload/UploadEpsSettings";
+import EpsHelperRow from "./epshelper";
 import {
   clampMegapixels, clampQuality, clampRescaleMegapixels, MP_MAX, MP_MIN, QUALITY_MAX, QUALITY_MIN,
 } from "../lib/upload/settingsnumbers";
@@ -103,7 +103,7 @@ export function FormatDeliveryRows({ w }: { w: FormatRowWiring }) {
       options={CONVERTER_IDS.map((cid) => ({ value: cid, label: CONVERTERS[cid].label }))}
       onChange={(next) => w.onChange({ epsConverter: parseConverterId(next) })}
       hint={'who writes the EPS when "Also write EPS" is on — the built-in subset writer, or Inkscape on this machine'} />
-    {v.epsConverter === "inkscape" && <ConverterHelperRow />}
+    {v.epsConverter === "inkscape" && <EpsHelperRow scope={w.prefix.replace(/-set$/, "")} />}
   </>;
 }
 
@@ -147,9 +147,6 @@ export function FormatTransformRows({ w }: { w: FormatRowWiring }) {
   const v = w.value;
   const mark = w.marker;
   return <>
-    <ExportCheckRow testid={id(w, "clean")} label="Clean up final SVG and EPS" checked={v.cleanExport} marker={mark?.("cleanExport", "clean")}
-      onChange={(next) => w.onChange({ cleanExport: next })}
-      hint="strips the generator's fingerprints before saving (data-* attributes, repeated namespaces, float-math junk) and keeps only the title, description and tags as metadata" />
     <ExportCheckRow testid={id(w, "optimize")} label="Optimize SVG (SVGO)" checked={v.optimizeSvg} marker={mark?.("optimizeSvg", "optimize")}
       onChange={(next) => w.onChange({ optimizeSvg: next })}
       hint="the export copy only — viewBox, geometry, strokes and metadata are preserved" />
