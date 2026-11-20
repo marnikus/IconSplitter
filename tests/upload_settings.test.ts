@@ -33,10 +33,10 @@ import {
 const changed = (patch: Partial<UploadSettings>): UploadSettings => ({ ...DEFAULT_UPLOAD_SETTINGS, ...patch });
 
 describe("defaults and clamps", () => {
-  it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
+  it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, clean on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
       paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "#000000", strokeLinecap: "source",
-      jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeSvg: true, includeJpeg: true, includeEps: false,
+      jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, cleanExport: true, includeSvg: true, includeJpeg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
       epsConverter: "builtin", expandStrokes: false, // 2026-10-09

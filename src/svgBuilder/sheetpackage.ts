@@ -7,6 +7,7 @@
 // and the converter are injected for tests.
 import { embedMetadataInSvg } from "../lib/upload/embed";
 import { solidPaint } from "../lib/upload/solidpaint";
+import { cleanSheetSvg } from "../lib/svgBuilder/cleansheet";
 import { expandStrokes } from "../lib/upload/expand";
 import { expandTextToFills } from "../lib/upload/expandtext";
 import { rescaleSvg } from "../lib/upload/rescale";
@@ -75,7 +76,13 @@ export async function prepareSheetSvg(svg: string, settings: UploadSettings): Pr
     out = scaled.svg;
   }
   const optimized = await optimizeSvg(out, settings.optimizeSvg);
-  return { ok: true, svg: optimized.svg, svgo: optimized.record };
+  // Then the paperwork (2026-11-19): the saved SVG — and the EPS built from it —
+  // carry the picture and its Title/description/tags, never the generator's
+  // hooks, provenance block or float noise. Refused content is named, not guessed.
+  if (!settings.cleanExport) return { ok: true, svg: optimized.svg, svgo: optimized.record };
+  const cleaned = cleanSheetSvg(optimized.svg);
+  if (cleaned.refused !== null) return { ok: false, reason: `clean: ${cleaned.refused}` };
+  return { ok: true, svg: cleaned.svg, svgo: optimized.record };
 }
 
 function acceptedOf(m: SheetMetadata | null): IconMetadata | null {

@@ -1,0 +1,107 @@
+// export_clean.test.ts — "Clean the saved files" (2026-11-19). A shipped sheet
+// carried the generator's own paperwork: `data-*` hooks (asset ids, cell
+// indexes, a config hash, approve flags), a provenance `<metadata>` JSON block
+// and float noise like `stroke-width="1.9992750000000001"`. The switch runs the
+// app's own clean policy (lib/upload/clean) over the export copy, so the saved
+// SVG and the EPS built from it carry the picture and the Title/description/tags
+// — nothing else. Geometry, viewBox and the artboard's px survive.
+import { afterEach, describe, expect, it } from "vitest";
+import { cleanSheetSvg } from "../src/lib/svgBuilder/cleansheet";
+import { embedMetadataInSvg, readEmbeddedMetadata } from "../src/lib/upload/embed";
+import { setTextOutliner } from "../src/lib/upload/expandtext";
+import { DEFAULT_FORMAT_OPTIONS } from "../src/lib/exportformats";
+import { packageOf, sheetSvg, textOf } from "./helpers/sheetpackage";
+
+afterEach(() => setTextOutliner(null));
+
+const HOOKS = [
+  "data-config-fingerprint", "data-approved-only", "data-approved=", "data-asset-id",
+  "data-cell-index", "data-view-box", "data-banner", "data-export", "data-artboard",
+];
+const DRAWABLE = /<(path|circle|rect|line|polyline|polygon|ellipse)\b/g;
+const LONG_DECIMAL = /="[^"]*-?\d+\.\d{4,}/;
+
+const drawables = (svg: string) => (svg.match(DRAWABLE) ?? []).length;
+const viewBox = (svg: string) => /\bviewBox="([^"]+)"/.exec(svg)?.[1] ?? null;
+
+describe("cleanSheetSvg", () => {
+  it("drops the generator's hooks, its provenance block and the float noise", () => {
+    const composed = sheetSvg();
+    const { svg } = cleanSheetSvg(composed);
+    for (const hook of HOOKS) expect(svg, hook).not.toContain(hook);
+    expect(svg).not.toMatch(/<metadata>\s*\{/);
+    expect(svg).not.toMatch(LONG_DECIMAL);
+  });
+
+  it("declares the namespace once — the stitched copy's repeated xmlns goes", () => {
+    const composed = sheetSvg();
+    expect((composed.match(/xmlns=/g) ?? []).length).toBeGreaterThan(1); // every copied child carries it
+    const svg = cleanSheetSvg(composed).svg;
+    expect((svg.match(/xmlns=/g) ?? []).length).toBe(1);
+    expect(svg).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  });
+
+  it("keeps the picture, the artboard's px and its Title/description", () => {
+    const composed = sheetSvg({ titleTracking: 7 });
+    const { svg } = cleanSheetSvg(composed);
+    expect(viewBox(svg)).toBe(viewBox(composed));
+    expect(drawables(svg)).toBe(drawables(composed));
+    expect(svg).toMatch(/\bwidth="1080"/);
+    expect(svg).toMatch(/\bheight="660"/);
+    expect(svg).toMatch(/<title>[^<]+<\/title>/);
+    expect(svg).toMatch(/<desc>[^<]+<\/desc>/);
+    // the pen and the tracking are content, not paperwork
+    expect(svg).toMatch(/stroke-width="[\d.]+"/);
+    expect(svg).toMatch(/letter-spacing="0\.025em"/);
+  });
+
+  it("drops a metadata blob that is not the tag list, keeps the one that is", () => {
+    const withJunk = sheetSvg().replace("</svg>", '<metadata><x:xmpmeta xmlns:x="adobe:ns:meta/">farm</x:xmpmeta></metadata></svg>');
+    const { svg } = cleanSheetSvg(withJunk);
+    expect(svg).not.toContain("xmpmeta");
+    expect(svg).not.toMatch(/<metadata>\s*\{/);
+  });
+
+  it("keeps the Dublin Core block: Title, description and the tag list read back", () => {
+    const meta = { title: "Food icons", description: "Kitchen set", tags: ["food", "kitchen"], name: "food" };
+    const composed = embedMetadataInSvg(sheetSvg(), meta);
+    const { svg } = cleanSheetSvg(composed);
+    expect(readEmbeddedMetadata(svg)).toMatchObject({ title: "Food icons", description: "Kitchen set", tags: ["food", "kitchen"] });
+    for (const hook of HOOKS) expect(svg, hook).not.toContain(hook);
+  });
+
+  it("reports what it removed, and refuses a raster it cannot clean", () => {
+    const { report, refused } = cleanSheetSvg(sheetSvg());
+    expect(refused).toBeNull();
+    expect(report.attributes).toBeGreaterThan(0);
+    const raster = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><image href="data:image/png;base64,AA"/></svg>`;
+    expect(cleanSheetSvg(raster).refused).toMatch(/raster/);
+  });
+});
+
+describe("the clean switch on a saved package", () => {
+  it("is on by default: the saved SVG answers with no hook at all", async () => {
+    expect(DEFAULT_FORMAT_OPTIONS.cleanExport).toBe(true);
+    const pkg = await packageOf(sheetSvg(), {});
+    const svg = textOf(pkg, ".svg") as string;
+    for (const hook of HOOKS) expect(svg, hook).not.toContain(hook);
+    expect(svg).not.toContain('{"v":1,');
+    expect(viewBox(svg)).toBe(viewBox(sheetSvg()));
+  });
+
+  it("off: the same sheet keeps its hooks — the box is what gates the pass", async () => {
+    const pkg = await packageOf(sheetSvg(), { cleanExport: false });
+    expect(textOf(pkg, ".svg")).toContain("data-config-fingerprint");
+  });
+
+  it("the EPS ships from the cleaned copy, and the artboard's tx still hold", async () => {
+    setTextOutliner(() => ({ d: "M0 0 L10 0", width: 10 }));
+    const pkg = await packageOf(sheetSvg({ strokeWidth: 1, ink: "#ff0000", titleTracking: 7 }), {
+      includeEps: true, expandText: true,
+    });
+    expect(pkg.problems).toEqual([]);
+    expect(textOf(pkg, ".eps")).toContain("1 0 0 setrgbcolor");
+    const svg = textOf(pkg, ".svg") as string;
+    for (const hook of HOOKS) expect(svg, hook).not.toContain(hook);
+  });
+});

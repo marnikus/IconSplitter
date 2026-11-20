@@ -48,7 +48,12 @@ describe("the builder package follows the format options", () => {
     const on = await buildSheetPackage(args({ optimizeSvg: true }), deps({}));
     expect(text(file(on, ".svg")!.bytes)).not.toContain("<!-- note -->");
     expect(on.record.tools.svgo.enabled).toBe(true);
-    const off = await buildSheetPackage(args({ optimizeSvg: false }), deps({}));
+    // The comment is editor bloat: the CLEAN pass drops it too (2026-11-19), so
+    // only turning both SVGO and the clean pass off ships it.
+    const cleanOnly = await buildSheetPackage(args({ optimizeSvg: false }), deps({}));
+    expect(text(file(cleanOnly, ".svg")!.bytes)).not.toContain("<!-- note -->");
+    expect(cleanOnly.record.tools.svgo.enabled).toBe(false);
+    const off = await buildSheetPackage(args({ optimizeSvg: false, cleanExport: false }), deps({}));
     expect(text(file(off, ".svg")!.bytes)).toContain("<!-- note -->");
     expect(off.record.tools.svgo.enabled).toBe(false);
   });

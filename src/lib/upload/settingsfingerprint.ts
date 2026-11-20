@@ -43,6 +43,10 @@ export function settingsFingerprint(s: UploadSettings): string {
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }
 
+// `cleanExport` is deliberately absent: the upload chain runs the clean pass
+// unconditionally (its own `prepare.ts`), so the box cannot change a package's
+// layout — only the builder honours it, and that store is per-browser.
+
 /** Explicit disabled outputs change the package; legacy/default flags must not churn hashes. */
 function formatToken(s: UploadSettings): unknown[] {
   return s.includeSvg === false || s.includeJpeg === false

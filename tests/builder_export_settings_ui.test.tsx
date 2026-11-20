@@ -70,7 +70,7 @@ describe("the builder export settings dialog", () => {
 
   it("shows every format row once (no duplicated JPEG block), with the sheet's own JPEG px", () => {
     render({ ...DEFAULT_FORMAT_OPTIONS, rescaleArtboard: true });
-    for (const id of ["svg", "jpeg", "eps", "converter", "mp", "mp-match", "quality", "optimize", "expand", "expandtext", "rescale", "rescale-mp", "rescale-strokes"]) {
+    for (const id of ["svg", "jpeg", "eps", "converter", "mp", "mp-match", "quality", "optimize", "clean", "expand", "expandtext", "rescale", "rescale-mp", "rescale-strokes"]) {
       expect(all(`bld-set-${id}`), id).toHaveLength(1);
     }
     // 5500×3000 rescaled to a 20 MP area is 6055×3302 — the note names the file it will really write
@@ -113,6 +113,16 @@ describe("the builder export settings dialog", () => {
     render({ ...DEFAULT_FORMAT_OPTIONS, includeEps: true, epsConverter: "inkscape" });
     expect(q("builder-format-eps-note")).toBeNull();
     expect(q("bld-eps-helper")).not.toBeNull();
+  });
+
+  it("offers the clean pass on by default and patches it in one gesture", () => {
+    render(DEFAULT_FORMAT_OPTIONS);
+    const box = q("bld-set-clean") as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    expect(host.textContent).toContain("Clean the saved files");
+    click("bld-set-clean");
+    expect(patches.at(-1)).toEqual({ cleanExport: false });
+    expect(q("bld-set-clean")).not.toBeNull();
   });
 
   it("says so when every format is unticked — that package would ship nothing", () => {

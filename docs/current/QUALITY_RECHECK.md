@@ -5713,3 +5713,29 @@ Method note (RULE 15): two full runs first showed `algo_efficiency`,
 the cause was a leaked `tools/bridge/server.mjs --watch-dir /tmp/helper-watch-*`
 process from an earlier interrupted run spinning at 56 % CPU on this 2-CPU box.
 Killed, the same suite is fully green; no budget or test was changed to hide it.
+
+## 2026-11-19 (d) — the clean pass on the saved SVG/EPS
+
+A shipped sheet's forensic dump (asset ids, cell indexes, a config hash, an
+approve flag, a provenance `<metadata>` JSON, repeated `xmlns` on every child,
+`stroke-width="1.9992750000000001"`) is the pass's spec: `cleanSheetSvg`
+(`lib/svgBuilder/cleansheet.ts`) runs the upload tab's own policy over the
+finished sheet and the package's SVG/JPEG/PNG/EPS all derive from the result.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| new `tests/export_clean.test.ts` | 9 passed | No `data-*`/`class`/`aria-*` survives, one `xmlns`, no provenance block, no 4+-decimal number, DC tags read back via `readEmbeddedMetadata`, px/viewBox/drawables unchanged, `cleanExport: false` keeps the comment, EPS from the cleaned copy |
+| `tests/builder_sheetpackage_formats.test.ts` | 8 passed | The old "SVGO off keeps `<!-- note -->`" pin now needs `cleanExport: false` too — the clean pass removes comments independently |
+| `tests/export_sheet_ui.test.tsx`, `tests/builder_export_settings_ui.test.tsx` | 7 + 11 passed | `bld-set-clean` on by default, one click patches `{ cleanExport: false }`, no dead box under `upload-set` |
+| `tests/upload_settings.test.ts` | 24 passed | Default object now carries `cleanExport: true` |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `cleansheet.ts` 124 lines / 11 fns, `sheetpackage.ts` 168 / 16, `exportsheet.tsx` 156 / 26 |
+| `npm run verify:fast` | ALL LANES PASSED | 199 s, build 3,618.57 kB (+3.2 kB) |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/export-formats.md` 8,976 B, `sor/svg-builder.md` 8,960 B, `selectors/svg-builder.md` 8,934 B — all under 9,000 B |
+
+The box is builder-scope on purpose: the upload chain already runs the policy
+unconditionally (`prepare.ts`), so a box there would be dead; the builder's
+stock package was the only path that shipped a raw stitched sheet.
+`cleanExport` is not in `settingsFingerprint` — the upload chain's output does
+not depend on it, and adding it would re-export every existing package.

@@ -35,6 +35,7 @@ const HINTS = {
   eps: "a genuine EPS; the converter below writes it, and anything it cannot write fails that stage honestly",
   converter: "who writes the EPS when \"Also write EPS\" is on — the built-in subset writer, or Inkscape on this machine",
   optimize: "the export copy only — viewBox, geometry, strokes and metadata are preserved",
+  clean: "drop the generator's paperwork — data-* hooks, class/aria, repeated xmlns, comments, our provenance block and float noise; the picture, the artboard's px, Title, description and tags stay",
   expand: "strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes",
   expandText: "text becomes filled glyph outlines; what cannot be outlined fails that stage honestly",
   rescale: "the full artboard keeps its ratio and grows until its area is the megapixel target",
@@ -118,6 +119,8 @@ function ExpandRows(p: FormatSheetProps) {
   return <>
     <ExportCheckRow {...rowOf(p, "optimizeSvg", "optimize")} label="Optimize SVG (SVGO)" checked={p.value.optimizeSvg}
       hint={p.optimizeHint ?? HINTS.optimize} onChange={(v) => p.patch({ optimizeSvg: v })} />
+    {p.scope === "bld-set" && <ExportCheckRow {...rowOf(p, "cleanExport", "clean")} label="Clean the saved files"
+      checked={p.value.cleanExport} hint={HINTS.clean} onChange={(v) => p.patch({ cleanExport: v })} />}
     <ExportCheckRow {...rowOf(p, "expandStrokes", "expand")} label="Expand strokes to fills" checked={p.value.expandStrokes}
       hint={HINTS.expand} onChange={(v) => p.patch({ expandStrokes: v })} />
     <ExportCheckRow {...rowOf(p, "expandText", "expandtext")} label="Expand text to fills" checked={p.value.expandText}

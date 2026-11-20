@@ -60,6 +60,18 @@ describe("the shared export format sheet", () => {
     expect(host.textContent).toContain("Scale strokes proportionally");
   });
 
+  it("offers the clean pass where it does something: the builder scope only", () => {
+    // The upload flow runs the same policy unconditionally (its own chain needs
+    // it), so a box there would be dead — the builder's copy is where it gates.
+    render("upload-set", { ...DEFAULT_FORMAT_OPTIONS });
+    expect(q("upload-set-clean")).toBeNull();
+    render("bld-set", { ...DEFAULT_FORMAT_OPTIONS });
+    expect(all("bld-set-clean")).toHaveLength(1);
+    expect((q("bld-set-clean") as HTMLInputElement).checked).toBe(true);
+    click("bld-set-clean");
+    expect(patches.at(-1)).toEqual({ cleanExport: false });
+  });
+
   it("names the real JPEG size in the note — the artboard, rescaled while the rescale box is on", () => {
     render("bld-set", { ...DEFAULT_FORMAT_OPTIONS, jpegMatchArtboard: true });
     expect(q("bld-set-mp-note")?.textContent).toBe("the JPEG is the artboard itself: 1000×1000 px — untick for a bigger file");

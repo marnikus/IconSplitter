@@ -28,6 +28,13 @@ export interface ExportFormatOptions {
   jpegMatchArtboard: boolean;
   /** Optimize the export SVG copy with SVGO — viewBox, geometry, strokes and metadata preserved. */
   optimizeSvg: boolean;
+  /**
+   * Clean the saved SVG and the EPS built from it (2026-11-19): the stock-clean
+   * pass drops the generator's paperwork — `data-*` hooks, `class`/`aria-*`,
+   * repeated xmlns, comments, our provenance `<metadata>` JSON and float noise.
+   * The picture, its viewBox, the artboard's px and Title/description/tags stay.
+   */
+  cleanExport: boolean;
   /** Strokes become filled shapes; the SVG, JPEG and EPS all ship without strokes. */
   expandStrokes: boolean;
   /** Every <text> becomes filled glyph outlines; what cannot be outlined fails honestly. */
@@ -43,18 +50,20 @@ export interface ExportFormatOptions {
 export const DEFAULT_FORMAT_OPTIONS: ExportFormatOptions = {
   includeSvg: true, includeJpeg: true, includeEps: false, epsConverter: DEFAULT_CONVERTER,
   jpegMegapixels: MP_DEFAULT, jpegQuality: QUALITY_DEFAULT, jpegMatchArtboard: true,
-  optimizeSvg: true, expandStrokes: false, expandText: false,
+  optimizeSvg: true, cleanExport: true, expandStrokes: false, expandText: false,
   rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true,
 };
 
 /** Boolean fields, in the order the dialogs show them. */
 export const FORMAT_FLAGS = [
   "includeSvg", "includeJpeg", "includeEps", "jpegMatchArtboard", "optimizeSvg",
-  "expandStrokes", "expandText", "rescaleArtboard", "rescaleStrokes",
+  "cleanExport", "expandStrokes", "expandText", "rescaleArtboard", "rescaleStrokes",
 ] as const;
 
 /** Fields that default ON read back on unless stored `false`; the rest read back off unless stored `true`. */
-const DEFAULT_ON = new Set<string>(["includeSvg", "includeJpeg", "jpegMatchArtboard", "optimizeSvg", "rescaleStrokes"]);
+const DEFAULT_ON = new Set<string>([
+  "includeSvg", "includeJpeg", "jpegMatchArtboard", "optimizeSvg", "cleanExport", "rescaleStrokes",
+]);
 
 const FORMAT_NUMBERS: ["jpegMegapixels" | "jpegQuality" | "rescaleMegapixels", (value: unknown) => number][] = [
   ["jpegMegapixels", clampMegapixels],

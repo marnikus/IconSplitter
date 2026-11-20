@@ -18,6 +18,7 @@ own export settings dialog can never drift apart.
 | `jpegQuality` | 0.92 | 0.5 – 1 |
 | `jpegMatchArtboard` | on | the JPEG is the artboard itself (its px, after any rescale); untick for the MP above |
 | `optimizeSvg` | on | the export copy only — viewBox, geometry, strokes and metadata are preserved |
+| `cleanExport` | on | the stock-clean pass over the saved SVG (and the EPS built from it): no `data-*`/`class`/`aria-*`, one xmlns, no comments, no provenance block, no float noise — Title, description and tags stay (builder scope; the upload chain always runs it) |
 | `expandStrokes` | off | strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes |
 | `expandText` | off | NEW: every `<text>` becomes filled glyph outlines; what cannot be outlined fails that stage honestly, in BOTH flows |
 | `rescaleArtboard` | off | NEW: rescale the FULL artboard, keeping its ratio, until its area is `rescaleMegapixels` (1000×1000 @ 20 MP → 4472×4472) |
@@ -26,7 +27,7 @@ own export settings dialog can never drift apart.
 
 ## 2026-11-19 — what was actually broken
 
-Five defects, all fixed and pinned by tests:
+Five defects, all fixed and pinned:
 
 1. **The settings were hidden and misplaced.** They existed only as an Export ▾
    item and rendered as a builder-only card. `ui/exportmodal.tsx` is now the ONE
@@ -34,39 +35,30 @@ Five defects, all fixed and pinned by tests:
    Escape, backdrop) that the upload dialog also renders, opened from its own
    `⚙ Export settings` header button (`builder-export-settings`) as well as
    from the menu.
-2. **The JPEG rows were duplicated** (two components, same three rows, same
-   test ids). Every row now comes from the one shared sheet.
-3. **The JPEG hint never named the real file** — now `exportArtboardSize`, so
-   the artboard's px (rescaled px while rescale is on) is named.
-4. **EPS looked unavailable** — the dialog warns before the export, names both
-   fixes, and the helper row reports live availability.
-5. **Exports ignored the ink.** Cells are drawn `stroke="currentColor"` +
-   `color="#…"`, which only a browser resolves: the saved SVG shipped
-   `currentColor` (Illustrator paints it black), and SVGO rewrote hex to names
-   (`#ffa500` → `orange`) that the EPS writer cannot read. `prepareSheetSvg`
-   now runs `lib/upload/solidpaint.ts` FIRST (every format gets real hex) and
-   the optimizer keeps hex (`convertColors: {shortname: false, names2hex: true}`).
+2. **Duplicated JPEG rows** (two components, same three ids) — now one sheet.
+3. **The JPEG hint never named the real file** — now `exportArtboardSize`.
+4. **EPS looked unavailable** — the dialog warns first (see below).
+5. **Exports ignored the ink.** Cells are `stroke="currentColor"` + `color="#…"`,
+   which only a browser resolves (Illustrator paints it black), and SVGO renamed
+   hex to names (`#ffa500` → `orange`) the EPS writer cannot read.
+   `prepareSheetSvg` now runs `lib/upload/solidpaint.ts` first, and the
+   optimizer keeps hex (`shortname: false, names2hex: true`).
 
 ## Where each flow consumes them
 
 - **Upload**: `UploadSettings` extends the interface; `prepare.ts` ends with
   expand-text then rescale on the finished artboarded SVG, `optimize.ts` and the
   EPS/JPEG stages read the same fields as before.
-- **Builder**: its own persisted store (`svgBuilder/formatstore.ts`, one storage
-  key, validated on read) feeds the **Export settings…** item of the builder's
-  Export menu and from the header button. The popup IS the upload dialog's own
-  shell (`ui/exportmodal.tsx`) and renders the SAME sheet component — `ui/exportsheet.tsx` `ExportFormatSheet` — under its own
-  test-id scope (`bld-set-*`; the upload dialog passes `upload-set`), with its
-  own store write path and no marker. The stock package (`sheetpackage.ts`)
-  honours every field: flags gate the files, `optimizeSvg` records a real SVGO
-  block in export.json, `expandStrokes` / `expandText` / rescale transform the
-  composed sheet BEFORE it is packaged, and `jpegMatchArtboard` decides the
-  JPEG px (artboard px, else MP).
-- The Export menu's preview items (Editable SVG, PNG 2×, clipboard) stay
-  untouched previews; the **Export package** item runs `exportSelectedArtboards`
-  and names the formats that package will really carry (`SVG · JPEG · EPS
-  (Inkscape CLI (local helper))`, `SVG off` for a switch that is off), so a
-  format is never invisible nor implied when it is off.
+- **Builder**: `svgBuilder/formatstore.ts` (one validated key) feeds the header
+  button and the menu item; the popup is the upload's own shell and renders the
+  SAME `ExportFormatSheet` under `bld-set-*` (the upload dialog passes
+  `upload-set`). `sheetpackage.ts` honours every field: flags gate the files,
+  `optimizeSvg` records a real SVGO block, the expansions/rescale transform the
+  composed sheet BEFORE packaging, `cleanExport` runs the clean pass (below) and
+  `jpegMatchArtboard` decides the JPEG px.
+- The menu's preview items (Editable SVG, PNG 2×, clipboard) stay untouched
+  previews; **Export package** runs `exportSelectedArtboards` and names the
+  formats it will really carry (`SVG · JPEG · EPS (built-in …)`, `SVG off`).
 
 ## Ownership (one row, one owner)
 
@@ -110,6 +102,17 @@ Ink: a saved file never carries `currentColor` (resolved to the nearest
 `color` on `stroke`, `fill`, `stop-color`, `flood-color` and inline style) and
 never a CSS colour name, so the artboard's or a template's colour is what the
 SVG, the JPEG and the EPS paint.
+
+## Clean rule (2026-11-19)
+
+With `cleanExport` on, `prepareSheetSvg` runs the upload tab's own policy
+(`lib/upload/cleandom`) plus the sheet's final touches
+(`lib/svgBuilder/cleansheet.ts`): every `data-*`/`class`/`aria-*` goes (asset
+ids, cell indexes, the config hash, approve flags), so do comments, the repeated
+`xmlns` of a stitched copy, any `<metadata>` that is not the tag list (ours read
+`<metadata>{"v":1,…}</metadata>`: prompt, model, source fingerprints) and float
+noise (`1.9992750000000001` → `1.999`). px, viewBox, geometry, Title, description
+and the DC tags survive; a raster `<image>` is refused by name.
 
 ## Rescale rule
 
