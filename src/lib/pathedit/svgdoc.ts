@@ -18,6 +18,8 @@ export interface PathTag {
   /** The shape as path data (a path's own `d`). */
   d: string | null;
   selfClosing: boolean;
+  /** How the shape fills: `fill-rule="evenodd"`, the attribute or a `style`, else nonzero. */
+  fillRule: "evenodd" | "nonzero";
 }
 
 const D_ATTR = /\sd\s*=\s*("([^"]*)"|'([^']*)')/;
@@ -86,9 +88,17 @@ export function pathTags(markup: string): PathTag[] {
   for (let m = SHAPE_TAG.exec(text); m !== null; m = SHAPE_TAG.exec(text)) {
     const tag = markup.slice(m.index, m.index + m[0].length);
     const kind = m[1].toLowerCase() as ShapeKind;
-    out.push({ index: out.length, kind, start: m.index, end: m.index + m[0].length, d: shapeD(kind, tag), selfClosing: /\/\s*>$/.test(tag) });
+    out.push({ index: out.length, kind, start: m.index, end: m.index + m[0].length, d: shapeD(kind, tag),
+      selfClosing: /\/\s*>$/.test(tag), fillRule: fillRuleOf(tag) });
   }
   return out;
+}
+
+/** `fill-rule` as the shape itself states it — the attribute or a `style` declaration. */
+function fillRuleOf(tag: string): "evenodd" | "nonzero" {
+  const style = /\sstyle\s*=\s*("([^"]*)"|'([^']*)')/i.exec(tag);
+  const declared = (style?.[2] ?? style?.[3] ?? "").match(/fill-rule\s*:\s*(evenodd|nonzero)/i)?.[1];
+  return (attr(tag, "fill-rule") ?? declared ?? "").toLowerCase() === "evenodd" ? "evenodd" : "nonzero";
 }
 
 /** A basic shape's start tag as a <path> with `d`, its geometry attributes removed. */

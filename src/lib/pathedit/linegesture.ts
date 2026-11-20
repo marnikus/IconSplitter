@@ -42,7 +42,7 @@ export function removeAt(st: EditorState, hit: SegmentHit, time?: number): Edito
  */
 export function cutRegionAt(st: EditorState, p: Pt): EditorState {
   const sub = regionAt(st.session.model, p);
-  const model = sub === null ? null : cutRegion(st.session.model, sub);
+  const model = sub === null ? null : cutRegion(st.session.model, sub, p);
   if (model === null) return st;
   return withEdit(st, commit(st.session, model));
 }

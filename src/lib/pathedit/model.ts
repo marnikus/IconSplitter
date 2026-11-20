@@ -24,7 +24,7 @@ export interface Anchor {
  * the editor loads every path of the icon into one model, edits the selected
  * objects and snaps against all of them; Finish writes each changed object back.
  */
-export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number }
+export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number; /** The object's `fill-rule="evenodd"` — absent means nonzero (2026-11-20). */ fillRule?: "evenodd" }
 export interface PathModel { subs: SubPath[] }
 /** One anchor: its subpath and its index there. */
 export interface AnchorRef { sub: number; i: number }
@@ -173,6 +173,7 @@ export function cloneModel(m: PathModel): PathModel {
     subs: m.subs.map((s) => ({
       closed: s.closed,
       ...(s.owner === undefined ? {} : { owner: s.owner }),
+      ...(s.fillRule === undefined ? {} : { fillRule: s.fillRule }),
       anchors: s.anchors.map((a) => ({ ...a, in: a.in && { ...a.in }, out: a.out && { ...a.out } })),
     })),
   };

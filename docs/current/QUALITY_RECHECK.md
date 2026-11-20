@@ -5834,3 +5834,35 @@ The legend gained a second row ("Alt+Shift+Click fill"), the line row now says
 "…or a tail", and `hotkeys.ts` is the one place both gestures are announced. A
 `fill-rule="evenodd"` outline is already holed where a subpath is nested, so a
 cut is not offered there — the missing feature is the right answer, not a bug.
+
+## 2026-11-20 (b) — the fill-region cut looked like a no-op: it now removes paint
+
+Reported straight after the round above: "Alt shift do select area but click it
+not apply the cut and the hole is not appear." The gesture and the commit were
+fine — the MODEL changed — but noneness of the change was wrong. Reversing a
+ring flips its *winding*, and that is only a hole when something else paints the
+same pixels: the common icon is ONE `<path>` with ONE ring, where the same ring
+walked backwards paints exactly the same area, and under
+`fill-rule="evenodd"` direction means nothing at all. Two faults, one cause:
+the cut changed a direction instead of the paint.
+
+`lib/pathedit/region.ts` now decides from the paint. `ringsAt` collects every
+closed ring that holds the point with the direction it adds, `painted` applies
+the subpath's own rule (nonzero: the directions must not sum to 0; evenodd: the
+count of rings must be odd), and `cutRegion(m, sub, p)` removes the paint:
+a ring nested in another painting ring is walked the other way; a lone ring gets
+a reversed TWIN that cancels it; under evenodd one extra ring flips the parity
+(direction irrelevant). `fill-rule` is read where the file states it —
+`svgdoc.pathTags` (attribute or `style`) → `SubPath.fillRule` → the session, so
+`loadObjects` carries it. Points that are already holes are no longer regions,
+so the mark disappears after the cut instead of inviting a dead second click.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_region_cut.test.ts` | 20 passed (+6) | a lone ring is cancelled by a reversed twin (winding 1 → 0, the drawn ring untouched), a nested ring is still flipped in place with the surrounding fill kept, evenodd gets ONE extra ring with the same walk, an evenodd outline already holed there is not offered, a backwards nonzero inner ring is recognised as a hole, and after the cut the region is not marked again |
+| `tests/pathedit_region_cut_ui.test.tsx` | 6 passed (+3) | the artboard itself changes: a one-ring `<path>` becomes `M10 10L90 10L90 90L10 90ZM10 90L90 90L90 10L10 10Z` (and Finish writes it), an `fill-rule="evenodd"` outline becomes `…Z…Z` with the attribute kept, and an already-holed evenodd point shows no mark while the ring around it still does |
+| pathedit sweep | 271 passed | `pathedit_*`, `svg_edit_*`, `tailcut_*` |
+| `npx vitest run` (full) | 494 files, 4,948 tests — 4,947 passed | 158 s; the single failure is still `algo_efficiency`'s 200 ms budget on this host (unchanged code, budget untouched) |
+| `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 18 fns / 155 lines, `svgdoc.ts` 16 / 154, `model.ts` `SubPath.fillRule`, `objects.ts` carries it |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 4,384 B, `sor/svg-path-editor-handles.md` 7,074 B |

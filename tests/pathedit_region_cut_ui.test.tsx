@@ -1,7 +1,7 @@
 // pathedit_region_cut_ui.test.tsx — Alt + Shift over a FILLED area in the real
 // edit surface (2026-11-20): the area's outline is marked red (overlay only,
-// never written), the click cuts it out — the working path keeps its geometry
-// and walks the other way — Ctrl+Z puts it back, and Finish edit writes it.
+// never written), the click cuts it out (see below for what "cut" means per
+// fill rule), Ctrl+Z puts it back, and Finish edit writes it.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,8 +32,8 @@ describe("Alt + Shift over a filled area", () => {
     node().dispatchEvent(new PointerEvent(type, { bubbles: true, composed: true, button: 0, clientX: x * SCALE, clientY: y * SCALE, pointerId: 1, ...mods }));
   });
   const both = { altKey: true, shiftKey: true };
-  const mount = () => act(async () => {
-    ui.render(<SvgPathEditor source={SRC} box={{ width: 240, height: 240 }} testid="e" label="icon" onFinish={onFinish} onCancel={vi.fn()} />);
+  const mount = (source: string = SRC) => act(async () => {
+    ui.render(<SvgPathEditor source={source} box={{ width: 240, height: 240 }} testid="e" label="icon" onFinish={onFinish} onCancel={vi.fn()} />);
   });
 
   it("marks the fill red while both keys are held, and clears it otherwise", async () => {
@@ -65,5 +65,68 @@ describe("Alt + Shift over a filled area", () => {
   it("is in the legend", async () => {
     await mount();
     expect(q("[data-testid=e-legend]")?.textContent).toContain("Alt+Shift+Click fill");
+  });
+});
+
+// The reported bug (2026-11-20, second round): "Alt shift do select area but
+// click it not apply the cut and the hole is not appear". A filled area that is
+// ONE ring cannot be holed by walking it backwards, and under evenodd direction
+// means nothing at all — so the cut subtracts the region instead, and the
+// artboard itself (which repaints from the model) has to show it.
+describe("a lone filled ring — the case that looked like a no-op", () => {
+  let host: HTMLDivElement;
+  let ui: Root;
+  let onFinish: ReturnType<typeof vi.fn<(markup: string) => void>>;
+  beforeEach(() => {
+    for (const p of protos()) Object.defineProperty(p, "getScreenCTM", { configurable: true, writable: true, value: ctm });
+    host = document.createElement("div"); document.body.append(host); ui = createRoot(host);
+    onFinish = vi.fn<(markup: string) => void>();
+  });
+  afterEach(() => { act(() => ui.unmount()); host.remove(); for (const p of protos()) delete (p as { getScreenCTM?: unknown }).getScreenCTM; });
+  const node = () => host.querySelector("[data-testid=e]") as HTMLElement;
+  const art = () => node().shadowRoot?.querySelector('[data-edit-path="0"]')?.getAttribute("d") ?? null;
+  const mark = () => node().shadowRoot?.querySelector("[data-cut-region]") ?? null;
+  const both = { altKey: true, shiftKey: true };
+  const pointer = (type: string, x: number, y: number, mods: PointerEventInit = {}) => act(async () => {
+    node().dispatchEvent(new PointerEvent(type, { bubbles: true, composed: true, button: 0, clientX: x * SCALE, clientY: y * SCALE, pointerId: 1, ...mods }));
+  });
+  const mount = (source: string) => act(async () => {
+    ui.render(<SvgPathEditor source={source} box={{ width: 240, height: 240 }} testid="e" label="icon" onFinish={onFinish} onCancel={vi.fn()} />);
+  });
+  const SQUARE = "M10 10L90 10L90 90L10 90Z";
+  const cut = async () => {
+    await pointer("pointermove", 50, 50, both);
+    expect(mark()).not.toBeNull();
+    await pointer("pointerdown", 50, 50, both);
+    await pointer("pointerup", 50, 50, both);
+  };
+
+  it("the picture gets a hole: a reversed twin, and the mark goes away", async () => {
+    await mount(`<svg viewBox="0 0 100 100"><path d="${SQUARE}"/></svg>`);
+    expect(art()).toBe(SQUARE);
+    await cut();
+    expect(art()).toBe(`${SQUARE}M10 90L90 90L90 10L10 10Z`); // the same ring, walked back: it cancels
+    await pointer("pointermove", 52, 52, both);
+    expect(mark()).toBeNull();                                // a hole is not offered again
+    await act(async () => { host.querySelector<HTMLElement>("[data-testid=e-finish]")?.click(); });
+    expect(onFinish.mock.calls[0][0]).toContain(`d="${SQUARE}M10 90L90 90L90 10L10 10Z"`);
+  });
+
+  it("an evenodd outline is holed by one extra ring, same walk", async () => {
+    await mount(`<svg viewBox="0 0 100 100"><path fill-rule="evenodd" d="${SQUARE}"/></svg>`);
+    await cut();
+    expect(art()).toBe(`${SQUARE}${SQUARE}`);
+    await act(async () => { host.querySelector<HTMLElement>("[data-testid=e-finish]")?.click(); });
+    const written = onFinish.mock.calls[0][0];
+    expect(written).toContain('fill-rule="evenodd"'); // the rule that makes it a hole is kept
+    expect(written).toContain(`d="${SQUARE}${SQUARE}"`);
+  });
+
+  it("an evenodd area that is already a hole is not marked", async () => {
+    await mount(`<svg viewBox="0 0 100 100"><path fill-rule="evenodd" d="${SQUARE}M40 40L60 40L60 60L40 60Z"/></svg>`);
+    await pointer("pointermove", 50, 50, both);
+    expect(mark()).toBeNull();
+    await pointer("pointermove", 20, 20, both); // between the rings the fill still paints
+    expect(mark()).not.toBeNull();
   });
 });
