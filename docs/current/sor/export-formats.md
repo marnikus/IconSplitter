@@ -17,7 +17,7 @@ fingerprint and the builder's settings can never drift apart.
 | `jpegQuality` | 0.92 | 0.5 – 1 |
 | `jpegMatchArtboard` | on | the JPEG is the artboard itself (its px, after any rescale); untick for the MP above |
 | `optimizeSvg` | on | the export copy only — viewBox, geometry, strokes and metadata are preserved |
-| `cleanExport` | on | clean the saved SVG (and the EPS built from it) — see **Clean rule**; Title, description and tags stay. Builder scope: the upload chain always runs it |
+| `cleanExport` | on | clean the saved SVG and the EPS document — see **Clean rule**; Title, description and tags stay. In BOTH dialogs: off restores the legacy two-carrier EPS |
 | `expandStrokes` | off | strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes |
 | `expandText` | off | NEW: every `<text>` becomes filled glyph outlines; what cannot be outlined fails that stage honestly, in BOTH flows |
 | `rescaleArtboard` | off | NEW: rescale the FULL artboard, keeping its ratio, until its area is `rescaleMegapixels` (1000×1000 @ 20 MP → 4472×4472) |
@@ -42,8 +42,7 @@ Five defects, all fixed and pinned:
 ## Where each flow consumes them
 
 - **Upload**: `UploadSettings` extends the interface; `prepare.ts` ends with
-  expand-text then rescale on the finished artboarded SVG, `optimize.ts` and the
-  EPS/JPEG stages read the same fields as before.
+  expand-text then rescale, and the optimize/EPS/JPEG stages read the fields.
 - **Builder**: `svgBuilder/formatstore.ts` (one validated key) feeds the header
   button and the menu item; the popup is the upload's own shell and renders the
   SAME `ExportFormatSheet` under `bld-set-*` (the upload dialog passes

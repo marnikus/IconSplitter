@@ -329,7 +329,9 @@ describe("runExport — the full package commits per icon", () => {
     // a real EPS 10 document, carrying the icon's own file name and the run's clock
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
     expect(eps).toContain(`%%Title: ${ART}.eps`);
-    expect(eps).toContain("%%CreationDate: 2026-10-08T12:00:00.000Z");
+    // the run's clock is NOT shipped: `Clean the saved files` (2026-11-19) strips the
+    // converter's own paperwork, and a creation second is provenance, not artwork
+    expect(eps).not.toContain("%%CreationDate");
     expect(eps).toContain("%%LanguageLevel: 3");
     // the stylesheet's paint arrived as a folded attribute, and no <style> text did
     expect(eps).toContain("0.071 0.204 0.337"); // #123456, setrgbcolor
@@ -359,8 +361,11 @@ describe("runExport — the full package commits per icon", () => {
     }));
     expect(result.status).toBe("processed");
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
-    expect(eps).toContain("%ADO_ContainsXMP: MainFirst");
-    expect(eps).toContain("%%DocumentData: Clean8Bit");
+    // the CLEAN envelope (2026-11-19): one carrier, no Adobe flag, no second copy
+    expect(eps).not.toContain("%ADO_ContainsXMP");
+    expect(eps).not.toContain("%%BeginPhotoshop");
+    expect(eps).toContain("%%DocumentData: Clean7Bit");
+    expect((eps.match(/<\?xpacket begin=/g) ?? []).length).toBe(1);
     expect(readXmpMetadataFromEps(eps)).toEqual(META);
     expect(verifyEpsDocument(eps).ok).toBe(true);
     expect(readRecord(root).validation).toMatchObject({ eps: true, readback: true });
@@ -488,7 +493,8 @@ describe("runExport — the full package commits per icon", () => {
       deps: { raster: fakeRaster(3886, 3886), converter: { bridgeUrl: "http://127.0.0.1:47391", fetch: up } },
     }));
     expect(ok.status).toBe("processed");
-    expect(fileText(okRoot, `${DIR}/export/${ART}.eps`)).toBe(EPS);
+    // the helper's program, minus the producer line the clean pass strips
+    expect(fileText(okRoot, `${DIR}/export/${ART}.eps`)).toBe(EPS.replace("%%Creator: cairo 1.18.0\n", ""));
     expect(readRecord(okRoot).tools.eps).toMatchObject({ converter: "inkscape", writer: "inkscape-cli@1.3.2" });
 
     const downRoot = pairRoot();

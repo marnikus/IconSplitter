@@ -20,6 +20,24 @@ export function embedIptcInEps(eps: string, meta: IconMetadata): string {
   const at = clean.indexOf(eol) + eol.length;
   return `${clean.slice(0, at)}${block}${clean.slice(at)}`;
 }
+/** Whether the file carries our Photoshop/IPTC block at all (the second carrier). */
+export function hasEpsIptc(eps: string): boolean {
+  const blocks = eps.match(/^%%BeginPhotoshop:[^\r\n]*(?:\r\n|\r|\n)(?:% [0-9a-f]+(?:\r\n|\r|\n))+%%EndPhotoshop/gm);
+  return blocks !== null && blocks.length > 0;
+}
+
+/**
+ * The 2026-11-19 clean form: ONE carrier. No Photoshop block, no Adobe
+ * `%ADO_*` flag, and exactly one XMP packet in the whole file.
+ */
+export function isCleanEpsEnvelope(eps: string): boolean {
+  return !hasEpsIptc(eps) && !/^%ADO_[A-Za-z]+:/im.test(eps) && countXmpPackets(eps) <= 1;
+}
+
+export function countXmpPackets(eps: string): number {
+  return (eps.match(/<\?xpacket begin=/g) ?? []).length;
+}
+
 function resourceBytes(eps: string): Uint8Array | null {
   const blocks = eps.match(/^%%BeginPhotoshop:[^\r\n]*(?:\r\n|\r|\n)(?:% [0-9a-f]+(?:\r\n|\r|\n))+%%EndPhotoshop/gm);
   if (blocks?.length !== 1) return null;

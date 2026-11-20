@@ -4,6 +4,23 @@ The optional EPS path in [SVG to upload](upload.md); exports are local and valid
 
 Inherited caps/joins and forced endpoint modes: [stroke endpoints](upload-stroke-endpoints.md).
 
+## The clean EPS (2026-11-19)
+
+`Clean the saved files` (Export settings, in both dialogs) governs the EPS too;
+unticking it restores the legacy two-carrier envelope below. The artwork is already clean — the
+EPS is written from the cleaned SVG copy, never from the raw source — and
+`lib/upload/epsclean.ts` then removes what a converter says about itself:
+`%%Creator`, `%%CreationDate`, `%%For`, `%%Copyright`, the `%ADO_*` flags, any
+foreign `%%BeginPhotoshop` block, and every packet but the one it re-derives.
+It keeps ONE carrier (the pdfmark stream) with no `x:xmptk="IconSplitter"`
+signature: Title, description and tags survive, nothing else does. The EPS 10
+markers (`%%BoundingBox`, `%%HiResBoundingBox`, `%%DocumentData`,
+`%%LanguageLevel`, Prolog/Setup, `%%EOF`) are untouched, and cleaning is
+byte-stable — `verifiedEpsArtwork` re-derives the envelope from the file alone.
+`verifyEpsMetadata` accepts either form and refuses a clean file that keeps a
+second copy; the legacy two-carrier envelope (XMP + Photoshop/IPTC) is still what
+the stock upload writes.
+
 ## Converter choices
 
 The built-in browser writer supports native Level 3 vector gradients, including
@@ -19,35 +36,27 @@ record and Download all. Converter selection remains explicit.
   EPS writer is CHOSEN, not fixed. The registry `CONVERTERS`
   (`src/lib/upload/epsconv/registry.ts`) is the one table the drop list, the
   settings parser and the EPS stage read: `builtin` (the native vector writer above,
-  `writer: "builtin-vector-4"`) and `inkscape` (Inkscape on this machine
-  through the local helper at `http://127.0.0.1:47391` — `GET /health` to
-  probe, `POST /convert/eps` with the prepared SVG to convert, `writer:
-  "inkscape-cli@<version>"` from the `x-inkscape-version` header). The
-  setting `epsConverter` is NOT in the settings fingerprint: switching
-  converters rebuilds the EPS only (the planner compares
-  `tools.eps.converter` with the run's converter; a record from before the
-  field is `builtin`), and choosing a converter never toggles `includeEps`.
-  The built-in writer treats the prepared SVG `viewBox` as the intended artboard,
-  including its white background rectangle: it keeps `%%HiResBoundingBox` exact,
-  rounds `%%BoundingBox` outward for integer-only readers, and emits Illustrator's
-  single-`%` `%AI5_ArtSize: height width` and centered `%AI3_TemplateBox` comments
-  using the HiRes dimensions (the AI5 order is height before width). Its upright
-  transform is anchored to that same exact rectangle. No `%%PageBoundingBox` is
-  added because this writer emits EPS, not a page-structured PostScript document.
-  The writer ID is `builtin-vector-4`; planning compares it as well as the
-  converter so existing packages refresh the EPS only after a writer change.
-  After conversion, accepted metadata is embedded as the same Dublin Core XMP
-  packet used by JPEG (`dc:title`, `dc:description`, `dc:subject`), using
-  `%ADO_ContainsXMP: MainFirst` and an EPS pdfmark metadata stream with BDC/EMC
-  around the drawing. EPS metadata is read back before and during atomic commit;
-  a metadata edit refreshes requested EPS without rasterizing again. Every EPS
-  — whoever wrote it — passes the SAME converter-neutral gate before commit
-  (`verifyEpsDocument`: EPSF-3.0 header, a `%%LanguageLevel`, a `%%BoundingBox`,
-  `%%EOF`, AND the closed vector-program audit; unverifiable external programs
-  fail closed); the stricter EPS 10 markers (`verifyEps`) are
-  the built-in writer's own contract — and since 2026-10-09 `verifyEps` also
-  runs the subset stack checker (`lib/upload/epscheck`, I-61), which the
-  built-in converter applies to its own output before it answers ok. A helper that is down / an Inkscape
+  and `inkscape` (Inkscape on this machine via the local helper at
+  `http://127.0.0.1:47391`: `GET /health`, `POST /convert/eps` with the prepared
+  SVG, `writer: "inkscape-cli@<version>"`). `epsConverter` is NOT in the settings
+  fingerprint: switching rebuilds the EPS only, and choosing a converter never
+  toggles `includeEps`.
+  It treats the prepared `viewBox` as the artboard: `%%HiResBoundingBox` exact,
+  `%%BoundingBox` rounded outward, Illustrator's `%AI5_ArtSize: height width`
+  and centered `%AI3_TemplateBox` from the HiRes box, the upright transform
+  anchored to it, and no `%%PageBoundingBox` (EPS, not a page). Writer ID
+  `builtin-vector-4`; planning compares it, so a writer change refreshes only
+  the EPS.
+  Accepted metadata is embedded as the JPEG's Dublin Core XMP packet
+  (`dc:title`, `dc:description`, `dc:subject`) in an EPS pdfmark stream with
+  BDC/EMC around the drawing (see the clean form below). It is read back before
+  and during atomic commit; a metadata edit refreshes requested EPS without
+  rasterizing again. Every EPS — whoever wrote it — passes the SAME
+  converter-neutral gate before commit (`verifyEpsDocument`: EPSF-3.0 header,
+  `%%LanguageLevel`, `%%BoundingBox`, `%%EOF`, the closed vector-program audit;
+  unverifiable programs fail closed); the stricter EPS 10 markers (`verifyEps`)
+  are the built-in writer's own contract, and it runs the subset stack checker
+  (`lib/upload/epscheck`, I-61) before it answers ok. A helper that is down / an Inkscape
   not installed / a conversion refused → the EPS stage fails honestly with
   the reason AND its fix (`run_inkscape_bridge.bat`; "install Inkscape 1.x
   or set INKSCAPE_PATH") → `partial`, SVG/JPEG stay committed. The record
@@ -56,7 +65,7 @@ record and Download all. Converter selection remains explicit.
   `iconSplitter.upload.bridge.v1`. ONE probe runs before a batch that wants
   Inkscape EPS (RULE 9): a helper that is not usable is said up front
   (`EPS: <reason> — N rows will be partial · <fix>`, repeated on the batch's
-  final line) and the batch runs anyway — the SVG and JPEG never wait.
+  final line) and the batch runs anyway.
 * The Inkscape helper itself (`tools/bridge/server.mjs` + `inkscape.mjs`,
   started by `run_inkscape_bridge.bat` / `run_app_inkscape.bat`, any OS:
   `node tools/bridge/server.mjs [--port] [--inkscape] [--dist]`) is a

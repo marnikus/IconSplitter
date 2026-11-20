@@ -5,6 +5,7 @@ import { embedXmpMetadata } from "../src/lib/upload/jpeg";
 import { jpegSegments } from "../src/lib/upload/jpegmarkers";
 import { joinBytes } from "../src/lib/upload/metadatabytes";
 import { readJpegIptc } from "../src/lib/upload/jpegiptc";
+import { embedXmpMetadataInEps, verifyEpsMetadata } from "../src/lib/upload/epsmetadata";
 import { stockExportArgs, STOCK_TEST_META, STOCK_TEST_SVGS } from "./helpers/stockexport";
 import { BinDir, BinFile } from "./helpers/binfakefs";
 import { minimalJpeg } from "./helpers/minijpeg";
@@ -49,15 +50,20 @@ it("repairs legacy XMP-only EPS without rewriting the intact JPEG or SVG", async
   const first = await runExport(args);
   const out = root.children.get("export") as BinDir;
   const eps = new TextDecoder().decode(await readBytesAt(root, "export/temporary.eps") as Uint8Array);
-  const legacy = eps.replace(/^% IconSplitter IPTC begin\n[\s\S]*?^% IconSplitter IPTC end\n/m, "");
-  out.children.set("temporary.eps", new BinFile("temporary.eps", legacy));
+  // Build the legacy two-carrier envelope on purpose (2026-11-19: the export
+  // itself ships the clean form), then strip its IPTC block: the file a reader
+  // that only speaks IPTC-IIM sees as incomplete.
+  const legacy = embedXmpMetadataInEps(eps, STOCK_TEST_META);
+  out.children.set("temporary.eps", new BinFile("temporary.eps", legacy.replace(/^% IconSplitter IPTC begin\n[\s\S]*?^% IconSplitter IPTC end\n/m, "")));
   const jpg = await readBytesAt(root, "export/temporary.jpg");
   const repaired = await runExport({ ...args, record: first.record });
   expect(repaired.status).toBe("processed");
   expect(repaired.stages).toEqual(["eps", "validate", "commit"]);
   expect(renders.count).toBe(1);
   expect(await readBytesAt(root, "export/temporary.jpg")).toEqual(jpg);
-  expect(new TextDecoder().decode(await readBytesAt(root, "export/temporary.eps") as Uint8Array)).toContain("%%BeginPhotoshop:");
+  const repairedEps = new TextDecoder().decode(await readBytesAt(root, "export/temporary.eps") as Uint8Array);
+  expect(verifyEpsMetadata(repairedEps, STOCK_TEST_META)).toBe(true);
+  expect((repairedEps.match(/<\?xpacket begin=/g) ?? []).length).toBe(1); // the clean form, one carrier
 });
 
 it("repairs wrong identity in a JPEG despite matching record fingerprint, then safely reuses", async () => {

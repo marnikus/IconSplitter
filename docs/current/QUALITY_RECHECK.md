@@ -5764,3 +5764,39 @@ machine move, and only 4+ decimal values are rounded.
 A real sheet's export shrank from 17 bare `<g>` wrappers and 6 repeated paint
 attributes to `<text>` inside its transform group: the picture, the px, the
 viewBox, the Title/description and the DC tags are unchanged.
+
+## 2026-11-19 (f) — the clean pass reaches the EPS document itself
+
+The question that opened this round: the EPS *artwork* was already clean (it is
+written from the cleaned SVG copy, in both flows) — but the PostScript *document*
+still named its producer. `lib/upload/epsclean.ts` now strips
+`%%Creator`/`%%CreationDate`/`%%For`/`%%Copyright`, the `%ADO_*` flags, any
+foreign `%%BeginPhotoshop` block and every packet but the one it re-derives, then
+re-embeds ONE carrier with no `x:xmptk` signature
+(`embedXmpMetadataInEps(…, { clean: true })`).
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/export_clean_eps.test.ts` (new) | 8 passed | One packet, no producer/ADO/Photoshop lines, `verifyEpsDocument` still ok, Title/description/tags read back, a second copy refused, byte-stable and `verifiedEpsArtwork` re-derives it, zero carriers without metadata, non-PostScript untouched, legacy envelope byte-identical, package on/off |
+| eps/export/builder/stockupload sweep | 75 files, 613 tests passed | 27.5 s |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `epsclean.ts` 62 lines / 5 fns, `epsiptc.ts` +3 fns, `epsmetadata.ts` mode-aware |
+| `npx vitest run` (full) | **4902 tests, all passed** | 130.0 s, after the upload-flow pins were moved to the clean contract |
+| `npm run verify:fast` | ALL LANES PASSED | build 3,622.4 kB |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/upload-eps.md` 8,836 B, `sor/tests/svg-builder.md` 8,952 B |
+
+`verifyEpsMetadata` accepts either envelope and, for a clean one, requires
+exactly one packet — the "keeps a second copy" case fails closed instead of
+being tolerated. The legacy two-carrier envelope (XMP + Photoshop/IPTC,
+`%ADO_ContainsXMP`) is untouched and is still what the stock upload writes, so
+Shutterstock-style IPTC readers keep working.
+
+Follow-up the same round: the box now renders in BOTH dialogs (it gates a real
+upload-flow difference — the EPS envelope), `upload_runexport`,
+`upload_padding_sides_export`, `upload_metadata_page` and `upload_stockrepair`
+pin the clean contract (one carrier; the independent reader still reads all
+three fields and reports `carriers: ["XMP"]`), and the reader's IPTC branches are
+exercised on a legacy envelope built on purpose, so neither carrier can hide the
+other. `readJpegIptc` keeps the JPEG's IPTC: the JPEG is untouched by the EPS
+clean form.

@@ -26,12 +26,16 @@ async function testExportAndUpload(svg: string) {
   const jpg = await readBytesAt(root, "export/temporary.jpg") as Uint8Array;
   const eps = await readBytesAt(root, "export/temporary.eps") as Uint8Array;
   expect(verifyEpsDocument(new TextDecoder().decode(eps)).ok).toBe(true);
-  for (const bytes of [jpg, eps]) {
-    const read = readStockFile(bytes);
-    expect(read.metadata).toEqual(STOCK_TEST_META);
-    expect(read.iptc).toEqual(STOCK_TEST_META);
-    expect(read.carriers).toEqual(["XMP", "IPTC-IIM"]);
-  }
+  const jpegRead = readStockFile(jpg);
+  expect(jpegRead.metadata).toEqual(STOCK_TEST_META);
+  expect(jpegRead.iptc).toEqual(STOCK_TEST_META);
+  expect(jpegRead.carriers).toEqual(["XMP", "IPTC-IIM"]);
+  // The exported EPS is the CLEAN form (2026-11-19): ONE carrier — the pdfmark
+  // XMP stream — and the independent reader still finds all three fields.
+  const epsRead = readStockFile(eps);
+  expect(epsRead.metadata).toEqual(STOCK_TEST_META);
+  expect(epsRead.iptc).toBeNull();
+  expect(epsRead.carriers).toEqual(["XMP"]);
   mount();
   upload([new File([jpg as BlobPart], "exported.jpg"), new File([eps as BlobPart], "exported.eps")]);
   await vi.waitFor(() => expect(document.querySelectorAll('[data-state="ready"]')).toHaveLength(2));
@@ -93,20 +97,24 @@ it("shows full XMP fields with long UTF-8 text and separately exposes limited le
   const metadata = { title: "日本語".repeat(100), description: "é".repeat(1500), tags: ["🌈".repeat(30)] };
   const result = await runExport({ ...args, metadata });
   expect(result.status).toBe("processed");
-  for (const ext of ["jpg", "eps"]) {
-    const read = readStockFile(await readBytesAt(root, `export/temporary.${ext}`) as Uint8Array);
-    expect(read.metadata).toEqual(metadata);
-    expect(read.iptc?.title.length).toBeLessThan(metadata.title.length);
-  }
+  const jpegRead = readStockFile(await readBytesAt(root, "export/temporary.jpg") as Uint8Array);
+  expect(jpegRead.metadata).toEqual(metadata);
+  expect(jpegRead.iptc?.title.length).toBeLessThan(metadata.title.length); // IIM's legacy limits
+  const epsRead = readStockFile(await readBytesAt(root, "export/temporary.eps") as Uint8Array);
+  expect(epsRead.metadata).toEqual(metadata); // the clean EPS carries XMP only
+  expect(epsRead.iptc).toBeNull();
 });
 
 it("handles IPTC-only and XMP-only files without inventing a second metadata carrier", async () => {
   const { args, root } = stockExportArgs(STOCK_TEST_SVGS[0]);
   await runExport(args);
   const eps = new TextDecoder().decode(await readBytesAt(root, "export/temporary.eps") as Uint8Array);
-  const iptcOnly = eps.replace(/<\?xpacket begin=[\s\S]*?<\?xpacket end=[^?]*\?>/, "");
+  // The export ships the clean form; the reader's IPTC branches are exercised on
+  // a legacy envelope built on purpose, so neither carrier can hide the other.
+  const legacy = embedXmpMetadataInEps(eps, STOCK_TEST_META);
+  const iptcOnly = legacy.replace(/<\?xpacket begin=[\s\S]*?<\?xpacket end=[^?]*\?>/, "");
   expect(readStockFile(new TextEncoder().encode(iptcOnly)).carriers).toEqual(["IPTC-IIM"]);
-  const xmpOnly = eps.replace(/^% IconSplitter IPTC begin\n[\s\S]*?^% IconSplitter IPTC end\n/m, "");
+  const xmpOnly = legacy.replace(/^% IconSplitter IPTC begin\n[\s\S]*?^% IconSplitter IPTC end\n/m, "");
   expect(readStockFile(new TextEncoder().encode(xmpOnly)).carriers).toEqual(["XMP"]);
   expect(() => readStockFile(new TextEncoder().encode(iptcOnly.replace(/^%%BeginPhotoshop:[\s\S]*?^%%EndPhotoshop/m, "")))).toThrow(/No complete/);
 });

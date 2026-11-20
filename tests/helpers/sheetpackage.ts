@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG, parseSheetConfig } from "../../src/lib/svgBuilder/confi
 import { computeLayout } from "../../src/lib/svgBuilder/layout";
 import { composeSheet } from "../../src/lib/svgBuilder/compose";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../../src/lib/upload/settings";
+import type { SheetMetadata } from "../../src/lib/svgBuilder/types";
 import { builtinConverter } from "../../src/lib/upload/epsconv/builtin";
 import { buildSheetPackage, type SheetPackage } from "../../src/svgBuilder/sheetpackage";
 import type { BuilderIconAsset } from "../../src/lib/svgBuilder/types";
@@ -50,9 +51,9 @@ const NO_BROWSER = {
 };
 
 /** One sheet package over the composed sheet; browser renderers are fakes. */
-export function packageOf(svg: string, settings: Partial<UploadSettings> = {}): Promise<SheetPackage> {
+export function packageOf(svg: string, settings: Partial<UploadSettings> = {}, metadata: SheetMetadata | null = null): Promise<SheetPackage> {
   return buildSheetPackage({
-    svg, metadata: null, folder: "_artboard_sheets/x/a", stem: "sheet", pairId: "a1",
+    svg, metadata, folder: "_artboard_sheets/x/a", stem: "sheet", pairId: "a1",
     now: "2026-11-19T00:00:00.000Z", prompt: "", model: "",
     settings: { ...DEFAULT_UPLOAD_SETTINGS, optimizeSvg: false, ...settings },
   }, NO_BROWSER);

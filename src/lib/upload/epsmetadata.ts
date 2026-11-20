@@ -3,7 +3,9 @@
 // The converter output is left intact; a pdfmark metadata stream is attached
 // before drawing and the drawing is bracketed by BDC/EMC, for both EPS writers.
 
-import { embedIptcInEps, readEpsIptc, readEpsPhotoshopXmp, stripEpsIptc } from "./epsiptc";
+import {
+  countXmpPackets, embedIptcInEps, isCleanEpsEnvelope, readEpsIptc, readEpsPhotoshopXmp, stripEpsIptc,
+} from "./epsiptc";
 import { sameMetadata } from "./rights";
 import { sameLegacyMetadata } from "./iptc";
 import { fnv1a32 } from "../pairing";
@@ -16,17 +18,26 @@ const SETUP_END = "% IconSplitter XMP setup end";
 const TRAILER_BEGIN = "% IconSplitter XMP trailer begin";
 const TRAILER_END = "% IconSplitter XMP trailer end";
 
+export interface EpsEmbedOptions {
+  /**
+   * The 2026-11-19 clean form: ONE carrier (the pdfmark stream), no
+   * Photoshop/IPTC copy, no `%ADO_*` flag and no `x:xmptk` signature. Default
+   * is the legacy two-carrier envelope the stock upload needs.
+   */
+  clean?: boolean;
+}
+
 /** Add a converter-neutral, Adobe-compatible XMP stream to an EPS document. */
-export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata): string {
+export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata, options: EpsEmbedOptions = {}): string {
   const clean = stripPreviousEmbedding(eps);
   const eol = lineEndingOf(clean);
-  const packet = buildXmpPacket(metadata).replace(/\n/g, eol);
+  const packet = packetFor(metadata, options.clean === true).replace(/\n/g, eol);
   const identity = clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
     .replace(/^%%DocumentData:.*(?:\r\n|\r|\n|$)/gm, "");
   // The id names what the FILE carries: the Icon Name (2026-11-08) is never written into it, so it must not
   // reach the id — the audit rebuilds this envelope from the file's own metadata and must reproduce it exactly.
   const id = `${metadataFingerprint({ ...metadata, name: undefined })}${fnv1a32(identity).toString(16).padStart(8, "0")}`;
-  const header = embedIptcInEps(addXmpHeader(clean, eol), metadata);
+  const header = options.clean === true ? withoutAdobeFlags(clean) : embedIptcInEps(addXmpHeader(clean, eol), metadata);
   const setup = setupBlock(id, packet, eol);
   const trailer = trailerBlock(id, eol);
   const setupAt = afterSetup(header);
@@ -52,11 +63,15 @@ export function readXmpMetadataFromEps(eps: string): IconMetadata | null {
   return null;
 }
 
-/** Whether both EPS metadata carriers match accepted fields (legacy limits only in IIM). */
+/**
+ * Whether the carriers match the accepted fields (legacy limits only in IIM).
+ * A clean envelope is verified the other way round: the ONE packet must match
+ * and there must be no second copy to disagree with it later.
+ */
 export function verifyEpsMetadata(eps: string, expected: IconMetadata): boolean {
-  const actual = readXmpMetadataFromEps(eps);
-  return sameMetadata(actual, expected) && sameMetadata(readEpsPhotoshopXmp(eps), expected)
-    && sameLegacyMetadata(readEpsIptc(eps), expected);
+  if (!sameMetadata(readXmpMetadataFromEps(eps), expected)) return false;
+  if (isCleanEpsEnvelope(eps)) return countXmpPackets(eps) === 1;
+  return sameMetadata(readEpsPhotoshopXmp(eps), expected) && sameLegacyMetadata(readEpsIptc(eps), expected);
 }
 
 function setupBlock(id: string, packet: string, eol: string): string {
@@ -96,6 +111,11 @@ function uniquePacketMarker(id: string, packet: string): string {
   return marker;
 }
 
+/** Everything our envelope added, gone: the converter's own program remains. */
+export function stripEpsEnvelope(eps: string): string {
+  return stripPreviousEmbedding(eps);
+}
+
 function stripPreviousEmbedding(eps: string): string {
   let clean = stripMarkedBlock(stripEpsIptc(eps), SETUP_BEGIN, SETUP_END);
   clean = stripMarkedBlock(clean, TRAILER_BEGIN, TRAILER_END);
@@ -118,6 +138,17 @@ function stripMarkedBlock(text: string, begin: string, end: string): string {
     i = endAt;
   }
   return out.join("");
+}
+
+/** The shared packet, minus the tool signature when the export is a clean one. */
+function packetFor(metadata: IconMetadata, clean: boolean): string {
+  const packet = buildXmpPacket(metadata);
+  return clean ? packet.replace(' x:xmptk="IconSplitter"', "") : packet;
+}
+
+/** Clean mode is one carrier: no `%ADO_*` flag, and no `%%DocumentData` rewrite. */
+function withoutAdobeFlags(eps: string): string {
+  return eps.replace(/^%ADO_[A-Za-z]+:[^\r\n]*(?:\r\n|\r|\n|$)/gm, "");
 }
 
 function addXmpHeader(eps: string, eol: string): string {
@@ -209,6 +240,7 @@ export function verifiedEpsArtwork(eps: string): string {
   if (!eps.includes(SETUP_BEGIN) && !eps.includes(TRAILER_BEGIN) && !eps.includes("% IconSplitter IPTC begin")) return eps;
   const metadata = readXmpMetadataFromEps(eps);
   const clean = stripPreviousEmbedding(eps);
-  if (metadata === null || embedXmpMetadataInEps(clean, metadata) !== eps) throw new Error("unverified EPS metadata envelope");
+  const mode = isCleanEpsEnvelope(eps) ? { clean: true } : {};
+  if (metadata === null || embedXmpMetadataInEps(clean, metadata, mode) !== eps) throw new Error("unverified EPS metadata envelope");
   return clean;
 }

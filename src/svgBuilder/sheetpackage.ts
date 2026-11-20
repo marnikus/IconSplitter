@@ -8,6 +8,7 @@
 import { embedMetadataInSvg } from "../lib/upload/embed";
 import { solidPaint } from "../lib/upload/solidpaint";
 import { cleanSheetSvg } from "../lib/svgBuilder/cleansheet";
+import { cleanEpsDocument } from "../lib/upload/epsclean";
 import { expandStrokes } from "../lib/upload/expand";
 import { expandTextToFills } from "../lib/upload/expandtext";
 import { rescaleSvg } from "../lib/upload/rescale";
@@ -101,12 +102,17 @@ async function renderJpegFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: Ic
   return { name, bytes: meta === null ? out.jpeg : embedXmpMetadata(out.jpeg, meta), problem: null };
 }
 
-async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps): Promise<Part> {
+async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: IconMetadata | null): Promise<Part> {
   const name = `${a.stem}.eps`;
   if (!a.settings.includeEps || d.eps === undefined) return { name, bytes: null, problem: a.settings.includeEps ? "EPS: no converter" : null };
   try {
     const out = await d.eps({ svg: solidPaint(a.svg), background: flattenColor(sizeOf(a.svg).background), title: name, createdAt: a.now });
-    return out.ok ? { name, bytes: text(out.eps), problem: null } : { name, bytes: null, problem: `EPS: ${out.reason}${out.fix === undefined ? "" : ` — ${out.fix}`}` };
+    // The EPS is written from the CLEANED sheet above, so the artwork is already
+    // clean; this strips the PostScript paperwork a converter adds (`%%Creator`,
+    // `%%CreationDate`, `%ADO_*`, a second metadata carrier) and leaves exactly
+    // one XMP carrier with Title, description and tags.
+    if (!out.ok) return { name, bytes: null, problem: `EPS: ${out.reason}${out.fix === undefined ? "" : ` — ${out.fix}`}` };
+    return { name, bytes: text(a.settings.cleanExport ? cleanEpsDocument(out.eps, meta) : out.eps), problem: null };
   } catch (error) {
     return { name, bytes: null, problem: `EPS: ${error instanceof Error ? error.message : "conversion failed"}` };
   }
@@ -159,7 +165,7 @@ export async function buildSheetPackage(a: SheetPackageArgs, d: SheetPackageDeps
   const svg: Part = a.settings.includeSvg
     ? { name: `${a.stem}.svg`, bytes: text(meta === null ? prepared.svg : embedMetadataInSvg(prepared.svg, meta)), problem: null }
     : { name: `${a.stem}.svg`, bytes: null, problem: null };
-  const [jpg, eps, png] = await Promise.all([renderJpegFile(worked, d, meta), convertEpsFile(worked, d), renderPngFile(worked, d)]);
+  const [jpg, eps, png] = await Promise.all([renderJpegFile(worked, d, meta), convertEpsFile(worked, d, meta), renderPngFile(worked, d)]);
   const record = await recordOf(a, { svg, jpg, eps }, meta, prepared.svgo);
   const files = [svg, jpg, eps, png].filter((p): p is Part & { bytes: Uint8Array } => p.bytes !== null).map((p) => ({ name: p.name, bytes: p.bytes }));
   files.push({ name: "export.json", bytes: text(serializeExportRecord(record)) });
