@@ -5826,7 +5826,7 @@ only for `cleanExport: false`, so legacy hashes stay.
 | `npx tsc --noEmit` | clean | — |
 | `npm run lint` | 0 errors | 27 pre-existing warnings |
 | `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `stretchAt` was CC 14 → split into `closedStretch`/`openStretch` (`stretch.ts` 33 fns / 218 lines); `region.ts` 8 fns / 106 lines, `svgclean.ts` 8 / 130, `svgtidy.ts` 17 / 186, `cleansheet.ts` 1 / 16 |
-| `npx vitest run` (full) | 494 files, 4,939 tests — 4,938 passed | 161–191 s; the ONE failure is `algo_efficiency`'s 200 ms synthetic-detect budget at 222–259 ms on this host, and it measures 226.7 ms with this round's `src`/`tests` changes stashed, so it is the machine, not the round — the budget was NOT touched |
+| `npx vitest run` (full) | 494 files, 4,939 tests — 4,938 passed | 161–191 s; the ONE failure is `algo_efficiency`'s 200 ms synthetic-detect budget at 222–259 ms on this host, and it measures 226.7 ms with this round's `src`/`tests` changes stashed, so it is the machine, not the round — the budget was NOT touched; `verify:fast` once failed `bridge_update_watch` under full load and that file passes 8/8 alone |
 | `npm run verify:fast` | ALL LANES PASSED | 235.5 s with coverage; build 3,625.42 kB (gzip 1,072.05 kB) |
 | `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 3,801 B, `sor/svg-path-editor.md` 8,974 B, `sor/svg-path-editor-handles.md` 6,926 B, `sor/tests/upload.md` 8,996 B, `sor/owners/upload.md` 8,992 B, `sor/export-formats.md` 8,981 B |
 
