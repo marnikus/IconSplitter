@@ -1,5 +1,5 @@
-// cleantree.ts — the tidy-up passes that sit on top of the stock clean policy
-// (2026-11-19, second round). The policy removes paperwork (names, foreign
+// svgtidy.ts — the tidy-up passes that sit on top of the stock clean policy
+// (2026-11-19, second round; shared 2026-11-20). The policy removes paperwork (names, foreign
 // vocabularies, comments); what survives it in a stitched sheet is still
 // machine-shaped, and this pass removes THAT without touching the picture:
 //
@@ -14,11 +14,15 @@
 //   • empty containers and whitespace-only text nodes: bytes that draw nothing;
 //   • `xlink:href` → the SVG 2 `href`, and the declaration that is then unused.
 //
+// Both exporters run it: the builder over the finished sheet (`cleansheet.ts`),
+// the upload chain over the icon SVG (`exportstages.ts`), so one policy — not a
+// sheet-only subset — decides what a saved file carries.
+//
 // `opacity` is deliberately not compared: it is per-element compositing, not
 // inherited paint. The paint comparison also stops at every reference subtree
 // (`<defs>`, `<symbol>`, `<clipPath>`…), because what those inherit is decided
 // by the `<use>` that instantiates them, not by their parents here.
-import { allElements, insideMetadata, localName, usedPrefixes } from "../upload/svgdom";
+import { allElements, insideMetadata, localName, usedPrefixes } from "./svgdom";
 
 interface TidyReport {
   /** Attributes removed as dead or redundant. */
@@ -44,7 +48,7 @@ const CONTAINERS = ["g", "defs"];
 const TEXT_EMBEDS = ["title", "desc", "metadata"];
 
 /** Runs every tidy pass in order; idempotent on an already tidy tree. */
-export function tidySheetTree(root: Element): TidyReport {
+export function tidySvgTree(root: Element): TidyReport {
   const attributes = dropDeadColor(root) + dropRedundantPaint(root);
   const nodes = unwrapBareGroups(root) + dropEmptyContainers(root) + dropWhitespace(root);
   toSvg2Href(root);

@@ -24,6 +24,7 @@ import { rotateAnchors, rotateAngle, scaleAnchors, scaleFor, type Box, type BoxH
 import { boxCursorAt, boxTargetAt } from "./boxtarget";
 import { alongEdge, boxCenter, skewAngleFor, skewAnchors, skewedCorners, type SkewEdge } from "./skew";
 import { HIT_PX } from "./hitpx";
+import { cutRegionAt } from "./linegesture";
 
 export interface PointerInput {
   p: Pt;
@@ -63,6 +64,8 @@ export interface EditorState {
   nudgeAt?: number;
   /** Alt + Shift over a line: the stretch between its two crossings a click would remove (drawn red). */
   cutHint?: Pt[] | null;
+  /** Alt + Shift over a FILLED area: the closed outline a click would cut out (drawn red, 2026-11-20). */
+  cutRegionHint?: Pt[] | null;
   /** While a box edge is dragged: the angle (degrees), the pointer, the fixed centre and the skewed box (drawn by the overlay). */
   skewHint?: { angle: number; at: Pt; center: Pt; quad: Pt[] } | null;
   /** The last Alt + click that removed a segment: when it was and the session before it (an Alt + double-click undoes it). */
@@ -112,13 +115,19 @@ const withSession = (st: EditorState, session: EditSession): EditorState => ({ .
 
 export function pointerDown(st: EditorState, input: PointerInput): EditorState {
   const next = pressDown(st, input);
-  return next.cutHint ? { ...next, cutHint: null } : next;
+  return next.cutHint || next.cutRegionHint ? { ...next, cutHint: null, cutRegionHint: null } : next;
 }
 
 function pressDown(st: EditorState, input: PointerInput): EditorState {
   const scaling = scaleDown(st, input);
   if (scaling !== null) return scaling;
   const hit = hitOf(st.session, input);
+  // Alt + Shift off every line is the fill-region cut (2026-11-20); on a line the
+  // line gestures below keep it. Nothing there → the click selects as usual.
+  if (st.session.tool === "select" && input.alt && input.shift && hit.kind === "none") {
+    const cut = cutRegionAt(st, input.p);
+    if (cut !== st) return cut;
+  }
   return st.session.tool === "draw" ? drawDown(st, input, hit) : selectDown(st, input, hit);
 }
 
@@ -277,4 +286,4 @@ function insertAt(st: EditorState, hit: Extract<Hit, { kind: "segment" }>): Edit
 }
 
 export { clearEditClipboard, keyDown, type KeyInput } from "./keys";
-export { doubleClick, hoverAt } from "./linegesture";
+export { cutRegionAt, doubleClick, hoverAt } from "./linegesture";

@@ -35,7 +35,7 @@ const HINTS = {
   eps: "a genuine EPS; the converter below writes it, and anything it cannot write fails that stage honestly",
   converter: "who writes the EPS when \"Also write EPS\" is on — the built-in subset writer, or Inkscape on this machine",
   optimize: "the export copy only — viewBox, geometry, strokes and metadata are preserved",
-  clean: "drop the generator's paperwork — data-* hooks, class/aria, repeated xmlns, comments, provenance blocks, float noise, and the EPS's %%Creator/%%CreationDate plus its second metadata copy; the picture, px, Title, description and tags stay",
+  clean: "drop the generator's paperwork — data-* hooks, class/aria, repeated xmlns, comments, provenance blocks, dead color, bare groups, float noise, and the EPS's %%Creator/%%CreationDate plus its second metadata copy; the picture, Title, description and tags stay (a sheet keeps its px too)",
   expand: "strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes",
   expandText: "text becomes filled glyph outlines; what cannot be outlined fails that stage honestly",
   rescale: "the full artboard keeps its ratio and grows until its area is the megapixel target",

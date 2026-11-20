@@ -23,11 +23,25 @@ dropped. Legend: "Alt+Click line". Test: `pathedit_remove_segment.test.ts`.
 around the click, even with no anchors there (`stretch.ts`): a crossing is where
 another line (or a far part of the same one) cuts it or ends on it. Anchors are
 made on both crossings (the shape is kept), the part between goes: an open line
-splits, a closed shape opens, an anchor inside goes too. It needs a crossing on
-both sides of an open line (else nothing happens). While both keys are held
+splits, a closed shape opens, an anchor inside goes too. A **tail** — an open
+line bounded by ONE crossing — is now removable the same way: the mark runs from
+that crossing to the line's end and the click drops it, leaving the end on the
+other line; a line with no crossing is never touched. While both keys are held
 over a line the part is drawn red (`cutHint`, overlay `data-cut-hint`, never
 written; it follows the next pointer move). One undo step. Tests:
-`pathedit_cut_between.test.ts`, `pathedit_cut_between_ui.test.tsx`.
+`pathedit_cut_between.test.ts`, `pathedit_cut_tail.test.ts`,
+`pathedit_cut_between_ui.test.tsx`. Rules together: [edit-mode cuts](svg-edit-cuts.md).
+
+## Alt + Shift over a filled area (2026-11-20)
+
+On empty space over a **closed, filled** area, both keys mark that area's own
+outline red (`cutRegionHint`, overlay `data-cut-region`); the click **cuts it
+out** — the subpath keeps its geometry and only its direction reverses
+(`lib/pathedit/region.ts` `cutRegion`), so under `fill-rule="nonzero"` the paint
+inside becomes a hole. Innermost closed subpath wins; a `fill-rule="evenodd"`
+outline is already holed there, so nothing is offered. One undo step, selection
+kept clear. Legend: "Alt+Shift+Click fill". Tests:
+`pathedit_region_cut.test.ts`, `pathedit_region_cut_ui.test.tsx`.
 
 ## Beyond the artboard's border (2026-11-10)
 

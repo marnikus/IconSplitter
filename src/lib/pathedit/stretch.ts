@@ -93,12 +93,32 @@ function neighbours(us: number[], u0: number, closed: boolean): { from: number |
   return { from, to };
 }
 
-/** The stretch of subpath `sub` around parameter `u0` (the click), or null when it has no crossing on both sides. */
+/**
+ * The stretch of subpath `sub` around parameter `u0` (the click). A CLOSED shape
+ * needs a crossing on both sides (it wraps, so it always has two); an OPEN line
+ * with only one crossing has a TAIL there — from that crossing to its own end
+ * (2026-11-20), which is what makes the two ends of a line removable too. A line
+ * with no crossing at all is not a tail: Alt + click already takes a segment.
+ */
 export function stretchAt(m: PathModel, sub: number, u0: number): Stretch | null {
   const s = m.subs[sub];
   if (s === undefined || s.anchors.length < 2) return null;
   const { from, to } = neighbours(crossingParams(m, sub), u0, s.closed);
-  return from === undefined || to === undefined || Math.abs(from - to) <= SAME ? null : { from, to };
+  return s.closed ? closedStretch(from, to) : openStretch(s, from, to);
+}
+
+/** A closed line wraps, so a stretch needs a crossing on both sides. */
+function closedStretch(from: number | undefined, to: number | undefined): Stretch | null {
+  if (from === undefined || to === undefined) return null;
+  return Math.abs(from - to) <= SAME ? null : { from, to };
+}
+
+/** An open line has ends, so ONE crossing bounds a tail: start…crossing, or crossing…end. */
+function openStretch(s: SubPath, from: number | undefined, to: number | undefined): Stretch | null {
+  if (from === undefined && to === undefined) return null;
+  const start = from ?? 0;
+  const end = to ?? segCount(s);
+  return end - start <= SAME ? null : { from: start, to: end };
 }
 
 /** The stretch as points along the line (for the red hint). */

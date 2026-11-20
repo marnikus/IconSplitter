@@ -22,9 +22,11 @@ describe("which stretch is under the click", () => {
     expect(s?.to).toBeCloseTo(0.7, 6);
   });
 
-  it("needs a crossing on both sides (an open line): one crossing, or none, is no stretch", () => {
-    expect(stretchAt(model(H + V1 + V2), 0, 0.1)).toBeNull(); // only the line at 30 is ahead
-    expect(stretchAt(model(H + V1), 0, 0.5)).toBeNull();
+  // 2026-11-20: one crossing on an OPEN line is a TAIL (see pathedit_cut_tail);
+  // only a line with no crossing at all is not a stretch.
+  it("one crossing is a tail and no crossing is no stretch", () => {
+    expect(stretchAt(model(H + V1 + V2), 0, 0.1)).toMatchObject({ from: 0, to: 0.3 });
+    expect(stretchAt(model(H + V1), 0, 0.5)).toMatchObject({ from: 0.3, to: 1 });
     expect(stretchAt(model(H), 0, 0.5)).toBeNull();
   });
 
@@ -34,7 +36,9 @@ describe("which stretch is under the click", () => {
   });
 
   it("its own neighbouring segments are no crossings", () => {
-    expect(stretchAt(model("M0 50L40 50L100 50" + V2), 0, 0.2)).toBeNull();
+    // the corner at u=1 is not a crossing: the only one is the line at 70 (u=1.5),
+    // so this is the tail from the start of the line to it
+    expect(stretchAt(model("M0 50L40 50L100 50" + V2), 0, 0.2)).toMatchObject({ from: 0, to: 1.5 });
   });
 });
 
@@ -108,9 +112,10 @@ describe("the gesture", () => {
     expect(body(click(start(), at(50, 50, { alt: true })))).toBe(V1 + V2);
   });
 
-  it("with no crossing on a side, nothing happens and nothing is recorded", () => {
-    const st = click(start(), at(10, 50, both));
-    expect(body(st)).toBe(H + V1 + V2);
+  it("with no crossing at all nothing happens and nothing is recorded", () => {
+    const bare = editorState(newSession(model("M0 50L100 50")));
+    const st = click(bare, at(10, 50, both));
+    expect(body(st)).toBe("M0 50L100 50");
     expect(st.session.undo).toHaveLength(0);
   });
 

@@ -21,6 +21,7 @@ import { embedXmpMetadata } from "../lib/upload/jpeg";
 import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
 import { cleanEpsDocument } from "../lib/upload/epsclean";
 import { enforceExportSvg } from "../lib/upload/clean";
+import { cleanSvgText } from "../lib/upload/svgclean";
 
 /** A stage failure carries its class, so the log names the failing stage. */
 export class StageError extends Error {
@@ -94,8 +95,21 @@ async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
   if (clean.violations.length > 0) {
     throw new StageError("optimize", `the export SVG breaks the clean rules: ${clean.violations.join("; ")}`);
   }
-  art.optimizedSvg = clean.svg;
-  art.optimizeRecord = await recordAfterClean(optimized.record, clean.svg, clean.rebuilt);
+  // The same clean copy the builder's sheet package gets (2026-11-20): the
+  // stock policy already ran in prepare, but the tidy passes, provenance
+  // `<metadata>` and rounding were sheet-only. Opt-in via the settings box; the
+  // icon contract is re-checked, so the pass cannot hand px width/height back.
+  const final = cleanedSvg(clean.svg, ctx.settings);
+  art.optimizedSvg = final;
+  art.optimizeRecord = await recordAfterClean(optimized.record, final, clean.rebuilt || final !== clean.svg);
+}
+
+/** The export SVG after the clean copy, when it is on and still contract-clean. */
+function cleanedSvg(svg: string, settings: UploadSettings): string {
+  if (!settings.cleanExport) return svg;
+  const cleaned = cleanSvgText(svg, { keepSize: false });
+  if (cleaned.refused !== null) return svg;
+  return enforceExportSvg(cleaned.svg).violations.length === 0 ? cleaned.svg : svg;
 }
 
 function embedSvg(art: Artifacts, metadata: IconMetadata | null): string | null {

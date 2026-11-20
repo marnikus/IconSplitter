@@ -10,6 +10,7 @@ import type { Hit } from "./hit";
 import { hitOf } from "./hitof";
 import type { AnchorRef, Pt } from "./model";
 import { removeSegment } from "./ops";
+import { cutRegion, regionAt, regionPoints } from "./region";
 import { commit, type EditSession } from "./session";
 import { removeStretch, stretchAt, stretchPoints } from "./stretch";
 
@@ -34,6 +35,26 @@ export function removeAt(st: EditorState, hit: SegmentHit, time?: number): Edito
   return { ...withEdit(st, commit(st.session, model)), lineCut: time === undefined ? null : { at: time, before } };
 }
 
+/**
+ * Alt + Shift + click on a FILLED area (2026-11-20): the region's winding flips,
+ * so the paint inside it becomes a hole. Nothing is recorded when the point is
+ * outside every closed shape — the click then selects as usual.
+ */
+export function cutRegionAt(st: EditorState, p: Pt): EditorState {
+  const sub = regionAt(st.session.model, p);
+  const model = sub === null ? null : cutRegion(st.session.model, sub);
+  if (model === null) return st;
+  return withEdit(st, commit(st.session, model));
+}
+
+/** The closed outline a click would cut out, or null: the red mark of a fill region. */
+function regionHintAt(s: EditSession, p: Pt): Pt[] | null {
+  const sub = regionAt(s.model, p);
+  if (sub === null) return null;
+  const pts = regionPoints(s.model.subs[sub]);
+  return pts.length < 3 ? null : pts;
+}
+
 /** Alt + Shift + click on a line: the part between the two crossings around the click goes; anchors appear on the crossings. */
 export function cutStretchAt(st: EditorState, hit: SegmentHit): EditorState {
   const m = st.session.model;
@@ -42,9 +63,13 @@ export function cutStretchAt(st: EditorState, hit: SegmentHit): EditorState {
   return model === null ? st : withEdit(st, commit(st.session, model));
 }
 
-const sameHint = (a: Pt[] | null | undefined, b: Pt[] | null): boolean =>
-  a != null && b !== null && a.length === b.length && a[0].x === b[0].x && a[0].y === b[0].y
-  && a[a.length - 1].x === b[b.length - 1].x && a[a.length - 1].y === b[b.length - 1].y;
+const sameHint = (a: Pt[] | null | undefined, b: Pt[] | null): boolean => {
+  const x = a ?? null;
+  if (x === null || b === null) return x === b;
+  if (x.length !== b.length || x.length < 2) return false;
+  const end = b.length - 1;
+  return x[0].x === b[0].x && x[0].y === b[0].y && x[end].x === b[end].x && x[end].y === b[end].y;
+};
 
 /** The stretch an Alt + Shift click on the line under the pointer would remove, or null. */
 function cutHintAt(s: EditSession, input: PointerInput): Pt[] | null {
@@ -53,13 +78,22 @@ function cutHintAt(s: EditSession, input: PointerInput): Pt[] | null {
   return hit.kind === "segment" && stretch !== null ? stretchPoints(s.model, hit.sub, stretch) : null;
 }
 
-/** A pointer move with nothing held down: Alt + Shift over a line shows what would go; else the hint is cleared. The same state when nothing changes. */
+/**
+ * A pointer move with nothing held down: Alt + Shift over a line shows the part
+ * that would go, over a FILLED area the outline that would be cut out (the line
+ * wins when both are under the pointer); otherwise both marks are cleared. The
+ * same state when nothing changes.
+ */
 export function hoverAt(st: EditorState, input: PointerInput): EditorState {
   const live = st.drag === null && st.session.tool === "select" && input.alt && input.shift;
   const hint = live ? cutHintAt(st.session, input) : null;
-  if (hint === null && (st.cutHint ?? null) === null) return st;
-  return sameHint(st.cutHint, hint) ? st : { ...st, cutHint: hint };
+  const region = live && hint === null ? regionHintAt(st.session, input.p) : null;
+  const same = sameHint(st.cutHint, hint) && sameRegion(st.cutRegionHint, region);
+  return same ? st : { ...st, cutHint: hint, cutRegionHint: region };
 }
+
+const sameRegion = (a: Pt[] | null | undefined, b: Pt[] | null): boolean =>
+  (a ?? null) === null && b === null ? true : a != null && b !== null && a.length === b.length && sameHint(a, b);
 
 /** One whole line's anchors. */
 const lineOf = (st: EditorState, sub: number): AnchorRef[] => st.session.model.subs[sub].anchors.map((_, i) => ({ sub, i }));

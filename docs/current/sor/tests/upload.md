@@ -18,11 +18,11 @@
   (restart → interrupted, corrupt → empty)
 * `upload_discovery.test.ts` — item-approval gates; [accepted source identity](../version-acceptance.md),
   legacy newest-valid fallback, missing/unreadable accepted files and exclusions.
-* Named row labels: [contract](../upload-row-badges.md); Ctrl-click/undo UI in `upload_rowbadge_ui.test.tsx`, retry re-assignment in `stockupload_runner.test.ts`.
+* Named row labels: [contract](../upload-row-badges.md); Ctrl-click/undo UI in `upload_rowbadge_ui.test.tsx`, retry in `stockupload_runner.test.ts`.
 * `upload_rowmodel.test.ts` — row assembly from a real export.json + source
   hash, exact staleness (source/settings/metadata fingerprints), the metadata
-  state a record carries, filters/sort/header/counts (incl. a failed run with
-  record null counted), pruneChecked
+  state a record carries, filters/sort/header/counts (a failed run counts with
+  record null), pruneChecked
 * `upload_undo.test.ts` — `uploadSettings` and RULE 25 selection entries:
   validated payload, live/persist-only apply, no-op refusal, undo/redo across
   tabs; failed apply cannot advance the timeline cursor
@@ -40,7 +40,9 @@
   `upload_runexport.test.ts` checks preview/JPEG prepared input, committed
   gradient SVG and built-in-EPS partial output; its two-pass regression proves
   that a previously committed EPS stays on disk but vanishes from the new
-  partial or EPS-disabled record and Download all.
+  partial or EPS-disabled record and Download all. `export_clean_upload.test.ts`
+  (9) — the same clean copy the sheet gets: dead `color`, bare `<g>`, provenance
+  and float noise; the fingerprint moves only for off.
 * `upload_badge_settings.test.ts`, `upload_badge_geometry.test.ts`,
   `upload_badge.test.ts` and `upload_outline.test.ts` — opt-in/default
   fingerprints, scientific-notation path parsing, exact four-corner insets,
@@ -59,66 +61,64 @@
   visible stroke under zero inherited fill opacity keeps its paint; source
   geometry and Shadow bounds agree with exported outlines
 * `upload_paint_clash.test.ts` — strokes the background hides (black on black)
-  are named; readable pairs and default/transparent/artwork say nothing
+  are named; readable pairs, default/transparent/artwork say nothing
 * `upload_live_preview.test.tsx` — the bar's STROKE writes the export
   `strokePx` and the live preview shows it; no dialog stroke row; the Default
   choices and "All default"; padding Default and icon-stroke Bar activate only
-  inside their buttons, not blank setting space; the preview box fits the
-  artboard ratio (2:1; 16 px = 2048 px); the icon's own stroke override
-  (written on leave, inherit drops it); custom W×H commits on leave;
+  inside their buttons, not blank space; the preview fits the artboard ratio
+  (2:1; 16 px = 2048 px); the icon's own stroke override (written on leave,
+  inherit drops it); custom W×H commits on leave;
   per-icon Shadow width/gap and corner badge, live vector preview and built-in-EPS warning
 * `upload_ui.test.tsx` — DOM end-to-end: approved rows only (pending/orphan
   reported), previews + zoom, filters/search, selection, the settings dialog
   (defaults persisted not undoable; per-icon markers; bulk apply = ONE undo
-  entry; reset), request confirmation, editable/copiable metadata, automatic valid-result acceptance for row/bulk Generate/Regenerate,
-  accepted-cache reload, preserved ownership, exact mixed-batch acceptance counts,
+  entry; reset), request confirmation, editable/copiable metadata, automatic
+  valid-result acceptance for row/bulk Generate/Regenerate, accepted-cache
+  reload, preserved ownership, mixed-batch acceptance counts,
   no automatic export after Generate/Regenerate (explicit Export refreshes packages),
   legacy-draft/manual-edit acceptance, invalid/malformed/truncated refusal,
-  failed/cancelled regeneration preserving accepted text/cache, cancel (never
-  resent), interrupted after a
-  restart, selected-only Shadow (hidden checks, mixed toggles, undo, general
-  bulk apply preserves it, popup EPS warning), selected-only badge opt-in
+  failed/cancelled regeneration keeping accepted text/cache, cancel (never
+  resent), interrupted after a restart, selected-only Shadow (hidden checks,
+  mixed toggles, undo, general bulk apply preserves it, popup EPS warning), selected-only badge opt-in
   (mixed/hidden checks, undo, one shared defaults block, per-icon
   markers/reset), selected-only size-guide opt-in (mixed/hidden checks, undo,
   one shared defaults block, corner-driven edge labels, per-icon markers),
-  deferred source-file preview
-  read under unrelated timers and rescan, export → green committed package with
-  the source untouched, stale →
-  re-export, metadata embedded + verified, honest failure commits nothing.
+  deferred source-file preview read under unrelated timers and rescan, export →
+  green committed package with the source untouched, stale → re-export,
+  metadata embedded + verified, honest failure commits nothing.
 * `upload_row_gestures.test.tsx` — RULE 25: Batch modifiers, visible header,
   arrows, modal isolation and global selection undo; no A/D or provider calls.
 
-Native vector EPS: `upload_epsgradient`, `upload_epsvectorcheck` cover axial/radial
-shading, template alpha, restricted data/stack grammar, nonlinear color error
-bounds and raster rejection. `upload_runexport` verifies saved EPS/XMP bytes,
-cached raster rejection, Download all and corruption after tmp verification.
-See `sor/upload-eps-gradients.md` for support limits and missing input fixtures.
+Native vector EPS: `upload_epsgradient`/`upload_epsvectorcheck` cover axial/radial
+shading, template alpha, the data/stack grammar, color error bounds, raster
+rejection; `upload_runexport` verifies saved EPS/XMP bytes, cached-raster
+rejection, Download all, tmp corruption. Limits: [gradients](../upload-eps-gradients.md).
 
 `upload_download_ui.test.tsx` drives real planned copies/readback with gated
 browser I/O: per-file progress, hidden portal/cancel, audio once, retained
-summaries, duplicate picker protection, no-op/cancelled picker silence and mixed
+summaries, duplicate-picker protection, cancelled-picker silence and mixed
 kept/missing/failed outcomes. `upload_process_progress.test.tsx` also pins the
 download slot, stale events and toolbar counts.
 
-Metadata/export/download progress, cancellation, handoff and hidden-tab tests: [process progress](../process-progress.md#tests-and-safety).
+Metadata/export/download progress, cancellation, handoff, hidden-tab tests: [process progress](../process-progress.md#tests-and-safety).
 
-Embedded JPEG/EPS carriers, repair and independent upload test page: [stock file metadata](../upload-file-metadata.md).
+Embedded JPEG/EPS carriers, repair, independent upload page: [stock file metadata](../upload-file-metadata.md).
 
 Adobe saved-page regression and opt-in LIVE upload validation (local reader is not Adobe acceptance): [guide](../upload-adobe-validation.md).
 
 
-User-defined badge validation, editor, persistence/undo/live preview and actual
+User-defined badge validation, editor, persistence/undo/live preview and
 supplied-file export tests: [custom templates](../upload-badge.md#custom-svg-templates).
 
 * `upload_auto_repair.test.ts`, `upload_viewrepair.test.ts`,
   `upload_fitfallback.test.ts` — real bulbs, bounded pinned-fit and minor-frame
-  recovery, safety, source immutability and vector EPS. [Cases/policy](../upload-auto-repair.md).
+  recovery, safety, source immutability, vector EPS. [Cases/policy](../upload-auto-repair.md).
 
-* `upload_centred_fit.test.ts` — leaf64×64/50px/8% centering; grid/padded containment, presets, EPS, cleaning, determinism, impossible fits.
+* `upload_centred_fit.test.ts` — leaf64×64/50px/8% centering; grid/padded containment, presets, EPS, cleaning, impossible fits.
 * `upload_offset_equivalence.test.ts`, `upload_offset_distance.test.ts` — hash/threshold equivalence.
 
 `upload_settings_disclosure.test.tsx`: both scopes, native folding, mounted
-drafts, retained open state, toggle/blur and Close/reopen.
+drafts, retained open state, toggle/blur, Close/reopen.
 
 * `upload_padding_sides.test.ts`, `upload_padding_sides_ui.test.tsx`,
   `upload_padding_sides_export.test.ts` and live-preview coverage: independent

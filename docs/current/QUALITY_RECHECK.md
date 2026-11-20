@@ -5800,3 +5800,37 @@ three fields and reports `carriers: ["XMP"]`), and the reader's IPTC branches ar
 exercised on a legacy envelope built on purpose, so neither carrier can hide the
 other. `readJpegIptc` keeps the JPEG's IPTC: the JPEG is untouched by the EPS
 clean form.
+
+## 2026-11-20 — edit-mode cuts (fills, tails) and the upload clean copy
+
+Three requests in one round: (g) **Alt + Shift over a filled area** cuts that
+area out — the *fill region* gesture — and (h) the same gesture now also removes
+a **tail**, an open line bounded by ONE crossing instead of two (`stretchAt`
+returns `{0,to}` / `{from,segCount}` for open subpaths; a line with no crossing
+stays untouched by design, Alt + click already removes a whole segment); and (i)
+the **clean copy reaches the upload flow**: `lib/svgBuilder/cleansheet.ts` +
+`cleantree.ts` became `lib/upload/svgclean.ts` + `lib/upload/svgtidy.ts`, shared
+by the sheet package (`keepSize: true`) and `exportstages.ts`
+(`keepSize: false`), so an uploaded icon SVG loses the dead `color`, the bare
+`<g>` wrappers, the provenance `<metadata>` and the float noise the stock policy
+left behind. `enforceExportSvg` re-checks the cleaned text and a pass that broke
+the icon contract is discarded, not committed; the settings fingerprint moves
+only for `cleanExport: false`, so legacy hashes stay.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_region_cut.test.ts` (new) | 14 passed | innermost closed subpath wins, open lines are never regions, the winding flip keeps geometry (`M10 10L90 10L90 90L10 90ZM40 60L60 60L60 40L40 40Z`), self-inverse, curved ring keeps its cubics, Alt alone or a plain click is not a cut |
+| `tests/pathedit_cut_tail.test.ts` (new) | 11 passed | one crossing ⇒ the tail (`M0 50L100 50` + `M30 0L30 100`, click at 60 ⇒ `M0 50L30 50M30 0L30 100`), either side by click position, one undo step, closed shapes unchanged, no crossing ⇒ null |
+| `tests/pathedit_region_cut_ui.test.tsx` (new) | 3 passed | Alt + Shift over a filled path marks `[data-cut-region]` in `#ff0000`, releasing either key clears it, the click cuts and leaves no mark, Finish writes the reversed subpath, Ctrl+Z disables Finish, the legend names the gesture |
+| `tests/export_clean_upload.test.ts` (new) | 9 passed | dead `color`/bare `<g>`/provenance/float noise go with the box on, the stock output with it off, `verifyExportSvg` clean either way, embedded Title/description/tags identical, px never returned (`keepSize`), idempotent, refusals by name, fingerprint moves only for off |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `stretchAt` was CC 14 → split into `closedStretch`/`openStretch` (`stretch.ts` 33 fns / 218 lines); `region.ts` 8 fns / 106 lines, `svgclean.ts` 8 / 130, `svgtidy.ts` 17 / 186, `cleansheet.ts` 1 / 16 |
+| `npx vitest run` (full) | 494 files, 4,939 tests — 4,938 passed | 161–191 s; the ONE failure is `algo_efficiency`'s 200 ms synthetic-detect budget at 222–259 ms on this host, and it measures 226.7 ms with this round's `src`/`tests` changes stashed, so it is the machine, not the round — the budget was NOT touched |
+| `npm run verify:fast` | ALL LANES PASSED | 235.5 s with coverage; build 3,625.42 kB (gzip 1,072.05 kB) |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 3,801 B, `sor/svg-path-editor.md` 8,974 B, `sor/svg-path-editor-handles.md` 6,926 B, `sor/tests/upload.md` 8,996 B, `sor/owners/upload.md` 8,992 B, `sor/export-formats.md` 8,981 B |
+
+The legend gained a second row ("Alt+Shift+Click fill"), the line row now says
+"…or a tail", and `hotkeys.ts` is the one place both gestures are announced. A
+`fill-rule="evenodd"` outline is already holed where a subpath is nested, so a
+cut is not offered there — the missing feature is the right answer, not a bug.

@@ -96,14 +96,14 @@ the SVG, the JPEG and the EPS paint.
 
 With `cleanExport` on, `prepareSheetSvg` runs the upload tab's own policy
 (`lib/upload/cleandom`) plus the sheet's final touches
-(`lib/svgBuilder/cleansheet.ts`): every `data-*`/`class`/`aria-*` goes (asset
+(`lib/upload/svgclean.ts`): every `data-*`/`class`/`aria-*` goes (asset
 ids, cell indexes, the config hash, approve flags), so do comments, the repeated
 `xmlns` of a stitched copy, any `<metadata>` that is not the tag list (ours read
 `<metadata>{"v":1,…}</metadata>`: prompt, model, source fingerprints) and float
 noise (`1.9992750000000001` → `1.999`). px, viewBox, geometry, Title, description
 and the DC tags survive; a raster `<image>` is refused by name.
 
-Then the tidy passes (`lib/svgBuilder/cleantree.ts`) remove what is still
+Then the tidy passes (`lib/upload/svgtidy.ts`) remove what is still
 machine-shaped and paints nothing: the dead `color="…"` beside an explicit
 stroke (the desktop-editor quirk — kept only while some `currentColor` still
 needs it), paint a child merely repeats from its group, values that ARE the SVG
@@ -115,7 +115,8 @@ is never compared (per-element compositing, not inherited paint) and the paint
 pass stops at every reference subtree, where the `<use>` decides inheritance.
 Authored coordinates are NOT touched: a 0.05 grid (`x="18.75"`, `rx="1.4"`) and
 real arcs/rounded rects are what marks the file human, so only 4+ decimal values
-are rounded. Idempotent, and pinned as such.
+are rounded. Idempotent, and pinned as such. The upload chain runs this same
+pair (`keepSize: false`).
 
 ## Rescale rule
 

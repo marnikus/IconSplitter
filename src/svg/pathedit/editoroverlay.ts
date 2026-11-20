@@ -115,6 +115,20 @@ function cutHintMarks(doc: Document, st: EditorState): Element[] {
   return [line];
 }
 
+/**
+ * Alt + Shift over a FILLED area: that area's own outline, filled translucent
+ * red with a red edge — the exact region a click cuts out (2026-11-20). Never
+ * written to the file; the fill is the mark, so the icon under it stays visible.
+ */
+function cutRegionMarks(doc: Document, st: EditorState): Element[] {
+  const pts = st.cutRegionHint;
+  if (pts == null || pts.length < 3) return [];
+  const d = `${pts.map((p, i) => `${i === 0 ? "M" : "L"}${n(p.x)} ${n(p.y)}`).join("")}Z`;
+  const region = el(doc, "path", { d }, "fill:rgba(255,0,0,0.22);stroke:#ff0000;stroke-width:2px;stroke-linejoin:round");
+  region.setAttribute("data-cut-region", "");
+  return [region];
+}
+
 function marqueeBox(doc: Document, st: EditorState): Element[] {
   const m = st.marquee;
   if (m === null) return [];
@@ -165,7 +179,7 @@ export function drawEditOverlay(svg: Element, st: EditorState, look: OverlayLook
   const model = { subs: st.session.model.subs.map((s, i) => (editableSub(st.session, i) ? s : { ...s, anchors: [] })) };
   const selected = new Set(st.session.selection.map((r) => `${r.sub}:${r.i}`));
   const guide = look.guide === false ? [] : [el(doc, "path", { d: toPathData(model, 3) }, "fill:none;stroke:#c8d2e0;stroke-width:1px")];
-  const parts: Element[] = [...guide, ...snapMarks(doc, st, look), ...cutHintMarks(doc, st)];
+  const parts: Element[] = [...guide, ...cutRegionMarks(doc, st), ...snapMarks(doc, st, look), ...cutHintMarks(doc, st)];
   // anchors first; a selected point's handles above them
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => parts.push(anchorDot(doc, a, selected.has(`${sub}:${i}`), look))));
   model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => { if (selected.has(`${sub}:${i}`)) parts.push(...handlesOf(doc, a, look)); }));

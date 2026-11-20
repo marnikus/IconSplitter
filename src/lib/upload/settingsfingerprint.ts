@@ -36,6 +36,7 @@ export function settingsFingerprint(s: UploadSettings): string {
     ...(s.shadowEnabled ? [["shadow", s.shadowWidthPct, s.shadowGapPct, s.shadowTemplateSvg ? fnv1a32(s.shadowTemplateSvg).toString(16) : templateHash]] : []),
     ...(s.badgeEnabled ? [["badge", s.badgeCorner, s.badgeWidthPct, s.badgeOffsetXPct, s.badgeOffsetYPct, fnv1a32(s.badgeTemplateSvg || badgeTemplate).toString(16)]] : []),
     ...formatToken(s),
+    ...(s.cleanExport === false ? [[["clean", false]]] : []),
     ...(s.sizeGuideEnabled ? [["sizeguide", s.sizeGuideCorner, s.sizeGuideSmallPct, s.sizeGuideLargePct,
       round3(s.sizeGuideSmallStrokePx), round3(s.sizeGuideLargeStrokePx), s.sizeGuideGapPct,
       s.sizeGuideOffsetXPct, s.sizeGuideOffsetYPct, sizeGuideTemplateHash]] : []),
@@ -43,9 +44,10 @@ export function settingsFingerprint(s: UploadSettings): string {
   return fnv1a32(canonical).toString(16).padStart(8, "0");
 }
 
-// `cleanExport` is deliberately absent: the upload chain runs the clean pass
-// unconditionally (its own `prepare.ts`), so the box cannot change a package's
-// layout — only the builder honours it, and that store is per-browser.
+// `cleanExport` moves the hash only when it is OFF (2026-11-20): the stock clean
+// policy runs either way in `prepare.ts`, but the shared clean copy
+// (`lib/upload/svgclean`) is asked for by the box, so a package built with it
+// off is not the same file. The default (on) keeps every legacy hash.
 
 /** Explicit disabled outputs change the package; legacy/default flags must not churn hashes. */
 function formatToken(s: UploadSettings): unknown[] {
