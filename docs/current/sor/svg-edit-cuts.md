@@ -50,16 +50,24 @@ model, so the hole is visible at once — no Finish needed to see it.
 - **only filled rings paint.** `fill="none"` — the shape's own or inherited from
   its `<g>` (`fill-rule` likewise) — paints no area, so a stroked circle inside a
   filled pin neither makes the middle a hole nor blocks the gesture: it is the
-  **cutter**, and the click knocks that ring out of the FILLED path behind it.
-  The stroked path keeps its look; the pin's own `d` gains the ring.
-- the cut removes paint, never geometry that was not needed:
-  - `nonzero`, the ring's own object nested in one other filling ring — it is
-    walked the other way (anchors reversed, handles swapped), so the two cancel;
-  - anything else — a lone filled ring, or a cutter that does not fill — gets
-    copies of the cutter ring added to the filling path, walked against the sum
-    of the directions there. Nothing else about either path changes;
+  **cutter**. The stroked path keeps its look; the paint behind it is what moves.
+- the cut subtracts from **every object that paints** at the pointer, not only
+  the innermost one: white art on white art (a shape inside a shape) is still
+  paint, so knocking out just the top layer would leave a hole nobody can see.
+  Per object that paints there:
+  - whatever that object drew **inside** the cut goes with it — the ring of an
+    earlier hole, a small shape that lived there — the area is being emptied
+    anyway, and a leftover ring would only have to be cancelled again;
+  - `nonzero` — copies of the cutter ring are added to that object's `d`, walked
+    against its winding (|winding| copies); when the cutter is itself the inner
+    ring of a two-ring cancel, it is simply walked the other way (anchors
+    reversed, handles swapped) and no extra geometry appears;
   - `evenodd` — direction means nothing, the count of rings does; ONE added ring
     flips the parity and the area is a hole.
+- a cut only ever changes paint **inside its own ring**: an earlier hole stays a
+  hole when a later cut is made next to it, and one that the new cut swallows
+  stays empty (2026-11-20, fourth round — a second cut used to paint the first
+  hole back in).
 - one cut = one undo step, selection cleared; Ctrl+Z restores the exact previous
   path data (a hole is never "cut back" by a second click).
 

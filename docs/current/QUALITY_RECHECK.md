@@ -5905,3 +5905,43 @@ states them — the shape's own attribute or `style`, else its `<g>` ancestors'
 
 `pathTags` now walks every tag once (shape + `<g>` stack) instead of a shape-only
 regex, so the extra information costs no second pass over the file.
+
+## 2026-11-20 (d) — a cut subtracts from every layer, and holes compose
+
+Two reports in one message: a second hole painted the first one back in, and a
+hole could not be made at all when several closed shapes sit one inside another
+("the current selecting problem"). Both are one mistake with two faces.
+
+The cut used to subtract from the **innermost painting object only** and to
+recompute that object's winding from all its rings. So:
+
+1. after a hole, the same object held the hole ring too, and a new cut's copies
+   were walked against a sum the new ring had already changed — the new ring
+   re-painted the old hole (only the newest hole survived);
+2. when the shapes are separate paths (a pin sitting on a body, a dot in a pin)
+   the layer below still painted the area: white on white, i.e. "no hole".
+
+`region.ts` now plans one knock-out **per object that paints** at the pointer
+(`knockouts` → `knockoutFor`, `Cut` carries the ring and its walk) and applies
+them together (`applyCut`): the same rules as before per object — copies walked
+against that object's own winding, an in-place walk-round when the cutter is the
+inner ring of a two-ring cancel, one ring under evenodd — plus one new rule:
+whatever that object drew **inside** the cut is dropped (`drawnInside`), because
+the area is being emptied anyway and a surviving ring would only have to be
+cancelled again. A stroke-only outline is never dropped: its `d` also draws the
+stroke, which a cut must leave alone.
+
+The invariant is now the one the user asked for: a cut changes paint **inside its
+own ring only**. Every earlier hole is still a hole, next to the new one or
+swallowed by it, and no click can ever bring paint back.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_region_cut.test.ts` | 30 passed (+5) | every painted layer knocked out (two nested objects → paint 0), an earlier hole kept when a later cut contains it, two disjoint holes that neither refills, a dot inside the cut dropped, three nested rings where cutting the middle keeps the inner hole |
+| `tests/pathedit_region_cut_ui.test.tsx` | 9 passed (+1) | the real pin: hole in the middle, the hole is not offered again, then the whole body cut — the old hole copy drops, the body gets its copy, and the middle is STILL a hole (the reported bug), the stroked path keeps its `d` |
+| pathedit sweep | 284 passed | `pathedit_*`, `svg_edit_*`, `tailcut_*` |
+| `npx vitest run` (full) | 494 files, **4,961 tests, all passed** | 141 s |
+| `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 30 fns / 248 lines (was 22 / 186) |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 5,124 B, `sor/svg-path-editor-handles.md` 7,215 B |
+| `npm run build` | built in 13.47 s | `dist/index.html` 3,628,274 B |

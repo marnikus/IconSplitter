@@ -132,35 +132,97 @@ export function regionAt(m: PathModel, p: Pt): number | null {
   return inner.sub;
 }
 
+/** The cut as the knock-out helpers see it: which ring, at which point, walked which way. */
+interface Cut { sub: number; walk: 1 | -1 }
+
+/** What one painted object needs so its paint inside the region goes: copies of the ring, or one flip. */
+interface Knockout { owner: number | undefined; count: number; reverse: boolean; flip?: number }
+
 /**
  * The model with the region cut out: the paint inside the ring under `p` gone,
  * everything else as it was. Null when the subpath cannot be a cutter (open, or
  * fewer than three anchors) or when nothing paints there, so nothing is guessed
- * at. `p` is the point that was clicked — it says what fills there and how.
+ * at. EVERY object that paints at `p` is knocked out — a hole through all the
+ * layers, not only the innermost — and whatever those objects drew inside the
+ * region goes with it (that area is being emptied anyway), so an earlier hole
+ * inside the new region stays empty instead of being painted back.
  */
 export function cutRegion(m: PathModel, sub: number, p: Pt): PathModel | null {
   const cutter = m.subs[sub];
   if (cutter === undefined || !cutter.closed || cutter.anchors.length < 3) return null;
-  const rings = ringsAt(m, p);
-  const paint = paintAt(m, rings);
-  if (paint === null || !painted(paint)) return null;
+  const inside = regionPoints(cutter);
+  const dropped = drawnInside(m, sub, inside);
+  const plans = knockouts(m, ringsAt(m, p).filter((r) => !dropped.has(r.sub)), sub, inside);
+  return plans.length === 0 ? null : applyCut(m, cutter, dropped, plans);
+}
+
+/**
+ * The subpaths that sit wholly inside the cutter on a painting object: they draw
+ * inside the area being emptied, so they would only survive as paint that the
+ * knock-out then has to cancel. A stroke-only outline is never dropped — its
+ * `d` also draws the stroke, which the cut must leave alone.
+ */
+function drawnInside(m: PathModel, sub: number, cutter: readonly Pt[]): Set<number> {
+  const dropped = new Set<number>();
+  m.subs.forEach((s, i) => {
+    if (i === sub || !fills(s) || !s.closed || s.anchors.length < 3) return;
+    const poly = regionPoints(s);
+    if (poly.length >= 3 && poly.every((q) => insidePolygon(cutter, q))) dropped.add(i);
+  });
+  return dropped;
+}
+
+/**
+ * One knock-out per object that paints at the point: nonzero adds |winding|
+ * copies of the cutter walked against the winding (or flips the cutter itself
+ * when it is the only ring but one), evenodd adds one ring because only the
+ * count matters.
+ */
+function knockouts(m: PathModel, rings: readonly Ring[], sub: number, inside: readonly Pt[]): Knockout[] {
+  const byOwner = new Map<number | undefined, Ring[]>();
+  for (const r of rings) {
+    if (!fills(m.subs[r.sub])) continue;
+    const owner = m.subs[r.sub].owner;
+    byOwner.set(owner, [...(byOwner.get(owner) ?? []), r]);
+  }
+  const cut: Cut = { sub, walk: Math.sign(signedArea(inside)) as 1 | -1 };
+  const plans: Knockout[] = [];
+  for (const [owner, list] of byOwner) {
+    const plan = knockoutFor(m, list, owner, cut);
+    if (plan !== null) plans.push(plan);
+  }
+  return plans;
+}
+
+/** The knock-out one object needs, or null when it does not paint there. */
+function knockoutFor(m: PathModel, list: readonly Ring[], owner: number | undefined, cut: Cut): Knockout | null {
+  const innermost = list[0];
+  if (innermost === undefined) return null;
+  if ((m.subs[innermost.sub].fillRule ?? "nonzero") === "evenodd") return list.length % 2 === 1 ? { owner, count: 1, reverse: false } : null;
+  const winding = list.reduce((n, r) => n + r.dir, 0);
+  if (winding === 0) return null;
+  const mine = list.find((r) => r.sub === cut.sub);
+  if (mine !== undefined && winding === 2 * mine.dir) return { owner, count: 0, reverse: false, flip: cut.sub };
+  return { owner, count: Math.abs(winding), reverse: -Math.sign(winding) !== cut.walk };
+}
+
+/** Applies the plans: drops what was drawn inside, flips where that is enough, adds the copies. */
+function applyCut(m: PathModel, cutter: SubPath, dropped: ReadonlySet<number>, plans: readonly Knockout[]): PathModel {
   const out = cloneModel(m);
-  const targets = paint.filled;
-  if (paint.rule === "evenodd") {
-    out.subs.push(copyOf(cutter, false, paint.owner)); // one more ring of that object: the parity flips
-    return out;
+  const kept = new Map<number, number>(); // old index → index in the new list
+  out.subs = out.subs.filter((_, i) => {
+    if (dropped.has(i)) return false;
+    kept.set(i, kept.size);
+    return true;
+  });
+  for (const plan of plans) {
+    if (plan.flip !== undefined) {
+      const at = kept.get(plan.flip);
+      if (at !== undefined) out.subs[at].anchors = reversed(cutter.anchors);
+      continue;
+    }
+    for (let i = 0; i < plan.count; i++) out.subs.push(copyOf(cutter, plan.reverse, plan.owner));
   }
-  const sum = targets.reduce((n, r) => n + r.dir, 0);
-  const mine = targets.find((r) => r.sub === sub);
-  if (mine !== undefined && sum === 2 * mine.dir) {
-    out.subs[sub].anchors = reversed(cutter.anchors); // it cancels the one ring around it: no extra geometry
-    return out;
-  }
-  // Nothing to cancel against in place (a lone pin body) or several rings: add
-  // copies of the cutter, walked against them, into the FILLED path's own `d`.
-  const want = -Math.sign(sum) as 1 | -1;
-  const walk = Math.sign(signedArea(regionPoints(cutter))) as 1 | -1; // the cutter's own direction
-  for (let i = 0; i < Math.abs(sum); i++) out.subs.push(copyOf(cutter, want !== walk, paint.owner));
   return out;
 }
 

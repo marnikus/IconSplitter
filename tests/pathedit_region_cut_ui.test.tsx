@@ -188,11 +188,36 @@ describe("the map pin — a stroked circle is the cutter", () => {
     expect(written).toContain(`d="${circleBefore}"`);                 // the stroked path keeps its `d`
   });
 
+  it("a second cut never paints an earlier hole back", async () => {
+    await act(async () => {
+      ui.render(<SvgPathEditor source={PIN} box={{ width: 384, height: 384 }} testid="e" label="pin" onFinish={onFinish} onCancel={vi.fn()} />);
+    });
+    await pointer("pointermove", 161, 165, both);
+    await pointer("pointerdown", 161, 165, both);
+    await pointer("pointerup", 161, 165, both);
+    expect(rings(art(0))).toBe(3);                    // body, fold, the hole
+    await pointer("pointermove", 161, 165, both);
+    expect(mark()).toBeNull();                        // the hole is not offered again
+    // The whole pin body next: it CONTAINS that hole. The hole has to stay a
+    // hole — the bigger ring must not paint it back (the reported bug).
+    await pointer("pointermove", 150, 80, both);
+    expect(mark()).not.toBeNull();
+    const before = rings(art(0));
+    await pointer("pointerdown", 150, 80, both);
+    await pointer("pointerup", 150, 80, both);
+    expect(rings(art(0))).toBe(before);               // the old hole copy dropped, the body copy added
+    expect(art(0)).not.toContain("151.58");           // …and that hole copy is the one that went
+    await pointer("pointermove", 161, 165, both);
+    expect(mark()).toBeNull();                        // the old hole is STILL a hole
+    await act(async () => { host.querySelector<HTMLElement>("[data-testid=e-finish]")?.click(); });
+    expect(onFinish.mock.calls[0][0]).toContain("151.58"); // the stroked circle keeps its d
+  });
+
   it("the middle of the pin body itself is still a region", async () => {
     await act(async () => {
       ui.render(<SvgPathEditor source={PIN} box={{ width: 384, height: 384 }} testid="e" label="pin" onFinish={onFinish} onCancel={vi.fn()} />);
     });
-    await pointer("pointermove", 120, 130, both); // inside the pin, outside the circle
+    await pointer("pointermove", 150, 80, both); // inside the pin body, outside the circle and the fold
     expect(mark()).not.toBeNull();
     expect(mark()?.getAttribute("d")).not.toBe(art(1)); // the pin body is the ring, not the circle
   });

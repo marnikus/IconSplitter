@@ -276,3 +276,86 @@ describe("an unfilled closed outline is a cutter, not a hole (the map pin)", () 
     expect(g.subs[1].fillRule).toBe("evenodd");
   });
 });
+
+// 2026-11-20 (fourth round), the user's two follow-ups:
+//   1. "after the hole made next hole created return back the previous hole back
+//      as fill … but should leave previous hole as it was" — a new cut added
+//      copies of its own ring to a path that already had holes, and the winding
+//      of a big containing ring re-painted them;
+//   2. "unable to make hole if it is several closed shapes one inside another" —
+//      the hole was knocked out of the INNERMOST painted object only, so an
+//      outer object of the same colour still painted the area: white on white,
+//      no visible hole.
+// A cut now subtracts its region from EVERY painting object at that point, drops
+// whatever those objects drew INSIDE the region (it is being emptied anyway) and
+// never touches paint outside it — so holes compose.
+describe("a cut subtracts from every painted layer, and only inside its region", () => {
+  /** What the eye sees: the nonzero winding of every filling subpath at `p`. */
+  const paint = (model: PathModel, p: { x: number; y: number }): number =>
+    model.subs.reduce((sum, s) => {
+      if (s.paints === false || !s.closed || s.anchors.length < 3) return sum;
+      const poly = regionPoints(s);
+      let area = 0;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) area += poly[j].x * poly[i].y - poly[i].x * poly[j].y;
+      let hit = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        if (poly[i].y > p.y !== poly[j].y > p.y && p.x < ((poly[j].x - poly[i].x) * (p.y - poly[i].y)) / (poly[j].y - poly[i].y) + poly[i].x) hit = !hit;
+      }
+      return hit ? sum + Math.sign(area) : sum;
+    }, 0);
+  const CUTTER = "M40 40L60 40L60 60L40 60Z";
+  const centre = { x: 50, y: 50 };
+
+  /** A model of several objects, as the file gives it: one path per ring. */
+  const objects = (...rings: { d: string; fill?: string }[]): PathModel => {
+    const subs = rings.flatMap((r, owner) => fromPathData(r.d, owner).subs);
+    subs.forEach((s, i) => { if (rings[i].fill === "none") s.paints = false; });
+    return { subs };
+  };
+
+  it("knocks the region out of EVERY painted layer, not just the innermost", () => {
+    const m = objects({ d: OUTER }, { d: "M20 20L80 20L80 80L20 80Z" }, { d: CUTTER, fill: "none" });
+    expect(paint(m, centre)).toBe(2);                 // two white layers over each other
+    const out = cutRegion(m, 2, centre)!;
+    expect(paint(out, centre)).toBe(0);               // one hole through both
+    expect(paint(out, { x: 15, y: 15 })).toBe(1);     // outside the cutter the layers stay
+  });
+
+  it("keeps an earlier hole when a later cut contains it", () => {
+    const first = cutRegion(objects({ d: OUTER }, { d: CUTTER, fill: "none" }), 1, centre)!;
+    expect(paint(first, centre)).toBe(0);             // hole made
+    expect(paint(first, { x: 20, y: 20 })).toBe(1);   // the rest of the ring paints
+    // Cut the whole ring next: its area is emptied anyway, so the small hole
+    // must stay empty instead of being painted back by the bigger ring.
+    const second = cutRegion(first, 0, { x: 20, y: 20 })!;
+    expect(paint(second, centre)).toBe(0);
+    expect(paint(second, { x: 20, y: 20 })).toBe(0);
+    expect(paint(second, { x: 120, y: 120 })).toBe(0); // nothing outside was painted either
+  });
+
+  it("two disjoint holes add up and neither one refills", () => {
+    const m = objects({ d: "M0 0L200 0L200 200L0 200Z" }, { d: CUTTER, fill: "none" }, { d: "M120 120L160 120L160 160L120 160Z", fill: "none" });
+    const a = cutRegion(m, 1, centre)!;
+    const b = cutRegion(a, 2, { x: 140, y: 140 })!;
+    expect(paint(b, centre)).toBe(0);
+    expect(paint(b, { x: 140, y: 140 })).toBe(0);
+    expect(paint(b, { x: 100, y: 20 })).toBe(1);
+  });
+
+  it("drops what was drawn inside the cut, so nothing survives it in pieces", () => {
+    const m = objects({ d: "M0 0L200 0L200 200L0 200Z" }, { d: "M45 45L55 45L55 55L45 55Z" }, { d: CUTTER, fill: "none" });
+    const out = cutRegion(m, 2, centre)!;
+    expect(paint(out, centre)).toBe(0);
+    expect(out.subs.filter((s) => s.owner === 1)).toHaveLength(0); // the dot inside the cut is gone
+  });
+
+  it("three nested rings of one object: cutting the middle keeps the inner hole", () => {
+    const m = objects({ d: "M0 0L100 0L100 100L0 100Z" }, { d: "M20 20L80 20L80 80L20 80Z" }, { d: "M35 35L65 35L65 65L35 65Z" });
+    const inner = cutRegion(m, 2, centre)!;
+    expect(paint(inner, centre)).toBe(0);
+    const middle = cutRegion(inner, 1, { x: 25, y: 25 })!;
+    expect(paint(middle, { x: 25, y: 25 })).toBe(0);
+    expect(paint(middle, centre)).toBe(0);            // the inner hole is still a hole
+    expect(paint(middle, { x: 10, y: 10 })).toBe(1);  // the outermost ring is untouched
+  });
+});
