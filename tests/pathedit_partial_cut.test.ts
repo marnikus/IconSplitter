@@ -122,20 +122,20 @@ describe("boolean region cut on a partially overlapping closed shape (ref image-
     expect(painted(m, { x: 125, y: 60 }, 0)).toBe(false);    // outside protrusion [110..140] stays empty!
   });
 
-  it("merges two overlapping hole cuts on an evenodd fill without re-painting their overlap", () => {
+  it("merges a cut overlapping an existing hole on an evenodd fill without re-painting the overlap", () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">`
-      + `<path data-edit-path="0" fill="#1da1f2" fill-rule="evenodd" d="M10 10L190 10L190 190L10 190Z"/>`
-      + `<path data-edit-path="1" fill="none" stroke="#000" d="M40 60L110 60L110 140L40 140Z"/>`
-      + `<path data-edit-path="2" fill="none" stroke="#000" d="M80 60L150 60L150 140L80 140Z"/>`
+      + `<path data-edit-path="0" fill="#1da1f2" fill-rule="evenodd" `
+      + `d="M10 10L190 10L190 190L10 190Z M40 60L110 60L110 140L40 140Z"/>`
+      + `<path data-edit-path="1" fill="none" stroke="#000" d="M80 60L150 60L150 140L80 140Z"/>`
       + `</svg>`;
-    let st = editorState(newSession(loadObjects(svg, [IDENTITY, IDENTITY, IDENTITY]), []));
-    st = click(st, at(60, 100, both));                       // punch left hole [40..110]
-    st = click(st, at(130, 100, both));                      // punch overlapping right hole [80..150]
+    let st = editorState(newSession(loadObjects(svg, [IDENTITY, IDENTITY]), []));
+    expect(painted(st.session.model, { x: 95, y: 100 }, 0)).toBe(false); // [40..110] is already a hole
+    st = click(st, at(130, 100, both));                       // punch overlapping right box [80..150]
     const m = st.session.model;
-    expect(painted(m, { x: 60, y: 100 }, 0)).toBe(false);    // left hole stays empty
-    expect(painted(m, { x: 95, y: 100 }, 0)).toBe(false);    // OVERLAP [80..110] stays empty (no XOR refill!)
-    expect(painted(m, { x: 130, y: 100 }, 0)).toBe(false);   // right hole is empty
-    expect(painted(m, { x: 25, y: 100 }, 0)).toBe(true);     // surrounding frame stays blue
+    expect(painted(m, { x: 60, y: 100 }, 0)).toBe(false);     // left hole stays empty
+    expect(painted(m, { x: 95, y: 100 }, 0)).toBe(false);     // OVERLAP [80..110] stays empty (no XOR refill!)
+    expect(painted(m, { x: 130, y: 100 }, 0)).toBe(false);    // right [110..150] is empty
+    expect(painted(m, { x: 25, y: 100 }, 0)).toBe(true);      // surrounding frame stays blue
   });
 
   it("picks a partial cutter even when its total area is larger than the filled shape", () => {

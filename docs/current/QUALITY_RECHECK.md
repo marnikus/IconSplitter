@@ -5998,4 +5998,20 @@ strictly inside).
 | `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 6,803 B |
 | `npm run build` | built in 14.11 s | `dist/index.html` 3,641,048 B |
 
+## 2026-11-20 (g) — toolbar popup z-order over AI source card + planar-cell fill cuts by open/crossing lines & overlapping fills
+
+1. **Edit-mode toolbar popup stacking (`image-10.png`):** `.svg-edit-toolbar` and `.svg-edit-aside` both shared `position: relative; z-index: 2`, trapping `.svg-edit-settings-pop` (`z-index: 60` inside `.svg-edit-toolbar`) below the later-in-DOM `.svg-edit-aside` (`AI SOURCE` card). Promoted `.svg-edit-toolbar` to `z-index: 20` and `.svg-edit-leave` to `z-index: 30` in `src/index.css` while keeping `.svg-edit-aside`, `.svg-edit-arrow`, and `.svg-edit-legend` at `z-index: 2`.
+2. **Planar-cell fill cutting (`image-11.png`):** added `src/lib/pathedit/planarface.ts` (`cellHintAt`, `cutCellAt`) and `anySubSegs` / `subtractFaceFromGroup` so `Alt + Shift` hover preview and click cut any bounded painted cell enclosed by an open curve/line spanning part of a fill, crossing lines (`#`, `V`), or overlapping fills, while pruning dead-end bridges (`faceOf[h] === faceOf[twin(h)]`) in one pass and delegating uncrossed closed rings to `cutRegion`.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_line_cut_fill.test.ts` | 7 passed (new) | `image-11` open U-arch cap, either side of spanning open line, crossing-lines wedge, `#` grid interior hole, fill-by-fill overlap (`A \ B` & `A ∩ B`), T-junction endpoints, half-crossing bridge ignored |
+| `tests/pathedit_ai_source.test.tsx` | 5 passed (+1) | real `src/index.css` cascade stacks `.svg-edit-toolbar` (`Cutter algo` popup) strictly above `.svg-edit-aside` |
+| `tests/pathedit_region_cut_ui.test.tsx` | 12 passed (+1) | `<SvgPathEditor>` open arch marks & cuts bounded cap while keeping upper fill & strokes intact |
+| pathedit, SVG edit & docs sweep | 36 files, **336 passed** | all `pathedit_*`, `svg_*edit*`, `svgimgedit`, `docs_navigation` |
+| `npx tsc --noEmit` / `eslint` | clean / 0 errors | 0 warnings in changed files |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `planarface.ts` 159 L, `boolean.ts` 246 L, `curvecut.ts` 269 L, `linegesture.ts` 134 L, `region.ts` 288 L |
+| `npm run build` | built in 14.08 s | `dist/index.html` 3,643.96 kB |
+
+
 

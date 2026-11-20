@@ -11,7 +11,7 @@ the line gesture wins when a click lands where both would apply.
 | Gesture | What the red mark is | What the click does |
 |---|---|---|
 | Alt + Shift over a **line** | the part of that line a click would remove | removes it, splitting or opening the line |
-| Alt + Shift over a **filled area** | the closed ring under the pointer | cuts it out: the area becomes a hole |
+| Alt + Shift over a **filled area** | the bounded painted cell under the pointer | cuts it out: the cell becomes empty |
 
 ## Line tails (2026-11-20)
 
@@ -86,6 +86,16 @@ model, so the hole is visible at once — no Finish needed to see it.
   line crossings, clip the red preview to `Fill ∩ Cutter` (ranking candidate
   cutters by that painted bite), and trace the exact Bezier boundary of
   `Fill \ Cutter` so nothing outside the fill ever turns painted.
+- **planar cells bounded by open lines, crossing lines, or overlapping fills**
+  (2026-11-20, seventh round): an open stroke need not be closed itself as long
+  as it spans across a filled part (e.g. an open U-arch entering and exiting a
+  fill's edge), or closes a cell together with other crossing lines (`#`, `V`)
+  or another fill's boundary. `planarface.ts` (`cellHintAt`, `cutCellAt`) builds
+  the DCEL planar arrangement of all subpaths (`anySubSegs`), strips dead-end
+  bridges (`faceOf[h] === faceOf[twin(h)]`) in one pass so hanging ends and
+  half-crossings never falsely slice, finds the smallest bounded painted face
+  holding the pointer, delegates uncrossed closed rings to `cutRegion`, and
+  subtracts subdivided cells via `subtractFaceFromGroup`.
 - one cut = one undo step, selection cleared; Ctrl+Z restores the exact previous
   path data (a hole is never "cut back" by a second click).
 
@@ -96,8 +106,8 @@ model, so the hole is visible at once — no Finish needed to see it.
 | the red marks (line stretch, fill region) | `src/svg/pathedit/editoroverlay.ts` (`data-cut-hint`, `data-cut-region`) |
 | the gesture rules (pure) | `lib/pathedit/linegesture.ts`, `lib/pathedit/gesture.ts` (`cutRegionHint`, `pressPaint`) |
 | compound fill + hole piece | `lib/pathedit/fill.ts` (`pieceAnchors`, `paintedPieceAt`) |
-| partial-overlap Bezier boolean | `lib/pathedit/boolean.ts`, `lib/pathedit/curvecut.ts` (`clipLayerIfPartial`, `clippedRegionAt`) |
+| planar cell & Bezier boolean | `lib/pathedit/planarface.ts`, `lib/pathedit/boolean.ts`, `lib/pathedit/curvecut.ts` |
 | the stretch maths (pure) | `lib/pathedit/stretch.ts` |
 | the region maths (pure) | `lib/pathedit/region.ts` (`ringsAt`/`paintedSubAt`/`cutRegion`) |
 | what paints where | `lib/pathedit/svgdoc.ts` (`fill`/`fill-rule`, `<g>` inheritance) → `SubPath.paints`/`fillRule` in `model.ts`, set by `objects.ts` |
-| tests | `tests/pathedit_cut_between.test.ts`, `tests/pathedit_cut_tail.test.ts`, `tests/pathedit_region_cut.test.ts`, `tests/pathedit_object_move.test.ts`, `tests/pathedit_partial_cut.test.ts`, UI: `tests/pathedit_cut_between_ui.test.tsx`, `tests/pathedit_region_cut_ui.test.tsx` |
+| tests | `tests/pathedit_cut_between.test.ts`, `tests/pathedit_cut_tail.test.ts`, `tests/pathedit_region_cut.test.ts`, `tests/pathedit_object_move.test.ts`, `tests/pathedit_partial_cut.test.ts`, `tests/pathedit_line_cut_fill.test.ts`, UI: `tests/pathedit_cut_between_ui.test.tsx`, `tests/pathedit_region_cut_ui.test.tsx` |

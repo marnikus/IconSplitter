@@ -34,6 +34,17 @@ export function subToSegs(s: SubPath): CurveSeg[] {
   return out;
 }
 
+export function anySubSegs(s: SubPath): CurveSeg[] {
+  if (s.closed) return subToSegs(s);
+  if (s.anchors.length < 2) return [];
+  const out: CurveSeg[] = [];
+  for (let i = 0; i < s.anchors.length - 1; i++) {
+    const c = segmentCubic(s, i);
+    if (c !== null && cSpan(c) > 1e-6) out.push({ c, line: isLineSegment(s, i) });
+  }
+  return out;
+}
+
 const cSpan = (c: Cubic): number =>
   Math.max(dist(c[0], c[3]), dist(c[0], c[1]), dist(c[0], c[2]));
 

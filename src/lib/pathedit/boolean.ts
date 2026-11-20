@@ -12,7 +12,7 @@ import { modeOf, type Anchor, type PathModel, type Pt, type SubPath } from "./mo
 const TAU = Math.PI * 2;
 const HINT_STEPS = 20;
 
-interface OwnerGroup { owner: number | undefined; rule: "evenodd" | "nonzero"; subs: SubPath[]; rings: CurveSeg[][] }
+export interface OwnerGroup { owner: number | undefined; rule: "evenodd" | "nonzero"; subs: SubPath[]; rings: CurveSeg[][] }
 
 function edgeMidNormal(e: CurveSeg): { mid: Pt; nIn: Pt } {
   const [l, r] = splitCubic4(e.c, 0.5);
@@ -191,7 +191,17 @@ function unclippedRing(cutter: SubPath | undefined, owner: number | undefined, o
   return !ownerSubs.some((s) => s !== cutter && hasAnyCrossing(subToSegs(s), segB));
 }
 
-function paintingGroupsAt(m: PathModel, p: Pt): OwnerGroup[] {
+export function subtractFaceFromGroup(g: OwnerGroup, face: readonly CurveSeg[]): SubPath[] {
+  const style: Pick<SubPath, "owner" | "fillRule"> = {
+    ...(g.owner === undefined ? {} : { owner: g.owner }),
+    ...(g.rule === "evenodd" ? { fillRule: "evenodd" } : {}),
+  };
+  const edges = splitArrangement([...g.rings.flat(), ...face]);
+  const dir = directedBoundary(edges, (q) => ringsPaint(g.rings, g.rule, q) && segsWinding(face, q) === 0);
+  return traceCycles(dir).map((c) => segsToSubPath(c, style)).filter((s): s is SubPath => s !== null);
+}
+
+export function paintingGroupsAt(m: PathModel, p: Pt): OwnerGroup[] {
   const byOwner = new Map<number | undefined, SubPath[]>();
   for (const s of m.subs) {
     if (s.paints === false || !s.closed || s.anchors.length < 3) continue;

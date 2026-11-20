@@ -272,4 +272,26 @@ describe("the map pin — a stroked circle is the cutter", () => {
     expect(mark()).toBeNull();                       // right crescent MUST STILL BE UNPAINTED (not inverted to blue!)
     expect(art(1)).toBe(circleBefore);               // stroked circle untouched
   });
+
+  // 2026-11-20 (seventh round, ref image-11): an OPEN stroked curve that spans
+  // across part of a filled shape marks and cuts just that bounded cap.
+  it("an open stroked arch crossing a fill marks and cuts the bounded cap (ref image-11)", async () => {
+    const openArch = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160">`
+      + `<path fill="#1da1f2" d="M10 0L210 0L210 75C180 112 40 112 10 75Z"/>`
+      + `<path fill="none" stroke="#000" stroke-width="5" d="M55 135C55 55 165 55 165 135 M85 110L85 135 M135 110L135 135"/>`
+      + `</svg>`;
+    await act(async () => {
+      ui.render(<SvgPathEditor source={openArch} box={{ width: 220, height: 160 }} testid="e" label="arch" onFinish={onFinish} onCancel={vi.fn()} />);
+    });
+    const strokeBefore = art(1);
+    await pointer("pointermove", 110, 88, both);
+    expect(mark()).not.toBeNull();                   // bounded cap between arch and fill bottom is marked red
+    await pointer("pointerdown", 110, 88, both);
+    await pointer("pointerup", 110, 88, both);
+    await pointer("pointermove", 110, 88, both);
+    expect(mark()).toBeNull();                       // cap is now cut out
+    await pointer("pointermove", 110, 40, both);
+    expect(mark()).not.toBeNull();                   // upper cloud above the arch is still painted
+    expect(art(1)).toBe(strokeBefore);               // open arch + tick strokes untouched
+  });
 });
