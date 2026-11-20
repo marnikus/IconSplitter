@@ -6,7 +6,8 @@
 import { describe, expect, it } from "vitest";
 import { cutRegion, regionAt, regionPoints } from "../src/lib/pathedit/region";
 import { editorState, hoverAt, pointerDown, pointerUp, type EditorState, type PointerInput } from "../src/lib/pathedit/gesture";
-import { fromPathData, toPathData } from "../src/lib/pathedit/model";
+import { fromPathData, toPathData, type PathModel } from "../src/lib/pathedit/model";
+import { loadObjects } from "../src/lib/pathedit/objects";
 import { newSession } from "../src/lib/pathedit/session";
 
 const model = (d: string) => fromPathData(d);
@@ -54,9 +55,11 @@ describe("cutting a region out", () => {
     expect(out.subs[1].closed).toBe(true);
   });
 
-  it("a second cut puts it back (a winding flip is its own inverse)", () => {
+  it("a hole is not cut twice: the second click is refused, undo is the way back", () => {
     const once = cutRegion(model(OUTER + INNER), 1, { x: 50, y: 50 })!;
-    expect(text(cutRegion(once, 1, { x: 50, y: 50 })!)).toBe(OUTER + INNER);
+    expect(text(once)).toBe(OUTER + "M40 60L60 60L60 40L40 40Z");
+    expect(cutRegion(once, 1, { x: 50, y: 50 })).toBeNull(); // already a hole
+    expect(regionAt(once, { x: 50, y: 50 })).toBeNull();
   });
 
   it("swaps each anchor's handles, so a curve keeps its drawn shape", () => {
@@ -198,5 +201,78 @@ describe("the cut has to make the paint go away", () => {
     expect(cut.session.undo).toHaveLength(1);
     expect(winding(toPathData(cut.session.model), centre)).toBe(0);
     expect(hoverAt(cut, at(50, 50)).cutRegionHint ?? null).toBeNull();
+  });
+});
+
+// 2026-11-20 (third round): the real map pin the user sent. Its middle circle is
+// a closed ring of a `fill="none"` stroked path — it paints NOTHING, so it must
+// not cancel the pin's fill in the winding sum (the bug: the area read as a hole
+// and was never marked), and it must still work as the CUTTER: the click has to
+// knock that ring out of the FILLED path behind it.
+const PIN = `<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 384 384">
+<path fill="#28ACEE" d="M65 168c0-27 15-59 36-76 22-17 50-21 73-18 28 2 52 14 65 34 14 23 19 45 10 71-8 25-20 46-34 66l-37 60-5 7q-5 7-10 0l-6-5-67-77q-25-29-25-62zM208 65c10-14 29-21 44-23 28-4 53 6 66 26 15 23 16 57 0 85-17 25-34 41-56 66q-7 7-12-1l-3-6q-1-3 1-7c13-28 17-49 10-76-7-24-23-42-48-54q-7-4-2-10z"/>
+<path fill="none" stroke="#000" stroke-width="5.4" stroke-linecap="round" d="M151.58 122.6C131.58 129.6 114.58 150.6 118.58 173.6C121.58 195.6 143.58 209.6 165.58 206.6C188.58 203.6 206.58 179.6 204.58 156.6C201.58 129.6 175.58 114.6 151.58 122.6Z"/>
+</svg>`;
+
+describe("an unfilled closed outline is a cutter, not a hole (the map pin)", () => {
+  const m = loadObjects(PIN, []);
+  const centre = { x: 161, y: 165 };
+  /** Nonzero winding of the FILLED rings only — what the eye sees. */
+  const paint = (model: PathModel, p: { x: number; y: number }): number =>
+    model.subs.reduce((sum, s) => {
+      if (s.paints === false || !s.closed || s.anchors.length < 3) return sum;
+      return s.anchors.length > 0 && inside(s, p) ? sum + Math.sign(signedOf(s)) : sum;
+    }, 0);
+  function inside(s: { anchors: unknown }, p: { x: number; y: number }): boolean {
+    const poly = regionPoints(s as Parameters<typeof regionPoints>[0]);
+    let hit = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      if (poly[i].y > p.y !== poly[j].y > p.y && p.x < ((poly[j].x - poly[i].x) * (p.y - poly[i].y)) / (poly[j].y - poly[i].y) + poly[i].x) hit = !hit;
+    }
+    return hit;
+  }
+  function signedOf(s: Parameters<typeof regionPoints>[0]): number {
+    const poly = regionPoints(s);
+    let sum = 0;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) sum += poly[j].x * poly[i].y - poly[i].x * poly[j].y;
+    return sum;
+  }
+
+  it("reads the fill rule and the fill of each path, not just its rings", () => {
+    expect(m.subs[0].paints).not.toBe(false);      // the pin body fills
+    expect(m.subs[2].paints).toBe(false);          // the circle is stroked only
+    expect(m.subs[2].closed).toBe(true);
+  });
+
+  it("marks the circle, because the pin behind it still paints there", () => {
+    expect(paint(m, centre)).not.toBe(0);
+    const sub = regionAt(m, centre);
+    expect(sub).toBe(2);
+    expect(regionAt(m, { x: 340, y: 30 })).toBeNull(); // nothing paints outside
+  });
+
+  it("the click knocks the ring out of the FILLED path, leaving the other path alone", () => {
+    const out = cutRegion(m, 2, centre)!;
+    expect(paint(out, centre)).toBe(0);            // a hole in the pin
+    expect(paint(out, { x: 90, y: 200 })).not.toBe(0); // the rest of the pin keeps its fill
+    expect(out.subs.slice(0, m.subs.length).map((s) => s.paints)).toEqual(m.subs.map((s) => s.paints));
+    const added = out.subs[m.subs.length];
+    expect(added.owner).toBe(0);                   // written into the pin's own `d`
+    expect(added.paints).not.toBe(false);
+    expect(regionAt(out, centre)).toBeNull();      // a hole is not offered again
+  });
+
+  it("a stroked ring with nothing filled behind it is not a cutter", () => {
+    const strokeOnly = loadObjects('<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="20" fill="none" stroke="#000"/></svg>', []);
+    expect(regionAt(strokeOnly, { x: 50, y: 50 })).toBeNull();
+    expect(cutRegion(strokeOnly, 0, { x: 50, y: 50 })).toBeNull();
+  });
+
+  it("`fill` and `fill-rule` are inherited from a group", () => {
+    const g = loadObjects('<svg viewBox="0 0 100 100"><g fill="none"><path d="M10 10L90 10L90 90L10 90Z"/></g>'
+      + '<g fill="#000" fill-rule="evenodd"><path d="M10 10L90 10L90 90L10 90Z"/></g></svg>', []);
+    expect(g.subs[0].paints).toBe(false);
+    expect(g.subs[1].paints).not.toBe(false);
+    expect(g.subs[1].fillRule).toBe("evenodd");
   });
 });

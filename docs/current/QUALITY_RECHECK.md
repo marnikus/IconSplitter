@@ -5866,3 +5866,42 @@ so the mark disappears after the cut instead of inviting a dead second click.
 | `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings |
 | `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 18 fns / 155 lines, `svgdoc.ts` 16 / 154, `model.ts` `SubPath.fillRule`, `objects.ts` carries it |
 | `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 4,384 B, `sor/svg-path-editor-handles.md` 7,074 B |
+
+## 2026-11-20 (c) — the map pin: a stroked circle is a cutter, not a hole
+
+The user's own file made the previous rule fail: the pin's middle circle is a
+closed ring of a `fill="none"` stroked path. `regionAt` counted every closed
+ring, so at that middle the pin body (+1) and the circle (−1) cancelled, the
+point read as "already a hole", the red mark never appeared and no cut was
+offered. The lesson is that **a ring is only paint when its shape fills**, and
+that an unfilled outline is exactly what a user holds over a filled area to ask
+for a hole in it.
+
+`lib/pathedit/svgdoc.ts` now resolves `fill` and `fill-rule` the way the file
+states them — the shape's own attribute or `style`, else its `<g>` ancestors'
+(`paintOf`, one tag pass with a `<g>` stack) — and `PathTag.paints` carries it as
+`SubPath.paints` (model clone keeps it). `region.ts` separates the two ideas:
+
+- `paintAt` = the filling rings at the point, their rule and the object that
+  paints there; `painted` says whether they sum (nonzero) or count (evenodd) to
+  paint. A point nothing paints is not a region.
+- `regionAt` = the innermost closed ring under the pointer, filled or not — the
+  CUTTER.
+- `cutRegion(m, sub, p)` knocks it out of the paint: a filled ring nested in one
+  other filling ring is walked the other way (unchanged); everything else gets
+  copies of the cutter's ring, walked against the sum, added to the FILLED
+  path's own `d` — so the pin's `d` gains the circle and the stroked path stays
+  byte for byte; under evenodd one added ring flips the parity.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_region_cut.test.ts` | 25 passed (+5) | the real pin: `fill="none"` reads as `paints: false`, the circle is marked (`regionAt` = its subpath), the click leaves the stroked path alone and writes the ring into the pin's object (owner 0), the middle is a hole afterwards and not offered again, a stroked ring with no fill behind it is not a cutter, and `fill`/`fill-rule` are inherited from `<g>` |
+| `tests/pathedit_region_cut_ui.test.tsx` | 8 passed (+2) | the pin in the real surface: the mark is the circle, the pin's own `data-edit-path` gains a ring (2 → 3) while the stroked one keeps its `d`, the region under the mark is gone after the cut, the pin body itself is still a region elsewhere, and Finish writes all of it |
+| pathedit sweep | 278 passed | `pathedit_*`, `svg_edit_*`, `tailcut_*` |
+| `npx vitest run` (full) | 494 files, **4,955 tests, all passed** | 145 s (this run had a quiet host, so `algo_efficiency` passed too) |
+| `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 22 fns / 186 lines, `svgdoc.ts` 17 / 187, `model.ts` 35 / 227, `objects.ts` 9 / 46 |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 4,588 B, `sor/svg-path-editor-handles.md` 7,215 B |
+
+`pathTags` now walks every tag once (shape + `<g>` stack) instead of a shape-only
+regex, so the extra information costs no second pass over the file.

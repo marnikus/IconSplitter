@@ -14,7 +14,7 @@ import { pathTags, withPathD } from "./svgdoc";
 /** All paths of `source` as one model in root space; `matrices[i]` maps path i into it (identity when absent). */
 export function loadObjects(source: string, matrices: readonly Affine[]): PathModel {
   const subs = pathTags(source).flatMap((tag) => transformModel(fromPathData(tag.d, tag.index), matrices[tag.index] ?? IDENTITY)
-    .subs.map((s) => (tag.fillRule === "evenodd" ? { ...s, fillRule: "evenodd" as const } : s)));
+    .subs.map((s) => ({ ...s, ...(tag.fillRule === "evenodd" ? { fillRule: "evenodd" as const } : {}), ...(tag.paints ? {} : { paints: false }) })));
   return { subs };
 }
 

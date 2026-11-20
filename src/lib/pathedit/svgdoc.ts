@@ -20,10 +20,11 @@ export interface PathTag {
   selfClosing: boolean;
   /** How the shape fills: `fill-rule="evenodd"`, the attribute or a `style`, else nonzero. */
   fillRule: "evenodd" | "nonzero";
+  /** False when nothing fills this shape (`fill="none"`, its own or inherited) — a stroked outline. */
+  paints: boolean;
 }
 
 const D_ATTR = /\sd\s*=\s*("([^"]*)"|'([^']*)')/;
-const SHAPE_TAG = /<(path|circle|ellipse|rect|line|polyline|polygon)\b[^>]*>/gi;
 const NOT_DRAWN = /<(defs|clipPath|mask|symbol|marker|pattern)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
 /** The attributes that only describe a shape's geometry (they go when it becomes a <path>). */
 export const GEOMETRY: Record<ShapeKind, string[]> = {
@@ -80,25 +81,57 @@ function shapeD(kind: ShapeKind, tag: string): string | null {
   return pointsD(tag, kind === "polygon");
 }
 
-/** Every drawn shape's start tag in document order, with its path data. */
+/** What paints a shape: the fill that reaches it and the rule it fills by (a group's, inherited). */
+interface Paint { fill: string; fillRule: "evenodd" | "nonzero" }
+
+/** Every tag, so `<g>` nesting can be followed while the shapes are collected. */
+const ANY_TAG = /<(\/?)([a-zA-Z][\w:.-]*)([^>]*)>/g;
+const SHAPE_KINDS = new Set(["path", "circle", "ellipse", "rect", "line", "polyline", "polygon"]);
+
+/** A presentation property as the tag states it: the attribute, else a `style` declaration. */
+function prop(tag: string, name: string): string | null {
+  const style = /\sstyle\s*=\s*("([^"]*)"|'([^']*)')/i.exec(tag);
+  const inline = (style?.[2] ?? style?.[3] ?? "").match(new RegExp(`(?:^|;)\\s*${name}\\s*:\\s*([^;]+)`, "i"))?.[1];
+  return (attr(tag, name) ?? inline)?.trim() ?? null;
+}
+
+/** The paint a tag starts, given what it inherits. */
+function paintOf(attrs: string, inherited: Paint): Paint {
+  const fill = prop(attrs, "fill") ?? inherited.fill;
+  const rule = prop(attrs, "fill-rule") ?? inherited.fillRule;
+  return { fill: fill === "inherit" ? inherited.fill : fill, fillRule: rule === "evenodd" ? "evenodd" : "nonzero" };
+}
+
+/**
+ * Every drawn shape's start tag in document order, with its path data, the rule
+ * it fills by and whether anything fills it at all. `<g>` nesting is followed so
+ * a group's `fill`/`fill-rule` reaches its children (2026-11-20): a stroked
+ * outline (`fill="none"`) paints no area, which the region cut has to know.
+ */
 export function pathTags(markup: string): PathTag[] {
   const out: PathTag[] = [];
   const text = blanked(markup);
-  SHAPE_TAG.lastIndex = 0;
-  for (let m = SHAPE_TAG.exec(text); m !== null; m = SHAPE_TAG.exec(text)) {
-    const tag = markup.slice(m.index, m.index + m[0].length);
-    const kind = m[1].toLowerCase() as ShapeKind;
-    out.push({ index: out.length, kind, start: m.index, end: m.index + m[0].length, d: shapeD(kind, tag),
-      selfClosing: /\/\s*>$/.test(tag), fillRule: fillRuleOf(tag) });
+  const stack: Paint[] = [{ fill: "#000000", fillRule: "nonzero" }];
+  ANY_TAG.lastIndex = 0;
+  for (let m = ANY_TAG.exec(text); m !== null; m = ANY_TAG.exec(text)) {
+    const name = m[2].toLowerCase();
+    const closing = m[1] === "/";
+    if (name === "g") {
+      if (closing) { if (stack.length > 1) stack.pop(); continue; }
+      const own = paintOf(m[3], stack[stack.length - 1]);
+      if (/\/\s*>$/.test(m[3])) stack[stack.length - 1] = own; // <g/> changes nothing
+      else stack.push(own);
+      continue;
+    }
+    if (closing || !SHAPE_KINDS.has(name)) continue;
+    const head = m[0];
+    const tag = markup.slice(m.index, m.index + head.length);
+    const kind = name as ShapeKind;
+    const paint = paintOf(m[3], stack[stack.length - 1]);
+    out.push({ index: out.length, kind, start: m.index, end: m.index + head.length, d: shapeD(kind, tag),
+      selfClosing: /\/\s*>$/.test(head), fillRule: paint.fillRule, paints: paint.fill !== "none" });
   }
   return out;
-}
-
-/** `fill-rule` as the shape itself states it — the attribute or a `style` declaration. */
-function fillRuleOf(tag: string): "evenodd" | "nonzero" {
-  const style = /\sstyle\s*=\s*("([^"]*)"|'([^']*)')/i.exec(tag);
-  const declared = (style?.[2] ?? style?.[3] ?? "").match(/fill-rule\s*:\s*(evenodd|nonzero)/i)?.[1];
-  return (attr(tag, "fill-rule") ?? declared ?? "").toLowerCase() === "evenodd" ? "evenodd" : "nonzero";
 }
 
 /** A basic shape's start tag as a <path> with `d`, its geometry attributes removed. */

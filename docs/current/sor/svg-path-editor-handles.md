@@ -36,13 +36,14 @@ written; it follows the next pointer move). One undo step. Tests:
 
 On empty space over a **closed, filled** area, both keys mark that area's own
 outline red (`cutRegionHint`, overlay `data-cut-region`); the click **cuts it
-out**, so the paint inside it goes — how depends on the fill rule
-(`lib/pathedit/region.ts` `cutRegion`): under `nonzero` a ring nested in another
-painting ring is walked the other way, a lone ring gets a reversed twin that
-cancels it, and under `evenodd` one extra ring flips the parity. The artboard
-repaints from the model, so the hole shows at once. The innermost painting ring
-wins; a point that is already a hole gets no mark. One undo step, selection kept
-clear. Legend: "Alt+Shift+Click fill". Tests:
+out**, so the paint inside it goes (`lib/pathedit/region.ts` `cutRegion`). Only
+filled rings paint: a `fill="none"` outline — a stroked circle inside a filled
+pin — is a CUTTER, and the click adds its ring to the filled path behind it, so
+the pin gets the hole and the stroke keeps its look. Under `nonzero` a ring
+nested in one other filling ring is walked the other way instead; under
+`evenodd` one added ring flips the parity. The artboard repaints from the model,
+so the hole shows at once. The innermost closed ring wins; a point that is
+already a hole gets no mark. One undo step, selection kept clear. Legend: "Alt+Shift+Click fill". Tests:
 `pathedit_region_cut.test.ts`, `pathedit_region_cut_ui.test.tsx`.
 
 ## Beyond the artboard's border (2026-11-10)
