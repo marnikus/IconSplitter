@@ -5739,3 +5739,28 @@ unconditionally (`prepare.ts`), so a box there would be dead; the builder's
 stock package was the only path that shipped a raw stitched sheet.
 `cleanExport` is not in `settingsFingerprint` — the upload chain's output does
 not depend on it, and adding it would re-export every existing package.
+
+## 2026-11-19 (e) — the tidy passes (second clean round)
+
+A second forensic read of a shipped sheet called out what survived round (d):
+`color="#6d0b04"` beside the real stroke, `<g><g><text>` stitch wrappers, paint
+repeated on children that already inherit it. `lib/svgBuilder/cleantree.ts` now
+runs after the stock policy in `cleanSheetSvg`; the report's other two items are
+deliberately untouched — the 0.05 "twip" grid and the per-icon `scale()` with a
+2 px painted pen are the HUMAN markers it cites, so rounding them would be the
+machine move, and only 4+ decimal values are rounded.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/export_clean.test.ts` | 16 passed | +7 tidy cases: dead `color` (guard test keeps it while `currentColor` needs it), inherited/initial paint dropped, `<defs>` subtree skipped, bare `<g>` unwrapped with the drawable count unchanged, empty containers + indentation gone, `xlink:href` → `href`, the 0.05 grid byte-identical, idempotent |
+| builder/export/upload sweep | 149 files, 1738 tests passed | 60.1 s |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `cleantree.ts` 184 lines / 17 fns, `cleansheet.ts` 137 / 13 |
+| `npx vitest run` (full) | **489 files, 4894 tests, all passed** | 133.8 s |
+| `npm run verify:fast` | ALL LANES PASSED | 219 s, build 3,621.27 kB (+2.7 kB) |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/export-formats.md` 8,985 B, `sor/svg-builder.md` 8,963 B, `sor/tests/svg-builder.md` 8,696 B |
+
+A real sheet's export shrank from 17 bare `<g>` wrappers and 6 repeated paint
+attributes to `<text>` inside its transform group: the picture, the px, the
+viewBox, the Title/description and the DC tags are unchanged.

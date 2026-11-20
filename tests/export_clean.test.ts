@@ -79,6 +79,76 @@ describe("cleanSheetSvg", () => {
   });
 });
 
+describe("the tidy pass: what a stitched sheet still shows", () => {
+  const wrap = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10">${body}</svg>`;
+
+  it("drops the dead `color` an editor leaves beside an explicit stroke", () => {
+    const svg = cleanSheetSvg(wrap('<g color="#ff0000"><path d="M0 0h1" stroke="#ff0000"/></g>')).svg;
+    expect(svg).not.toContain('color="');
+    expect(svg).toContain('stroke="#ff0000"');
+    // but a real `currentColor` dependency keeps it, or the ink would change
+    const live = cleanSheetSvg(wrap('<g color="#ff0000"><path d="M0 0h1" stroke="currentColor"/></g>')).svg;
+    expect(live).toContain('color="#ff0000"');
+  });
+
+  it("does not repeat inherited paint, and drops values that are simply the default", () => {
+    const svg = cleanSheetSvg(wrap('<g fill="none" stroke="#111111"><path d="M0 0h1" fill="none" stroke="#111111" stroke-linecap="butt"/>'
+      + '<path d="M0 0h2" fill="none" stroke="#111111" stroke-linecap="round"/></g>')).svg;
+    expect(svg).toContain('<path d="M0 0h1"/>');
+    expect(svg).toContain('<path d="M0 0h2" stroke-linecap="round"/>');
+    expect(svg).toContain('<g fill="none" stroke="#111111">'); // the group keeps its own paint
+  });
+
+  it("leaves a reference subtree alone — what `<defs>` inherits is the `<use>`'s call", () => {
+    const svg = cleanSheetSvg(wrap('<g fill="none"><defs><path d="M0 0h1" fill="none"/></defs><use href="#p"/></g>')).svg;
+    expect(svg).toContain('<path d="M0 0h1" fill="none"/>');
+  });
+
+  it("unwraps the bare `<g>` wrappers a cell-by-cell stitch leaves behind", () => {
+    const composed = sheetSvg();
+    const svg = cleanSheetSvg(composed).svg;
+    expect(svg).not.toMatch(/<g>/);
+    expect(svg).not.toMatch(/<g><g>/);
+    expect(drawables(svg)).toBe(drawables(composed)); // nothing drawn was lost with them
+    expect(svg).toMatch(/<g transform="translate\([^"]+\) scale\([^"]+\)"/); // a real group stays
+    expect(svg).toMatch(/<text[^>]*>ICON<\/text>/); // and the text is no longer triple-wrapped
+  });
+
+  it("drops empty containers, empty embeds and indentation — bytes that draw nothing", () => {
+    const svg = cleanSheetSvg(wrap('<g/>\n  <defs></defs>\n  <title>  </title><rect x="0" y="0" width="1" height="1"/>\n')).svg;
+    expect(svg).not.toContain("<g/>");
+    expect(svg).not.toContain("<defs");
+    expect(svg).not.toContain("<title");
+    expect(svg).not.toContain("\n");
+    expect(svg).toContain('<rect x="0" y="0" width="1" height="1"/>');
+  });
+
+  it("writes the SVG 2 href and drops the xlink declaration it no longer needs", () => {
+    const legacy = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 10 10">'
+      + '<defs><rect id="r" width="1" height="1"/></defs><use xlink:href="#r"/></svg>';
+    const svg = cleanSheetSvg(legacy).svg;
+    expect(svg).toContain('href="#a"');
+    expect(svg).not.toContain("xlink");
+  });
+
+  it("leaves the author's coordinates alone — the 0.05 grid is what says a human drew it", () => {
+    // The forensic read: every value ends in .0/.05/.1/.15 (a twip grid) and the
+    // primitives are real arcs and rounded rects, not traced beziers. Rounding
+    // THAT would be the machine move, so only 4+-decimal values are touched.
+    const d = "M18.7 13.5V8.25a5.1 5.1 0 0 1 5.1-5.1h7.25a1.6 1.6 0 0 1 0 3.2h-7.3q-1.85 0-1.85 1.85v5.3";
+    const svg = cleanSheetSvg(wrap(`<path d="${d}" stroke-width="1.9992750000000001"/><rect width="5.05" height="5" x="18.75" y="28.2" rx="1.4"/>`)).svg;
+    expect(svg).toContain(`d="${d}"`);
+    expect(svg).toContain('rx="1.4"');
+    expect(svg).toContain('width="5.05"');
+    expect(svg).toContain('stroke-width="1.999"'); // the float noise is not a twip
+  });
+
+  it("is idempotent: cleaning a cleaned file changes nothing", () => {
+    const once = cleanSheetSvg(sheetSvg()).svg;
+    expect(cleanSheetSvg(once).svg).toBe(once);
+  });
+});
+
 describe("the clean switch on a saved package", () => {
   it("is on by default: the saved SVG answers with no hook at all", async () => {
     expect(DEFAULT_FORMAT_OPTIONS.cleanExport).toBe(true);
@@ -87,6 +157,9 @@ describe("the clean switch on a saved package", () => {
     for (const hook of HOOKS) expect(svg, hook).not.toContain(hook);
     expect(svg).not.toContain('{"v":1,');
     expect(viewBox(svg)).toBe(viewBox(sheetSvg()));
+    // …and the tidy pass ran after the ink pass, so the editor's `color` quirk is gone too
+    expect(svg).not.toMatch(/\scolor="/);
+    expect(svg).not.toMatch(/<g>/);
   });
 
   it("off: the same sheet keeps its hooks — the box is what gates the pass", async () => {

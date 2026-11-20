@@ -1,10 +1,9 @@
 # Export formats — one domain, two flows
 
 The **SVG to upload** tab and the **sheet builder** ship stock packages with the
-SAME format decisions (2026-11-17). One interface owns them —
-`lib/exportformats.ts` `ExportFormatOptions` — and `UploadSettings` EXTENDS it,
-so the upload dialog, its per-icon overrides, the fingerprint and the builder's
-own export settings dialog can never drift apart.
+SAME format decisions. `lib/exportformats.ts` `ExportFormatOptions` owns them and
+`UploadSettings` EXTENDS it, so the dialog, the per-icon overrides, the
+fingerprint and the builder's settings can never drift apart.
 
 ## The shared options (`ExportFormatOptions`)
 
@@ -18,7 +17,7 @@ own export settings dialog can never drift apart.
 | `jpegQuality` | 0.92 | 0.5 – 1 |
 | `jpegMatchArtboard` | on | the JPEG is the artboard itself (its px, after any rescale); untick for the MP above |
 | `optimizeSvg` | on | the export copy only — viewBox, geometry, strokes and metadata are preserved |
-| `cleanExport` | on | the stock-clean pass over the saved SVG (and the EPS built from it): no `data-*`/`class`/`aria-*`, one xmlns, no comments, no provenance block, no float noise — Title, description and tags stay (builder scope; the upload chain always runs it) |
+| `cleanExport` | on | clean the saved SVG (and the EPS built from it) — see **Clean rule**; Title, description and tags stay. Builder scope: the upload chain always runs it |
 | `expandStrokes` | off | strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes |
 | `expandText` | off | NEW: every `<text>` becomes filled glyph outlines; what cannot be outlined fails that stage honestly, in BOTH flows |
 | `rescaleArtboard` | off | NEW: rescale the FULL artboard, keeping its ratio, until its area is `rescaleMegapixels` (1000×1000 @ 20 MP → 4472×4472) |
@@ -29,20 +28,16 @@ own export settings dialog can never drift apart.
 
 Five defects, all fixed and pinned:
 
-1. **The settings were hidden and misplaced.** They existed only as an Export ▾
-   item and rendered as a builder-only card. `ui/exportmodal.tsx` is now the ONE
-   popup (backdrop, `.svg-modal`, sticky head with `aria-labelledby`, Close,
-   Escape, backdrop) that the upload dialog also renders, opened from its own
-   `⚙ Export settings` header button (`builder-export-settings`) as well as
-   from the menu.
+1. **The settings were hidden and misplaced.** `ui/exportmodal.tsx` is now the
+   ONE popup (backdrop, sticky head, Close, Escape) both dialogs render, opened
+   from a `⚙ Export settings` header button (`builder-export-settings`) too.
 2. **Duplicated JPEG rows** (two components, same three ids) — now one sheet.
 3. **The JPEG hint never named the real file** — now `exportArtboardSize`.
 4. **EPS looked unavailable** — the dialog warns first (see below).
-5. **Exports ignored the ink.** Cells are `stroke="currentColor"` + `color="#…"`,
-   which only a browser resolves (Illustrator paints it black), and SVGO renamed
-   hex to names (`#ffa500` → `orange`) the EPS writer cannot read.
-   `prepareSheetSvg` now runs `lib/upload/solidpaint.ts` first, and the
-   optimizer keeps hex (`shortname: false, names2hex: true`).
+5. **Exports ignored the ink.** `currentColor` is browser-only (Illustrator
+   paints black) and SVGO renamed hex the EPS writer cannot read.
+   `prepareSheetSvg` runs `lib/upload/solidpaint.ts` first; the optimizer keeps
+   hex (`shortname: false, names2hex: true`).
 
 ## Where each flow consumes them
 
@@ -67,31 +62,27 @@ Five defects, all fixed and pinned:
 | the options, their defaults/validation, `exportArtboardSize`, `jpegNote` | `src/lib/exportformats.ts` |
 | the rows both dialogs render (flags, EPS writer + helper, JPEG px/match/quality, SVGO, expansions, rescale) | `src/ui/exportsheet.tsx` |
 | the pure row markup (checkbox/number/select) | `src/ui/exportrows.tsx` |
-| the Inkscape helper row (URL, Check, live state + fix) | `src/ui/epshelper.tsx` |
-| the upload dialog's marker + live defaults/override write path | `src/upload/settingsfield.tsx` (`UploadSettingsDialog` wraps the sheet) |
+| the Inkscape helper row | `src/ui/epshelper.tsx` |
+| the upload dialog's marker + override write path | `src/upload/settingsfield.tsx` |
 | the builder's own persisted options | `src/svgBuilder/formatstore.ts` |
-| the builder dialog (modal + EPS live-text note) and the menu plan | `src/svgBuilder/SvgBuilderFormatDialog.tsx`, `SvgBuilderExportMenu.tsx` |
+| the builder dialog + menu plan | `src/svgBuilder/SvgBuilderFormatDialog.tsx`, `SvgBuilderExportMenu.tsx` |
 
 ## EPS availability (what a builder export really writes)
 
 The built-in writer is a PostScript subset: **live `<text>` is outside it**
-(`<text> is outside the EPS subset`). A composed sheet always carries its banner
-title/subtitle as text, so `Also write EPS` with the built-in converter and
-`Expand text to fills` unticked fails THAT stage honestly (the rest of the
-package still ships, `partial`). The builder dialog says this BEFORE the export
-(`builder-format-eps-note`) and names both fixes: tick **Expand text to fills**
-(words ship as outlines) or choose the **Inkscape CLI** helper, whose row
-(`bld-eps-helper`) reports live whether that machine can write it. The upload
-flow keeps its per-row, per-icon honesty (a failing EPS is named on the row).
+(`<text> is outside the EPS subset`). A sheet always carries banner text, so
+`Also write EPS` with the built-in converter and `Expand text to fills`
+unticked fails THAT stage honestly (`partial`, named on the row). The dialog
+says so first (`builder-format-eps-note`) and names both fixes: tick **Expand
+text to fills** or pick the **Inkscape CLI** helper (`bld-eps-helper` reports
+live whether that machine can write it).
 
 ## Stroke width, tracking and ink (2026-11-19)
 
 Widths are authored in ARTBOARD px, but the cell `<g>` scales the icon's own
 viewBox into its cell, so the written `stroke-width` is that px ÷ the cell
-scale: the painted width is what the panel set — 1 px stays 1 px in the SVG and
-the EPS. The old `vector-effect="non-scaling-stroke"` stood in for this and only
-the browser honoured it (the EPS painted width × scale, and expanded outlines
-baked the heavier pen); nothing in the sheet relies on it now.
+scale: 1 px stays 1 px in the SVG and the EPS. `vector-effect` is gone — only
+the browser honoured it, so the EPS painted width × scale.
 
 Tracking is an em length (`0.025em` for `7/100 em`) and is read through
 `lib/upload/geom/length.ts` (em/rem/ex/ch/%, signed, px and unitless) — plain
@@ -99,9 +90,8 @@ Tracking is an em length (`0.025em` for `7/100 em`) and is read through
 EPS, which needs it) lost the spacing. The outliner gets the run's px spacing.
 
 Ink: a saved file never carries `currentColor` (resolved to the nearest
-`color` on `stroke`, `fill`, `stop-color`, `flood-color` and inline style) and
-never a CSS colour name, so the artboard's or a template's colour is what the
-SVG, the JPEG and the EPS paint.
+`color`) nor a CSS colour name, so the artboard's or a template's colour is what
+the SVG, the JPEG and the EPS paint.
 
 ## Clean rule (2026-11-19)
 
@@ -113,6 +103,20 @@ ids, cell indexes, the config hash, approve flags), so do comments, the repeated
 `<metadata>{"v":1,…}</metadata>`: prompt, model, source fingerprints) and float
 noise (`1.9992750000000001` → `1.999`). px, viewBox, geometry, Title, description
 and the DC tags survive; a raster `<image>` is refused by name.
+
+Then the tidy passes (`lib/svgBuilder/cleantree.ts`) remove what is still
+machine-shaped and paints nothing: the dead `color="…"` beside an explicit
+stroke (the desktop-editor quirk — kept only while some `currentColor` still
+needs it), paint a child merely repeats from its group, values that ARE the SVG
+initial value (`stroke-linecap="butt"`, `fill-rule="nonzero"`, `text-anchor="start"`),
+the attribute-less `<g>` wrappers a cell-by-cell stitch leaves (`<g><g><text>`
+becomes `<text>`), empty containers, indentation-only text nodes, and
+`xlink:href` → the SVG 2 `href` plus the declaration that then dangles. `opacity`
+is never compared (per-element compositing, not inherited paint) and the paint
+pass stops at every reference subtree, where the `<use>` decides inheritance.
+Authored coordinates are NOT touched: a 0.05 grid (`x="18.75"`, `rx="1.4"`) and
+real arcs/rounded rects are what marks the file human, so only 4+ decimal values
+are rounded. Idempotent, and pinned as such.
 
 ## Rescale rule
 

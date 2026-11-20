@@ -11,6 +11,7 @@
 // width/height beside the viewBox). A sheet is a page — the package sizes its
 // JPEG and 2× PNG from those px — so the px size is captured and put back.
 import { cleanExportDom } from "../upload/cleandom";
+import { tidySheetTree } from "./cleantree";
 
 export interface SheetCleanReport {
   /** Naming/editor attributes the policy dropped (`data-*`, `class`, `aria-*`…). */
@@ -48,6 +49,7 @@ export function cleanSheetSvg(svgText: string): SheetCleanResult {
   const elements = dropJunkMetadata(root) + countComments(root);
   cleanExportDom(root, { keepRootEmbeds: true });
   dropNestedNamespaces(root);
+  trimSheetTree(root);
   restoreSize(root, size);
   const rounded = roundNumbers(root);
   return {
@@ -55,6 +57,12 @@ export function cleanSheetSvg(svgText: string): SheetCleanResult {
     report: { attributes: before - countAttributes(root), elements, rounded },
     refused: null,
   };
+}
+
+/** The tidy passes; a node removed here is counted with the provenance ones. */
+function trimSheetTree(root: Element): number {
+  const tidy = tidySheetTree(root);
+  return tidy.nodes;
 }
 
 /** The artboard's px: a page keeps them, the icon policy had dropped them. */
