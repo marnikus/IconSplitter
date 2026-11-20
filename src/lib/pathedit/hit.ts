@@ -18,10 +18,14 @@ export type Hit =
 
 const dist = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
 
+const inCtrlBox = (c: Pt[], p: Pt, r: number): boolean =>
+  p.x >= Math.min(c[0].x, c[1].x, c[2].x, c[3].x) - r && p.x <= Math.max(c[0].x, c[1].x, c[2].x, c[3].x) + r
+  && p.y >= Math.min(c[0].y, c[1].y, c[2].y, c[3].y) - r && p.y <= Math.max(c[0].y, c[1].y, c[2].y, c[3].y) + r;
+
 /** The nearest point of segment i to `p`: projection on a line, sampling + refinement on a curve. */
-export function nearestOnSegment(sub: SubPath, i: number, p: Pt): { t: number; pt: Pt; d: number } | null {
+export function nearestOnSegment(sub: SubPath, i: number, p: Pt, maxDist = Infinity): { t: number; pt: Pt; d: number } | null {
   const c = segmentCubic(sub, i);
-  if (c === null) return null;
+  if (c === null || (Number.isFinite(maxDist) && !inCtrlBox(c, p, maxDist))) return null;
   if (isLineSegment(sub, i)) {
     const dx = c[3].x - c[0].x, dy = c[3].y - c[0].y;
     const len2 = dx * dx + dy * dy;
@@ -74,11 +78,11 @@ function anchorHit(m: PathModel, p: Pt, r: number, can: Editable): Hit | null {
 
 function segmentHit(m: PathModel, p: Pt, r: number, can: Editable): Hit | null {
   let best: Extract<Hit, { kind: "segment" }> | null = null;
-  let bestD = Infinity;
+  let bestD = r;
   m.subs.forEach((s, sub) => s.anchors.forEach((_, i) => {
     if (!can(sub)) return;
-    const n = nearestOnSegment(s, i, p);
-    if (n !== null && n.d <= r && n.d < bestD) { bestD = n.d; best = { kind: "segment", sub, i, t: n.t, pt: n.pt }; }
+    const n = nearestOnSegment(s, i, p, bestD);
+    if (n !== null && n.d <= r && (best === null || n.d < bestD)) { bestD = n.d; best = { kind: "segment", sub, i, t: n.t, pt: n.pt }; }
   }));
   return best;
 }
@@ -117,11 +121,11 @@ function endSnap(base: PathModel, p: Pt, moving: AnchorRef, r: number): Snap | n
 
 function onSegmentSnap(base: PathModel, p: Pt, moving: AnchorRef, r: number): Snap | null {
   let best: Snap | null = null;
-  let bestD = Infinity;
+  let bestD = r;
   base.subs.forEach((s, sub) => s.anchors.forEach((_, i) => {
     if (nextIndex(s, i) === null || ownSegment(base, moving, sub, i)) return;
-    const n = nearestOnSegment(s, i, p);
-    if (n !== null && n.d <= r && n.d < bestD) { bestD = n.d; best = { kind: "segment", pt: n.pt, sub, i }; }
+    const n = nearestOnSegment(s, i, p, bestD);
+    if (n !== null && n.d <= r && (best === null || n.d < bestD)) { bestD = n.d; best = { kind: "segment", pt: n.pt, sub, i }; }
   }));
   return best;
 }

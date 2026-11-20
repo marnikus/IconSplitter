@@ -4,7 +4,7 @@
 // only Fill ∩ Cutter is highlighted — never inverting the outside crescent.
 
 import {
-  hasAnyCrossing, reverseSeg, ringsPaint, segAt, segsWinding, splitArrangement, splitCubic4, subToSegs,
+  cubicNearBox, hasAnyCrossing, reverseSeg, ringsPaint, segAt, segsWinding, splitArrangement, splitCubic4, subToSegs,
   type CurveSeg, type GraphEdge,
 } from "./curvecut";
 import { modeOf, type Anchor, type PathModel, type Pt, type SubPath } from "./model";
@@ -28,9 +28,9 @@ function edgeMidNormal(e: CurveSeg): { mid: Pt; nIn: Pt } {
 }
 
 function probeOffset(edges: readonly GraphEdge[], idx: number, mid: Pt): number {
-  let near = Infinity;
+  let near = 0.2;
   edges.forEach((g, j) => {
-    if (j === idx) return;
+    if (j === idx || !cubicNearBox(g.seg.c, mid, near)) return;
     for (let k = 0; k <= 8; k++) {
       const q = segAt(g.seg, k / 8);
       near = Math.min(near, Math.hypot(q.x - mid.x, q.y - mid.y));

@@ -6013,5 +6013,17 @@ strictly inside).
 | `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `planarface.ts` 159 L, `boolean.ts` 246 L, `curvecut.ts` 269 L, `linegesture.ts` 134 L, `region.ts` 288 L |
 | `npm run build` | built in 14.08 s | `dist/index.html` 3,643.96 kB |
 
+## 2026-11-20 (h) — inverted-mask edit-mode freeze fix & coincident-curve boolean tail deletion
 
+1. **Root causes (`image-12.png`):**
+   - **Coincident / 2-decimal-quantized mask curve shattering & braiding (`curvecut.ts` vs `model.ts` `toPathData(..., digits = 2)`):** when a filled shape already carried an inverted mask subpath (saved at `0.01` rounding) coincident with a 3-decimal stroked badge/ribbon outline, `meetChords` reported false crossings at all 23 interior chord joints per cubic (`24×` anchor explosion, `1,702–1,840` hint points) while `SNAP = 1e-3` missed `±0.005` rounding deltas (`~0.0071` Euclidean), braiding `65–79` micro-sliver edges and corrupting `nonzero` DCEL face winding. Raised `SNAP = 1.5e-2` / `T_EPS = 1e-4`, deduplicated forward/reversed coincident segments (`dedupSegs` + `SegBox`), and filtered local overlap touches (`coincidentHit`).
+   - **Uncached per-pixel `regionAt` → `clippedRegionAt` + `splitArrangement` (`planarface.ts`, `stretch.ts`):** every `Alt+Shift` `pointermove` rebuilt the full Bezier arrangement and invoked `regionAt` → `clippedRegionAt` (two additional boolean arrangements per pixel: `5.24 s` per hover on a 208-segment icon, `104 s` across 20 hovers). Cached `ModelPlanar` per `PathModel` (`WeakMap`) with lazy area/crossing `findIntactSub` (dropping `regionAt` from `planarface.ts`) and cached `crossingParams` (`WeakMap`) + `subCtrlDisjoint` culling in `stretch.ts` (`5,236 ms → 50.5 ms` first hover, `0.39 ms` cached hover, `5,535 ms → 32.2 ms` boolean tail cut).
+   - **Control-box culling & wrap clamp (`boolean.ts`, `hit.ts`, `fill.ts`, `region.ts`, `stretch.ts`):** added `cubicNearBox` culling in `probeOffset` (`near = 0.2`), `inCtrlBox` (`maxDist`) pruning in `nearestOnSegment`, bbox guards in `pointOnSegment` / `segmentsCross`, fast-fail `ringsShareArea`, and `Math.max(0, p)` wrap clamp in `endOf`.
 
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_inverted_mask_perf.test.tsx` | 4 passed (new) | `nonzero` & `evenodd` protruding ribbon-tail deletion (`<45` anchors, no splintering, post-cut drag + undo), 350+ seg `<250 ms` hover/cut/drag benchmark, `<SvgPathEditor>` DOM cut + drag + Finish edit |
+| pathedit, SVG edit & docs sweep | 37 files, **340 passed** | all `pathedit_*`, `svg_*edit*`, `svgimgedit`, `docs_navigation` |
+| `npx tsc --noEmit` / `eslint` | clean / 0 errors | 0 warnings in changed files |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `curvecut.ts` 297 L, `boolean.ts` 246 L, `planarface.ts` 206 L, `stretch.ts` 255 L, `region.ts` 288 L, `hit.ts` 191 L, `fill.ts` 108 L |
+| `npm run build` | built in 13.04 s | `dist/index.html` 3,645.24 kB |

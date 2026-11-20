@@ -61,11 +61,35 @@ function meet(u: Pt, v: Pt, p: Pt, q: Pt): { r: number; w: number } | null {
 const apart = (p: Piece, q: Piece): boolean => q.x1 < p.x0 - EPS || q.x0 > p.x1 + EPS || q.y1 < p.y0 - EPS || q.y0 > p.y1 + EPS;
 const paramOf = (p: Piece, f: number): number => p.seg + p.t0 + (p.t1 - p.t0) * f;
 
+const piecesBox = (ps: readonly Piece[]) => ({
+  x0: Math.min(...ps.map((p) => p.x0)), y0: Math.min(...ps.map((p) => p.y0)),
+  x1: Math.max(...ps.map((p) => p.x1)), y1: Math.max(...ps.map((p) => p.y1)),
+});
+
+function subCtrlBox(s: SubPath): { x0: number; y0: number; x1: number; y1: number } {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const a of s.anchors) {
+    for (const p of [a, a.in, a.out]) {
+      if (!p) continue;
+      x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x);
+      y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y);
+    }
+  }
+  return { x0, y0, x1, y1 };
+}
+
+function subCtrlDisjoint(s: SubPath, mb: { x0: number; y0: number; x1: number; y1: number }): boolean {
+  const b = subCtrlBox(s);
+  return b.x1 < mb.x0 - EPS || b.x0 > mb.x1 + EPS || b.y1 < mb.y0 - EPS || b.y0 > mb.y1 + EPS;
+}
+
 /** Every crossing along subpath `sub`, as sorted parameters (a closed path wraps: 0 and its length are one). */
 function crossingParams(m: PathModel, sub: number): number[] {
   const s = m.subs[sub];
   const mine = piecesOf(s);
-  const others = m.subs.flatMap((o, k) => (k === sub ? [] : piecesOf(o)));
+  if (mine.length === 0) return [];
+  const mb = piecesBox(mine);
+  const others = m.subs.flatMap((o, k) => (k === sub || subCtrlDisjoint(o, mb) ? [] : piecesOf(o)));
   const found: number[] = [];
   mine.forEach((p, k) => {
     for (const q of others) {
@@ -93,6 +117,18 @@ function neighbours(us: number[], u0: number, closed: boolean): { from: number |
   return { from, to };
 }
 
+const crossingCache = new WeakMap<PathModel, Map<number, number[]>>();
+
+function cachedCrossings(m: PathModel, sub: number): number[] {
+  let bySub = crossingCache.get(m);
+  if (bySub === undefined) { bySub = new Map(); crossingCache.set(m, bySub); }
+  const hit = bySub.get(sub);
+  if (hit !== undefined) return hit;
+  const built = crossingParams(m, sub);
+  bySub.set(sub, built);
+  return built;
+}
+
 /**
  * The stretch of subpath `sub` around parameter `u0` (the click). A CLOSED shape
  * needs a crossing on both sides (it wraps, so it always has two); an OPEN line
@@ -103,7 +139,7 @@ function neighbours(us: number[], u0: number, closed: boolean): { from: number |
 export function stretchAt(m: PathModel, sub: number, u0: number): Stretch | null {
   const s = m.subs[sub];
   if (s === undefined || s.anchors.length < 2) return null;
-  const { from, to } = neighbours(crossingParams(m, sub), u0, s.closed);
+  const { from, to } = neighbours(cachedCrossings(m, sub), u0, s.closed);
   return s.closed ? closedStretch(from, to) : openStretch(s, from, to);
 }
 
@@ -144,8 +180,9 @@ type End = { kind: "anchor"; k: number } | { kind: "split"; seg: number; t: numb
 
 /** A parameter as an existing anchor (it sits on one) or a place to split. */
 function endOf(s: SubPath, p: number): End {
-  const seg = Math.min(Math.floor(p), s.anchors.length - 1);
-  const t = p - seg;
+  const clamped = Math.max(0, p);
+  const seg = Math.min(Math.floor(clamped), s.anchors.length - 1);
+  const t = clamped - seg;
   if (t < SAME) return { kind: "anchor", k: seg };
   if (t > 1 - SAME) return { kind: "anchor", k: (seg + 1) % s.anchors.length };
   return { kind: "split", seg, t };

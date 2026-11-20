@@ -28,6 +28,8 @@ const insideOrOn = (poly: readonly Pt[], p: Pt): boolean =>
 
 /** Strict interior crossing of segments u→v and p→q (touching an endpoint alone does not glue tiles). */
 function segmentsCross(u: Pt, v: Pt, p: Pt, q: Pt): boolean {
+  if (Math.max(p.x, q.x) <= Math.min(u.x, v.x) || Math.min(p.x, q.x) >= Math.max(u.x, v.x)) return false;
+  if (Math.max(p.y, q.y) <= Math.min(u.y, v.y) || Math.min(p.y, q.y) >= Math.max(u.y, v.y)) return false;
   const rx = v.x - u.x, ry = v.y - u.y, sx = q.x - p.x, sy = q.y - p.y;
   const den = rx * sy - ry * sx;
   if (Math.abs(den) < 1e-12) return false;
@@ -52,9 +54,10 @@ const apart = (a: RingPoly, b: RingPoly): boolean =>
 /** Two closed filling rings share interior area: nested (a hole), crossing, or twin copies. */
 function ringsShareArea(a: RingPoly, b: RingPoly): boolean {
   if (apart(a, b)) return false;
+  if (insidePolygon(b.poly, a.poly[0]) || insidePolygon(a.poly, b.poly[0])) return true;
+  if (edgesCross(a.poly, b.poly)) return true;
   if (a.poly.some((p) => insidePolygon(b.poly, p)) || b.poly.some((p) => insidePolygon(a.poly, p))) return true;
-  if (b.poly.every((p) => insideOrOn(a.poly, p)) || a.poly.every((p) => insideOrOn(b.poly, p))) return true;
-  return edgesCross(a.poly, b.poly);
+  return b.poly.every((p) => insideOrOn(a.poly, p)) || a.poly.every((p) => insideOrOn(b.poly, p));
 }
 
 /** The connected component of `start` among `rings` under area overlap. */

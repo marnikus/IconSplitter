@@ -96,6 +96,18 @@ model, so the hole is visible at once — no Finish needed to see it.
   half-crossings never falsely slice, finds the smallest bounded painted face
   holding the pointer, delegates uncrossed closed rings to `cutRegion`, and
   subtracts subdivided cells via `subtractFaceFromGroup`.
+- **coincident inverted masks & cached planar arrangement** (2026-11-20, eighth
+  round): when a fill already carries an inverted mask subpath coincident with a
+  stroked shape (e.g. a saved `toPathData` 2-decimal reversed hole over a
+  3-decimal stroke whose protruding tail hangs outside the fill), `curvecut.ts`
+  aligns `SNAP = 1.5e-2` with 2-decimal quantization, deduplicates forward /
+  reversed duplicate edges (`dedupSegs`), and skips locally coincident chord-joint
+  touches (`coincidentHit`) so curves never splinter into 24× micro-anchors or
+  braided slivers. `planarface.ts` caches the DCEL planar arrangement per
+  `PathModel` (`WeakMap`) and tests `findIntactSub` lazily on the chosen face,
+  while `stretch.ts` caches `crossingParams` (`WeakMap`) and `hit.ts` /
+  `boolean.ts` cull by cubic control boxes so hover and boolean tail deletion
+  stay sub-frame without freezing.
 - one cut = one undo step, selection cleared; Ctrl+Z restores the exact previous
   path data (a hole is never "cut back" by a second click).
 
@@ -110,4 +122,4 @@ model, so the hole is visible at once — no Finish needed to see it.
 | the stretch maths (pure) | `lib/pathedit/stretch.ts` |
 | the region maths (pure) | `lib/pathedit/region.ts` (`ringsAt`/`paintedSubAt`/`cutRegion`) |
 | what paints where | `lib/pathedit/svgdoc.ts` (`fill`/`fill-rule`, `<g>` inheritance) → `SubPath.paints`/`fillRule` in `model.ts`, set by `objects.ts` |
-| tests | `tests/pathedit_cut_between.test.ts`, `tests/pathedit_cut_tail.test.ts`, `tests/pathedit_region_cut.test.ts`, `tests/pathedit_object_move.test.ts`, `tests/pathedit_partial_cut.test.ts`, `tests/pathedit_line_cut_fill.test.ts`, UI: `tests/pathedit_cut_between_ui.test.tsx`, `tests/pathedit_region_cut_ui.test.tsx` |
+| tests | `tests/pathedit_cut_between.test.ts`, `tests/pathedit_cut_tail.test.ts`, `tests/pathedit_region_cut.test.ts`, `tests/pathedit_object_move.test.ts`, `tests/pathedit_partial_cut.test.ts`, `tests/pathedit_line_cut_fill.test.ts`, `tests/pathedit_inverted_mask_perf.test.tsx`, UI: `tests/pathedit_cut_between_ui.test.tsx`, `tests/pathedit_region_cut_ui.test.tsx` |

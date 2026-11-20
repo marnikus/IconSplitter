@@ -66,10 +66,10 @@ export function insidePolygon(poly: readonly Pt[], p: Pt): boolean {
 }
 
 export function pointOnSegment(a: Pt, b: Pt, p: Pt): boolean {
+  if (p.x < Math.min(a.x, b.x) - EPS || p.x > Math.max(a.x, b.x) + EPS) return false;
+  if (p.y < Math.min(a.y, b.y) - EPS || p.y > Math.max(a.y, b.y) + EPS) return false;
   const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
-  if (Math.abs(cross) > 1e-6 * Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))) return false;
-  return p.x >= Math.min(a.x, b.x) - EPS && p.x <= Math.max(a.x, b.x) + EPS
-    && p.y >= Math.min(a.y, b.y) - EPS && p.y <= Math.max(a.y, b.y) + EPS;
+  return Math.abs(cross) <= 1e-6 * Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
 }
 
 /** The polygon's (unsigned) area: the smallest containing one is the region the pointer is really in. */

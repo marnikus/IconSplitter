@@ -14,8 +14,8 @@ interface Chord { seg: number; t0: number; t1: number; a: Pt; b: Pt; x0: number;
 
 const CHORDS = 24;
 const EPS = 1e-9;
-const T_EPS = 1e-5;
-const SNAP = 1e-3;
+const T_EPS = 1e-4;
+const SNAP = 1.5e-2;
 
 const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 const dist = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -24,26 +24,20 @@ export const segAt = (e: CurveSeg, t: number): Pt => (e.line ? lerp(e.c[0], e.c[
 
 export const reverseSeg = (e: CurveSeg): CurveSeg => ({ c: [e.c[3], e.c[2], e.c[1], e.c[0]], line: e.line });
 
-export function subToSegs(s: SubPath): CurveSeg[] {
-  if (!s.closed || s.anchors.length < 3) return [];
+function segsUpTo(s: SubPath, limit: number): CurveSeg[] {
   const out: CurveSeg[] = [];
-  for (let i = 0; i < s.anchors.length; i++) {
+  for (let i = 0; i < limit; i++) {
     const c = segmentCubic(s, i);
     if (c !== null && cSpan(c) > 1e-6) out.push({ c, line: isLineSegment(s, i) });
   }
   return out;
 }
 
-export function anySubSegs(s: SubPath): CurveSeg[] {
-  if (s.closed) return subToSegs(s);
-  if (s.anchors.length < 2) return [];
-  const out: CurveSeg[] = [];
-  for (let i = 0; i < s.anchors.length - 1; i++) {
-    const c = segmentCubic(s, i);
-    if (c !== null && cSpan(c) > 1e-6) out.push({ c, line: isLineSegment(s, i) });
-  }
-  return out;
-}
+export const subToSegs = (s: SubPath): CurveSeg[] =>
+  s.closed && s.anchors.length >= 3 ? segsUpTo(s, s.anchors.length) : [];
+
+export const anySubSegs = (s: SubPath): CurveSeg[] =>
+  s.closed ? subToSegs(s) : s.anchors.length >= 2 ? segsUpTo(s, s.anchors.length - 1) : [];
 
 const cSpan = (c: Cubic): number =>
   Math.max(dist(c[0], c[3]), dist(c[0], c[1]), dist(c[0], c[2]));
@@ -128,13 +122,14 @@ function refinePair(a: CurveSeg, b: CurveSeg, t0: number, u0: number): [number, 
 }
 
 function projectLinePt(e: CurveSeg, p: Pt): number | null {
+  if (!cubicNearBox(e.c, p, SNAP * 2)) return null;
   const dx = e.c[3].x - e.c[0].x, dy = e.c[3].y - e.c[0].y, len2 = dx * dx + dy * dy;
   if (len2 < EPS) return null;
   const t = ((p.x - e.c[0].x) * dx + (p.y - e.c[0].y) * dy) / len2;
   return t > T_EPS && t < 1 - T_EPS && dist(segAt(e, t), p) < SNAP ? t : null;
 }
 
-function cubicNearBox(c: Cubic, p: Pt, pad: number): boolean {
+export function cubicNearBox(c: Cubic, p: Pt, pad: number): boolean {
   return p.x >= Math.min(c[0].x, c[1].x, c[2].x, c[3].x) - pad && p.x <= Math.max(c[0].x, c[1].x, c[2].x, c[3].x) + pad
     && p.y >= Math.min(c[0].y, c[1].y, c[2].y, c[3].y) - pad && p.y <= Math.max(c[0].y, c[1].y, c[2].y, c[3].y) + pad;
 }
@@ -157,19 +152,21 @@ function projectCubicPt(e: CurveSeg, p: Pt): number | null {
 
 const projectPt = (e: CurveSeg, p: Pt): number | null => (e.line ? projectLinePt(e, p) : projectCubicPt(e, p));
 
-function segsApart(a: CurveSeg, b: CurveSeg): boolean {
-  const ax0 = Math.min(a.c[0].x, a.c[1].x, a.c[2].x, a.c[3].x), ax1 = Math.max(a.c[0].x, a.c[1].x, a.c[2].x, a.c[3].x);
-  const bx0 = Math.min(b.c[0].x, b.c[1].x, b.c[2].x, b.c[3].x), bx1 = Math.max(b.c[0].x, b.c[1].x, b.c[2].x, b.c[3].x);
-  if (bx1 < ax0 - SNAP || bx0 > ax1 + SNAP) return true;
-  const ay0 = Math.min(a.c[0].y, a.c[1].y, a.c[2].y, a.c[3].y), ay1 = Math.max(a.c[0].y, a.c[1].y, a.c[2].y, a.c[3].y);
-  const by0 = Math.min(b.c[0].y, b.c[1].y, b.c[2].y, b.c[3].y), by1 = Math.max(b.c[0].y, b.c[1].y, b.c[2].y, b.c[3].y);
-  return by1 < ay0 - SNAP || by0 > ay1 + SNAP;
-}
+interface SegBox { x0: number; y0: number; x1: number; y1: number }
+
+const segBox = (e: CurveSeg): SegBox => ({
+  x0: Math.min(e.c[0].x, e.c[1].x, e.c[2].x, e.c[3].x), x1: Math.max(e.c[0].x, e.c[1].x, e.c[2].x, e.c[3].x),
+  y0: Math.min(e.c[0].y, e.c[1].y, e.c[2].y, e.c[3].y), y1: Math.max(e.c[0].y, e.c[1].y, e.c[2].y, e.c[3].y),
+});
+
+const boxesApart = (a: SegBox, b: SegBox): boolean =>
+  b.x1 < a.x0 - SNAP || b.x0 > a.x1 + SNAP || b.y1 < a.y0 - SNAP || b.y0 > a.y1 + SNAP;
 
 export function hasAnyCrossing(a: readonly CurveSeg[], b: readonly CurveSeg[]): boolean {
+  const ba = a.map(segBox), bb = b.map(segBox);
   for (let i = 0; i < a.length; i++) {
     for (let j = 0; j < b.length; j++) {
-      if (segsApart(a[i], b[j])) continue;
+      if (boxesApart(ba[i], bb[j])) continue;
       const ca = chordsOf(a[i], i), cb = chordsOf(b[j], j);
       if (ca.some((p) => cb.some((q) => meetChords(p, q) !== null))) return true;
     }
@@ -180,15 +177,51 @@ export function hasAnyCrossing(a: readonly CurveSeg[], b: readonly CurveSeg[]): 
     || endsB.some((p) => a.some((e) => projectPt(e, p) !== null));
 }
 
-function collectSplits(segs: readonly CurveSeg[]): number[][] {
+const sameDirSeg = (a: CurveSeg, b: CurveSeg): boolean =>
+  dist(a.c[0], b.c[0]) < SNAP && dist(a.c[3], b.c[3]) < SNAP
+  && dist(segAt(a, 0.33), segAt(b, 0.33)) < SNAP && dist(segAt(a, 0.67), segAt(b, 0.67)) < SNAP;
+
+const onSeg = (e: CurveSeg, p: Pt): boolean =>
+  dist(e.c[0], p) < SNAP * 2 || dist(e.c[3], p) < SNAP * 2 || projectPt(e, p) !== null;
+
+function coincidentHit(a: CurveSeg, b: CurveSeg, ti: number, tj: number): boolean {
+  if (dist(segAt(a, ti), segAt(b, tj)) >= SNAP) return true;
+  const da = segDeriv(a, ti), db = segDeriv(b, tj);
+  const scale = Math.hypot(da.x, da.y) * Math.hypot(db.x, db.y);
+  if (scale > EPS && Math.abs(da.x * db.y - da.y * db.x) > 0.025 * scale) return false;
+  return onSeg(b, segAt(a, Math.max(0, ti - 0.08))) && onSeg(b, segAt(a, Math.min(1, ti + 0.08)));
+}
+
+function dedupSegs(rawSegs: readonly CurveSeg[]): { segs: CurveSeg[]; boxes: SegBox[] } {
+  const segs: CurveSeg[] = [], boxes: SegBox[] = [];
+  for (const e of rawSegs) {
+    const b = segBox(e);
+    const dup = segs.some((g, i) => !boxesApart(b, boxes[i]) && (sameDirSeg(e, g) || sameDirSeg(e, reverseSeg(g))));
+    if (!dup) { segs.push(e); boxes.push(b); }
+  }
+  return { segs, boxes };
+}
+
+const inBoxPad = (b: SegBox, p: Pt, pad: number): boolean =>
+  p.x >= b.x0 - pad && p.x <= b.x1 + pad && p.y >= b.y0 - pad && p.y <= b.y1 + pad;
+
+function projectEnd(segs: readonly CurveSeg[], boxes: readonly SegBox[], splits: number[][], end: Pt): void {
+  for (let k = 0; k < segs.length; k++) {
+    if (!inBoxPad(boxes[k], end, SNAP * 2)) continue;
+    const t = projectPt(segs[k], end);
+    if (t !== null) splits[k].push(t);
+  }
+}
+
+function collectSplits(segs: readonly CurveSeg[], boxes: readonly SegBox[]): number[][] {
   const splits = segs.map(() => [] as number[]);
   const chords = segs.map((e, i) => chordsOf(e, i));
+  const ends: Pt[] = [];
   for (let i = 0; i < segs.length; i++) {
-    for (let j = i + 1; j < segs.length; j++) {
-      if (!segsApart(segs[i], segs[j])) crossPair(segs, chords, splits, [i, j]);
-    }
-    for (const end of [segs[i].c[0], segs[i].c[3]]) projectEnd(segs, splits, end);
+    for (let j = i + 1; j < segs.length; j++) if (!boxesApart(boxes[i], boxes[j])) crossPair(segs, chords, splits, [i, j]);
+    for (const end of [segs[i].c[0], segs[i].c[3]]) snapVert(ends, end);
   }
+  for (const end of ends) projectEnd(segs, boxes, splits, end);
   return splits;
 }
 
@@ -198,17 +231,11 @@ function crossPair(segs: readonly CurveSeg[], chords: Chord[][], splits: number[
       const hit = meetChords(p, q);
       if (hit === null) continue;
       const [ti, tj] = refinePair(segs[i], segs[j], hit[0], hit[1]);
+      if (coincidentHit(segs[i], segs[j], ti, tj)) continue;
       if (ti > T_EPS && ti < 1 - T_EPS) splits[i].push(ti);
       if (tj > T_EPS && tj < 1 - T_EPS) splits[j].push(tj);
     }
   }
-}
-
-function projectEnd(segs: readonly CurveSeg[], splits: number[][], end: Pt): void {
-  segs.forEach((e, k) => {
-    const t = projectPt(e, end);
-    if (t !== null) splits[k].push(t);
-  });
 }
 
 function cutSegAt(e: CurveSeg, raw: readonly number[]): CurveSeg[] {
@@ -250,8 +277,9 @@ function nonLoopPieces(pieces: readonly CurveSeg[]): CurveSeg[] {
   });
 }
 
-export function splitArrangement(segs: readonly CurveSeg[]): GraphEdge[] {
-  const splits = collectSplits(segs);
+export function splitArrangement(rawSegs: readonly CurveSeg[]): GraphEdge[] {
+  const { segs, boxes } = dedupSegs(rawSegs);
+  const splits = collectSplits(segs, boxes);
   const pieces = nonLoopPieces(segs.flatMap((e, i) => cutSegAt(e, splits[i])));
   const verts: Pt[] = [];
   const out: GraphEdge[] = [];

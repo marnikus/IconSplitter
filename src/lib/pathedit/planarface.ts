@@ -1,19 +1,42 @@
 // planarface.ts — planar DCEL cell extraction & boolean cell subtraction
-// (2026-11-20, round 7): finds the minimal bounded painted cell enclosing `p`
+// (2026-11-20, round 7–8): finds the minimal bounded painted cell enclosing `p`
 // in the arrangement of ALL subpaths (open curves/lines, crossing lines, and
-// overlapping fills, ref image-11), pruning dead-end bridges so open tails and
-// unclosed spurs never cut unless they close off a real bounded cell.
+// overlapping fills, ref image-11 & image-12), pruning dead-end bridges and
+// caching the planar decomposition per PathModel for sub-millisecond hover/cut.
 
-import { flattenCycle, paintingGroupsAt, polyArea, subtractFaceFromGroup, type OwnerGroup } from "./boolean";
-import { anySubSegs, hasAnyCrossing, reverseSeg, segAt, segsWinding, splitArrangement, subToSegs, type CurveSeg, type GraphEdge } from "./curvecut";
+import { flattenCycle, polyArea, subtractFaceFromGroup, type OwnerGroup } from "./boolean";
+import {
+  anySubSegs, hasAnyCrossing, reverseSeg, ringsPaint, segAt, segsWinding, splitArrangement, subToSegs,
+  type CurveSeg, type GraphEdge,
+} from "./curvecut";
 import { cloneModel, type PathModel, type Pt, type SubPath } from "./model";
-import { cutRegion, regionAt, regionPoints } from "./region";
+import { cutRegion, regionPoints } from "./region";
 
 const TAU = Math.PI * 2;
+
+interface BBox { x0: number; y0: number; x1: number; y1: number }
+interface CachedGroup extends OwnerGroup { box: BBox }
+interface CachedFace { segs: CurveSeg[]; pts: Pt[]; area: number; box: BBox; intactSub?: number | null }
+interface ModelPlanar { groups: CachedGroup[]; faces: CachedFace[] }
+
+const planarCache = new WeakMap<PathModel, ModelPlanar>();
 
 const halfFrom = (edges: readonly GraphEdge[], h: number): number => ((h & 1) === 0 ? edges[h >> 1].u : edges[h >> 1].v);
 const halfTo = (edges: readonly GraphEdge[], h: number): number => ((h & 1) === 0 ? edges[h >> 1].v : edges[h >> 1].u);
 const halfSeg = (edges: readonly GraphEdge[], h: number): CurveSeg => ((h & 1) === 0 ? edges[h >> 1].seg : reverseSeg(edges[h >> 1].seg));
+
+const inBox = (b: BBox, p: Pt): boolean => p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
+
+function ptsBox(pts: readonly Pt[]): BBox {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const p of pts) {
+    if (p.x < x0) x0 = p.x;
+    if (p.x > x1) x1 = p.x;
+    if (p.y < y0) y0 = p.y;
+    if (p.y > y1) y1 = p.y;
+  }
+  return { x0, y0, x1, y1 };
+}
 
 function departAngle(seg: CurveSeg, sampleT: number): number {
   const a = seg.c[0], p = segAt(seg, sampleT), f = seg.c[3];
@@ -92,32 +115,56 @@ function interiorFaces(bridgeless: readonly GraphEdge[]): CurveSeg[][] {
   return faces;
 }
 
-interface CachedFace { segs: CurveSeg[]; pts: Pt[]; area: number }
-const faceCache = new WeakMap<PathModel, CachedFace[]>();
+function buildGroups(m: PathModel): CachedGroup[] {
+  const byOwner = new Map<number | undefined, SubPath[]>();
+  for (const s of m.subs) {
+    if (s.paints === false || !s.closed || s.anchors.length < 3) continue;
+    byOwner.set(s.owner, [...(byOwner.get(s.owner) ?? []), s]);
+  }
+  const out: CachedGroup[] = [];
+  for (const [owner, subs] of byOwner) {
+    const rule = subs[0].fillRule ?? "nonzero";
+    const rings = subs.map(subToSegs).filter((r) => r.length > 0);
+    if (rings.length === 0) continue;
+    const cPts = rings.flatMap((r) => r.flatMap((e) => e.c));
+    out.push({ owner, rule, subs, rings, box: ptsBox(cPts) });
+  }
+  return out;
+}
 
-function cachedFaces(m: PathModel): CachedFace[] {
-  const hit = faceCache.get(m);
+function cachedPlanar(m: PathModel): ModelPlanar {
+  const hit = planarCache.get(m);
   if (hit !== undefined) return hit;
   const bridgeless = removeBridges(splitArrangement(m.subs.flatMap(anySubSegs)));
-  const built = interiorFaces(bridgeless)
-    .map((segs) => { const pts = flattenCycle(segs); return { segs, pts, area: polyArea(pts) }; })
+  const faces = interiorFaces(bridgeless)
+    .map((segs) => { const pts = flattenCycle(segs); return { segs, pts, area: polyArea(pts), box: ptsBox(pts) }; })
     .sort((a, b) => a.area - b.area);
-  faceCache.set(m, built);
+  const built: ModelPlanar = { groups: buildGroups(m), faces };
+  planarCache.set(m, built);
   return built;
 }
 
 function minimalPaintedFace(m: PathModel, p: Pt): { face: CachedFace; groups: OwnerGroup[] } | null {
-  const groups = paintingGroupsAt(m, p);
+  const planar = cachedPlanar(m);
+  const groups = planar.groups.filter((g) => inBox(g.box, p) && ringsPaint(g.rings, g.rule, p));
   if (groups.length === 0) return null;
-  const face = cachedFaces(m).find((c) => segsWinding(c.segs, p) > 0);
+  const face = planar.faces.find((c) => inBox(c.box, p) && segsWinding(c.segs, p) > 0);
   return face === undefined ? null : { face, groups };
 }
 
-function isIntactClosedSub(m: PathModel, sub: number | null, faceArea: number): sub is number {
-  if (sub === null) return false;
-  const segs = subToSegs(m.subs[sub]);
-  if (segs.length === 0 || Math.abs(polyArea(flattenCycle(segs)) - faceArea) > 0.1) return false;
-  return !m.subs.some((s, j) => j !== sub && hasAnyCrossing(anySubSegs(s), segs));
+function findIntactSub(m: PathModel, face: CachedFace, p: Pt): number | null {
+  if (face.intactSub !== undefined) return face.intactSub;
+  for (let k = 0; k < m.subs.length; k++) {
+    const segs = subToSegs(m.subs[k]);
+    if (segs.length === 0 || segsWinding(segs, p) === 0) continue;
+    if (Math.abs(polyArea(flattenCycle(segs)) - face.area) > 0.1) continue;
+    if (!m.subs.some((s, j) => j !== k && hasAnyCrossing(anySubSegs(s), segs))) {
+      face.intactSub = k;
+      return k;
+    }
+  }
+  face.intactSub = null;
+  return null;
 }
 
 function replaceGroupSubs(subs: SubPath[], byOwner: ReadonlyMap<number | undefined, SubPath[]>): SubPath[] {
@@ -139,8 +186,8 @@ function replaceGroupSubs(subs: SubPath[], byOwner: ReadonlyMap<number | undefin
 export function cellHintAt(m: PathModel, p: Pt): Pt[] | null {
   const hit = minimalPaintedFace(m, p);
   if (hit === null) return null;
-  const sub = regionAt(m, p);
-  if (isIntactClosedSub(m, sub, hit.face.area)) return regionPoints(m.subs[sub]);
+  const sub = findIntactSub(m, hit.face, p);
+  if (sub !== null) return regionPoints(m.subs[sub]);
   return hit.face.pts.length < 3 ? null : hit.face.pts;
 }
 
@@ -148,8 +195,8 @@ export function cellHintAt(m: PathModel, p: Pt): Pt[] | null {
 export function cutCellAt(m: PathModel, p: Pt): PathModel | null {
   const hit = minimalPaintedFace(m, p);
   if (hit === null) return null;
-  const sub = regionAt(m, p);
-  if (isIntactClosedSub(m, sub, hit.face.area)) return cutRegion(m, sub, p);
+  const sub = findIntactSub(m, hit.face, p);
+  if (sub !== null) return cutRegion(m, sub, p);
   const byOwner = new Map<number | undefined, SubPath[]>();
   for (const g of hit.groups) byOwner.set(g.owner, subtractFaceFromGroup(g, hit.face.segs));
   const out = cloneModel(m);
