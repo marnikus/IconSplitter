@@ -2,6 +2,7 @@
 // for boolean region cuts (2026-11-20): splits closed subpaths at every curve
 // crossing and shared-edge transition while keeping true cubic handles intact.
 
+import { assembleGraph, type PtLink } from "./curvegraph";
 import { cubicAt, isLineSegment, segmentCubic, splitCubic, type Pt, type SubPath } from "./model";
 
 export type Cubic = [Pt, Pt, Pt, Pt];
@@ -14,8 +15,8 @@ interface Chord { seg: number; t0: number; t1: number; a: Pt; b: Pt; x0: number;
 
 const CHORDS = 24;
 const EPS = 1e-9;
-const T_EPS = 1e-4;
-const SNAP = 1.5e-2;
+const T_EPS = 1e-7;
+const SNAP = 1.2e-2;
 
 const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 const dist = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -121,12 +122,16 @@ function refinePair(a: CurveSeg, b: CurveSeg, t0: number, u0: number): [number, 
   return [t, u];
 }
 
+const awayFromEnds = (e: CurveSeg, q: Pt): boolean => dist(q, e.c[0]) >= SNAP * 2 && dist(q, e.c[3]) >= SNAP * 2;
+
 function projectLinePt(e: CurveSeg, p: Pt): number | null {
   if (!cubicNearBox(e.c, p, SNAP * 2)) return null;
   const dx = e.c[3].x - e.c[0].x, dy = e.c[3].y - e.c[0].y, len2 = dx * dx + dy * dy;
   if (len2 < EPS) return null;
   const t = ((p.x - e.c[0].x) * dx + (p.y - e.c[0].y) * dy) / len2;
-  return t > T_EPS && t < 1 - T_EPS && dist(segAt(e, t), p) < SNAP ? t : null;
+  if (t <= T_EPS || t >= 1 - T_EPS) return null;
+  const q = segAt(e, t);
+  return dist(q, p) < SNAP && awayFromEnds(e, q) ? t : null;
 }
 
 export function cubicNearBox(c: Cubic, p: Pt, pad: number): boolean {
@@ -134,20 +139,27 @@ export function cubicNearBox(c: Cubic, p: Pt, pad: number): boolean {
     && p.y >= Math.min(c[0].y, c[1].y, c[2].y, c[3].y) - pad && p.y <= Math.max(c[0].y, c[1].y, c[2].y, c[3].y) + pad;
 }
 
-function projectCubicPt(e: CurveSeg, p: Pt): number | null {
-  if (!cubicNearBox(e.c, p, SNAP * 2)) return null;
+function coarseCubicT(c: Cubic, p: Pt): [number, number] {
   let best = 0.5, bestD = Infinity;
   for (let k = 0; k <= CHORDS; k++) {
-    const d = dist(cubicAt(e.c, k / CHORDS), p);
+    const d = dist(cubicAt(c, k / CHORDS), p);
     if (d < bestD) { bestD = d; best = k / CHORDS; }
   }
-  if (bestD > 4) return null;
+  return [best, bestD];
+}
+
+function projectCubicPt(e: CurveSeg, p: Pt): number | null {
+  if (!cubicNearBox(e.c, p, SNAP * 2)) return null;
+  const [seed, bestD] = coarseCubicT(e.c, p);
+  if (bestD > cSpan(e.c) * 0.25 + SNAP * 4) return null;
+  let best = seed;
   for (let k = 0; k < 6; k++) {
     const q = cubicAt(e.c, best), d = segDeriv(e, best), den = d.x * d.x + d.y * d.y;
     if (den < EPS) break;
     best = Math.max(0, Math.min(1, best - ((q.x - p.x) * d.x + (q.y - p.y) * d.y) / den));
   }
-  return best > T_EPS && best < 1 - T_EPS && dist(cubicAt(e.c, best), p) < SNAP ? best : null;
+  const q = cubicAt(e.c, best);
+  return best > T_EPS && best < 1 - T_EPS && dist(q, p) < SNAP && awayFromEnds(e, q) ? best : null;
 }
 
 const projectPt = (e: CurveSeg, p: Pt): number | null => (e.line ? projectLinePt(e, p) : projectCubicPt(e, p));
@@ -192,14 +204,24 @@ function coincidentHit(a: CurveSeg, b: CurveSeg, ti: number, tj: number): boolea
   return onSeg(b, segAt(a, Math.max(0, ti - 0.08))) && onSeg(b, segAt(a, Math.min(1, ti + 0.08)));
 }
 
-function dedupSegs(rawSegs: readonly CurveSeg[]): { segs: CurveSeg[]; boxes: SegBox[] } {
-  const segs: CurveSeg[] = [], boxes: SegBox[] = [];
+function matchDupSeg(e: CurveSeg, b: SegBox, segs: readonly CurveSeg[], boxes: readonly SegBox[]): [PtLink, PtLink] | null {
+  for (let i = 0; i < segs.length; i++) {
+    if (boxesApart(b, boxes[i])) continue;
+    if (sameDirSeg(e, segs[i])) return [[e.c[0], segs[i].c[0]], [e.c[3], segs[i].c[3]]];
+    if (sameDirSeg(e, reverseSeg(segs[i]))) return [[e.c[0], segs[i].c[3]], [e.c[3], segs[i].c[0]]];
+  }
+  return null;
+}
+
+function dedupSegs(rawSegs: readonly CurveSeg[]): { segs: CurveSeg[]; boxes: SegBox[]; links: PtLink[] } {
+  const segs: CurveSeg[] = [], boxes: SegBox[] = [], links: PtLink[] = [];
   for (const e of rawSegs) {
     const b = segBox(e);
-    const dup = segs.some((g, i) => !boxesApart(b, boxes[i]) && (sameDirSeg(e, g) || sameDirSeg(e, reverseSeg(g))));
-    if (!dup) { segs.push(e); boxes.push(b); }
+    const hit = matchDupSeg(e, b, segs, boxes);
+    if (hit !== null) links.push(hit[0], hit[1]);
+    else { segs.push(e); boxes.push(b); }
   }
-  return { segs, boxes };
+  return { segs, boxes, links };
 }
 
 const inBoxPad = (b: SegBox, p: Pt, pad: number): boolean =>
@@ -268,29 +290,9 @@ function snapVert(verts: Pt[], p: Pt): number {
   return verts.length - 1;
 }
 
-function nonLoopPieces(pieces: readonly CurveSeg[]): CurveSeg[] {
-  return pieces.flatMap((e) => {
-    if (dist(e.c[0], e.c[3]) >= SNAP) return [e];
-    if (cSpan(e.c) < SNAP) return [];
-    const [l, r] = splitCubic4(e.c, 0.5);
-    return [{ c: l, line: e.line }, { c: r, line: e.line }];
-  });
-}
-
 export function splitArrangement(rawSegs: readonly CurveSeg[]): GraphEdge[] {
-  const { segs, boxes } = dedupSegs(rawSegs);
+  const { segs, boxes, links } = dedupSegs(rawSegs);
   const splits = collectSplits(segs, boxes);
-  const pieces = nonLoopPieces(segs.flatMap((e, i) => cutSegAt(e, splits[i])));
-  const verts: Pt[] = [];
-  const out: GraphEdge[] = [];
-  for (const raw of pieces) {
-    const u = snapVert(verts, raw.c[0]), v = snapVert(verts, raw.c[3]);
-    if (u === v) continue;
-    const a = verts[u], b = verts[v];
-    const seg: CurveSeg = raw.line ? { c: [a, a, b, b], line: true } : { c: [a, raw.c[1], raw.c[2], b], line: false };
-    const mid = segAt(seg, 0.5);
-    const dup = out.some((g) => ((g.u === u && g.v === v) || (g.u === v && g.v === u)) && dist(segAt(g.seg, 0.5), mid) < SNAP);
-    if (!dup) out.push({ u, v, seg });
-  }
-  return out;
+  const pieces = segs.flatMap((e, i) => cutSegAt(e, splits[i]));
+  return assembleGraph(pieces, links, SNAP);
 }

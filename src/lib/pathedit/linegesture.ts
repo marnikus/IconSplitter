@@ -53,8 +53,21 @@ function regionHintAt(s: EditSession, p: Pt): Pt[] | null {
   return cellHintAt(s.model, p);
 }
 
+const isStretchLine = (s: EditSession, sub: number): boolean => {
+  const item = s.model.subs[sub];
+  return item !== undefined && (!item.closed || item.paints === false);
+};
+
+/** Segment hit on an open line or stroke-only shape that actually has a crossing stretch, or null. */
+export function lineStretchHit(s: EditSession, input: PointerInput): SegmentHit | null {
+  const hit = hitOf(s, input);
+  if (hit.kind !== "segment" || !isStretchLine(s, hit.sub)) return null;
+  return stretchAt(s.model, hit.sub, hit.i + hit.t) === null ? null : hit;
+}
+
 /** Alt + Shift + click on a line: the part between the two crossings around the click goes; anchors appear on the crossings. */
 export function cutStretchAt(st: EditorState, hit: SegmentHit): EditorState {
+  if (!isStretchLine(st.session, hit.sub)) return st;
   const m = st.session.model;
   const stretch = stretchAt(m, hit.sub, hit.i + hit.t);
   const model = stretch === null ? null : removeStretch(m, hit.sub, stretch);
@@ -71,9 +84,10 @@ const sameHint = (a: Pt[] | null | undefined, b: Pt[] | null): boolean => {
 
 /** The stretch an Alt + Shift click on the line under the pointer would remove, or null. */
 function cutHintAt(s: EditSession, input: PointerInput): Pt[] | null {
-  const hit = hitOf(s, input);
-  const stretch = hit.kind === "segment" ? stretchAt(s.model, hit.sub, hit.i + hit.t) : null;
-  return hit.kind === "segment" && stretch !== null ? stretchPoints(s.model, hit.sub, stretch) : null;
+  const hit = lineStretchHit(s, input);
+  if (hit === null) return null;
+  const stretch = stretchAt(s.model, hit.sub, hit.i + hit.t);
+  return stretch === null ? null : stretchPoints(s.model, hit.sub, stretch);
 }
 
 /**

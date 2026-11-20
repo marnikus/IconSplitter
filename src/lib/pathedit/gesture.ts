@@ -14,7 +14,7 @@
 import { paintedPieceAt } from "./fill";
 import { anchorsInRect, objectAt, snapPoint, type Hit, type Snap } from "./hit";
 import { hitOf } from "./hitof";
-import { cutRegionAt, cutStretchAt, removeAt } from "./linegesture";
+import { cutRegionAt, cutStretchAt, lineStretchHit, removeAt } from "./linegesture";
 import { nextIndex, type AnchorRef, type PathModel, type Pt } from "./model";
 import {
   addAnchor, breakSmooth, closeSubpath, insertOnSegment, joinSubpaths,
@@ -78,7 +78,7 @@ export { scaleBoxOf } from "./boxtarget";
 
 /** The cursor a hover should show over the selection box (rotate / resize), or null. */
 export function cursorAt(st: EditorState, input: PointerInput): string | null {
-  return st.drag === null ? boxCursorAt(st.session, input.p, input.unitsPerPx) : null;
+  return st.drag === null && !(input.alt && input.shift) ? boxCursorAt(st.session, input.p, input.unitsPerPx) : null;
 }
 
 /** A press on the box: the knob or a corner zone starts a rotation, a handle a scale drag, an edge a distortion. */
@@ -119,15 +119,15 @@ export function pointerDown(st: EditorState, input: PointerInput): EditorState {
 }
 
 function pressDown(st: EditorState, input: PointerInput): EditorState {
-  const scaling = scaleDown(st, input);
-  if (scaling !== null) return scaling;
-  const hit = hitOf(st.session, input);
-  // Alt + Shift off every line is the fill-region cut (2026-11-20); on a line the
-  // line gestures below keep it. Nothing there → the click selects as usual.
-  if (st.session.tool === "select" && input.alt && input.shift && hit.kind === "none") {
+  if (st.session.tool === "select" && input.alt && input.shift) {
+    const lineHit = lineStretchHit(st.session, input);
+    if (lineHit !== null) return cutStretchAt(st, lineHit);
     const cut = cutRegionAt(st, input.p);
     if (cut !== st) return cut;
   }
+  const scaling = scaleDown(st, input);
+  if (scaling !== null) return scaling;
+  const hit = hitOf(st.session, input);
   return st.session.tool === "draw" ? drawDown(st, input, hit) : selectDown(st, input, hit);
 }
 

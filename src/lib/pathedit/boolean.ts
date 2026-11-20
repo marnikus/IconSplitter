@@ -27,18 +27,27 @@ function edgeMidNormal(e: CurveSeg): { mid: Pt; nIn: Pt } {
   return { mid, nIn: { x: -dy / len, y: dx / len } };
 }
 
+function ptChordDist(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x, dy = b.y - a.y, len2 = dx * dx + dy * dy;
+  const t = len2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
+}
+
 function probeOffset(edges: readonly GraphEdge[], idx: number, mid: Pt): number {
-  let near = 0.2;
+  const c = edges[idx].seg.c;
+  const span = Math.max(1e-4, Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y));
+  let near = Math.max(0.2, span * 0.25);
   edges.forEach((g, j) => {
     if (j === idx || !cubicNearBox(g.seg.c, mid, near)) return;
-    for (let k = 0; k <= 8; k++) {
-      const q = segAt(g.seg, k / 8);
-      near = Math.min(near, Math.hypot(q.x - mid.x, q.y - mid.y));
+    const steps = g.seg.line ? 1 : 16;
+    let prev = g.seg.c[0];
+    for (let k = 1; k <= steps; k++) {
+      const next = segAt(g.seg, k / steps);
+      near = Math.min(near, ptChordDist(mid, prev, next));
+      prev = next;
     }
   });
-  const c = edges[idx].seg.c;
-  const span = Math.max(1e-3, Math.hypot(c[3].x - c[0].x, c[3].y - c[0].y));
-  return Math.max(1e-5, Math.min(0.05, 0.2 * span, 0.25 * near));
+  return Math.max(1e-6, Math.min(0.05, 0.2 * span, 0.25 * near));
 }
 
 function directedBoundary(edges: readonly GraphEdge[], keep: (p: Pt) => boolean): GraphEdge[] {
@@ -68,9 +77,11 @@ function pickNextEdge(directed: readonly GraphEdge[], cands: readonly number[], 
   if (free.length <= 1) return free[0] ?? -1;
   const back = rayAngle(incoming.c[3], segAt(incoming, 0.98), incoming.c[0]);
   return free.reduce((best, k) => {
-    const tBest = cwTurn(back, rayAngle(directed[best].seg.c[0], segAt(directed[best].seg, 0.02), directed[best].seg.c[3]));
-    const tCand = cwTurn(back, rayAngle(directed[k].seg.c[0], segAt(directed[k].seg, 0.02), directed[k].seg.c[3]));
-    return tCand < tBest ? k : best;
+    const sb = directed[best].seg, sk = directed[k].seg;
+    const tBest = cwTurn(back, rayAngle(sb.c[0], segAt(sb, 0.02), sb.c[3]));
+    const tCand = cwTurn(back, rayAngle(sk.c[0], segAt(sk, 0.02), sk.c[3]));
+    if (Math.abs(tCand - tBest) > 1e-5) return tCand < tBest ? k : best;
+    return cwTurn(back, rayAngle(sk.c[0], segAt(sk, 0.15), sk.c[3])) < cwTurn(back, rayAngle(sb.c[0], segAt(sb, 0.15), sb.c[3])) ? k : best;
   });
 }
 
@@ -140,7 +151,7 @@ export function polyArea(poly: readonly Pt[]): number {
 
 function segsToSubPath(cycle: readonly CurveSeg[], style: Pick<SubPath, "owner" | "fillRule">): SubPath | null {
   const segs = ensureThreeSegs(cycle);
-  if (segs.length < 3 || polyArea(flattenCycle(segs)) < 1e-2) return null;
+  if (segs.length < 3 || polyArea(flattenCycle(segs)) < 1e-5) return null;
   const anchors: Anchor[] = segs.map((curr, i) => {
     const prev = segs[(i - 1 + segs.length) % segs.length];
     const a: Anchor = {
@@ -191,13 +202,18 @@ function unclippedRing(cutter: SubPath | undefined, owner: number | undefined, o
   return !ownerSubs.some((s) => s !== cutter && hasAnyCrossing(subToSegs(s), segB));
 }
 
-export function subtractFaceFromGroup(g: OwnerGroup, face: readonly CurveSeg[]): SubPath[] {
+export function subtractFaceFromGroup(
+  g: OwnerGroup,
+  face: readonly CurveSeg[],
+  islands: readonly (readonly CurveSeg[])[] = [],
+): SubPath[] {
   const style: Pick<SubPath, "owner" | "fillRule"> = {
     ...(g.owner === undefined ? {} : { owner: g.owner }),
     ...(g.rule === "evenodd" ? { fillRule: "evenodd" } : {}),
   };
-  const edges = splitArrangement([...g.rings.flat(), ...face]);
-  const dir = directedBoundary(edges, (q) => ringsPaint(g.rings, g.rule, q) && segsWinding(face, q) === 0);
+  const edges = splitArrangement([...g.rings.flat(), ...face, ...islands.flat()]);
+  const inCell = (q: Pt): boolean => segsWinding(face, q) !== 0 && !islands.some((h) => segsWinding(h, q) > 0);
+  const dir = directedBoundary(edges, (q) => ringsPaint(g.rings, g.rule, q) && !inCell(q));
   return traceCycles(dir).map((c) => segsToSubPath(c, style)).filter((s): s is SubPath => s !== null);
 }
 
