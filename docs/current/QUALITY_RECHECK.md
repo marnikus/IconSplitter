@@ -5946,3 +5946,30 @@ swallowed by it, and no click can ever bring paint back.
 | `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 29 fns / 247 lines (was 22 / 186) |
 | `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 5,124 B, `sor/svg-path-editor-handles.md` 7,215 B |
 | `npm run build` | built in 14.26 s | `dist/index.html` 3,628,080 B |
+
+## 2026-11-20 (e) — a punched hole moves with its fill as one object
+
+After punching a hole (`Alt + Shift + click`), shifting the fill left the hole
+ring behind, producing an unwanted half-inverted mask (`image-8.png`):
+`doubleClick` only selected `subs[sub].anchors`, `selectDown` could not drag a
+painted fill interior, `hit.ts` `objectAt` matched transparent `fill="none"`
+interiors ahead of painted fills, and `region.ts` `copyOf` dropped `evenodd`
+when copying a `fill="none"` cutter into an `evenodd` fill.
+
+`fill.ts` (`pieceAnchors`, `paintedPieceAt`) now groups area-sharing closed
+filling rings of the same `owner` into one compound fill piece while keeping
+disjoint glyphs separate; `linegesture.ts` (`doubleClick`), `gesture.ts`
+(`pressPaint` / `anchorMove`), `hit.ts` (`objectAt`), `region.ts`
+(`paintedSubAt`, `copyOf`), and `clipboard.ts` (`ownerLook`) all treat the fill
+and its holes as one object (`Alt+Double-click` still excludes a single ring).
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_object_move.test.ts` | 8 passed (new) | double-click + drag, painted-interior drag + 1 undo step, interior double-click + Arrow nudge, multiple holes, `evenodd` fill cut by `fill="none"` cutter, disjoint glyphs in one `<path>`, `Alt+Double-click` single-ring exclusion, `image-8` nested magnifier |
+| `tests/pathedit_region_cut_ui.test.tsx` | 10 passed (+1) | `PIN` `<SvgPathEditor>` cut + interior drag carries the hole along and keeps it unpainted |
+| pathedit & SVG edit sweep | 33 files, **313 passed** | all `pathedit_*`, `svg_*edit*`, `svgimgedit` |
+| `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings, 0 in changed files |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `clipboard.ts` 77 L, `fill.ts` 105 L, `gesture.ts` 300 L, `hit.ts` 187 L, `linegesture.ts` 137 L, `region.ts` 263 L |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 5,932 B |
+| `npm run build` | built in 19.79 s | `dist/index.html` 3,630,784 B |
+

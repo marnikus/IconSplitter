@@ -64,7 +64,7 @@ export function insidePolygon(poly: readonly Pt[], p: Pt): boolean {
   return inside;
 }
 
-function pointOnSegment(a: Pt, b: Pt, p: Pt): boolean {
+export function pointOnSegment(a: Pt, b: Pt, p: Pt): boolean {
   const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
   if (Math.abs(cross) > 1e-6 * Math.max(1, Math.hypot(b.x - a.x, b.y - a.y))) return false;
   return p.x >= Math.min(a.x, b.x) - EPS && p.x <= Math.max(a.x, b.x) + EPS
@@ -141,11 +141,23 @@ export function regionAt(m: PathModel, p: Pt): number | null {
   return inner.sub;
 }
 
+/**
+ * The topmost subpath that paints at `p` among the allowed objects, or null:
+ * a hole paints nothing, and `fill="none"` paints nothing, so neither is hit.
+ */
+export function paintedSubAt(m: PathModel, p: Pt, can: (owner: number | undefined) => boolean = () => true): number | null {
+  const hits = layersAt(m, ringsAt(m, p)).filter((l) => can(l.owner));
+  if (hits.length === 0) return null;
+  const rank = (l: Layer) => (l.owner ?? -1) * 1e6 + Math.max(...l.rings.map((r) => r.sub));
+  const top = hits.reduce((a, b) => (rank(b) >= rank(a) ? b : a));
+  return top.rings[0].sub;
+}
+
 /** The cut as the knock-out helpers see it: which ring, at which point, walked which way. */
 interface Cut { sub: number; walk: 1 | -1 }
 
 /** What one painted object needs so its paint inside the region goes: copies of the ring, or one flip. */
-interface Knockout { owner: number | undefined; count: number; reverse: boolean; flip?: number }
+interface Knockout { owner: number | undefined; rule: "evenodd" | "nonzero"; count: number; reverse: boolean; flip?: number }
 
 /**
  * The model with the region cut out: the paint inside the ring under `p` gone,
@@ -198,11 +210,11 @@ function knockouts(m: PathModel, rings: readonly Ring[], sub: number, inside: re
 /** The knock-out one painted object needs: one flipped ring, or copies walked against its winding. */
 function knockoutFor(layer: Layer, cut: Cut): Knockout | null {
   const { owner, rule, rings } = layer;
-  if (rule === "evenodd") return { owner, count: 1, reverse: false };
+  if (rule === "evenodd") return { owner, rule, count: 1, reverse: false };
   const winding = rings.reduce((n, r) => n + r.dir, 0);
   const mine = rings.find((r) => r.sub === cut.sub);
-  if (mine !== undefined && winding === 2 * mine.dir) return { owner, count: 0, reverse: false, flip: cut.sub };
-  return { owner, count: Math.abs(winding), reverse: -Math.sign(winding) !== cut.walk };
+  if (mine !== undefined && winding === 2 * mine.dir) return { owner, rule, count: 0, reverse: false, flip: cut.sub };
+  return { owner, rule, count: Math.abs(winding), reverse: -Math.sign(winding) !== cut.walk };
 }
 
 /** Applies the plans: drops what was drawn inside, flips where that is enough, adds the copies. */
@@ -220,7 +232,7 @@ function applyCut(m: PathModel, cutter: SubPath, dropped: ReadonlySet<number>, p
       if (at !== undefined) out.subs[at].anchors = reversed(cutter.anchors);
       continue;
     }
-    for (let i = 0; i < plan.count; i++) out.subs.push(copyOf(cutter, plan.reverse, plan.owner));
+    for (let i = 0; i < plan.count; i++) out.subs.push(copyOf(cutter, plan));
   }
   return out;
 }
@@ -229,12 +241,16 @@ function applyCut(m: PathModel, cutter: SubPath, dropped: ReadonlySet<number>, p
 const reversed = (anchors: readonly Anchor[]): Anchor[] => anchors.slice().reverse().map(flip);
 
 /**
- * A copy of the ring as a subpath of `owner` (the filled path it is cut out of),
- * walked either way. Handles follow their anchors, so a curve keeps its shape.
+ * A copy of the ring as a subpath of `plan.owner` (the filled path it is cut
+ * out of), keeping that path's fill rule. Handles follow their anchors.
  */
-function copyOf(s: SubPath, reverse: boolean, owner: number | undefined): SubPath {
-  const anchors = reverse ? reversed(s.anchors) : s.anchors.map((a) => ({ ...a, in: a.in && { ...a.in }, out: a.out && { ...a.out } }));
-  return { anchors, closed: true, paints: true, ...(owner === undefined ? {} : { owner }), ...(s.fillRule === undefined ? {} : { fillRule: s.fillRule }) };
+function copyOf(s: SubPath, plan: Knockout): SubPath {
+  const anchors = plan.reverse ? reversed(s.anchors) : s.anchors.map((a) => ({ ...a, in: a.in && { ...a.in }, out: a.out && { ...a.out } }));
+  return {
+    anchors, closed: true, paints: true,
+    ...(plan.owner === undefined ? {} : { owner: plan.owner }),
+    ...(plan.rule === "evenodd" ? { fillRule: "evenodd" } : {}),
+  };
 }
 
 const flip = (a: Anchor): Anchor => ({

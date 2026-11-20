@@ -11,9 +11,10 @@
 // a smooth pair), segment click inserts, first anchor closes, another open
 // end joins. Keys: Delete, Esc, Enter (= Finish), Ctrl+Z / Ctrl+Y.
 
+import { paintedPieceAt } from "./fill";
 import { anchorsInRect, objectAt, snapPoint, type Hit, type Snap } from "./hit";
 import { hitOf } from "./hitof";
-import { cutStretchAt, removeAt } from "./linegesture";
+import { cutRegionAt, cutStretchAt, removeAt } from "./linegesture";
 import { nextIndex, type AnchorRef, type PathModel, type Pt } from "./model";
 import {
   addAnchor, breakSmooth, closeSubpath, insertOnSegment, joinSubpaths,
@@ -24,7 +25,6 @@ import { rotateAnchors, rotateAngle, scaleAnchors, scaleFor, type Box, type BoxH
 import { boxCursorAt, boxTargetAt } from "./boxtarget";
 import { alongEdge, boxCenter, skewAngleFor, skewAnchors, skewedCorners, type SkewEdge } from "./skew";
 import { HIT_PX } from "./hitpx";
-import { cutRegionAt } from "./linegesture";
 
 export interface PointerInput {
   p: Pt;
@@ -42,7 +42,7 @@ export interface PointerInput {
 }
 
 type Drag =
-  | { kind: "anchors"; before: PathModel; refs: AnchorRef[]; grab: AnchorRef; start: Pt; grabStart: Pt }
+  | { kind: "anchors"; before: PathModel; refs: AnchorRef[]; grab: AnchorRef; start: Pt; grabStart: Pt; minMove?: number }
   | { kind: "handle"; before: PathModel; base: PathModel; ref: AnchorRef; side: "in" | "out" }
   | { kind: "marquee"; start: Pt; objects: number[]; base: AnchorRef[]; mode: SelectMode }
   | { kind: "draw"; before: PathModel; base: PathModel; ref: AnchorRef }
@@ -139,12 +139,20 @@ function selectObject(s: EditSession, target: number, additive: boolean): EditSe
   return { ...s, objects, selection, active: null };
 }
 
+function pressPaint(st: EditorState, s: EditSession, target: number | null, input: PointerInput): EditorState | null {
+  const next = target === null ? s : selectObject(s, target, input.shift);
+  const refs = input.shift ? null : paintedPieceAt(next, input.p, target);
+  if (refs === null) return target === null ? null : withSession(st, next);
+  const drag = { ...anchorDrag(next.model, refs, refs[0], input.p), minMove: HIT_PX.pull * input.unitsPerPx };
+  return { ...st, session: { ...next, selection: [], active: null }, drag };
+}
+
 function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState {
   if (hit.kind !== "none") return pressOn(st, input, hit);
   const s = st.session;
   const mode = modeOf(input);
-  const target = mode === "remove" ? null : pickedObject(s, input);
-  if (target !== null) return withSession(st, selectObject(s, target, input.shift));
+  const paint = mode === "remove" ? null : pressPaint(st, s, pickedObject(s, input), input);
+  if (paint !== null) return paint;
   const base = mode === "replace" ? [] : s.selection;
   return { ...st, session: { ...s, selection: base }, drag: { kind: "marquee", start: input.p, objects: s.objects, base, mode }, marquee: null };
 }
@@ -250,11 +258,13 @@ function drawDown(st: EditorState, input: PointerInput, hit: Hit): EditorState {
 function anchorMove(st: EditorState, d: Extract<Drag, { kind: "anchors" }>, input: PointerInput): EditorState {
   let dx = input.p.x - d.start.x;
   let dy = input.p.y - d.start.y;
+  if (d.minMove !== undefined && Math.hypot(dx, dy) <= d.minMove) return st;
   const snap = input.shift
     ? snapPoint(d.before, { x: d.grabStart.x + dx, y: d.grabStart.y + dy }, d.grab, HIT_PX.snap * input.unitsPerPx)
     : null;
   if (snap !== null) { dx = snap.pt.x - d.grabStart.x; dy = snap.pt.y - d.grabStart.y; }
-  return { ...st, snap, session: preview(st.session, moveAnchors(d.before, d.refs, dx, dy)) };
+  const drag = d.minMove === undefined ? d : { ...d, minMove: undefined };
+  return { ...st, drag, snap, session: preview(st.session, moveAnchors(d.before, d.refs, dx, dy)) };
 }
 
 export function pointerMove(st: EditorState, input: PointerInput): EditorState {

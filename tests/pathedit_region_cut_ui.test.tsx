@@ -221,4 +221,32 @@ describe("the map pin — a stroked circle is the cutter", () => {
     expect(mark()).not.toBeNull();
     expect(mark()?.getAttribute("d")).not.toBe(art(1)); // the pin body is the ring, not the circle
   });
+
+  // 2026-11-20 (fifth round): after the boolean cut the hole is part of the
+  // fill — one object overall — so shifting the fill carries the hole with it
+  // instead of leaving the hole behind as an unwanted stationary mask.
+  it("shifting the fill after the cut carries its hole along as one object", async () => {
+    await act(async () => {
+      ui.render(<SvgPathEditor source={PIN} box={{ width: 384, height: 384 }} testid="e" label="pin" onFinish={onFinish} onCancel={vi.fn()} />);
+    });
+    const circleBefore = art(1);
+    await pointer("pointerdown", 161, 165, both);
+    await pointer("pointerup", 161, 165, both);
+    // Drag the painted pin body 50 units left: both the pin body and its hole move −50,
+    // while the separate stroked circle stays at (161, 165).
+    await pointer("pointerdown", 150, 80);
+    await pointer("pointermove", 100, 80);
+    await pointer("pointerup", 100, 80);
+    expect(art(1)).toBe(circleBefore);               // stroked cutter untouched
+    expect(art(0)).toContain("M101.58 122.6");       // hole moved 151.58 → 101.58 with the fill
+    expect(art(0)).not.toContain("M151.58 122.6");   // nothing left behind at the old hole position
+    await pointer("pointermove", 111, 165, both);    // moved hole centre (161 − 50, 165) is still a hole
+    expect(mark()).toBeNull();
+    await act(async () => { host.querySelector<HTMLElement>("[data-testid=e-finish]")?.click(); });
+    const written = onFinish.mock.calls[0][0];
+    const pinTag = written.slice(written.indexOf('fill="#28ACEE"'), written.indexOf('fill="none"'));
+    expect(pinTag).toContain("M15 168");             // body moved 65 → 15
+    expect(pinTag).toContain("101.58");              // hole moved 151.58 → 101.58
+    expect(written).toContain(`d="${circleBefore}"`);
+  });
 });

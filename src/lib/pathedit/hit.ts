@@ -6,6 +6,7 @@
 // or its own two segments. Pure.
 
 import { cubicAt, isLineSegment, nextIndex, prevIndex, segmentCubic, type AnchorRef, type PathModel, type Pt, type SubPath } from "./model";
+import { paintedSubAt } from "./region";
 
 export interface HitRadii { anchor: number; handle: number; segment: number }
 
@@ -166,14 +167,20 @@ function inside(s: SubPath, p: Pt): boolean {
  * segment band of any shape, else inside a closed shape that is not selected
  * (the topmost — last drawn — first). Null on empty space.
  */
+function unfilledAt(m: PathModel, p: Pt, selected: (owner: number) => boolean): number | null {
+  for (let i = m.subs.length - 1; i >= 0; i--) {
+    const s = m.subs[i];
+    if (s.owner !== undefined && s.paints === false && !selected(s.owner) && inside(s, p)) return s.owner;
+  }
+  return null;
+}
+
 export function objectAt(m: PathModel, p: Pt, r: HitRadii, selected: (owner: number) => boolean): number | null {
   const near = hitTest(m, p, { radii: r, selected: [] });
   const sub = near.kind === "anchor" ? near.ref.sub : near.kind === "segment" ? near.sub : null;
   const owner = sub === null ? undefined : m.subs[sub]?.owner;
   if (owner !== undefined) return owner;
-  for (let i = m.subs.length - 1; i >= 0; i--) {
-    const o = m.subs[i].owner;
-    if (o !== undefined && !selected(o) && inside(m.subs[i], p)) return o;
-  }
-  return null;
+  const fill = paintedSubAt(m, p);
+  const fillOwner = fill === null ? undefined : m.subs[fill]?.owner;
+  return fillOwner ?? unfilledAt(m, p, selected);
 }

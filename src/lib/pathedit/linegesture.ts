@@ -5,12 +5,13 @@
 // Each is one undo step; the old anchor picks are dropped because the anchors
 // are renumbered. Pure state rules, like gesture.ts.
 
+import { pieceAnchors } from "./fill";
 import type { EditorState, PointerInput } from "./gesture";
 import type { Hit } from "./hit";
 import { hitOf } from "./hitof";
 import type { AnchorRef, Pt } from "./model";
 import { removeSegment } from "./ops";
-import { cutRegion, regionAt, regionPoints } from "./region";
+import { cutRegion, paintedSubAt, regionAt, regionPoints } from "./region";
 import { commit, type EditSession } from "./session";
 import { removeStretch, stretchAt, stretchPoints } from "./stretch";
 
@@ -95,27 +96,41 @@ export function hoverAt(st: EditorState, input: PointerInput): EditorState {
 const sameRegion = (a: Pt[] | null | undefined, b: Pt[] | null): boolean =>
   (a ?? null) === null && b === null ? true : a != null && b !== null && a.length === b.length && sameHint(a, b);
 
-/** One whole line's anchors. */
-const lineOf = (st: EditorState, sub: number): AnchorRef[] => st.session.model.subs[sub].anchors.map((_, i) => ({ sub, i }));
+/** One whole line's (or filled piece's, holes included) anchors. */
+const lineOf = (st: EditorState, sub: number): AnchorRef[] => pieceAnchors(st.session.model, sub);
 
-/** The selection a double-click makes: the line replaces it, Shift adds the line to it, Alt takes the line out of it. */
+/** The selection a double-click makes: the piece replaces it, Shift adds it, Alt takes that one ring out of it. */
 function lineSelection(st: EditorState, sub: number, input: PointerInput): AnchorRef[] {
   const kept = st.session.selection;
   if (input.alt) return kept.filter((r) => r.sub !== sub);
-  if (!input.shift) return lineOf(st, sub);
-  return [...kept, ...lineOf(st, sub).filter((r) => !kept.some((k) => k.sub === r.sub && k.i === r.i))];
+  const piece = lineOf(st, sub);
+  if (!input.shift) return piece;
+  return [...kept, ...piece.filter((r) => !kept.some((k) => k.sub === r.sub && k.i === r.i))];
+}
+
+function doubleClickSub(s: EditSession, input: PointerInput): number | null {
+  const hit = hitOf(s, input, []);
+  if (hit.kind === "segment") return hit.sub;
+  if (hit.kind === "anchor") return hit.ref.sub;
+  if (input.alt) return null;
+  return paintedSubAt(s.model, input.p, (o) => o === undefined || s.objects.includes(o)) ?? paintedSubAt(s.model, input.p);
+}
+
+function includeOwner(objects: readonly number[], owner: number | undefined, additive: boolean): number[] {
+  if (owner === undefined || objects.includes(owner)) return [...objects];
+  return additive ? [...objects, owner] : [owner];
 }
 
 /**
- * Double-click on a line (or one of its anchors) in Select selects that whole line (2026-11-06). With Shift it is
- * added to the selection, with Alt the whole line is excluded from it (2026-11-10). An Alt + click removes a segment,
- * so the removal made by this double-click's own first click is undone first (and no undo step is left behind).
+ * Double-click on a line (or one of its anchors, or inside a painted fill) in Select selects that whole line / filled
+ * piece (holes included, 2026-11-20). With Shift it is added to the selection, with Alt that single ring is excluded.
+ * An Alt + click removes a segment, so the removal made by this double-click's own first click is undone first.
  */
 export function doubleClick(st: EditorState, input: PointerInput): EditorState {
   if (st.session.tool !== "select") return st;
   const base = input.alt && quick(st.lineCut, input.time) ? { ...st, session: st.lineCut.before, lineCut: null } : st;
-  const hit = hitOf(base.session, input, []);
-  if (hit.kind !== "segment" && hit.kind !== "anchor") return st; // nothing there: a removal, if any, stays
-  const sub = hit.kind === "segment" ? hit.sub : hit.ref.sub;
-  return { ...base, session: { ...base.session, selection: lineSelection(base, sub, input) } };
+  const sub = doubleClickSub(base.session, input);
+  if (sub === null) return st; // nothing there: a removal, if any, stays
+  const objects = includeOwner(base.session.objects, base.session.model.subs[sub]?.owner, input.shift);
+  return { ...base, session: { ...base.session, objects, selection: lineSelection(base, sub, input) } };
 }
