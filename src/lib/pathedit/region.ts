@@ -103,19 +103,29 @@ function signedArea(poly: readonly Pt[]): number {
   return sum;
 }
 
-/** The rings that actually fill, and the rule of the innermost of them (a group's rule is inherited). */
-function paintAt(m: PathModel, rings: readonly Ring[]): { filled: Ring[]; rule: "evenodd" | "nonzero"; owner: number | undefined } | null {
-  const filled = rings.filter((r) => fills(m.subs[r.sub]));
-  const inner = filled[0];
-  if (inner === undefined) return null;
-  const sameObject = filled.filter((r) => m.subs[r.sub].owner === m.subs[inner.sub].owner);
-  return { filled: sameObject, rule: m.subs[inner.sub].fillRule ?? "nonzero", owner: m.subs[inner.sub].owner };
+/** The filling rings of ONE object at the point, innermost first, and the rule they are painted by. */
+interface Layer { owner: number | undefined; rule: "evenodd" | "nonzero"; rings: Ring[] }
+
+/** The objects that paint at the point: their filling rings, grouped, with the rule of the innermost. */
+function layersAt(m: PathModel, rings: readonly Ring[]): Layer[] {
+  const byOwner = new Map<number | undefined, Ring[]>();
+  for (const r of rings) {
+    if (!fills(m.subs[r.sub])) continue;
+    const owner = m.subs[r.sub].owner;
+    byOwner.set(owner, [...(byOwner.get(owner) ?? []), r]);
+  }
+  const layers: Layer[] = [];
+  for (const [owner, list] of byOwner) {
+    const rule = m.subs[list[0].sub].fillRule ?? "nonzero";
+    if (paints(list, rule)) layers.push({ owner, rule, rings: list });
+  }
+  return layers;
 }
 
 /** Nonzero: the directions must not cancel; evenodd: an odd number of rings. */
-function painted(paint: { filled: readonly Ring[]; rule: "evenodd" | "nonzero" }): boolean {
-  if (paint.rule === "evenodd") return paint.filled.length % 2 === 1;
-  return paint.filled.reduce((sum, r) => sum + r.dir, 0) !== 0;
+function paints(rings: readonly Ring[], rule: "evenodd" | "nonzero"): boolean {
+  if (rule === "evenodd") return rings.length % 2 === 1;
+  return rings.reduce((sum, r) => sum + r.dir, 0) !== 0;
 }
 
 /**
@@ -126,9 +136,8 @@ function painted(paint: { filled: readonly Ring[]; rule: "evenodd" | "nonzero" }
  */
 export function regionAt(m: PathModel, p: Pt): number | null {
   const rings = ringsAt(m, p);
-  const paint = paintAt(m, rings);
   const inner = rings[0];
-  if (paint === null || inner === undefined || !painted(paint)) return null;
+  if (inner === undefined || layersAt(m, rings).length === 0) return null;
   return inner.sub;
 }
 
@@ -179,29 +188,19 @@ function drawnInside(m: PathModel, sub: number, cutter: readonly Pt[]): Set<numb
  * count matters.
  */
 function knockouts(m: PathModel, rings: readonly Ring[], sub: number, inside: readonly Pt[]): Knockout[] {
-  const byOwner = new Map<number | undefined, Ring[]>();
-  for (const r of rings) {
-    if (!fills(m.subs[r.sub])) continue;
-    const owner = m.subs[r.sub].owner;
-    byOwner.set(owner, [...(byOwner.get(owner) ?? []), r]);
-  }
   const cut: Cut = { sub, walk: Math.sign(signedArea(inside)) as 1 | -1 };
-  const plans: Knockout[] = [];
-  for (const [owner, list] of byOwner) {
-    const plan = knockoutFor(m, list, owner, cut);
-    if (plan !== null) plans.push(plan);
-  }
-  return plans;
+  return layersAt(m, rings).flatMap((layer) => {
+    const plan = knockoutFor(layer, cut);
+    return plan === null ? [] : [plan];
+  });
 }
 
-/** The knock-out one object needs, or null when it does not paint there. */
-function knockoutFor(m: PathModel, list: readonly Ring[], owner: number | undefined, cut: Cut): Knockout | null {
-  const innermost = list[0];
-  if (innermost === undefined) return null;
-  if ((m.subs[innermost.sub].fillRule ?? "nonzero") === "evenodd") return list.length % 2 === 1 ? { owner, count: 1, reverse: false } : null;
-  const winding = list.reduce((n, r) => n + r.dir, 0);
-  if (winding === 0) return null;
-  const mine = list.find((r) => r.sub === cut.sub);
+/** The knock-out one painted object needs: one flipped ring, or copies walked against its winding. */
+function knockoutFor(layer: Layer, cut: Cut): Knockout | null {
+  const { owner, rule, rings } = layer;
+  if (rule === "evenodd") return { owner, count: 1, reverse: false };
+  const winding = rings.reduce((n, r) => n + r.dir, 0);
+  const mine = rings.find((r) => r.sub === cut.sub);
   if (mine !== undefined && winding === 2 * mine.dir) return { owner, count: 0, reverse: false, flip: cut.sub };
   return { owner, count: Math.abs(winding), reverse: -Math.sign(winding) !== cut.walk };
 }

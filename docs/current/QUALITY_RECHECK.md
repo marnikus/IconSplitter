@@ -5922,7 +5922,8 @@ recompute that object's winding from all its rings. So:
    the layer below still painted the area: white on white, i.e. "no hole".
 
 `region.ts` now plans one knock-out **per object that paints** at the pointer
-(`knockouts` → `knockoutFor`, `Cut` carries the ring and its walk) and applies
+(`layersAt` groups the filling rings by owner and keeps the ones that paint,
+`knockouts` → `knockoutFor`, `Cut` carries the ring and its walk) and applies
 them together (`applyCut`): the same rules as before per object — copies walked
 against that object's own winding, an in-place walk-round when the cutter is the
 inner ring of a two-ring cancel, one ring under evenodd — plus one new rule:
@@ -5942,6 +5943,6 @@ swallowed by it, and no click can ever bring paint back.
 | pathedit sweep | 284 passed | `pathedit_*`, `svg_edit_*`, `tailcut_*` |
 | `npx vitest run` (full) | 494 files, **4,961 tests, all passed** | 141 s |
 | `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings |
-| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 30 fns / 248 lines (was 22 / 186) |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 29 fns / 247 lines (was 22 / 186) |
 | `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 5,124 B, `sor/svg-path-editor-handles.md` 7,215 B |
-| `npm run build` | built in 13.47 s | `dist/index.html` 3,628,274 B |
+| `npm run build` | built in 14.26 s | `dist/index.html` 3,628,080 B |
