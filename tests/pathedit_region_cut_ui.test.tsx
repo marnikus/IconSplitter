@@ -249,4 +249,27 @@ describe("the map pin — a stroked circle is the cutter", () => {
     expect(pinTag).toContain("101.58");              // hole moved 151.58 → 101.58
     expect(written).toContain(`d="${circleBefore}"`);
   });
+
+  // 2026-11-20 (sixth round, ref image-9): when the stroked cutter circle only
+  // PARTLY overlaps a filled shape, Alt+Shift+click cuts only that overlapping
+  // part out of the fill — never inverting the unpainted outside crescent.
+  it("a cutter only partly over a fill cuts just the overlapping part, never inverting outside", async () => {
+    const partial = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260">`
+      + `<path fill="#1da1f2" fill-rule="evenodd" d="M0 0L210 0L150 260L0 260Z"/>`
+      + `<path fill="none" stroke="#000" stroke-width="4" d="M130 50C174.18 50 210 85.82 210 130C210 174.18 174.18 210 130 210C85.82 210 50 174.18 50 130C50 85.82 85.82 50 130 50Z"/>`
+      + `</svg>`;
+    await act(async () => {
+      ui.render(<SvgPathEditor source={partial} box={{ width: 260, height: 260 }} testid="e" label="partial" onFinish={onFinish} onCancel={vi.fn()} />);
+    });
+    const circleBefore = art(1);
+    await pointer("pointermove", 195, 130, both);    // right crescent inside circle, outside blue card
+    expect(mark()).toBeNull();                       // unpainted before
+    await pointer("pointerdown", 120, 130, both);    // cut the overlapping blue part inside the circle
+    await pointer("pointerup", 120, 130, both);
+    await pointer("pointermove", 120, 130, both);
+    expect(mark()).toBeNull();                       // overlap is now cut out
+    await pointer("pointermove", 195, 130, both);
+    expect(mark()).toBeNull();                       // right crescent MUST STILL BE UNPAINTED (not inverted to blue!)
+    expect(art(1)).toBe(circleBefore);               // stroked circle untouched
+  });
 });

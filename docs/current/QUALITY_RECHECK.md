@@ -5973,3 +5973,29 @@ and its holes as one object (`Alt+Double-click` still excludes a single ring).
 | `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 5,932 B |
 | `npm run build` | built in 19.79 s | `dist/index.html` 3,630,784 B |
 
+## 2026-11-20 (f) — partial-overlap region cuts subtract only `Fill \ Cutter`
+
+When a closed cutter ring only partly overlapped a filled shape (`image-9.png`:
+a stroked circle hanging off the slanted edge of a blue card), appending the
+whole cutter ring inverted the unpainted outside crescent into fill (`evenodd`
+parity `0 → 1`, `nonzero` winding `0 → −1`), and `regionAt` ranked partial
+cutters by their full area rather than their painted overlap.
+
+`curvecut.ts` and `boolean.ts` (`clipLayerIfPartial`, `clippedRegionAt`) now
+split intersecting cubic Beziers and lines at their exact crossings and shared
+endpoints, clip the red hover mark and cutter ranking to `Fill ∩ Cutter`, and
+trace the exact Bezier boundary of `Fill \ Cutter` whenever a cutter crosses a
+layer's edge or an existing hole (preserving the intact-ring fast path when
+strictly inside).
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_partial_cut.test.ts` | 9 passed (new) | `image-9` `evenodd` & `nonzero`, bar split into 2 pieces, collinear protruding cutter, overlapping `evenodd` holes merged without refill, large partial cutter, 2-arc curved crescent, `<circle>` element, interior hole + partial cut + drag |
+| `tests/pathedit_region_cut_ui.test.tsx` | 11 passed (+1) | `<SvgPathEditor>` partial circle over slanted card removes overlap and leaves outside crescent unpainted |
+| pathedit & SVG edit sweep | 34 files, **323 passed** | all `pathedit_*`, `svg_*edit*`, `svgimgedit` |
+| `npx tsc --noEmit` / `eslint` | clean / 0 errors | 0 warnings in changed files |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `boolean.ts` 236 L, `curvecut.ts` 258 L, `linegesture.ts` 137 L, `region.ts` 288 L |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 6,803 B |
+| `npm run build` | built in 14.11 s | `dist/index.html` 3,641,048 B |
+
+

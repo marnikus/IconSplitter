@@ -5,13 +5,14 @@
 // Each is one undo step; the old anchor picks are dropped because the anchors
 // are renumbered. Pure state rules, like gesture.ts.
 
+import { clippedRegionAt } from "./boolean";
 import { pieceAnchors } from "./fill";
 import type { EditorState, PointerInput } from "./gesture";
 import type { Hit } from "./hit";
 import { hitOf } from "./hitof";
 import type { AnchorRef, Pt } from "./model";
 import { removeSegment } from "./ops";
-import { cutRegion, paintedSubAt, regionAt, regionPoints } from "./region";
+import { cutRegion, paintedSubAt, regionAt } from "./region";
 import { commit, type EditSession } from "./session";
 import { removeStretch, stretchAt, stretchPoints } from "./stretch";
 
@@ -51,9 +52,8 @@ export function cutRegionAt(st: EditorState, p: Pt): EditorState {
 /** The closed outline a click would cut out, or null: the red mark of a fill region. */
 function regionHintAt(s: EditSession, p: Pt): Pt[] | null {
   const sub = regionAt(s.model, p);
-  if (sub === null) return null;
-  const pts = regionPoints(s.model.subs[sub]);
-  return pts.length < 3 ? null : pts;
+  const clipped = sub === null ? null : clippedRegionAt(s.model, sub, p);
+  return clipped === null || clipped.pts.length < 3 ? null : clipped.pts;
 }
 
 /** Alt + Shift + click on a line: the part between the two crossings around the click goes; anchors appear on the crossings. */

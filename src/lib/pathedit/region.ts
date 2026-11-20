@@ -22,6 +22,7 @@
 // knock-out. Points that are already holes are not regions, so a hole is never
 // offered twice.
 
+import { clipLayerIfPartial, clippedRegionAt } from "./boolean";
 import { cloneModel, cubicAt, isLineSegment, segmentCubic, type Anchor, type PathModel, type Pt, type SubPath } from "./model";
 
 /** A curve is flattened in this many straight pieces per segment (the mark is a hint, not geometry). */
@@ -136,9 +137,15 @@ function paints(rings: readonly Ring[], rule: "evenodd" | "nonzero"): boolean {
  */
 export function regionAt(m: PathModel, p: Pt): number | null {
   const rings = ringsAt(m, p);
-  const inner = rings[0];
-  if (inner === undefined || layersAt(m, rings).length === 0) return null;
-  return inner.sub;
+  if (rings.length === 0 || layersAt(m, rings).length === 0) return null;
+  if (rings.length === 1) return rings[0].sub;
+  const areas = rings.map((r) => clippedRegionAt(m, r.sub, p)?.area ?? r.area);
+  let best = 0;
+  for (let i = 1; i < rings.length; i++) {
+    const da = areas[i] - areas[best];
+    if (da < -1e-2 || (Math.abs(da) <= 1e-2 && rings[i].area < rings[best].area)) best = i;
+  }
+  return rings[best].sub;
 }
 
 /**
@@ -156,8 +163,8 @@ export function paintedSubAt(m: PathModel, p: Pt, can: (owner: number | undefine
 /** The cut as the knock-out helpers see it: which ring, at which point, walked which way. */
 interface Cut { sub: number; walk: 1 | -1 }
 
-/** What one painted object needs so its paint inside the region goes: copies of the ring, or one flip. */
-interface Knockout { owner: number | undefined; rule: "evenodd" | "nonzero"; count: number; reverse: boolean; flip?: number }
+/** What one painted object needs so its paint inside the region goes: copies of the ring, one flip, or a boolean clip. */
+interface Knockout { owner: number | undefined; rule: "evenodd" | "nonzero"; count: number; reverse: boolean; flip?: number; clipped?: SubPath[] }
 
 /**
  * The model with the region cut out: the paint inside the ring under `p` gone,
@@ -170,10 +177,11 @@ interface Knockout { owner: number | undefined; rule: "evenodd" | "nonzero"; cou
  */
 export function cutRegion(m: PathModel, sub: number, p: Pt): PathModel | null {
   const cutter = m.subs[sub];
-  if (cutter === undefined || !cutter.closed || cutter.anchors.length < 3) return null;
+  const atP = ringsAt(m, p);
+  if (cutter === undefined || !cutter.closed || cutter.anchors.length < 3 || layersAt(m, atP).length === 0) return null;
   const inside = regionPoints(cutter);
   const dropped = drawnInside(m, sub, inside);
-  const plans = knockouts(m, ringsAt(m, p).filter((r) => !dropped.has(r.sub)), sub, inside);
+  const plans = knockouts(m, atP.filter((r) => !dropped.has(r.sub)), { sub, dropped }, inside);
   return plans.length === 0 ? null : applyCut(m, cutter, dropped, plans);
 }
 
@@ -199,10 +207,12 @@ function drawnInside(m: PathModel, sub: number, cutter: readonly Pt[]): Set<numb
  * when it is the only ring but one), evenodd adds one ring because only the
  * count matters.
  */
-function knockouts(m: PathModel, rings: readonly Ring[], sub: number, inside: readonly Pt[]): Knockout[] {
-  const cut: Cut = { sub, walk: Math.sign(signedArea(inside)) as 1 | -1 };
+function knockouts(m: PathModel, rings: readonly Ring[], cut: { sub: number; dropped: ReadonlySet<number> }, inside: readonly Pt[]): Knockout[] {
+  const walk = Math.sign(signedArea(inside)) as 1 | -1;
   return layersAt(m, rings).flatMap((layer) => {
-    const plan = knockoutFor(layer, cut);
+    const clipped = clipLayerIfPartial(m, layer.owner, layer.rule, cut);
+    if (clipped !== null) return [{ owner: layer.owner, rule: layer.rule, count: 0, reverse: false, clipped }];
+    const plan = knockoutFor(layer, { sub: cut.sub, walk });
     return plan === null ? [] : [plan];
   });
 }
@@ -217,7 +227,21 @@ function knockoutFor(layer: Layer, cut: Cut): Knockout | null {
   return { owner, rule, count: Math.abs(winding), reverse: -Math.sign(winding) !== cut.walk };
 }
 
-/** Applies the plans: drops what was drawn inside, flips where that is enough, adds the copies. */
+function replaceClipped(subs: SubPath[], plans: readonly Knockout[]): SubPath[] {
+  const byOwner = new Map<number | undefined, SubPath[]>();
+  for (const p of plans) if (p.clipped !== undefined) byOwner.set(p.owner, p.clipped);
+  if (byOwner.size === 0) return subs;
+  const placed = new Set<number | undefined>();
+  return subs.flatMap((s) => {
+    const rep = byOwner.get(s.owner);
+    if (rep === undefined || !fills(s) || !s.closed || s.anchors.length < 3) return [s];
+    if (placed.has(s.owner)) return [];
+    placed.add(s.owner);
+    return rep;
+  });
+}
+
+/** Applies the plans: drops what was drawn inside, replaces clipped layers, flips or adds copies. */
 function applyCut(m: PathModel, cutter: SubPath, dropped: ReadonlySet<number>, plans: readonly Knockout[]): PathModel {
   const out = cloneModel(m);
   const kept = new Map<number, number>(); // old index → index in the new list
@@ -234,6 +258,7 @@ function applyCut(m: PathModel, cutter: SubPath, dropped: ReadonlySet<number>, p
     }
     for (let i = 0; i < plan.count; i++) out.subs.push(copyOf(cutter, plan));
   }
+  out.subs = replaceClipped(out.subs, plans);
   return out;
 }
 

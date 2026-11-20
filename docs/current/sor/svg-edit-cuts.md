@@ -77,6 +77,15 @@ model, so the hole is visible at once — no Finish needed to see it.
   Arrow-nudging, scaling, rotating, skewing or copying), carries every hole of
   that fill along at the same offset while keeping disjoint glyphs separate;
   `Alt+Double-click` still excludes a single ring.
+- **partially overlapping cutters subtract only their overlap (`Fill \ Cutter`)**
+  (2026-11-20, sixth round): when a closed cutter crosses a filled shape's edge
+  or an existing hole instead of lying strictly inside it, appending the whole
+  ring would invert the cutter's unpainted overhang into fill (`evenodd` parity
+  `0 → 1`, `nonzero` winding `0 → −1`). `boolean.ts` (`clipLayerIfPartial`,
+  `clippedRegionAt`) and `curvecut.ts` split both shapes at their exact cubic /
+  line crossings, clip the red preview to `Fill ∩ Cutter` (ranking candidate
+  cutters by that painted bite), and trace the exact Bezier boundary of
+  `Fill \ Cutter` so nothing outside the fill ever turns painted.
 - one cut = one undo step, selection cleared; Ctrl+Z restores the exact previous
   path data (a hole is never "cut back" by a second click).
 
@@ -87,7 +96,8 @@ model, so the hole is visible at once — no Finish needed to see it.
 | the red marks (line stretch, fill region) | `src/svg/pathedit/editoroverlay.ts` (`data-cut-hint`, `data-cut-region`) |
 | the gesture rules (pure) | `lib/pathedit/linegesture.ts`, `lib/pathedit/gesture.ts` (`cutRegionHint`, `pressPaint`) |
 | compound fill + hole piece | `lib/pathedit/fill.ts` (`pieceAnchors`, `paintedPieceAt`) |
+| partial-overlap Bezier boolean | `lib/pathedit/boolean.ts`, `lib/pathedit/curvecut.ts` (`clipLayerIfPartial`, `clippedRegionAt`) |
 | the stretch maths (pure) | `lib/pathedit/stretch.ts` |
 | the region maths (pure) | `lib/pathedit/region.ts` (`ringsAt`/`paintedSubAt`/`cutRegion`) |
 | what paints where | `lib/pathedit/svgdoc.ts` (`fill`/`fill-rule`, `<g>` inheritance) → `SubPath.paints`/`fillRule` in `model.ts`, set by `objects.ts` |
-| tests | `tests/pathedit_cut_between.test.ts`, `tests/pathedit_cut_tail.test.ts`, `tests/pathedit_region_cut.test.ts`, `tests/pathedit_object_move.test.ts`, UI: `tests/pathedit_cut_between_ui.test.tsx`, `tests/pathedit_region_cut_ui.test.tsx` |
+| tests | `tests/pathedit_cut_between.test.ts`, `tests/pathedit_cut_tail.test.ts`, `tests/pathedit_region_cut.test.ts`, `tests/pathedit_object_move.test.ts`, `tests/pathedit_partial_cut.test.ts`, UI: `tests/pathedit_cut_between_ui.test.tsx`, `tests/pathedit_region_cut_ui.test.tsx` |
