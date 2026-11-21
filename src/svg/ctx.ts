@@ -20,7 +20,7 @@ import { resetNote, resolveModelParams } from "./modelparams";
 import { saveConfig, saveConnections, savePrompt } from "./promptstore";
 import { saveSvgPrefs } from "./prefsstore";
 import { bootSources, scanSources, type ScanSetters } from "./scan";
-import { headerState, toListRow, visibleRows, withQueued } from "./rowmodel";
+import { toListRow, visibleRows, withQueued } from "./rowmodel";
 import type { SvgAction, SvgModel } from "./statemodel";
 import type { SvgCtx, SvgSetters } from "./actions";
 import type { Discovery } from "./sources";
@@ -28,7 +28,9 @@ import type { CatalogModel } from "../lib/modelcaps";
 import type { RunProgress, SvgRefs, SvgRow } from "./types";
 
 export function useSvgCtx(model: SvgModel, dispatch: Dispatch<SvgAction>): SvgCtx {
-  const refs = useRef(newRefs()).current;
+  const refsRef = useRef<SvgRefs | null>(null);
+  if (refsRef.current === null) refsRef.current = newRefs();
+  const refs = refsRef.current;
   const hist = useHistoryActions();
   const svg = useAppSlice("svg");
   const say = useSay(dispatch);
@@ -173,18 +175,37 @@ function useSvgPersist(model: SvgModel): void {
   useEffect(() => savePrompt(model.prompt), [model.prompt]);
 }
 
+function checkedVisibleFast(visibleIds: readonly string[], orderMap: ReadonlyMap<string, number>, checked: readonly string[]): string[] {
+  if (checked.length === 0 || visibleIds.length === 0) return [];
+  if (checked.length * 4 >= visibleIds.length) return checkedInView(visibleIds, checked);
+  const hits: { id: string; idx: number }[] = [];
+  const seen = new Set<string>();
+  for (const id of checked) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const idx = orderMap.get(id);
+    if (idx !== undefined) hits.push({ id, idx });
+  }
+  hits.sort((a, b) => a.idx - b.idx);
+  return hits.map((h) => h.id);
+}
+
 /** The filtered/sorted view, its totals and the request count, derived only. */
 function useDerived(model: SvgModel, checked: string[]): Pick<SvgCtx, "visible" | "totals" | "header" | "affected" | "requests"> {
   const sortChecks = isSelectionSort(model.sort) ? checked : undefined;
-  const visible = useMemo(
-    () => withQueued(visibleRows(model.rows, model.filter, model.sort, { order: model.order, checked: sortChecks, dir: model.sortDir }), model.queue),
-    [model.rows, model.filter, model.sort, model.sortDir, model.order, model.queue, sortChecks],
+  const filtered = useMemo(
+    () => visibleRows(model.rows, model.filter, model.sort, { order: model.order, checked: sortChecks, dir: model.sortDir }),
+    [model.rows, model.filter, model.sort, model.sortDir, model.order, sortChecks],
   );
-  const totals = useMemo(() => usageTotals(visible.map(toListRow)), [visible]);
-  const header = useMemo(() => headerState(visible, checked), [visible, checked]);
-  const affected = useMemo(() => checkedInView(visible.map((r) => r.source.id), checked), [visible, checked]);
-  // The same size the confirmation and the runner use — shown before any send.
-  // The effort tier is deliberately absent: it never shrinks the batch.
+  const visible = useMemo(() => withQueued(filtered, model.queue), [filtered, model.queue]);
+  const totals = useMemo(() => usageTotals(filtered.map(toListRow)), [filtered]);
+  const visibleIds = useMemo(() => filtered.map((r) => r.source.id), [filtered]);
+  const orderMap = useMemo(() => new Map(visibleIds.map((id, idx) => [id, idx])), [visibleIds]);
+  const affected = useMemo(() => checkedVisibleFast(visibleIds, orderMap, checked), [visibleIds, orderMap, checked]);
+  const header = useMemo((): "none" | "some" | "all" => {
+    if (visibleIds.length === 0 || affected.length === 0) return "none";
+    return affected.length === visibleIds.length ? "all" : "some";
+  }, [visibleIds.length, affected.length]);
   const requests = useMemo(
     () => requestCount(checked.length, clampImagesPerRequest(model.config.imagesPerRequest)),
     [checked.length, model.config.imagesPerRequest],

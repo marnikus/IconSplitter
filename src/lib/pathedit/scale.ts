@@ -6,7 +6,7 @@
 // both (pivot: the middle of the opposite edge). The pivot is always the
 // opposite side; anchors and their handles scale together. Pure.
 
-import { cloneModel, type AnchorRef, type PathModel, type Pt } from "./model";
+import { mapSelectedAnchors, type AnchorRef, type PathModel, type Pt } from "./model";
 
 export interface Box { x0: number; y0: number; x1: number; y1: number }
 export type BoxHandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
@@ -77,14 +77,8 @@ const scalePt = (p: Pt, o: Pt, sx: number, sy: number): Pt => ({ x: o.x + (p.x -
 
 /** The selected anchors (and their handles) scaled by `s` about its pivot. */
 export function scaleAnchors(m: PathModel, refs: readonly AnchorRef[], s: ScaleSpec): PathModel {
-  const out = cloneModel(m);
   const at = (p: Pt) => scalePt(p, s.origin, s.sx, s.sy);
-  for (const r of refs) {
-    const a = out.subs[r.sub]?.anchors[r.i];
-    if (a === undefined) continue;
-    out.subs[r.sub].anchors[r.i] = { ...a, ...at(a), in: a.in && at(a.in), out: a.out && at(a.out) };
-  }
-  return out;
+  return mapSelectedAnchors(m, refs, (a) => ({ ...a, ...at(a), in: a.in && at(a.in), out: a.out && at(a.out) }));
 }
 
 // --- rotation (2026-11-06) ---------------------------------------------------
@@ -103,15 +97,9 @@ export function rotateAngle(c: Pt, start: Pt, p: Pt, snap: boolean): number {
 
 /** The selected anchors (and their handles) turned by `angle` around `c`. */
 export function rotateAnchors(m: PathModel, refs: readonly AnchorRef[], c: Pt, angle: number): PathModel {
-  const out = cloneModel(m);
   const cos = Math.cos(angle), sin = Math.sin(angle);
   const turn = (p: Pt): Pt => ({ x: c.x + (p.x - c.x) * cos - (p.y - c.y) * sin, y: c.y + (p.x - c.x) * sin + (p.y - c.y) * cos });
-  for (const r of refs) {
-    const a = out.subs[r.sub]?.anchors[r.i];
-    if (a === undefined) continue;
-    out.subs[r.sub].anchors[r.i] = { ...a, ...turn(a), in: a.in && turn(a.in), out: a.out && turn(a.out) };
-  }
-  return out;
+  return mapSelectedAnchors(m, refs, (a) => ({ ...a, ...turn(a), in: a.in && turn(a.in), out: a.out && turn(a.out) }));
 }
 
 /** How big the corner rotate zones are (all in path units). */

@@ -108,7 +108,10 @@ function paintOf(attrs: string, inherited: Paint): Paint {
  * a group's `fill`/`fill-rule` reaches its children (2026-11-20): a stroked
  * outline (`fill="none"`) paints no area, which the region cut has to know.
  */
-export function pathTags(markup: string): PathTag[] {
+const TAG_CACHE_MAX = 256;
+const tagCache = new Map<string, readonly PathTag[]>();
+
+function scanPathTags(markup: string): readonly PathTag[] {
   const out: PathTag[] = [];
   const text = blanked(markup);
   const stack: Paint[] = [{ fill: "#000000", fillRule: "nonzero" }];
@@ -119,7 +122,7 @@ export function pathTags(markup: string): PathTag[] {
     if (name === "g") {
       if (closing) { if (stack.length > 1) stack.pop(); continue; }
       const own = paintOf(m[3], stack[stack.length - 1]);
-      if (/\/\s*>$/.test(m[3])) stack[stack.length - 1] = own; // <g/> changes nothing
+      if (/\/\s*>$/.test(m[3])) stack[stack.length - 1] = own;
       else stack.push(own);
       continue;
     }
@@ -131,7 +134,33 @@ export function pathTags(markup: string): PathTag[] {
     out.push({ index: out.length, kind, start: m.index, end: m.index + head.length, d: shapeD(kind, tag),
       selfClosing: /\/\s*>$/.test(head), fillRule: paint.fillRule, paints: paint.fill !== "none" });
   }
-  return out;
+  return Object.freeze(out);
+}
+
+/** Shared immutable tag list for hot callers that do not mutate the array. */
+export function cachedPathTags(markup: string): readonly PathTag[] {
+  const hit = tagCache.get(markup);
+  if (hit !== undefined) {
+    tagCache.delete(markup);
+    tagCache.set(markup, hit);
+    return hit;
+  }
+  const built = scanPathTags(markup);
+  if (tagCache.size >= TAG_CACHE_MAX) {
+    const oldest = tagCache.keys().next().value;
+    if (oldest !== undefined) tagCache.delete(oldest);
+  }
+  tagCache.set(markup, built);
+  return built;
+}
+
+/** Fast count of editable drawn shapes in `markup` without cloning the tag list. */
+export function pathTagCount(markup: string): number {
+  return cachedPathTags(markup).length;
+}
+
+export function pathTags(markup: string): PathTag[] {
+  return cachedPathTags(markup).slice();
 }
 
 /** A basic shape's start tag as a <path> with `d`, its geometry attributes removed. */
@@ -143,7 +172,7 @@ function asPathTag(t: PathTag, tag: string, d: string): string {
 
 /** The file with shape `index` drawn by `d` (a basic shape becomes a <path>); null when there is no such shape. */
 export function withPathD(markup: string, index: number, d: string): string | null {
-  const t = pathTags(markup)[index];
+  const t = cachedPathTags(markup)[index];
   if (t === undefined) return null;
   const old = markup.slice(t.start, t.end);
   if (t.kind === "path") {
@@ -158,8 +187,9 @@ export function withPathD(markup: string, index: number, d: string): string | nu
 /** Many shapes redrawn in ONE pass over the file (the tail cutter's batch write, 2026-11-06). */
 export function withPathDs(markup: string, ds: ReadonlyMap<number, string>): string {
   let out = markup;
-  const tags = pathTags(markup);
-  for (const t of [...tags].reverse()) {
+  const tags = cachedPathTags(markup);
+  for (let i = tags.length - 1; i >= 0; i--) {
+    const t = tags[i];
     const d = ds.get(t.index);
     if (d === undefined) continue;
     const old = out.slice(t.start, t.end);
@@ -178,7 +208,9 @@ export function withPathDs(markup: string, ds: ReadonlyMap<number, string>): str
 /** The preview copy: each drawn shape tagged with its number, so a click names the shape it hit. */
 export function annotatePaths(markup: string): string {
   let out = markup;
-  for (const t of pathTags(markup).reverse()) {
+  const tags = cachedPathTags(markup);
+  for (let i = tags.length - 1; i >= 0; i--) {
+    const t = tags[i];
     const name = `<${markup.slice(t.start + 1, t.start + 1 + t.kind.length)}`;
     out = `${out.slice(0, t.start)}${name} data-edit-path="${t.index}"${out.slice(t.start + name.length)}`;
   }

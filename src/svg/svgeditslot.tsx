@@ -4,7 +4,7 @@
 // editor. Edit needs a drawn SVG with a shape and no run writing the row.
 
 import type { ReactNode } from "react";
-import { pathTags } from "../lib/pathedit/svgdoc";
+import { pathTagCount } from "../lib/pathedit/svgdoc";
 import { openSvgEditor } from "./pathedit/editmodalstore";
 import { approveRowCut } from "./tailcut/cutactions";
 import type { TailReview } from "./tailcut/tailreview";
@@ -54,7 +54,7 @@ export function PairBars({ cells }: { cells: readonly PairBarCell[] }) {
 export function editBlocked(row: SvgRow, svg: string | null): string | null {
   if (svg === null) return "No SVG to edit yet";
   if (row.running || row.queued) return "Generating or queued — wait until it finishes";
-  return pathTags(svg).length === 0 ? "This SVG has no shape to edit" : null;
+  return pathTagCount(svg) === 0 ? "This SVG has no shape to edit" : null;
 }
 
 /** The small Edit control beside the SVG version. */

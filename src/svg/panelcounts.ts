@@ -1,5 +1,4 @@
-// panelcounts.ts — the Generate SVG panel's derived counters, out of the render
-// function so each one is computed ONCE per rows snapshot (RULE: one owner).
+// panelcounts.ts — pure single-pass row counters and O(1)-lookup sets for SvgPanel.
 import { shownVersion } from "./rowmodel";
 import type { SvgRow } from "./types";
 
@@ -10,39 +9,69 @@ export interface SvgCounts {
   failed: number;
 }
 
-/** The four counters above the list, in ONE pass. */
+export interface SvgRowIndex {
+  counts: SvgCounts;
+  knownIds: ReadonlySet<string>;
+  decidableIds: ReadonlySet<string>;
+  generatedIds: ReadonlySet<string>;
+  corrupt: number;
+  running: number;
+  issues: number;
+}
+
+const addBool = (n: number, cond: boolean): number => (cond ? n + 1 : n);
+
+/** Single-pass index over `rows`: reads `r.status` once per row and derives all counts and id sets in O(N). */
+export function indexSvgRows(rows: readonly SvgRow[]): SvgRowIndex {
+  let generated = 0, approved = 0, failed = 0, corrupt = 0, running = 0, issues = 0;
+  const knownIds = new Set<string>();
+  const decidableIds = new Set<string>();
+  const generatedIds = new Set<string>();
+  for (const r of rows) {
+    const id = r.source.id;
+    const status = r.status;
+    const isFailed = status === "failed";
+    knownIds.add(id);
+    generated = addBool(generated, status === "generated");
+    approved = addBool(approved, r.review === "approved");
+    failed = addBool(failed, isFailed);
+    corrupt = addBool(corrupt, r.corrupt);
+    running = addBool(running, r.running);
+    issues = addBool(issues, isFailed || r.corrupt);
+    if (shownVersion(r) !== null) decidableIds.add(id);
+    if (r.newest !== null) generatedIds.add(id);
+  }
+  return {
+    counts: { eligible: rows.length, generated, approved, failed },
+    knownIds, decidableIds, generatedIds, corrupt, running, issues,
+  };
+}
+
+/** Counts how many `ids` belong to `set` in O(|ids|). */
+export function countInSet(ids: readonly string[], set: ReadonlySet<string>): number {
+  let count = 0;
+  for (const id of ids) if (set.has(id)) count += 1;
+  return count;
+}
+
+/** The four counters above the list, in ONE pass reading `r.status` once per row. */
 export function countsOf(rows: readonly SvgRow[]): SvgCounts {
   let generated = 0, approved = 0, failed = 0;
   for (const r of rows) {
-    if (r.status === "generated") generated += 1;
+    const status = r.status;
+    if (status === "generated") generated += 1;
     if (r.review === "approved") approved += 1;
-    if (r.status === "failed") failed += 1;
+    if (status === "failed") failed += 1;
   }
   return { eligible: rows.length, generated, approved, failed };
 }
 
-/**
- * Selected rows that actually have a valid SVG to approve or decline.
- *
- * Was `affected.filter(id => rows.find(x => x.source.id === id))` inside the
- * render: O(affected × rows) on EVERY render — 6.5 ms at 1,000 rows and 131 ms
- * at 5,000. One pass over the rows, then a membership test per affected id.
- */
+/** Selected rows that actually have a valid SVG to approve or decline. */
 export function decidableCount(rows: readonly SvgRow[], affected: readonly string[]): number {
-  if (affected.length === 0) return 0;
-  const decidable = new Set<string>();
-  for (const r of rows) if (shownVersion(r) !== null) decidable.add(r.source.id);
-  let count = 0;
-  for (const id of affected) if (decidable.has(id)) count += 1;
-  return count;
+  return affected.length === 0 ? 0 : countInSet(affected, indexSvgRows(rows).decidableIds);
 }
 
-/** Selected rows in the list — any row can be declined, even before an SVG exists (2026-11-17). */
+/** Selected rows in the list — any row can be declined, even before an SVG exists. */
 export function declinableCount(rows: readonly SvgRow[], affected: readonly string[]): number {
-  if (affected.length === 0) return 0;
-  const known = new Set<string>();
-  for (const r of rows) known.add(r.source.id);
-  let count = 0;
-  for (const id of affected) if (known.has(id)) count += 1;
-  return count;
+  return affected.length === 0 ? 0 : countInSet(affected, indexSvgRows(rows).knownIds);
 }

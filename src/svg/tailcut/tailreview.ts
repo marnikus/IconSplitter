@@ -51,8 +51,7 @@ export function useTailReviews(): ReadonlyMap<string, TailReview> {
 
 /** A row's review while its file is still exactly what was reviewed (else none: the marks would be wrong). */
 export function useRowTailReview(id: string, svgPath: string, svg: string | null): TailReview | null {
-  const all = useTailReviews();
-  const r = all.get(id) ?? null;
+  const r = useSyncExternalStore(subscribe, () => reviews.get(id) ?? null);
   return r !== null && r.svgPath === svgPath && r.source === svg ? r : null;
 }
 

@@ -9,7 +9,7 @@
 // valid SVG exists, and the active row is visually distinct from a merely
 // checked one.
 
-import { memo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
@@ -52,9 +52,18 @@ export interface SvgRowActions {
   preferVersion: (id: string, version: number) => Promise<string | null>;
 }
 
-export type SvgRowPresentation = Omit<SvgRowActions, "checked" | "activeId">;
+export type SvgRowPresentation = Omit<SvgRowActions, "checked" | "activeId" | "imgRunning" | "thumb" | "bg">;
 
-function SvgRowView({ row, a, register }: { row: SvgRow; a: SvgRowPresentation; register: RegisterCheckedRow }) {
+export interface SvgRowProps {
+  row: SvgRow;
+  thumb: number;
+  bg: PreviewBackground;
+  imgBusy: boolean;
+  a: SvgRowPresentation;
+  register: RegisterCheckedRow;
+}
+
+function SvgRowView({ row, thumb, bg, imgBusy, a, register }: SvgRowProps) {
   const ref = useRowBinding(row.source.id, register);
   const id = row.source.id;
   return (
@@ -65,27 +74,35 @@ function SvgRowView({ row, a, register }: { row: SvgRow; a: SvgRowPresentation; 
       <input type="checkbox" className="svg-check" data-testid={`svg-check-${id}`}
         aria-label={`Select ${row.source.name}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
-      <RowContent row={row} a={a} />
+      <RowPreview row={row} thumb={thumb} bg={bg} imgBusy={imgBusy} a={a} />
+      <RowDetails row={row} imgBusy={imgBusy} a={a} />
     </div>
   );
 }
 
 export default memo(SvgRowView);
 
-const RowContent = memo(function RowContent({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
-  const id = row.source.id;
+const RowPreview = memo(function RowPreview({ row, thumb, bg, imgBusy, a }: {
+  row: SvgRow; thumb: number; bg: PreviewBackground; imgBusy: boolean; a: SvgRowPresentation;
+}) {
+  const aiActions = useMemo(() => ({ running: imgBusy, onMain: a.setImageVersion }), [imgBusy, a.setImageVersion]);
+  const onPreferSvg = useCallback((sourceId: string, version: number) => { void a.preferVersion(sourceId, version); }, [a]);
+  return (
+    <LazyPreview size={thumb} width={row.baseAiPath ? thumb * 3 + 36 : thumb * 2 + 24}>
+      <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={thumb} bg={bg}
+        aiActions={aiActions} onPreferSvg={onPreferSvg} />
+    </LazyPreview>
+  );
+});
+
+const RowDetails = memo(function RowDetails({ row, imgBusy, a }: { row: SvgRow; imgBusy: boolean; a: SvgRowPresentation }) {
   return <>
-      <LazyPreview size={a.thumb} width={row.baseAiPath ? a.thumb * 3 + 36 : a.thumb * 2 + 24}>
-        <SvgThumbs rootRef={a.rootRef} rootToken={a.rootToken} row={row} thumb={a.thumb} bg={a.bg}
-          aiActions={{ running: a.imgRunning.includes(id), onMain: a.setImageVersion }}
-          onPreferSvg={(sourceId, version) => void a.preferVersion(sourceId, version)} />
-      </LazyPreview>
-      <FileCell row={row} />
-      <StatusCell row={row} />
-      <ReviewCell row={row} />
-      <UsageCell row={row} />
-      <FileActions row={row} a={a} />
-      <DecisionActions row={row} a={a} />
+    <FileCell row={row} />
+    <StatusCell row={row} />
+    <ReviewCell row={row} />
+    <UsageCell row={row} />
+    <FileActions row={row} a={a} />
+    <DecisionActions row={row} imgBusy={imgBusy} a={a} />
   </>;
 });
 
@@ -116,7 +133,7 @@ function FileActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
 }
 
 /** The row's own generate/regenerate and its approve/decline/needs-review/regenerate marks. */
-function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
+function DecisionActions({ row, imgBusy, a }: { row: SvgRow; imgBusy: boolean; a: SvgRowPresentation }) {
   const id = row.source.id;
   const shown = shownVersion(row);
   const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -134,7 +151,7 @@ function DecisionActions({ row, a }: { row: SvgRow; a: SvgRowPresentation }) {
         title="Reset to no decision (Pending)" onClick={click(() => a.decide([id], "pending"))}>↺</button>
       <RegenStatusButtons id={id} disabled={shown === null} decide={a.decide} />
       <span className="svg-decision-sep" aria-hidden="true" />
-      <ImageRegenButton id={id} running={a.imgRunning.includes(id)} onClick={click(() => a.requestImageRegen([id]))} />
+      <ImageRegenButton id={id} running={imgBusy} onClick={click(() => a.requestImageRegen([id]))} />
     </div>
   );
 }

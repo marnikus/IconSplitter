@@ -36,14 +36,27 @@ export function nearestOnSegment(sub: SubPath, i: number, p: Pt, maxDist = Infin
   return refine(c, p);
 }
 
+function cubicDist2(c: Pt[], t: number, px: number, py: number): number {
+  const u = 1 - t;
+  const u2 = u * u, t2 = t * t;
+  const b0 = u2 * u, b1 = 3 * u2 * t, b2 = 3 * u * t2, b3 = t2 * t;
+  const dx = b0 * c[0].x + b1 * c[1].x + b2 * c[2].x + b3 * c[3].x - px;
+  const dy = b0 * c[0].y + b1 * c[1].y + b2 * c[2].y + b3 * c[3].y - py;
+  return dx * dx + dy * dy;
+}
+
 function refine(c: Pt[], p: Pt): { t: number; pt: Pt; d: number } {
-  const N = 48;
+  const N = 24;
   let best = 0;
-  for (let k = 1; k <= N; k++) if (dist(cubicAt(c, k / N), p) < dist(cubicAt(c, best / N), p)) best = k;
+  let bestD2 = cubicDist2(c, 0, p.x, p.y);
+  for (let k = 1; k <= N; k++) {
+    const d2 = cubicDist2(c, k / N, p.x, p.y);
+    if (d2 < bestD2) { best = k; bestD2 = d2; }
+  }
   let lo = Math.max(0, (best - 1) / N), hi = Math.min(1, (best + 1) / N);
-  for (let k = 0; k < 30; k++) {
+  for (let k = 0; k < 18; k++) {
     const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;
-    if (dist(cubicAt(c, a), p) < dist(cubicAt(c, b), p)) hi = b; else lo = a;
+    if (cubicDist2(c, a, p.x, p.y) < cubicDist2(c, b, p.x, p.y)) hi = b; else lo = a;
   }
   const t = (lo + hi) / 2;
   const pt = cubicAt(c, t);
@@ -142,14 +155,19 @@ export function anchorsInRect(m: PathModel, a: Pt, b: Pt): AnchorRef[] {
   return m.subs.flatMap((s, sub) => s.anchors.flatMap((p, i) => (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 ? [{ sub, i }] : [])));
 }
 
-/** A closed subpath as a polygon (each segment sampled), for inside tests. */
+const outlineCache = new WeakMap<SubPath, Pt[]>();
+
+/** A closed subpath as a polygon (each segment sampled), cached per SubPath for inside tests. */
 function outlinePoints(s: SubPath): Pt[] {
+  const hit = outlineCache.get(s);
+  if (hit !== undefined) return hit;
   const pts: Pt[] = [];
   s.anchors.forEach((_, i) => {
     const c = segmentCubic(s, i);
     if (c === null) return;
     for (let k = 0; k < 8; k++) pts.push(cubicAt(c, k / 8));
   });
+  outlineCache.set(s, pts);
   return pts;
 }
 

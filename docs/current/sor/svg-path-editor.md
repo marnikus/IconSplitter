@@ -102,7 +102,7 @@ mode `corner` / `smooth` / `broken`, read through the shared outline reader
 (arcs, quadratics, relative commands → absolute cubics). A segment is a line
 only when neither side has a handle. Finish writes only `M`, `L`, `C`, `Z`
 (a missing handle sits on its anchor), 2 decimals, and replaces **only that
-changed path's `d`** in the file text (`objects.writeObjects` → `svgdoc.withPathD`,
+changed path's `d`** in the file text (`objects.writeObjects` → `svgdoc.withPathDs`,
 each through the inverse of its matrix back into its own units) — untouched
 paths and every other byte stay.
 

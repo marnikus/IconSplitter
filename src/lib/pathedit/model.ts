@@ -195,6 +195,28 @@ export interface Affine { a: number; b: number; c: number; d: number; e: number;
 
 export const IDENTITY: Affine = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 
+export function isIdentityAffine(m: Affine): boolean {
+  return m.a === 1 && m.b === 0 && m.c === 0 && m.d === 1 && m.e === 0 && m.f === 0;
+}
+
+/** Updates only the anchors named in `refs`, preserving untouched SubPath and Anchor references. */
+export function mapSelectedAnchors(m: PathModel, refs: readonly AnchorRef[], mapAnchor: (a: Anchor) => Anchor): PathModel {
+  if (refs.length === 0) return m;
+  const subs = m.subs.slice();
+  const clonedSubs = new Set<number>();
+  for (const r of refs) {
+    const sub = subs[r.sub];
+    const a = sub?.anchors[r.i];
+    if (sub === undefined || a === undefined) continue;
+    if (!clonedSubs.has(r.sub)) {
+      subs[r.sub] = { ...sub, anchors: sub.anchors.slice() };
+      clonedSubs.add(r.sub);
+    }
+    subs[r.sub].anchors[r.i] = mapAnchor(subs[r.sub].anchors[r.i]);
+  }
+  return clonedSubs.size === 0 ? m : { subs };
+}
+
 export function applyAffine(m: Affine, p: Pt): Pt {
   return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
 }

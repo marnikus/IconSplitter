@@ -11,12 +11,12 @@ export function useImageUrl(rootRef: { current: DirHandleLike | null }, relPath:
   const [url, setUrl] = useState<string | null>(null);
   // a paste overwrites the file in place (2026-11-17): ask again after a bump
   const [tick, setTick] = useState(0);
-  useEffect(() => subscribeSideThumbs(() => setTick((t) => t + 1)), []);
+  useEffect(() => (relPath === "" ? undefined : subscribeSideThumbs(() => setTick((t) => t + 1))), [relPath]);
   useEffect(() => {
     let live = true;
-    if (relPath === "") { setUrl(null); return () => { live = false; }; }
+    if (relPath === "") return () => { live = false; };
     thumbFor(relPath).then((u) => live && setUrl(u)).catch(() => live && setUrl(null));
     return () => { live = false; };
   }, [relPath, thumbFor, tick]);
-  return url;
+  return relPath === "" ? null : url;
 }

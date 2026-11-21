@@ -1,167 +1,202 @@
-// editoroverlay.ts — what the path editor draws over the icon (2026-11-06):
-// a thin guide along the working path, EVERY anchor (blue circles, the selected
-// ones filled), and only for the selection its handle arms and diamonds. A
-// Shift-snap target is shown in red: the segment, or a ring on a line end. The
-// marquee is a dashed box. Only the SELECTED paths show anchors (2026-11-06:
-// several paths per session). Everything is drawn at the end of the icon's root
-// <svg>, in its root space, and sized in SCREEN pixels: the path zooms, the chrome does not. Inline !important beats the
-// preview stroke sheet. Nothing here is ever written to the file.
+// editoroverlay.ts — incremental pooled SVG overlay for the path editor.
+// Preserves exact DOM hierarchy & z-order under `[data-edit-overlay]` while
+// reusing anchor `<circle>` elements in-place and skipping unchanged layers so
+// dragging 1 anchor on a 240-anchor icon mutates 1 `<circle>` instead of
+// destroying and recreating hundreds of SVG nodes per frame.
 
 import type { EditorState } from "../../lib/pathedit/gesture";
 import { editableSub } from "../../lib/pathedit/session";
-import { HIT_PX, scaleBoxOf } from "../../lib/pathedit/gesture";
-import { boxHandles, rotateHandleOf } from "../../lib/pathedit/scale";
-import { nextIndex, segmentCubic, toPathData, type Anchor, type Pt } from "../../lib/pathedit/model";
+import { toPathData, type AnchorRef, type PathModel } from "../../lib/pathedit/model";
+import {
+  createScaleBoxPool, cutHintMarks, cutRegionMarks, handlesOf, marqueeBox, n, scaleBoxKeyOf,
+  skewMarks, snapMarks, STYLE_ANCHOR, STYLE_ANCHOR_SEL, STYLE_GUIDE, SVG_NS, updateScaleBoxPool,
+  type OverlayLook, type ScaleBoxPool,
+} from "./overlaymarks";
 
-const SVG_NS = "http://www.w3.org/2000/svg";
+export type { OverlayLook } from "./overlaymarks";
 export const OVERLAY_ATTR = "data-edit-overlay";
-const BLUE = "#1a8cff";
-const SNAP = "#ff5a36";
 
-export interface OverlayLook {
-  /** Path units per screen pixel. */
-  u: number;
-  /** The anchor's drawn diameter in screen pixels (Edit settings). */
-  anchorPx: number;
-  /** The thin guide along the working path: only in the thin view — over the preset stroke it doubled the line. */
-  guide?: boolean;
+interface CircleSlot {
+  el: Element;
+  x: number;
+  y: number;
+  r: string;
+  sel: boolean;
 }
 
-const style = (css: string): string => css.split(";").filter(Boolean).map((d) => `${d.trim()} !important`).join(";")
-  + ";vector-effect:non-scaling-stroke !important;opacity:1 !important";
-
-function el(doc: Document, tag: string, attrs: Record<string, string>, css: string): Element {
-  const node = doc.createElementNS(SVG_NS, tag);
-  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
-  node.setAttribute("style", style(css));
-  return node;
+interface OverlayPool {
+  root: Element;
+  guideLayer: Element;
+  underLayer: Element;
+  anchorLayer: Element;
+  handleLayer: Element;
+  scaleLayer: Element;
+  topLayer: Element;
+  circles: CircleSlot[];
+  scalePool: ScaleBoxPool | null;
+  guideModel: PathModel | null;
+  guideObjects: readonly number[] | null;
+  guideOn: boolean | null;
+  underKey: string;
+  cutRegion: EditorState["cutRegionHint"];
+  snap: EditorState["snap"];
+  cutHint: EditorState["cutHint"];
+  anchorModel: PathModel | null;
+  anchorObjects: readonly number[] | null;
+  anchorSel: readonly AnchorRef[] | null;
+  anchorRadius: string;
+  handleModel: PathModel | null;
+  handleObjects: readonly number[] | null;
+  handleSel: readonly AnchorRef[] | null;
+  handleScale: string;
+  topMarquee: EditorState["marquee"];
+  topSkew: EditorState["skewHint"];
+  topBoxKey: string;
 }
 
-const n = (v: number): string => String(Math.round(v * 1000) / 1000);
+const pools = new WeakMap<Element, OverlayPool>();
 
-function diamond(doc: Document, p: Pt, r: number): Element {
-  const pts = [[p.x, p.y - r], [p.x + r, p.y], [p.x, p.y + r], [p.x - r, p.y]].map(([x, y]) => `${n(x)},${n(y)}`).join(" ");
-  return el(doc, "polygon", { points: pts }, `fill:#fff;stroke:${BLUE};stroke-width:1.2px`);
+function createPool(svg: Element): OverlayPool {
+  const doc = svg.ownerDocument;
+  const root = doc.createElementNS(SVG_NS, "g");
+  root.setAttribute(OVERLAY_ATTR, "");
+  root.setAttribute("pointer-events", "none");
+  const mk = () => doc.createElementNS(SVG_NS, "g");
+  const [guideLayer, underLayer, anchorLayer, handleLayer, scaleLayer, topLayer] = [mk(), mk(), mk(), mk(), mk(), mk()];
+  root.append(guideLayer, underLayer, anchorLayer, handleLayer, scaleLayer, topLayer);
+  svg.appendChild(root);
+  const pool: OverlayPool = {
+    root, guideLayer, underLayer, anchorLayer, handleLayer, scaleLayer, topLayer, circles: [], scalePool: null,
+    guideModel: null, guideObjects: null, guideOn: null,
+    underKey: "", cutRegion: undefined, snap: null, cutHint: undefined,
+    anchorModel: null, anchorObjects: null, anchorSel: null, anchorRadius: "",
+    handleModel: null, handleObjects: null, handleSel: null, handleScale: "",
+    topMarquee: null, topSkew: undefined, topBoxKey: "__init__",
+  };
+  pools.set(svg, pool);
+  return pool;
 }
 
-/** One selected anchor's arms and diamonds. */
-function handlesOf(doc: Document, a: Anchor, look: OverlayLook): Element[] {
-  const out: Element[] = [];
-  for (const h of [a.in, a.out]) {
-    if (h === null) continue;
-    out.push(el(doc, "line", { x1: n(a.x), y1: n(a.y), x2: n(h.x), y2: n(h.y) }, `fill:none;stroke:${BLUE};stroke-width:1px`));
-    out.push(diamond(doc, h, (look.anchorPx * 0.4) * look.u));
+function acquirePool(svg: Element): OverlayPool {
+  const existing = pools.get(svg);
+  if (existing !== undefined && existing.root.parentNode === svg) {
+    if (svg.lastElementChild !== existing.root) svg.appendChild(existing.root);
+    return existing;
   }
-  return out;
+  clearEditOverlay(svg);
+  return createPool(svg);
 }
 
-function anchorDot(doc: Document, a: Anchor, selected: boolean, look: OverlayLook): Element {
-  return el(doc, "circle", { cx: n(a.x), cy: n(a.y), r: n((look.anchorPx / 2) * look.u) },
-    `fill:${selected ? BLUE : "#fff"};stroke:${BLUE};stroke-width:1.4px`);
+function replaceChildren(layer: Element, nodes: readonly Element[]): void {
+  while (layer.firstChild !== null) layer.removeChild(layer.firstChild);
+  for (const child of nodes) layer.appendChild(child);
 }
 
-/** The red snap mark: the target segment, plus a stronger ring on a line end. */
-function snapMarks(doc: Document, st: EditorState, look: OverlayLook): Element[] {
-  const s = st.snap;
-  if (s === null) return [];
-  if (s.kind === "end") return [el(doc, "circle", { cx: n(s.pt.x), cy: n(s.pt.y), r: n(look.anchorPx * look.u) }, `fill:none;stroke:${SNAP};stroke-width:2px`)];
-  const sub = st.drag !== null && "before" in st.drag ? st.drag.before.subs[s.sub] : st.session.model.subs[s.sub];
-  const c = sub === undefined || nextIndex(sub, s.i) === null ? null : segmentCubic(sub, s.i);
-  if (c === null) return [];
-  const d = `M${n(c[0].x)} ${n(c[0].y)}C${n(c[1].x)} ${n(c[1].y)} ${n(c[2].x)} ${n(c[2].y)} ${n(c[3].x)} ${n(c[3].y)}`;
-  return [el(doc, "path", { d }, `fill:none;stroke:${SNAP};stroke-width:1.5px`)];
+function syncGuide(doc: Document, pool: OverlayPool, st: EditorState, guideOn: boolean): void {
+  if (pool.guideModel === st.session.model && pool.guideObjects === st.session.objects && pool.guideOn === guideOn) return;
+  pool.guideModel = st.session.model;
+  pool.guideObjects = st.session.objects;
+  pool.guideOn = guideOn;
+  if (!guideOn) { replaceChildren(pool.guideLayer, []); return; }
+  const model = { subs: st.session.model.subs.map((s, i) => (editableSub(st.session, i) ? s : { ...s, anchors: [] })) };
+  const path = doc.createElementNS(SVG_NS, "path");
+  path.setAttribute("d", toPathData(model, 3));
+  path.setAttribute("style", STYLE_GUIDE);
+  replaceChildren(pool.guideLayer, [path]);
 }
 
-/** The crosshair on the skew's fixed point (the box centre). */
-function skewPivot(doc: Document, c: Pt, look: OverlayLook): Element {
-  const g = doc.createElementNS(SVG_NS, "g");
-  g.setAttribute("data-skew-pivot", "");
-  const r = 5 * look.u, arm = 9 * look.u;
-  const css = `fill:none;stroke:${BLUE};stroke-width:1.2px`;
-  g.appendChild(el(doc, "circle", { cx: n(c.x), cy: n(c.y), r: n(r) }, css));
-  g.appendChild(el(doc, "line", { x1: n(c.x - arm), y1: n(c.y), x2: n(c.x + arm), y2: n(c.y) }, css));
-  g.appendChild(el(doc, "line", { x1: n(c.x), y1: n(c.y - arm), x2: n(c.x), y2: n(c.y + arm) }, css));
-  return g;
+function syncUnder(doc: Document, pool: OverlayPool, st: EditorState, look: OverlayLook): void {
+  const key = `${look.u}:${look.anchorPx}`;
+  if (pool.underKey === key && pool.cutRegion === st.cutRegionHint && pool.snap === st.snap && pool.cutHint === st.cutHint) return;
+  pool.underKey = key;
+  pool.cutRegion = st.cutRegionHint;
+  pool.snap = st.snap;
+  pool.cutHint = st.cutHint;
+  replaceChildren(pool.underLayer, [...cutRegionMarks(doc, st), ...snapMarks(doc, st, look), ...cutHintMarks(doc, st)]);
 }
 
-/** "⊿ : -11.6°" beside the pointer: a dark label with the skew angle. */
-function skewReadout(doc: Document, angle: number, at: Pt, look: OverlayLook): Element[] {
-  const u = look.u;
-  const x = at.x + 14 * u, y = at.y + 14 * u;
-  const text = el(doc, "text", { x: n(x + 7 * u), y: n(y + 13 * u) }, `fill:#fff;stroke:none;font-size:${n(11 * u)}px;font-family:sans-serif`);
-  text.setAttribute("data-skew-readout", "");
-  text.textContent = `⊿ : ${(Math.round(angle * 10) / 10 + 0).toFixed(1)}°`;
-  const back = el(doc, "rect", { x: n(x), y: n(y), width: n(72 * u), height: n(18 * u), rx: n(3 * u) }, "fill:#12182a;stroke:#35405e;stroke-width:1px");
-  return [back, text];
+type CircleSpec = Omit<CircleSlot, "el">;
+
+function updateCircleSlot(slot: CircleSlot, s: CircleSpec): void {
+  if (slot.x !== s.x) { slot.x = s.x; slot.el.setAttribute("cx", n(s.x)); }
+  if (slot.y !== s.y) { slot.y = s.y; slot.el.setAttribute("cy", n(s.y)); }
+  if (slot.r !== s.r) { slot.r = s.r; slot.el.setAttribute("r", s.r); }
+  if (slot.sel !== s.sel) { slot.sel = s.sel; slot.el.setAttribute("style", s.sel ? STYLE_ANCHOR_SEL : STYLE_ANCHOR); }
 }
 
-/** While a box edge is dragged: the skewed box (dashed), the fixed centre and the angle. */
-function skewMarks(doc: Document, st: EditorState, look: OverlayLook): Element[] {
-  const h = st.skewHint;
-  if (h == null) return [];
-  const points = h.quad.map((p) => `${n(p.x)},${n(p.y)}`).join(" ");
-  const quad = el(doc, "polygon", { points }, `fill:rgba(26,140,255,0.06);stroke:${BLUE};stroke-width:1px;stroke-dasharray:5 3`);
-  quad.setAttribute("data-skew-quad", "");
-  return [quad, skewPivot(doc, h.center, look), ...skewReadout(doc, h.angle, h.at, look)];
+function putCircleAt(doc: Document, pool: OverlayPool, count: number, spec: CircleSpec): void {
+  if (count < pool.circles.length) {
+    updateCircleSlot(pool.circles[count], spec);
+    return;
+  }
+  const el = doc.createElementNS(SVG_NS, "circle");
+  el.setAttribute("cx", n(spec.x));
+  el.setAttribute("cy", n(spec.y));
+  el.setAttribute("r", spec.r);
+  el.setAttribute("style", spec.sel ? STYLE_ANCHOR_SEL : STYLE_ANCHOR);
+  pool.anchorLayer.appendChild(el);
+  pool.circles.push({ el, ...spec });
 }
 
-/** Alt + Shift over a line: the part a click would remove, laid over the line in red (never written). */
-function cutHintMarks(doc: Document, st: EditorState): Element[] {
-  const pts = st.cutHint;
-  if (pts == null || pts.length < 2) return [];
-  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${n(p.x)} ${n(p.y)}`).join("");
-  const line = el(doc, "path", { d }, "fill:none;stroke:#ff0000;stroke-width:4px;stroke-linecap:round;stroke-linejoin:round");
-  line.setAttribute("data-cut-hint", "");
-  return [line];
+function drawEditableCircles(doc: Document, pool: OverlayPool, s: EditorState["session"], r: string): number {
+  const selected = s.selection.length === 0 ? null : new Set(s.selection.map((ref) => `${ref.sub}:${ref.i}`));
+  let count = 0;
+  for (let sub = 0; sub < s.model.subs.length; sub++) {
+    if (!editableSub(s, sub)) continue;
+    const anchors = s.model.subs[sub].anchors;
+    for (let i = 0; i < anchors.length; i++) {
+      const a = anchors[i];
+      putCircleAt(doc, pool, count, { x: a.x, y: a.y, r, sel: selected !== null && selected.has(`${sub}:${i}`) });
+      count += 1;
+    }
+  }
+  return count;
 }
 
-/**
- * Alt + Shift over a FILLED area: that area's own outline, filled translucent
- * red with a red edge — the exact region a click cuts out (2026-11-20). Never
- * written to the file; the fill is the mark, so the icon under it stays visible.
- */
-function cutRegionMarks(doc: Document, st: EditorState): Element[] {
-  const pts = st.cutRegionHint;
-  if (pts == null || pts.length < 3) return [];
-  const d = `${pts.map((p, i) => `${i === 0 ? "M" : "L"}${n(p.x)} ${n(p.y)}`).join("")}Z`;
-  const region = el(doc, "path", { d }, "fill:rgba(255,0,0,0.22);stroke:#ff0000;stroke-width:2px;stroke-linejoin:round");
-  region.setAttribute("data-cut-region", "");
-  return [region];
+function syncAnchors(doc: Document, pool: OverlayPool, st: EditorState, look: OverlayLook): void {
+  const r = n((look.anchorPx / 2) * look.u);
+  const s = st.session;
+  if (pool.anchorModel === s.model && pool.anchorObjects === s.objects && pool.anchorSel === s.selection && pool.anchorRadius === r) return;
+  pool.anchorModel = s.model;
+  pool.anchorObjects = s.objects;
+  pool.anchorSel = s.selection;
+  pool.anchorRadius = r;
+  const count = drawEditableCircles(doc, pool, s, r);
+  while (pool.circles.length > count) pool.circles.pop()!.el.remove();
 }
 
-function marqueeBox(doc: Document, st: EditorState): Element[] {
-  const m = st.marquee;
-  if (m === null) return [];
-  const x = Math.min(m.a.x, m.b.x), y = Math.min(m.a.y, m.b.y);
-  return [el(doc, "rect", { x: n(x), y: n(y), width: n(Math.abs(m.a.x - m.b.x)), height: n(Math.abs(m.a.y - m.b.y)) },
-    `fill:rgba(26,140,255,0.08);stroke:${BLUE};stroke-width:1px;stroke-dasharray:4 3`)];
+function syncHandles(doc: Document, pool: OverlayPool, st: EditorState, look: OverlayLook): void {
+  const scale = `${look.u}:${look.anchorPx}`;
+  const s = st.session;
+  if (pool.handleModel === s.model && pool.handleObjects === s.objects && pool.handleSel === s.selection && pool.handleScale === scale) return;
+  pool.handleModel = s.model;
+  pool.handleObjects = s.objects;
+  pool.handleSel = s.selection;
+  pool.handleScale = scale;
+  const nodes: Element[] = [];
+  for (const ref of s.selection) {
+    if (!editableSub(s, ref.sub)) continue;
+    const a = s.model.subs[ref.sub]?.anchors[ref.i];
+    if (a !== undefined) nodes.push(...handlesOf(doc, a, look));
+  }
+  replaceChildren(pool.handleLayer, nodes);
 }
 
-/** The scale box around two or more selected anchors and its eight square handles (screen-sized). */
-function scaleBoxMarks(doc: Document, st: EditorState, look: OverlayLook): Element[] {
-  const box = scaleBoxOf(st.session);
-  if (box === null) return [];
-  const pad = HIT_PX.scalePad * look.u;
-  const rect = el(doc, "rect", { x: n(box.x0 - pad), y: n(box.y0 - pad), width: n(box.x1 - box.x0 + 2 * pad), height: n(box.y1 - box.y0 + 2 * pad) },
-    `fill:none;stroke:${BLUE};stroke-width:1px;stroke-dasharray:5 3`);
-  rect.setAttribute("data-scale-box", "");
-  const s = 3.5 * look.u;
-  const handles = boxHandles(box, pad).map((h) => {
-    const sq = el(doc, "rect", { x: n(h.p.x - s), y: n(h.p.y - s), width: n(2 * s), height: n(2 * s) }, `fill:#fff;stroke:${BLUE};stroke-width:1.2px`);
-    sq.setAttribute("data-scale-handle", h.id);
-    return sq;
-  });
-  return [rect, ...handles, ...rotateMarks(doc, box, pad, look)];
-}
-
-/** The rotate handle: a short stem up from the top edge to a circle (2026-11-06). */
-function rotateMarks(doc: Document, box: { x0: number; y0: number; x1: number; y1: number }, pad: number, look: OverlayLook): Element[] {
-  const knob = rotateHandleOf(box, pad, HIT_PX.rotateStem * look.u);
-  const stem = el(doc, "line", { x1: n(knob.x), y1: n(box.y0 - pad), x2: n(knob.x), y2: n(knob.y) }, `fill:none;stroke:${BLUE};stroke-width:1px`);
-  stem.setAttribute("data-rotate-stem", "");
-  const circle = el(doc, "circle", { cx: n(knob.x), cy: n(knob.y), r: n(4.5 * look.u) }, `fill:#fff;stroke:${BLUE};stroke-width:1.4px`);
-  circle.setAttribute("data-rotate-handle", "");
-  return [stem, circle];
+function syncTop(doc: Document, pool: OverlayPool, st: EditorState, look: OverlayLook): void {
+  const boxKey = `${look.u}:${scaleBoxKeyOf(st)}`;
+  if (pool.topBoxKey !== boxKey) {
+    pool.topBoxKey = boxKey;
+    if (boxKey.endsWith(":")) replaceChildren(pool.scaleLayer, []);
+    else {
+      pool.scalePool ??= createScaleBoxPool(doc);
+      updateScaleBoxPool(pool.scalePool, st, look);
+      if (pool.scalePool.group.parentNode !== pool.scaleLayer) replaceChildren(pool.scaleLayer, [pool.scalePool.group]);
+    }
+  }
+  if (pool.topMarquee === st.marquee && pool.topSkew === st.skewHint) return;
+  pool.topMarquee = st.marquee;
+  pool.topSkew = st.skewHint;
+  replaceChildren(pool.topLayer, [...marqueeBox(doc, st), ...skewMarks(doc, st, look)]);
 }
 
 /** Removes the previous overlay of this preview, if any. */
@@ -169,21 +204,13 @@ export function clearEditOverlay(root: ParentNode): void {
   root.querySelectorAll(`[${OVERLAY_ATTR}]`).forEach((g) => g.remove());
 }
 
-/** Draws the whole overlay at the end of the icon's root <svg> (root space). */
+/** Draws (or incrementally updates) the overlay at the end of the icon's root <svg>. */
 export function drawEditOverlay(svg: Element, st: EditorState, look: OverlayLook): void {
   const doc = svg.ownerDocument;
-  clearEditOverlay(svg);
-  const g = doc.createElementNS(SVG_NS, "g");
-  g.setAttribute(OVERLAY_ATTR, "");
-  g.setAttribute("pointer-events", "none");
-  const model = { subs: st.session.model.subs.map((s, i) => (editableSub(st.session, i) ? s : { ...s, anchors: [] })) };
-  const selected = new Set(st.session.selection.map((r) => `${r.sub}:${r.i}`));
-  const guide = look.guide === false ? [] : [el(doc, "path", { d: toPathData(model, 3) }, "fill:none;stroke:#c8d2e0;stroke-width:1px")];
-  const parts: Element[] = [...guide, ...cutRegionMarks(doc, st), ...snapMarks(doc, st, look), ...cutHintMarks(doc, st)];
-  // anchors first; a selected point's handles above them
-  model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => parts.push(anchorDot(doc, a, selected.has(`${sub}:${i}`), look))));
-  model.subs.forEach((s, sub) => s.anchors.forEach((a, i) => { if (selected.has(`${sub}:${i}`)) parts.push(...handlesOf(doc, a, look)); }));
-  parts.push(...marqueeBox(doc, st), ...scaleBoxMarks(doc, st, look), ...skewMarks(doc, st, look));
-  for (const p of parts) g.appendChild(p);
-  svg.appendChild(g);
+  const pool = acquirePool(svg);
+  syncGuide(doc, pool, st, look.guide !== false);
+  syncUnder(doc, pool, st, look);
+  syncAnchors(doc, pool, st, look);
+  syncHandles(doc, pool, st, look);
+  syncTop(doc, pool, st, look);
 }

@@ -20,10 +20,10 @@
 // a preview it does not belong to, whatever the number of previews.
 
 import { aiCorner, Corner, mainVersionOf, svgCorner } from "./previewtrash";
-import { useCallback, useState, type ReactNode } from "react";
+import { memo, useCallback, useMemo, useState, type ReactNode } from "react";
 import { previewFrame, type PreviewBackground, type PreviewFrame } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
-import { buildSvgPreview } from "../lib/svgpreview";
+import { buildSvgPreview, type SvgPreview } from "../lib/svgpreview";
 import { zoomBox, zoomBoxRatio } from "../lib/zoom";
 import PairedThumbs, { type PreviewSlot } from "../ui/PairedThumbs";
 import { lastImageFailure, mainImageOf } from "../lib/svgimgreg";
@@ -57,26 +57,26 @@ interface Dims {
   h: number;
 }
 
-export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiActions, onPreferSvg }: SvgThumbsProps) {
+function SvgThumbsView({ rootRef, rootToken, row, thumb, bg, aiActions, onPreferSvg }: SvgThumbsProps) {
   // The AI side shows the MAIN image — the same file the SVG generation reads (RC8).
   const ai = useImageUrl(rootRef, mainImageOf(row.meta, row.source.relPath));
   const baseAi = useImageUrl(rootRef, row.baseAiPath ?? "");
-  const target = previewTargetOf(row);
+  const target = useMemo(() => previewTargetOf(row), [row]);
   const svg = useSvgText(rootRef, rootToken, target?.svgPath ?? "");
+  const art = useMemo(() => (svg === null ? null : buildSvgPreview(svg)), [svg]);
   const id = row.source.id;
   const [aiNat, setAiNat] = useState<Dims | null>(null);
-  // Both boxes come from the one rule: the raster from its own pixels, the
-  // vector from the ratio of the document it is about to draw.
   const aiBox = zoomBox(thumb, aiNat);
   const { review, marks } = useRowTailMarks(id, target?.svgPath ?? "", svg, useCutSettings());
-  // double-click on the SVG opens it in the edit mode (2026-11-06)
-  const onOpen = editBlocked(row, svg) === null ? () => openSvgEditor(id) : undefined;
-  const slotArgs = { svg, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame: previewFrame(bg), marks, onOpen,
-    trash: svgCorner(target, id) };
-  const svgSide = svgSlot(slotArgs);
-  const aiBar = aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />;
-  const svgBar = svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />, review);
-  // ONE list of sides: each preview slot + the bar cell under it (2026-11-17).
+  const canEdit = useMemo(() => editBlocked(row, svg) === null, [row, svg]);
+  const onOpen = useMemo(() => (canEdit ? () => openSvgEditor(id) : undefined), [canEdit, id]);
+  const frame = useMemo(() => previewFrame(bg), [bg]);
+  const svgSide = svgSlot({ svg, art, thumb, id, stem: row.source.stem, version: target?.version ?? 0, frame, marks, onOpen, trash: svgCorner(target, id) });
+  const aiBar = useMemo(() => (aiActions === undefined ? null : <AiSourceBar row={row} ai={aiActions} />), [row, aiActions]);
+  const svgBar = useMemo(
+    () => svgBarOf(row, svg, onPreferSvg === undefined ? null : <SvgVersionChips row={row} onPrefer={onPreferSvg} />, review),
+    [row, svg, onPreferSvg, review],
+  );
   const sides: PreviewSide[] = [...(row.baseAiPath ? [baseSide(row, id, aiBox, baseAi)] : []),
     aiSide({ row, id, box: aiBox, url: ai, onDims: setAiNat, bar: aiBar }),
     { slot: svgSide, bar: svgBar }];
@@ -87,6 +87,8 @@ export default function SvgThumbs({ rootRef, rootToken, row, thumb, bg, aiAction
     </div>
   );
 }
+
+export default memo(SvgThumbsView);
 
 /** A preview slot together with the bar cell that sits under it. */
 interface PreviewSide {
@@ -129,6 +131,7 @@ function aiSide({ row, id, box, url, onDims, bar }: AiSideArgs): PreviewSide {
 /** Everything the SVG side of a row is drawn from — nothing else is read. */
 interface SvgSlotArgs {
   svg: string | null;
+  art: SvgPreview | null;
   thumb: number;
   id: string;
   stem: string;
@@ -143,8 +146,8 @@ interface SvgSlotArgs {
 }
 
 /** The SVG side: the framed document, in the box its own ratio asks for. */
-function svgSlot({ svg, thumb, id, stem, version, frame, marks, onOpen, trash }: SvgSlotArgs): PreviewSlot {
-  const box = svgBox(svg, thumb);
+function svgSlot({ svg, art, thumb, id, stem, version, frame, marks, onOpen, trash }: SvgSlotArgs): PreviewSlot {
+  const box = svgBox(art, thumb);
   const className = `svg-preview-frame${frame.outline ? " contrast" : ""}`;
   return {
     tag: version > 0 ? `SVG v${version}` : "SVG",
@@ -157,7 +160,7 @@ function svgSlot({ svg, thumb, id, stem, version, frame, marks, onOpen, trash }:
     children: (
       <div className="svg-open-edit" style={{ display: "contents" }} title={onOpen ? "Double-click to edit" : undefined}
         onDoubleClick={(e) => { if (onOpen) { e.stopPropagation(); onOpen(); } }}>
-        <SvgPreviewBox code={svg} box={box} testid={`svg-prev-${id}`} marks={marks}
+        <SvgPreviewBox code={svg} preview={art ?? undefined} box={box} testid={`svg-prev-${id}`} marks={marks}
       label={`${stem} SVG v${version}`} version={version} strokeSheet={SVG_STROKE_SHEET} />
         <Corner id={id} side="svg" trash={trash} />
       </div>
@@ -167,8 +170,7 @@ function svgSlot({ svg, thumb, id, stem, version, frame, marks, onOpen, trash }:
 
 /** The vector's box: its own viewBox ratio at the zoom height, a square until
     the document parses and an empty slot stays honest about it. */
-function svgBox(svg: string | null, thumb: number): { width: number; height: number } {
-  const art = svg === null ? null : buildSvgPreview(svg);
+function svgBox(art: SvgPreview | null, thumb: number): { width: number; height: number } {
   return zoomBoxRatio(thumb, art !== null && art.ok ? art.ratio : 1);
 }
 

@@ -8,7 +8,7 @@
 // stay (a shear, not a perspective). Anchors and their handles skew together.
 // Shift snaps the angle to 15° steps. Pure.
 
-import { cloneModel, type AnchorRef, type PathModel, type Pt } from "./model";
+import { mapSelectedAnchors, type AnchorRef, type PathModel, type Pt } from "./model";
 import type { Box } from "./scale";
 
 export type SkewEdge = "n" | "s" | "e" | "w";
@@ -66,15 +66,9 @@ export interface SkewSpec { edge: SkewEdge; box: Box; angle: number }
 /** The selected anchors (and their handles) skewed as `spec` says, about the box's centre. */
 export function skewAnchors(m: PathModel, refs: readonly AnchorRef[], spec: SkewSpec): PathModel {
   const { edge, box, angle } = spec;
-  const out = cloneModel(m);
-  if (angle === 0) return out;
+  if (angle === 0) return m;
   const shear = shearer(edge, box, angle);
-  for (const r of refs) {
-    const a = out.subs[r.sub]?.anchors[r.i];
-    if (a === undefined) continue;
-    out.subs[r.sub].anchors[r.i] = { ...a, ...shear(a), in: a.in && shear(a.in), out: a.out && shear(a.out) };
-  }
-  return out;
+  return mapSelectedAnchors(m, refs, (a) => ({ ...a, ...shear(a), in: a.in && shear(a.in), out: a.out && shear(a.out) }));
 }
 
 const round6 = (v: number): number => Math.round(v * 1e6) / 1e6;

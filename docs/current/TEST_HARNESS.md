@@ -37,16 +37,16 @@ Windows guarantee.
 
 - Each file belongs to exactly one project; groups run sequentially, not as
   competing pools, native files serially, all with `isolate:true`.
-- Main/geometry inherit min(4, CPUs, 75% RAM/768 MiB) workers, floor 1; add none
-  on a two-core host without complete-run measurements.
-- Main VMs reuse external DOM/React imports while giving each file a fresh module
-  graph, context and DOM; native realms support Buffer checks.
-- A **first-line** `// @vitest-environment node` skips all DOM/React setup; use it
-  for files that touch no document/window.
-- `fsModuleCache:true` reuses transforms in `node_modules/.vitest-cache`; a first
-  run after a config change is not a warmed measurement.
-- Mixed pools in one group respawn workers costily: timing/realm files go to
-  `NATIVE_TESTS`, measured CPU files to `GEOMETRY_TESTS`.
+- Main/geometry inherit min(4, CPUs, 75% RAM/768 MiB) workers, floor 1;
+  `vmMemoryLimit:"768MB"` recycles `vmThreads` workers in swapless 3.8 GiB
+  sandboxes and `testTimeout:30000` covers cold Istanbul dynamic imports.
+- Main VMs reuse external DOM/React imports with fresh per-file contexts; native
+  realms support Buffer checks.
+- A **first-line** `// @vitest-environment node` skips DOM/React setup for
+  Node-only files.
+- `fsModuleCache:true` caches transforms in `node_modules/.vitest-cache`.
+- Mixed pools in one group respawn workers: timing/realm files go to
+  `NATIVE_TESTS`, CPU geometry files to `GEOMETRY_TESTS`.
 - Rejected, measured: custom VM (faster in a microbenchmark, not in the suite),
   global threads/V8, four-worker oversubscription, pending-work cancellation; no
   custom DOM/provider/pool switch ships.

@@ -1,16 +1,6 @@
-// svgpreview.ts — turning a saved SVG into a safe, fitted inline preview.
-// Owns the pipeline the panel used to skip: parse the saved text, repair the
-// namespace a strict XML parser rejects, strip everything that can execute or
-// fetch, give the document a box it can be fitted into, and hand back markup
-// that is rendered inline. Nothing here writes: the saved SVG is only ever
-// read, and the copy shown in the panel is the thing that is changed.
-//
-// Defects this file exists for (docs/archive/2026-10-01-svg-preview-rendering):
-// a document without xmlns, or with an XML prolog, copied as valid code and
-// painted nothing; a document with no intrinsic size painted off-centre. The
-// preview never recolours the artwork: `currentColor` resolves exactly as it
-// does in a standalone document (the UA default), and a dark frame is answered
-// by the frame's contrast outline, never by a different ink.
+// svgpreview.ts — turns saved SVG markup into a safe, fitted inline preview
+// without mutating the saved file or overriding author paint (`currentColor`
+// falls back only via weakest root presentation `color="#000000"`).
 
 export interface SvgPreview {
   ok: boolean;
@@ -22,25 +12,11 @@ export interface SvgPreview {
   error: string | null;
 }
 
-/**
- * The colour a standalone SVG document resolves `currentColor` to (the UA
- * default). It is applied ONLY when the document declares no colour of its own,
- * and only as a presentation attribute on the root — the weakest declaration
- * there is — so the app never overrides the artwork: an author's `color`
- * attribute, a `color:` in the style, and every fill/stroke/opacity value all
- * win untouched. The preview paints the document it was given, not a theme.
- */
+/** Standalone UA fallback for `currentColor` when the SVG declares no root colour. */
 export const STANDALONE_INK = "#000000";
 
-/**
- * Scoped to the preview's shadow root, so it cannot style the app. Layout only:
- * no colour, no stroke/fill override, no filter, no inversion — the preview
- * must render exactly what the saved file renders.
- */
-export const PREVIEW_CSS = "<style>"
-  + ":host{display:block}"
-  + "svg{display:block;width:100%;height:100%;overflow:hidden}"
-  + "</style>";
+/** Layout-only shadow-root CSS: never overrides colour, stroke, fill, or filter. */
+export const PREVIEW_CSS = "<style>:host{display:block}svg{display:block;width:100%;height:100%;overflow:hidden}</style>";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const XLINK_NS = "http://www.w3.org/1999/xlink";
@@ -52,16 +28,39 @@ const URL_ATTRS = ["href", "xlink:href", "src"];
 const LOCAL_REF = /^(#|data:image\/)/i;
 const REMOTE_URL = /url\(\s*['"]?(?!#)/i;
 const WIDTH_HEIGHT = /^\s*(width|height)\s*:/i;
+const PREVIEW_CACHE_MAX = 512;
+const previewCache = new Map<string, SvgPreview>();
+
+function cachedPreview(code: string, compute: () => SvgPreview): SvgPreview {
+  const hit = previewCache.get(code);
+  if (hit !== undefined) {
+    previewCache.delete(code);
+    previewCache.set(code, hit);
+    return hit;
+  }
+  const built = Object.freeze(compute());
+  if (previewCache.size >= PREVIEW_CACHE_MAX) {
+    const oldest = previewCache.keys().next().value;
+    if (oldest !== undefined) previewCache.delete(oldest);
+  }
+  previewCache.set(code, built);
+  return built;
+}
 
 /** The one entry point: saved SVG text in, displayable markup out. */
 export function buildSvgPreview(code: string | null): SvgPreview {
+  if (code === null || code.trim() === "") return failed("no SVG to preview");
+  return cachedPreview(code, () => compileSvgPreview(code));
+}
+
+function compileSvgPreview(code: string): SvgPreview {
   const parsed = parseDocument(code);
   if (parsed.doc === null) return failed(parsed.error ?? "no SVG to preview");
   const root = parsed.doc.documentElement;
   const box = fitBox(root);
   if (box === null) return failed("no viewBox and no usable width/height");
   sanitize(root);
-  scopeIds(root, idPrefix(code ?? ""));
+  scopeIds(root, idPrefix(code));
   return {
     ok: true,
     // The root element alone: a prolog or doctype is not markup to inline.
