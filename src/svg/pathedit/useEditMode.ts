@@ -20,13 +20,15 @@ import { useRowMoves } from "./useRowMoves";
 import { toPathSpace, useEditorInput } from "./useEditorInput";
 import { usePreviewZoom, type PreviewZoom } from "../../ui/usePreviewZoom";
 
+export type EditReview = "approved" | "declined";
+
 export interface EditNav {
   canPrev: boolean;
   canNext: boolean;
   /** "3 / 120 · name SVG v2" */
   position: string;
-  /** `approve`: Ctrl+Shift+S — also mark the SVG approved before going on. */
-  onGo: (dir: 1 | -1, markup: string | null, approve?: boolean) => void;
+  /** `decision`: Ctrl+Shift+S ("approved") or Ctrl+Shift+X ("declined") before moving on. */
+  onGo: (dir: 1 | -1, markup: string | null, decision?: EditReview) => void;
 }
 
 export type StrokeView = "preset" | "thin";
@@ -148,7 +150,7 @@ export interface EditMode {
   toggleView: () => void;
   leave: 1 | -1 | null;
   resolveLeave: (choice: "save" | "discard" | "stay") => void;
-  go: (dir: 1 | -1, mode: "ask" | "save" | "discard" | "save-approve") => void;
+  go: (dir: 1 | -1, mode: "ask" | "save" | "discard" | "save-approve" | "discard-decline") => void;
   finish: () => void;
   dirty: boolean;
   zoom: PreviewZoom;
@@ -207,7 +209,7 @@ function runAction(action: ModalAction, k: KeyParts): void {
     prev: () => k.go(-1, "ask"),
     next: () => k.go(1, "ask"),
     "save-next": () => k.go(1, "save-approve"),
-    "discard-next": () => k.go(1, "discard"),
+    "decline-next": () => k.go(1, "discard-decline"),
     "toggle-stroke": k.toggleView,
     "tool-select": () => tool("select"),
     "tool-draw": () => tool("draw"),

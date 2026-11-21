@@ -47,13 +47,13 @@ export const EDIT_HOTKEYS: readonly HotkeyHelp[] = [
   { keys: "Ctrl+J", icon: "✂", text: "Highlight every tail to cut in this artwork" },
   { keys: "Ctrl+L", icon: "✓", text: "Apply the highlighted cut" },
   { keys: "Ctrl+Shift+S", icon: "💾", text: "Save, approve & next SVG" },
-  { keys: "Ctrl+Shift+X", icon: "🗑", text: "Discard & next SVG" },
+  { keys: "Ctrl+Shift+X", icon: "✕", text: "Discard, decline & next SVG" },
 ];
 
-export type ModalAction = "prev" | "next" | "save-next" | "discard-next" | "toggle-stroke" | "tool-select" | "tool-draw" | "cut-highlight" | "cut-apply";
+export type ModalAction = "prev" | "next" | "save-next" | "decline-next" | "toggle-stroke" | "tool-select" | "tool-draw" | "cut-highlight" | "cut-apply";
 
 const PLAIN: Record<string, ModalAction> = { arrowleft: "prev", arrowright: "next", i: "toggle-stroke", v: "tool-select", p: "tool-draw" };
-const CTRL_SHIFT: Record<string, ModalAction> = { s: "save-next", x: "discard-next" };
+const CTRL_SHIFT: Record<string, ModalAction> = { s: "save-next", x: "decline-next" };
 /** The tail cutter: Ctrl+J highlights, Ctrl+L applies (Ctrl+Z, C, V … stay the session's own). */
 const CTRL: Record<string, ModalAction> = { j: "cut-highlight", l: "cut-apply" };
 

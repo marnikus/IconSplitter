@@ -8,7 +8,7 @@ import { memo, useEffect, useMemo } from "react";
 import type { DirHandleLike } from "../../lib/fs";
 import { getAppState, patchSvg } from "../../state/appstore";
 import { previewTargetOf } from "../rowmodel";
-import { approveEditedSvg, finishSvgEdit } from "../svgedit";
+import { finishSvgEdit, reviewEditedSvg, type EditedSvgDecision } from "../svgedit";
 import type { SvgRow } from "../types";
 import { useSvgText } from "../usesvgtext";
 import { closeSvgEditor, openSvgEditor, useSvgEditorId } from "./editmodalstore";
@@ -58,12 +58,13 @@ function ModalBody(p: SvgEditModalProps & { id: string }) {
   const { idx, row, target, svg, aiUrl, label, prev, next } = useEditedRow(p);
   const save = async (markup: string) => (row !== null && target !== null && svg !== null
     ? finishSvgEdit({ id, svgPath: target.svgPath, label, before: svg, after: markup }) : false);
-  const onGo = (dir: 1 | -1, markup: string | null, approve = false) => {
+  const onGo = (dir: 1 | -1, markup: string | null, decision?: EditedSvgDecision) => {
     const to = dir === 1 ? next : prev;
     void (async () => {
       if (markup !== null && !(await save(markup))) return;
-      if (approve && row !== null && !(await approveEditedSvg(id, row.review, label))) return;
+      if (decision !== undefined && row !== null && !(await reviewEditedSvg(id, row.review, decision, label))) return;
       if (to !== null) openSvgEditor(to.source.id);
+      else if (decision !== undefined) closeSvgEditor();
     })();
   };
   const position = `${idx + 1} / ${rows.length} · ${label}`;

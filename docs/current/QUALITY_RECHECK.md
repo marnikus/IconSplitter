@@ -6038,3 +6038,9 @@ strictly inside).
   - `tests/svg_list_perf.test.tsx` (150 mounted rows, 32 warm gestures): `1,771.1 ms -> 619.6 ms` (`-65.0%`, `2.86x` faster); initial `DOMParser` parses `300 -> 140`; warm parses `1,200 -> 0`; warm boot storage reads `160 -> 0`; warm `pathTags` parses `2,400 -> 0`.
   - `tests/svg_editor_perf.test.tsx` (20 paths / 240 anchors): 30-step drag `1,745.0 ms -> 59.4 ms` (`1.98 ms/frame`, `-96.6%`, `29.4x` faster); 15-step `Alt+Shift` hover `176.5 ms -> 88.2 ms` (`5.88 ms/frame`, `-50.0%`).
 - **Verification (`npm run verify`):** ALL LANES PASSED — Types (`5.8s`), Lint (`1.7s`, `0` errors, `26` legacy warnings, `0` in changed files), Quality gate (`0.9s`, `35` changed files `[OK]`), Perf budgets native (`3.5s`, `5` files / `30` tests), Tests + coverage (`178.0s`, `500` files / `4,999` tests passed, Istanbul `src/lib/**` line threshold >= 80% met), Build (`13.6s`).
+
+## 2026-11-19 — Ctrl+Shift+X sets the decline marker in edit mode
+
+- **Scope:** Changed `Ctrl+Shift+X` in `Edit SVG` mode from discard-only navigation (`"Discard & next SVG"`) to `"Discard, decline & next SVG"` (`src/svg/pathedit/{hotkeys,useEditMode,useRowMoves,SvgEditModal}.ts(x)`, `src/svg/svgedit.ts`).
+- **Behavior:** Discards unsaved artboard changes without prompting, marks the current row `"declined"` (`✕` decline marker) in Generate SVG via `reviewEditedSvg` / `declineEditedSvg` as its own undoable `svgReview` step (already-declined rows record no duplicate history entry), and opens the next editable row — or closes edit mode when pressed on the last editable row (`canNext === false`).
+- **Verification:** `node tools/affected-tests.mjs --base HEAD --run` (`164/164` affected files, `1,696/1,696` tests passed), `node tools/quality.mjs --base HEAD --changed --allow-legacy` (`GATE PASSED`), `npx tsc --noEmit` (`0` errors), `npx eslint` (`0` errors), `tests/docs_navigation.test.ts` (`4/4` passed), `npm run build` (`PASS`).

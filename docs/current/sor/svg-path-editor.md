@@ -23,12 +23,11 @@ session. **⚙ Edit settings** (bulk bar) sets anchor size and click tolerance.
 - Session history is local: **Ctrl+Z** undo, **Ctrl+Shift+Z** (or Ctrl+Y)
   redo, at most **50** steps (`session.MAX_SESSION_HISTORY`); gone on Finish or
   Cancel.
-- **← / →** (or the side arrows) open the previous / next editable row in the
-  list's order (`editnav.neighborRow`, no wrap) at once, ready to edit. With
-  unsaved changes a question asks **Save and go** (Enter) / **Discard and go** /
-  **Stay** (Esc). **Ctrl+Shift+S** saves, **approves** (Generate SVG review, its own
-  undo step, even when nothing changed — `svgedit.approveEditedSvg`) and goes next; **Ctrl+Shift+X**
-  discards and goes next. A failed save keeps the artboard.
+- **← / →** (or side arrows) open the previous / next editable row (`editnav.neighborRow`,
+  no wrap). With unsaved changes a dialog asks **Save and go** (Enter) / **Discard and go** /
+  **Stay** (Esc). **Ctrl+Shift+S** saves, **approves** (`svgedit.approveEditedSvg`, own undo
+  step) and goes next; **Ctrl+Shift+X** discards, **declines** (`svgedit.declineEditedSvg`,
+  own undo step) and goes next (or closes on the last row). A failed save keeps the artboard.
 - **Arrows** nudge the selected points 1 icon unit (Shift 10); a quick burst is one
   undo step. With nothing selected, ← / → change SVG (Esc deselects first).
 - **I** switches thin hairlines / the tab's preset stroke sheet; **V** / **P**
