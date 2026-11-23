@@ -10,7 +10,7 @@
 import { useEffect, useRef } from "react";
 import { declineItems } from "../svg/declineitems";
 import { onSvgReviewsWritten, type SvgReviewRec } from "../svg/reviewundo";
-import { emptySlotFor } from "../lib/svgBuilder/slots";
+import { withEmptyFor } from "../lib/svgBuilder/slots";
 import type { BuilderActionContext } from "./actiontypes";
 import type { BuilderApi } from "./useSvgBuilder";
 import { BUILDER_HANDLE_KEY } from "./scan";
@@ -45,7 +45,5 @@ export function useBuilderReviewFollower(b: BuilderApi): void {
 
 /** Placements without the dropped icons: each leaves an empty cell, never a shifted sheet. */
 export function withoutAssets(placed: readonly string[], drop: ReadonlySet<string>): string[] {
-  const out: string[] = [];
-  for (const id of placed) out.push(drop.has(id) ? emptySlotFor([...placed, ...out]) : id);
-  return out;
+  return withEmptyFor(placed, (id) => drop.has(id));
 }

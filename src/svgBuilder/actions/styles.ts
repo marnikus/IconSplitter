@@ -5,7 +5,7 @@
 // their locks go — as ONE undo step. Saved artboards are never changed.
 import { multiText, type Multi } from "../../lib/multifilter";
 import { ALL_STYLES, offStyleIds, styleLabel } from "../../lib/svgBuilder/iconstyles";
-import { emptySlotFor, placedOnly } from "../../lib/svgBuilder/slots";
+import { placedOnly, withEmptyFor } from "../../lib/svgBuilder/slots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { prefs } from "./config";
 
@@ -13,18 +13,11 @@ export function styleActions(get: () => BuilderActionContext): Pick<BuilderActio
   return { setStyleFilter: (next) => setStyleFilter(get(), next) };
 }
 
-/** The sheet's cells with the given icons taken out (each cell kept, empty). */
-function withoutIcons(ids: readonly string[], off: ReadonlySet<string>): string[] {
-  const out: string[] = [];
-  for (const id of ids) out.push(off.has(id) ? emptySlotFor([...ids, ...out]) : id);
-  return out;
-}
-
 function setStyleFilter(ctx: BuilderActionContext, next: Multi<string>): void {
   prefs(ctx, { styles: next });
   const off = new Set(offStyleIds(ctx.placedIds, next));
   if (off.size === 0) return ctx.say(`Styles in sheets: ${multiText(next, ALL_STYLES, styleLabel) || "all styles"}`);
-  const checked = withoutIcons(ctx.placedIds, off);
+  const checked = withEmptyFor(ctx.placedIds, (id) => off.has(id));
   ctx.setChecked({ checked, anchor: null, active: placedOnly(checked)[0] ?? null }, "Styles filter");
   const lockedIds = ctx.model.lockedIds.filter((id) => !off.has(id));
   if (lockedIds.length !== ctx.model.lockedIds.length) ctx.dispatch({ lockedIds });

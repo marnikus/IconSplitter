@@ -10,7 +10,7 @@ import { parseSheetConfig } from "./config";
 import { RANGES } from "./ranges";
 import { cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
 import { parseSelectionRecipe } from "./selection";
-import { emptySlotFor, isEmptySlot } from "./slots";
+import { freshEmpty, isEmptySlot } from "./slots";
 import type { BuilderIconAsset, SelectionRecipe, SheetConfig, SheetMetadata } from "./types";
 
 export const PRESET_FORMAT = "iconsplitter-sheet-preset";
@@ -90,16 +90,21 @@ function refText(ref: Exclude<IconRef, null>): string {
 
 /** The placement the JSON describes: ids in cell order (empty cells kept), and what was not found. */
 export function resolveIcons(refs: readonly unknown[], assets: readonly BuilderIconAsset[]): { ids: string[]; unresolved: string[] } {
-  const ids: string[] = [];
+  const picked: (string | null)[] = [];
+  const seen = new Set<string>();
   const unresolved: string[] = [];
   for (const raw of refs) {
     const ref = asRef(raw);
     if (ref === undefined) continue;
     const hit = ref === null ? undefined : findIcon(ref, assets);
     if (ref !== null && hit === undefined) unresolved.push(refText(ref));
-    ids.push(hit !== undefined && !ids.includes(hit.id) ? hit.id : emptySlotFor(ids));
+    const fresh = hit !== undefined && !seen.has(hit.id);
+    if (fresh) seen.add(hit.id);
+    picked.push(fresh ? hit.id : null);
   }
-  return { ids, unresolved };
+  const holes = freshEmpty([...seen], picked.filter((id) => id === null).length); // one pass, however many cells (2026-11-23)
+  let k = 0;
+  return { ids: picked.map((id) => id ?? holes[k++]), unresolved };
 }
 
 function asRef(raw: unknown): IconRef | undefined {

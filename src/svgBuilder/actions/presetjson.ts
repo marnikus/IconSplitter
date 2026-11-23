@@ -4,7 +4,7 @@
 // download it. Export ▾ Save preset / Load preset use the same document.
 import { sheetCopy } from "../../lib/svgBuilder/compose";
 import { presetBriefForAi, presetJsonOf, readPresetJson, type AppliedPreset } from "../../lib/svgBuilder/presetjson";
-import { emptySlotFor, placedOnly } from "../../lib/svgBuilder/slots";
+import { padEmpty, placedOnly } from "../../lib/svgBuilder/slots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { downloadJsonText } from "../exporter";
 import type { BuilderModel } from "../model";
@@ -71,8 +71,7 @@ function workingStateOf(p: AppliedPreset): Partial<BuilderModel> {
 /** Exactly the icons the JSON names, in its cell order; cells it does not fill stay empty. */
 function placeIcons(ctx: BuilderActionContext, p: AppliedPreset): void {
   const capacity = p.config.grid.columns * p.config.grid.rows;
-  const ids = (p.placedIds ?? []).slice(0, capacity);
-  while (ids.length < capacity) ids.push(emptySlotFor(ids));
+  const ids = padEmpty((p.placedIds ?? []).slice(0, capacity), capacity);
   ctx.setChecked({ checked: ids, anchor: null, active: placedOnly(ids)[0] ?? null }, "Apply preset JSON");
 }
 

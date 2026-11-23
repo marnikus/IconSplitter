@@ -9,7 +9,7 @@ import { applyRowGesture, setChecked as setCheckedIds, toggleChecked, type RowSe
 import { ARTBOARD_LIMIT, artboardConfig, artboardsWithout, newArtboard, type FinalArtboard } from "../../lib/svgBuilder/artboards";
 import { addSides } from "../../lib/svgBuilder/removal";
 import { cleanTemplateName } from "../../lib/svgBuilder/templates";
-import { emptySlotFor, placedOnly } from "../../lib/svgBuilder/slots";
+import { padEmpty, placedOnly } from "../../lib/svgBuilder/slots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
 import { blockLeave } from "./leaveguard";
@@ -178,8 +178,7 @@ function openArtboard(ctx: BuilderActionContext, artboard: FinalArtboard): void 
   const config = artboardConfig(template, artboard);
   const capacity = config.grid.columns * config.grid.rows;
   const known = ctx.assets.length > 0 ? new Set(ctx.assets.map((a) => a.id)) : null;
-  const ids = (known === null ? artboard : artboardsWithout([artboard], known)[0]).placedIds.slice(0, capacity);
-  while (ids.length < capacity) ids.push(emptySlotFor(ids));
+  const ids = padEmpty((known === null ? artboard : artboardsWithout([artboard], known)[0]).placedIds.slice(0, capacity), capacity);
   ctx.dispatch({ config, lockedIds: artboard.lockedIds, metadata: artboard.metadata, editingArtboardId: artboard.id, editingTemplateId: null,
     // the open artboard is always listed under a selected template (2026-11-14); callers make it the active row
     templateSel: showing(ctx.model.templateSel, artboard.templateId) });
