@@ -1,4 +1,4 @@
-// banner.ts — the reference masthead: Solid or Split, on a side (column) or an
+// banner.ts — the reference masthead: Solid, Split or Line (bannerline.ts), on a side (column) or an
 // edge (row). Title is never upper-cased; the subtitle always is, letter-spaced.
 // Wrapping follows the reference formulas, at most three lines.
 import { readableInk } from "./config";
@@ -15,13 +15,15 @@ import type { InkBox } from "./measure";
 
 export { applyCase };
 import { attr, round, textWidth } from "./markup";
+import { bannerGround } from "./bannerline";
 import type { Rect, SheetConfig } from "./types";
 
 type Banner = SheetConfig["banner"];
 /** Draws the hero icon centred in a square; returns "" when no hero artwork is available. */
 export type HeroPainter = (x: number, y: number, size: number, ink: string) => string;
 
-export interface BannerArgs { banner: Banner; box: Rect; artboardWidth: number; title: string; subtitle: string; hero: HeroPainter }
+/** `canvas`: the artboard colour — what a Line banner's words and hero ring stand on (2026-11-23). */
+export interface BannerArgs { banner: Banner; box: Rect; artboardWidth: number; title: string; subtitle: string; hero: HeroPainter; canvas?: string }
 
 function inset(box: Rect, pad: number): Rect {
   const p = Math.max(0, Math.min(pad, box.width / 2 - 1, box.height / 2 - 1));
@@ -34,9 +36,11 @@ export function bannerMarkup(input: BannerArgs): string {
   const a = input.banner.autoRebalance && canRebalance(input.banner) ? { ...input, banner: { ...input.banner, ...rebalancedBanner(input.banner) } } : input;
   const { box, banner } = a;
   const side = banner.position === "left" || banner.position === "right";
-  const laid: Laid = { ...a, frame: box, box: inset(box, banner.textPadding) };
+  // a Line banner lays out like a Solid one, on the canvas colour (its rule and hero ring mix with it)
+  const look = banner.style === "line" ? { ...banner, background: a.canvas ?? banner.background } : banner;
+  const laid: Laid = { ...a, banner: look, frame: box, box: inset(box, banner.textPadding) };
   const body = banner.style === "split" ? (side ? splitSide(laid) : splitEdge(laid)) : (side ? solidSide(laid) : solidEdge(laid));
-  return `<g data-banner="true"><rect x="${round(box.x)}" y="${round(box.y)}" width="${round(box.width)}" height="${round(box.height)}" fill="${attr(banner.background)}"/>${body}</g>`;
+  return `<g data-banner="true">${bannerGround(box, banner)}${body}</g>`;
 }
 
 function solidSide(a: Laid): string {

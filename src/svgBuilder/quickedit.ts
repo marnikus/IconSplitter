@@ -8,13 +8,14 @@ import { isStyledIcon } from "../lib/svgBuilder/iconstyles";
 import type { SheetConfig } from "../lib/svgBuilder/types";
 
 /** `styled`: an icon of a registered style (`~colored_wiggle`, 2026-11-23) — its own stroke and fill settings. */
-export type QuickKind = "icon" | "styled" | "hero" | "title" | "subtitle" | "caption" | "block" | "banner" | "canvas";
+/** `line`: a Line banner's separator (2026-11-23) — its colour and width. */
+export type QuickKind = "icon" | "styled" | "hero" | "title" | "subtitle" | "caption" | "block" | "line" | "banner" | "canvas";
 
 export interface QuickTarget { kind: QuickKind; el: Element }
 
 /** Plain marks, in priority order (after the cell and banner-text checks). */
 const MARKS: readonly [string, QuickKind][] = [
-  ["data-caption", "caption"], ["data-split-block", "block"], ["data-banner", "banner"], ["data-artboard", "canvas"],
+  ["data-caption", "caption"], ["data-split-block", "block"], ["data-banner-line", "line"], ["data-banner", "banner"], ["data-artboard", "canvas"],
 ];
 
 /** An outlined icon or a colored one (2026-11-23): both are icon cells. */
@@ -88,6 +89,8 @@ export const QUICK_SPECS: Readonly<Record<QuickKind, QuickSpec>> = {
     gap: { label: "Letter spacing", group: "banner", key: "subtitleTracking", range: RANGES.tracking, unit: "/100 em" },
   },
   block: { name: "Banner block", color: { label: "Block color", group: "banner", key: "accent" } },
+  line: { name: "Separator line", color: { label: "Line color", group: "banner", key: "lineColor" },
+    stroke: { label: "Line width", group: "banner", key: "lineWidth", range: RANGES.lineWidth, unit: "px" } },
   banner: { name: "Banner", color: { label: "Banner background", group: "banner", key: "background" } },
   canvas: { name: "Background", color: { label: "Background color", group: "artboard", key: "background" } },
 };

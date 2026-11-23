@@ -42,7 +42,7 @@
 | Testid | Element | Notes |
 |---|---|---|
 | `builder-stage` / `builder-canvas` | column / scroll area | `builder-stage-empty` before a composition |
-| `builder-layout-{editorial,masthead,plain}` | Side banner / Top split / Plain grid | `aria-pressed`; `builder-custom-pill` after an edit |
+| `builder-layout-{editorial,masthead,plain,line}` | layout presets ([Line](svg-builder-presets.md)) | `aria-pressed`; then `builder-custom-pill` |
 | `builder-zoom-out` / `builder-zoom` / `builder-zoom-in` / `builder-fit` / `builder-zoom-1` | zoom | `builder-zoom` text = %, click → fit |
 | `builder-artboard` | scaled artboard | `data-zoom`; composed SVG in a shadow root |
 | `builder-empty-cell-{i}` | dashed `+` placeholder | `data-placeholder`, preview only |
@@ -78,5 +78,5 @@ See [templates & artboards selectors](svg-builder-presets.md).
 | Testid | Element | Notes |
 |---|---|---|
 | `builder-brief-dialog` | brief | `builder-brief-tab-brief`, `-tab-raw`, `builder-brief-copy`, `builder-brief-close`, `builder-brief-text`, `builder-brief-raw`, `builder-brief-count` |
-| `builder-format-dialog` | Export settings popup (2026-11-17, shell shared 2026-11-19) | `section.svg-modal` inside `builder-format-backdrop` (`.svg-backdrop.bld-export-backdrop`) — the SAME `ui/exportmodal.tsx` shell the upload dialog renders (`.svg-modal-head h2#builder-format-title` + `.svg-modal-body`), `aria-modal`, `aria-labelledby`; closed by `builder-format-close`, Escape or a backdrop click; `builder-format-note` names where the package is written; `builder-format-eps-note` warns while `Also write EPS` + the built-in writer + live text (`Expand text to fills` unticked). Rows use the `bld-set-` scope of the shared sheet: `bld-set-{svg,jpeg,eps,converter,mp,mp-match,mp-note,quality,optimize,clean,expand,expandtext,rescale,rescale-mp,rescale-strokes}` (`clean` = `Clean the saved files`, on by default), `bld-set-formats-warning` while every format is off; `bld-eps-helper{,-url,-check,-state}` for the Inkscape converter |
+| `builder-format-dialog` | Export settings popup (2026-11-17, shell shared 2026-11-19) | `section.svg-modal` inside `builder-format-backdrop` (`.svg-backdrop.bld-export-backdrop`) — the shared `ui/exportmodal.tsx` shell (`h2#builder-format-title` + `.svg-modal-body`), `aria-modal`, `aria-labelledby`; closed by `builder-format-close`, Escape or a backdrop click; `builder-format-note` names where the package is written; `builder-format-eps-note` warns while `Also write EPS` + the built-in writer + live text (`Expand text to fills` unticked). Rows use the `bld-set-` scope of the shared sheet: `bld-set-{svg,jpeg,eps,converter,mp,mp-match,mp-note,quality,optimize,clean,expand,expandtext,rescale,rescale-mp,rescale-strokes}` (`clean` = `Clean the saved files`, on by default), `bld-set-formats-warning` while every format is off; `bld-eps-helper{,-url,-check,-state}` for the Inkscape converter |
 | `builder-meta-dialog` | exact request | `builder-meta-preview` (768 px JPEG), `builder-meta-prompt`, `builder-exact-request`, `builder-meta-confirm`, `-accept`, `-cancel`, `-close`, `builder-meta-draft` |

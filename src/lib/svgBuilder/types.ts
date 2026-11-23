@@ -2,6 +2,8 @@
 // React, filesystem or provider imports, so every rule can be tested alone.
 
 export type BannerPosition = "left" | "right" | "top" | "bottom" | "none";
+/** Masthead (2026-11-23 "line"): a coloured block, a block + accent split, or no colour with one separator line. */
+export type BannerStyle = "solid" | "split" | "line";
 export type SelectionMode = "similar" | "random" | "filtered";
 export type CaptionCase = "upper" | "normal";
 export type TitleFace = "sans" | "serif" | "mono";
@@ -85,7 +87,9 @@ export interface SheetConfig {
   };
   banner: {
     position: BannerPosition; size: number; background: string; accent: string;
-    textColor: string; subtitleColor: string; style: "solid" | "split";
+    textColor: string; subtitleColor: string; style: BannerStyle;
+    /** The Line masthead's separator (2026-11-23): its width in px and its colour. */
+    lineWidth: number; lineColor: string;
     title: string; subtitle: string; titleSize: number; subtitleSize: number;
     titleFace: TitleFace; hero: boolean; heroIconId: string | null; divider: boolean;
     /** Text placement (2026-11-13): an inset from the banner edge, and per-text moves in px. */

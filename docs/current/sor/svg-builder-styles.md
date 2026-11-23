@@ -12,6 +12,11 @@ An icon's **style** is read from its id (`lib/svgBuilder/iconstyles.ts`): the ba
 - **Remembered** in the builder prefs (`styles`, validated by `parseStyleFilter`: style names only, one as itself, nothing = all); not an undo step itself.
 - Explicit names still resolve against every approved icon (preset JSON, Register): naming an icon places it.
 
+## Line masthead
+
+- `banner.style` `"line"` (2026-11-23, `lib/svgBuilder/bannerline.ts`): no banner colour — the canvas shows through, the words lie out as on a Solid banner (its rule and hero ring mix with the canvas) — and ONE separator line on the edge facing the grid, centred on it: `lineWidth` 0.5–12 px, `lineColor`. Set in Customize ▸ Banner ▸ Masthead **Line** (the Banner colour chip is hidden) and in the quick toolbar (*Separator line*: colour, ≡ width).
+- The **Line banner** layout preset (after Plain grid): bottom, Line, dark words on a cream canvas, 7 × 3 without captions.
+
 ## Colored icons — strokes and fills apart
 
 - **Drawn with their own paints** (`lib/svgBuilder/stylepaint.ts`, `svgAsset.ts`): an icon of a registered style is never forced stroke-only. Each drawable element gets its effective fill, stroke and stroke width written on itself (resolved through its groups and `style`, SVG defaults otherwise; colours as `#RRGGBB`), so a stroke stays a stroke and a fill stays a fill. Line-stroke icons are drawn exactly as before (stroke-only, the sheet's ink and pen). Library tiles show colored icons in their own colours.

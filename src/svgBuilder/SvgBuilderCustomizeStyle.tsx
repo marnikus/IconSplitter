@@ -2,7 +2,7 @@
 // Customize column (reference controls and order).
 import { rebalanceSpan } from "../lib/svgBuilder/rebalance";
 import { RANGES, bannerRange, clampTo } from "../lib/svgBuilder/ranges";
-import type { BannerPosition, SheetConfig, TitleFace } from "../lib/svgBuilder/types";
+import type { BannerPosition, BannerStyle, SheetConfig, TitleFace } from "../lib/svgBuilder/types";
 import type { Edit } from "./SvgBuilderCustomize";
 import { ColorChip, Field, Section, Segmented, Slider, Swatches, TextBox, Toggle, type SegOption } from "./SvgBuilderFields";
 import type { BuilderApi } from "./useSvgBuilder";
@@ -13,6 +13,7 @@ import ColoredIconStyle from "./SvgBuilderColoredStyle";
 const CASE_OPTIONS = [{ value: "normal" as const, label: "Aa normal" }, { value: "capitalized" as const, label: "Capitalized" }, { value: "upper" as const, label: "UPPER" }];
 import HeroStyle from "./SvgBuilderHeroStyle";
 
+const MASTHEADS: readonly SegOption<BannerStyle>[] = [{ value: "solid", label: "Solid" }, { value: "split", label: "Split" }, { value: "line", label: "Line" }];
 const POSITIONS: readonly SegOption<BannerPosition>[] = [
   { value: "left", label: "← Left" }, { value: "top", label: "↑ Top" }, { value: "bottom", label: "↓ Bottom" },
   { value: "right", label: "→ Right" }, { value: "none", label: "— None" },
@@ -61,8 +62,9 @@ function BannerControls({ b, edit }: { b: BuilderApi; edit: Edit }) {
   return <>
     <Field label="Masthead">
       <Segmented label="Masthead" value={n.style} testid="builder-banner-style"
-        options={[{ value: "solid", label: "Solid" }, { value: "split", label: "Split" }]} onChange={(style) => edit("banner", { style })} />
+        options={MASTHEADS} onChange={(style) => edit("banner", { style })} />
     </Field>
+    {n.style === "line" && <SeparatorLine n={n} edit={edit} />}
     <Slider label={side ? "Banner width" : "Banner height"} value={n.size} range={bannerRange(n.position)} unit="px"
       testid="builder-banner-size" onChange={(size) => edit("banner", { size }, true)} />
     <BannerColours n={n} edit={edit} />
@@ -83,9 +85,19 @@ function BannerControls({ b, edit }: { b: BuilderApi; edit: Edit }) {
   </>;
 }
 
+/** The Line masthead's separator (2026-11-23): its colour and width. */
+function SeparatorLine({ n, edit }: { n: SheetConfig["banner"]; edit: Edit }) {
+  return <div className="bld-two">
+    <ColorChip label="Line" value={n.lineColor} testid="builder-banner-line-color" onChange={(lineColor) => edit("banner", { lineColor })} />
+    <Slider label="Line width" value={n.lineWidth} range={RANGES.lineWidth} unit="px" testid="builder-banner-line-width"
+      onChange={(lineWidth) => edit("banner", { lineWidth }, true)} />
+  </div>;
+}
+
+/** The banner colour only where a banner has one (a Line banner stands on the canvas). */
 function BannerColours({ n, edit }: { n: SheetConfig["banner"]; edit: Edit }) {
   return <div className="bld-colours">
-    <ColorChip label="Banner" value={n.background} testid="builder-banner-bg" onChange={(background) => edit("banner", { background })} />
+    {n.style !== "line" && <ColorChip label="Banner" value={n.background} testid="builder-banner-bg" onChange={(background) => edit("banner", { background })} />}
     <ColorChip label="Accent" value={n.accent} testid="builder-accent" onChange={(accent) => edit("banner", { accent })} />
     <ColorChip label="Title ink" value={n.textColor} testid="builder-title-ink" onChange={(textColor) => edit("banner", { textColor })} />
     <ColorChip label="Subtitle" value={n.subtitleColor} testid="builder-subtitle-ink" onChange={(subtitleColor) => edit("banner", { subtitleColor })} />

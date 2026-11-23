@@ -31,6 +31,7 @@ export function sheetFolderOf(raw: unknown): string | null {
 }
 export const TEMPLATE_NAME_MAX = 60;
 
+const STYLE_LABEL: Readonly<Record<SheetConfig["banner"]["style"], string>> = { solid: "Solid", split: "Split", line: "Line" };
 const POSITION_LABEL: Readonly<Record<SheetConfig["banner"]["position"], string>> = {
   left: "Side banner", right: "Right banner", top: "Top banner", bottom: "Bottom banner", none: "Plain grid",
 };
@@ -65,7 +66,7 @@ export function applyTemplate(current: SheetConfig, template: SheetTemplate): Sh
 
 /** "Side banner · 8×4 · Split" — a generated name, numbered when it is taken. */
 export function templateName(config: SheetConfig, taken: readonly string[]): string {
-  const banner = config.banner.position === "none" ? "" : ` · ${config.banner.style === "split" ? "Split" : "Solid"}`;
+  const banner = config.banner.position === "none" ? "" : ` · ${STYLE_LABEL[config.banner.style]}`;
   const base = `${POSITION_LABEL[config.banner.position]} · ${config.grid.columns}×${config.grid.rows}${banner}`;
   const used = new Set(taken.map((name) => name.toLowerCase()));
   if (!used.has(base.toLowerCase())) return base;

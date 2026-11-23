@@ -7,7 +7,7 @@ import { readKey, writeKey } from "../state/safestorage";
 
 export const BUILDER_PREFS_KEY = "iconSplitter.svgBuilder.prefs.v1";
 
-export type BuilderLayoutChoice = "editorial" | "masthead" | "plain" | "custom";
+export type BuilderLayoutChoice = "editorial" | "masthead" | "plain" | "line" | "custom";
 
 export interface BuilderPrefs {
   /** Manual zoom; used only while `fit` is false. */
@@ -37,7 +37,7 @@ export interface BuilderPrefs {
 
 export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true, showGuides: false, guideOpacity: 70, styles: ALL_STYLES };
 export const META_HEIGHT = { min: 160, max: 1200 } as const;
-const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "custom"];
+const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "line", "custom"];
 
 export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
   if (!isRecord(raw)) return { ...DEFAULT_BUILDER_PREFS };

@@ -6097,3 +6097,8 @@ strictly inside).
 
 - The header's *Save as new* only shows while a template is edited (never removed); it is now also on the stage (`builder-stage-template-save-new`) whenever a template or an artboard is open. Saving a new template from an open artboard no longer marks the new template as edited while the artboard stays open (`actions/templates.ts` `saveAsNew`).
 - Measured: `svg_builder_save_new` 2/2 (the artboard rule mutation-witnessed); builder suites 41 files / 302 tests pass; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS (stage actions CC kept ≤ 10 by `SaveAsNewButton` / `TemplateDraftButtons`).
+
+## 2026-11-23 — SVG builder: Line masthead and the Line banner layout preset
+
+- `banner.style` `"line"`: no banner colour (the canvas shows through, words laid out as Solid on the canvas colour) and one separator line on the banner's grid-side edge (`lib/svgBuilder/bannerline.ts`, 28 lines; `lineWidth` 0.5–12 px, `lineColor`). Customize ▸ Masthead Line (line colour + width; banner chip hidden), quick toolbar kind `line`, preset JSON schema text, template name "· Line", folder colour words canvas + line. Preset **Line banner** after Plain grid.
+- Measured: `svg_builder_line_banner` 6/6 + workspace Line UI test (UI wiring mutation-witnessed); builder suites 42 files / 309 tests pass; full vitest 5051 pass / 27 fail — the same 27 pre-existing environment failures in 9 files; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS; touched docs ≤ 9000 bytes (Line text lives on `svg-builder-styles.md`).

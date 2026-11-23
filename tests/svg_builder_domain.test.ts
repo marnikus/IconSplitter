@@ -44,11 +44,11 @@ function acceptedMetadata(): SheetMetadata {
 }
 
 describe("sheet config and layout", () => {
-  it("has dark-app-friendly defaults and three presets", () => {
+  it("has dark-app-friendly defaults and four presets (Line banner since 2026-11-23)", () => {
     expect(DEFAULT_CONFIG.artboard.width).toBeGreaterThan(600);
     expect(DEFAULT_CONFIG.icons.color).not.toBe("#000000");
-    expect(LAYOUT_PRESETS).toHaveLength(3);
-    expect(new Set(LAYOUT_PRESETS.map((p) => p.id)).size).toBe(3);
+    expect(LAYOUT_PRESETS).toHaveLength(4);
+    expect(new Set(LAYOUT_PRESETS.map((p) => p.id)).size).toBe(4);
   });
 
   it("validates a stored config, dropping foreign fields", () => {

@@ -83,7 +83,7 @@ function bannerOf(args: ComposeSheetArgs, copy: { title: string; subtitle: strin
   const box = args.layout.banner;
   if (box === null) return "";
   return bannerMarkup({ banner: args.config.banner, box, artboardWidth: args.config.artboard.width,
-    title: copy.title, subtitle: copy.subtitle, hero: heroPainter(args, ids) });
+    title: copy.title, subtitle: copy.subtitle, hero: heroPainter(args, ids), canvas: args.config.artboard.background });
 }
 
 /** The hero glyph: the chosen library icon, else the first placed icon; the banner's Icon stroke in the given ink. */

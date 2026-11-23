@@ -43,9 +43,11 @@ export function colorWord(hex: string): string {
   return HUES.find(([top]) => c.h < top)?.[1] ?? "red";
 }
 
-/** The sheet's two leading colours: banner background + accent, or (no banner) canvas + icons. */
+/** The sheet's two leading colours: banner background + accent, a Line banner's canvas + line, or (no banner) canvas + icons. */
 export function paletteWords(config: SheetConfig): string[] {
-  const pair = config.banner.position === "none" ? [config.artboard.background, config.icons.color] : [config.banner.background, config.banner.accent];
+  const { banner, artboard } = config;
+  const pair = banner.position === "none" ? [artboard.background, config.icons.color]
+    : banner.style === "line" ? [artboard.background, banner.lineColor] : [banner.background, banner.accent];
   return [...new Set(pair.map(colorWord))];
 }
 

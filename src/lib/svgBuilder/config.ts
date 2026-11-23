@@ -4,7 +4,7 @@
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { RANGES, clampTo, type NumRange } from "./ranges";
-import type { BannerPosition, CaptionCase, SelectionMode, SheetConfig, TitleFace , TextCase } from "./types";
+import type { BannerPosition, BannerStyle, CaptionCase, SelectionMode, SheetConfig, TitleFace , TextCase } from "./types";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const MODES: readonly SelectionMode[] = ["similar", "random", "filtered"];
@@ -16,7 +16,7 @@ export const DEFAULT_CONFIG: SheetConfig = {
     captionColor: "#787A6C", captionSize: 9, captionCase: "upper", captionGap: 0 },
   icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round", coloredStroke: "", coloredStrokeWidth: 0, coloredFill: "" },
   banner: { position: "left", size: 242, background: "#17271F", accent: "#D9F36C",
-    textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid",
+    textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid", lineWidth: 1.5, lineColor: "#E8C547",
     title: "ICON SHEET", subtitle: "Editable stroke width",
     titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true,
     textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0,
@@ -26,7 +26,7 @@ export const DEFAULT_CONFIG: SheetConfig = {
 /** The 8 swatches shown under Canvas and Stroke colour. */
 export const SWATCHES: readonly string[] = ["#17271F", "#202A24", "#3D5A44", "#D9F36C", "#F4F0E7", "#FBFAF6", "#E7B37C", "#C96B4B"];
 
-export type LayoutPresetId = "editorial" | "masthead" | "plain";
+export type LayoutPresetId = "editorial" | "masthead" | "plain" | "line";
 export interface LayoutPreset { id: LayoutPresetId; label: string; hint: string; patch: (d: SheetConfig) => SheetConfig }
 
 export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
@@ -42,6 +42,14 @@ export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
     grid: { ...d.grid, columns: 8, rows: 3, gapX: 30, gapY: 26, captions: false },
     icons: { ...d.icons, box: 58, strokeWidth: 1.8 },
     banner: { ...d.banner, position: "none" },
+  }) },
+  // 2026-11-23: no banner colour — the words sit on the canvas under one separator line
+  { id: "line", label: "Line banner", hint: "Words on the canvas under one line", patch: (d) => ({
+    artboard: { ...d.artboard, height: 600, background: "#FDF8E8", padding: 40 },
+    grid: { ...d.grid, columns: 7, rows: 3, gapX: 30, gapY: 26, captions: false },
+    icons: { ...d.icons, box: 64, strokeWidth: 1.6, color: "#4A3B1F" },
+    banner: { ...d.banner, position: "bottom", style: "line", size: 76, hero: false, divider: false,
+      textColor: "#4A3B1F", subtitleColor: "#4A3B1F", lineColor: "#E8C547", lineWidth: 1.5 },
   }) },
 ];
 
@@ -116,7 +124,8 @@ function parseBanner(raw: unknown): SheetConfig["banner"] {
   if (!isRecord(raw)) return { ...d };
   return {
     position: oneOf(raw.position, ["left", "right", "top", "bottom", "none"], d.position) as BannerPosition,
-    size: num(RANGES.bannerAny, raw.size, d.size), style: oneOf(raw.style, ["solid", "split"], d.style) as "solid" | "split",
+    size: num(RANGES.bannerAny, raw.size, d.size), style: oneOf(raw.style, ["solid", "split", "line"], d.style) as BannerStyle,
+    lineWidth: num(RANGES.lineWidth, raw.lineWidth, d.lineWidth), lineColor: hex(raw.lineColor, d.lineColor),
     background: hex(raw.background, d.background), accent: hex(raw.accent, d.accent),
     textColor: hex(raw.textColor, d.textColor), subtitleColor: hex(raw.subtitleColor, d.subtitleColor),
     title: text(raw.title, d.title, 90), subtitle: text(raw.subtitle, d.subtitle, 140),
