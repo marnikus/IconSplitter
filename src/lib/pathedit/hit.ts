@@ -155,54 +155,18 @@ export function anchorsInRect(m: PathModel, a: Pt, b: Pt): AnchorRef[] {
   return m.subs.flatMap((s, sub) => s.anchors.flatMap((p, i) => (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 ? [{ sub, i }] : [])));
 }
 
-const outlineCache = new WeakMap<SubPath, Pt[]>();
-
-/** A closed subpath as a polygon (each segment sampled), cached per SubPath for inside tests. */
-function outlinePoints(s: SubPath): Pt[] {
-  const hit = outlineCache.get(s);
-  if (hit !== undefined) return hit;
-  const pts: Pt[] = [];
-  s.anchors.forEach((_, i) => {
-    const c = segmentCubic(s, i);
-    if (c === null) return;
-    for (let k = 0; k < 8; k++) pts.push(cubicAt(c, k / 8));
-  });
-  outlineCache.set(s, pts);
-  return pts;
-}
-
-/** Even-odd: is `p` inside the closed subpath? */
-function inside(s: SubPath, p: Pt): boolean {
-  if (!s.closed || s.anchors.length < 2) return false;
-  const pts = outlinePoints(s);
-  let hit = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const a = pts[i], b = pts[j];
-    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) hit = !hit;
-  }
-  return hit;
-}
-
 /**
- * The object (icon shape) a click picks, by geometry — a thin stroke or a
- * shape without fill is still easy to pick (2026-11-06): within the anchor /
- * segment band of any shape, else inside a closed shape that is not selected
- * (the topmost — last drawn — first). Null on empty space.
+ * The object (icon shape) a click picks, by geometry — a thin stroke is still
+ * easy to pick (2026-11-06): within the anchor / segment band of any shape, else
+ * where a shape PAINTS its fill. The empty inside of a shape without fill picks
+ * nothing (2026-11-23): a stroke-only shape is picked on its line only
+ * (strokepress.ts). Null on empty space.
  */
-function unfilledAt(m: PathModel, p: Pt, selected: (owner: number) => boolean): number | null {
-  for (let i = m.subs.length - 1; i >= 0; i--) {
-    const s = m.subs[i];
-    if (s.owner !== undefined && s.paints === false && !selected(s.owner) && inside(s, p)) return s.owner;
-  }
-  return null;
-}
-
-export function objectAt(m: PathModel, p: Pt, r: HitRadii, selected: (owner: number) => boolean): number | null {
+export function objectAt(m: PathModel, p: Pt, r: HitRadii): number | null {
   const near = hitTest(m, p, { radii: r, selected: [] });
   const sub = near.kind === "anchor" ? near.ref.sub : near.kind === "segment" ? near.sub : null;
   const owner = sub === null ? undefined : m.subs[sub]?.owner;
   if (owner !== undefined) return owner;
   const fill = paintedSubAt(m, p);
-  const fillOwner = fill === null ? undefined : m.subs[fill]?.owner;
-  return fillOwner ?? unfilledAt(m, p, selected);
+  return fill === null ? null : m.subs[fill]?.owner ?? null;
 }

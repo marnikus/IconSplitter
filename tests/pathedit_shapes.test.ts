@@ -3,8 +3,8 @@
 // path, a square path and five <circle>s, stroke-width 1 in a 1024 viewBox
 // (half a pixel on screen, fill none) — the square and the circles could not
 // be selected. Shapes load as anchors; a changed shape is written back as a
-// <path> with its other attributes; a click within the hit band of ANY path,
-// or inside an unselected closed shape, selects it.
+// <path> with its other attributes; a click within the hit band of ANY path
+// selects it (inside an unfilled shape: nothing since 2026-11-23).
 import { describe, expect, it } from "vitest";
 import { editorState, pointerDown, pointerMove, pointerUp, type EditorState, type PointerInput } from "../src/lib/pathedit/gesture";
 import { IDENTITY } from "../src/lib/pathedit/model";
@@ -52,10 +52,11 @@ describe("thin lines are easy to pick", () => {
     expect(st.session.objects).toEqual([1]);
   });
 
-  it("a click inside an unselected circle selects that circle; Shift adds another", () => {
-    let st = click(start([0]), at(512, 801));
+  it("a click on an unselected circle's line selects that circle; Shift adds another; its empty inside picks nothing (2026-11-23)", () => {
+    expect(click(start([0]), at(512, 801)).session.objects).toEqual([0]); // the middle of a fill="none" circle
+    let st = click(start([0]), at(512, 801 - 36 - 8)); // 8 units (~5 px) outside its line
     expect(st.session.objects).toEqual([4]);
-    st = click(st, at(777, 539, { shift: true }));
+    st = click(st, at(777 + 36 + 8, 539, { shift: true }));
     expect(st.session.objects).toEqual([4, 6]);
   });
 

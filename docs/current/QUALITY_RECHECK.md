@@ -6086,3 +6086,9 @@ strictly inside).
 - **Scope:** `lib/svgBuilder/{ranges,slots,artboards,presetjson}.ts`, `svgBuilder/{declineasset.ts,actions/artboards.ts,actions/presetjson.ts,actions/styles.ts}`.
 - **Behavior:** columns and rows range 1–100 (was 16 / 12); placeholder ids for empty cells cover 10 000 cells; saved artboard lists keep every cell; empty cells are made in one pass (`freshEmpty`, `padEmpty`, `withEmptyFor`) instead of once per cell.
 - **Verification:** `svg_builder_grid_limits` 3; builder + export suites `451/451`; `node tools/verify.mjs --full --base HEAD`: Types, Lint, Quality gate, Perf budgets, Build PASS; Tests + coverage `5034/5062` — the same `27` pre-existing failures plus `pathedit_inverted_mask_perf` at 264 ms over its 250 ms budget under coverage (untouched code; passes alone with and without coverage, 7/7).
+
+## 2026-11-23 — edit mode: stroke-only lines are picked on their line and move as their own object
+
+- Cause: line icons put `fill="none"` and the pen on the root `<svg>`, which `svgdoc.scanPathTags` did not inherit, so every stroke path counted as filled — a press inside a closed stroke shape picked and dragged it, and nested rings of one path moved as one "filled piece".
+- Fix: root `<svg>` paint + `stroke-width` inherited (`PathTag.strokeWidth`, `SubPath.halfStroke` scaled by the object's matrix); `hit.objectAt` no longer picks the empty inside of an unfilled shape; new `lib/pathedit/strokepress.ts` (72 lines): a press within half the pen + click tolerance of a stroke line selects and drags that one line; with a point of it picked, segments edit points.
+- Measured: `pathedit_stroke_lines` 7/7 (each new rule mutation-witnessed: root inheritance, half-pen tolerance); editor + SVG suites 165 files / 1507 tests pass; full vitest 5042 pass / 27 fail — the same 27 pre-existing environment failures in 9 files; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS (gesture.ts kept at 300 lines).

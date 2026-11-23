@@ -25,6 +25,7 @@ import { rotateAnchors, rotateAngle, scaleAnchors, scaleFor, type Box, type BoxH
 import { boxCursorAt, boxTargetAt } from "./boxtarget";
 import { alongEdge, boxCenter, skewAngleFor, skewAnchors, skewedCorners, type SkewEdge } from "./skew";
 import { HIT_PX } from "./hitpx";
+import { linePressSub, pressLine } from "./strokepress";
 
 export interface PointerInput {
   p: Pt;
@@ -72,8 +73,7 @@ export interface EditorState {
   lineCut?: { at: number; before: EditSession } | null;
 }
 
-/** Hit radii in screen pixels: generous anchors and handles, a 6 px band around a segment. */
-export { HIT_PX } from "./hitpx";
+export { HIT_PX } from "./hitpx"; // hit radii in screen pixels
 export { scaleBoxOf } from "./boxtarget";
 
 /** The cursor a hover should show over the selection box (rotate / resize), or null. */
@@ -148,6 +148,7 @@ function pressPaint(st: EditorState, s: EditSession, target: number | null, inpu
 }
 
 function selectDown(st: EditorState, input: PointerInput, hit: Hit): EditorState {
+  const line = linePressSub(st.session, input, hit); if (line !== null) return pressLine(st, input, line); // a stroke line is its own object (2026-11-23)
   if (hit.kind !== "none") return pressOn(st, input, hit);
   const s = st.session;
   const mode = modeOf(input);
@@ -171,10 +172,10 @@ function pressOn(st: EditorState, input: PointerInput, hit: Exclude<Hit, { kind:
   return grab(st, input, hit);
 }
 
-/** The shape a single click picks: within the click tolerance (Edit settings, screen px) of its line, or inside it. */
+/** The shape a single click picks: within the click tolerance (Edit settings, screen px) of its line, or on its painted fill. */
 function pickedObject(s: EditSession, input: PointerInput): number | null {
   const r = (input.pickPx ?? HIT_PX.pick) * input.unitsPerPx;
-  return objectAt(s.model, input.p, { anchor: r, handle: r, segment: r }, (o) => s.objects.includes(o)) ?? input.target ?? null;
+  return objectAt(s.model, input.p, { anchor: r, handle: r, segment: r }) ?? input.target ?? null;
 }
 
 const sameRef = (a: AnchorRef, b: AnchorRef): boolean => a.sub === b.sub && a.i === b.i;
@@ -294,6 +295,5 @@ function insertAt(st: EditorState, hit: Extract<Hit, { kind: "segment" }>): Edit
   const ins = insertOnSegment(st.session.model, hit.sub, hit.i, hit.t);
   return ins === null ? st : withSession(st, { ...commit(st.session, ins.model), selection: [ins.ref] });
 }
-
 export { clearEditClipboard, keyDown, type KeyInput } from "./keys";
 export { cutRegionAt, doubleClick, hoverAt } from "./linegesture";

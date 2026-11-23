@@ -24,7 +24,7 @@ export interface Anchor {
  * the editor loads every path of the icon into one model, edits the selected
  * objects and snaps against all of them; Finish writes each changed object back.
  */
-export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number; /** The object's `fill-rule="evenodd"` — absent means nonzero (2026-11-20). */ fillRule?: "evenodd"; /** `false` when the object does not fill (stroked only): absent means it fills (2026-11-20). */ paints?: boolean }
+export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number; /** The object's `fill-rule="evenodd"` — absent means nonzero (2026-11-20). */ fillRule?: "evenodd"; /** `false` when the object does not fill (stroked only): absent means it fills (2026-11-20). */ paints?: boolean; /** Half the drawn pen width in model units — a press that far from the line is on it (2026-11-23); absent = no stroke. */ halfStroke?: number }
 export interface PathModel { subs: SubPath[] }
 /** One anchor: its subpath and its index there. */
 export interface AnchorRef { sub: number; i: number }
@@ -175,6 +175,7 @@ export function cloneModel(m: PathModel): PathModel {
       ...(s.owner === undefined ? {} : { owner: s.owner }),
       ...(s.fillRule === undefined ? {} : { fillRule: s.fillRule }),
       ...(s.paints === undefined ? {} : { paints: s.paints }),
+      ...(s.halfStroke === undefined ? {} : { halfStroke: s.halfStroke }),
       anchors: s.anchors.map((a) => ({ ...a, in: a.in && { ...a.in }, out: a.out && { ...a.out } })),
     })),
   };

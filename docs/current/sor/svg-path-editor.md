@@ -8,9 +8,8 @@ run on the row; Enter on a focused button stays the button's) — opens the tab'
 **full-screen edit mode** on that row (`pathedit/SvgEditModal.tsx`, one modal for the tab; the
 open row lives in `editmodalstore.ts`). Every control is OUTSIDE the artboard:
 the **AI SOURCE** panel left of the artboard (the row's main AI image —
-`pathedit/AiSourcePanel.tsx`, `svg/useimageurl.ts`), the top bar (Select / Draw, **thin lines ↔ preset stroke** switch, **PREVIEW BG**
-(the shared `ui/PreviewBgPicker`: presets or a custom colour, white by default,
-remembered in Edit settings `bg`), "row n / N · name", Finish edit, Cancel), **‹ ›** arrows on the artboard's sides, and the
+`pathedit/AiSourcePanel.tsx`), the top bar (Select / Draw, **thin lines ↔ preset stroke**, **PREVIEW BG**
+(`ui/PreviewBgPicker`, white by default, Edit settings `bg`), "row n / N · name", Finish edit, Cancel), **‹ ›** arrows on the artboard's sides, and the
 **hotkey legend** at the bottom (`hotkeys.ts` `EDIT_HOTKEYS`). The artboard fits the window at the icon's ratio. Finish is the
 only moment the SVG file is rewritten; **Cancel closes** the mode and drops the
 session. **⚙ Edit settings** (bulk bar) sets anchor size and click tolerance.
@@ -39,7 +38,7 @@ session. **⚙ Edit settings** (bulk bar) sets anchor size and click tolerance.
 |---|---|
 | Edit is offered for a drawn SVG with a shape, not while the row generates or waits | `svg/svgeditslot.tsx` `editBlocked` |
 | Every drawn shape — `<path>`, `<circle>`, `<ellipse>`, `<rect>`, `<line>`, `<polyline>`, `<polygon>` (never inside defs/clipPath/mask/symbol/marker/pattern) — is an **object** of the session; a changed basic shape is written back as a `<path>` keeping its other attributes (`svgdoc.ts`). Objects are loaded into one model in the icon's root space through its own matrix (`lib/pathedit/objects.ts`). A one-path icon starts selected; otherwise click a path to edit | `SvgPathEditor.tsx`, `objects.ts` |
-| Picking is by geometry (`hit.objectAt`), so a half-pixel stroke or an unfilled shape is still easy to pick: within the **click tolerance** (Edit settings, default 14 px) of any shape, else inside an unselected closed shape (topmost first). Click a path = only that path; another click switches; **Shift+click** adds / removes. Only selected paths show anchors and can be edited; anchors of several selected paths move together | `gesture.ts` `selectObject`, `session.editableSub` |
+| Picking by geometry (`hit.objectAt`): within the **click tolerance** (Edit settings, 14 px) of a shape, else on its painted fill — never an unfilled shape's empty inside. Paint and pen inherit from `<g>` and the root `<svg>`. A **stroke line** (no fill, or open with a pen) is its own object: a press within half its pen + tolerance selects and drags that one line; with one of its points picked, segments edit points (`strokepress.ts`) | `gesture.ts`, `session.editableSub` |
 | The **marquee** selects anchors of every path inside it and selects those paths | `gesture.ts` `marqueeMove` |
 | **Esc**: ends a draw in progress → clears selected anchors → clears selected paths | `gesture.ts` `escape` |
 | Every anchor drawn all session; handles + arms only for the selection; Shift-snap target in red; marquee dashed; sizes in **screen px** (the path zooms, the chrome does not) | `pathedit/editoroverlay.ts` |

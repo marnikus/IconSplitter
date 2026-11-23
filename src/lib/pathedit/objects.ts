@@ -55,13 +55,20 @@ function ownerCanonicalData(model: PathModel, owner: number): string {
   return data;
 }
 
+/** How a path's subpaths fill and how wide their pen is in root space (its matrix scales the pen). */
+function lookOf(tag: PathTag, m: Affine): Pick<SubPath, "fillRule" | "paints" | "halfStroke"> {
+  const half = (tag.strokeWidth / 2) * Math.sqrt(Math.abs(m.a * m.d - m.b * m.c));
+  return { ...(tag.fillRule === "evenodd" ? { fillRule: "evenodd" as const } : {}), ...(tag.paints ? {} : { paints: false }), ...(half > 0 ? { halfStroke: half } : {}) };
+}
+
 /** All paths of `source` as one model in root space; `matrices[i]` maps path i into it (identity when absent). */
 export function loadObjects(source: string, matrices: readonly Affine[]): PathModel {
   const subs = cachedPathTags(source).flatMap((tag) => {
     const parsed = fromPathData(tag.d, tag.index);
     const m = matrices[tag.index] ?? IDENTITY;
     const moved = isIdentityAffine(m) ? parsed : transformModel(parsed, m);
-    return moved.subs.map((s) => ({ ...s, ...(tag.fillRule === "evenodd" ? { fillRule: "evenodd" as const } : {}), ...(tag.paints ? {} : { paints: false }) }));
+    const look = lookOf(tag, m);
+    return moved.subs.map((s) => ({ ...s, ...look }));
   });
   return { subs };
 }
