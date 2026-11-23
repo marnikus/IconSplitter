@@ -1,6 +1,6 @@
 # Documentation, privacy and delivery rules
 
-Canonical rules for this topic. Return to the [RULE 1–25 index](../AGENT_RULES.md) for the other rules.
+Canonical rules for this topic. Return to the [RULE 1–26 index](../AGENT_RULES.md) for the other rules.
 
 <a id="rule-6"></a>
 
@@ -67,3 +67,10 @@ Adapted from the correlation-token rule:
 * Blobs are complete-or-nothing: a ZIP is built fully in memory and downloaded once; a folder-save writes one finished blob per file; a partial/corrupt blob is never handed to the browser (RULE 15 gate).
 * Name collisions get a unique suffix rather than silent overwrite of user files.
 * Interrupted exports never leave a half-written ZIP: build first, deliver once.
+
+<a id="rule-26"></a>
+
+## RULE 26 — Exported files carry zero machine, AI, script or tool evidence
+
+* Exported deliverables (`.svg`, `.jpg`, `.eps`, `.png`, ZIP entries and copied SVG markup across **SVG to upload** and **SVG builder**) must **never** expose generator, AI, script or tool attribution or provenance: no `IconSplitter`, `SVG builder`, `Generated with…`, `x:xmptk`, `%%Creator`, `%%CreationDate`, tool-named DSC/PostScript/IPTC comments or dictionary identifiers, `data-*` hooks, provenance `<metadata>` JSON, or XML/HTML comments. Only user-accepted descriptive/rights metadata may travel in the file.
+* Exported SVGs must **never** wrap scaled artwork in `scale(…)` / `matrix(…)` transforms or compensate `stroke-width` by dividing by a scale factor (`target / scale`). Scaled geometry is baked directly at real target coordinates and sizes with direct target `stroke-width` values, rounded to **at most 1 decimal place** (`0.1` max precision, trailing `.0` stripped).

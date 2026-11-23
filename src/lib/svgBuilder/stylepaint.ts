@@ -60,9 +60,11 @@ export function markPaints(el: Element, inherited: Paint = SVG_DEFAULT): void {
 }
 
 /** The markers filled in for one sheet: stroke colour / width on strokes, fill colour on fills; an empty setting = the icon's own. */
-export function paintsOf(children: string, style: SheetConfig["icons"], pen: (width: number) => string): string {
+export function paintsOf(
+  children: string, style: SheetConfig["icons"], pen: (width: number) => string, ownPen: (raw: string) => string = (w) => w,
+): string {
   return children
     .replace(STROKE_AT, (_m, own: string) => ` stroke="${style.coloredStroke || own}"`)
     .replace(FILL_AT, (_m, own: string) => ` fill="${style.coloredFill || own}"`)
-    .replace(WIDTH_AT, (_m, own: string) => ` stroke-width="${style.coloredStrokeWidth > 0 ? pen(style.coloredStrokeWidth) : own}"`);
+    .replace(WIDTH_AT, (_m, own: string) => ` stroke-width="${style.coloredStrokeWidth > 0 ? pen(style.coloredStrokeWidth) : ownPen(own)}"`);
 }

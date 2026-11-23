@@ -48,7 +48,7 @@ describe("the EPS follows Rescale artboard to MP (2026-11-23)", () => {
     const { given } = await epsBox({ rescaleArtboard: true, rescaleMegapixels: 16 });
     const w = Number(/width="([\d.]+)"/.exec(given)![1]);
     expect(w * 0.75).toBeGreaterThan(5655);
-    expect(given).toContain('viewBox="0 0 2000 1000"'); // the drawing itself is untouched
+    expect(given).toContain('viewBox="0 0 5656.9 2828.4"'); // rescaled directly to 1-decimal target coordinates (RULE 26)
     expect(epsInputSvg(SHEET, false)).toBe(SHEET);
   });
 });

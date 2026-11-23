@@ -6147,3 +6147,8 @@ strictly inside).
 
 - After "Rescale artboard to MP" the EPS page was the target × 0.75 (px → pt), so a 16 MP target came out ≈ 9 MP as Illustrator / the stocks count it (1 pt = 1 px). `rescale.ts` `epsInputSvg` hands both converters the root px size × 4/3 when the rescale is on (viewBox and drawing untouched); used by the builder package and the upload export. No rescale: unchanged.
 - Measured: `eps_rescale_target` 4/4 (2000×1000 @ 16 MP → 5657×2828 pt; 4 / 9 / 25 MP within 0.5 %; failed at 4242 pt before, mutation-witnessed); EPS / upload / export / stock suites 1681 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc, eslint, `quality:changed --base HEAD` PASS.
+
+## 2026-11-19 — Clean direct-geometry exports & zero machine/tool evidence (RULE 26)
+- Added RULE 26 across `docs/current/rules/*`, `docs/current/AGENT_RULES.md`, `AGENTS.md`, `docs/archive/2026-11-19-clean-direct-exports/design.md`, and `docs/current/sor/{export-formats,svg-builder,upload-file-metadata,upload-eps}.md`.
+- Implemented `src/lib/upload/{svgdirectpath,svgdirect}.ts` and `src/lib/svgBuilder/svgAssetNodes.ts`, removing all machine/tool/AI attribution (`IconSplitter`, `SVG builder`, `Generated with…`, `— icon sheet`, `x:xmptk`, `%%Creator`, `%%CreationDate`, tool-named PS/IPTC comments, `data-*` hooks) and baking all exported SVG coordinates, `viewBox`, sizes, and `stroke-width` directly at target dimensions rounded to at most 1 decimal place (including styled/colored icons).
+- Verification: `npm run verify` (`ALL LANES PASSED` — Types, Lint, Quality gate, Native perf budgets, Full test + coverage suite including `tests/export_no_machine_evidence.test.ts` 7/7, and Vite production build).

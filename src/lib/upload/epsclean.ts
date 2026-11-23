@@ -45,6 +45,11 @@ export function cleanEpsDocument(eps: string, metadata: IconMetadata | null): st
   return dropAllCarriers(stripEpsEnvelope(stripEpsFingerprints(eps)));
 }
 
+/** Producer/date removal (always applied so converter attribution never leaks, RULE 26). */
+export function stripEpsProducerLines(eps: string): string {
+  return eps.replace(PRODUCER_LINES, "");
+}
+
 /** Producer/date/ADO/foreign-carrier removal. Idempotent. */
 export function stripEpsFingerprints(eps: string): string {
   return eps.replace(FOREIGN_PHOTOSHOP, "").replace(PRODUCER_LINES, "").replace(ADO_LINES, "");

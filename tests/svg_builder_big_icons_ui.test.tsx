@@ -69,7 +69,7 @@ const shadow = () => q("builder-artboard")!.querySelector(".bld-artboard-svg")!.
 /** The drawn icons: slot → asset id. */
 const drawn = () => Object.fromEntries([...shadow().querySelectorAll("[data-cell-index]")]
   .filter((g) => g.getAttribute("data-cell-index") !== "-1").map((g) => [Number(g.getAttribute("data-cell-index")), g.getAttribute("data-asset-id")]));
-const scaleAt = (slot: number) => Number(/scale\(([\d.]+)\)/.exec(shadow().querySelector(`[data-cell-index="${slot}"]`)!.getAttribute("transform") ?? "")![1]);
+const scaleAt = (slot: number) => Number(/h([\d.]+)/.exec(shadow().querySelector(`[data-cell-index="${slot}"] path`)!.getAttribute("d") ?? "")![1]);
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })));

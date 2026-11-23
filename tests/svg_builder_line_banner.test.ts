@@ -43,13 +43,14 @@ describe("the Line masthead (2026-11-23)", () => {
   });
 
   it("puts the line on the grid side of every position", () => {
+    const r1 = (n: number) => Math.round(n * 10) / 10;
     const top = sheet({ position: "top", size: 80 });
-    expect(lineOf(top.svg)!.y).toBeCloseTo(top.layout.banner!.y + top.layout.banner!.height - 0.75);
+    expect(lineOf(top.svg)!.y).toBe(r1(top.layout.banner!.y + top.layout.banner!.height - 0.75));
     const left = sheet({ position: "left", size: 200 });
     const l = lineOf(left.svg)!;
-    expect([l.x, l.width, l.height]).toEqual([left.layout.banner!.x + left.layout.banner!.width - 0.75, 1.5, left.layout.banner!.height]);
+    expect([l.x, l.width, l.height]).toEqual([r1(left.layout.banner!.x + left.layout.banner!.width - 0.75), 1.5, left.layout.banner!.height]);
     const right = sheet({ position: "right", size: 200 });
-    expect(lineOf(right.svg)!.x).toBeCloseTo(right.layout.banner!.x - 0.75);
+    expect(lineOf(right.svg)!.x).toBe(r1(right.layout.banner!.x - 0.75));
   });
 
   it("a Solid banner draws no separator line", () => {

@@ -9,7 +9,8 @@
 import { embedMetadataInSvg } from "../lib/upload/embed";
 import { solidPaint } from "../lib/upload/solidpaint";
 import { cleanSheetSvg } from "../lib/svgBuilder/cleansheet";
-import { cleanEpsDocument } from "../lib/upload/epsclean";
+import { cleanEpsDocument, stripEpsProducerLines } from "../lib/upload/epsclean";
+import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
 import { expandStrokes } from "../lib/upload/expand";
 import { expandTextToFills } from "../lib/upload/expandtext";
 import { epsInputSvg, rescaleSvg } from "../lib/upload/rescale";
@@ -53,11 +54,19 @@ const SVGO_OFF: OptimizeRecord = { enabled: false, version: "none", config: "{}"
  * expand text, rescale the artboard, optimize the export copy — in this order,
  * each refusal named before anything ships.
  */
+function stripPreviewHooks(svg: string): string {
+  const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+  if (root === null || root.getElementsByTagName("parsererror").length > 0) return svg;
+  for (const el of [root, ...Array.from(root.getElementsByTagName("*"))]) {
+    for (const a of Array.from(el.attributes)) {
+      if (a.name.startsWith("data-")) el.removeAttribute(a.name);
+    }
+  }
+  return new XMLSerializer().serializeToString(root);
+}
+
 export async function prepareSheetSvg(svg: string, settings: UploadSettings): Promise<{ ok: true; svg: string; svgo: OptimizeRecord } | { ok: false; reason: string }> {
-  // First, the ink: the artboard's `currentColor` becomes real hex, so the SVG
-  // the user opens, the JPEG the browser rasterises and the EPS the writer
-  // parses all paint the colour the panel (or a template) set (2026-11-19).
-  let out = solidPaint(svg);
+  let out = stripPreviewHooks(solidPaint(svg));
   if (settings.expandStrokes) {
     const doc = new DOMParser().parseFromString(out, "image/svg+xml");
     const expanded = expandStrokes(doc.documentElement);
@@ -101,7 +110,11 @@ async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: Ic
     // `%%CreationDate`, `%ADO_*`, a second metadata carrier) and leaves exactly
     // one XMP carrier with Title, description and tags.
     if (!out.ok) return { name, bytes: null, problem: `EPS: ${out.reason}${out.fix === undefined ? "" : ` — ${out.fix}`}` };
-    return { name, bytes: text(a.settings.cleanExport ? cleanEpsDocument(out.eps, meta) : out.eps), problem: null };
+    const producerFree = stripEpsProducerLines(out.eps);
+    const epsText = a.settings.cleanExport
+      ? cleanEpsDocument(producerFree, meta)
+      : (meta === null ? producerFree : embedXmpMetadataInEps(producerFree, meta));
+    return { name, bytes: text(epsText), problem: null };
   } catch (error) {
     return { name, bytes: null, problem: `EPS: ${error instanceof Error ? error.message : "conversion failed"}` };
   }

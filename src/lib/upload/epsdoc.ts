@@ -74,21 +74,16 @@ export function assemble({ viewBox, unit = 1, box, hires, body, opts }: EpsDoc):
   return `${header}\n${upright}\n${body.join("\n")}\n%%EOF\n`;
 }
 
-/** The documented DSC comment order (Creator, Title, date, boxes, data, level). */
+/** DSC comment order (Title, boxes, data, level — zero tool/date attribution, RULE 26). */
 function commentLines(box: EpsBoundingBox, hires: EpsBoundingBox, opts: EpsOptions): string[] {
-  const lines = [
-    "%%Creator: IconSplitter (SVG to upload)",
+  return [
     `%%Title: ${dscString(opts.title ?? "export.eps")}`,
-  ];
-  if (opts.createdAt !== undefined) lines.push(`%%CreationDate: ${dscString(opts.createdAt)}`);
-  lines.push(
     `%%BoundingBox: ${box.llx} ${box.lly} ${box.urx} ${box.ury}`,
     `%%HiResBoundingBox: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
     "%%DocumentData: Clean7Bit",
     "%%LanguageLevel: 3",
     ...illustratorArtboard(hires),
-  );
-  return lines;
+  ];
 }
 
 /** Illustrator's AI5 comment stores height then width and a centered template point. */

@@ -34,7 +34,8 @@ export function composeSheet(args: ComposeSheetArgs): SheetDocument {
   const sources = placed.flatMap((p) => (p.asset === undefined ? [] : [{ id: p.id, fingerprint: p.asset.fingerprint }]));
   const copy = sheetCopy(metadata, args.config.banner);
   const svg = [
-    rootOpen(args.config, fingerprint), headOf(metadata?.state === "accepted" && metadata.title !== "" ? metadata.title : copy.title, metadata, { ids, sources, fingerprint }),
+    rootOpen(args.config, fingerprint),
+    headOf(metadata?.state === "accepted" && metadata.title !== "" ? metadata.title : copy.title, metadata),
     backgroundOf(args.config), bannerOf(args, copy, ids), `<g data-export="icons">${cells.join("")}</g>`,
     captionsOf(args, placed), "</svg>",
   ].join("");
@@ -71,12 +72,15 @@ function rootOpen(config: SheetConfig, fingerprint: string): string {
     + `data-config-fingerprint="${attr(fingerprint)}" data-approved-only="true" role="img">`;
 }
 
-function headOf(title: string, metadata: SheetMetadata | null, trace: { ids: string[]; sources: { id: string; fingerprint: string }[]; fingerprint: string }): string {
+function headOf(title: string, metadata: SheetMetadata | null): string {
   const accepted = metadata?.state === "accepted" ? metadata : null;
-  const desc = accepted === null ? "Generated with the SVG builder. Editable stroke-only icon sheet."
-    : `${accepted.description}. Tags: ${accepted.tags.join(", ")}`;
-  const payload = JSON.stringify({ v: 1, approvedOnly: true, title, placedIds: trace.ids, sources: trace.sources, configFingerprint: trace.fingerprint });
-  return `<title>${escapeText(`${title.trim() || "Icon sheet"} — icon sheet`)}</title><desc>${escapeText(desc)}</desc><metadata>${escapeText(payload)}</metadata>`;
+  const cleanTitle = title.trim();
+  const titleTag = cleanTitle !== "" ? `<title>${escapeText(cleanTitle)}</title>` : "";
+  const desc = accepted !== null && accepted.description.trim() !== ""
+    ? (accepted.tags.length > 0 ? `${accepted.description}. Tags: ${accepted.tags.join(", ")}` : accepted.description)
+    : "";
+  const descTag = desc !== "" ? `<desc>${escapeText(desc)}</desc>` : "";
+  return `${titleTag}${descTag}`;
 }
 
 function backgroundOf(config: SheetConfig): string {

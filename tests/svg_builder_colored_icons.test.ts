@@ -34,18 +34,21 @@ function sheet(icons: Partial<SheetConfig["icons"]> = {}, banner: Partial<SheetC
 const cell = (doc: Document, index: string) => doc.querySelector(`[data-cell-index="${index}"]`)!;
 const part = (doc: Document, index: string, id: string) => cell(doc, index).querySelector(`[id$="-${id}"]`)!;
 const paints = (el: Element) => [el.getAttribute("fill"), el.getAttribute("stroke"), el.getAttribute("stroke-width")];
-const scaleOf = (el: Element) => Number(/scale\(([\d.]+)\)/.exec(el.getAttribute("transform") ?? "")?.[1]);
+const scaleOf = (el: Element) => Number(/scale\(([\d.]+)\)/.exec(el.getAttribute("transform") ?? "")?.[1] ?? 1);
 
 describe("colored icons keep their own paints (2026-11-23)", () => {
-  it("by default every stroke and fill is the icon's own — resolved from groups and style, colours as hex", () => {
+  it("by default every stroke and fill is the icon's own — resolved from groups and style, colours as hex, strokes in direct artboard px", () => {
     const doc = sheet();
     const c = cell(doc, "1");
     expect([c.getAttribute("fill"), c.getAttribute("stroke")]).toEqual([null, null]); // no stroke-only wrapper
+    expect(c.getAttribute("transform")).toBeNull();
+    const cellScale = computeLayout(parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, position: "none" } })).cells[1].glyph / 24;
+    const expected = (w: number) => String(Math.round(w * cellScale * 10) / 10);
     expect(paints(part(doc, "1", "blob"))).toEqual(["#F5A623", "none", null]);
-    expect(paints(part(doc, "1", "outline"))).toEqual(["none", "#1F2937", "2"]);
+    expect(paints(part(doc, "1", "outline"))).toEqual(["none", "#1F2937", expected(2)]);
     expect(paints(part(doc, "1", "inherited"))).toEqual(["#112233", "none", null]);
-    expect(paints(part(doc, "1", "styled"))).toEqual(["none", "#AABBCC", "3"]);
-    expect(paints(part(doc, "1", "nested"))).toEqual(["none", "#FF0080", "1.5"]);
+    expect(paints(part(doc, "1", "styled"))).toEqual(["none", "#AABBCC", expected(3)]);
+    expect(paints(part(doc, "1", "nested"))).toEqual(["none", "#FF0080", expected(1.5)]);
   });
 
   it("stroke colour and width change only the strokes; fill colour only the fills", () => {

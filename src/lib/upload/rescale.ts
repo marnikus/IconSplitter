@@ -1,10 +1,10 @@
-// rescale.ts — "rescale the full artboard keeping its ratio" (2026-11-17): the
-// root px size moves to the megapixel target and the viewBox stays, so every
-// coordinate scales with the document. With "scale strokes proportionally"
-// unticked each visible stroke-width is divided by the factor FIRST — the
-// stroke prints at the px it had before the rescale. A document with no
-// readable px size or viewBox is refused by name, untouched (RULE 4/15).
+// rescale.ts — "rescale the full artboard keeping its ratio" (2026-11-17;
+// updated 2026-11-19 for RULE 26 direct geometry): root `width`/`height`,
+// `viewBox` and geometry rescale directly into target px rounded to ≤ 1 decimal
+// place. With `rescaleStrokes` on, strokes scale by `factor`; with it off,
+// `stroke-width` keeps its direct px value instead of dividing by `factor`.
 import { rescaleSize, type ExportFormatOptions } from "../exportformats";
+import { bakeDirectSvg, fmt1 } from "./svgdirect";
 
 export type RescaleOptions = Pick<ExportFormatOptions, "rescaleMegapixels" | "rescaleStrokes">;
 export type RescaleResult = { ok: true; svg: string; factor: number } | { ok: false; svg: string; reason: string };
@@ -15,13 +15,11 @@ const num = (value: string | null): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-/** The element's own stroke paint; `null` = inherit, "none" = not stroked. */
 function ownStroke(el: Element): string | null {
   const value = el.getAttribute("stroke");
   return value === null ? null : value.trim().toLowerCase();
 }
 
-/** The stroke paint that really reaches this element (nearest definition wins). */
 function effectiveStroke(el: Element): string {
   let cur: Element | null = el;
   while (cur !== null) {
@@ -29,37 +27,42 @@ function effectiveStroke(el: Element): string {
     if (own !== null) return own;
     cur = cur.parentElement;
   }
-  return "none"; // SVG's default: nothing strokes unless something says so
+  return "none";
 }
 
-function strokeWidthOf(el: Element): number {
+function hasInheritedStrokeWidth(el: Element): boolean {
   let cur: Element | null = el;
   while (cur !== null) {
-    const own = num(cur.getAttribute("stroke-width"));
-    if (own !== null) return own;
+    if (num(cur.getAttribute("stroke-width")) !== null) return true;
+    const style = cur.getAttribute("style");
+    if (style && /stroke-width\s*:/i.test(style)) return true;
     cur = cur.parentElement;
   }
-  return 1; // the SVG default width, in user units
+  return false;
 }
 
-/** Every visibly stroked element gets its own width divided by the factor. */
-function divideStrokes(root: Element, factor: number): number {
-  let touched = 0;
+/** Materialise implicit SVG default `stroke-width="1"` before proportional scaling. */
+function seedImplicitStrokes(root: Element): void {
   for (const el of [root, ...Array.from(root.querySelectorAll("*"))]) {
-    if (effectiveStroke(el) === "none") continue;
-    const width = strokeWidthOf(el) / factor;
-    el.setAttribute("stroke-width", String(Number(width.toFixed(4))));
-    touched += 1;
+    if (effectiveStroke(el) !== "none" && !hasInheritedStrokeWidth(el)) {
+      el.setAttribute("stroke-width", "1");
+    }
   }
-  return touched;
 }
 
-/** The root's own px size, else its viewBox; null when neither reads. */
+function viewBoxOf(root: Element): [number, number, number, number] | null {
+  const vb = (root.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
+  if (vb.length === 4 && vb.every((n) => Number.isFinite(n)) && vb[2] > 0 && vb[3] > 0) {
+    return [vb[0], vb[1], vb[2], vb[3]];
+  }
+  return null;
+}
+
 function baseSizeOf(root: Element): { width: number; height: number } | null {
   const pxW = num(root.getAttribute("width")), pxH = num(root.getAttribute("height"));
   if (pxW !== null && pxH !== null) return { width: pxW, height: pxH };
-  const vb = (root.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
-  return vb.length === 4 && vb.every((n) => Number.isFinite(n)) && vb[2] > 0 && vb[3] > 0 ? { width: vb[2], height: vb[3] } : null;
+  const vb = viewBoxOf(root);
+  return vb === null ? null : { width: vb[2], height: vb[3] };
 }
 
 export function rescaleSvg(svg: string, o: RescaleOptions): RescaleResult {
@@ -67,8 +70,11 @@ export function rescaleSvg(svg: string, o: RescaleOptions): RescaleResult {
   if (root.nodeName.toLowerCase() !== "svg") return { ok: false, svg, reason: "the document root is not an <svg> element" };
   const base = baseSizeOf(root);
   if (base === null) return { ok: false, svg, reason: "the document has no readable px size or viewBox to rescale" };
+  const vb = viewBoxOf(root) ?? [0, 0, base.width, base.height];
   const { width, height, factor } = rescaleSize(base.width, base.height, o.rescaleMegapixels);
-  if (!o.rescaleStrokes) divideStrokes(root, factor);
+  if (o.rescaleStrokes) seedImplicitStrokes(root);
+  bakeDirectSvg(root, { scale: factor, scaleStrokes: o.rescaleStrokes });
+  root.setAttribute("viewBox", `${fmt1(vb[0] * factor)} ${fmt1(vb[1] * factor)} ${fmt1(vb[2] * factor, 0.1)} ${fmt1(vb[3] * factor, 0.1)}`);
   root.setAttribute("width", String(width));
   root.setAttribute("height", String(height));
   return { ok: true, svg: new XMLSerializer().serializeToString(root), factor };

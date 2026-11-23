@@ -9,27 +9,29 @@ import { jpegTargetSize } from "../src/lib/exportformats";
 const sheet = (extra = "") => `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">${extra}</svg>`;
 
 describe("rescaleSvg", () => {
-  it("moves the root px size to the target and keeps the viewBox", () => {
+  it("moves the root px size AND viewBox directly to the target", () => {
     const out = rescaleSvg(sheet(), { rescaleMegapixels: 1, rescaleStrokes: true });
     expect(out.ok).toBe(true);
     if (!out.ok) return;
     expect(out.svg).toContain('width="1414"');
     expect(out.svg).toContain('height="707"');
-    expect(out.svg).toContain('viewBox="0 0 200 100"');
+    expect(out.svg).toContain('viewBox="0 0 1414.2 707.1"');
     expect(out.factor).toBeCloseTo(7.0711, 3);
   });
 
-  it("scales stroke widths with the document when asked", () => {
+  it("scales geometry and stroke widths directly when asked (≤ 1 decimal)", () => {
     const out = rescaleSvg(sheet('<rect x="1" y="1" width="9" height="9" stroke="#000000" stroke-width="2"/>'), { rescaleMegapixels: 1, rescaleStrokes: true });
-    expect(out.ok && out.svg).toContain('stroke-width="2"');
+    expect(out.ok && out.svg).toContain('stroke-width="14.1"');
+    expect(out.ok && out.svg).toContain('x="7.1"');
+    expect(out.ok && out.svg).toContain('width="63.6"');
   });
 
-  it("keeps the printed stroke px when the proportional box is unticked", () => {
+  it("keeps the direct printed stroke px when the proportional box is unticked (no scale division)", () => {
     const src = sheet('<rect x="1" y="1" width="9" height="9" stroke="#000000" stroke-width="2"/>');
     const out = rescaleSvg(src, { rescaleMegapixels: 1, rescaleStrokes: false });
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(Number(/stroke-width="([\d.]+)"/.exec(out.svg)?.[1])).toBeCloseTo(2 / 7.0711, 3);
+    expect(out.svg).toContain('stroke-width="2"');
   });
 
   it("leaves stroke-free and stroke:none shapes alone", () => {

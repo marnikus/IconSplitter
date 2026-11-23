@@ -73,7 +73,7 @@ const shadow = () => q("builder-artboard")!.querySelector(".bld-artboard-svg")!.
 const cells = (colored: boolean) => [...shadow().querySelectorAll("[data-cell-index]")]
   .filter((g) => g.getAttribute("data-cell-index") !== "-1" && (g.getAttribute("data-asset-id") ?? "").endsWith("~colored_wiggle") === colored);
 const partOf = (g: Element, id: string) => g.querySelector(`[id$="-${id}"]`)!;
-const scaleOf = (g: Element) => Number(/scale\(([\d.]+)\)/.exec(g.getAttribute("transform") ?? "")?.[1]);
+const scaleOf = (g: Element) => Number(/scale\(([\d.]+)\)/.exec(g.getAttribute("transform") ?? "")?.[1] ?? 1);
 
 async function openLibrary(): Promise<void> {
   await click("tab-svg-builder");

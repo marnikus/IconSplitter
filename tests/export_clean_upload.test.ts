@@ -28,7 +28,7 @@ describe("cleanSvgText — the shared clean copy", () => {
     expect(svg).not.toMatch(/<g[\s>]/);            // both wrappers unwrapped
     expect(svg).not.toContain("color=");           // dead beside an explicit stroke
     expect(svg).not.toContain('{"v":1');           // our machine record
-    expect(svg).toContain('stroke-width="1.999"'); // 4+ decimals only
+    expect(svg).toContain('stroke-width="2"');     // rounded to ≤ 1 decimal (trailing .0 stripped)
     expect(report.rounded).toBe(1);
   });
 

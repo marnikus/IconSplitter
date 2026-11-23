@@ -169,11 +169,13 @@ describe("approved SVG embedding and composition", () => {
     });
     expect(doc.placedIds).toEqual(["a", "b"]);
     expect(doc.brokenIds).toEqual([]);
-    expect(doc.svg).toContain("<title>Quiet line icons — icon sheet</title>"); // the embedded title is the accepted metadata title
+    expect(doc.svg).toContain("<title>Quiet line icons</title>");
+    expect(doc.svg).not.toContain("— icon sheet");
     expect(doc.svg).toContain("<desc>Approved vector set. Tags: icon, vector, line</desc>");
     expect(doc.svg).toContain('data-asset-id="a"');
     expect(doc.svg).toContain('data-config-fingerprint="' + doc.configFingerprint + '"');
-    expect(doc.svg).toContain("\"id\":\"a\"");
+    expect(doc.svg).not.toContain("approvedOnly");
+    expect(doc.sourceFingerprints).toEqual([{ id: "a", fingerprint: "10:1" }, { id: "b", fingerprint: "11:2" }]);
     expect(validateSvg(doc.svg).ok).toBe(true);
   });
 

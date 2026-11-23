@@ -13,10 +13,14 @@ import type { IconMetadata } from "./meta";
 import { metadataFingerprint } from "./meta";
 import { buildXmpPacket, readXmpPacket } from "./xmp";
 
-const SETUP_BEGIN = "% IconSplitter XMP setup begin";
-const SETUP_END = "% IconSplitter XMP setup end";
-const TRAILER_BEGIN = "% IconSplitter XMP trailer begin";
-const TRAILER_END = "% IconSplitter XMP trailer end";
+const SETUP_BEGIN = "%BeginDocumentMetadata";
+const SETUP_END = "%EndDocumentMetadata";
+const TRAILER_BEGIN = "%BeginMetadataTrailer";
+const TRAILER_END = "%EndMetadataTrailer";
+const LEGACY_SETUP_BEGIN = "% IconSplitter XMP setup begin";
+const LEGACY_SETUP_END = "% IconSplitter XMP setup end";
+const LEGACY_TRAILER_BEGIN = "% IconSplitter XMP trailer begin";
+const LEGACY_TRAILER_END = "% IconSplitter XMP trailer end";
 
 export interface EpsEmbedOptions {
   /**
@@ -31,7 +35,7 @@ export interface EpsEmbedOptions {
 export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata, options: EpsEmbedOptions = {}): string {
   const clean = stripPreviousEmbedding(eps);
   const eol = lineEndingOf(clean);
-  const packet = packetFor(metadata, options.clean === true).replace(/\n/g, eol);
+  const packet = buildXmpPacket(metadata).replace(/\n/g, eol);
   const identity = clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
     .replace(/^%%DocumentData:.*(?:\r\n|\r|\n|$)/gm, "");
   // The id names what the FILE carries: the Icon Name (2026-11-08) is never written into it, so it must not
@@ -75,8 +79,8 @@ export function verifyEpsMetadata(eps: string, expected: IconMetadata): boolean 
 }
 
 function setupBlock(id: string, packet: string, eol: string): string {
-  const dictionary = `IconSplitterXmp_${id}`;
-  const stream = `IconSplitterStream_${id}`;
+  const dictionary = `MetadataDict_${id}`;
+  const stream = `MetadataStream_${id}`;
   const marker = uniquePacketMarker(id, packet);
   return [
     SETUP_BEGIN,
@@ -101,12 +105,12 @@ function setupBlock(id: string, packet: string, eol: string): string {
 }
 
 function trailerBlock(id: string, eol: string): string {
-  const dictionary = `IconSplitterXmp_${id}`;
+  const dictionary = `MetadataDict_${id}`;
   return [TRAILER_BEGIN, `${dictionary} begin`, "[/EMC pdfmark", "end", TRAILER_END].join(eol);
 }
 
 function uniquePacketMarker(id: string, packet: string): string {
-  let marker = `% IconSplitterXmpEnd_${id}`;
+  let marker = `%EndPacket_${id}`;
   while (packet.includes(marker)) marker += "_";
   return marker;
 }
@@ -119,6 +123,8 @@ export function stripEpsEnvelope(eps: string): string {
 function stripPreviousEmbedding(eps: string): string {
   let clean = stripMarkedBlock(stripEpsIptc(eps), SETUP_BEGIN, SETUP_END);
   clean = stripMarkedBlock(clean, TRAILER_BEGIN, TRAILER_END);
+  clean = stripMarkedBlock(clean, LEGACY_SETUP_BEGIN, LEGACY_SETUP_END);
+  clean = stripMarkedBlock(clean, LEGACY_TRAILER_BEGIN, LEGACY_TRAILER_END);
   return clean;
 }
 
@@ -138,12 +144,6 @@ function stripMarkedBlock(text: string, begin: string, end: string): string {
     i = endAt;
   }
   return out.join("");
-}
-
-/** The shared packet, minus the tool signature when the export is a clean one. */
-function packetFor(metadata: IconMetadata, clean: boolean): string {
-  const packet = buildXmpPacket(metadata);
-  return clean ? packet.replace(' x:xmptk="IconSplitter"', "") : packet;
 }
 
 /** Clean mode is one carrier: no `%ADO_*` flag, and no `%%DocumentData` rewrite. */
@@ -234,10 +234,19 @@ function lineEndingOf(text: string): string {
   return /\r\n|\n|\r/.exec(text)?.[0] ?? "\n";
 }
 
+function hasEnvelopeMarkers(eps: string): boolean {
+  return eps.includes(SETUP_BEGIN)
+    || eps.includes(TRAILER_BEGIN)
+    || eps.includes(LEGACY_SETUP_BEGIN)
+    || eps.includes(LEGACY_TRAILER_BEGIN)
+    || eps.includes("% IconSplitter IPTC begin")
+    || /^%%BeginPhotoshop:/m.test(eps);
+}
+
 /** Only our byte-for-byte canonical metadata program may be excluded from the
  * vector grammar audit. Marker comments alone are never a bypass. */
 export function verifiedEpsArtwork(eps: string): string {
-  if (!eps.includes(SETUP_BEGIN) && !eps.includes(TRAILER_BEGIN) && !eps.includes("% IconSplitter IPTC begin")) return eps;
+  if (!hasEnvelopeMarkers(eps)) return eps;
   const metadata = readXmpMetadataFromEps(eps);
   const clean = stripPreviousEmbedding(eps);
   const mode = isCleanEpsEnvelope(eps) ? { clean: true } : {};

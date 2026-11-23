@@ -36,16 +36,16 @@ afterEach(() => setTextOutliner(null));
 
 describe("cleanEpsDocument", () => {
   it("strips the producer's paperwork and the second metadata carrier", () => {
-    const legacy = embedXmpMetadataInEps(eps(), META);
+    const converterEps = eps().replace("%%Title: sheet.eps", "%%Creator: Inkscape 1.3\n%%CreationDate: 2026-11-19T00:00:00Z\n%%Title: sheet.eps");
+    const legacy = embedXmpMetadataInEps(converterEps, META);
     expect(legacy).toContain("%%Creator:");
     expect(legacy).toContain("%%CreationDate:");
     expect(legacy).toContain("%ADO_ContainsXMP:");
     expect(legacy).toContain("%%BeginPhotoshop:");
-    expect(legacy).toContain('x:xmptk="IconSplitter"');
-    // ONE readable packet, plus the second copy hidden in the hex Photoshop block
+    expect(legacy).not.toContain("IconSplitter");
+    expect(legacy).not.toContain("x:xmptk");
     expect(packets(legacy)).toBe(1);
-    expect(legacy).toContain("% IconSplitter IPTC begin");
-    const clean = cleanEpsDocument(eps(), META);
+    const clean = cleanEpsDocument(converterEps, META);
     expect(clean).not.toContain("%%Creator");
     expect(clean).not.toContain("%%CreationDate");
     expect(clean).not.toContain("%ADO_");
@@ -118,9 +118,12 @@ describe("the clean switch on the package's EPS", () => {
     expect(verifyEpsDocument(epsText).ok).toBe(true);
   });
 
-  it("off: the converter's own EPS ships as written", async () => {
+  it("off: ships the two-carrier envelope while still stripping producer attribution (RULE 26)", async () => {
     outline();
     const pkg = await packageOf(sheetSvg(), { includeEps: true, expandText: true, includeJpeg: false, cleanExport: false }, SHEET_META);
-    expect(textOf(pkg, ".eps")).toContain("%%Creator");
+    const epsText = textOf(pkg, ".eps") as string;
+    expect(epsText).not.toContain("%%Creator");
+    expect(epsText).not.toContain("IconSplitter");
+    expect(epsText).toContain("%%BeginPhotoshop: 6");
   });
 });

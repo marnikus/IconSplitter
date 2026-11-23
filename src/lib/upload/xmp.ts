@@ -13,7 +13,7 @@ export function buildXmpPacket(meta: IconMetadata): string {
   const li = (text: string) => `<rdf:li xml:lang="x-default">${escapeXml(text)}</rdf:li>`;
   const tags = meta.tags.map((tag) => `<rdf:li>${escapeXml(tag)}</rdf:li>`).join("");
   return `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="IconSplitter">
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
  <rdf:RDF xmlns:rdf="${RDF_NS}">
   <rdf:Description rdf:about="" xmlns:dc="${DC_NS}">
    <dc:title><rdf:Alt>${li(meta.title)}</rdf:Alt></dc:title>

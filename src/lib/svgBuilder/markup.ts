@@ -21,7 +21,9 @@ export function fontFamily(face: TitleFace): string {
 }
 
 export function round(value: number): string {
-  return Number(value.toFixed(2)).toString();
+  if (!Number.isFinite(value)) return "0";
+  const r = Math.round(value * 10) / 10;
+  return String(Object.is(r, -0) ? 0 : r);
 }
 
 export function attr(value: string): string {

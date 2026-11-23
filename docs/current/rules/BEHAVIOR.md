@@ -1,6 +1,6 @@
 # Behaviour rules
 
-Canonical rules for this topic. Return to the [RULE 1–25 index](../AGENT_RULES.md) for the other rules.
+Canonical rules for this topic. Return to the [RULE 1–26 index](../AGENT_RULES.md) for the other rules.
 
 <a id="rule-1"></a>
 

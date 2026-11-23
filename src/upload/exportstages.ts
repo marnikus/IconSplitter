@@ -20,7 +20,7 @@ import type { StagePlan } from "../lib/upload/export";
 import type { RasterDeps } from "../lib/upload/raster";
 import { embedXmpMetadata } from "../lib/upload/jpeg";
 import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
-import { cleanEpsDocument } from "../lib/upload/epsclean";
+import { cleanEpsDocument, stripEpsProducerLines } from "../lib/upload/epsclean";
 import { enforceExportSvg } from "../lib/upload/clean";
 import { cleanSvgText } from "../lib/upload/svgclean";
 
@@ -137,12 +137,10 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
     title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
-    // Clean export (2026-11-19): the EPS is built from the cleaned SVG above and
-    // then loses the converter's own paperwork — one metadata carrier, no
-    // `%%Creator`/`%%CreationDate`/`%ADO_*`, no tool signature in the packet.
+    const producerFree = stripEpsProducerLines(eps.eps);
     art.epsText = ctx.settings.cleanExport
-      ? cleanEpsDocument(eps.eps, ctx.metadata)
-      : (ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata));
+      ? cleanEpsDocument(producerFree, ctx.metadata)
+      : (ctx.metadata === null ? producerFree : embedXmpMetadataInEps(producerFree, ctx.metadata));
     const checked = verifyEpsDocument(art.epsText);
     if (!checked.ok) {
       art.epsText = null;

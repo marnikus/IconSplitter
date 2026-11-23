@@ -72,11 +72,11 @@ describe("big icons over 2 × 2 cells (2026-11-23)", () => {
     const assets = ["a", "b"].map((id) => ({ id, base: id, suffix: "", label: id, category: "c", tags: [], svgPath: `${id}.svg`, svgName: `${id}.svg`,
       version: 1, fingerprint: id, metaPath: `${id}.json`, approved: true as const }));
     const doc = composeSheet({ config, layout, assets, placedIds: ["a", "b"], svgTexts: { a: svg, b: svg } });
-    const scaleOf = (id: string) => Number(new RegExp(`data-asset-id="${id}" data-approved="true" data-cell-index="[0-9]+"[^>]*scale\\(([\\d.]+)\\)`).exec(doc.svg)![1]);
+    const spanOf = (id: string) => Number(new RegExp(`data-asset-id="${id}" data-approved="true" data-cell-index="[0-9]+"[^>]*><path d="M[\\d.]+ [\\d.]+h([\\d.]+)`).exec(doc.svg)![1]);
     const widthOf = (id: string) => Number(new RegExp(`data-asset-id="${id}" data-approved="true" data-cell-index="[0-9]+"[^>]*stroke-width="([\\d.]+)"`).exec(doc.svg)![1]);
-    expect(scaleOf("a")).toBeGreaterThan(scaleOf("b") * 1.9);
-    expect(widthOf("a") * scaleOf("a")).toBeCloseTo(3, 1); // 3 artboard px
-    expect(widthOf("b") * scaleOf("b")).toBeCloseTo(config.icons.strokeWidth, 1);
+    expect(spanOf("a")).toBeGreaterThan(spanOf("b") * 1.9);
+    expect(widthOf("a")).toBeCloseTo(3, 1); // direct 3 artboard px (RULE 26)
+    expect(widthOf("b")).toBeCloseTo(config.icons.strokeWidth, 1);
     expect(gapStrips(config, layout).every((s) => !["x-0", "y-0"].includes(s.id))).toBe(true);
   });
 });

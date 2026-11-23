@@ -71,7 +71,7 @@ describe("agent documentation routes", () => {
 
   it("gives stable rule and invariant IDs one canonical definition each", () => {
     const rules = pages(resolve(current, "rules")).flatMap((path) => [...readFileSync(path, "utf8").matchAll(/^## RULE (\d+)\b/gm)].map((x) => Number(x[1])));
-    expect(rules.sort((a, b) => a - b)).toEqual(Array.from({ length: 25 }, (_, i) => i + 1));
+    expect(rules.sort((a, b) => a - b)).toEqual(Array.from({ length: 26 }, (_, i) => i + 1));
     const ids = pages(resolve(current, "sor/invariants")).flatMap((path) => [...readFileSync(path, "utf8").matchAll(/<a id="(i-\d+)"\s*\/?>/g)].map((x) => x[1]));
     expect(ids.length).toBeGreaterThan(50);
     expect(new Set(ids).size).toBe(ids.length);

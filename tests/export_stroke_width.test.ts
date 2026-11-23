@@ -69,9 +69,12 @@ describe("expanding strokes bakes the artboard's own pen into the outline", () =
     expect(out).not.toContain("stroke-width");
     expect(out).not.toContain("vector-effect");
     const pens = paintedWidths(svg, true).map((width) => width.local);
-    // Icon outlines come in cell order; the square's 2-unit edge moves out by pen/2.
-    const edges = [...out.matchAll(/<path[^>]*d="M2 ([\d.]+)/g)].map((match) => 2 - Number(match[1]));
-    expect(edges.length).toBe(pens.length);
-    edges.forEach((edge, index) => expect(edge).toBeCloseTo(pens[index] / 2, 2));
+    const origTops = [...svg.matchAll(/data-asset-id="[^"]+"[\s\S]*?<path d="M([\d.]+) ([\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+    expect(origTops.length).toBe(pens.length);
+    origTops.forEach((orig, index) => {
+      const match = new RegExp(`<path[^>]*d="M${orig.x} ([\\d.]+)`).exec(out);
+      expect(match).not.toBeNull();
+      expect(Number(match![1])).toBe(Math.round((orig.y - pens[index] / 2) * 10) / 10);
+    });
   });
 });

@@ -54,7 +54,7 @@ it("repairs legacy XMP-only EPS without rewriting the intact JPEG or SVG", async
   // itself ships the clean form), then strip its IPTC block: the file a reader
   // that only speaks IPTC-IIM sees as incomplete.
   const legacy = embedXmpMetadataInEps(eps, STOCK_TEST_META);
-  out.children.set("temporary.eps", new BinFile("temporary.eps", legacy.replace(/^% IconSplitter IPTC begin\n[\s\S]*?^% IconSplitter IPTC end\n/m, "")));
+  out.children.set("temporary.eps", new BinFile("temporary.eps", legacy.replace(/^%%BeginPhotoshop: 6\n[\s\S]*?^%%EndPhotoshop\n/m, "")));
   const jpg = await readBytesAt(root, "export/temporary.jpg");
   const repaired = await runExport({ ...args, record: first.record });
   expect(repaired.status).toBe("processed");

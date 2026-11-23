@@ -30,15 +30,26 @@ export function fillToolBlocks(record: ExportRecord, art: Artifacts, settings: U
   record.tools.eps.fixes = art.epsFixes;
   record.tools.eps.writer = art.epsWriter ?? prev?.tools.eps.writer ?? record.tools.eps.writer;
   record.tools.expand = { enabled: settings.expandStrokes, shapes: art.prepared?.ok ? art.prepared.strokesExpanded : 0 };
-  const artboard = artboardBlock(settings, art.prepared) ?? prev?.tools.artboard;
+  const artboard = artboardBlock(settings, art.prepared, art.optimizedSvg) ?? prev?.tools.artboard;
   if (artboard !== undefined) record.tools.artboard = artboard;
 }
 
-/** The shipped artboard: the viewBox px (3 decimals, as written), their megapixels, the passes it took. */
-export function artboardBlock(settings: UploadSettings, prepared: PrepareResult | null): ArtboardBlock | null {
+function shippedViewBoxSize(svg: string | null): { width: number; height: number } | null {
+  if (svg === null) return null;
+  const m = /\bviewBox=["']\s*[-+]?[\d.]+\s+[-+]?[\d.]+\s+([\d.]+)\s+([\d.]+)\s*["']/.exec(svg);
+  if (!m) return null;
+  const width = Number(m[1]), height = Number(m[2]);
+  return Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0 ? { width, height } : null;
+}
+
+/** The shipped artboard: the committed viewBox px, their megapixels, the passes it took. */
+export function artboardBlock(
+  settings: UploadSettings, prepared: PrepareResult | null, shippedSvg: string | null = null,
+): ArtboardBlock | null {
   if (prepared === null || !prepared.ok) return null;
-  const width = Number(fmt(prepared.fit.artW));
-  const height = Number(fmt(prepared.fit.artH));
+  const vb = shippedViewBoxSize(shippedSvg);
+  const width = vb?.width ?? Number(fmt(prepared.fit.artW));
+  const height = vb?.height ?? Number(fmt(prepared.fit.artH));
   const scaledTo = megapixelTargetOf(settings.artboard, settings.scaleToMegapixels, settings.artboardMegapixels);
   return { mode: settings.artboard.mode, width, height, megapixels: (width * height) / 1e6, scaledTo, passes: prepared.passes };
 }

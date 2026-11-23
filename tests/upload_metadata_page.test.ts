@@ -114,7 +114,7 @@ it("handles IPTC-only and XMP-only files without inventing a second metadata car
   const legacy = embedXmpMetadataInEps(eps, STOCK_TEST_META);
   const iptcOnly = legacy.replace(/<\?xpacket begin=[\s\S]*?<\?xpacket end=[^?]*\?>/, "");
   expect(readStockFile(new TextEncoder().encode(iptcOnly)).carriers).toEqual(["IPTC-IIM"]);
-  const xmpOnly = legacy.replace(/^% IconSplitter IPTC begin\n[\s\S]*?^% IconSplitter IPTC end\n/m, "");
+  const xmpOnly = legacy.replace(/^%%BeginPhotoshop: 6\n[\s\S]*?^%%EndPhotoshop\n/m, "");
   expect(readStockFile(new TextEncoder().encode(xmpOnly)).carriers).toEqual(["XMP"]);
   expect(() => readStockFile(new TextEncoder().encode(iptcOnly.replace(/^%%BeginPhotoshop:[\s\S]*?^%%EndPhotoshop/m, "")))).toThrow(/No complete/);
 });

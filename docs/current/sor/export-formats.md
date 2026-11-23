@@ -50,9 +50,11 @@ Five defects, all fixed and pinned:
   `optimizeSvg` records a real SVGO block, the expansions/rescale transform the
   composed sheet BEFORE packaging, `cleanExport` runs the clean pass (below) and
   `jpegMatchArtboard` decides the JPEG px.
-- The menu's preview items (Editable SVG, PNG 2×, clipboard) stay untouched
-  previews; **Export package** runs `exportSelectedArtboards` and names the
-  formats it will really carry (`SVG · JPEG · EPS (built-in …)`, `SVG off`).
+- The menu's Editable SVG, PNG 2× and Copy SVG markup also deliver clean,
+  attribution-free outputs (`cleanSheetSvg(solidPaint(doc.svg))` + accepted
+  metadata, RULE 26); **Export package** runs `exportSelectedArtboards` and
+  names the formats it will really carry (`SVG · JPEG · EPS (built-in …)`,
+  `SVG off`).
 
 ## Ownership (one row, one owner)
 
@@ -76,12 +78,14 @@ says so first (`builder-format-eps-note`) and names both fixes: tick **Expand
 text to fills** or pick the **Inkscape CLI** helper (`bld-eps-helper` reports
 live whether that machine can write it).
 
-## Stroke width, tracking and ink (2026-11-19)
+## Direct geometry, stroke width, tracking and ink (2026-11-19)
 
-Widths are authored in ARTBOARD px, but the cell `<g>` scales the icon's own
-viewBox into its cell, so the written `stroke-width` is that px ÷ the cell
-scale: 1 px stays 1 px in the SVG and the EPS. `vector-effect` is gone — only
-the browser honoured it, so the EPS painted width × scale.
+Placed cell and hero icons are baked directly into real artboard px (`svgAsset.ts`,
+`svgdirect.ts`, RULE 26) — never wrapped in `transform="translate(…) scale(…)"`
+and never compensated with `px ÷ scale`. Every coordinate, size, `viewBox` and
+`stroke-width` is written directly at ≤ 1 decimal place (`0.1` max, trailing `.0`
+stripped; positive `stroke-width`/`font-size` floored at `0.1`), so a `1.8 px`
+setting writes `stroke-width="1.8"` in the SVG and EPS with no `vector-effect`.
 
 Tracking is an em length (`0.025em` for `7/100 em`) and is read through
 `lib/upload/geom/length.ts` (em/rem/ex/ch/%, signed, px and unitless) — plain
@@ -94,38 +98,26 @@ the SVG, the JPEG and the EPS paint.
 
 ## Clean rule (2026-11-19)
 
-With `cleanExport` on, `prepareSheetSvg` runs the upload tab's own policy
-(`lib/upload/cleandom`) plus the sheet's final touches
-(`lib/upload/svgclean.ts`): every `data-*`/`class`/`aria-*` goes (asset
-ids, cell indexes, the config hash, approve flags), so do comments, the repeated
-`xmlns` of a stitched copy, any `<metadata>` that is not the tag list (ours read
-`<metadata>{"v":1,…}</metadata>`: prompt, model, source fingerprints) and float
-noise (`1.9992750000000001` → `1.999`). px, viewBox, geometry, Title, description
-and the DC tags survive; a raster `<image>` is refused by name.
-
-Then the tidy passes (`lib/upload/svgtidy.ts`) remove what is still
-machine-shaped and paints nothing: the dead `color="…"` beside an explicit
-stroke (the desktop-editor quirk — kept only while some `currentColor` still
-needs it), paint a child merely repeats from its group, values that ARE the SVG
-initial value (`stroke-linecap="butt"`, `fill-rule="nonzero"`, `text-anchor="start"`),
-the attribute-less `<g>` wrappers a cell-by-cell stitch leaves (`<g><g><text>`
-becomes `<text>`), empty containers, indentation-only text nodes, and
-`xlink:href` → the SVG 2 `href` plus the declaration that then dangles. `opacity`
-is never compared (per-element compositing, not inherited paint) and the paint
-pass stops at every reference subtree, where the `<use>` decides inheritance.
-Authored coordinates are NOT touched: a 0.05 grid (`x="18.75"`, `rx="1.4"`) and
-real arcs/rounded rects are what marks the file human, so only 4+ decimal values
-are rounded. Idempotent, and pinned as such. The upload chain runs this same
-pair (`keepSize: false`).
+Composed sheets omit `<desc>Generated with…</desc>`, `" — icon sheet"` and
+provenance `<metadata>` JSON (RULE 26). With `cleanExport` on, `prepareSheetSvg`
+and `cleanSvgText` (`lib/upload/cleandom`, `svgclean.ts`, `svgtidy.ts`,
+`svgdirect.ts`) strip `data-*`/`class`/`aria-*`, comments, duplicate `xmlns` and
+non-DC `<metadata>`, fold remaining `transform`s (including moved `<text>` and
+outlined text paths) into direct coordinates, drop dead `color`, collapse
+repeated/default presentation attributes and bare `<g>` wrappers, convert
+`xlink:href` → `href`, and round geometry/sizes/`viewBox`/`stroke-*` to ≤ 1
+decimal place (preserving CSS `em` tracking and `0..1` alpha/stop ratios).
+Idempotent, and pinned as such; the upload chain runs the same pair
+(`keepSize: false`).
 
 ## Rescale rule
 
-`factor = sqrt(mp · 10⁶ / (w · h))`; the root `width`/`height` become
-`round(w · factor)` / `round(h · factor)` and the `viewBox` is untouched, so
-every coordinate scales with the document. With `rescaleStrokes` off, each
-visible `stroke-width` is divided by the factor first — the stroke prints at
-the px it had before the rescale. A document without a readable px size or
-viewBox is refused by name, untouched.
+`factor = sqrt(mp · 10⁶ / (w · h))`; root `width`/`height`, `viewBox` and
+geometry rescale directly into real target coordinates rounded to ≤ 1 decimal
+place (`lib/upload/rescale.ts`, RULE 26). With `rescaleStrokes` on, strokes scale
+by `factor` (rounded to ≤ 1 decimal); with it off, `stroke-width` keeps its
+direct value instead of dividing by `factor`. A document without a readable px
+size or viewBox is refused by name, untouched.
 
 ## Expand-text rule
 

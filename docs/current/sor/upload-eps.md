@@ -6,20 +6,7 @@ Inherited caps/joins and forced endpoint modes: [stroke endpoints](upload-stroke
 
 ## The clean EPS (2026-11-19)
 
-`Clean the saved files` (Export settings, in both dialogs) governs the EPS too;
-unticking it restores the legacy two-carrier envelope below. The artwork is already clean — the
-EPS is written from the cleaned SVG copy, never from the raw source — and
-`lib/upload/epsclean.ts` then removes what a converter says about itself:
-`%%Creator`, `%%CreationDate`, `%%For`, `%%Copyright`, the `%ADO_*` flags, any
-foreign `%%BeginPhotoshop` block, and every packet but the one it re-derives.
-It keeps ONE carrier (the pdfmark stream) with no `x:xmptk="IconSplitter"`
-signature: Title, description and tags survive, nothing else does. The EPS 10
-markers (`%%BoundingBox`, `%%HiResBoundingBox`, `%%DocumentData`,
-`%%LanguageLevel`, Prolog/Setup, `%%EOF`) are untouched, and cleaning is
-byte-stable — `verifiedEpsArtwork` re-derives the envelope from the file alone.
-`verifyEpsMetadata` accepts either form and refuses a clean file that keeps a
-second copy; the legacy two-carrier envelope (XMP + Photoshop/IPTC) is still what
-the stock upload writes.
+No exported EPS ever carries `IconSplitter`, `x:xmptk` or converter `%%Creator` / `%%CreationDate` headers (RULE 26 — `epsdoc.ts`, `epsmetadata.ts`, `epsiptc.ts` use neutral `%BeginDocumentMetadata` / `MetadataDict_<id>` / `MetadataStream_<id>` and bare `%%BeginPhotoshop: 6` markers, while still stripping legacy `% IconSplitter …` blocks from older files). `Clean the saved files` governs carrier count: on (default), `lib/upload/epsclean.ts` strips foreign `%ADO_*` / `%%For` / `%%Copyright` / `%%BeginPhotoshop` blocks and keeps ONE neutral pdfmark XMP stream; off, the two-carrier envelope (neutral pdfmark XMP + `%%BeginPhotoshop` IRB) is written. EPS 10 markers (`%%BoundingBox`, `%%HiResBoundingBox`, `%%DocumentData`, `%%LanguageLevel`, Prolog/Setup, `%%EOF`) stay intact, and `verifiedEpsArtwork` re-derives the envelope byte-identically.
 
 ## Converter choices
 

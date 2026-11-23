@@ -33,15 +33,16 @@ describe("cleanSheetSvg", () => {
     expect(svg).not.toMatch(LONG_DECIMAL);
   });
 
-  it("declares the namespace once — the stitched copy's repeated xmlns goes", () => {
-    const composed = sheetSvg();
-    expect((composed.match(/xmlns=/g) ?? []).length).toBeGreaterThan(1); // every copied child carries it
-    const svg = cleanSheetSvg(composed).svg;
+  it("declares the namespace once — repeated child xmlns declarations go", () => {
+    const stitched = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10" width="10" height="10"><g xmlns="http://www.w3.org/2000/svg"><path xmlns="http://www.w3.org/2000/svg" d="M0 0h1"/></g></svg>';
+    expect((stitched.match(/xmlns=/g) ?? []).length).toBeGreaterThan(1);
+    const svg = cleanSheetSvg(stitched).svg;
     expect((svg.match(/xmlns=/g) ?? []).length).toBe(1);
+    expect((sheetSvg().match(/xmlns=/g) ?? []).length).toBe(1);
     expect(svg).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
   });
 
-  it("keeps the picture, the artboard's px and its Title/description", () => {
+  it("keeps the picture, the artboard's px and its Title without generator <desc>", () => {
     const composed = sheetSvg({ titleTracking: 7 });
     const { svg } = cleanSheetSvg(composed);
     expect(viewBox(svg)).toBe(viewBox(composed));
@@ -49,7 +50,7 @@ describe("cleanSheetSvg", () => {
     expect(svg).toMatch(/\bwidth="1080"/);
     expect(svg).toMatch(/\bheight="660"/);
     expect(svg).toMatch(/<title>[^<]+<\/title>/);
-    expect(svg).toMatch(/<desc>[^<]+<\/desc>/);
+    expect(svg).not.toMatch(/Generated with/i);
     // the pen and the tracking are content, not paperwork
     expect(svg).toMatch(/stroke-width="[\d.]+"/);
     expect(svg).toMatch(/letter-spacing="0\.025em"/);
@@ -109,9 +110,10 @@ describe("the tidy pass: what a stitched sheet still shows", () => {
     const svg = cleanSheetSvg(composed).svg;
     expect(svg).not.toMatch(/<g>/);
     expect(svg).not.toMatch(/<g><g>/);
-    expect(drawables(svg)).toBe(drawables(composed)); // nothing drawn was lost with them
-    expect(svg).toMatch(/<g transform="translate\([^"]+\) scale\([^"]+\)"/); // a real group stays
-    expect(svg).toMatch(/<text[^>]*>ICON<\/text>/); // and the text is no longer triple-wrapped
+    expect(drawables(svg)).toBe(drawables(composed));
+    expect(svg).toMatch(/<g fill="none"[^>]*stroke-width="1\.4"/);
+    expect(svg).not.toMatch(/\btransform=/);
+    expect(svg).toMatch(/<text[^>]*>ICON<\/text>/);
   });
 
   it("drops empty containers, empty embeds and indentation — bytes that draw nothing", () => {
@@ -131,16 +133,14 @@ describe("the tidy pass: what a stitched sheet still shows", () => {
     expect(svg).not.toContain("xlink");
   });
 
-  it("leaves the author's coordinates alone — the 0.05 grid is what says a human drew it", () => {
-    // The forensic read: every value ends in .0/.05/.1/.15 (a twip grid) and the
-    // primitives are real arcs and rounded rects, not traced beziers. Rounding
-    // THAT would be the machine move, so only 4+-decimal values are touched.
+  it("rounds geometry and stroke values to at most 1 decimal place while keeping arcs and rounded rects", () => {
     const d = "M18.7 13.5V8.25a5.1 5.1 0 0 1 5.1-5.1h7.25a1.6 1.6 0 0 1 0 3.2h-7.3q-1.85 0-1.85 1.85v5.3";
     const svg = cleanSheetSvg(wrap(`<path d="${d}" stroke-width="1.9992750000000001"/><rect width="5.05" height="5" x="18.75" y="28.2" rx="1.4"/>`)).svg;
-    expect(svg).toContain(`d="${d}"`);
+    expect(svg).toContain('d="M18.7 13.5V8.3a5.1 5.1 0 0 1 5.1 -5.1h7.3a1.6 1.6 0 0 1 0 3.2h-7.4q-1.8 0 -1.8 1.8v5.3"');
     expect(svg).toContain('rx="1.4"');
-    expect(svg).toContain('width="5.05"');
-    expect(svg).toContain('stroke-width="1.999"'); // the float noise is not a twip
+    expect(svg).toContain('width="5.1"');
+    expect(svg).toContain('x="18.8"');
+    expect(svg).toContain('stroke-width="2"');
   });
 
   it("is idempotent: cleaning a cleaned file changes nothing", () => {
@@ -162,9 +162,11 @@ describe("the clean switch on a saved package", () => {
     expect(svg).not.toMatch(/<g>/);
   });
 
-  it("off: the same sheet keeps its hooks — the box is what gates the pass", async () => {
+  it("off: skips the tidy pass while still stripping internal data-* preview hooks (RULE 26)", async () => {
     const pkg = await packageOf(sheetSvg(), { cleanExport: false });
-    expect(textOf(pkg, ".svg")).toContain("data-config-fingerprint");
+    const raw = textOf(pkg, ".svg") as string;
+    expect(raw).not.toContain("data-config-fingerprint");
+    expect(raw).toMatch(/\scolor="/);
   });
 
   it("the EPS ships from the cleaned copy, and the artboard's tx still hold", async () => {
