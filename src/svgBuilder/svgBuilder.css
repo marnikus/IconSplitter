@@ -33,6 +33,10 @@
 .bld-eyebrow { color: var(--v2-muted-2); font-size: 9px; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; }
 .bld-live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--v2-green); vertical-align: 1px; }
 .bld-header-index { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+/* STYLES in the pinned header (2026-11-23): its label and dropdown on ONE row, like the controls beside it. */
+.bld-header-index .multi-select { display: inline-flex; align-items: center; gap: 6px; }
+.bld-header-index .multi-select > .svg-label { margin-bottom: 0; white-space: nowrap; }
+.bld-header-index .multi-select-trigger { width: auto; }
 .bld-header-actions { margin-left: auto; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .bld-undo { display: flex; gap: 4px; margin-right: 4px; }
 .bld-meta-state { margin-left: 6px; color: var(--v2-muted); font-size: 9px; text-transform: uppercase; }

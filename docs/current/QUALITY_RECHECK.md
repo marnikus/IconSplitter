@@ -6112,3 +6112,8 @@ strictly inside).
 
 - `TEMPLATE_LIMIT` (60) removed from `parseTemplates` and `saveAsNew`; storage is the only bound (localStorage holds thousands of looks).
 - Measured: `svg_builder_template_count` 1/1 (failed at 60 before the change); template suites 27/27; tsc PASS.
+
+## 2026-11-23 — SVG builder: STYLES label and dropdown on one row
+
+- Header-scoped CSS (`.bld-header-index .multi-select` inline-flex, label without its stacked margin); the shared MultiSelect elsewhere is unchanged.
+- Measured: `svg_builder_styles_row` 1/1 (fails without the rules); not checked in a real browser.
