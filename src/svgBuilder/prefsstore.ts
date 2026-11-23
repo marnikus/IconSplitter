@@ -1,5 +1,7 @@
 // prefsstore.ts — display-only builder preferences, validated on read.
 import { isRecord } from "../lib/isrecord";
+import type { Multi } from "../lib/multifilter";
+import { ALL_STYLES, parseStyleFilter } from "../lib/svgBuilder/iconstyles";
 import { clampZoom } from "../lib/zoom";
 import { readKey, writeKey } from "../state/safestorage";
 
@@ -29,9 +31,11 @@ export interface BuilderPrefs {
   /** Red layout guides over the artboard, and their opacity 1–100 (2026-11-13). */
   showGuides: boolean;
   guideOpacity: number;
+  /** Which icon styles may be in sheets (2026-11-23, lib/svgBuilder/iconstyles.ts): "all", one, or several. */
+  styles: Multi<string>;
 }
 
-export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true, showGuides: false, guideOpacity: 70 };
+export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true, showGuides: false, guideOpacity: 70, styles: ALL_STYLES };
 export const META_HEIGHT = { min: 160, max: 1200 } as const;
 const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "custom"];
 
@@ -50,6 +54,7 @@ export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
     showGuides: raw.showGuides === true,
     guideOpacity: Math.round(num(raw.guideOpacity, 70, 1, 100)),
     metaHeight: typeof raw.metaHeight === "number" ? num(raw.metaHeight, 0, META_HEIGHT.min, META_HEIGHT.max) || null : null,
+    styles: parseStyleFilter(raw.styles),
   };
 }
 

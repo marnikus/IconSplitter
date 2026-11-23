@@ -4,7 +4,7 @@ The seventh Workbench mode turns already-created, `.svg.json`-approved icons int
 
 ## Layout
 
-Folder bar (Open folder, Rescan, scope, approved count, audit, path) → **metadata widget** (prompt + Gemini, below) → header (`COLLECTION / 01 · LIVE`, sheet title, **◈ Icons indexing** + indexed chip / progress + Cancel beside it, Undo/Redo on the global timeline, `SEED ####` re-roll, Prompt brief, Sheet metadata, Export ▾) → three columns: **Icon library** | **stage** | **Customize · live** → **Saved templates** window. The panel uses only its own `bld-*` layout classes — never another tab's layout class (the borrowed `.svg-panel` grid caused the stray-text bug).
+Folder bar (Open folder, Rescan, scope, approved count, audit, path) → **metadata widget** (prompt + Gemini, below) → header (`COLLECTION / 01 · LIVE`, sheet title, **◈ Icons indexing** + chip / progress + Cancel, **STYLES** ([icon styles](svg-builder-styles.md)), Undo/Redo (global timeline), `SEED ####`, Prompt brief, Sheet metadata, Export ▾) → three columns: **Icon library** | **stage** | **Customize · live** → **Saved templates** window. The panel uses only its own `bld-*` layout classes — never another tab's (the borrowed `.svg-panel` grid caused the stray-text bug).
 
 ## Behaviour
 

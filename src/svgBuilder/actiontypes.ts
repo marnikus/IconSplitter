@@ -19,6 +19,8 @@ import type { DirHandleLike } from "../lib/fs";
 export interface BuilderActionContext {
   model: BuilderModel;
   assets: readonly BuilderIconAsset[];
+  /** The icons the STYLES filter allows in sheets (2026-11-23): every pick draws from these. */
+  pickable: readonly BuilderIconAsset[];
   visibleAssets: readonly BuilderIconAsset[];
   placedIds: readonly string[];
   repository: AssetRepository | null;
@@ -66,6 +68,8 @@ export interface BuilderActions {
   dropAssets: (ids: readonly string[]) => void;
   /** Show / hide the "used N times" index on the artboard's icons (display-only). */
   toggleUsage: (show: boolean) => void;
+  /** STYLES (2026-11-23): which icon styles may be in sheets; icons of an unchecked style leave the sheet (one undo step). */
+  setStyleFilter: (next: import("../lib/multifilter").Multi<string>) => void;
   /** Show / hide the red layout guides, and their opacity 1–100 (display-only). */
   toggleGuides: (show: boolean) => void;
   setGuideOpacity: (percent: number) => void;

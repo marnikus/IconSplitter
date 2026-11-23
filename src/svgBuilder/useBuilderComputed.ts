@@ -2,6 +2,8 @@
 // ids to the library, layout, repository and the composition that gets exported.
 import { useEffect, useMemo } from "react";
 import { categoriesOf, filterAssets, profilesOf } from "../lib/svgBuilder/assets";
+import { ALL_STYLES, allowedAssets, styleLabel, styleOptions } from "../lib/svgBuilder/iconstyles";
+import { multiText } from "../lib/multifilter";
 import { computeLayout } from "../lib/svgBuilder/layout";
 import { composeSheet } from "../lib/svgBuilder/compose";
 import type { BuilderIconAsset, BuilderProfile, SheetDocument, SheetLayout } from "../lib/svgBuilder/types";
@@ -24,7 +26,13 @@ export interface BuilderComputed extends IconIndexView {
   templateSampleIds: readonly string[];
   /** Every library icon id (pictures wait only for icons the library has). */
   knownIds: ReadonlySet<string>;
+  /** Every approved icon (names, saved artboards, pruning) — never narrowed by the style filter. */
   assets: readonly BuilderIconAsset[];
+  /** The icons the STYLES filter allows in sheets (2026-11-23): what the library lists and every pick draws from. */
+  pickable: readonly BuilderIconAsset[];
+  /** The STYLES dropdown's [value, label] options, and what it says now. */
+  styleOptions: ReadonlyArray<readonly [string, string]>;
+  styleSummary: string;
   visibleAssets: readonly BuilderIconAsset[];
   categories: readonly string[];
   profiles: readonly BuilderProfile[];
@@ -38,14 +46,15 @@ export function useBuilderComputed(
   model: BuilderModel, placedIds: readonly string[], patch: (value: Partial<BuilderModel>) => void,
 ): BuilderComputed {
   const assets = useMemo(() => model.discovery?.assets ?? [], [model.discovery]);
+  const styles = useStyleFilter(assets, model.prefs.styles);
   const categories = useMemo(() => categoriesOf(assets), [assets]);
   const profiles = useMemo(() => profilesOf(assets), [assets]);
-  const visibleAssets = useMemo(() => filterAssets(assets, model.listView.query, model.listView.category),
-    [assets, model.listView.query, model.listView.category]);
+  const visibleAssets = useMemo(() => filterAssets(styles.pickable, model.listView.query, model.listView.category),
+    [styles.pickable, model.listView.query, model.listView.category]);
   const layout = useMemo(() => computeLayout(model.config), [model.config]);
   const repository = useMemo(() => model.root === null ? null : createAssetRepository(model.root, assets),
     [model.root, assets]);
-  const { document, templateSampleIds } = useStageDocument({ model, placedIds, patch, assets, layout, repository });
+  const { document, templateSampleIds } = useStageDocument({ model, placedIds, patch, assets, sample: styles.pickable, layout, repository });
   const auditLine = useMemo(() => model.discovery === null ? "No approved assets scanned yet"
     : builderAuditLine(model.discovery), [model.discovery]);
   const indexView = useIconIndex(assets, model.discovery?.index, { placed: placedIds, locked: model.lockedIds, textWeight: model.recipe.textWeight });
@@ -53,12 +62,20 @@ export function useBuilderComputed(
   const pendingUse = useMemo(() => pendingOf(model.artboards.map((a) => (a.id === model.editingArtboardId ? { ...a, placedIds: [...placedIds] } : a))),
     [model.artboards, model.editingArtboardId, placedIds]);
   const knownIds = useMemo(() => new Set(assets.map((a) => a.id)), [assets]);
-  return { assets, visibleAssets, categories, profiles, layout, repository, document, auditLine, pendingUse, templateSampleIds, knownIds, ...indexView };
+  return { assets, ...styles, visibleAssets, categories, profiles, layout, repository, document, auditLine, pendingUse, templateSampleIds, knownIds, ...indexView };
+}
+
+/** The STYLES filter over the library (2026-11-23): the allowed icons, the dropdown's options and its summary. */
+function useStyleFilter(assets: readonly BuilderIconAsset[], want: BuilderModel["prefs"]["styles"]) {
+  const pickable = useMemo(() => allowedAssets(assets, want), [assets, want]);
+  const options = useMemo(() => styleOptions(assets, want), [assets, want]);
+  const styleSummary = useMemo(() => multiText(want, ALL_STYLES, styleLabel) || "All styles", [want]);
+  return { pickable, styleOptions: options, styleSummary };
 }
 
 interface StageArgs {
   model: BuilderModel; placedIds: readonly string[]; patch: (value: Partial<BuilderModel>) => void;
-  assets: readonly BuilderIconAsset[]; layout: SheetLayout; repository: AssetRepository | null;
+  assets: readonly BuilderIconAsset[]; sample: readonly BuilderIconAsset[]; layout: SheetLayout; repository: AssetRepository | null;
 }
 
 /**
@@ -66,11 +83,11 @@ interface StageArgs {
  * sample's) and the stage's composed sheet — recomposed only when the stage's
  * own icons change (2026-11-15, performance).
  */
-function useStageDocument({ model, placedIds, patch, assets, layout, repository }: StageArgs) {
+function useStageDocument({ model, placedIds, patch, assets, sample, layout, repository }: StageArgs) {
   const realIds = useMemo(() => placedOnly(placedIds), [placedIds]);
   const shownIcons = useMemo(() => visibleArtboards(model).flatMap(artboardIcons), [model.templates, model.templateSel, model.artboards]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Template pictures draw a STABLE sample of the library: changing the stage's icons never redraws them all.
-  const templateSampleIds = useMemo(() => (model.templates.length === 0 ? [] : assets.slice(0, TEMPLATE_SAMPLE).map((a) => a.id)), [assets, model.templates.length]);
+  // Template pictures draw a STABLE sample of the (style-allowed) library: changing the stage's icons never redraws them all.
+  const templateSampleIds = useMemo(() => (model.templates.length === 0 ? [] : sample.slice(0, TEMPLATE_SAMPLE).map((a) => a.id)), [sample, model.templates.length]);
   const stageIds = useMemo(() => withHero(realIds, model.config.banner.heroIconId), [realIds, model.config.banner.heroIconId]);
   const needed = useMemo(() => [...new Set([...stageIds, ...shownIcons, ...templateSampleIds])], [stageIds, shownIcons, templateSampleIds]);
   useLoadSvgTexts(repository, needed, model.svgTexts, patch);
