@@ -31,7 +31,7 @@ export function useSvgBuilder(): BuilderApi {
   const actions = useBuilderActions({ model, computed, boot, slice, hist, patch });
   useAutoPlacement(actions, computed.assets, computed.layout.capacity);
   useIconEditBinding(model, computed, patch);
-  useArtboardUndo(model, actions, patch);
+  useArtboardUndo(model, actions);
   useSheetJsonSync(model, slice.checked, actions);
   useAutoRegister(model, actions);
   return {

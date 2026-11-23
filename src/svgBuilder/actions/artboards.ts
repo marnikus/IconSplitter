@@ -7,22 +7,23 @@
 // one random icon and the template's sample words (startpick.ts).
 import { applyRowGesture, setChecked as setCheckedIds, toggleChecked, type RowSelection, type SelectIntent } from "../../lib/reviewselect";
 import { ARTBOARD_LIMIT, artboardConfig, artboardsWithout, newArtboard, type FinalArtboard } from "../../lib/svgBuilder/artboards";
+import { addSides } from "../../lib/svgBuilder/removal";
 import { cleanTemplateName } from "../../lib/svgBuilder/templates";
 import { emptySlotFor, placedOnly } from "../../lib/svgBuilder/slots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
 import { blockLeave } from "./leaveguard";
-import { editTemplate } from "./templates";
+import { editTemplate, showTemplate } from "./templates";
 import { saveSheetConfig } from "../configstore";
 import { visibleArtboards } from "../artboardview";
 import { commitConfig, prefs } from "./config";
 import { startIcons } from "./startpick";
-import { dropArtboardFolders, seedArtboardFolder } from "./sheetexport";
+import { seedArtboardFolder } from "./sheetexport";
 import { artboardFromStage, openArtboardOf } from "../artboarddraft";
 
 type ArtboardActions = Pick<BuilderActions,
   "templateGesture" | "toggleTemplateCheck" | "setTemplateChecks" | "addArtboard" | "artboardGesture" | "toggleArtboardCheck"
-  | "setArtboardChecks" | "renameArtboard" | "removeArtboards" | "closeArtboard" | "resetArtboardLook" | "openArtboard" | "saveArtboard" | "resetArtboard" | "showArtboard">;
+  | "setArtboardChecks" | "renameArtboard" | "closeArtboard" | "resetArtboardLook" | "openArtboard" | "saveArtboard" | "resetArtboard" | "showArtboard">;
 
 export function artboardActions(get: () => BuilderActionContext): ArtboardActions {
   return {
@@ -34,7 +35,6 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
     toggleArtboardCheck: (id) => { const c = get(); c.dispatch({ artboardSel: { ...c.model.artboardSel, checked: toggleChecked(c.model.artboardSel.checked, id) } }); },
     setArtboardChecks: (ids, on) => { const c = get(); c.dispatch({ artboardSel: { ...c.model.artboardSel, checked: setCheckedIds(c.model.artboardSel.checked, ids, on) } }); },
     renameArtboard: (id, name) => renameArtboard(get(), id, name),
-    removeArtboards: (ids) => { const gone = get().model.artboards.filter((a) => ids.includes(a.id)); removeArtboards(get(), ids); void dropArtboardFolders(get, gone); },
     closeArtboard: () => get().dispatch({ editingArtboardId: null }),
     resetArtboardLook: (id) => resetArtboardLook(get(), id),
     saveArtboard: () => saveArtboard(get()),
@@ -44,9 +44,10 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
   };
 }
 
-/** Add / remove as ONE undo step (2026-11-16): the whole list before and after. */
-function recordArtboards(ctx: BuilderActionContext, before: readonly FinalArtboard[], after: readonly FinalArtboard[], label: string): void {
-  ctx.hist?.push({ type: "builderArtboards", label, origin: "svgBuilder", ids: ["artboards"], before: { artboards: before }, after: { artboards: after } });
+/** ＋ Artboard as ONE undo step (2026-11-16); since 2026-11-22 only that artboard is recorded, so undo never rewinds other saves. */
+function recordAdd(ctx: BuilderActionContext, made: FinalArtboard, label: string): void {
+  const { before, after } = addSides({ templates: ctx.model.templates, artboards: ctx.model.artboards }, made);
+  ctx.hist?.push({ type: "builderArtboards", label, origin: "svgBuilder", ids: ["artboards"], before, after });
 }
 
 function storeArtboards(ctx: BuilderActionContext, artboards: readonly FinalArtboard[]): void {
@@ -83,7 +84,7 @@ export function addArtboard(ctx: BuilderActionContext, templateId: string, guard
   const capacity = template.config.grid.columns * template.config.grid.rows;
   const created = newArtboard(template, ctx.model.artboards, { now: new Date().toISOString(), id: artboardId(), placedIds: startIcons(ctx, capacity) });
   storeArtboards(ctx, [...ctx.model.artboards, created]);
-  recordArtboards(ctx, ctx.model.artboards, [...ctx.model.artboards, created], `Add artboard “${created.name}”`);
+  recordAdd(ctx, created, `Add artboard “${created.name}”`);
   const checked = ctx.model.templateSel.checked;
   ctx.dispatch({ templateSel: { ...ctx.model.templateSel, active: templateId, checked: checked.length > 0 && !checked.includes(templateId) ? [...checked, templateId] : checked } });
   openArtboard(ctx, created);
@@ -148,10 +149,14 @@ function resetArtboard(ctx: BuilderActionContext): void {
   ctx.say(`Artboard “${open.name}” back to what is saved`);
 }
 
-/** After undo / redo took the open artboard away: that artboard (no leave question — the gone one cannot be saved), else its template. */
+/**
+ * After undo / redo took the open artboard away: that artboard (no leave question
+ * — the gone one cannot be saved), else its template, shown without an undo step
+ * of its own (2026-11-22: a step pushed while undoing would cut the redo branch).
+ */
 function showArtboard(ctx: BuilderActionContext, id: string | null, templateId: string | null): void {
   if (id !== null) return openArtboardRow(ctx, id);
-  if (templateId !== null && ctx.model.templates.some((t) => t.id === templateId)) return editTemplate(ctx, templateId, false);
+  if (templateId !== null && ctx.model.templates.some((t) => t.id === templateId)) return showTemplate(ctx, templateId);
   ctx.dispatch({ editingArtboardId: null });
 }
 
@@ -192,32 +197,3 @@ function renameArtboard(ctx: BuilderActionContext, id: string, name: string): vo
   storeArtboards(ctx, ctx.model.artboards.map((a) => (a.id === id ? { ...a, name: clean, updated: new Date().toISOString() } : a)));
 }
 
-function removeArtboards(ctx: BuilderActionContext, ids: readonly string[]): void {
-  const drop = new Set(ids);
-  const gone = ctx.model.artboards.filter((a) => drop.has(a.id));
-  if (gone.length === 0) return ctx.say("No artboard selected", true);
-  storeArtboards(ctx, ctx.model.artboards.filter((a) => !drop.has(a.id)));
-  recordArtboards(ctx, ctx.model.artboards, ctx.model.artboards.filter((a) => !drop.has(a.id)), gone.length === 1 ? `Remove artboard “${gone[0].name}”` : `Remove ${gone.length} artboards`);
-  ctx.dispatch(selectionWithout(ctx, drop));
-  ctx.say(gone.length === 1 ? `Artboard “${gone[0].name}” removed` : `${gone.length} artboards removed`);
-  const open = ctx.model.editingArtboardId;
-  if (open !== null && drop.has(open)) showArtboard(ctx, neighbourOf(ctx.model.artboards, open, drop), gone.find((a) => a.id === open)?.templateId ?? null);
-}
-
-/** The selection (and the open artboard) without the removed artboards. */
-function selectionWithout(ctx: BuilderActionContext, drop: ReadonlySet<string>): Partial<BuilderActionContext["model"]> {
-  const sel = ctx.model.artboardSel, open = ctx.model.editingArtboardId;
-  return {
-    artboardSel: { checked: sel.checked.filter((id) => !drop.has(id)), active: sel.active !== null && drop.has(sel.active) ? null : sel.active, anchor: null },
-    ...(open !== null && drop.has(open) ? { editingArtboardId: null } : {}),
-  };
-}
-
-/** The artboard to show after the open one is removed: the one before it of its template, else the next (2026-11-16). */
-function neighbourOf(all: readonly FinalArtboard[], open: string, drop: ReadonlySet<string>): string | null {
-  const templateId = all.find((a) => a.id === open)?.templateId;
-  const mine = all.filter((a) => a.templateId === templateId);
-  const at = mine.findIndex((a) => a.id === open);
-  const before = mine.slice(0, at).reverse().find((a) => !drop.has(a.id));
-  return (before ?? mine.slice(at + 1).find((a) => !drop.has(a.id)))?.id ?? null;
-}

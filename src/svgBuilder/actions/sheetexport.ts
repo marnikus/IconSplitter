@@ -21,7 +21,6 @@ import { buildSheetPackage } from "../sheetpackage";
 import { writeArtboardSeed, writeSheetExport, writeSheetMetadata, type SheetMetaFile } from "../sheetwriter";
 import { recordUse } from "../usagestore";
 import { writeTemplateFolder } from "./templatefolder";
-import { probePath } from "../../lib/fs";
 import { sheetsRoot } from "./sheetsroot";
 import { writeSheetJson } from "./sheetjson";
 import { svgTextsFor } from "./artboardmeta";
@@ -146,22 +145,6 @@ export async function seedArtboardFolder(get: () => BuilderActionContext, id: st
     get().say(`Artboard folder not written — ${error instanceof Error ? error.message : "write failed"}`, true);
     return null;
   }
-}
-
-/** Removing artboards (2026-11-16) deletes their own folders under _artboard_sheets too; failures are reported. */
-export async function dropArtboardFolders(get: () => BuilderActionContext, gone: readonly FinalArtboard[]): Promise<void> {
-  const root = sheetsRoot(get(), true);
-  if (root === null) return;
-  const failed: string[] = [];
-  for (const a of gone) {
-    if (a.folder === null || !a.folder.startsWith("_artboard_sheets/")) continue;
-    const cut = a.folder.lastIndexOf("/");
-    try {
-      const parent = await probePath(root, a.folder.slice(0, cut));
-      if (parent?.removeEntry !== undefined) await parent.removeEntry(a.folder.slice(cut + 1), { recursive: true });
-    } catch { failed.push(a.name); }
-  }
-  if (failed.length > 0) get().say(`Folder not deleted for ${failed.join(", ")} — remove it in Explorer`, true);
 }
 
 /** After an artboard's metadata is generated: metadata.json + preview.png in its folder (the folder is created). */

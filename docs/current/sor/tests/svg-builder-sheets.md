@@ -1,0 +1,12 @@
+# Tests — SVG builder templates, artboards and their folders
+
+Back to the [builder test index](svg-builder.md) and the contracts: [templates & presets](../svg-builder-presets.md), [removal and undo](../svg-builder-editing.md#remove-and-undo). Real modules, in-memory folder fakes and happy-dom; no provider call.
+
+| Suite | Pins |
+|---|---|
+| `tests/svg_builder_templates.test.tsx` | saved templates: look-only (words/hero kept), generated + numbered names, validated list, dashed preview cells; through Workbench save → rename → open (one undo step) → save back → save as new → remove; indexing controls in the header; text placement (marked, moved, padded, clamped, kept by templates), double-click edit on the artboard (save, Escape, one undo), template picture zoom |
+| `tests/svg_builder_artboards.test.tsx` | artboards: names, template look + own words, pending use, validated list; add → empty → fill → written back, switching keeps each artboard's icons/words, multi-template groups, Shift/Ctrl gestures, bulk remove, key required for metadata, export saves use once per artboard beside the SVG and pending use on tiles; ✕ Remove artboard's folder moves out and comes back with Undo, out again with Redo |
+| `tests/svg_builder_remove.test.tsx` | removal through Workbench, at once and as ONE undo step (2026-11-22): a template with its artboards, its folder moved whole into `_artboard_sheets/.removed versions`; Undo restores lists, folders and an empty trash, Redo removes again; the removed template on the stage gives way to the one left and one Undo brings it back; undoing never rewinds a template saved after the removal; emptied date folders cleared and made again; removed artboards leave the checks; bulk artboard removal keeps the template folder |
+| `tests/svg_builder_removal_plan.test.ts` | the pure plan: trash stamp and names, sheet-folder paths only, a template's outer folder (older-day homes too), distinct names, artboards alone, kept folders never moved, labels and toasts; steps as deltas (out / back at its place / moves) applied to lists changed meanwhile, an artboard only with its template, older whole-list steps, ＋ Artboard sides, timeline round trip, junk refused |
+| `tests/svg_builder_register.test.ts` | hand-added template / artboard folders found at any depth and registered once; metadata.json read; the `.removed versions` trash never registered |
+| `tests/svg_builder_sheet_folders.test.ts` | template and artboard folder names, homes, variants and export stems |

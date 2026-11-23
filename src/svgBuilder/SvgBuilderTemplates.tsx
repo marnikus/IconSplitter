@@ -80,7 +80,8 @@ function TemplateBlock({ b, template }: { b: BuilderApi; template: SheetTemplate
     <div className="bld-template-foot">
       <span className="bld-template-facts">{templateFacts(template.config)}</span>
       <button type="button" className="svg-btn tiny" data-testid={`builder-template-remove-${template.id}`}
-        onClick={() => b.actions.removeTemplate(template.id)} aria-label={`Remove ${template.name}`} title="Remove this template">✕</button>
+        onClick={() => b.actions.removeTemplate(template.id)} aria-label={`Remove ${template.name}`}
+        title="Remove this template with its artboards — its folder moves to _artboard_sheets/.removed versions; Undo brings it all back">✕</button>
     </div>
   </article>;
 }

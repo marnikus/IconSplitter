@@ -12,7 +12,7 @@ import { newTemplate, type SheetTemplate } from "../../lib/svgBuilder/templates"
 import { newArtboard, type FinalArtboard } from "../../lib/svgBuilder/artboards";
 import { overridesOf } from "../../lib/svgBuilder/lookoverrides";
 import type { BuilderIconAsset } from "../../lib/svgBuilder/types";
-import { probePath, readTextAt, type DirHandleLike } from "../../lib/fs";
+import { probePath, readTextAt, TRASH_DIR, type DirHandleLike } from "../../lib/fs";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
 import { saveArtboards } from "../artboardstore";
@@ -24,9 +24,10 @@ export const AUTO_REGISTER_KEY = "iconSplitter.builder.autoRegister.v1";
 export interface FoundArtboard { folder: string; sheet: string | null; meta: string | null }
 export interface FoundTemplate { folder: string; json: string; artboards: FoundArtboard[] }
 
+/** Sub-folders by name — never the `.removed versions` trash, whose folders wait for an undo (2026-11-22). */
 const subdirs = async (dir: DirHandleLike): Promise<Array<[string, DirHandleLike]>> => {
   const out: Array<[string, DirHandleLike]> = [];
-  for await (const [name, h] of dir.entries()) if (h.kind === "directory") out.push([name, h as DirHandleLike]);
+  for await (const [name, h] of dir.entries()) if (h.kind === "directory" && name !== TRASH_DIR) out.push([name, h as DirHandleLike]);
   return out.sort((a, b) => a[0].localeCompare(b[0]));
 };
 

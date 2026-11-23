@@ -487,16 +487,17 @@ describe("final artboards — the list under the templates", () => {
     const a2Dir = (a2 as unknown as { folder: string }).folder;
     expect(dirOf(a2Dir)).toBeDefined();
     await click("builder-editing-remove-artboard"); // the open one (a2)
-    await waitUntil(() => dirOf(a2Dir) === undefined, "its folder goes with it (2026-11-16)");
+    await waitUntil(() => dirOf(a2Dir) === undefined, "its folder goes with it (2026-11-16) — into .removed versions (2026-11-22)");
     expect(savedArtboards().map((a) => a.id)).toEqual([a1.id]);
     expect(q("builder-editing")?.textContent).toContain(a1.name); // the stage moves to a1 — no dead view
-    await click("builder-undo"); // the removal comes back, whole
-    await waitUntil(() => savedArtboards().length === 2, "removal undone");
+    await click("builder-undo"); // the removal comes back, whole — its folder too (2026-11-22)
+    await waitUntil(() => savedArtboards().length === 2 && dirOf(a2Dir) !== undefined, "removal undone");
     expect(savedArtboards()[1]).toMatchObject({ id: a2.id, name: a2.name });
+    expect(dirOf(a2Dir)?.children.has("metadata.json")).toBe(true);
     await click("builder-redo");
-    await waitUntil(() => savedArtboards().length === 1, "removal redone");
+    await waitUntil(() => savedArtboards().length === 1 && dirOf(a2Dir) === undefined, "removal redone");
     await click("builder-undo");
-    await waitUntil(() => savedArtboards().length === 2, "back again");
+    await waitUntil(() => savedArtboards().length === 2 && dirOf(a2Dir) !== undefined, "back again");
     await click("builder-undo"); // the second add, undone
     await waitUntil(() => savedArtboards().length === 1, "add undone");
     expect(savedArtboards()[0].id).toBe(a1.id);

@@ -59,6 +59,16 @@ describe("register hand-added templates and artboards", () => {
     expect([again.templates.length, again.artboards.length]).toEqual([2, 2]);
   });
 
+  it("never registers what waits in _artboard_sheets/.removed versions (2026-11-22)", async () => {
+    const root = new FakeDir("Picked");
+    put(root, `${NEW}/template.json`, preset("Hand made", 7));
+    put(root, "_artboard_sheets/.removed versions/gone_sheet~20261122-090000-ab12/template.json", preset("Removed", 5));
+    put(root, `${NEW}/.removed versions/artboard_09_old/sheet.json`, preset("Old board", 7));
+    const found = await findSheetFolders(root);
+    expect(found.map((f) => f.folder)).toEqual([NEW]);
+    expect(found[0].artboards).toEqual([]);
+  });
+
   it("an artboard's metadata.json becomes its metadata", async () => {
     const root = new FakeDir("Picked");
     put(root, `${NEW}/template.json`, preset("Hand made", 7));

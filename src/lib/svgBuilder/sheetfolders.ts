@@ -64,14 +64,23 @@ export function sheetFolderName(args: { title: string; icons: number; palette: r
 }
 
 /**
+ * A template's homes on disk, best first: where an artboard of it already lives
+ * (its artboards never split from it, 2026-11-16), then its own folder. Removing
+ * it moves both (2026-11-22), so no stray template.json is left to register.
+ */
+export function templateHomes(template: Pick<SheetTemplate, "id" | "folder">, artboards: readonly FinalArtboard[]): string[] {
+  const lived = artboards.find((a) => a.templateId === template.id && a.folder !== null)?.folder ?? null;
+  const homes = [lived === null ? "" : lived.slice(0, lived.lastIndexOf("/")), template.folder ?? ""];
+  return [...new Set(homes.filter((h) => h !== ""))];
+}
+
+/**
  * A template's folder (2026-11-16): the one it already has, else a new one under
  * the given day, named from ITS title, cell count, banner colours and code.
  */
 export function templateFolder(template: Pick<SheetTemplate, "id" | "config" | "folder">, now: Date, artboards: readonly FinalArtboard[] = []): string {
-  // Its artboards never split from it (2026-11-16): where an artboard of it already lives is its home.
-  const lived = artboards.find((a) => a.templateId === template.id && a.folder !== null)?.folder;
-  if (lived != null) return lived.slice(0, lived.lastIndexOf("/"));
-  if (template.folder != null) return template.folder;
+  const home = templateHomes(template, artboards)[0];
+  if (home !== undefined) return home;
   const { config } = template;
   const name = sheetFolderName({ title: config.banner.title, icons: config.grid.columns * config.grid.rows, palette: paletteWords(config), templateId: template.id });
   return `${SHEETS_DIR}/${dayPath(now)}/${name}`;

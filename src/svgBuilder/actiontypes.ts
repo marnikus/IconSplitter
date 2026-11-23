@@ -131,7 +131,11 @@ export interface BuilderActions {
   saveTemplateAsNew: () => void;
   editTemplate: (id: string) => void;
   renameTemplate: (id: string, name: string) => void;
+  /** Removing (2026-11-22): at once, with every artboard of them; folders into `_artboard_sheets/.removed versions`; ONE undo step. */
   removeTemplate: (id: string) => void;
+  removeTemplates: (ids: readonly string[]) => void;
+  /** Undo / redo of a "builderArtboards" step: folders, lists, then the stage (`recent` = artboards viewed, newest first). */
+  applySheetLists: (side: import("../lib/svgBuilder/removal").ListsDelta, recent: readonly string[]) => Promise<boolean>;
   /** Height of the template pictures (shared 48–800 px zoom); display-only. */
   setTemplateZoom: (px: number) => void;
   /** Preset JSON (2026-11-13): open the window, the sheet as JSON, apply pasted JSON (true when read), copy, copy for AI, download. */
