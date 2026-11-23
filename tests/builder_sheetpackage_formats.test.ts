@@ -1,8 +1,9 @@
 // builder_sheetpackage_formats.test.ts — the builder's stock package honours
 // the shared format options exactly like the upload flow (2026-11-17): flags
 // gate the files, SVGO records a real block, strokes and text expand, the
-// artboard rescales — and a refused expansion ships nothing, named. No JPEG
-// (2026-11-23): the raster is the 2× PNG only, whatever the options say.
+// artboard rescales — and a refused expansion ships nothing, named. The raster
+// is a PNG instead of a JPEG (2026-11-23): the same switch and the same size
+// rule (the artboard itself, or the MP at its ratio), never a JPEG.
 import { describe, expect, it } from "vitest";
 import { buildSheetPackage, type SheetPackageArgs } from "../src/svgBuilder/sheetpackage";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/settings";
@@ -14,8 +15,8 @@ import { builtinConverter } from "../src/lib/upload/epsconv/builtin";
 
 const SHEET = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><!-- note --><rect x="1" y="1" width="9" height="9" fill="none" stroke="#000000" stroke-width="2"/><text x="10" y="50" fill="#123456" font-size="12">Hi</text></svg>';
 
-const deps = (seen: { jpeg?: { width: number; height: number } }) => ({
-  pngBlob: async () => new Blob(["png"]),
+const deps = (seen: { jpeg?: { width: number; height: number }; png?: { width: number; height: number } }) => ({
+  pngBlob: async (_svg: string, width: number, height: number) => { seen.png = { width, height }; return new Blob(["png"]); },
   rasterize: async (_svg: string, target: { width: number; height: number }) => { seen.jpeg = target; return { ok: true as const, jpeg: new Uint8Array([1, 2, 3]) }; },
   eps: async () => ({ ok: true as const, eps: "%!PS-Adobe test", writer: "builtin@test", fixes: [] }),
 });
@@ -31,14 +32,16 @@ const file = (pkg: Awaited<ReturnType<typeof buildSheetPackage>>, ext: string) =
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
 describe("the builder package follows the format options", () => {
-  it("writes SVG, EPS and PNG per the flags — never a JPEG (2026-11-23)", async () => {
+  it("writes SVG, PNG and EPS per the flags — the raster is a PNG, never a JPEG (2026-11-23)", async () => {
     const seen: { jpeg?: { width: number; height: number } } = {};
     const all = await buildSheetPackage(args({ includeEps: true, includeJpeg: true }), deps(seen));
     expect(all.files.map((f) => f.name).sort()).toEqual(["export.json", "sheet.eps", "sheet.png", "sheet.svg"]);
     expect(seen.jpeg).toBeUndefined(); // nothing is rasterised to JPEG
     expect(all.record.outputs.jpg).toBeNull();
-    expect(all.record.settings.effective.includeJpeg).toBe(false); // export.json says so
+    expect(all.record.settings.effective.includeJpeg).toBe(false); // export.json says: no JPEG
     expect(all.record.status).toBe("processed"); // no JPEG is not a missing part
+    const noPng = await buildSheetPackage(args({ includeJpeg: false }), deps({}));
+    expect(file(noPng, ".png")).toBeUndefined(); // the raster switch now means the PNG
     const noSvg = await buildSheetPackage(args({ includeSvg: false }), deps({}));
     expect(file(noSvg, ".svg")).toBeUndefined();
     expect(noSvg.record.outputs.svg).toBeNull();
@@ -75,9 +78,17 @@ describe("the builder package follows the format options", () => {
     expect(text(file(kept, ".svg")!.bytes)).toContain("<text");
   });
 
-  it("rescales the sheet artboard", async () => {
-    const scaled = await buildSheetPackage(args({ rescaleArtboard: true, rescaleMegapixels: 1 }), deps({}));
+  it("rescales the sheet artboard and lets the PNG follow it or the MP (2026-11-23: the JPEG's size rule)", async () => {
+    const seen: { png?: { width: number; height: number } } = {};
+    const scaled = await buildSheetPackage(args({ rescaleArtboard: true, rescaleMegapixels: 1, jpegMatchArtboard: true }), deps(seen));
     expect(text(file(scaled, ".svg")!.bytes)).toContain('width="1414"');
+    expect(seen.png).toMatchObject({ width: 1414, height: 707 });
+    const seenMp: { png?: { width: number; height: number } } = {};
+    await buildSheetPackage(args({ jpegMatchArtboard: false, jpegMegapixels: 1 }), deps(seenMp));
+    expect(seenMp.png).toMatchObject({ width: 1414, height: 707 });
+    const seenBox: { png?: { width: number; height: number } } = {};
+    await buildSheetPackage(args({ jpegMatchArtboard: true }), deps(seenBox));
+    expect(seenBox.png).toMatchObject({ width: 200, height: 100 });
   });
 
   it("names the built-in EPS writer's real limit: live text is outside its subset, and the rest still ships", async () => {

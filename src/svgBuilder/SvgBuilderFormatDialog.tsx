@@ -6,8 +6,8 @@
 // settings, not a builder-only look (2026-11-19). Its rows write
 // the builder's own persisted options (formatstore) at once (RULE 24); the
 // stock package and its EPS stage read exactly these options (sheetpackage.ts).
-// No JPEG (2026-11-23): the 2× PNG is the sheet's only raster, so the JPEG rows
-// are not shown. No row, hint or clamp is written twice.
+// A PNG instead of the JPEG (2026-11-23): the same switch, MP and artboard
+// match, named PNG, no quality. No row, hint or clamp is written twice.
 import { useState } from "react";
 import { type ExportFormatOptions } from "../lib/exportformats";
 import ExportModal from "../ui/exportmodal";
@@ -30,11 +30,11 @@ export function BuilderFormatSettings({ value, artboard, onPatch, onClose }: Bui
     backdropClass="bld-export-backdrop" onClose={onClose}>
     <p className="builder-note" data-testid="builder-format-note">
       Every checked artboard (else the open one) is written under <b>_artboard_sheets</b> in the folder: the ticked
-      SVG and EPS beside a 2× PNG (the only raster) and export.json. Anything a stage cannot write is named and left out.
+      SVG, PNG and EPS beside export.json. Anything a stage cannot write is named and left out.
     </p>
     <EpsTextNote value={value} />
     <div className="up-set-grid">
-      <ExportFormatSheet scope="bld-set" value={value} patch={onPatch} artboard={artboard} noJpeg />
+      <ExportFormatSheet scope="bld-set" value={value} patch={onPatch} artboard={artboard} raster="png" />
     </div>
   </ExportModal>;
 }

@@ -6137,3 +6137,8 @@ strictly inside).
 
 - The rescale moves the root px size and keeps the viewBox; the built-in EPS writer sized its page from the viewBox alone, so the EPS never grew. `eps.ts` `unitOf` now draws the viewBox at the root's plain px size (same ratio only, else the viewBox as before); `epsdoc.assemble` takes that `unit` into the upright matrix. Shared by the builder package and the upload export.
 - Measured: `builder_sheetpackage_formats` 9/9 incl. the new EPS rescale case (failed at 150 pt before); EPS / upload / export / builder / stock suites 2008 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc PASS.
+
+## 2026-11-23 — SVG builder: a PNG in place of the JPEG (corrects 39753d92)
+
+- 39753d92 removed the JPEG and its size rows and left a fixed 2× PNG; the ask was to REPLACE the JPEG with a PNG. Now the shared format sheet takes `raster="png"` (Export PNG / PNG (MP) / same size as the artboard, notes and warning name PNG, no quality row); the package renders its PNG with `jpegTargetSize` (artboard after any rescale, or the MP) when the raster switch is on, and writes no JPEG (`export.json` JPEG off). The upload tab's JPEG rows are unchanged.
+- Measured: builder package / format / settings UI + shared sheet tests 31/31; related suites 2002 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc, eslint, `quality:changed --base HEAD` PASS.

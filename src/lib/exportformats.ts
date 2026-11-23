@@ -151,9 +151,10 @@ export function exportArtboardSize(
 }
 
 /** What the JPEG row says it will write: the artboard's own px, or the MP rule at its ratio. */
-export function jpegNote(size: { width: number; height: number } | null, match = true): string {
+/** `kind`: the raster the row makes — the upload flow's JPEG, or the sheet builder's PNG (2026-11-23). */
+export function jpegNote(size: { width: number; height: number } | null, match = true, kind: "JPEG" | "PNG" = "JPEG"): string {
   if (size === null) return "rendered from the vectors at this resolution (default 15.1)";
   return match
-    ? `the JPEG is the artboard itself: ${size.width}×${size.height} px — untick for a bigger file`
+    ? `the ${kind} is the artboard itself: ${size.width}×${size.height} px — untick for a bigger file`
     : "rendered from the vectors at this resolution, at the artboard's aspect ratio";
 }

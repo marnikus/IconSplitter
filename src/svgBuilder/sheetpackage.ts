@@ -1,7 +1,8 @@
 // sheetpackage.ts — an artboard sheet's stock package (2026-11-14), built with
 // the SVG to upload tab's parts: the SVG with its metadata embedded, an EPS
-// from the Upload settings' converter (colours resolved first), and a full 2×
-// PNG — no JPEG since 2026-11-23 (the PNG is the sheet's only raster) — recorded
+// from the Upload settings' converter (colours resolved first), and a PNG in
+// place of the upload flow's JPEG (2026-11-23: the same switch and size rule —
+// the artboard itself, or the MP at its ratio; no JPEG is written) — recorded
 // in the same export.json the stock upload tab discovers. A failing part is
 // reported and left out; the rest still ships ("partial"). The browser renderers
 // and the converter are injected for tests.
@@ -13,6 +14,7 @@ import { expandStrokes } from "../lib/upload/expand";
 import { expandTextToFills } from "../lib/upload/expandtext";
 import { rescaleSvg } from "../lib/upload/rescale";
 import { optimizeSvg, type OptimizeRecord } from "../lib/upload/optimize";
+import { jpegTargetSize } from "../lib/exportformats";
 import { metadataBlock, newExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import { sha256Hex } from "../lib/upload/hash";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -104,11 +106,14 @@ async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: Ic
   }
 }
 
-async function renderPngFile(a: SheetPackageArgs, d: SheetPackageDeps): Promise<Part> {
+/** The raster, a PNG (2026-11-23): on with the raster switch, sized like the JPEG was (the artboard after any rescale, or the MP). */
+async function renderPngFile(a: SheetPackageArgs, d: SheetPackageDeps, wanted: boolean): Promise<Part> {
   const name = `${a.stem}.png`;
+  if (!wanted) return { name, bytes: null, problem: null };
   try {
     const box = sizeOf(a.svg);
-    const blob = await (d.pngBlob ?? sheetPngBlob)(a.svg, box.width * 2, box.height * 2);
+    const size = jpegTargetSize(box.width, box.height, a.settings);
+    const blob = await (d.pngBlob ?? sheetPngBlob)(a.svg, size.width, size.height);
     return { name, bytes: new Uint8Array(await blob.arrayBuffer()), problem: null };
   } catch (error) {
     return { name, bytes: null, problem: `PNG: ${error instanceof Error ? error.message : "render failed"}` };
@@ -140,7 +145,7 @@ async function recordOf(a: SheetPackageArgs, parts: { svg: Part; jpg: Part; eps:
     timestamps: { ...base.timestamps, committedAt: a.now } };
 }
 
-/** The builder writes no JPEG (2026-11-23): whatever the stored options say, the record says JPEG off. */
+/** The builder writes a PNG instead of a JPEG (2026-11-23): the raster switch drives the PNG; the record says JPEG off. */
 const NO_JPEG = (a: SheetPackageArgs): SheetPackageArgs => ({ ...a, settings: { ...a.settings, includeJpeg: false } });
 
 export async function buildSheetPackage(given: SheetPackageArgs, d: SheetPackageDeps = {}): Promise<SheetPackage> {
@@ -156,7 +161,7 @@ export async function buildSheetPackage(given: SheetPackageArgs, d: SheetPackage
     ? { name: `${a.stem}.svg`, bytes: text(meta === null ? prepared.svg : embedMetadataInSvg(prepared.svg, meta)), problem: null }
     : { name: `${a.stem}.svg`, bytes: null, problem: null };
   const jpg: Part = { name: `${a.stem}.jpg`, bytes: null, problem: null };
-  const [eps, png] = await Promise.all([convertEpsFile(worked, d, meta), renderPngFile(worked, d)]);
+  const [eps, png] = await Promise.all([convertEpsFile(worked, d, meta), renderPngFile(worked, d, given.settings.includeJpeg)]);
   const record = await recordOf(a, { svg, jpg, eps }, meta, prepared.svgo);
   const files = [svg, jpg, eps, png].filter((p): p is Part & { bytes: Uint8Array } => p.bytes !== null).map((p) => ({ name: p.name, bytes: p.bytes }));
   files.push({ name: "export.json", bytes: text(serializeExportRecord(record)) });

@@ -68,14 +68,17 @@ describe("the builder export settings dialog", () => {
     expect(closed).toBe(0);
   });
 
-  it("shows every format row once — and no JPEG row: the builder's raster is the 2× PNG only (2026-11-23)", () => {
+  it("shows every format row once — a PNG in place of the JPEG, with its MP and the sheet's own px (2026-11-23)", () => {
     render({ ...DEFAULT_FORMAT_OPTIONS, rescaleArtboard: true });
-    for (const id of ["svg", "eps", "converter", "optimize", "clean", "expand", "expandtext", "rescale", "rescale-mp", "rescale-strokes"]) {
+    for (const id of ["svg", "png", "eps", "converter", "mp", "mp-match", "optimize", "clean", "expand", "expandtext", "rescale", "rescale-mp", "rescale-strokes"]) {
       expect(all(`bld-set-${id}`), id).toHaveLength(1);
     }
-    for (const id of ["jpeg", "mp", "mp-match", "mp-note", "quality"]) expect(q(`bld-set-${id}`), id).toBeNull();
+    for (const id of ["jpeg", "quality"]) expect(q(`bld-set-${id}`), id).toBeNull(); // PNG is lossless: no quality
     expect(host.textContent).not.toMatch(/JPEG/);
-    expect(q("builder-format-note")?.textContent).toMatch(/2× PNG/);
+    expect(host.textContent).toContain("Export PNG");
+    expect(host.textContent).toContain("PNG (MP)");
+    // 5500×3000 rescaled to a 20 MP area is 6055×3302 — the note names the file it will really write
+    expect(q("bld-set-mp-note")?.textContent).toBe("the PNG is the artboard itself: 6055×3302 px — untick for a bigger file");
     expect(host.textContent).toContain("Export SVG");
     expect(host.textContent).toContain("Also write EPS");
     expect(host.textContent).toContain("Expand text to fills");
@@ -94,8 +97,9 @@ describe("the builder export settings dialog", () => {
       set?.call(input, next);
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    click("bld-set-png");
     type("bld-set-rescale-mp", "999");
-    expect(patches).toEqual([{ includeSvg: false }, { expandText: true }, { rescaleStrokes: false }, { rescaleMegapixels: 64 }]);
+    expect(patches).toEqual([{ includeSvg: false }, { expandText: true }, { rescaleStrokes: false }, { includeJpeg: false }, { rescaleMegapixels: 64 }]);
   });
 
   it("names the built-in EPS writer's live-text limit before an export would fail that stage", () => {
@@ -125,8 +129,10 @@ describe("the builder export settings dialog", () => {
     expect(q("bld-set-clean")).not.toBeNull();
   });
 
-  it("never warns that nothing ships: the 2× PNG is always written (2026-11-23)", () => {
-    render({ ...DEFAULT_FORMAT_OPTIONS, includeSvg: false, includeJpeg: false, includeEps: false });
+  it("says so when every format is unticked — that package would ship nothing (SVG, PNG or EPS)", () => {
+    render({ ...DEFAULT_FORMAT_OPTIONS, includeSvg: false, includeJpeg: false });
+    expect(q("bld-set-formats-warning")?.textContent).toMatch(/at least one.*SVG, PNG or EPS/i);
+    click("bld-set-eps");
     expect(q("bld-set-formats-warning")).toBeNull();
   });
 });
@@ -163,7 +169,8 @@ describe("the Export menu", () => {
     openMenu();
     const item = q("builder-export-package")!;
     expect(item.textContent).toContain("SVG");
-    expect(item.textContent).toContain("PNG 2×"); // no JPEG from the builder (2026-11-23)
+    expect(item.textContent).toContain("PNG"); // a PNG instead of the JPEG (2026-11-23)
+    expect(item.textContent).not.toContain("JPEG");
     expect(item.textContent).toContain("EPS (Inkscape CLI (local helper))");
     expect(item.getAttribute("title") ?? "").toContain("_artboard_sheets");
     click("builder-export-package");
@@ -176,8 +183,8 @@ describe("the Export menu", () => {
     openMenu();
     const text = q("builder-export-package")!.textContent ?? "";
     expect(text).toContain("SVG off");
-    expect(text).not.toContain("JPEG"); // the builder writes no JPEG (2026-11-23)
-    expect(text).toContain("PNG");
+    expect(text).not.toContain("JPEG"); // the builder writes a PNG instead (2026-11-23)
+    expect(text).toContain("PNG off");
     expect(text).toContain("EPS off");
   });
 });

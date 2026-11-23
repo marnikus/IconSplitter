@@ -14,10 +14,10 @@ import type { BuilderApi } from "./useSvgBuilder";
 
 interface Item { id: string; label: string; hint: string; title?: string; run: () => void }
 
-/** `SVG · PNG 2× · EPS (built-in …)` — or `SVG off` / `EPS off` for a format the package will not write (no JPEG since 2026-11-23). */
+/** `SVG · PNG · EPS (built-in …)` — or `SVG off` for each format the package will not write (a PNG instead of the JPEG since 2026-11-23). */
 export function formatPlan(options: ExportFormatOptions): string {
   const eps = options.includeEps ? `EPS (${CONVERTERS[options.epsConverter].label})` : "EPS off";
-  return [options.includeSvg ? "SVG" : "SVG off", "PNG 2×", eps].join(" · ");
+  return [options.includeSvg ? "SVG" : "SVG off", options.includeJpeg ? "PNG" : "PNG off", eps].join(" · ");
 }
 
 /** The items, in the reference order; `onLoad` opens the hidden preset file input. */
@@ -29,7 +29,7 @@ function itemsOf(b: BuilderApi, onLoad: () => void): Item[] {
     { id: "copy", label: "Copy SVG markup", hint: "Paste into your design tool", run: b.actions.copySvg },
     { id: "package", label: "Export package", hint: formatPlan(loadBuilderFormats()), title: PACKAGE_TITLE,
       run: b.actions.exportSelectedArtboards },
-    { id: "formats", label: "Export settings…", hint: "SVG / EPS, expansion, rescale", run: b.actions.openExportFormats },
+    { id: "formats", label: "Export settings…", hint: "SVG / PNG / EPS, PNG size, expansion, rescale", run: b.actions.openExportFormats },
     { id: "preset", label: "Save preset", hint: "Settings, text, icons by name (.json)", run: b.actions.savePreset },
     { id: "preset-json", label: "Preset JSON…", hint: "Edit or paste JSON, then apply", run: b.actions.openPresetJson },
     { id: "load", label: "Load preset", hint: "Restore a saved .json preset", run: onLoad },
@@ -37,7 +37,7 @@ function itemsOf(b: BuilderApi, onLoad: () => void): Item[] {
 }
 
 const PACKAGE_TITLE = "Writes each checked artboard (else the open one) under _artboard_sheets in the folder: "
-  + "the ticked SVG and EPS, a 2× PNG and export.json";
+  + "the ticked SVG, PNG and EPS and export.json";
 
 /** The open menu: the items and its footnote. */
 function MenuItems({ b, onLoad, onDone }: { b: BuilderApi; onLoad: () => void; onDone: () => void }) {
