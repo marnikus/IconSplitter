@@ -1,7 +1,7 @@
 // sheetpackage.ts — an artboard sheet's stock package (2026-11-14), built with
-// the SVG to upload tab's parts: the SVG with its metadata embedded, a JPEG at
-// the Upload settings' megapixels with XMP metadata, an EPS from the Upload
-// settings' converter (colours resolved first), and a full 2× PNG — recorded
+// the SVG to upload tab's parts: the SVG with its metadata embedded, an EPS
+// from the Upload settings' converter (colours resolved first), and a full 2×
+// PNG — no JPEG since 2026-11-23 (the PNG is the sheet's only raster) — recorded
 // in the same export.json the stock upload tab discovers. A failing part is
 // reported and left out; the rest still ships ("partial"). The browser renderers
 // and the converter are injected for tests.
@@ -13,12 +13,9 @@ import { expandStrokes } from "../lib/upload/expand";
 import { expandTextToFills } from "../lib/upload/expandtext";
 import { rescaleSvg } from "../lib/upload/rescale";
 import { optimizeSvg, type OptimizeRecord } from "../lib/upload/optimize";
-import { jpegTargetSize } from "../lib/exportformats";
 import { metadataBlock, newExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import { sha256Hex } from "../lib/upload/hash";
-import { embedXmpMetadata } from "../lib/upload/jpeg";
 import type { IconMetadata } from "../lib/upload/meta";
-import { rasterizeJpeg } from "../lib/upload/raster";
 import { flattenColor, type UploadSettings } from "../lib/upload/settings";
 import { settingsFingerprint } from "../lib/upload/settingsfingerprint";
 import type { ConvertResult, EpsConvertInput } from "../lib/upload/epsconv/types";
@@ -35,7 +32,6 @@ export interface SheetPackageArgs {
 
 export interface SheetPackageDeps {
   pngBlob?: (svg: string, width: number, height: number) => Promise<Blob>;
-  rasterize?: (svg: string, target: { width: number; height: number; quality: number; background: string }) => Promise<{ ok: true; jpeg: Uint8Array } | { ok: false; reason: string }>;
   eps?: (input: EpsConvertInput) => Promise<ConvertResult>;
 }
 
@@ -92,16 +88,6 @@ function acceptedOf(m: SheetMetadata | null): IconMetadata | null {
 
 interface Part { name: string; bytes: Uint8Array | null; problem: string | null }
 
-async function renderJpegFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: IconMetadata | null): Promise<Part> {
-  const name = `${a.stem}.jpg`;
-  if (!a.settings.includeJpeg) return { name, bytes: null, problem: null };
-  const box = sizeOf(a.svg);
-  const size = jpegTargetSize(box.width, box.height, a.settings);
-  const out = await (d.rasterize ?? rasterizeJpeg)(a.svg, { ...size, quality: a.settings.jpegQuality, background: flattenColor(box.background) });
-  if (!out.ok) return { name, bytes: null, problem: `JPG: ${out.reason}` };
-  return { name, bytes: meta === null ? out.jpeg : embedXmpMetadata(out.jpeg, meta), problem: null };
-}
-
 async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: IconMetadata | null): Promise<Part> {
   const name = `${a.stem}.eps`;
   if (!a.settings.includeEps || d.eps === undefined) return { name, bytes: null, problem: a.settings.includeEps ? "EPS: no converter" : null };
@@ -154,7 +140,11 @@ async function recordOf(a: SheetPackageArgs, parts: { svg: Part; jpg: Part; eps:
     timestamps: { ...base.timestamps, committedAt: a.now } };
 }
 
-export async function buildSheetPackage(a: SheetPackageArgs, d: SheetPackageDeps = {}): Promise<SheetPackage> {
+/** The builder writes no JPEG (2026-11-23): whatever the stored options say, the record says JPEG off. */
+const NO_JPEG = (a: SheetPackageArgs): SheetPackageArgs => ({ ...a, settings: { ...a.settings, includeJpeg: false } });
+
+export async function buildSheetPackage(given: SheetPackageArgs, d: SheetPackageDeps = {}): Promise<SheetPackage> {
+  const a = NO_JPEG(given);
   const meta = acceptedOf(a.metadata);
   const prepared = await prepareSheetSvg(a.svg, a.settings);
   if (!prepared.ok) {
@@ -165,9 +155,10 @@ export async function buildSheetPackage(a: SheetPackageArgs, d: SheetPackageDeps
   const svg: Part = a.settings.includeSvg
     ? { name: `${a.stem}.svg`, bytes: text(meta === null ? prepared.svg : embedMetadataInSvg(prepared.svg, meta)), problem: null }
     : { name: `${a.stem}.svg`, bytes: null, problem: null };
-  const [jpg, eps, png] = await Promise.all([renderJpegFile(worked, d, meta), convertEpsFile(worked, d, meta), renderPngFile(worked, d)]);
+  const jpg: Part = { name: `${a.stem}.jpg`, bytes: null, problem: null };
+  const [eps, png] = await Promise.all([convertEpsFile(worked, d, meta), renderPngFile(worked, d)]);
   const record = await recordOf(a, { svg, jpg, eps }, meta, prepared.svgo);
   const files = [svg, jpg, eps, png].filter((p): p is Part & { bytes: Uint8Array } => p.bytes !== null).map((p) => ({ name: p.name, bytes: p.bytes }));
   files.push({ name: "export.json", bytes: text(serializeExportRecord(record)) });
-  return { files, record, problems: [jpg, eps, png].map((p) => p.problem).filter((p): p is string => p !== null) };
+  return { files, record, problems: [eps, png].map((p) => p.problem).filter((p): p is string => p !== null) };
 }

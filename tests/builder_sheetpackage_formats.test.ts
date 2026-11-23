@@ -1,8 +1,8 @@
 // builder_sheetpackage_formats.test.ts — the builder's stock package honours
 // the shared format options exactly like the upload flow (2026-11-17): flags
 // gate the files, SVGO records a real block, strokes and text expand, the
-// artboard rescales, the JPEG follows the artboard or the MP — and a refused
-// expansion ships nothing, named.
+// artboard rescales — and a refused expansion ships nothing, named. No JPEG
+// (2026-11-23): the raster is the 2× PNG only, whatever the options say.
 import { describe, expect, it } from "vitest";
 import { buildSheetPackage, type SheetPackageArgs } from "../src/svgBuilder/sheetpackage";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/settings";
@@ -31,9 +31,14 @@ const file = (pkg: Awaited<ReturnType<typeof buildSheetPackage>>, ext: string) =
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
 describe("the builder package follows the format options", () => {
-  it("writes SVG, JPEG, EPS and PNG per the flags", async () => {
-    const all = await buildSheetPackage(args({ includeEps: true }), deps({}));
-    expect(all.files.map((f) => f.name).sort()).toEqual(["export.json", "sheet.eps", "sheet.jpg", "sheet.png", "sheet.svg"]);
+  it("writes SVG, EPS and PNG per the flags — never a JPEG (2026-11-23)", async () => {
+    const seen: { jpeg?: { width: number; height: number } } = {};
+    const all = await buildSheetPackage(args({ includeEps: true, includeJpeg: true }), deps(seen));
+    expect(all.files.map((f) => f.name).sort()).toEqual(["export.json", "sheet.eps", "sheet.png", "sheet.svg"]);
+    expect(seen.jpeg).toBeUndefined(); // nothing is rasterised to JPEG
+    expect(all.record.outputs.jpg).toBeNull();
+    expect(all.record.settings.effective.includeJpeg).toBe(false); // export.json says so
+    expect(all.record.status).toBe("processed"); // no JPEG is not a missing part
     const noSvg = await buildSheetPackage(args({ includeSvg: false }), deps({}));
     expect(file(noSvg, ".svg")).toBeUndefined();
     expect(noSvg.record.outputs.svg).toBeNull();
@@ -70,17 +75,9 @@ describe("the builder package follows the format options", () => {
     expect(text(file(kept, ".svg")!.bytes)).toContain("<text");
   });
 
-  it("rescales the sheet artboard and lets the JPEG follow it or the MP", async () => {
-    const seen: { jpeg?: { width: number; height: number } } = {};
-    const scaled = await buildSheetPackage(args({ rescaleArtboard: true, rescaleMegapixels: 1, jpegMatchArtboard: true }), deps(seen));
+  it("rescales the sheet artboard", async () => {
+    const scaled = await buildSheetPackage(args({ rescaleArtboard: true, rescaleMegapixels: 1 }), deps({}));
     expect(text(file(scaled, ".svg")!.bytes)).toContain('width="1414"');
-    expect(seen.jpeg).toMatchObject({ width: 1414, height: 707 });
-    const seenMp: { jpeg?: { width: number; height: number } } = {};
-    await buildSheetPackage(args({ jpegMatchArtboard: false, jpegMegapixels: 1 }), deps(seenMp));
-    expect(seenMp.jpeg).toMatchObject({ width: 1414, height: 707 });
-    const seenBox: { jpeg?: { width: number; height: number } } = {};
-    await buildSheetPackage(args({ jpegMatchArtboard: true }), deps(seenBox));
-    expect(seenBox.jpeg).toMatchObject({ width: 200, height: 100 });
   });
 
   it("names the built-in EPS writer's real limit: live text is outside its subset, and the rest still ships", async () => {

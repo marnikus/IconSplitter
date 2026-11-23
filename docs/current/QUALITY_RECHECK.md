@@ -6127,3 +6127,8 @@ strictly inside).
 
 - Two remembered prefs (`metaFullSheet` off, `metaTitleToBanner` on = the old behaviour) with checkboxes in both confirmations (`SvgBuilderMetaOptions.tsx`); `iconsImageFor({ full })`; ticking "whole sheet" redraws the exact requests (bulk plans keep their `ids`); `withSheetAnswer(…, toBanner)` and the sheet's `applyAnswer` leave the banner words when unticked.
 - Measured: `svg_builder_meta_options` 4/4, `svg_builder_meta_autoapply` 2/2 (the title switch mutation-witnessed); builder suites pass; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS.
+
+## 2026-11-23 — SVG builder: export package writes no JPEG (the 2× PNG is the only raster)
+
+- `buildSheetPackage` forces `includeJpeg: false` (no rasterising, `export.json` records JPEG off, status not "partial"); the shared format sheet gets `noJpeg` (builder only: JPEG rows and the "nothing ticked" warning hidden, stroke hint names the PNG); Export menu / header / dialog texts name `PNG 2×`. The upload tab keeps its JPEG controls.
+- Measured: builder package + format tests 12/12, builder export settings UI 11/11, shared sheet UI 7/7; related suites 1827 pass / 10 fail (`upload_flag_viewport`, pre-existing); tsc, eslint, `quality:changed --base HEAD` PASS.

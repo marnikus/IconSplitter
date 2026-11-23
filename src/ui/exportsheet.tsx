@@ -27,6 +27,8 @@ export interface FormatSheetProps {
   marker?: (field: keyof ExportFormatOptions, testid: string) => ReactNode;
   /** The upload dialog's "skipped while every visual setting is default" hint. */
   optimizeHint?: string;
+  /** The sheet builder (2026-11-23): its raster is the 2× PNG only — no JPEG rows, and no "nothing ticked" warning (the PNG always ships). */
+  noJpeg?: boolean;
 }
 
 const HINTS = {
@@ -37,6 +39,7 @@ const HINTS = {
   optimize: "the export copy only — viewBox, geometry, strokes and metadata are preserved",
   clean: "drop the generator's paperwork — data-* hooks, class/aria, repeated xmlns, comments, provenance blocks, dead color, bare groups, float noise, and the EPS's %%Creator/%%CreationDate plus its second metadata copy; the picture, Title, description and tags stay (a sheet keeps its px too)",
   expand: "strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes",
+  expandNoJpeg: "strokes become filled shapes (what some stocks require); the SVG, PNG and EPS all ship without strokes",
   expandText: "text becomes filled glyph outlines; what cannot be outlined fails that stage honestly",
   rescale: "the full artboard keeps its ratio and grows until its area is the megapixel target",
   rescaleMp: "the artboard area in megapixels (1 – 64)",
@@ -62,15 +65,15 @@ function DeliveryRows(p: FormatSheetProps) {
   return <>
     <ExportCheckRow {...rowOf(p, "includeSvg", "svg")} label="Export SVG" checked={p.value.includeSvg}
       hint={HINTS.svg} onChange={(v) => p.patch({ includeSvg: v })} />
-    <ExportCheckRow {...rowOf(p, "includeJpeg", "jpeg")} label="Export JPEG" checked={p.value.includeJpeg}
-      hint={HINTS.jpeg} onChange={(v) => p.patch({ includeJpeg: v })} />
+    {p.noJpeg !== true && <ExportCheckRow {...rowOf(p, "includeJpeg", "jpeg")} label="Export JPEG" checked={p.value.includeJpeg}
+      hint={HINTS.jpeg} onChange={(v) => p.patch({ includeJpeg: v })} />}
     <ExportCheckRow {...rowOf(p, "includeEps", "eps")} label="Also write EPS" checked={p.value.includeEps}
       hint={HINTS.eps} onChange={(v) => p.patch({ includeEps: v })} />
     <ExportSelectRow {...rowOf(p, "epsConverter", converterSuffix(p.scope))} label="EPS converter" value={p.value.epsConverter}
       options={CONVERTER_IDS.map((id) => ({ value: id, label: CONVERTERS[id].label }))}
       hint={HINTS.converter} onChange={(v) => p.patch({ epsConverter: parseConverterId(v) })} />
     {p.value.epsConverter === "inkscape" && <EpsHelperRow scope={helperScope(p.scope)} />}
-    {!hasOutputFormats(p.value) && <small className="svg-error" role="alert" data-testid={`${p.scope}-formats-warning`}>{NO_OUTPUT_FORMATS}. The previous package is kept unchanged.</small>}
+    {p.noJpeg !== true && !hasOutputFormats(p.value) && <small className="svg-error" role="alert" data-testid={`${p.scope}-formats-warning`}>{NO_OUTPUT_FORMATS}. The previous package is kept unchanged.</small>}
   </>;
 }
 
@@ -122,7 +125,7 @@ function ExpandRows(p: FormatSheetProps) {
     <ExportCheckRow {...rowOf(p, "cleanExport", "clean")} label="Clean the saved files"
       checked={p.value.cleanExport} hint={HINTS.clean} onChange={(v) => p.patch({ cleanExport: v })} />
     <ExportCheckRow {...rowOf(p, "expandStrokes", "expand")} label="Expand strokes to fills" checked={p.value.expandStrokes}
-      hint={HINTS.expand} onChange={(v) => p.patch({ expandStrokes: v })} />
+      hint={p.noJpeg === true ? HINTS.expandNoJpeg : HINTS.expand} onChange={(v) => p.patch({ expandStrokes: v })} />
     <ExportCheckRow {...rowOf(p, "expandText", "expandtext")} label="Expand text to fills" checked={p.value.expandText}
       hint={HINTS.expandText} onChange={(v) => p.patch({ expandText: v })} />
   </>;
@@ -147,8 +150,7 @@ function RescaleRows(p: FormatSheetProps) {
 export function ExportFormatSheet(p: FormatSheetProps) {
   return <>
     <DeliveryRows {...p} />
-    <JpegPixels {...p} />
-    <QualityRow {...p} />
+    {p.noJpeg !== true && <><JpegPixels {...p} /><QualityRow {...p} /></>}
     <ExpandRows {...p} />
     <RescaleRows {...p} />
   </>;

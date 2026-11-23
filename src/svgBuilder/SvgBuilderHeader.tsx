@@ -26,7 +26,7 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
         title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>
       <button type="button" className="svg-btn" data-testid="builder-export-settings"
-        title="What the next export writes: SVG / JPEG / EPS, quality, expansion, rescale — the same popup the SVG to upload tab opens"
+        title="What the next export writes: SVG / EPS (and always a 2× PNG), expansion, rescale — the same popup the SVG to upload tab opens"
         onClick={b.actions.openExportFormats}>⚙ Export settings</button>
       <SvgBuilderExportMenu b={b} />
       <GenerateSelected b={b} />

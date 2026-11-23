@@ -38,15 +38,15 @@ const args = (over: Partial<Parameters<typeof buildSheetPackage>[0]> = {}) => ({
 });
 
 describe("artboard sheet package", () => {
-  it("writes SVG, JPG, EPS and a full PNG named by the stem, and an export.json the stock tab can read", async () => {
+  it("writes SVG, EPS and a full PNG named by the stem (no JPEG, 2026-11-23), and an export.json the stock tab can read", async () => {
     const { d, seen } = deps();
     const pkg = await buildSheetPackage(args(), d);
     expect(pkg.problems).toEqual([]);
-    expect(pkg.files.map((f) => f.name).sort()).toEqual(["export.json", "x_sheet_1_icons_green_palette_id00001_v1.eps", "x_sheet_1_icons_green_palette_id00001_v1.jpg",
+    expect(pkg.files.map((f) => f.name).sort()).toEqual(["export.json", "x_sheet_1_icons_green_palette_id00001_v1.eps",
       "x_sheet_1_icons_green_palette_id00001_v1.png", "x_sheet_1_icons_green_palette_id00001_v1.svg"]);
     const svg = new TextDecoder().decode(pkg.files.find((f) => f.name.endsWith(".svg"))!.bytes);
     expect(readEmbeddedMetadata(svg)?.title).toBe(META.title);
-    expect(seen.jpg.w * seen.jpg.h).toBeLessThanOrEqual(DEFAULT_UPLOAD_SETTINGS.jpegMegapixels * 1e6);
+    expect(seen.jpg).toEqual({ w: 0, h: 0 }); // never rasterised to JPEG
     expect(seen.png).toEqual({ w: 2160, h: 1320 });
     expect(seen.eps).not.toContain("currentColor"); // the converter gets real colours
     const record = parseExportRecord(JSON.parse(new TextDecoder().decode(pkg.files.find((f) => f.name === "export.json")!.bytes)));
