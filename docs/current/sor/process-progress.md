@@ -7,11 +7,11 @@
 
 `src/ui/ProcessProgressBar.tsx` is the ONE header/track/stats layout for
 `BatchProgressHeader`, `SvgProgressHeader`, `UploadProgressHeaders`,
-`StockUploadDialogs` and `SvgRegisterProgress`. Reuse it instead of copying a
-header. Callers provide a prefix, theme, title/detail, counts/percentage and
-slots for a thumbnail icon and actions. It never starts requests, persists
-state or owns cancellation. One rule stacks it on narrow screens; the track is
-`role=progressbar` 0–100 with a textual processed fraction.
+`StockUploadDialogs`, `SvgRegisterProgress` and `SvgBuilderExportProgress`. Reuse
+it instead of copying a header. Callers provide a prefix, theme, title/detail,
+counts/percentage and slots for a thumbnail icon and actions. It never starts
+requests, persists state or owns cancellation. One rule stacks it on narrow
+screens; the track is `role=progressbar` 0–100 with a textual processed fraction.
 
 `src/lib/processprogress.ts` owns generic arithmetic and reporting:
 
@@ -67,8 +67,8 @@ when the next batch starts, so the bar carries its total instead of restarting.
 
 ## Handles
 
-- Shell: `upload-progress-mount`, `upload-shell` (`hidden` when inactive).
-- Prefixes: `upload-{metadata,export,download}-progress-*`,
+- Shell: `upload-progress-mount`, `builder-progress-mount`, `upload-shell`, `builder-shell` (`hidden` when inactive).
+- Prefixes: `upload-{metadata,export,download}-progress-*`, `builder-export-progress-*`,
   `register-{svg,images}-progress-*`, `stock-upload-progress-*`.
 - Suffixes: `header`, `title`, `file`, `track`, `completed`, `remaining`,
   `note`, `percent`, `cancel` (running), `review` and `dismiss` (terminal).
@@ -135,12 +135,12 @@ results + ✕. One cue per `runId` for completed/failed with `total > 0`
 silent. A finished bar stays until ✕ or the feature's next run: no timer.
 Per-feature mappings (a user stop wins):
 `batchStatusOf`, `svgRunStatusOf`, `imageStatusOf`, `registerStatusOf`,
-`stockStatusOf`; Upload uses its reporter status. An SVG run that ended before
-its first request still gets a bar (`endedProgress`). Register passes
-(`beginRegister` → `{reading, settled, finish, fail, cancelled}`) stop at Cancel
-before the next folder (`cancelRegister`) and end `failed` if a folder throws.
-Suffixes: `cancel`, `review`, `dismiss`, `icon`. Contract test:
-`process_bar_lifecycle.test.tsx`.
+`stockStatusOf`; Upload and SVG builder export (`exportprogress.ts`) use their
+slot status directly. An SVG run ended before its first request gets
+`endedProgress`. Register (`beginRegister`) and artboard export
+(`beginBuilderExport`) stop on Cancel before the next item (`cancelRegister`,
+`cancelBuilderExport`). Suffixes: `cancel`, `review`, `dismiss`, `icon`
+(`process_bar_lifecycle.test.tsx`).
 
 Sound regressions: `completion_sound.test.ts`, `process_completion_sound.test.tsx`,
 `sheets_completion_sound.test.tsx`, plus actual Upload phase-chain/hidden-tab/

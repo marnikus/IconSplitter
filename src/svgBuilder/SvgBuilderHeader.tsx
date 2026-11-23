@@ -6,6 +6,8 @@ import { useOptionalHistoryView } from "../state/HistoryProvider";
 import { sheetCopy } from "../lib/svgBuilder/compose";
 import SvgBuilderExportMenu from "./SvgBuilderExportMenu";
 import { IndexingControl, RegisterControl, StyleFilterControl } from "./SvgBuilderControls";
+import { useProcessSlot } from "../ui/useProcessSlot";
+import { builderExportSlot } from "./exportprogress";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
@@ -47,9 +49,14 @@ function GenerateSelected({ b }: { b: BuilderApi }) {
 /** Export all selected (2026-11-14): the checked artboards (else the open one) into `_artboard_sheets` in the folder. */
 function ExportSelected({ b }: { b: BuilderApi }) {
   const count = b.artboardSel.checked.length > 0 ? b.artboardSel.checked.length : b.editingArtboardId !== null ? 1 : 0;
+  const exp = useProcessSlot(builderExportSlot);
+  const running = exp?.status === "running" && exp.total > 0;
+  const label = running
+    ? `⇪ Exporting ${exp.done}/${exp.total} (${Math.max(0, exp.total - exp.done)} left)`
+    : `⇪ Export all selected${count > 0 ? ` (${count})` : ""}`;
   return <button type="button" className="svg-btn primary" data-testid="builder-export-selected" disabled={count === 0 || b.root === null || b.busy !== null}
     title="Save each checked artboard (else the open one) as SVG + JPG + EPS + PNG + export.json under _artboard_sheets in the folder"
-    onClick={b.actions.exportSelectedArtboards}>⇪ Export all selected{count > 0 ? ` (${count})` : ""}</button>;
+    onClick={b.actions.exportSelectedArtboards}>{label}</button>;
 }
 
 function UndoRedo({ b }: { b: BuilderApi }) {

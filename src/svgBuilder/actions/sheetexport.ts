@@ -24,6 +24,7 @@ import { writeTemplateFolder } from "./templatefolder";
 import { sheetsRoot } from "./sheetsroot";
 import { writeSheetJson } from "./sheetjson";
 import { svgTextsFor } from "./artboardmeta";
+import { beginBuilderExport, type BuilderExportRun } from "../exportprogress";
 
 export function sheetExportActions(get: () => BuilderActionContext): Pick<BuilderActions, "exportSelectedArtboards" | "syncSheetJson"> {
   return { exportSelectedArtboards: () => { void exportSelected(get); }, syncSheetJson: () => { void writeSheetJson(get); } };
@@ -60,10 +61,10 @@ export function sheetSettings(): UploadSettings {
   return { ...loadUploadSettings().defaults, ...loadBuilderFormats() };
 }
 
-const epsOf = (converter: Parameters<typeof converterOf>[0]) => (input: Parameters<ReturnType<typeof converterOf>["convert"]>[0]) =>
-  converterOf(converter).convert(input, { bridgeUrl: loadBridgeConfig().url, fetch: (url, init) => globalThis.fetch(url, init) });
+const epsOf = (converter: Parameters<typeof converterOf>[0], signal?: AbortSignal) => (input: Parameters<ReturnType<typeof converterOf>["convert"]>[0]) =>
+  converterOf(converter).convert(input, { bridgeUrl: loadBridgeConfig().url, fetch: (url, init) => globalThis.fetch(url, init) }, signal);
 
-async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboard, texts: Record<string, string>): Promise<string[]> {
+async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboard, texts: Record<string, string>, signal?: AbortSignal): Promise<string[]> {
   const ctx = get();
   const root = sheetsRoot(ctx, true);
   const template = ctx.model.templates.find((t) => t.id === artboard.templateId);
@@ -76,7 +77,8 @@ async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboar
   const settings = sheetSettings();
   if (settings.expandText) await warmTextFonts(doc.svg); // the outliner is sync; fonts load here
   const pkg = await buildSheetPackage({ svg: doc.svg, metadata: artboard.metadata, settings, folder, stem: sheetStem(folder), pairId: artboard.id,
-    now: now.toISOString(), prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(settings.epsConverter) });
+    now: now.toISOString(), prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(settings.epsConverter, signal) });
+  if (signal?.aborted) return [];
   await writeSheetExport(root, folder, pkg.files);
   await countUse(get, artboard, now.toISOString());
   remember(get(), artboard.id, { folder, exportedAt: now.toISOString() });
@@ -94,24 +96,45 @@ async function countUse(get: () => BuilderActionContext, artboard: FinalArtboard
   remember(get(), artboard.id, { countedIds: [...artboard.countedIds, ...fresh] });
 }
 
+async function runExportLoop(get: () => BuilderActionContext, targets: readonly FinalArtboard[], run: BuilderExportRun): Promise<{ done: number; problems: string[] }> {
+  const texts = await svgTextsFor(get(), targets);
+  const problems: string[] = [];
+  let done = 0;
+  for (const a of targets) {
+    if (run.isCancelled()) break;
+    run.startItem(a.name);
+    get().setBusy(`Exporting artboards (${done}/${targets.length} · ${targets.length - done} left) — ${a.name}…`);
+    let itemProblems: string[] = [];
+    try {
+      itemProblems = await exportOne(get, get().model.artboards.find((x) => x.id === a.id) ?? a, texts, run.signal);
+    } catch (error) {
+      if (!run.isCancelled()) itemProblems = [`${a.name}: ${error instanceof Error ? error.message : "could not be written"}`];
+    }
+    if (run.isCancelled()) break;
+    done += 1;
+    problems.push(...itemProblems);
+    run.advance(itemProblems);
+  }
+  return { done, problems };
+}
+
 async function exportSelected(get: () => BuilderActionContext): Promise<void> {
   const ctx = get();
   if (ctx.model.root === null) return ctx.say("Open the folder first — sheets are saved inside it", true);
   if (sheetsRoot(ctx) === null) return;
   const targets = targetsOf(ctx);
   if (targets.length === 0) return ctx.say("Check the artboards to export first", true);
-  ctx.setBusy(`Exporting ${targets.length} artboard(s) into _artboard_sheets…`);
-  const problems: string[] = [];
+  const run = beginBuilderExport(targets.length);
+  ctx.setBusy(`Exporting artboards (0/${targets.length} · ${targets.length} left)…`);
+  let done: number;
+  let problems: string[];
   try {
-    const texts = await svgTextsFor(ctx, targets);
-    for (const a of targets) {
-      try { problems.push(...await exportOne(get, get().model.artboards.find((x) => x.id === a.id) ?? a, texts)); } catch (error) {
-        problems.push(`${a.name}: ${error instanceof Error ? error.message : "could not be written"}`);
-      }
-    }
+    ({ done, problems } = await runExportLoop(get, targets, run));
   } finally {
+    run.finish();
     get().setBusy(null);
   }
+  if (run.isCancelled()) return get().say(`Artboard export cancelled — ${done} of ${targets.length} exported (${targets.length - done} left)`);
   get().say(problems.length === 0 ? `${targets.length} artboard(s) exported into _artboard_sheets` : `Exported with problems — ${problems.join("; ")}`, problems.length > 0);
 }
 

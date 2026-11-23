@@ -11,12 +11,11 @@ Since 2026-11-14 the builder's metadata is the **same system as the SVG to uploa
   - Older saves are read with `subtitle` → `description` and `keywords` → `tags`.
 - **Prompt**: `DEFAULT_SHEET_PROMPT` is the stock prompt. It asks for Title 1, Title 2, Title, Description, Tags and **Title-Artboard**. A saved copy of the old JSON prompt is replaced with it on read (`isLegacySheetPrompt`).
 - **Image** (`lib/svgBuilder/metaimage.ts`, `metaimagefor.ts`, `preview.ts` `sheetPngFor`):
-  - the sheet's **icons only**: the banner strip is cut off and the banner turned off, so the icon grid keeps its exact size — or, with **Send the whole sheet with its banner** ticked in the confirmation (2026-11-23, `builder-meta-full-sheet`, pref `metaFullSheet`, default off), the whole sheet; ticking it draws the exact images again before anything is sent;
-  - rendered by the PNG export's renderer (`exporter.ts` `sheetPngBlob`) as **one PNG of at most 1 megapixel** (`megapixelSize`);
-  - shown in the confirmation and sent unchanged.
-- **Answer** (`parseSheetAnswer`): Title, Description and Tags become the metadata. **Title-Artboard** (2–5 words) is not metadata: it becomes the artboard's **visible banner title**, and the subtitle becomes the default phrase "Editable stroke width" — unless **Put the answer's title on the banner** is unticked in the confirmation (2026-11-23, `builder-meta-title-banner`, pref `metaTitleToBanner`, default on): then only the metadata is filled and the banner words stay. Both choices are in the sheet's and the artboards' confirmations (`SvgBuilderMetaOptions.tsx`) and remembered.
-  - On artboards (✦ Generate metadata, `withSheetAnswer`) this happens at once. An artboard open on the stage gets the same words and metadata there, so it shows no unsaved change.
-  - For the current sheet the answer is **applied at once** (2026-11-15: no draft step, no Accept draft button). It is accepted when it passes the upload rules, else kept as invalid with its errors in the editor. The Title-Artboard goes onto the banner as one undo step, and the confirmation closes.
+  - **icons only** (banner cut off so the grid keeps its exact size), or with **Send the whole sheet with its banner** (`builder-meta-full-sheet`, pref `metaFullSheet`, default off) the whole sheet (redrawn at once before anything is sent);
+  - rendered via `sheetPngBlob` (`exporter.ts`) as **one PNG of at most 1 MP** (`megapixelSize`), shown in the confirmation and sent unchanged.
+- **Answer** (`parseSheetAnswer`): Title, Description and Tags become metadata. **Title-Artboard** (2–5 words) becomes the artboard's **visible banner title** (subtitle "Editable stroke width") unless **Put the answer's title on the banner** (`builder-meta-title-banner`, pref `metaTitleToBanner`, default on) is unticked, leaving banner words unchanged. Both choices sit in `SvgBuilderMetaOptions.tsx` and persist.
+  - On artboards (✦ Generate metadata, `withSheetAnswer`) this applies at once; an open artboard updates on stage too without unsaved state.
+  - On the current sheet the answer applies at once (no draft step): accepted when upload rules pass, else invalid with errors in the editor; Title-Artboard lands on the banner as one undo step and the confirmation closes.
 - **Banner text**: metadata never replaces the banner words any more (`sheetCopy`). The SVG's hidden `<title>` uses the accepted metadata title, and `<desc>` holds the description and tags.
 - **Editing** (`SvgBuilderMetaFields.tsx`, in the metadata widget): the upload tab's `UploadMetaFields` (Title, Description, Tags, each with Copy, without the Icon Name field: `showName={false}`).
   - Editing an accepted answer marks it `edited`.
@@ -53,6 +52,7 @@ _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/
   - `<stem>.png` at full size, 2×;
   - `export.json`: the Upload tab's export record (status `processed`, or `partial` when a part failed), so the stock upload tab discovers the package.
   - Every failed part is reported in the toast and the rest still ships.
+  - While running, `SvgBuilderExportProgress` (`builder-progress-mount`, `builder-export-progress-…`) advances live per artboard with `{done} completed / {total}`, `{left} remaining`, `%`, the current artboard name, Cancel (aborts EPS / stops before the next artboard, keeping real progress), Review results and ✕ ([process-progress.md](process-progress.md)); `builder-export-selected` and `builder-busy` also show live `done/total` and `left`.
   - The export counts the icons' use once per artboard, and the artboard remembers its folder and `exportedAt`.
 - The builder header is pinned to the top while the page scrolls.
 

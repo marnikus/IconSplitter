@@ -58,6 +58,7 @@ function Shell() {
         <div id="batch-progress-mount" data-testid="batch-progress-mount"></div>
         <div id="upload-progress-mount" data-testid="upload-progress-mount"></div>
         <div id="stock-upload-progress-mount" data-testid="stock-upload-progress-mount"></div>
+        <div id="builder-progress-mount" data-testid="builder-progress-mount"></div>
       </div>
       <Nav tab={tab} />
       <main ref={mainRef} className="app-main" data-testid="app-main">

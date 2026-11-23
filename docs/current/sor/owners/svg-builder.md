@@ -17,7 +17,7 @@ Back to the [owner map](../OWNERS.md) and [behaviour contract](../svg-builder.md
 | stage walking | `src/svgBuilder/{stagenav,useStageHotkeys}.ts`, `src/svgBuilder/actions/stagenav.ts`, `SvgBuilderEditingLabel.tsx` | ◀ ▶ and ← → templates, ↑ ↓ artboards (2026-11-23) |
 | big icons | `src/lib/svgBuilder/merges.ts`, `layout.ts` `mergedCells`, `src/svgBuilder/actions/merges.ts`, `SvgBuilderQuickMerge.tsx`, `useSvgBuilder` / `useBuilderActions` (slots ↔ positions) | 2 × 2 cells → one big icon (2026-11-23) |
 | icon styles | `src/lib/svgBuilder/{iconstyles,stylepaint}.ts`, `src/svgBuilder/actions/styles.ts`, `SvgBuilderControls.tsx` `StyleFilterControl`, `SvgBuilderColoredStyle.tsx`, `quickedit.ts` (`styled`) | STYLES filter; colored icons drawn with their own paints, strokes / fills set apart (2026-11-23) |
-| presentation | `src/svgBuilder/SvgBuilder*.tsx`, `briefText.ts`, `svgBuilder.css` | header, folder bar, library + recipe, stage + artboard overlays, Customize sections, export menu, toast, dialogs — app-theme styles only |
+| presentation | `src/svgBuilder/SvgBuilder*.tsx`, `exportprogress.ts`, `briefText.ts`, `svgBuilder.css` | header, folder bar, library + recipe, stage + artboard overlays, Customize sections, export menu, live artboard export progress bar, toast, dialogs — app-theme styles only |
 | shared provider / key | `src/lib/upload/gemini.ts`, `src/upload/configstore.ts`, `src/upload/keystore.ts`, `src/ui/PromptWindow.tsx`, `src/ui/KeySlot.tsx` | unchanged Gemini config, prompt presets and key vault |
 | tests | `tests/svg_builder_*.test.ts*`, edited `tests/workbench_ui.test.tsx`, `tests/session.test.ts`, `tests/log_ui.test.tsx`, `tests/scroll_top.test.tsx` | TDD contracts and shell regressions |
 
