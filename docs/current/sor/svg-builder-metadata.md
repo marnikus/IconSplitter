@@ -36,7 +36,7 @@ The tree mirrors single icons' `_split_output`, but under **`_artboard_sheets`**
 _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/
   template.json                                   ← the template's blueprint
   artboard_<NN>_<its title>/                      ← one per derived artboard
-    metadata.json  preview.png  export/…
+    sheet.json  metadata.json  preview.png  export/…
 ```
 
 - **Template folder**: `<its title>_sheet_<cells>_icons_<colour>_<colour>_palette_id<code>` (`templateFolder`).
@@ -55,4 +55,10 @@ _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/
   - Every failed part is reported in the toast and the rest still ships.
   - The export counts the icons' use once per artboard, and the artboard remembers its folder and `exportedAt`.
 - The builder header is pinned to the top while the page scrolls.
+
+## Files edited outside the app — 🗂 Register (2026-11-16; reading back 2026-11-22)
+
+- **sheet.json** (`actions/sheetjson.ts`): each artboard folder's full preset (`presetJsonOf`). For the artboard open on the stage it follows the stage live; every other artboard's follows its SAVED state, rewritten when the artboard or its template's look changes (`useSheetFileMirror.ts`, `actions/sheetsync.ts`). metadata.json follows the saved metadata too (its prompt, model and time kept).
+- **🗂 Register templates and artboards** (`builder-register`; *Automatic register* `builder-auto-register` runs it after every scan; `actions/register.ts`, `lib/svgBuilder/registerplan.ts`): new template folders (template.json) and artboard folders (sheet.json / metadata.json) join the lists. A KNOWN template or artboard is updated from a file edited outside the app: template.json → its look; sheet.json → words, icons by name (names not in the library stay empty and are counted), locks, its own look changes (measured against the template the file was written with), metadata; metadata.json → metadata (an accepted one turns *edited* until ✓ Accept). What the stage shows follows its files unless it holds unsaved edits (kept; the toast says so). Then files still holding an older copy get the app's state. Folders deleted by hand are not removed from the app.
+- **Fingerprints** (`filesigstore.ts`, `lib/svgBuilder/sheetsync.ts`): the app remembers a fingerprint of every JSON file it writes or reads, so its own copies — older ones, the open artboard's live draft — are never read back as edits, and its automatic writes never go over a file changed outside the app (the stage says once that it waits for Register). ✓ Save template still writes template.json and says when that replaced an outside change. A template.json from before fingerprints is read when newer than the template's last save; artboard files from before fingerprints that differ are replaced once, after a copy goes to that folder's `.removed versions/<file>~<stamp>`.
 - **✦ Generate metadata in the pinned header** (2026-11-15, `builder-header-generate-metadata`, beside ⇪ Export all selected): it generates for the checked artboards, else the open artboard, else the current sheet. The exact-request confirmation is shown first, as everywhere else.

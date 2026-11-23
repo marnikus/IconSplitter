@@ -166,8 +166,10 @@ export interface BuilderActions {
   exportSelectedArtboards: () => void;
   /** Rewrites the open artboard's sheet.json from the stage (2026-11-16). */
   syncSheetJson: () => void;
-  /** Registers hand-added template / artboard folders (2026-11-16). */
+  /** Registers hand-added template / artboard folders (2026-11-16) and reads back files changed outside the app (2026-11-22). */
   registerSheets: (quiet?: boolean) => void;
+  /** The app's newer state into its JSON files (2026-11-22): every file ("all") or the given artboards'; never over an outside edit. */
+  syncSheetFiles: (scope: "all" | readonly string[]) => void;
   setAutoRegister: (on: boolean) => void;
   /** 📂 Location (2026-11-16): the open artboard's / edited template's folder in Explorer, through the helper. */
   openLocation: () => void;

@@ -11,6 +11,7 @@ import { useBuilderComputed, type BuilderComputed } from "./useBuilderComputed";
 import { useBuilderActions } from "./useBuilderActions";
 import { bindBuilderSvgEdit } from "./iconedit";
 import { useArtboardUndo } from "./useArtboardUndo";
+import { useSheetFileMirror } from "./useSheetFileMirror";
 import type { BuilderActions } from "./actiontypes";
 
 export interface BuilderApi extends BuilderModel, BuilderComputed {
@@ -33,6 +34,7 @@ export function useSvgBuilder(): BuilderApi {
   useIconEditBinding(model, computed, patch);
   useArtboardUndo(model, actions);
   useSheetJsonSync(model, slice.checked, actions);
+  useSheetFileMirror(model, actions); // before auto-register: a folder's first full file check is queued first
   useAutoRegister(model, actions);
   return {
     ...model, ...computed,

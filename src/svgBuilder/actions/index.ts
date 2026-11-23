@@ -18,6 +18,7 @@ import { locationActions } from "./location";
 import { artboardMetaEditActions } from "./artboardmetaedit";
 import { registerActions } from "./register";
 import { sheetListActions } from "./sheetlists";
+import { sheetSyncActions } from "./sheetsync";
 
 export function createBuilderActions(get: () => BuilderActionContext): BuilderActions {
   const folder = folderActions(get);
@@ -38,8 +39,9 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const metaEdit = artboardMetaEditActions(get);
   const register = registerActions(get);
   const lists = sheetListActions(get);
+  const files = sheetSyncActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...location, ...register, ...lists,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...location, ...register, ...lists, ...files,
     presets: get().presetActions,
   };
 }

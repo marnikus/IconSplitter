@@ -1,6 +1,6 @@
 // model.ts — the builder workspace's one React state shape. Pure reducer and
 // validated initial state; storage, provider calls and disk IO stay in siblings.
-import { loadAutoRegister } from "./actions/register";
+import { loadAutoRegister } from "./autoregisterstore";
 import type { GeminiConfig } from "../lib/upload/gemini";
 import { loadGeminiConfig } from "../upload/configstore";
 import { getAppState } from "../state/appstore";
