@@ -1,7 +1,7 @@
 // StockUploadRow.tsx — one exported item row: preview, stem + export/ path +
 // general row badges, formats, metadata summary, and actions.
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import type { ExportedItem } from "../lib/stockupload/types";
@@ -10,6 +10,7 @@ import type { IconMetadata } from "../lib/upload/meta";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
 import { isRowGestureClick } from "../ui/rowgesture";
+import UploadNameField from "../ui/UploadNameField";
 import UploadRowBadges from "../upload/UploadRowBadges";
 import StockUploadMetaFields from "./StockUploadMetaFields";
 import StockUploadPreview from "./StockUploadPreview";
@@ -48,6 +49,7 @@ function StockUploadRowView({ item, a, active = false, register }: {
   item: ExportedItem; a: StockRowPresentation; active?: boolean; register: RegisterCheckedRow;
 }) {
   const ref = useRowBinding(item.id, register);
+  const [renameOpen, setRenameOpen] = useState(false);
   return (
     <div ref={ref} role="listitem" data-testid={`stock-row-${item.id}`} tabIndex={-1}
       className="up-row stock-up-row processed"
@@ -62,21 +64,32 @@ function StockUploadRowView({ item, a, active = false, register }: {
       <FileIdentityCell item={item} a={a} />
       <FormatsCell item={item} />
       <MetadataSummaryCell item={item} draft={a.metaDraftOf(item)} />
-      <RowActionsCell item={item} a={a} />
+      <RowActionsCell item={item} a={a} onToggleRename={() => setRenameOpen((v) => !v)} />
+      {renameOpen && <ExpandedRowRename item={item} a={a} />}
       {active && <ExpandedRowMeta item={item} a={a} />}
     </div>
   );
 }
 
-function ExpandedRowMeta({ item, a }: { item: ExportedItem; a: StockRowPresentation }) {
+function ExpandedRowRename({ item, a }: { item: ExportedItem; a: StockRowPresentation }) {
   const workName = itemWorkName(item);
   const customUpload = item.stem !== workName ? item.stem : null;
+  const m = a.metaDraftOf(item).metadata;
+  return (
+    <div className="up-detail" data-testid={`stock-rename-panel-${item.id}`}>
+      <UploadNameField id={item.id} workName={workName} uploadName={customUpload}
+        titleText={m.title} descriptionText={m.description}
+        onApply={(next) => a.renameItem(item.id, next)} />
+    </div>
+  );
+}
+
+function ExpandedRowMeta({ item, a }: { item: ExportedItem; a: StockRowPresentation }) {
   return (
     <div className="up-detail" data-testid={`stock-detail-${item.id}`}>
       <StockUploadMetaFields
         id={item.id}
         draft={a.metaDraftOf(item)}
-        rename={{ workName, uploadName: customUpload, onApply: (next) => a.renameItem(item.id, next) }}
         onEdit={(patch) => a.editMeta(item, patch)}
         onAccept={() => a.acceptMeta(item)}
         onCopy={(f) => a.copyMeta(item, f)}
@@ -139,12 +152,19 @@ function MetadataSummaryCell({ item, draft }: { item: ExportedItem; draft: Stock
   );
 }
 
-function RowActionsCell({ item, a }: { item: ExportedItem; a: StockRowPresentation }) {
+function RowActionsCell({ item, a, onToggleRename }: {
+  item: ExportedItem; a: StockRowPresentation; onToggleRename: () => void;
+}) {
   return (
     <div className="svg-file-actions">
       <button type="button" className="svg-btn tiny" data-testid={`stock-meta-btn-${item.id}`}
         onClick={(e) => { e.stopPropagation(); a.selectRow(item.id, "replace"); }}>
         Metadata
+      </button>
+      <button type="button" className="svg-btn tiny" data-testid={`stock-rename-btn-${item.id}`}
+        title="Edit exported upload file name (stored in export.json only, never in metadata)"
+        onClick={(e) => { e.stopPropagation(); onToggleRename(); }}>
+        ✎ File name
       </button>
       <button type="button" className="svg-btn tiny" data-testid={`stock-location-${item.id}`}
         title="Copy export folder path"

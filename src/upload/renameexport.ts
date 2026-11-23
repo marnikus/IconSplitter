@@ -13,6 +13,7 @@ import {
   stemOf,
   type ExportRecord,
 } from "../lib/upload/export";
+import { sha256Hex } from "../lib/upload/hash";
 import { effectiveExportStem, shrinkUploadNameToBudget } from "../lib/upload/uploadname";
 
 export interface RenameExportArgs {
@@ -101,45 +102,71 @@ async function commitJson(dir: DirHandleLike, record: ExportRecord): Promise<voi
 }
 
 interface CopyOutcome { touched: number; obsolete: Set<string> }
+interface SlotCopyCtx { dir: DirHandleLike; workName: string; targetStem: string; out: CopyOutcome }
 
-async function copyOneSlot(
-  dir: DirHandleLike,
-  slot: Record<string, unknown>,
-  targetStem: string,
-  out: CopyOutcome,
-): Promise<{ keep: boolean; oldStem: string }> {
-  const oldPath = slot.path as string;
-  const oldName = fileNameOf(oldPath);
+function scrubEpsTitle(src: Uint8Array, ext: string, workName: string): { bytes: Uint8Array; changed: boolean } {
+  if (ext !== "eps") return { bytes: src, changed: false };
+  const text = unutf8(src);
+  const safe = `${workName}.eps`.replace(/[\\()]/g, (ch) => `\\${ch}`).replace(/\s+/g, " ");
+  const next = text.replace(/^%%Title:[^\r\n]*/m, `%%Title: ${safe}`);
+  return next === text ? { bytes: src, changed: false } : { bytes: utf8(next), changed: true };
+}
+
+async function writeSlotBytes(ctx: SlotCopyCtx, slot: Record<string, unknown>, src: Uint8Array, ext: string): Promise<void> {
+  const newName = `${ctx.targetStem}.${ext}`;
+  const oldName = fileNameOf(slot.path as string);
+  const cleaned = scrubEpsTitle(src, ext, ctx.workName);
+  if (oldName !== newName || cleaned.changed) {
+    await atomicCopy(ctx.dir, cleaned.bytes, ext, newName);
+    if (oldName !== newName) ctx.out.obsolete.add(oldName);
+  }
+  if (cleaned.changed) {
+    slot.bytes = cleaned.bytes.byteLength;
+    slot.hash = typeof slot.hash === "string" && slot.hash.startsWith("sha256:")
+      ? `sha256:${await sha256Hex(cleaned.bytes)}`
+      : await sha256Hex(cleaned.bytes);
+  }
+  slot.path = replaceLeaf(slot.path as string, newName);
+  ctx.out.touched += 1;
+}
+
+async function copyOneSlot(ctx: SlotCopyCtx, slot: Record<string, unknown>): Promise<{ keep: boolean; oldStem: string }> {
+  const oldName = fileNameOf(slot.path as string);
   const ext = extOf(oldName);
   if (ext === "") return { keep: true, oldStem: "" };
   const oldStem = oldName.slice(0, -(ext.length + 1));
-  const newName = `${targetStem}.${ext}`;
-  const src = oldName === newName ? await readBytesAt(dir, newName) : await readBytesAt(dir, oldName);
+  const newName = `${ctx.targetStem}.${ext}`;
+  const src = oldName === newName ? await readBytesAt(ctx.dir, newName) : await readBytesAt(ctx.dir, oldName);
   if (src !== null) {
-    if (oldName !== newName) { await atomicCopy(dir, src, ext, newName); out.obsolete.add(oldName); }
-    slot.path = replaceLeaf(oldPath, newName);
-    out.touched += 1;
+    await writeSlotBytes(ctx, slot, src, ext);
     return { keep: true, oldStem };
   }
-  if ((await readBytesAt(dir, newName)) !== null) {
-    slot.path = replaceLeaf(oldPath, newName);
-    out.touched += 1;
+  const existing = await readBytesAt(ctx.dir, newName);
+  if (existing !== null) {
+    await writeSlotBytes(ctx, slot, existing, ext);
     return { keep: true, oldStem };
   }
   return { keep: false, oldStem };
 }
 
-async function copyRecordedSlots(dir: DirHandleLike, record: ExportRecord, targetStem: string, prevStems: Set<string>): Promise<CopyOutcome> {
+async function copyRecordedSlots(
+  dir: DirHandleLike,
+  record: ExportRecord,
+  workName: string,
+  targetStem: string,
+): Promise<{ outcome: CopyOutcome; slotStems: string[] }> {
   const outs = record.outputs as unknown as Record<string, unknown>;
-  const out: CopyOutcome = { touched: 0, obsolete: new Set<string>() };
+  const outcome: CopyOutcome = { touched: 0, obsolete: new Set<string>() };
+  const slotStems: string[] = [];
+  const ctx: SlotCopyCtx = { dir, workName, targetStem, out: outcome };
   for (const key of OUTPUT_KEYS) {
     const slot = outs[key];
     if (!isRecord(slot) || typeof slot.path !== "string") continue;
-    const res = await copyOneSlot(dir, slot, targetStem, out);
-    if (res.oldStem !== "") prevStems.add(res.oldStem);
+    const res = await copyOneSlot(ctx, slot);
+    if (res.oldStem !== "") slotStems.push(res.oldStem);
     if (!res.keep) outs[key] = null;
   }
-  return out;
+  return { outcome, slotStems };
 }
 
 async function copyCompanionPngs(dir: DirHandleLike, prevStems: ReadonlySet<string>, targetStem: string, out: CopyOutcome): Promise<void> {
@@ -180,7 +207,8 @@ async function executeDiskRename(dir: DirHandleLike, loaded: ExportRecord, args:
   const targetStem = await fitStemToDir(dir, desiredStem, args.workName);
   const next: ExportRecord = JSON.parse(JSON.stringify(loaded)) as ExportRecord;
   const prevStems = seedPrevStems(args.workName, next);
-  const outcome = await copyRecordedSlots(dir, next, targetStem, prevStems);
+  const { outcome, slotStems } = await copyRecordedSlots(dir, next, args.workName, targetStem);
+  for (const s of slotStems) prevStems.add(s);
   await copyCompanionPngs(dir, prevStems, targetStem, outcome);
   if (outcome.touched === 0) return { ok: true, diskRenamed: false, uploadName: desiredStem, record: loaded };
   next.workName = args.workName;

@@ -50,6 +50,7 @@ export interface StageContext {
   root: DirHandleLike;
   sourceText: string;
   exportDir: string;
+  workName?: string;
   stem: string;
   settings: UploadSettings;
   metadata: IconMetadata | null;
@@ -134,7 +135,7 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   const eps = await converter.convert({
     // a rescaled page is the target in POINTS — what Illustrator and the stocks count as px (2026-11-23)
     svg: epsInputSvg(art.optimizedSvg as string, ctx.settings.rescaleArtboard), background: flattenColor(ctx.settings.background),
-    title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
+    title: `${ctx.workName ?? ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
     const producerFree = stripEpsProducerLines(eps.eps);

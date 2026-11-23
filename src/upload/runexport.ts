@@ -156,7 +156,7 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
   try {
     checkCancel(args.signal);
     const art = await buildArtifacts(plan.plan, {
-      root: args.root, sourceText: plan.sourceText, exportDir: plan.exportDir, stem: plan.stem,
+      root: args.root, sourceText: plan.sourceText, exportDir: plan.exportDir, workName: plan.workName, stem: plan.stem,
       settings: args.settings, metadata: args.metadata, raster: args.deps?.raster,
       converter: converterDeps(args.deps), signal: args.signal,
       now: args.deps?.now?.() ?? new Date().toISOString(),

@@ -43,7 +43,7 @@ export default function UploadNameField(p: UploadNameFieldProps) {
       <NameActions id={p.id} canGen={generated !== ""} dirty={dirty} canReset={saved !== "" || draft !== ""}
         onGen={() => commit(generated)} onApply={() => commit(preview === "" ? null : preview)} onReset={() => commit(null)} />
       <small className="up-hint">
-        Exports as <code>{preview !== "" ? preview : activeStem}</code> (no commas or dots, max {UPLOAD_NAME_MAX_CHARS} chars on whole words).
+        Exports as <code>{preview !== "" ? preview : activeStem}</code> (saved in JSON + exported filenames only — never in metadata; no commas/dots, max {UPLOAD_NAME_MAX_CHARS} chars on whole words).
       </small>
     </div>
   );

@@ -10,6 +10,7 @@ import { overrideCount } from "../lib/svgBuilder/lookoverrides";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 import { isNativeListKeyTarget, isRowGestureClick } from "../ui/rowgesture";
 import { artboardGroups, visibleArtboards } from "./artboardview";
+import UploadNameField from "../ui/UploadNameField";
 import { artboardWorkName } from "./actions/artboardrename";
 import { useUploadNames } from "../upload/uploadnamestore";
 import SvgBuilderRowMeta from "./SvgBuilderRowMeta";
@@ -78,6 +79,7 @@ function onListKeys(e: KeyboardEvent<HTMLDivElement>, b: BuilderApi, ids: string
 }
 
 function ArtboardGroupView({ b, template, artboards }: { b: BuilderApi; template: SheetTemplate; artboards: FinalArtboard[] }) {
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   return <div className="bld-artboard-group" data-testid={`builder-artboard-group-${template.id}`}>
     <div className="bld-artboard-group-head">
       <b>{template.name}</b><span>{artboards.length} artboard{artboards.length === 1 ? "" : "s"}</span>
@@ -85,13 +87,29 @@ function ArtboardGroupView({ b, template, artboards }: { b: BuilderApi; template
     </div>
     {artboards.length === 0 && <p className="bld-templates-empty">No artboards yet — ＋ Add artboard, then pick its icons.</p>}
     {artboards.map((a) => <Fragment key={a.id}>
-      <ArtboardRow b={b} template={template} artboard={a} />
+      <ArtboardRow b={b} template={template} artboard={a} onToggleRename={() => setRenamingId((cur) => (cur === a.id ? null : a.id))} />
+      {renamingId === a.id && <ArtboardRenamePanel b={b} artboard={a} />}
       {b.artboardSel.active === a.id && <SvgBuilderRowMeta b={b} artboard={a} />}
     </Fragment>)}
   </div>;
 }
 
-function ArtboardRow({ b, template, artboard }: { b: BuilderApi; template: SheetTemplate; artboard: FinalArtboard }) {
+function ArtboardRenamePanel({ b, artboard }: { b: BuilderApi; artboard: FinalArtboard }) {
+  const names = useUploadNames();
+  const workName = artboardWorkName(artboard, b.artboards, b.templates);
+  const uploadName = artboard.uploadName ?? names[artboard.id] ?? null;
+  return (
+    <div className="bld-row-meta" data-testid={`builder-artboard-rename-panel-${artboard.id}`}>
+      <UploadNameField id={artboard.id} workName={workName} uploadName={uploadName}
+        titleText={artboard.metadata?.title ?? ""} descriptionText={artboard.metadata?.description ?? ""}
+        onApply={(next) => b.actions.setArtboardUploadName(artboard.id, next)} />
+    </div>
+  );
+}
+
+function ArtboardRow({ b, template, artboard, onToggleRename }: {
+  b: BuilderApi; template: SheetTemplate; artboard: FinalArtboard; onToggleRename: () => void;
+}) {
   const active = b.artboardSel.active === artboard.id;
   const checked = b.artboardSel.checked.includes(artboard.id);
   const open = b.editingArtboardId === artboard.id;
@@ -110,7 +128,7 @@ function ArtboardRow({ b, template, artboard }: { b: BuilderApi; template: Sheet
     </div>
     <span className="bld-meta-state" data-state={artboard.metadata?.state ?? "empty"} data-testid={`builder-artboard-meta-${artboard.id}`}>
       {artboard.metadata === null ? "no metadata" : `metadata ${artboard.metadata.state}`}</span>
-    <RowActions b={b} artboard={artboard} own={own} />
+    <RowActions b={b} artboard={artboard} own={own} onToggleRename={onToggleRename} />
   </div>;
 }
 
@@ -131,12 +149,17 @@ function ArtboardFacts({ b, artboard, cells }: { b: BuilderApi; artboard: FinalA
   );
 }
 
-function RowActions({ b, artboard, own }: { b: BuilderApi; artboard: FinalArtboard; own: number }) {
+function RowActions({ b, artboard, own, onToggleRename }: {
+  b: BuilderApi; artboard: FinalArtboard; own: number; onToggleRename: () => void;
+}) {
   return <>
     {artboard.exportedAt !== null && <span className="v2-chip approved" data-testid={`builder-artboard-exported-${artboard.id}`}>exported</span>}
     {own > 0 && <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-reset-${artboard.id}`}
       title={`${own} setting${own === 1 ? "" : "s"} changed on this artboard. Reset: follow the template in everything again`}
       onClick={() => b.actions.resetArtboardLook(artboard.id)}>↺ Template <small>{own}</small></button>}
+    <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-rename-btn-${artboard.id}`}
+      title="Edit exported upload file name (stored in JSON only, never in metadata)"
+      onClick={(e) => { e.stopPropagation(); onToggleRename(); }}>✎ File name</button>
     <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-regen-${artboard.id}`} title="Generate this artboard's metadata again (the exact request is shown first)"
       onClick={() => b.actions.generateArtboardsMetadata([artboard.id])}>↻ Metadata</button>
     <button type="button" className="svg-btn tiny" data-testid={`builder-artboard-remove-${artboard.id}`} aria-label={`Remove ${artboard.name}`}

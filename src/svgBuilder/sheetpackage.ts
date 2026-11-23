@@ -99,22 +99,21 @@ function acceptedOf(m: SheetMetadata | null): IconMetadata | null {
 
 interface Part { name: string; bytes: Uint8Array | null; problem: string | null }
 
+function finalizeEpsText(eps: string, cleanExport: boolean, meta: IconMetadata | null): string {
+  const producerFree = stripEpsProducerLines(eps);
+  if (cleanExport) return cleanEpsDocument(producerFree, meta);
+  return meta === null ? producerFree : embedXmpMetadataInEps(producerFree, meta);
+}
+
 async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: IconMetadata | null): Promise<Part> {
   const name = `${a.stem}.eps`;
+  const docTitle = `${a.workName ?? a.stem}.eps`;
   if (!a.settings.includeEps || d.eps === undefined) return { name, bytes: null, problem: a.settings.includeEps ? "EPS: no converter" : null };
   try {
     // a rescaled page is the target in POINTS — what Illustrator and the stocks count as px (2026-11-23)
-    const out = await d.eps({ svg: epsInputSvg(solidPaint(a.svg), a.settings.rescaleArtboard), background: flattenColor(sizeOf(a.svg).background), title: name, createdAt: a.now });
-    // The EPS is written from the CLEANED sheet above, so the artwork is already
-    // clean; this strips the PostScript paperwork a converter adds (`%%Creator`,
-    // `%%CreationDate`, `%ADO_*`, a second metadata carrier) and leaves exactly
-    // one XMP carrier with Title, description and tags.
+    const out = await d.eps({ svg: epsInputSvg(solidPaint(a.svg), a.settings.rescaleArtboard), background: flattenColor(sizeOf(a.svg).background), title: docTitle, createdAt: a.now });
     if (!out.ok) return { name, bytes: null, problem: `EPS: ${out.reason}${out.fix === undefined ? "" : ` — ${out.fix}`}` };
-    const producerFree = stripEpsProducerLines(out.eps);
-    const epsText = a.settings.cleanExport
-      ? cleanEpsDocument(producerFree, meta)
-      : (meta === null ? producerFree : embedXmpMetadataInEps(producerFree, meta));
-    return { name, bytes: text(epsText), problem: null };
+    return { name, bytes: text(finalizeEpsText(out.eps, a.settings.cleanExport, meta)), problem: null };
   } catch (error) {
     return { name, bytes: null, problem: `EPS: ${error instanceof Error ? error.message : "conversion failed"}` };
   }

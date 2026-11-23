@@ -27,7 +27,8 @@ async function atomicWriteFile(
   bytes: Uint8Array,
   verify: (back: Uint8Array) => boolean,
 ): Promise<void> {
-  const tmp = `${name}.tmp`;
+  const dot = name.lastIndexOf(".");
+  const tmp = `_meta_stage${dot >= 0 ? name.slice(dot) : ".tmp"}`;
   await writeFileOverwrite(dir, tmp, new Blob([bytes as BlobPart]));
   const tmpBack = await readBytesAt(dir, tmp);
   if (tmpBack === null || !verify(tmpBack)) throw new Error(`tmp verify failed for ${name}`);

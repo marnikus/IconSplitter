@@ -22,6 +22,13 @@ import {
 import { renameExportPackage } from "../src/upload/renameexport";
 import { buildSheetPackage } from "../src/svgBuilder/sheetpackage";
 import { writeSheetExport } from "../src/svgBuilder/sheetwriter";
+import { artboardSheetJson, metaFileJson } from "../src/lib/svgBuilder/sheetsync";
+import { newArtboard } from "../src/lib/svgBuilder/artboards";
+import { newTemplate } from "../src/lib/svgBuilder/templates";
+import { DEFAULT_CONFIG } from "../src/lib/svgBuilder/config";
+import { DEFAULT_SELECTION_RECIPE } from "../src/lib/svgBuilder/selection";
+import { CONVERTERS } from "../src/lib/upload/epsconv/registry";
+import { validateMetadata } from "../src/lib/upload/meta";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="#FFFFFF"/><path d="M20 20h100v100H20z" fill="#112233"/></svg>';
@@ -251,5 +258,60 @@ describe("uploadnamestore & export.json workName + uploadName", () => {
     expect(longDesired.startsWith(`${res.uploadName}_`)).toBe(true);
     expect(exportDir!.children.has(`${res.uploadName}.svg`)).toBe(true);
     expect(exportDir!.children.has(`${res.uploadName}.png`)).toBe(true);
+  });
+
+  it("keeps uploadName strictly in JSON (export.json / sheet.json) and NEVER inside SVG, EPS, or metadata.json", async () => {
+    const workName = "icon-sheet_01_v1";
+    const uploadStem = "Unique_website_upload_filename_token_99";
+    const title = "Breakfast meal and morning food icons";
+    const description = "Enjoying a peaceful morning breakfast ritual with coffee and pancakes";
+    const tags = ["icon", "pictogram", "vector", "stroke", "line", "editable", "web", "breakfast", "morning", "food"];
+    const validation = validateMetadata({ title, description, tags });
+
+    const pkg = await buildSheetPackage(
+      {
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200"><path d="M10 10h80v80H10z" fill="none" stroke="#111111" stroke-width="2"/></svg>',
+        metadata: { state: "accepted", title, description, tags, validation, fingerprint: "fp1" },
+        settings: { ...DEFAULT_UPLOAD_SETTINGS, includeSvg: true, includeJpeg: false, includeEps: true, expandText: false },
+        folder: "_artboard_sheets/2026-11/2026-11-19/tpl/art_01",
+        workName,
+        stem: uploadStem,
+        pairId: "art-json-only",
+        now: "2026-11-19T12:00:00.000Z",
+        prompt: "p",
+        model: "gemini-2.5-flash",
+      },
+      { eps: (inp) => CONVERTERS.builtin.convert(inp, { bridgeUrl: "", fetch: globalThis.fetch }) },
+    );
+
+    const dec = new TextDecoder();
+    const svgFile = pkg.files.find((f) => f.name === `${uploadStem}.svg`)!;
+    const epsFile = pkg.files.find((f) => f.name === `${uploadStem}.eps`)!;
+    const jsonFile = pkg.files.find((f) => f.name === "export.json")!;
+    expect(pkg.problems).toEqual([]);
+    expect(svgFile).toBeDefined();
+    expect(epsFile).toBeDefined();
+
+    // SVG & EPS file contents carry Title/Description/Tags, NEVER uploadName:
+    expect(dec.decode(svgFile.bytes)).not.toContain(uploadStem);
+    expect(dec.decode(epsFile.bytes)).not.toContain(uploadStem);
+
+    // export.json carries workName & uploadName at top level, NEVER inside record.metadata:
+    const parsedJson = JSON.parse(dec.decode(jsonFile.bytes));
+    expect(parsedJson.workName).toBe(workName);
+    expect(parsedJson.uploadName).toBe(uploadStem);
+    expect(JSON.stringify(parsedJson.metadata)).not.toContain(uploadStem);
+
+    // sheet.json stores uploadName, while metadata.json NEVER stores uploadName:
+    const tpl = newTemplate(DEFAULT_CONFIG, [], "2026-11-19T00:00:00Z", "tpl-1");
+    const ab = {
+      ...newArtboard(tpl, [], { id: "art-json-only", now: "2026-11-19T00:00:00Z", placedIds: [] }),
+      uploadName: uploadStem,
+    };
+    const sheetJson = artboardSheetJson(ab, tpl, { assets: [], seed: 1, recipe: DEFAULT_SELECTION_RECIPE });
+    expect(sheetJson.uploadName).toBe(uploadStem);
+    const metaJson = metaFileJson(JSON.stringify({ uploadName: uploadStem }), ab.metadata);
+    expect("uploadName" in metaJson).toBe(false);
+    expect(JSON.stringify(metaJson)).not.toContain(uploadStem);
   });
 });

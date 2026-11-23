@@ -6,14 +6,7 @@
 // accepted text persists in the pair's export.json at the next export commit.
 
 import { countWords, dedupeTags, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
-import UploadNameField from "../ui/UploadNameField";
 import type { UploadMetaState } from "./types";
-
-export interface UploadRenameBinding {
-  workName: string;
-  uploadName: string | null;
-  onApply: (next: string | null) => void;
-}
 
 export interface UploadMetaFieldsProps {
   id: string;
@@ -24,16 +17,13 @@ export interface UploadMetaFieldsProps {
   onRegenerate: () => void;
   /** The one-word Icon Name field (default on); the SVG builder's sheet metadata has none (2026-11-14). */
   showName?: boolean;
-  /** Optional per-file upload filename editor (preserved workName + editable uploadName). */
-  rename?: UploadRenameBinding;
 }
 
-function EmptyMetaFields({ id, detail, nameBox, onRegenerate }: {
-  id: string; detail: string; nameBox: React.ReactNode; onRegenerate: () => void;
+function EmptyMetaFields({ id, detail, onRegenerate }: {
+  id: string; detail: string; onRegenerate: () => void;
 }) {
   return (
     <div className="up-meta" data-testid={`upload-meta-empty-${id}`}>
-      {nameBox}
       <p className="up-meta-hint">
         No metadata yet — generate it with Gemini (the icon's image is sent only inside that
         one request), or export without metadata.
@@ -48,19 +38,13 @@ function EmptyMetaFields({ id, detail, nameBox, onRegenerate }: {
   );
 }
 
-export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, onRegenerate, showName = true, rename }: UploadMetaFieldsProps) {
-  const nameBox = rename && (
-    <UploadNameField id={id} workName={rename.workName} uploadName={rename.uploadName}
-      titleText={meta.metadata?.title ?? ""} descriptionText={meta.metadata?.description ?? ""}
-      onApply={rename.onApply} />
-  );
+export default function UploadMetaFields({ id, meta, onEdit, onAccept, onCopy, onRegenerate, showName = true }: UploadMetaFieldsProps) {
   if (meta.metadata === null) {
-    return <EmptyMetaFields id={id} detail={meta.detail} nameBox={nameBox} onRegenerate={onRegenerate} />;
+    return <EmptyMetaFields id={id} detail={meta.detail} onRegenerate={onRegenerate} />;
   }
   const m = meta.metadata;
   return (
     <div className="up-meta" data-testid={`upload-meta-fields-${id}`}>
-      {nameBox}
       <MetaFieldsGrid id={id} m={m} onEdit={onEdit} onCopy={onCopy} showName={showName} />
       <ValidationLine id={id} validation={meta.validation} />
       <MetaActions id={id} meta={meta} onAccept={onAccept} onRegenerate={onRegenerate} />

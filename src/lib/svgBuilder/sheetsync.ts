@@ -6,6 +6,7 @@
 // template (the look) or artboard (words, icons, locks, look changes, metadata).
 import { isRecord } from "../isrecord";
 import { fnv1a32 } from "../pairing";
+import { sanitizeUploadName } from "../upload/uploadname";
 import { artboardConfig, type FinalArtboard } from "./artboards";
 import { overridesOf } from "./lookoverrides";
 import { cleanSheetMetadata, editSheetMetadata, emptySheetMetadata } from "./metadata";
@@ -93,12 +94,16 @@ export interface SheetRead { artboard: FinalArtboard; unresolved: string[] }
 export function artboardFromSheet(a: FinalArtboard, template: SheetTemplate, text: string, assets: readonly BuilderIconAsset[]): SheetRead | null {
   const read = readPresetJson(text, artboardConfig(template, a), assets);
   if (!read.ok) return null;
+  const raw = parseJson(text);
+  const rawUpload = isRecord(raw) && typeof raw.uploadName === "string" ? (sanitizeUploadName(raw.uploadName) || undefined) : a.uploadName;
   const p = read.preset, b = p.config.banner;
   const artboard: FinalArtboard = {
     ...a, title: b.title, subtitle: b.subtitle, heroIconId: b.heroIconId, captionTexts: { ...b.captionTexts },
     overrides: overridesOf(template, p.config), placedIds: p.placedIds ?? a.placedIds, lockedIds: p.lockedIds ?? a.lockedIds,
     metadata: p.metadata === undefined ? a.metadata : editedMetadata(a.metadata, p.metadata),
+    ...(rawUpload ? { uploadName: rawUpload } : {}),
   };
+  if (!rawUpload) delete artboard.uploadName;
   return { artboard, unresolved: p.unresolved };
 }
 
@@ -115,20 +120,26 @@ export function sameMetaFile(text: string, metadata: SheetMetadata | null): bool
   return sameFields(metadata, raw) && (typeof raw.state === "string" ? raw.state : "empty") === (metadata?.state ?? "empty");
 }
 
-/** metadata.json as the app writes it now: its record (when, prompt, model, the AI's Title-Artboard, anything else) kept, the metadata current. */
+/** metadata.json as the app writes it now: its record (when, prompt, model, the AI's Title-Artboard, anything else) kept, the metadata current (never uploadName). */
 export function metaFileJson(existing: string | null, metadata: SheetMetadata | null): Record<string, unknown> {
   const old = existing === null ? null : parseJson(existing);
+  const base = isRecord(old) ? { ...old } : {};
+  delete base.uploadName;
+  delete base.workName;
   const m = metadata ?? emptySheetMetadata();
-  return { ...(isRecord(old) ? old : {}), v: 1, state: m.state, title: m.title, description: m.description, tags: [...m.tags], validation: m.validation };
+  return { ...base, v: 1, state: m.state, title: m.title, description: m.description, tags: [...m.tags], validation: m.validation };
 }
 
 export interface SheetJsonContext { assets: readonly BuilderIconAsset[]; seed: number; recipe: SelectionRecipe }
 
-/** The artboard's sheet.json as the app writes it: its whole sheet (template look + its own), icons by name, locks, metadata. */
+/** The artboard's sheet.json as the app writes it: its whole sheet (template look + its own), icons by name, locks, metadata, and optional uploadName. */
 export function artboardSheetJson(a: FinalArtboard, template: SheetTemplate, ctx: SheetJsonContext): Record<string, unknown> {
   const config = artboardConfig(template, a);
-  return presetJsonOf({ name: config.banner.title, config, placedIds: a.placedIds, lockedIds: a.lockedIds,
-    seed: ctx.seed, recipe: ctx.recipe, metadata: a.metadata, assets: ctx.assets });
+  return {
+    ...presetJsonOf({ name: config.banner.title, config, placedIds: a.placedIds, lockedIds: a.lockedIds,
+      seed: ctx.seed, recipe: ctx.recipe, metadata: a.metadata, assets: ctx.assets }),
+    ...(a.uploadName ? { uploadName: a.uploadName } : {}),
+  };
 }
 
 const cells = (ids: readonly string[]): string => {

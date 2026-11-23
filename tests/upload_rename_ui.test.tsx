@@ -125,8 +125,14 @@ describe("Rename exported upload files across SVG builder, SVG to upload, and Up
     const abId = row.getAttribute("data-testid")!.replace("builder-artboard-", "");
     const originalRowName = (q(`builder-artboard-name-${abId}`) as HTMLInputElement).value;
 
-    // Activate row, enter pre-export upload name with commas/dots, and apply BEFORE exporting:
+    // Activate row: Metadata panel must NOT contain Upload file name!
     await click(`builder-artboard-${abId}`);
+    expect(q(`builder-artboard-meta-fields-${abId}`)?.querySelector('[data-testid^="upload-name-box-"]')).toBeNull();
+    expect(q("builder-meta-fields")?.querySelector('[data-testid^="upload-name-box-"]')).toBeNull();
+
+    // Open dedicated per-row File name panel (`builder-artboard-rename-btn-${abId}`) and apply BEFORE exporting:
+    await click(`builder-artboard-rename-btn-${abId}`);
+    expect(q(`builder-artboard-rename-panel-${abId}`)).not.toBeNull();
     await click(`builder-artboard-check-${abId}`);
     await typeInto(`upload-file-name-${abId}`, "Set of assorted cafe food icons, fresh. Drinks machine cup");
     await click(`upload-name-apply-${abId}`);
@@ -146,8 +152,12 @@ describe("Rename exported upload files across SVG builder, SVG to upload, and Up
     expect(text(`stock-name-${abId}`)).toBe("Set_of_assorted_cafe_food_icons_fresh_Drinks_machine_cup");
     expect(text(`stock-work-name-${abId}`)).toMatch(/_v1$/);
 
-    // Enter Title + Description in Stock Upload and click bulk "Rename for upload" to rename export/ files in-place!
+    // Enter Title + Description in Stock Upload (Metadata panel must NOT contain Upload file name!)
+    // and click bulk "Rename for upload" to rename export/ files in-place!
     await click(`stock-row-${abId}`);
+    expect(q(`stock-meta-fields-${abId}`)?.querySelector('[data-testid^="upload-name-box-"]')).toBeNull();
+    await click(`stock-rename-btn-${abId}`);
+    expect(q(`stock-rename-panel-${abId}`)).not.toBeNull();
     await typeInto(`stock-meta-title-${abId}`, "Set of assorted cafe food icons");
     await typeInto(`stock-meta-description-${abId}`, "Providing refreshing culinary enjoyment for customers. Drinks machine cup mug boba donut sandwich");
     await click(`stock-check-${abId}`);
@@ -208,9 +218,8 @@ describe("Rename exported upload files across SVG builder, SVG to upload, and Up
     expect(text("builder-toast")).not.toContain("No selected artboards have Title + Description");
     expect(text(`builder-artboard-upload-name-${abId}`)).toContain(expected);
 
-    // Reset back to workName first, then break writes inside `export/` while keeping reads working (simulating OS write error):
-    // clicking `builder-artboards-rename` must report the REAL disk error and NEVER blame missing metadata!
-    await click(`builder-artboard-${abId}`);
+    // Reset back to workName first via dedicated File name button, then break writes inside `export/` while keeping reads working:
+    await click(`builder-artboard-rename-btn-${abId}`);
     await click(`upload-name-reset-${abId}`);
     await waitUntil(() => q(`builder-artboard-upload-name-${abId}`) === null, "reset to work name");
     const sheetsDir = dir.children.get("_artboard_sheets") as BinDir;
@@ -239,7 +248,7 @@ describe("Rename exported upload files across SVG builder, SVG to upload, and Up
 
   it("SVG to upload: bulk-renames selected icons from Title + Description before export, exports under uploadName, then renames existing export/ files on disk", async () => {
     const cur = loadUploadSettings();
-    saveUploadSettings({ ...cur, defaults: { ...cur.defaults, includeSvg: true, includeJpeg: false, includeEps: false, expandText: false } });
+    saveUploadSettings({ ...cur, defaults: { ...cur.defaults, includeSvg: true, includeJpeg: false, includeEps: true, epsConverter: "builtin", expandText: false } });
     vi.spyOn(raster, "rasterizeJpeg").mockImplementation(async () => { throw new Error("jpeg off"); });
 
     const coffeeId = pairFile("cafe/coffee", "coffee_AI.png").id;
@@ -276,17 +285,29 @@ describe("Rename exported upload files across SVG builder, SVG to upload, and Up
     const coffeeDir = (dir.children.get("cafe") as BinDir).children.get("coffee") as BinDir;
     const exportDir = coffeeDir.children.get("export") as BinDir;
     expect(exportDir.children.has(`${expectedBulk}.svg`)).toBe(true);
+    expect(exportDir.children.has(`${expectedBulk}.eps`)).toBe(true);
     expect(exportDir.children.has("coffee_AI.svg")).toBe(false);
+    // Exported SVG & EPS metadata/headers must NEVER contain uploadName:
+    expect((exportDir.children.get(`${expectedBulk}.svg`) as BinFile).text).not.toContain(expectedBulk);
+    expect((exportDir.children.get(`${expectedBulk}.eps`) as BinFile).text).not.toContain(expectedBulk);
 
-    // Now manually edit the upload name on the ALREADY-exported icon -> renames export/ on disk immediately!
+    // Activate row: Metadata panel must NOT contain Upload file name!
     await click(`upload-row-${coffeeId}`);
+    expect(q(`upload-meta-fields-${coffeeId}`)?.querySelector('[data-testid^="upload-name-box-"]')).toBeNull();
+
+    // Open dedicated File name panel (`upload-rename-btn-${coffeeId}`) -> renames export/ on disk immediately!
+    await click(`upload-rename-btn-${coffeeId}`);
+    expect(q(`upload-rename-panel-${coffeeId}`)).not.toBeNull();
     await typeInto(`upload-file-name-${coffeeId}`, "Hot morning coffee cup icon, minimalist line.");
     await click(`upload-name-apply-${coffeeId}`);
 
     await waitUntil(() => exportDir.children.has("Hot_morning_coffee_cup_icon_minimalist_line.svg"), "disk file renamed");
+    expect(exportDir.children.has("Hot_morning_coffee_cup_icon_minimalist_line.eps")).toBe(true);
     expect(exportDir.children.has(`${expectedBulk}.svg`)).toBe(false);
     const savedRec = JSON.parse((exportDir.children.get("export.json") as BinFile).text);
     expect(savedRec.workName).toBe("coffee");
+    expect(savedRec.uploadName).toBe("Hot_morning_coffee_cup_icon_minimalist_line");
+    expect(JSON.stringify(savedRec.metadata)).not.toContain("Hot_morning_coffee_cup_icon_minimalist_line");
     expect(savedRec.uploadName).toBe("Hot_morning_coffee_cup_icon_minimalist_line");
 
     // Reset back to workName -> renames disk file back to coffee.svg, then per-item "From Title + Description":

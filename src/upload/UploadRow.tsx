@@ -7,8 +7,9 @@
 // badges never merge them.
 
 import { paddingLabel } from "../lib/upload/padding";
-import { memo } from "react";
+import { memo, useCallback, useState } from "react";
 import { useRowBinding, type RegisterCheckedRow } from "../ui/checkedrows";
+import UploadNameField from "../ui/UploadNameField";
 import { selectIntent, type SelectIntent } from "../lib/reviewselect";
 import { isRowGestureClick } from "../ui/rowgesture";
 import type { IconMetadata } from "../lib/upload/meta";
@@ -66,6 +67,8 @@ export type UploadRowPresentation = Omit<UploadRowActions, "checked" | "activeId
  */
 function UploadRowView({ row, a, active = false, register }: { row: UploadRow; a: UploadRowPresentation; active?: boolean; register: RegisterCheckedRow }) {
   const ref = useRowBinding(row.source.id, register);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const toggleRename = useCallback(() => setRenameOpen((v) => !v), []);
   const id = row.source.id;
   const status = statusOf(row);
   return (
@@ -76,7 +79,8 @@ function UploadRowView({ row, a, active = false, register }: { row: UploadRow; a
       <input type="checkbox" className="up-check" data-testid={`upload-check-${id}`}
         aria-label={`Select ${row.source.svgName}`} onClick={(e) => e.stopPropagation()}
         onChange={() => a.toggleCheck(id)} />
-      <RowContent row={row} a={a} />
+      <RowContent row={row} a={a} onToggleRename={a.setRowUploadName ? toggleRename : undefined} />
+      {renameOpen && a.setRowUploadName && <RowRenamePanel id={id} row={row} a={a} />}
       {active && <RowDetail id={id} row={row} a={a} />}
     </div>
   );
@@ -84,7 +88,9 @@ function UploadRowView({ row, a, active = false, register }: { row: UploadRow; a
 
 export default memo(UploadRowView);
 
-const RowContent = memo(function RowContent({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
+const RowContent = memo(function RowContent({ row, a, onToggleRename }: {
+  row: UploadRow; a: UploadRowPresentation; onToggleRename?: () => void;
+}) {
   const id = row.source.id;
   const status = statusOf(row);
   return <>
@@ -98,19 +104,34 @@ const RowContent = memo(function RowContent({ row, a }: { row: UploadRow; a: Upl
       <StatusCell row={row} status={status} />
       <MetaCell row={row} />
       <SettingsCell row={row} a={a} />
-      <ActionCell row={row} a={a} />
+      <ActionCell row={row} a={a} onToggleRename={onToggleRename} />
   </>;
 });
 
-/** The expandable detail: text only — the editable, copiable metadata fields. */
-function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowPresentation }) {
+function rowTitleDesc(row: UploadRow): { title: string; description: string } {
+  const m = row.meta.metadata ?? row.record?.metadata;
+  return { title: m?.title ?? "", description: m?.description ?? "" };
+}
+
+function RowRenamePanel({ id, row, a }: { id: string; row: UploadRow; a: UploadRowPresentation }) {
   const names = useUploadNames();
   const workName = stemOf(row.source.svgName);
   const uploadName = names[id] ?? row.record?.uploadName ?? null;
+  const td = rowTitleDesc(row);
+  return (
+    <div className="up-detail" data-testid={`upload-rename-panel-${id}`}>
+      <UploadNameField id={id} workName={workName} uploadName={uploadName}
+        titleText={td.title} descriptionText={td.description}
+        onApply={(next) => a.setRowUploadName?.(id, next)} />
+    </div>
+  );
+}
+
+/** The expandable detail: text only — the editable, copiable metadata fields. */
+function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowPresentation }) {
   return (
     <div className="up-detail" data-testid={`upload-detail-${id}`}>
       <UploadMetaFields id={id} meta={row.meta}
-        rename={a.setRowUploadName ? { workName, uploadName, onApply: (next) => a.setRowUploadName?.(id, next) } : undefined}
         onEdit={(patch) => a.editMetadata(id, patch)}
         onAccept={() => a.acceptMetadata(id)}
         onCopy={(field) => a.copyMeta(id, field)}
@@ -219,14 +240,21 @@ function SettingsCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) 
   );
 }
 
-/** Metadata / Settings / Location / Export / Remove — the row's own actions. */
-function ActionCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
+/** Metadata / File name / Settings / Location / Export / Remove — the row's own actions. */
+function ActionCell({ row, a, onToggleRename }: {
+  row: UploadRow; a: UploadRowPresentation; onToggleRename?: () => void;
+}) {
   const id = row.source.id;
   const click = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   return (
     <div className="svg-file-actions">
       <button type="button" className="svg-btn tiny" data-testid={`upload-meta-${id}`}
         onClick={click(() => a.requestMetadata([id]))}>Metadata</button>
+      {onToggleRename && (
+        <button type="button" className="svg-btn tiny" data-testid={`upload-rename-btn-${id}`}
+          title="Edit exported upload file name (stored in export.json only, never in metadata)"
+          onClick={click(onToggleRename)}>✎ File name</button>
+      )}
       <button type="button" className="svg-btn tiny" data-testid={`upload-settings-btn-${id}`}
         onClick={click(() => a.openSettings(id))}>Settings</button>
       <button type="button" className="svg-btn tiny" data-testid={`upload-location-${id}`}
