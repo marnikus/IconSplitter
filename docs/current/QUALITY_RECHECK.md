@@ -6092,3 +6092,8 @@ strictly inside).
 - Cause: line icons put `fill="none"` and the pen on the root `<svg>`, which `svgdoc.scanPathTags` did not inherit, so every stroke path counted as filled — a press inside a closed stroke shape picked and dragged it, and nested rings of one path moved as one "filled piece".
 - Fix: root `<svg>` paint + `stroke-width` inherited (`PathTag.strokeWidth`, `SubPath.halfStroke` scaled by the object's matrix); `hit.objectAt` no longer picks the empty inside of an unfilled shape; new `lib/pathedit/strokepress.ts` (72 lines): a press within half the pen + click tolerance of a stroke line selects and drags that one line; with a point of it picked, segments edit points.
 - Measured: `pathedit_stroke_lines` 7/7 (each new rule mutation-witnessed: root inheritance, half-pen tolerance); editor + SVG suites 165 files / 1507 tests pass; full vitest 5042 pass / 27 fail — the same 27 pre-existing environment failures in 9 files; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS (gesture.ts kept at 300 lines).
+
+## 2026-11-23 — SVG builder: ＋ Save as new template on the stage
+
+- The header's *Save as new* only shows while a template is edited (never removed); it is now also on the stage (`builder-stage-template-save-new`) whenever a template or an artboard is open. Saving a new template from an open artboard no longer marks the new template as edited while the artboard stays open (`actions/templates.ts` `saveAsNew`).
+- Measured: `svg_builder_save_new` 2/2 (the artboard rule mutation-witnessed); builder suites 41 files / 302 tests pass; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS (stage actions CC kept ≤ 10 by `SaveAsNewButton` / `TemplateDraftButtons`).
