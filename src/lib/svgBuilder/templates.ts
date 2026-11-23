@@ -23,7 +23,6 @@ export interface SheetTemplate {
   folder?: string | null;
 }
 
-export const TEMPLATE_LIMIT = 60;
 
 /** A stored folder path: inside `_artboard_sheets` only, never climbing out. */
 export function sheetFolderOf(raw: unknown): string | null {
@@ -93,8 +92,7 @@ export function parseTemplates(raw: unknown): SheetTemplate[] {
     const template = parseTemplate(entry);
     if (template === null || ids.has(template.id)) continue;
     ids.add(template.id);
-    out.push(template);
-    if (out.length >= TEMPLATE_LIMIT) break;
+    out.push(template); // no count limit (2026-11-23; was 60)
   }
   return out;
 }

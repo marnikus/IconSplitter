@@ -4,7 +4,7 @@
 // rename. The list is a saved library, written to localStorage at once;
 // applying a template IS undoable, and so is removing one (sheetlists.ts, 2026-11-22).
 import {
-  TEMPLATE_LIMIT, cleanTemplateName, lookOf, newTemplate, templateConfig, type SheetTemplate,
+  cleanTemplateName, lookOf, newTemplate, templateConfig, type SheetTemplate,
 } from "../../lib/svgBuilder/templates";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
@@ -53,7 +53,6 @@ export function saveTemplate(ctx: BuilderActionContext): SheetTemplate | null {
 
 function saveAsNew(ctx: BuilderActionContext): SheetTemplate | null {
   const list = ctx.model.templates;
-  if (list.length >= TEMPLATE_LIMIT) { ctx.say(`At most ${TEMPLATE_LIMIT} templates — remove one first`, true); return null; }
   const created = newTemplate(ctx.model.config, list.map((t) => t.name), new Date().toISOString(), templateId());
   // the new template is the one being edited (later changes are tracked) — unless an artboard is open: it stays open, its draft untouched (2026-11-23)
   store(ctx, [...list, created], ctx.model.editingArtboardId === null ? created.id : undefined);
