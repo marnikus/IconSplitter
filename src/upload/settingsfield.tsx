@@ -6,7 +6,6 @@
 // rows (UploadPaintSettings) cannot drift apart.
 
 import type { DecorationValues } from "../lib/upload/decorations";
-import { ExportCheckRow } from "../ui/exportrows";
 import type { SettingsOverrides, UploadSettings } from "../lib/upload/settings";
 import type { SelectedShadow } from "./shadowselection";
 import type { SelectedBadge } from "./badgeselection";
@@ -71,15 +70,4 @@ export function changeMany(p: UploadSettingsDialogProps, patch: Partial<UploadSe
     return;
   }
   p.onOverride(p.id, { ...p.overrides, ...patch });
-}
-
-/** Shared boolean row, with the same live/pinned write path as every setting. */
-export function ToggleSetting({ p, effective, field, label, testid, hint }: {
-  p: UploadSettingsDialogProps; effective: UploadSettings; field: keyof UploadSettings;
-  label: string; testid: string; hint: string;
-}) {
-  return (
-    <ExportCheckRow label={label} hint={hint} testid={`upload-set-${testid}`} checked={effective[field] as boolean}
-      marker={<Marker p={p} field={field} testid={testid} />} onChange={(value) => change(p, field, value)} />
-  );
 }

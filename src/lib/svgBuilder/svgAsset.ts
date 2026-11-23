@@ -66,16 +66,17 @@ function sanitize(code: string, assetId: string, index: number): Sanitized {
 export function cellGroupOf(args: CellSvgArgs): CellSvgResult {
   const s = sanitizedOf(args.code, args.asset.id, args.frame.index);
   if (!s.ok) return s;
-  return { ok: true, html: groupOf(args, s.children, s.box, transformOf(args.frame, s.box)) };
+  const placed = placementOf(args.frame, s.box);
+  return { ok: true, html: groupOf(args, s.children, s.box, placed) };
 }
 
-function groupOf(args: CellSvgArgs, children: string, box: readonly number[], transform: string): string {
+function groupOf(args: CellSvgArgs, children: string, box: readonly number[], placed: Placement): string {
   const style = args.style;
   const attrs = [
     `data-asset-id="${attr(args.asset.id)}"`, 'data-approved="true"',
-    `data-cell-index="${args.frame.index}"`, `transform="${transform}"`,
+    `data-cell-index="${args.frame.index}"`, `transform="${placed.transform}"`,
     'fill="none"', 'stroke="currentColor"', `color="${attr(style.color)}"`,
-    `stroke-width="${style.strokeWidth}"`, `stroke-linecap="${style.linecap}"`,
+    `stroke-width="${penWidth(style.strokeWidth, placed.scale)}"`, `stroke-linecap="${style.linecap}"`,
     `stroke-linejoin="${style.linecap === "square" ? "miter" : "round"}"`, `data-view-box="${attr(box.join(" "))}"`,
   ];
   return `<g ${attrs.join(" ")}>${children}</g>`;
@@ -96,7 +97,6 @@ function recolor(root: Element): void {
     if (!DRAWABLE.has(name(el))) continue;
     el.setAttribute("fill", "none");
     el.setAttribute("stroke", "currentColor");
-    el.setAttribute("vector-effect", "non-scaling-stroke");
   }
 }
 
@@ -122,14 +122,31 @@ function rewriteRefs(el: Element, ids: ReadonlyMap<string, string>): void {
   }
 }
 
-/** Stroke-aware bounds: the artwork fits `frame.glyph`, centred inside the `frame.size` box. */
-function transformOf(frame: CellFrame, box: readonly number[]): string {
+/** Where one icon sits: the artwork fits `frame.glyph`, centred inside the `frame.size` box. */
+interface Placement {
+  transform: string;
+  /** The scale the transform really applies (rounded, so the pen width below is exact). */
+  scale: number;
+}
+
+function placementOf(frame: CellFrame, box: readonly number[]): Placement {
   const [, , width, height] = box;
   const glyph = frame.glyph > 0 ? Math.min(frame.glyph, frame.size) : frame.size;
-  const scale = Math.min(glyph / width, glyph / height);
+  const scale = Number(round(Math.min(glyph / width, glyph / height)));
   const dx = frame.x + (frame.size - width * scale) / 2 - box[0] * scale;
   const dy = frame.y + (frame.size - height * scale) / 2 - box[1] * scale;
-  return `translate(${round(dx)} ${round(dy)}) scale(${round(scale)})`;
+  return { scale, transform: `translate(${round(dx)} ${round(dy)}) scale(${round(scale)})` };
+}
+
+/**
+ * The stroke width is authored in ARTBOARD pixels (the panel's 1 px), but the
+ * cell's transform scales it — so the drawn width is written back down by that
+ * scale (2026-11-19). A `vector-effect="non-scaling-stroke"` shortcut used to
+ * stand in for this, which only the browser honoured: the saved EPS (and every
+ * other consumer) painted 1 px × the cell scale. Now every format agrees.
+ */
+function penWidth(width: number, scale: number): string {
+  return round(scale > 0 ? width / scale : width);
 }
 
 /** A stroke-only 24×24 preview: the library tile shows exactly what the artboard will draw. */

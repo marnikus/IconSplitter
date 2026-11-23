@@ -25,7 +25,11 @@ export function useSvgBuilder() {
     key: { value: null, source: "none", mask: "not set", title: "No Gemini API key yet",
       note: "stored in IndexedDB", keySet: false },
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null, preview: null,
-    dialog: "none", svgTexts: {},
+    dialog: "none", svgTexts: {}, iconMap: null, pendingUse: new Map(),
+    templates: [], editingTemplateId: null, artboards: [], editingArtboardId: null,
+    templateSel: { checked: [], activeId: null, anchorId: null },
+    artboardSel: { checked: [], activeId: null, anchorId: null },
+    artboardMeta: null, leaveTo: null, editingIconId: null, booting: false, autoRegister: false,
     assets: [asset], visibleAssets: [asset], categories: ["All", "UI"],
     profiles: [{ id: "all", label: "All icons", tags: [] }],
     layout: computeLayout(DEFAULT_CONFIG),
@@ -40,6 +44,7 @@ export function useSvgBuilder() {
       forgetKey: noop, generateMetadata: noop, confirmMetadata: noop, cancelMetadata: noop,
       acceptMetadataDraft: noop, exportSvg: noop, exportPng: noop, copySvg: noop, savePreset: noop,
       loadPreset: noop, openBrief: noop, startIndexing: noop, cancelIndexing: noop, openMetadata: noop, say: noop, closeDialog: noop, presetOfModel: () => ({}),
+      openExportFormats: noop, exportSelectedArtboards: noop, openPresetJson: noop, presetJsonText: () => "", applyPresetJson: () => false,
     },
   };
 }

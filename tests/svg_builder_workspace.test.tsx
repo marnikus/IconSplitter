@@ -328,7 +328,24 @@ describe("SVG builder workspace", () => {
     expect(text("builder-zoom")).toBe("90%");
     await click("builder-export-toggle");
     expect(all('[data-testid^="builder-export-"][role="menuitem"]').map((el) => el.dataset.testid))
-      .toEqual(["builder-export-svg", "builder-export-png", "builder-export-copy", "builder-export-formats", "builder-export-preset", "builder-export-preset-json", "builder-export-load"]);
+      .toEqual(["builder-export-svg", "builder-export-png", "builder-export-copy", "builder-export-package", "builder-export-formats", "builder-export-preset", "builder-export-preset-json", "builder-export-load"]);
+  });
+
+  it("Export settings is its own toolbar button and opens the upload flow's popup", async () => {
+    await openLibrary();
+    const button = q("builder-export-settings")!;
+    expect(button.closest('[data-testid="builder-export"]')).toBeNull(); // beside the dropdown, not in it
+    expect(button.textContent).toContain("Export settings");
+    expect(q("builder-format-dialog")).toBeNull();
+    await click("builder-export-settings");
+    const dialog = q("builder-format-dialog")!;
+    // Same shell as "SVG to upload" → Export settings (ui/exportmodal.tsx).
+    expect(dialog.classList.contains("svg-modal")).toBe(true);
+    expect(dialog.closest(".svg-backdrop")).not.toBeNull();
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(q("bld-set-svg")).not.toBeNull();
+    await click("builder-format-close");
+    expect(q("builder-format-dialog")).toBeNull();
   });
 
   it("Sheet metadata unfolds the prompt + Gemini widget; the brief has Brief and Raw views", async () => {

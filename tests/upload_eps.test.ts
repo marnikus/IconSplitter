@@ -19,9 +19,9 @@ describe("writeEps — a genuine EPS document", () => {
     if (!result.ok) throw new Error(result.reason);
     const head = result.eps.split("%%EndComments")[0];
     expect(head.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
-    expect(head).toContain("%%Creator: IconSplitter");
-    expect(head).toContain("%%Title: fog_AI.eps");
-    expect(head).toContain("%%CreationDate: 2026-10-08T00:00:00.000Z");
+    expect(head).toContain("%%Creator: IconSplitter\n");
+    expect(head).toContain("%%Title: (fog_AI.eps)"); // a DSC string, as a document names itself
+    expect(head).toContain("%%CreationDate: D:20261008000000+00'00'"); // the DSC date form, never ISO
     expect(head).toContain("%%BoundingBox: 0 0 70 70");
     expect(head).toContain("%%HiResBoundingBox: 0 0 69.6 69.6");
     expect(head).toContain("%%DocumentData: Clean7Bit");
@@ -42,7 +42,7 @@ describe("writeEps — a genuine EPS document", () => {
   it("escapes a title so a stray parenthesis cannot break the DSC string", () => {
     const result = writeEps(PREPARED, "#ffffff", { title: "odd (1) name.eps" });
     if (!result.ok) throw new Error(result.reason);
-    expect(result.eps).toContain("%%Title: odd \\(1\\) name.eps");
+    expect(result.eps).toContain("%%Title: (odd \\(1\\) name.eps)");
   });
 
   it("verifies the EPS 10 markers, not just the header", () => {
@@ -115,11 +115,14 @@ describe("writeEps — a genuine EPS document", () => {
     expect(run.painted!.ury).toBeLessThanOrEqual(box.ury + 1e-6);
   });
 
-  it("fills INSIDE gsave/grestore before it strokes, so a filled-and-stroked shape keeps its stroke", () => {
-    // `fill` consumes the current path: `… fill … stroke` stroked nothing
+  it("states the path for BOTH paints, so a filled-and-stroked shape keeps its stroke", () => {
+    // `fill` consumes the current path: `… f … S` stroked nothing (I-61)
     const result = writeEps(art(`<rect x="1" y="1" width="4" height="4" fill="#f00" stroke="#000" stroke-width="1"/>`), "#ffffff");
-    expect(result.ok && result.eps).toContain("gsave 1 0 0 setrgbcolor fill grestore 0 0 0 setrgbcolor 1 setlinewidth");
-    expect(runPostScript(result.ok ? result.eps : "").errors).toEqual([]);
+    const eps = result.ok ? result.eps : "";
+    expect(eps).toContain("1 0 0 rg 1 1 m 5 1 l 5 5 l 1 5 l h f");
+    // the pen is still the setup's (1 w, no dash): only the colour is the stroke's
+    expect(eps).toContain("0 0 0 rg 1 1 m 5 1 l 5 5 l 1 5 l h S");
+    expect(runPostScript(eps).errors).toEqual([]);
   });
 
   it("emits nothing for a shape that paints nothing (fill none, stroke none)", () => {
@@ -137,12 +140,12 @@ describe("writeEps — a genuine EPS document", () => {
     expect(runPostScript(eps).errors).toEqual([]);
   });
 
-  it("paints fills with setrgbcolor inside gsave/concat/grestore", () => {
+  it("paints fills with the rgb operator, and replays a wrapper translate ONCE for the group", () => {
     const result = writeEps(PREPARED, "#ffffff");
-    expect(result.ok && result.eps).toContain("1 1 1 setrgbcolor fill"); // the white background
-    expect(result.ok && result.eps).toContain("0 0 0 setrgbcolor fill"); // the black artwork
-    expect(result.ok && result.eps).toContain("gsave");
-    expect(result.ok && result.eps).toContain("[1 0 0 1 -3.6 -3.6] concat"); // the wrapper translate replayed
+    expect(result.ok && result.eps).toContain("1 1 1 rg"); // the white background
+    expect(result.ok && result.eps).toContain("0 0 0 rg"); // the black artwork
+    expect(result.ok && result.eps).toContain("q\n[1 0 0 1 -3.6 -3.6] concat"); // the wrapper, once
+    expect(result.ok && result.eps).not.toContain("[1 0 0 1 0 0]"); // never an identity matrix
   });
 
   it("replays transforms through the CTM", () => {
@@ -157,29 +160,33 @@ describe("writeEps — a genuine EPS document", () => {
 });
 
 describe("writeEps — strokes, dashes, caps, joins", () => {
-  it("emits the full stroke setup", () => {
+  it("emits the full stroke setup (short operators, prolog-supplied)", () => {
     const src = art(`<rect x="10" y="10" width="20" height="20" fill="none" stroke="#ff0000"`
       + ` stroke-width="2" stroke-dasharray="4 2" stroke-linecap="round" stroke-linejoin="bevel"/>`);
     const result = writeEps(src, "#ffffff");
-    expect(result.ok && result.eps).toContain("1 0 0 setrgbcolor");
-    expect(result.ok && result.eps).toContain("2 setlinewidth");
-    expect(result.ok && result.eps).toContain("[4 2] 0 setdash");
-    expect(result.ok && result.eps).toContain("1 setlinecap");
-    expect(result.ok && result.eps).toContain("2 setlinejoin");
-    expect(result.ok && result.eps).toContain("stroke");
+    expect(result.ok && result.eps).toContain("1 0 0 rg");
+    expect(result.ok && result.eps).toContain("2 w");
+    expect(result.ok && result.eps).toContain("[4 2] 0 d");
+    expect(result.ok && result.eps).toContain("1 J");
+    expect(result.ok && result.eps).toContain("2 j");
+    expect(result.ok && result.eps).toContain(" S");
+    // and each alias is supplied by the procset the header declares
+    for (const alias of ["/w {setlinewidth}", "/d {setdash}", "/J {setlinecap}", "/j {setlinejoin}"]) {
+      expect(result.ok && result.eps).toContain(`${alias} bind def`);
+    }
   });
 
   it("flattens fill-opacity onto the export background (PostScript has no alpha)", () => {
     const src = art(`<rect x="10" y="10" width="20" height="20" fill="#000000" fill-opacity="0.5"/>`);
     const result = writeEps(src, "#ffffff");
-    expect(result.ok && result.eps).toContain("0.5 0.5 0.5 setrgbcolor fill");
+    expect(result.ok && result.eps).toContain("0.5 0.5 0.5 rg");
   });
 
   it("accepts named and rgb() paints", () => {
     const named = writeEps(art(`<rect x="1" y="1" width="4" height="4" fill="red"/>`), "#ffffff");
-    expect(named.ok && named.eps).toContain("1 0 0 setrgbcolor fill");
+    expect(named.ok && named.eps).toContain("1 0 0 rg");
     const rgb = writeEps(art(`<rect x="1" y="1" width="4" height="4" fill="rgb(0, 128, 255)"/>`), "#ffffff");
-    expect(rgb.ok && rgb.eps).toContain("0 0.502 1 setrgbcolor fill");
+    expect(rgb.ok && rgb.eps).toContain("0 0.502 1 rg");
   });
 });
 
@@ -193,9 +200,9 @@ describe("writeEps — the shape subset", () => {
     const result = writeEps(src, "#ffffff");
     expect(result.ok && result.shapes).toBe(5);
     expect(result.ok && result.eps).not.toContain(" arc"); // the circle is the same four-cubic split as the ellipse
-    expect(result.ok && result.eps).toContain("14 10 moveto 14 12.209 12.209 14 10 14 curveto");
-    expect(result.ok && result.eps.match(/curveto/g)).toHaveLength(8); // circle + ellipse
-    expect(result.ok && result.eps).toContain("closepath"); // the polygon
+    expect(result.ok && result.eps).toContain("14 10 m 14 12.209 12.209 14 10 14 c");
+    expect(result.ok && result.eps.match(/ c\b/g)).toHaveLength(8); // circle + ellipse
+    expect(result.ok && result.eps).toContain(" h"); // the polygon
   });
 
   it("replays path data: lines, curves, quads and arcs", () => {
@@ -204,9 +211,9 @@ describe("writeEps — the shape subset", () => {
       + `<path d="M10 10 A5 5 0 0 1 20 20" fill="none" stroke="#000"/>`);
     const result = writeEps(src, "#ffffff");
     expect(result.ok && result.shapes).toBe(3);
-    expect(result.ok && result.eps).toContain("10 10 moveto");
-    expect(result.ok && result.eps).toContain("closepath");
-    expect(result.ok && result.eps.match(/curveto/g)?.length).toBeGreaterThanOrEqual(4); // C/S/Q/T + the arc
+    expect(result.ok && result.eps).toContain("10 10 m");
+    expect(result.ok && result.eps).toContain(" h");
+    expect(result.ok && result.eps.match(/ c(?=\s|$)/g)?.length).toBeGreaterThanOrEqual(4); // C/S/Q/T + the arc
     expect(result.ok && result.eps).not.toContain(" arc"); // SVG arcs replay as cubics, never guessed
   });
 
@@ -224,8 +231,8 @@ describe("writeEps — a rounded <rect> is written, exactly, and the fix is repo
     const result = writeEps(art(`<rect x="1" y="1" width="8" height="4" rx="1" fill="#000"/>`), "#ffffff");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.eps.match(/curveto/g)).toHaveLength(4);
-    expect(result.eps.match(/lineto/g)).toHaveLength(4);
+    expect(result.eps.match(/ c(?=\s|$)/g)).toHaveLength(4);
+    expect(result.eps.match(/ l(?=\s|$)/g)).toHaveLength(4);
     expect(result.shapes).toBe(1);
     expect(result.fixes).toEqual(["1 rounded <rect> written as an exact path outline"]);
     const two = writeEps(art(`<rect x="1" y="1" width="4" height="4" rx="1" fill="#000"/><rect x="5" y="5" width="2" height="2" ry="0.5" fill="#000"/>`), "#ffffff");
@@ -281,6 +288,6 @@ describe("verifyEps", () => {
     const broken = (result.ok ? result.eps : "").replace("[0.75 0 0 -0.75 0 69.6] concat", "0.75 0 0 -0.75 0 69.6 concat");
     const verdict = verifyEps(broken);
     expect(verdict.ok).toBe(false);
-    expect(verdict.errors).toContain("line 15: concat expects an array, found number"); // the two AI artboard comments precede the CTM
+    expect(verdict.errors).toContain("line 43: concat expects an array, found number"); // the setup's CTM, after the header + procset
   });
 });

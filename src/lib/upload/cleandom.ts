@@ -13,6 +13,7 @@ import {
   allElements, attributeNames, comments, insideMetadata, isIdReference, isNamespaceDecl,
   isSvgElement, localName, referencedIds, rewriteRefs, usedPrefixes, XMLNS_NS,
 } from "./svgdom";
+import { dropSkeleton } from "./skeleton";
 
 /** Attributes that are naming or editor bookkeeping, never rendering. */
 export const BLOAT_ATTRS = ["class", "role", "xml:space", "enable-background"];
@@ -75,6 +76,7 @@ export function cleanExportDom(root: Element, opts: CleanOptions = {}): void {
   for (const el of allElements(root)) removeJunkElement(el, opts);
   for (const el of allElements(root)) stripAttributes(el);
   renameReferencedIds(root);
+  dropSkeleton(root);
   hoistNamespaces(root);
 }
 

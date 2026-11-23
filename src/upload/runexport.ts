@@ -157,7 +157,7 @@ async function runStages(args: ExportRunArgs, plan: PlanFor): Promise<ExportRunR
       now: args.deps?.now?.() ?? new Date().toISOString(),
     });
     checkCancel(args.signal);
-    const validation = validateArtifacts(art, metadata);
+    const validation = validateArtifacts(art, metadata, args.settings.cleanExport !== false);
     if (artifactsInvalid(art, validation)) {
       return failedResult({ rowId: row.id, stages: plan.plan.stages, record: args.record, klass: "validate", detail: validation.errors.join("; ") });
     }

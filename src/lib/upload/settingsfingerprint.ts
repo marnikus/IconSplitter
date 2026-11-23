@@ -45,6 +45,12 @@ export function settingsFingerprint(s: UploadSettings): string {
 
 /** Explicit disabled outputs change the package; legacy/default flags must not churn hashes. */
 function formatToken(s: UploadSettings): unknown[] {
-  return s.includeSvg === false || s.includeJpeg === false
-    ? [["formats", s.includeSvg !== false, s.includeJpeg !== false]] : [];
+  return [
+    ...(s.includeSvg === false || s.includeJpeg === false
+      ? [["formats", s.includeSvg !== false, s.includeJpeg !== false]] : []),
+    // The clean pass changes the delivered bytes, so turning it ON is a pin of
+    // its own; off is the historical default and must not move any fingerprint
+    // written before the option existed.
+    ...(s.cleanExport === true ? [["clean", true]] : []),
+  ];
 }

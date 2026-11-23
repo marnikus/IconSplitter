@@ -22,8 +22,27 @@ function eps(source: string) {
   expect(verifyEps(r.eps)).toMatchObject({ ok: true, errors: [] });
   return r.eps;
 }
-const caps = (text: string) => [...text.matchAll(/(\d) setlinecap/g)].map((m) => Number(m[1]));
-const joins = (text: string) => [...text.matchAll(/(\d) setlinejoin/g)].map((m) => Number(m[1]));
+/**
+ * What each stroke actually paints with, read off the program: the setup writes
+ * the document defaults (`1 w [] 0 d 0 J 0 j 4 M`) once and the body then writes a
+ * pen value only when it differs, so a value that is NOT written is the default
+ * (butt = 0, miter = 0), never "no cap at all".
+ */
+function pens(text: string): { cap: number; join: number }[] {
+  const art = text.slice(text.indexOf("%%EndSetup"));
+  const out: { cap: number; join: number }[] = [];
+  const tokens = art.split(/\s+/).filter((tok) => tok !== "");
+  let cap = 0;
+  let join = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i] === "J") cap = Number(tokens[i - 1]);
+    if (tokens[i] === "j") join = Number(tokens[i - 1]);
+    if (tokens[i] === "S") out.push({ cap, join });
+  }
+  return out;
+}
+const caps = (text: string) => pens(text).map((pen) => pen.cap);
+const joins = (text: string) => pens(text).map((pen) => pen.join);
 
 function prepared(source: string, settings = DEFAULT_UPLOAD_SETTINGS) {
   const r = prepareExportSvg(source, settings);

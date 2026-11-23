@@ -191,7 +191,7 @@ function readNumbers(raw: Record<string, unknown>, out: SettingsOverrides): void
 }
 
 function readFlags(raw: Record<string, unknown>, out: SettingsOverrides): void {
-  for (const key of ["optimizeSvg", "includeSvg", "includeJpeg", "includeEps", "jpegMatchArtboard", "expandStrokes", "scaleToMegapixels", "shadowEnabled", "badgeEnabled"]) {
+  for (const key of ["optimizeSvg", "includeSvg", "includeJpeg", "includeEps", "jpegMatchArtboard", "expandStrokes", "cleanExport", "scaleToMegapixels", "shadowEnabled", "badgeEnabled"]) {
     const value = raw[key];
     if (typeof value === "boolean") Object.assign(out, { [key]: value });
   }

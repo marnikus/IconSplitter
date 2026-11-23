@@ -5638,3 +5638,137 @@ with its own face in `_<style>` (`pairrebase.ts` re-derives `<pairId(base
 folder)>~<style>` on read) — a fixture parsed from the style image name gets a
 different id and silently declines the wrong file. Evidence: the styles and
 remove clusters 47 passed; docs inside caps (`sor/svg-styles.md` ~5.7 kB).
+
+## 2026-11-19 — builder export fidelity (stroke px, tracking, shared popup)
+
+Measured on the branch sandbox (`npm ci` node_modules, Chromium-less happy-dom lanes):
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `npx vitest run` (full) | 486 files, 4868 tests — 1 failed | the failure is `tests/algo_efficiency.test.ts` "synthetic 1000px 4-icon grid detects <200ms" at 200.1–209 ms; the same 3/3 failures reproduce on the base commit in this sandbox (215.9 / 200.5 / 205.7 ms), so it is this machine's speed, not the change |
+| new `tests/export_stroke_width.test.ts` | 6 passed | painted width = set px for 1 / 1.4 / 2.5, no `non-scaling-stroke`, EPS pen widths equal the SVG's, expansion adds exactly pen/2 |
+| new `tests/export_text_spacing.test.ts` | 6 passed | `0.07em`→7 px, `0.025em`→0.8 px, style form, negative and px forms; package runs carry the sheet's em value; plain SVG unchanged |
+| `tests/svg_builder_workspace.test.tsx` | 16 passed | new toolbar `builder-export-settings` (outside the dropdown) opens the shared popup |
+| `tests/builder_export_settings_ui.test.tsx` | 10 passed | popup shell = `.svg-backdrop` > `.svg-modal` > head (`aria-labelledby`) + body, body clicks ignored |
+| `tests/svg_builder*.test.ts*` + `tests/export_*.test.ts*` | 36 files, 284 tests passed | 27.2 s |
+| `tests/upload_*.test.ts*`, `svgpreview*`, `eps*`, `rescale*` | 109 files, 1412 tests passed | 42.3 s |
+| `tests/upload_*.test.tsx`, `export_sheet_ui` | 22 files, 232 tests passed | 24.6 s |
+| `npm run test:builder:fast` | 14 passed, 0 failed | 373.8 ms |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 warnings, all pre-existing (`versionremove.ts`, `runmetadata.ts`, …) |
+| `node tools/quality.mjs --changed` | GATE PASSED | 13 changed prod files, largest 184 lines / 29 fns (`sheetexport.ts`) |
+| `npm run build` | 3,614.78 kB `dist/index.html`, 15.6 s | — |
+| `npm run verify:fast` | ALL LANES PASSED | 221 s |
+| `tests/docs_navigation.test.ts` | 4 passed | every edited `docs/current/` page stays under the 9,000 B gate |
+
+## 2026-11-19 — clean final SVG and EPS (builder export, round 3)
+
+The user's ask: "add these filters to clean final EPS and SVG before they are
+saved", as a checkbox, keeping ONLY title, description and tags as metadata.
+
+- **`cleanExport`** joins `ExportFormatOptions` (row `bld-set-clean`, and the
+  upload dialog renders it too). ON is the builder's default
+  (`formatstore.builderFormatDefaults`), OFF in the shared domain, so the upload
+  tab's long-standing delivered bytes never move. `settingsFingerprint` pins only
+  `clean: true`; the historical default fingerprint `36232c04` is unchanged.
+- **SVG**: `lib/upload/svgclean.ts` `cleanExportSvg(svg, meta?)` — ≤3-decimal
+  numbers, then the existing `cleandom.cleanExportDom` (data-*/aria-*/class/role,
+  extra `<metadata>`, repeated namespaces, junk elements; referenced ids → a,b,…),
+  then only DC title/description/subject re-embedded, `enforceExportSvg` still
+  passes. Non-SVG refused by name.
+- **EPS**: `lib/upload/epsclean.ts` `cleanExportEps` rebuilds through
+  `embedXmpMetadataInEps(…, {clean:true})` — ONE carrier (pdfmark XMP stream,
+  `DocMeta`/`DocStream`), no `%%Creator`/`%%CreationDate`/`%ADO_ContainsXMP`/
+  Photoshop/IPTC block/`x:xmptk`, byte-stable (idempotent), `verifyEpsDocument`
+  still green. `verifiedEpsArtwork` rebuilds both envelopes; `verifyEpsMetadata`
+  accepts the clean single-carrier form and refuses a second copy.
+- **Three real bugs** surfaced by the work: `svgdom.isNamespaceDecl` matched only
+  `xmlns:*` (so the DOM-stitch's repeated default `xmlns` survived while
+  `hoistNamespaces` deleted the genuine one — now both handled), and `clean.ts`
+  called the root default `xmlns` "unused". `attributeViolations`/`namespaceViolations`
+  plus `insideMetadata` scoping keep the DC block legal.
+- Validation compares `shippedMetadata(...)` (title/description/tags), never a
+  field the cleaner removed.
+
+Tests: `export_clean_dom.test.ts` (8), `export_clean_eps.test.ts` (5),
+`builder_export_clean.test.tsx` (4, incl. the `bld-set-clean` gesture).
+`builder_sheetpackage_formats.test.ts` still pins the FORMAT CHAIN only.
+
+Gates after the merge with the export-settings popup work (2026-11-19):
+`tsc --noEmit` clean · `npm run lint` 0 errors (27 pre-existing warnings) ·
+`tools/quality.mjs --changed` GATE PASSED · `npm run build` OK ·
+full suite **495 files / 4919 tests green**.
+
+The merge itself needed three repairs (type-broken tree on arrival):
+`expandTextToFills(svg, {outliner})` (the EPS stage's pinned outliner),
+`rescaledArtboard`/`jpegBoxFor`/`formatSummary`/`ArtboardBox` (one JPEG-box
+calculator both the row hint and the stage read), and the helper row's import
+(`ui/epshelper.tsx`, not the removed `upload/UploadEpsSettings`). Tests updated
+where they pinned the superseded shape: spacing is asserted in px (the sheet no
+longer writes `em`), the JPEG hint is read from `bld-set-mp-note`, the popup from
+the one `builder-export-settings` button, and a refused outline names the real
+reason. Docs trimmed back under the 9 000 B page gate.
+
+Stroke fidelity: the composed cell now writes `stroke-width = set px ÷ the cell
+transform's scale` and carries no `vector-effect`, so the SVG, the EPS, the JPEG
+raster and stroke expansion all paint the px the artboard set. Tracking: em
+lengths are parsed by `lib/upload/geom/length.ts` before the outliner sees them.
+Popup: `ui/exportmodal.tsx` is the one shell for the upload dialog and the
+builder's own `⚙ Export settings` toolbar button.
+
+## 2026-11-19 — the delivered EPS and SVG read as drawings (round 4)
+
+The user's review of a delivered package: the vector files still look like a
+script's output. Verified claim by claim, and **three of the points were wrong**
+about this code — recorded so nobody "fixes" them later:
+
+* `%AI5_ArtSize` already wrote height then width (`illustratorArtboard`), which
+  is what the AI7 spec says. Untouched.
+* No random hex hash in the EPS object names existed at that point: the clean
+  pass already renamed them to `DocMeta`/`DocStream`, and the packet marker is a
+  stable suffix of the metadata fingerprint.
+* Stock sites do not require Illustrator provenance (Adobe Stock takes EPS/AI/
+  SVG, outlines text, caps at 45 MB). "Looks like Illustrator" is review taste,
+  never a technical requirement.
+
+Real smells, all fixed:
+
+* **EPS header** gained the Illustrator-compatible set (DocumentProcessColors,
+  DocumentSuppliedResources, Pages/PageOrder/PageOrigin, `%AI3_ColorUsage`,
+  `%AI5_FileFormat`, `%AI3_DocumentPreview`, `%AI5_NumLayers`, `%AI3_TileBox`),
+  `%%Title` as a DSC string, and `%%CreationDate` in DSC's `D:…` form via the
+  new `dscDate` (no zone → no line, never a guessed date).
+* **Empty prolog/setup** replaced with a real `procset VectorEPS`
+  (`/n /m /l /c /h /f /f* /S /W /w /J /j /M /d /rg /q /Q`) and a setup holding
+  the uprighting matrix and the pen defaults `1 w [] 0 d 0 J 0 j 4 M`.
+* **Compact body**: one shared `WriterState` (not the per-element walk copy) so
+  only CHANGED pen/colour values are written; a transform is one `q [matrix]
+  concat … Q` around its group; `[1 0 0 1 0 0]` can no longer be emitted; the
+  per-shape `gsave`/`grestore` is gone. One named layer brackets the artwork.
+* `epscheck.ts` stayed a CLOSED gate and learned the vocabulary (`CANONICAL`
+  alias folding, `shfill`, `Lb`/`Ln`/`LB`, `(…)` strings, `/x {op} bind def`
+  definitions accepted but never executed).
+* **SVG skeleton** (`lib/upload/skeleton.ts`): bare `<g>` chains unwrap,
+  default-restating attributes drop — except an explicit default that overrides
+  an inherited value (that is a decision). Reported as removed traces.
+* **Honesty line held**: no spoofed `%%Creator: Adobe Illustrator(R)`, no
+  fabricated `xmpMM:DocumentID`, no Adobe procset name. The clean option still
+  removes `%%Creator`/`%%CreationDate` when the user wants no producer
+  identity — anonymous is honest, falsely attributed is not.
+
+Side effect found by the full suite: `validateBadgeTemplate` stores a canonical
+document and re-validates it on read, so the new attribute removals changed the
+serialized attribute ORDER and the round trip stopped being byte-identical.
+`canonicalTemplate` now writes one fixed order (never a rendering change).
+
+New tests: `tests/eps_human_export.test.ts` (11),
+`tests/svg_human_export.test.ts` (8). Older assertions moved to the new form
+where they pinned the verbose one, none weakened: caps/joins/widths are now read
+out of the program the way an interpreter reads it (a value not written IS the
+setup's default).
+
+Gates: `tsc --noEmit` clean · `tools/quality.mjs --changed` GATE PASSED ·
+full suite **498 files / 4939 tests green**. Docs: new sibling page
+`docs/current/sor/upload-eps-document.md` (the header/prolog/body/gate contract),
+`upload-eps.md` and `export-formats.md` point at it, archive design
+`docs/archive/2026-11-19-human-export/design.md`.

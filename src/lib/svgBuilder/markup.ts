@@ -4,13 +4,20 @@ import type { TitleFace } from "./types";
 
 export interface TextSpec {
   x: number; y: number; value: string; size: number; colour: string;
-  face: TitleFace; weight: number; anchor?: "start" | "middle" | "end"; spacing?: string;
+  face: TitleFace; weight: number; anchor?: "start" | "middle" | "end";
+  /**
+   * Letter spacing PER GLYPH, in **px** at this run's own size (2026-11-19).
+   * Never an em string: the shared text outliner adds px per glyph, so an em
+   * fraction silently became 0 there (the reported "spacing reset to 0" in the
+   * exported EPS and, with Expand text to fills on, in the SVG).
+   */
+  spacingPx?: number;
 }
 
 export function textEl(t: TextSpec): string {
   return `<text x="${round(t.x)}" y="${round(t.y)}" fill="${attr(t.colour)}" font-size="${round(t.size)}" `
     + `font-weight="${t.weight}" font-family="${fontFamily(t.face)}" text-anchor="${t.anchor ?? "start"}" `
-    + `letter-spacing="${t.spacing ?? "0"}">${escapeText(t.value)}</text>`;
+    + `letter-spacing="${round(t.spacingPx ?? 0)}">${escapeText(t.value)}</text>`;
 }
 
 /** Grotesk / Editorial / Mono with local fallbacks (the artboard never fetches fonts). */

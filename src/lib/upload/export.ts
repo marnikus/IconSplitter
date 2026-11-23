@@ -97,6 +97,13 @@ export interface ExportRecord {
     eps: { enabled: boolean; converter?: EpsConverterId; writer: string; fixes?: string[] };
     /** Strokes expanded to fills (2026-10-09; absent on older packages). */
     expand?: { enabled: boolean; shapes: number };
+    /** Live <text> outlined to filled paths (2026-11-19; absent on older packages). */
+    text?: { enabled: boolean; runs: number };
+    /**
+     * The full-artboard rescale (2026-11-19; absent while it is off): the
+     * shipped px, their megapixels, and whether strokes scaled with it.
+     */
+    rescale?: { enabled: boolean; megapixels: number; strokes: boolean; width: number; height: number };
     /**
      * The artboard the file ships (I-60, 2026-10-09; absent on older packages):
      * its mode and px (the viewBox), the megapixels those px make, the

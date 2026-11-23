@@ -53,15 +53,15 @@ class Painter {
     if (op === "gsave") this.saved.push([...this.ctm]);
     else if (op === "grestore") this.ctm = this.saved.pop() ?? this.ctm;
     else if (op === "concat") this.ctm = multiply(this.ctm, (this.stack.pop() as number[]) as Ctm);
-    else if (op === "newpath") this.path = [];
-    else if (op === "moveto" || op === "lineto") this.path.push(this.point(this.nums(2)));
-    else if (op === "curveto") { const n = this.nums(6); for (let i = 0; i < 6; i += 2) this.path.push(this.point(n.slice(i, i + 2))); }
-    else if (op === "setlinewidth") this.lineWidth = this.nums(1)[0];
-    else if (op === "setrgbcolor") this.nums(3);
-    else if (op === "setdash") { this.stack.pop(); this.stack.pop(); }
-    else if (op === "setlinecap" || op === "setlinejoin" || op === "setmiterlimit") this.nums(1);
-    else if (op === "fill") this.paint(0);
-    else if (op === "stroke") this.paint((this.lineWidth / 2) * Math.hypot(this.ctm[0], this.ctm[1]));
+    else if (op === "newpath" || op === "n") this.path = [];
+    else if (["moveto", "m", "lineto", "l"].includes(op)) this.path.push(this.point(this.nums(2)));
+    else if (op === "curveto" || op === "c") { const n = this.nums(6); for (let i = 0; i < 6; i += 2) this.path.push(this.point(n.slice(i, i + 2))); }
+    else if (op === "setlinewidth" || op === "w") this.lineWidth = this.nums(1)[0];
+    else if (op === "setrgbcolor" || op === "rg") this.nums(3);
+    else if (op === "setdash" || op === "d") { this.stack.pop(); this.stack.pop(); }
+    else if (["setlinecap", "J", "setlinejoin", "j", "setmiterlimit", "M"].includes(op)) this.nums(1);
+    else if (op === "fill" || op === "f") this.paint(0);
+    else if (op === "stroke" || op === "S") this.paint((this.lineWidth / 2) * Math.hypot(this.ctm[0], this.ctm[1]));
   }
 
   private point([x, y]: number[]): Pt {

@@ -20,6 +20,8 @@ import type { RasterDeps } from "../lib/upload/raster";
 import { embedXmpMetadata } from "../lib/upload/jpeg";
 import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
 import { enforceExportSvg } from "../lib/upload/clean";
+import { cleanExportSvg } from "../lib/upload/svgclean";
+import { cleanExportEps } from "../lib/upload/epsclean";
 
 /** A stage failure carries its class, so the log names the failing stage. */
 export class StageError extends Error {
@@ -68,7 +70,7 @@ export async function buildArtifacts(plan: StagePlan, ctx: StageContext): Promis
   const needSvgText = plan.rebuild.svg || plan.rebuild.eps;
   const needRender = plan.rebuild.jpg && plan.stages.includes("render");
   if (needSvgText || needRender) await buildSvgText(art, ctx);
-  if (plan.rebuild.svg) art.svgOut = embedSvg(art, ctx.metadata);
+  if (plan.rebuild.svg) art.svgOut = embedSvg(art, ctx);
   if (plan.rebuild.jpg) await buildJpegArtifact(plan, ctx, art);
   if (plan.rebuild.eps) await buildEps(art, ctx);
   return art;
@@ -97,9 +99,25 @@ async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
   art.optimizeRecord = await recordAfterClean(optimized.record, clean.svg, clean.rebuilt);
 }
 
-function embedSvg(art: Artifacts, metadata: IconMetadata | null): string | null {
+/**
+ * The delivered SVG (2026-11-19): when `cleanExport` is on, the file that ships
+ * loses the generator's fingerprints and carries ONLY title, description and
+ * tags — so the metadata is embedded FROM the reduced set, then the document is
+ * cleaned. Off, the old behaviour is untouched.
+ */
+function embedSvg(art: Artifacts, ctx: StageContext): string | null {
   if (art.optimizedSvg === null) return null;
-  return metadata === null ? art.optimizedSvg : embedMetadataInSvg(art.optimizedSvg, metadata);
+  if (ctx.metadata !== null && ctx.settings.cleanExport !== false) {
+    const result = cleanExportSvg(embedMetadataInSvg(art.optimizedSvg, ctx.metadata), shippedMetadata(ctx.metadata));
+    if (!result.ok) throw new StageError("embed", `the export SVG cannot be cleaned: ${result.reason}`);
+    return result.svg;
+  }
+  return ctx.metadata === null ? art.optimizedSvg : embedMetadataInSvg(art.optimizedSvg, ctx.metadata);
+}
+
+/** What a cleaned file may carry: title, description and tags (2026-11-19). */
+export function shippedMetadata(metadata: IconMetadata): IconMetadata {
+  return { title: metadata.title, description: metadata.description, tags: metadata.tags };
 }
 
 async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifacts): Promise<void> {
@@ -121,6 +139,12 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
     art.epsText = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
+    // The delivered EPS (2026-11-19): one metadata carrier, no producer name.
+    if (ctx.settings.cleanExport !== false) {
+      const cleaned = cleanExportEps(art.epsText);
+      if (!cleaned.ok) throw new StageError("eps", `the export EPS cannot be cleaned: ${cleaned.reason}`);
+      art.epsText = cleaned.eps;
+    }
     const checked = verifyEpsDocument(art.epsText);
     if (!checked.ok) {
       art.epsText = null;

@@ -20,7 +20,7 @@ describe("native vector-only EPS gradients", () => {
     for (const [tag, type] of [["linearGradient", 2], ["radialGradient", 3]] as const) {
       const eps = epsOf(svg(gradient(tag) + shape));
       expect(eps).toContain(`/ShadingType ${type}`);
-      expect(eps).toContain("clip newpath");
+      expect(eps).toContain(" q W "); // the fill's clip, in the prolog's operator
       expect(eps).toContain("shfill");
       expect(eps).not.toMatch(/\b(image|colorimage|imagemask)\b/);
     }
@@ -65,8 +65,8 @@ describe("native vector-only EPS gradients", () => {
 
   it("preserves even-odd vector clipping and a separate solid stroke", () => {
     const eps = epsOf(svg(gradient() + '<path fill-rule="evenodd" d="M0 0H100V100H0Z M20 20H80V80H20Z" fill="url(#g)" stroke="black"/>'));
-    expect(eps).toContain("eoclip newpath");
-    expect(eps).toContain("grestore 0 0 0 setrgbcolor");
+    expect(eps).toContain(" q W* ");
+    expect(eps).toContain("Q\n\n0 0 0 rg"); // the clip ends, then the stroke paints
     expect(eps).toContain("stroke");
   });
 

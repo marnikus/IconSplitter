@@ -88,9 +88,14 @@ export function isIdReference(value: string): boolean {
 
 export const XMLNS_NS = "http://www.w3.org/2000/xmlns/";
 
-/** Is this attribute name a namespace declaration (`xmlns:p`)? */
+/**
+ * Is this attribute name a namespace declaration? Both forms: the prefixed
+ * `xmlns:p` AND the default `xmlns` (2026-11-19 — the default form was never
+ * matched, so a document that repeated it on every stitched child kept every
+ * repeat: the DOM-stitch fingerprint a stock reviewer names first).
+ */
 export function isNamespaceDecl(name: string): boolean {
-  return name.startsWith("xmlns:");
+  return name === "xmlns" || name.startsWith("xmlns:");
 }
 
 /** Every prefix the document USES — in element names and in attribute names (declarations excluded). */

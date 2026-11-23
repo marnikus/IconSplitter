@@ -24,5 +24,9 @@ export function gradientFill(el: Element, ref: string, opacity: number, ctx: Gra
     Coords: space.coords, Function: fn, Extend: [true, true] });
   try { checkShading(data); }
   catch { throw new Unsupported("gradient cannot be represented within EPS numeric precision"); }
-  return ` ${ctx.evenOdd ? "eoclip" : "clip"} newpath\n${matrixPs(space.matrix)}\n${data} shfill\n`;
+  // The clip lives inside the caller's save/restore (a gradient fill restores the
+  // path and the clipping it changes); the body speaks the prolog's operators.
+  // `shfill` ends its own line (the checker reads a shading dictionary line as
+  // one instruction); the restore follows it.
+  return `q ${ctx.evenOdd ? "W*" : "W"} ${matrixPs(space.matrix)}\n${data} shfill\nQ\n`;
 }

@@ -56,6 +56,10 @@ function canonicalTemplate(root: Element, bounds: Bounds): TemplateResult {
   for (const [name, value] of Object.entries(PAINT_DEFAULTS)) {
     if (!root.hasAttribute(name)) root.setAttribute(name, value);
   }
+  // A stored template is read back through this same pass, so its attribute
+  // order must be the order this function leaves — not whatever the clean pass'
+  // removals happened to produce (2026-11-19: the round trip was unstable).
+  canonicalOrder(root);
   const baked = bakeGeometry(root, identity());
   if (baked.unsupported.length > 0) return refused(`Unsupported SVG geometry: ${baked.unsupported.join(", ")}.`);
   if (!insideArtboard(root)) return refused("The SVG must contain visible vector geometry entirely inside its viewBox (including strokes).");
@@ -63,6 +67,23 @@ function canonicalTemplate(root: Element, bounds: Bounds): TemplateResult {
   const eps = writeEps(svg, "#ffffff");
   if (!eps.ok) return refused(`Unsupported vector SVG: ${eps.reason}.`);
   return { ok: true, svg, root, bounds };
+}
+
+/**
+ * One fixed attribute order for every element: the root's paint defaults first,
+ * then whatever it carries, then `version`/`viewBox` — so the same document is
+ * the same bytes however it was written. Order never changes rendering.
+ */
+function canonicalOrder(root: Element): void {
+  const PRIORITY = ["xmlns", "version", "viewBox", "fill", "fill-opacity", "fill-rule", "stroke", "stroke-opacity",
+    "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-miterlimit", "stroke-dasharray", "stroke-dashoffset"];
+  for (const el of [root, ...Array.from(root.querySelectorAll("*"))]) {
+    const names = Array.from(el.attributes).map((a) => a.name);
+    const ordered = [...PRIORITY.filter((name) => names.includes(name)), ...names.filter((name) => !PRIORITY.includes(name)).sort()];
+    const values = ordered.map((name) => el.getAttribute(name) ?? "");
+    for (const name of names) el.removeAttribute(name);
+    ordered.forEach((name, at) => el.setAttribute(name, values[at]));
+  }
 }
 
 /** Invalid persisted data costs only this field; empty is the explicit bundled-template choice. */

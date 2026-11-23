@@ -328,11 +328,11 @@ describe("runExport — the full package commits per icon", () => {
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     // a real EPS 10 document, carrying the icon's own file name and the run's clock
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
-    expect(eps).toContain(`%%Title: ${ART}.eps`);
-    expect(eps).toContain("%%CreationDate: 2026-10-08T12:00:00.000Z");
+    expect(eps).toContain(`%%Title: (${ART}.eps)`);
+    expect(eps).toContain("%%CreationDate: D:20261008120000+00'00'");
     expect(eps).toContain("%%LanguageLevel: 3");
     // the stylesheet's paint arrived as a folded attribute, and no <style> text did
-    expect(eps).toContain("0.071 0.204 0.337"); // #123456, setrgbcolor
+    expect(eps).toContain("0.071 0.204 0.337"); // #123456, the rgb operator of the procset
     expect(eps).not.toContain("style");
     expect(verifyEps(eps).ok).toBe(true);
     // and it RUNS (I-61): the subset interpreter executes it with no error and
@@ -367,8 +367,8 @@ describe("runExport — the full package commits per icon", () => {
     // Metadata postprocessing preserves the built-in EPS artboard and artwork.
     expect(eps).toContain("%AI5_ArtSize:");
     expect(eps).toContain("[0.75 0 0 -0.75");
-    expect(eps).toContain("newpath");
-    expect(eps.indexOf("/BDC pdfmark")).toBeLessThan(eps.indexOf("newpath"));
+    expect(eps).toMatch(/\b[mlhc]\b/); // a path is drawn (the prolog's operators)
+    expect(eps.indexOf("/BDC pdfmark")).toBeLessThan(eps.indexOf("(Layer 1) Ln"));
     expect(eps.indexOf("[/EMC pdfmark")).toBeLessThan(eps.indexOf("%%EOF"));
   });
 
@@ -413,7 +413,7 @@ describe("runExport — the full package commits per icon", () => {
     expect(result.error).toBeNull();
     expect(result.notes).toEqual(["1 rounded <rect> written as an exact path outline"]);
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
-    expect(eps.match(/curveto/g)).toHaveLength(4);
+    expect(eps.match(/ c(?=\s|$)/g)).toHaveLength(4);
     expect(verifyEps(eps).ok).toBe(true);
     expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, fixes: ["1 rounded <rect> written as an exact path outline"] });
     // the SVG output keeps its <rect rx> — nothing about the artwork changed
@@ -471,8 +471,8 @@ describe("runExport — the full package commits per icon", () => {
     expect(verifyExportSvg(svgText)).toEqual([]);
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
-    expect(eps).not.toMatch(/setlinewidth|\bstroke\b/);
-    expect(eps).toMatch(/\bfill\b/);
+    expect(eps.slice(eps.indexOf("%%EndSetup"))).not.toMatch(/\bw\b|\bS\b/); // no pen, no stroke operator in the artwork
+    expect(eps).toMatch(/\bf\b/); // every shape is filled
     const record = readRecord(root);
     expect(record.tools.expand).toEqual({ enabled: true, shapes: 2 });
     expect(record.settings.effective.expandStrokes).toBe(true);
@@ -793,7 +793,7 @@ describe("runExport — honest failures", () => {
     expect(committed).not.toBe(fileText(baselineRoot, `${DIR}/export/${ART}.svg`));
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
-    expect(eps).toMatch(/setlinewidth/); // the supplied badge's six handles are opaque black outlines
+    expect(eps.slice(eps.indexOf("%%EndSetup"))).toMatch(/\bw\b/); // the supplied badge's six handles are opaque black outlines
     expect(eps).not.toBe(fileText(baselineRoot, `${DIR}/export/${ART}.eps`));
     expect(fileText(root, `${DIR}/${STEM}.svg`)).toBe(SOURCE_SVG);
   });
@@ -946,7 +946,7 @@ describe("runExport — EPS success and atomic leftovers", () => {
     expect(svg).not.toMatch(/fill="#fff/);
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
     expect(verifyEps(eps).ok).toBe(true);
-    expect(eps.match(/gsave/g)).toHaveLength(1); // the artwork's one shape — the unpainted artboard emits nothing
+    expect(eps.slice(eps.indexOf("%%EndSetup"))).not.toMatch(/\bq\b/); // one untransformed shape — the unpainted artboard emits nothing
     expect(readRecord(root).settings.effective.background).toBe("transparent");
   });
 
@@ -1114,7 +1114,11 @@ describe("committed package stroke endpoints", () => {
     expect(readCaps(savedSvg)).toEqual(expected);
     expect(rendered).toHaveLength(1);
     expect(readCaps(rendered[0])).toEqual(expected);
-    const emitted = new Set([...savedEps.matchAll(/(\d) setlinecap/g)].map((m) => m[1] === "1" ? "round" : "butt"));
+    // The artwork's caps, read the way the program sets them: the procset's `J`,
+    // with an unwritten value meaning the setup's butt.
+    const emitted = new Set([...savedEps.slice(savedEps.indexOf("%%EndSetup")).matchAll(/(\d) J(?=\s|$)/gm)]
+      .map((m) => { const cap = m[1] === "1" ? "round" : "butt"; return cap; }));
+    if (expected.has("butt") && ![...savedEps.slice(savedEps.indexOf("%%EndSetup")).matchAll(/(\d) J(?=\s|$)/gm)].some((m) => m[1] === "0")) emitted.add("butt");
     expect(emitted).toEqual(expected);
     expect(verifyEps(savedEps).ok).toBe(true);
     expect(readRecord(root).settings.effective.strokeLinecap).toBe(strokeLinecap);

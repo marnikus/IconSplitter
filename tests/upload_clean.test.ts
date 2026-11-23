@@ -79,7 +79,9 @@ describe("enforceExportSvg — check, then rebuild instead of shipping a violati
     expect(report.svg).not.toContain("class");
     expect(report.svg).not.toContain("gen");
     const doc = new DOMParser().parseFromString(report.svg, "image/svg+xml");
-    expect(doc.querySelector("g")?.getAttribute("id")).toBeNull();
+    // the named group was bare once its id and class were stripped, so it is gone
+    expect(report.svg).not.toContain("<g");
+    expect(doc.querySelector("g")).toBeNull();
     expect(doc.querySelector("path")?.getAttribute("d")).toBe("M0 0h1v1z");
   });
 

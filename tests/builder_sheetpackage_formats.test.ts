@@ -9,7 +9,12 @@ import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/
 import { setTextOutliner } from "../src/lib/upload/expandtext";
 import { loadBuilderFormats, saveBuilderFormats } from "../src/svgBuilder/formatstore";
 import { DEFAULT_FORMAT_OPTIONS, type ExportFormatOptions } from "../src/lib/exportformats";
+import { sheetSettings } from "../src/svgBuilder/actions/sheetexport";
+import { builtinConverter } from "../src/lib/upload/epsconv/builtin";
 
+// These cases pin the FORMAT CHAIN (flags, SVGO, expansion, rescale), so the
+// clean pass is off here; the cleanup itself is pinned in
+// export_clean_dom/eps tests and builder_export_clean.test.ts (2026-11-19).
 const SHEET = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><!-- note --><rect x="1" y="1" width="9" height="9" fill="none" stroke="#000000" stroke-width="2"/><text x="10" y="50" fill="#123456" font-size="12">Hi</text></svg>';
 
 const deps = (seen: { jpeg?: { width: number; height: number } }) => ({
@@ -30,7 +35,12 @@ const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
 describe("the builder package follows the format options", () => {
   it("writes SVG, JPEG, EPS and PNG per the flags", async () => {
+    // The SHEET carries live <text>; the built-in EPS subset cannot write it, so
+    // this case supplies the outliner the browser provides (2026-11-19). The
+    // EPS-with-text contract itself is pinned in builder_export_package.test.ts.
+    setTextOutliner(() => ({ d: "M0 0 L40 0", width: 40 }));
     const all = await buildSheetPackage(args({ includeEps: true }), deps({}));
+    setTextOutliner(null);
     expect(all.files.map((f) => f.name).sort()).toEqual(["export.json", "sheet.eps", "sheet.jpg", "sheet.png", "sheet.svg"]);
     const noSvg = await buildSheetPackage(args({ includeSvg: false }), deps({}));
     expect(file(noSvg, ".svg")).toBeUndefined();
@@ -76,6 +86,16 @@ describe("the builder package follows the format options", () => {
     expect(seenBox.jpeg).toMatchObject({ width: 200, height: 100 });
   });
 
+  it("names the built-in EPS writer's real limit: with no outliner the text cannot be outlined, and the rest still ships", async () => {
+    const out = await buildSheetPackage(args({ includeEps: true, expandText: false }),
+      { ...deps({}), eps: (input: { svg: string; background: string; title: string }) =>
+        builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") }) });
+    expect(out.files.some((f) => f.name.endsWith(".eps"))).toBe(false);
+    expect(out.problems.join(" ")).toMatch(/EPS: no text outliner is available/);
+    expect(out.record.status).toBe("partial");
+    expect(out.files.some((f) => f.name.endsWith(".svg"))).toBe(true); // the rest is untouched
+  });
+
   it("ships nothing but a named problem when an expansion is refused", async () => {
     setTextOutliner(() => null);
     const out = await buildSheetPackage(args({ expandText: true }), deps({}));
@@ -87,6 +107,12 @@ describe("the builder package follows the format options", () => {
 });
 
 describe("the builder's own persisted format store", () => {
+  it("is what Export all selected reads — the upload tab's visual defaults under the builder's formats", () => {
+    saveBuilderFormats({ ...DEFAULT_FORMAT_OPTIONS, includeEps: true, epsConverter: "inkscape", expandText: true });
+    expect(sheetSettings()).toMatchObject({ includeEps: true, epsConverter: "inkscape", expandText: true });
+    expect(sheetSettings().includeSvg).toBe(true); // untouched format fields come from the builder's defaults
+  });
+
   it("round-trips the options and falls back to the defaults on garbage", () => {
     const next: ExportFormatOptions = { ...DEFAULT_FORMAT_OPTIONS, includeEps: true, jpegQuality: 0.7, expandText: true };
     saveBuilderFormats(next);

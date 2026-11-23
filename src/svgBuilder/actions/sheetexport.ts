@@ -14,6 +14,7 @@ import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
 import { loadBridgeConfig } from "../../upload/configstore";
 import { loadUploadSettings } from "../../upload/settingsstore";
+import type { UploadSettings } from "../../lib/upload/settings";
 import { loadBuilderFormats } from "../formatstore";
 import { warmTextFonts } from "../../lib/upload/textoutline";
 import { buildSheetPackage } from "../sheetpackage";
@@ -50,6 +51,16 @@ function remember(ctx: BuilderActionContext, id: string, patch: Partial<FinalArt
   saveArtboards(artboards);
 }
 
+/**
+ * The settings the builder's package reads (2026-11-19): the SVG to upload tab's
+ * visual defaults (stroke, background, artboard…) under the builder's OWN
+ * format store, so the Export settings dialog shapes the package at once. One
+ * owner, so the test of that wiring cannot drift from the export.
+ */
+export function sheetSettings(): UploadSettings {
+  return { ...loadUploadSettings().defaults, ...loadBuilderFormats() };
+}
+
 const epsOf = (converter: Parameters<typeof converterOf>[0]) => (input: Parameters<ReturnType<typeof converterOf>["convert"]>[0]) =>
   converterOf(converter).convert(input, { bridgeUrl: loadBridgeConfig().url, fetch: (url, init) => globalThis.fetch(url, init) });
 
@@ -63,7 +74,7 @@ async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboar
   if (folder === null) return [`${artboard.name}: its template is gone`];
   const config = artboardConfig(template, artboard);
   const doc = composeSheet({ config, layout: computeLayout(config), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts: texts, metadata: artboard.metadata });
-  const settings = { ...loadUploadSettings().defaults, ...loadBuilderFormats() };
+  const settings = sheetSettings();
   if (settings.expandText) await warmTextFonts(doc.svg); // the outliner is sync; fonts load here
   const pkg = await buildSheetPackage({ svg: doc.svg, metadata: artboard.metadata, settings, folder, stem: sheetStem(folder), pairId: artboard.id,
     now: now.toISOString(), prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(settings.epsConverter) });

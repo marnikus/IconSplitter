@@ -13,8 +13,13 @@ type Banner = SheetConfig["banner"];
 /** Inside the drawing: `box` is where text lays out (inset by Text padding), `frame` the painted banner. */
 export interface Laid extends BannerArgs { frame: Rect }
 
-/** An em length for letter-spacing, without float noise: 0.055em. */
-const em = (n: number) => `${Number(n.toFixed(4))}em`;
+/**
+ * An em fraction as the PX one glyph step adds (2026-11-19): `em 0.025` at 32 px
+ * is 0.8 px. Writing px keeps the sheet and the shared text outliner agreeing on
+ * the same number — an em string was read as 0 there and the exported EPS lost
+ * the spacing the artboard showed.
+ */
+const spacingPx = (em: number, size: number) => Number((em * size).toFixed(4));
 /** Characters per line: a width the user set wins (2026-11-14); else the reference limits. */
 function perLine(width: number, charWidth: number, auto: number): number {
   return width > 0 ? Math.max(1, Math.floor(width / Math.max(1, charWidth))) : auto;
@@ -34,7 +39,7 @@ export function subtitleLines(a: BannerArgs, side: boolean): string[] {
 export function titleText(a: BannerArgs, lines: string[], at: { x: number; top: number; size: number; ink: string; anchor: "start" | "middle"; xs?: readonly number[] }): string {
   const serif = a.banner.titleFace === "serif";
   const body = lines.map((line, i) => textEl({ x: at.xs?.[i] ?? at.x, y: at.top + at.size * 0.83 + i * at.size * 1.03, value: line, size: at.size,
-    colour: at.ink, face: a.banner.titleFace, weight: serif ? 500 : 600, anchor: at.anchor, spacing: em(titleStyle(a.banner).spacingEm) })).join("");
+    colour: at.ink, face: a.banner.titleFace, weight: serif ? 500 : 600, anchor: at.anchor, spacingPx: spacingPx(titleStyle(a.banner).spacingEm, at.size) })).join("");
   const pad = paddingShift(a.banner);
   return movedText("title", a.banner.titleDx + pad.dx, a.banner.titleDy + pad.dy, body);
 }
@@ -59,7 +64,7 @@ export function movedText(which: "title" | "subtitle", dx: number, dy: number, b
 export function subtitleText(a: BannerArgs, lines: string[], at: { x: number; top: number; anchor: "start" | "middle"; xs?: readonly number[] }): string {
   const s = a.banner.subtitleSize;
   const body = lines.map((line, i) => textEl({ x: at.xs?.[i] ?? at.x, y: at.top + s * 0.83 + i * s * 1.55, value: line, size: s,
-    colour: a.banner.subtitleColor, face: "sans", weight: 500, anchor: at.anchor, spacing: em(subtitleStyle(a.banner).spacingEm) })).join("");
+    colour: a.banner.subtitleColor, face: "sans", weight: 500, anchor: at.anchor, spacingPx: spacingPx(subtitleStyle(a.banner).spacingEm, s) })).join("");
   const pad = paddingShift(a.banner);
   return movedText("subtitle", a.banner.subtitleDx + pad.dx, a.banner.subtitleDy + pad.dy, body);
 }
