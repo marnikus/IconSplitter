@@ -7,6 +7,7 @@ import SvgBuilderLeaveDialog from "./SvgBuilderLeaveDialog";
 import SvgBuilderFormatDialog from "./SvgBuilderFormatDialog";
 import { DEFAULT_ARTBOARD_SUBTITLE } from "../lib/svgBuilder/metadata";
 import type { BuilderApi } from "./useSvgBuilder";
+import SvgBuilderMetaOptions, { imageWords } from "./SvgBuilderMetaOptions";
 
 export default function SvgBuilderDialogs({ b }: { b: BuilderApi }) {
   if (b.dialog === "brief") return <SvgBuilderBrief onClose={b.actions.closeDialog} onCopied={b.actions.say} />;
@@ -24,9 +25,10 @@ function MetadataDialog({ b }: { b: BuilderApi }) {
       aria-modal="true" aria-label="Confirm sheet metadata request">
       <MetadataHead onClose={b.actions.cancelMetadata} />
       <div className="builder-meta-grid">
-        <MetadataPreview src={b.preview} />
+        <MetadataPreview src={b.preview} words={imageWords(b)} />
         <MetadataRequest b={b} />
       </div>
+      <SvgBuilderMetaOptions b={b} disabled={b.busy !== null} />
       <MetadataDraft b={b} />
       <MetadataActions b={b} />
     </section>
@@ -38,12 +40,12 @@ function MetadataHead({ onClose }: { onClose: () => void }) {
     <button type="button" className="svg-btn ghost tiny" data-testid="builder-meta-close" onClick={onClose}>✕</button></div>;
 }
 
-function MetadataPreview({ src }: { src: string | null }) {
+function MetadataPreview({ src, words }: { src: string | null; words: string }) {
   return <figure className="builder-meta-preview-wrap">
     {src !== null
-      ? <img className="builder-meta-preview" data-testid="builder-meta-preview" src={src} alt="The exact icons-only PNG to be sent" />
+      ? <img className="builder-meta-preview" data-testid="builder-meta-preview" src={src} alt={`The exact PNG to be sent — ${words}`} />
       : <div className="builder-meta-preview is-empty" data-testid="builder-meta-preview">No preview</div>}
-    <figcaption>ONE PNG (at most 1 MP) of this sheet's icons, without the banner · no other files or folder contents are sent</figcaption>
+    <figcaption>ONE PNG (at most 1 MP) of this sheet — {words} · no other files or folder contents are sent</figcaption>
   </figure>;
 }
 

@@ -3,12 +3,14 @@
 // document, not like a script's log (2026-11-19). The review of a delivered
 // file found exactly these giveaways, and each is pinned here against a real
 // writeEps output: an empty prolog/setup, full-word operators, a `gsave` and an
-// identity `[1 0 0 1 0 0] concat` around every single shape, `setlinecap/
-// setlinejoin/setmiterlimit` repeated on every stroke, an ISO timestamp where
-// DSC wants `D:…`, and a `%%Creator` naming the tab instead of the program.
+// identity `[1 0 0 1 0 0] concat` around every single shape, and `setlinecap/
+// setlinejoin/setmiterlimit` repeated on every stroke.
+//
+// What it may NOT gain is attribution: since RULE 26 the repaired document names
+// neither the tool nor the moment it ran — no `%%Creator`, no `%%CreationDate`,
+// no `%ADO_*` — so the header test pins that absence instead.
 import { describe, expect, it } from "vitest";
 import { writeEps, verifyEpsDocument } from "../src/lib/upload/eps";
-import { dscDate } from "../src/lib/upload/epsdoc";
 import { hiResBox, runPostScript } from "./helpers/psrun";
 
 const NS = 'xmlns="http://www.w3.org/2000/svg"';
@@ -31,14 +33,16 @@ function bodyOf(eps: string): string {
 describe("the EPS header reads like a document", () => {
   const eps = epsOf(art(RECT));
 
-  it("names the program, one title, and a DSC timestamp", () => {
-    expect(eps).toContain("%%Creator: IconSplitter\n");
-    expect(eps).not.toContain("(SVG to upload)"); // the tab name is our paperwork, not the program's
-    expect(eps).toContain("%%CreationDate: D:");
-    expect(eps).not.toMatch(/%%CreationDate:.*\dT\d\d:/); // never the ISO log line
-    expect(dscDate("2026-11-19T00:00:00.000Z")).toBe("D:20261119000000+00'00'");
-    expect(dscDate("2026-11-19T20:01:44.512+02:00")).toBe("D:20261119200144+02'00'");
-    expect(dscDate("not a date")).toBeNull();
+  it("names the artwork once and attributes it to nobody", () => {
+    expect(eps).toContain("%%Title: export.eps");
+    expect(eps).not.toContain("(SVG to upload)"); // the tab name is our paperwork, not the artwork's
+    // RULE 26: no producer, no date, no tool-named DSC line of any kind.
+    expect(eps).not.toContain("%%Creator");
+    expect(eps).not.toMatch(/%%CreationDate/);
+    expect(eps).not.toContain("IconSplitter");
+    expect(eps).not.toMatch(/^%ADO_/m);
+    // `createdAt` stays an accepted parameter and is deliberately ignored.
+    expect(epsOf(art(RECT), { createdAt: "2026-11-19T00:00:00.000Z" })).not.toContain("2026");
   });
 
   it("carries the full DSC + Illustrator comment set, and never claims Adobe wrote it", () => {

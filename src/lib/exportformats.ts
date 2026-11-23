@@ -28,6 +28,14 @@ export interface ExportFormatOptions {
   jpegMatchArtboard: boolean;
   /** Optimize the export SVG copy with SVGO — viewBox, geometry, strokes and metadata preserved. */
   optimizeSvg: boolean;
+  /**
+   * Clean the saved SVG and the EPS built from it (2026-11-19): the stock-clean
+   * pass drops the generator's paperwork — `data-*` hooks, `class`/`aria-*`,
+   * repeated xmlns, comments, our provenance `<metadata>` JSON and float noise.
+   * The picture, its viewBox, the artboard's px and Title/description/tags stay —
+   * and, since RULE 26, no byte of it names the tool or the moment it ran.
+   */
+  cleanExport: boolean;
   /** Strokes become filled shapes; the SVG, JPEG and EPS all ship without strokes. */
   expandStrokes: boolean;
   /** Every <text> becomes filled glyph outlines; what cannot be outlined fails honestly. */
@@ -38,32 +46,27 @@ export interface ExportFormatOptions {
   rescaleMegapixels: number;
   /** While rescaling: scale stroke widths proportionally; off = every stroke keeps its printed px. */
   rescaleStrokes: boolean;
-  /**
-   * Clean the delivered SVG and EPS: strip the generator's fingerprints
-   * (custom `data-*`, stitched per-element `xmlns`, float-math junk, duplicate
-   * metadata carriers) and keep ONLY title, description and tags as metadata.
-   */
-  cleanExport: boolean;
 }
 
 export const DEFAULT_FORMAT_OPTIONS: ExportFormatOptions = {
   includeSvg: true, includeJpeg: true, includeEps: false, epsConverter: DEFAULT_CONVERTER,
   jpegMegapixels: MP_DEFAULT, jpegQuality: QUALITY_DEFAULT, jpegMatchArtboard: true,
-  optimizeSvg: true, expandStrokes: false, expandText: false,
-  // Off in the shared domain: the upload tab's delivered files keep their
-  // identity fields (its own long-standing contract). The builder turns it ON
-  // as ITS default (formatstore.ts) — a stock sheet ships clean.
-  rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true, cleanExport: false,
+  // Clean by default, as the remote round decided (RULE 26): every door ships
+  // files with no machine attribution unless the user unticks the box.
+  optimizeSvg: true, cleanExport: true, expandStrokes: false, expandText: false,
+  rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true,
 };
 
 /** Boolean fields, in the order the dialogs show them. */
 export const FORMAT_FLAGS = [
   "includeSvg", "includeJpeg", "includeEps", "jpegMatchArtboard", "optimizeSvg",
-  "expandStrokes", "expandText", "rescaleArtboard", "rescaleStrokes", "cleanExport",
+  "cleanExport", "expandStrokes", "expandText", "rescaleArtboard", "rescaleStrokes",
 ] as const;
 
 /** Fields that default ON read back on unless stored `false`; the rest read back off unless stored `true`. */
-const DEFAULT_ON = new Set<string>(["includeSvg", "includeJpeg", "jpegMatchArtboard", "optimizeSvg", "rescaleStrokes"]);
+const DEFAULT_ON = new Set<string>([
+  "includeSvg", "includeJpeg", "jpegMatchArtboard", "optimizeSvg", "cleanExport", "rescaleStrokes",
+]);
 
 const FORMAT_NUMBERS: ["jpegMegapixels" | "jpegQuality" | "rescaleMegapixels", (value: unknown) => number][] = [
   ["jpegMegapixels", clampMegapixels],
@@ -174,10 +177,10 @@ export function exportArtboardSize(
   return { width: scaled.width, height: scaled.height };
 }
 
-/** What the JPEG row says it will write: the artboard's own px, or the MP rule at its ratio. */
-export function jpegNote(size: { width: number; height: number } | null, match = true): string {
+/** What the raster row says it will write: the artboard's own px, or the MP rule at its ratio. */
+export function jpegNote(size: { width: number; height: number } | null, match = true, kind: "JPEG" | "PNG" = "JPEG"): string {
   if (size === null) return "rendered from the vectors at this resolution (default 15.1)";
   return match
-    ? `the JPEG is the artboard itself: ${size.width}×${size.height} px — untick for a bigger file`
+    ? `the ${kind} is the artboard itself: ${size.width}×${size.height} px — untick for a bigger file`
     : "rendered from the vectors at this resolution, at the artboard's aspect ratio";
 }

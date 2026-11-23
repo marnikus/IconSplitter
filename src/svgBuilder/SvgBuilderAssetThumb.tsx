@@ -1,12 +1,13 @@
-// SvgBuilderAssetThumb.tsx — one library tile preview, drawn STROKE-ONLY with
-// the same sanitiser/recolour the artboard uses (FIXES E1), inside a shadow root
-// so a source document can never style the app. Loads when scrolled into view.
+// SvgBuilderAssetThumb.tsx — one library tile preview, drawn with the same
+// sanitiser/recolour the artboard uses (FIXES E1): a line-stroke icon stroke-only,
+// a colored icon in its own colours (2026-11-23) — inside a shadow root so a
+// source document can never style the app. Loads when scrolled into view.
 import { useEffect, useRef, useState } from "react";
 import { iconPreviewSvg } from "../lib/svgBuilder/svgAsset";
 import type { BuilderIconAsset } from "../lib/svgBuilder/types";
 import type { AssetRepository } from "./repository";
 
-const TILE_STYLE = { box: 24, strokeWidth: 1.55, color: "#C6CEE2", linecap: "round" as const };
+const TILE_STYLE = { box: 24, strokeWidth: 1.55, color: "#C6CEE2", linecap: "round" as const, coloredStroke: "", coloredStrokeWidth: 0, coloredFill: "" };
 
 export default function SvgBuilderAssetThumb({ asset, repository }: { asset: BuilderIconAsset; repository: AssetRepository | null }) {
   const host = useRef<HTMLSpanElement | null>(null);

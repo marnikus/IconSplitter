@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG, parseSheetConfig } from "../../src/lib/svgBuilder/confi
 import { computeLayout } from "../../src/lib/svgBuilder/layout";
 import { composeSheet } from "../../src/lib/svgBuilder/compose";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../../src/lib/upload/settings";
+import type { SheetMetadata } from "../../src/lib/svgBuilder/types";
 import { builtinConverter } from "../../src/lib/upload/epsconv/builtin";
 import { buildSheetPackage, type SheetPackage } from "../../src/svgBuilder/sheetpackage";
 import type { BuilderIconAsset } from "../../src/lib/svgBuilder/types";
@@ -18,6 +19,8 @@ export const ICON_ASSET: BuilderIconAsset = {
 
 export interface SheetPatch {
   strokeWidth?: number;
+  /** The icon ink (the artboard's stroke colour). */
+  ink?: string;
   titleTracking?: number;
   subtitleTracking?: number;
 }
@@ -26,7 +29,11 @@ export interface SheetPatch {
 export function sheetSvg(patch: SheetPatch = {}): string {
   const config = parseSheetConfig({
     ...DEFAULT_CONFIG,
-    icons: { ...DEFAULT_CONFIG.icons, ...(patch.strokeWidth === undefined ? {} : { strokeWidth: patch.strokeWidth }) },
+    icons: {
+      ...DEFAULT_CONFIG.icons,
+      ...(patch.strokeWidth === undefined ? {} : { strokeWidth: patch.strokeWidth }),
+      ...(patch.ink === undefined ? {} : { color: patch.ink }),
+    },
     banner: {
       ...DEFAULT_CONFIG.banner,
       ...(patch.titleTracking === undefined ? {} : { titleTracking: patch.titleTracking }),
@@ -44,9 +51,9 @@ const NO_BROWSER = {
 };
 
 /** One sheet package over the composed sheet; browser renderers are fakes. */
-export function packageOf(svg: string, settings: Partial<UploadSettings> = {}): Promise<SheetPackage> {
+export function packageOf(svg: string, settings: Partial<UploadSettings> = {}, metadata: SheetMetadata | null = null): Promise<SheetPackage> {
   return buildSheetPackage({
-    svg, metadata: null, folder: "_artboard_sheets/x/a", stem: "sheet", pairId: "a1",
+    svg, metadata, folder: "_artboard_sheets/x/a", stem: "sheet", pairId: "a1",
     now: "2026-11-19T00:00:00.000Z", prompt: "", model: "",
     settings: { ...DEFAULT_UPLOAD_SETTINGS, optimizeSvg: false, ...settings },
   }, NO_BROWSER);

@@ -80,11 +80,12 @@ function writeEpsUnsafe(svgText: string, background: string, opts: EpsOptions): 
   walk(root, ctx);
   // Two boxes, as DSC wants: the integer one a Level-1 reader uses, and the
   // exact one (`%%HiResBoundingBox`) a modern consumer places the art by.
-  const ptW = vb[2] * PX_TO_PT;
-  const ptH = vb[3] * PX_TO_PT;
+  const unit = unitOf(root, vb);
+  const ptW = vb[2] * unit * PX_TO_PT;
+  const ptH = vb[3] * unit * PX_TO_PT;
   const hires = { llx: 0, lly: 0, urx: ptW, ury: ptH };
   const box = integerBounds(hires);
-  const eps = assemble({ viewBox: vb, box, hires, body: ctx.out, opts });
+  const eps = assemble({ viewBox: vb, unit, box, hires, body: ctx.out, opts });
   return { ok: true, eps, boundingBox: box, shapes: ctx.count.shapes, fixes: fixLines(ctx.count) };
 }
 
@@ -268,6 +269,24 @@ function isRoundedRect(el: Element): boolean {
   if (el.nodeName.toLowerCase() !== "rect") return false;
   const [rx, ry] = rectRadii(el, Number(el.getAttribute("width")), Number(el.getAttribute("height")));
   return rx > 0 && ry > 0;
+}
+
+const pxOf = (raw: string | null): number | null => {
+  const m = raw === null ? null : /^\s*(\d+(?:\.\d+)?)\s*(px)?\s*$/i.exec(raw);
+  return m === null ? null : Number(m[1]);
+};
+
+/**
+ * Root px per viewBox unit (2026-11-23): the page is the document's OWN px size
+ * — "rescale the artboard to MP" moves width/height and keeps the viewBox, and
+ * the EPS has to grow with it like the SVG does. 1 when there is no plain px
+ * size, or its ratio is not the viewBox's (then the viewBox decides, as before).
+ */
+function unitOf(root: Element, vb: number[]): number {
+  const w = pxOf(root.getAttribute("width")), h = pxOf(root.getAttribute("height"));
+  if (w === null || h === null || w <= 0 || h <= 0) return 1;
+  const sx = w / vb[2], sy = h / vb[3];
+  return Math.abs(sx - sy) <= 0.005 * Math.max(sx, sy) ? sx : 1;
 }
 
 function viewBoxOf(root: Element): number[] | null {

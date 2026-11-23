@@ -16,7 +16,7 @@
 | `builder-brief` / `builder-corrected-brief` | open `builder-brief-dialog` | header / stage bottom-right |
 | `builder-open-preset-json` / `builder-export-preset-json` | `{ } Preset JSON` | dialog `builder-preset-json`: `builder-preset-json-text`, `-apply`, `-refresh`, `-copy`, `-copy-ai`, `-download`, `-close`, `-status`, `-help` |
 | `builder-open-metadata` | Sheet metadata | unfolds `builder-meta-widget` |
-| `builder-format-open` (alias `builder-export-settings`) | `⚙ Export settings` | its OWN header button beside the dropdown (2026-11-19): opens `builder-format-dialog` directly — the upload flow's popup, not a menu item only |
+| `builder-export-settings` | `⚙ Export settings` | its OWN header button beside the dropdown (2026-11-19): opens `builder-format-dialog` directly — the upload flow's popup, not a menu item only |
 | `builder-export-toggle` | `Export ▾` | menu `builder-export-menu`: `builder-export-svg`, `-png`, `-copy`, `-package` (its hint names the formats the package will really write, `SVG off` for a switch that is off; `title` names `_artboard_sheets`), `-formats` (opens the modal below), `-preset`, `-preset-json`, `-load` (`role=menuitem`); `builder-preset-file` hidden input |
 | `builder-toast` / `builder-busy` / `builder-status-text` | toast zone | 4.2 s toast; errors stay |
 | `history-bar` | global undo bar | shared with every tab |
@@ -42,7 +42,7 @@
 | Testid | Element | Notes |
 |---|---|---|
 | `builder-stage` / `builder-canvas` | column / scroll area | `builder-stage-empty` before a composition |
-| `builder-layout-{editorial,masthead,plain}` | Side banner / Top split / Plain grid | `aria-pressed`; `builder-custom-pill` after an edit |
+| `builder-layout-{editorial,masthead,plain,line}` | layout presets ([Line](svg-builder-presets.md)) | `aria-pressed`; then `builder-custom-pill` |
 | `builder-zoom-out` / `builder-zoom` / `builder-zoom-in` / `builder-fit` / `builder-zoom-1` | zoom | `builder-zoom` text = %, click → fit |
 | `builder-artboard` | scaled artboard | `data-zoom`; composed SVG in a shadow root |
 | `builder-empty-cell-{i}` | dashed `+` placeholder | `data-placeholder`, preview only |
@@ -78,5 +78,5 @@ See [templates & artboards selectors](svg-builder-presets.md).
 | Testid | Element | Notes |
 |---|---|---|
 | `builder-brief-dialog` | brief | `builder-brief-tab-brief`, `-tab-raw`, `builder-brief-copy`, `builder-brief-close`, `builder-brief-text`, `builder-brief-raw`, `builder-brief-count` |
-| `builder-format-dialog` | Export settings popup (2026-11-17, shell shared 2026-11-19) | `section.svg-modal` inside `builder-format-backdrop` (`.svg-backdrop.bld-export-backdrop`) — the SAME `ui/exportmodal.tsx` shell the upload dialog renders (`.svg-modal-head h2#builder-format-title` + `.svg-modal-body`), `aria-modal`, `aria-labelledby`; closed by `builder-format-close`, Escape or a backdrop click; `builder-format-note` names where the package is written; `builder-format-eps-note` warns while `Also write EPS` + the built-in writer + live text (`Expand text to fills` unticked). Rows use the `bld-set-` scope of the shared sheet: `bld-set-{svg,jpeg,eps,converter,mp,mp-match,mp-note,quality,clean,optimize,expand,expandtext,rescale,rescale-mp,rescale-strokes}`, `bld-set-formats-warning` while every format is off; `bld-eps-helper{,-url,-check,-state}` for the Inkscape converter |
+| `builder-format-dialog` | Export settings popup (2026-11-17, shell shared 2026-11-19) | `section.svg-modal` inside `builder-format-backdrop` (`.svg-backdrop.bld-export-backdrop`) — the shared `ui/exportmodal.tsx` shell (`h2#builder-format-title` + `.svg-modal-body`), `aria-modal`, `aria-labelledby`; closed by `builder-format-close`, Escape or a backdrop click; `builder-format-note` names where the package is written; `builder-format-eps-note` warns while `Also write EPS` + the built-in writer + live text (`Expand text to fills` unticked). Rows use the `bld-set-` scope of the shared sheet: `bld-set-{svg,jpeg,eps,converter,mp,mp-match,mp-note,quality,optimize,clean,expand,expandtext,rescale,rescale-mp,rescale-strokes}` (`clean` = `Clean the saved files`, on by default), `bld-set-formats-warning` while every format is off; `bld-eps-helper{,-url,-check,-state}` for the Inkscape converter |
 | `builder-meta-dialog` | exact request | `builder-meta-preview` (768 px JPEG), `builder-meta-prompt`, `builder-exact-request`, `builder-meta-confirm`, `-accept`, `-cancel`, `-close`, `builder-meta-draft` |

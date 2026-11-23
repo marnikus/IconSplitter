@@ -306,6 +306,28 @@ describe("SVG builder workspace", () => {
     expect(text("builder-section-grid")).toContain("8 × 4");
   });
 
+  it("Line banner (after Plain grid, 2026-11-23): no banner colour, the separator line's colour and width in Customize", async () => {
+    await openLibrary();
+    const buttons = [...host.querySelectorAll('[data-testid^="builder-layout-"]')].map((el) => el.getAttribute("data-testid"));
+    expect(buttons.indexOf("builder-layout-line")).toBe(buttons.indexOf("builder-layout-plain") + 1);
+    await click("builder-layout-line");
+    if (q("builder-banner-style") === null) await act(async () => { q("builder-section-banner")!.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(q("builder-banner-style-line")?.getAttribute("aria-checked")).toBe("true");
+    expect(q("builder-banner-bg")).toBeNull(); // a Line banner has no colour of its own
+    const width = q("builder-banner-line-width") as HTMLInputElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(width, "4");
+      width.dispatchEvent(new Event("input", { bubbles: true }));
+      width.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle(0);
+    const svg = () => q("builder-artboard")!.querySelector(".bld-artboard-svg")!.shadowRoot!.innerHTML;
+    expect(svg()).toMatch(/height="4" fill="#E8C547" data-banner-line="true"/);
+    await click("builder-banner-style-solid");
+    expect(svg()).not.toContain("data-banner-line");
+    expect(q("builder-banner-bg")).not.toBeNull();
+  });
+
   it("a typed width clamps to the range instead of snapping back to the default", async () => {
     await openLibrary();
     await click("builder-section-artboard"); // collapsed by default → open

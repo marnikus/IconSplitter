@@ -2,6 +2,7 @@
 // tabs): Open folder, Rescan, scope copy, approved count, audit line and path.
 // The indexing controls live in the header row (SvgBuilderHeader).
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import MultiSelect from "../ui/MultiSelect";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderControls({ b }: { b: BuilderApi }) {
@@ -57,6 +58,15 @@ export function IndexingControl({ b }: { b: BuilderApi }) {
     <span className="v2-chip pending" data-testid="builder-index-progress" aria-live="polite">{progressText(run)}</span>
     <button type="button" className="svg-btn danger" data-testid="builder-index-cancel" onClick={b.actions.cancelIndexing}>Cancel</button>
   </>;
+}
+
+/**
+ * STYLES (2026-11-23): which icon styles may be in sheets — the shared checkbox
+ * dropdown, beside Icons indexing. All styles, Line stroke and every style the
+ * library has (Colored wiggle…); checked ones combine.
+ */
+export function StyleFilterControl({ b }: { b: BuilderApi }) {
+  return <MultiSelect label="STYLES" testid="builder-style-filter" value={b.prefs.styles} options={b.styleOptions} onChange={b.actions.setStyleFilter} />;
 }
 
 /** Register hand-added template / artboard folders (2026-11-16): now, or after every scan. */

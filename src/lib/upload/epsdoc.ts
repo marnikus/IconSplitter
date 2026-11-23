@@ -83,6 +83,8 @@ export const PEN_DEFAULTS = "1 w [] 0 d 0 J 0 j 4 M";
 export interface EpsDoc {
   /** The root viewBox — its origin and size place the artwork. */
   viewBox: number[];
+  /** Root px per viewBox unit (2026-11-23): the document's own px size over its viewBox; absent = 1. */
+  unit?: number;
   /** The integer DSC box (`%%BoundingBox`), what a Level-1 reader uses. */
   box: EpsBoundingBox;
   /** The exact box (`%%HiResBoundingBox`), in points. */
@@ -94,9 +96,11 @@ export interface EpsDoc {
 
 /**
  * The EPS 10 document: header, prolog, setup (document transform + pen
- * defaults), one layer holding the body, then the trailer.
+ * defaults), one layer holding the body, then the trailer. No `%%Creator` and
+ * no `%%CreationDate`: a delivered file names neither the tool nor the moment
+ * it ran (RULE 26).
  */
-export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
+export function assemble({ viewBox, unit = 1, box, hires, body, opts }: EpsDoc): string {
   const lines = [
     "%!PS-Adobe-3.0 EPSF-3.0",
     ...commentLines(box, hires, opts),
@@ -105,7 +109,7 @@ export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
     ...prologLines(),
     "%%EndProlog",
     "%%BeginSetup",
-    uprightingMatrix(viewBox, hires),
+    uprightingMatrix(viewBox, hires, unit),
     PEN_DEFAULTS,
     "%%EndSetup",
     "%%Page: 1 1",
@@ -123,20 +127,20 @@ export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
 /**
  * Anchor the artwork to the exact HiRes artboard; the integer DSC box only
  * rounds outward for legacy readers (`%AI5_ArtSize` preserves the exact size).
- * `concat` takes ONE matrix, never six bare numbers (I-61 / Illustrator).
+ * `concat` takes ONE matrix, never six bare numbers (I-61 / Illustrator). A
+ * rescaled artboard (root px ≠ viewBox) is drawn at its px size (`unit`).
  */
-function uprightingMatrix(viewBox: number[], hires: EpsBoundingBox): string {
-  const tx = fmt(hires.llx - PX_TO_PT * viewBox[0]);
-  const ty = fmt(hires.ury + PX_TO_PT * viewBox[1]);
-  return `[${fmt(PX_TO_PT)} 0 0 ${fmt(-PX_TO_PT)} ${tx} ${ty}] concat`;
+function uprightingMatrix(viewBox: number[], hires: EpsBoundingBox, unit: number): string {
+  const s = PX_TO_PT * unit;
+  const tx = fmt(hires.llx - s * viewBox[0]);
+  const ty = fmt(hires.ury + s * viewBox[1]);
+  return `[${fmt(s)} 0 0 ${fmt(-s)} ${tx} ${ty}] concat`;
 }
 
 /** The DSC + Illustrator comment block, in the order a reader prefers. */
 function commentLines(box: EpsBoundingBox, hires: EpsBoundingBox, opts: EpsOptions): string[] {
   return [
-    "%%Creator: IconSplitter",
-    `%%Title: (${dscString(opts.title ?? "export.eps")})`,
-    ...creationDate(opts.createdAt),
+    `%%Title: ${dscString(opts.title ?? "export.eps")}`,
     `%%BoundingBox: ${box.llx} ${box.lly} ${box.urx} ${box.ury}`,
     `%%HiResBoundingBox: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
     "%%DocumentData: Clean7Bit",
@@ -148,27 +152,6 @@ function commentLines(box: EpsBoundingBox, hires: EpsBoundingBox, opts: EpsOptio
     "%%PageOrigin: 0 0",
     ...illustratorArtboard(hires),
   ];
-}
-
-function creationDate(iso: string | undefined): string[] {
-  const date = iso === undefined ? null : dscDate(iso);
-  return date === null ? [] : [`%%CreationDate: ${date}`];
-}
-
-/**
- * An ISO timestamp as DSC wants it: `D:YYYYMMDDHHmmSS±HH'MM'`. Anything that is
- * not a timestamp with a zone yields null — a made-up date is worse than none.
- */
-export function dscDate(iso: string): string | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.exec(iso.trim());
-  if (m === null) return null;
-  const zone = m[7] === "Z" ? "+00'00'" : `${normalizeZone(m[7]).slice(0, 3)}'${normalizeZone(m[7]).slice(3)}'`;
-  return `D:${m[1]}${m[2]}${m[3]}${m[4]}${m[5]}${m[6]}${zone}`;
-}
-
-/** `+02:00` → `+0200`. */
-function normalizeZone(zone: string): string {
-  return zone.replace(":", "");
 }
 
 /** The prolog: the short operators the body is written with, and nothing else. */

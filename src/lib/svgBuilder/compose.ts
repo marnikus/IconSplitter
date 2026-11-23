@@ -34,7 +34,8 @@ export function composeSheet(args: ComposeSheetArgs): SheetDocument {
   const sources = placed.flatMap((p) => (p.asset === undefined ? [] : [{ id: p.id, fingerprint: p.asset.fingerprint }]));
   const copy = sheetCopy(metadata, args.config.banner);
   const svg = [
-    rootOpen(args.config, fingerprint), headOf(metadata?.state === "accepted" && metadata.title !== "" ? metadata.title : copy.title, metadata, { ids, sources, fingerprint }),
+    rootOpen(args.config, fingerprint),
+    headOf(metadata?.state === "accepted" && metadata.title !== "" ? metadata.title : copy.title, metadata),
     backgroundOf(args.config), bannerOf(args, copy, ids), `<g data-export="icons">${cells.join("")}</g>`,
     captionsOf(args, placed), "</svg>",
   ].join("");
@@ -54,10 +55,15 @@ function cellMarkup(args: ComposeSheetArgs, p: Placed, brokenIds: string[]): str
   if (p.asset === undefined) return ""; // not in the library (declined / removed): never drawn, never "Unavailable" (2026-11-14)
   const code = args.svgTexts[p.id];
   const cell = p.asset !== undefined && typeof code === "string" && code !== ""
-    ? cellGroupOf({ code, asset: p.asset, frame: p.frame, style: args.config.icons }) : null;
+    ? cellGroupOf({ code, asset: p.asset, frame: p.frame, style: penOf(args.config.icons, p.frame) }) : null;
   if (cell !== null && cell.ok) return cell.html;
   brokenIds.push(p.id);
   return brokenMarkup(p.frame, p.id, cell?.ok === false ? cell.error : "approved SVG is still loading or unreadable");
+}
+
+/** A big icon's own stroke (2026-11-23): outlined and colored icons alike. */
+function penOf(icons: SheetConfig["icons"], frame: CellFrame): SheetConfig["icons"] {
+  return frame.stroke === undefined ? icons : { ...icons, strokeWidth: frame.stroke, coloredStrokeWidth: icons.coloredStrokeWidth > 0 ? frame.stroke : 0 };
 }
 
 function rootOpen(config: SheetConfig, fingerprint: string): string {
@@ -66,12 +72,15 @@ function rootOpen(config: SheetConfig, fingerprint: string): string {
     + `data-config-fingerprint="${attr(fingerprint)}" data-approved-only="true" role="img">`;
 }
 
-function headOf(title: string, metadata: SheetMetadata | null, trace: { ids: string[]; sources: { id: string; fingerprint: string }[]; fingerprint: string }): string {
+function headOf(title: string, metadata: SheetMetadata | null): string {
   const accepted = metadata?.state === "accepted" ? metadata : null;
-  const desc = accepted === null ? "Generated with the SVG builder. Editable stroke-only icon sheet."
-    : `${accepted.description}. Tags: ${accepted.tags.join(", ")}`;
-  const payload = JSON.stringify({ v: 1, approvedOnly: true, title, placedIds: trace.ids, sources: trace.sources, configFingerprint: trace.fingerprint });
-  return `<title>${escapeText(`${title.trim() || "Icon sheet"} — icon sheet`)}</title><desc>${escapeText(desc)}</desc><metadata>${escapeText(payload)}</metadata>`;
+  const cleanTitle = title.trim();
+  const titleTag = cleanTitle !== "" ? `<title>${escapeText(cleanTitle)}</title>` : "";
+  const desc = accepted !== null && accepted.description.trim() !== ""
+    ? (accepted.tags.length > 0 ? `${accepted.description}. Tags: ${accepted.tags.join(", ")}` : accepted.description)
+    : "";
+  const descTag = desc !== "" ? `<desc>${escapeText(desc)}</desc>` : "";
+  return `${titleTag}${descTag}`;
 }
 
 function backgroundOf(config: SheetConfig): string {
@@ -83,7 +92,7 @@ function bannerOf(args: ComposeSheetArgs, copy: { title: string; subtitle: strin
   const box = args.layout.banner;
   if (box === null) return "";
   return bannerMarkup({ banner: args.config.banner, box, artboardWidth: args.config.artboard.width,
-    title: copy.title, subtitle: copy.subtitle, hero: heroPainter(args, ids) });
+    title: copy.title, subtitle: copy.subtitle, hero: heroPainter(args, ids), canvas: args.config.artboard.background });
 }
 
 /** The hero glyph: the chosen library icon, else the first placed icon; the banner's Icon stroke in the given ink. */
@@ -94,7 +103,8 @@ function heroPainter(args: ComposeSheetArgs, ids: readonly string[]): HeroPainte
   return (x, y, size, ink) => {
     if (asset === undefined || typeof code !== "string" || code === "") return "";
     const frame: CellFrame = { index: -1, x, y, size, glyph: size, captionY: 0, captionSize: 0 };
-    const cell = cellGroupOf({ code, asset, frame, style: { ...args.config.icons, color: ink, strokeWidth: args.config.banner.heroStroke } });
+    const pen = args.config.banner.heroStroke; // a colored hero (2026-11-23): its strokes take the ink and pen too; its fills stay its own
+    const cell = cellGroupOf({ code, asset, frame, style: { ...args.config.icons, color: ink, strokeWidth: pen, coloredStroke: ink, coloredStrokeWidth: pen } });
     return cell.ok ? cell.html : "";
   };
 }

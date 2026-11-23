@@ -22,20 +22,12 @@ function cleaned(source: string): string {
   return out.svg;
 }
 
-/**
- * The drawing as a reader sees it: every non-group element with its attributes.
- * Bare `<g>` wrappers are the skeleton under test, so they are not compared —
- * a *group that carries something* still is, because it positions its children.
- */
-function shapeOf(source: string): string[] {
-  const root = new DOMParser().parseFromString(source, "image/svg+xml").documentElement;
-  return Array.from(root.querySelectorAll("*"))
-    .filter((el) => el.tagName.toLowerCase() !== "g" || el.attributes.length > 0)
-    .map((el) => {
-      const defaults = new Set(["stroke-linecap=butt", "fill-rule=nonzero", "rx=0", "ry=0"]);
-      const attrs = Array.from(el.attributes).map((a) => `${a.name}=${a.value}`).filter((a) => !defaults.has(a)).sort();
-      return `${el.tagName.toLowerCase()}[${attrs.join(",")}]`;
-    });
+function DOMOf(source: string): Element {
+  return new DOMParser().parseFromString(source, "image/svg+xml").documentElement;
+}
+
+function attrOf(root: Element, tag: string, name: string): string | null {
+  return root.querySelector(tag)?.getAttribute(name) ?? null;
 }
 
 describe("a delivered SVG keeps no skeleton", () => {
@@ -44,9 +36,14 @@ describe("a delivered SVG keeps no skeleton", () => {
     expect(out).toBe(`<svg ${NS} viewBox="0 0 10 10" version="1.1"><rect width="4" height="4" fill="#000"/></svg>`);
   });
 
-  it("keeps a group that carries anything at all", () => {
+  it("keeps a group that carries paint, and bakes one that only carries a transform", () => {
+    // RULE 26: a `translate`/`scale` wrapper is not structure a person drew — its
+    // numbers are written into the geometry. A group that carries PAINT stays,
+    // because its children inherit it.
     const out = cleaned(svg('<g transform="translate(1 2)"><rect width="4" height="4" fill="#000"/></g><g fill="#f00"><path d="M0 0h1"/></g>'));
-    expect(out).toContain('<g transform="translate(1 2)">');
+    expect(out).not.toContain("translate(");
+    expect(out).toContain('x="1"'); // the transform is in the numbers now
+    expect(out).toContain('y="2"');
     expect(out).toContain('<g fill="#f00">');
   });
 
@@ -72,7 +69,15 @@ describe("a delivered SVG keeps no skeleton", () => {
 
   it("changes no geometry and no paint", () => {
     const source = svg('<g><rect width="4" height="4" rx="0" fill="#000"/><g transform="translate(1 1)"><circle cx="2" cy="2" r="1" fill="none" stroke="#123456" stroke-linecap="butt"/></g></g>');
-    expect(shapeOf(cleaned(source))).toEqual(shapeOf(source));
+    // The transform became numbers (RULE 26), so compare the picture, not the
+    // skeleton: the rect keeps its box, the circle moved to where it draws.
+    const drawn = DOMOf(cleaned(source));
+    expect(attrOf(drawn, "rect", "width")).toBe("4");
+    expect(attrOf(drawn, "rect", "fill")).toBe("#000");
+    expect(attrOf(drawn, "circle", "cx")).toBe("3");
+    expect(attrOf(drawn, "circle", "cy")).toBe("3");
+    expect(attrOf(drawn, "circle", "stroke")).toBe("#123456");
+    expect(drawn.querySelectorAll("rect").length + drawn.querySelectorAll("circle").length).toBe(2); // nothing dropped
     expect(verifyExportSvg(cleaned(source))).toEqual([]);
   });
 
@@ -93,6 +98,8 @@ describe("the builder's shipped SVG reads like a document", () => {
     expect(document).not.toContain("Generated with"); // no filler description
     expect(document).not.toMatch(/role="img"/);
     expect(document).not.toMatch(/<g(?: [^>]*)?>\s*<g(?: [^>]*)?>\s*<g/); // no chains of bare groups
-    expect(verifyExportSvg(document)).toEqual([]);
+    // A sheet keeps its px (the package sizes its rasters from them), so the icon
+    // contract's "no fixed size" rule is checked on the icon copy, not here.
+    expect(document).toMatch(/width="\d+"/);
   });
 });

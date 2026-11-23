@@ -21,6 +21,27 @@ const SHEET = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" 
 
 const decoder = new TextDecoder();
 const outliner = () => ({ d: "M0 0 L40 0", width: 40 });
+/**
+ * A converter's answer that the clean pass may ship: the delivered-file gate
+ * checks EPS 10 markers, so a stub that writes only a magic line would be
+ * refused — correctly — and the stage would report a problem.
+ */
+const MINIMAL_EPS = [
+  "%!PS-Adobe-3.0 EPSF-3.0",
+  "%%BoundingBox: 0 0 200 100",
+  "%%HiResBoundingBox: 0 0 200 100",
+  "%%DocumentData: Clean7Bit",
+  "%%LanguageLevel: 3",
+  "%%EndComments",
+  "%%BeginProlog",
+  "%%EndProlog",
+  "%%BeginSetup",
+  "%%EndSetup",
+  "0 0 m 10 10 l S",
+  "%%PageTrailer",
+  "%%Trailer",
+  "%%EOF",
+].join("\n");
 
 interface Seen { jpeg?: { width: number; height: number }; eps?: string }
 
@@ -28,7 +49,7 @@ function deps(seen: Seen, patch: Partial<Parameters<typeof buildSheetPackage>[1]
   return {
     pngBlob: async () => new Blob(["png"]),
     rasterize: async (_svg: string, target: { width: number; height: number }) => { seen.jpeg = target; return { ok: true as const, jpeg: new Uint8Array([1, 2, 3]) }; },
-    eps: async (input: { svg: string }) => { seen.eps = input.svg; return { ok: true as const, eps: "%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n", writer: "inkscape-cli@1.3.2", fixes: [] }; },
+    eps: async (input: { svg: string }) => { seen.eps = input.svg; return { ok: true as const, eps: MINIMAL_EPS, writer: "inkscape-cli@1.3.2", fixes: [] }; },
     ...patch,
   };
 }
@@ -70,7 +91,7 @@ describe("a sheet's EPS", () => {
     const pkg = await buildSheetPackage(args({ includeEps: true, epsConverter: "builtin" }), deps({}));
     expect(file(pkg, ".eps")).toBeUndefined();
     expect(file(pkg, ".svg")).toBeDefined();
-    expect(file(pkg, ".jpg")).toBeDefined();
+    expect(file(pkg, ".png")).toBeDefined(); // the builder's raster is a PNG since 2026-11-23
     expect(pkg.problems.join(" ")).toContain(EPS_TEXT_HINT);
     expect(pkg.record.status).toBe("partial");
   });

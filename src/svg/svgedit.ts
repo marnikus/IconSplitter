@@ -111,18 +111,27 @@ export async function finishSvgEdit(a: FinishArgs): Promise<boolean> {
   return true;
 }
 
+export type EditedSvgDecision = "approved" | "declined";
+
 /**
- * Ctrl+Shift+S in the edit mode (2026-11-06): the SVG is marked approved in
- * Generate SVG through its own review path, as its OWN undo step (the review's
- * svgReview entry). An item that is already approved records nothing.
+ * Ctrl+Shift+S ("approved") and Ctrl+Shift+X ("declined") in edit mode: marks
+ * the item in Generate SVG through its review path as its OWN svgReview undo
+ * step. An item that already carries `decision` records nothing.
  */
-export async function approveEditedSvg(id: string, before: ReviewStatus, label: string): Promise<boolean> {
-  if (before === "approved") return true;
-  const ok = await applySvgReviewPatch({ recs: [{ id, review: "approved" }] });
+export async function reviewEditedSvg(id: string, before: ReviewStatus, decision: EditedSvgDecision, label: string): Promise<boolean> {
+  if (before === decision) return true;
+  const ok = await applySvgReviewPatch({ recs: [{ id, review: decision }] });
   if (!ok) return false;
+  const verb = decision === "approved" ? "Approve" : "Decline";
   live?.push({
-    type: "svgReview", label: `Approve ${label}`, origin: getAppState().tab, ids: [id],
-    before: { recs: [{ id, review: before }] }, after: { recs: [{ id, review: "approved" }] },
+    type: "svgReview", label: `${verb} ${label}`, origin: getAppState().tab, ids: [id],
+    before: { recs: [{ id, review: before }] }, after: { recs: [{ id, review: decision }] },
   });
   return true;
 }
+
+export const approveEditedSvg = (id: string, before: ReviewStatus, label: string): Promise<boolean> =>
+  reviewEditedSvg(id, before, "approved", label);
+
+export const declineEditedSvg = (id: string, before: ReviewStatus, label: string): Promise<boolean> =>
+  reviewEditedSvg(id, before, "declined", label);

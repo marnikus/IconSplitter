@@ -3,6 +3,7 @@
 // planner's rebuild flags. The artifacts are built BEFORE any validation or
 // commit, so a failed stage never touches the last valid package.
 
+import { epsInputSvg } from "../lib/upload/rescale";
 import { verifyEpsDocument } from "../lib/upload/eps";
 import { prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
 import { warmTextFonts } from "../lib/upload/textoutline";
@@ -19,9 +20,9 @@ import type { StagePlan } from "../lib/upload/export";
 import type { RasterDeps } from "../lib/upload/raster";
 import { embedXmpMetadata } from "../lib/upload/jpeg";
 import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
+import { cleanEpsDocument, stripEpsProducerLines } from "../lib/upload/epsclean";
 import { enforceExportSvg } from "../lib/upload/clean";
-import { cleanExportSvg } from "../lib/upload/svgclean";
-import { cleanExportEps } from "../lib/upload/epsclean";
+import { cleanSvgText } from "../lib/upload/svgclean";
 
 /** A stage failure carries its class, so the log names the failing stage. */
 export class StageError extends Error {
@@ -70,7 +71,7 @@ export async function buildArtifacts(plan: StagePlan, ctx: StageContext): Promis
   const needSvgText = plan.rebuild.svg || plan.rebuild.eps;
   const needRender = plan.rebuild.jpg && plan.stages.includes("render");
   if (needSvgText || needRender) await buildSvgText(art, ctx);
-  if (plan.rebuild.svg) art.svgOut = embedSvg(art, ctx);
+  if (plan.rebuild.svg) art.svgOut = embedSvg(art, ctx.metadata);
   if (plan.rebuild.jpg) await buildJpegArtifact(plan, ctx, art);
   if (plan.rebuild.eps) await buildEps(art, ctx);
   return art;
@@ -95,29 +96,41 @@ async function buildSvgText(art: Artifacts, ctx: StageContext): Promise<void> {
   if (clean.violations.length > 0) {
     throw new StageError("optimize", `the export SVG breaks the clean rules: ${clean.violations.join("; ")}`);
   }
-  art.optimizedSvg = clean.svg;
-  art.optimizeRecord = await recordAfterClean(optimized.record, clean.svg, clean.rebuilt);
+  // The same clean copy the builder's sheet package gets (2026-11-20): the
+  // stock policy already ran in prepare, but the tidy passes, provenance
+  // `<metadata>` and rounding were sheet-only. Opt-in via the settings box; the
+  // icon contract is re-checked, so the pass cannot hand px width/height back.
+  const final = cleanedSvg(clean.svg, ctx.settings);
+  art.optimizedSvg = final;
+  art.optimizeRecord = await recordAfterClean(optimized.record, final, clean.rebuilt || final !== clean.svg);
+}
+
+/** The export SVG after the clean copy, when it is on and still contract-clean. */
+function cleanedSvg(svg: string, settings: UploadSettings): string {
+  if (!settings.cleanExport) return svg;
+  const cleaned = cleanSvgText(svg, { keepSize: false });
+  if (cleaned.refused !== null) return svg;
+  return enforceExportSvg(cleaned.svg).violations.length === 0 ? cleaned.svg : svg;
 }
 
 /**
- * The delivered SVG (2026-11-19): when `cleanExport` is on, the file that ships
- * loses the generator's fingerprints and carries ONLY title, description and
- * tags — so the metadata is embedded FROM the reduced set, then the document is
- * cleaned. Off, the old behaviour is untouched.
+ * What a cleaned file may carry (2026-11-19, corrected 2026-11-23): the user's
+ * own metadata — title, description, tags, and the rights claims the user typed
+ * (creator, copyright). NOTHING of the tool's. RULE 26 forbids machine/AI
+ * attribution; a person claiming authorship of their own artwork is exactly what
+ * a stock site's IPTC block is for, so that is kept, never stripped.
  */
-function embedSvg(art: Artifacts, ctx: StageContext): string | null {
-  if (art.optimizedSvg === null) return null;
-  if (ctx.metadata !== null && ctx.settings.cleanExport !== false) {
-    const result = cleanExportSvg(embedMetadataInSvg(art.optimizedSvg, ctx.metadata), shippedMetadata(ctx.metadata));
-    if (!result.ok) throw new StageError("embed", `the export SVG cannot be cleaned: ${result.reason}`);
-    return result.svg;
-  }
-  return ctx.metadata === null ? art.optimizedSvg : embedMetadataInSvg(art.optimizedSvg, ctx.metadata);
+export function shippedMetadata(metadata: IconMetadata): IconMetadata {
+  return {
+    title: metadata.title, description: metadata.description, tags: metadata.tags,
+    ...(metadata.creator === undefined ? {} : { creator: metadata.creator }),
+    ...(metadata.copyright === undefined ? {} : { copyright: metadata.copyright }),
+  };
 }
 
-/** What a cleaned file may carry: title, description and tags (2026-11-19). */
-export function shippedMetadata(metadata: IconMetadata): IconMetadata {
-  return { title: metadata.title, description: metadata.description, tags: metadata.tags };
+function embedSvg(art: Artifacts, metadata: IconMetadata | null): string | null {
+  if (art.optimizedSvg === null) return null;
+  return metadata === null ? art.optimizedSvg : embedMetadataInSvg(art.optimizedSvg, metadata);
 }
 
 async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifacts): Promise<void> {
@@ -134,17 +147,15 @@ async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifa
 async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   const converter = CONVERTERS[ctx.settings.epsConverter]; // the setting's choice (2026-10-09)
   const eps = await converter.convert({
-    svg: art.optimizedSvg as string, background: flattenColor(ctx.settings.background),
+    // a rescaled page is the target in POINTS — what Illustrator and the stocks count as px (2026-11-23)
+    svg: epsInputSvg(art.optimizedSvg as string, ctx.settings.rescaleArtboard), background: flattenColor(ctx.settings.background),
     title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
-    art.epsText = ctx.metadata === null ? eps.eps : embedXmpMetadataInEps(eps.eps, ctx.metadata);
-    // The delivered EPS (2026-11-19): one metadata carrier, no producer name.
-    if (ctx.settings.cleanExport !== false) {
-      const cleaned = cleanExportEps(art.epsText);
-      if (!cleaned.ok) throw new StageError("eps", `the export EPS cannot be cleaned: ${cleaned.reason}`);
-      art.epsText = cleaned.eps;
-    }
+    const producerFree = stripEpsProducerLines(eps.eps);
+    art.epsText = ctx.settings.cleanExport
+      ? cleanEpsDocument(producerFree, ctx.metadata)
+      : (ctx.metadata === null ? producerFree : embedXmpMetadataInEps(producerFree, ctx.metadata));
     const checked = verifyEpsDocument(art.epsText);
     if (!checked.ok) {
       art.epsText = null;

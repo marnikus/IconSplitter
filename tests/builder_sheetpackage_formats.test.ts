@@ -1,8 +1,9 @@
 // builder_sheetpackage_formats.test.ts — the builder's stock package honours
 // the shared format options exactly like the upload flow (2026-11-17): flags
 // gate the files, SVGO records a real block, strokes and text expand, the
-// artboard rescales, the JPEG follows the artboard or the MP — and a refused
-// expansion ships nothing, named.
+// artboard rescales — and a refused expansion ships nothing, named. The raster
+// is a PNG instead of a JPEG (2026-11-23): the same switch and the same size
+// rule (the artboard itself, or the MP at its ratio), never a JPEG.
 import { describe, expect, it } from "vitest";
 import { buildSheetPackage, type SheetPackageArgs } from "../src/svgBuilder/sheetpackage";
 import { DEFAULT_UPLOAD_SETTINGS, type UploadSettings } from "../src/lib/upload/settings";
@@ -12,16 +13,22 @@ import { DEFAULT_FORMAT_OPTIONS, type ExportFormatOptions } from "../src/lib/exp
 import { sheetSettings } from "../src/svgBuilder/actions/sheetexport";
 import { builtinConverter } from "../src/lib/upload/epsconv/builtin";
 
-// These cases pin the FORMAT CHAIN (flags, SVGO, expansion, rescale), so the
-// clean pass is off here; the cleanup itself is pinned in
-// export_clean_dom/eps tests and builder_export_clean.test.ts (2026-11-19).
 const SHEET = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><!-- note --><rect x="1" y="1" width="9" height="9" fill="none" stroke="#000000" stroke-width="2"/><text x="10" y="50" fill="#123456" font-size="12">Hi</text></svg>';
 
-const deps = (seen: { jpeg?: { width: number; height: number } }) => ({
-  pngBlob: async () => new Blob(["png"]),
+const deps = (seen: { jpeg?: { width: number; height: number }; png?: { width: number; height: number } }) => ({
+  pngBlob: async (_svg: string, width: number, height: number) => { seen.png = { width, height }; return new Blob(["png"]); },
   rasterize: async (_svg: string, target: { width: number; height: number }) => { seen.jpeg = target; return { ok: true as const, jpeg: new Uint8Array([1, 2, 3]) }; },
-  eps: async () => ({ ok: true as const, eps: "%!PS-Adobe test", writer: "builtin@test", fixes: [] }),
+  // A verifiable EPS 10: the delivered-file gate refuses a bare magic line.
+  eps: async () => ({ ok: true as const, eps: MINIMAL_EPS, writer: "builtin@test", fixes: [] }),
 });
+
+/** What a real converter writes: the DSC envelope plus a program and a trailer. */
+const MINIMAL_EPS = [
+  "%!PS-Adobe-3.0 EPSF-3.0", "%%BoundingBox: 0 0 200 100", "%%HiResBoundingBox: 0 0 200 100",
+  "%%DocumentData: Clean7Bit", "%%LanguageLevel: 3", "%%EndComments",
+  "%%BeginProlog", "%%EndProlog", "%%BeginSetup", "%%EndSetup",
+  "0 0 m 10 10 l S", "%%PageTrailer", "%%Trailer", "%%EOF",
+].join("\n");
 
 function args(patch: Partial<UploadSettings>): SheetPackageArgs {
   return {
@@ -34,14 +41,20 @@ const file = (pkg: Awaited<ReturnType<typeof buildSheetPackage>>, ext: string) =
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
 describe("the builder package follows the format options", () => {
-  it("writes SVG, JPEG, EPS and PNG per the flags", async () => {
-    // The SHEET carries live <text>; the built-in EPS subset cannot write it, so
-    // this case supplies the outliner the browser provides (2026-11-19). The
-    // EPS-with-text contract itself is pinned in builder_export_package.test.ts.
+  it("writes SVG, PNG and EPS per the flags — the raster is a PNG, never a JPEG (2026-11-23)", async () => {
+    // A real browser has a text outliner; this sheet carries live <text>, so the
+    // built-in EPS writer needs it to write the converter's copy.
     setTextOutliner(() => ({ d: "M0 0 L40 0", width: 40 }));
-    const all = await buildSheetPackage(args({ includeEps: true }), deps({}));
+    const seen: { jpeg?: { width: number; height: number } } = {};
+    const all = await buildSheetPackage(args({ includeEps: true, includeJpeg: true }), deps(seen));
     setTextOutliner(null);
-    expect(all.files.map((f) => f.name).sort()).toEqual(["export.json", "sheet.eps", "sheet.jpg", "sheet.png", "sheet.svg"]);
+    expect(all.files.map((f) => f.name).sort()).toEqual(["export.json", "sheet.eps", "sheet.png", "sheet.svg"]);
+    expect(seen.jpeg).toBeUndefined(); // nothing is rasterised to JPEG
+    expect(all.record.outputs.jpg).toBeNull();
+    expect(all.record.settings.effective.includeJpeg).toBe(false); // export.json says: no JPEG
+    expect(all.record.status).toBe("processed"); // no JPEG is not a missing part
+    const noPng = await buildSheetPackage(args({ includeJpeg: false }), deps({}));
+    expect(file(noPng, ".png")).toBeUndefined(); // the raster switch now means the PNG
     const noSvg = await buildSheetPackage(args({ includeSvg: false }), deps({}));
     expect(file(noSvg, ".svg")).toBeUndefined();
     expect(noSvg.record.outputs.svg).toBeNull();
@@ -56,7 +69,12 @@ describe("the builder package follows the format options", () => {
     const on = await buildSheetPackage(args({ optimizeSvg: true }), deps({}));
     expect(text(file(on, ".svg")!.bytes)).not.toContain("<!-- note -->");
     expect(on.record.tools.svgo.enabled).toBe(true);
-    const off = await buildSheetPackage(args({ optimizeSvg: false }), deps({}));
+    // The comment is editor bloat: the CLEAN pass drops it too (2026-11-19), so
+    // only turning both SVGO and the clean pass off ships it.
+    const cleanOnly = await buildSheetPackage(args({ optimizeSvg: false }), deps({}));
+    expect(text(file(cleanOnly, ".svg")!.bytes)).not.toContain("<!-- note -->");
+    expect(cleanOnly.record.tools.svgo.enabled).toBe(false);
+    const off = await buildSheetPackage(args({ optimizeSvg: false, cleanExport: false }), deps({}));
     expect(text(file(off, ".svg")!.bytes)).toContain("<!-- note -->");
     expect(off.record.tools.svgo.enabled).toBe(false);
   });
@@ -73,27 +91,44 @@ describe("the builder package follows the format options", () => {
     expect(text(file(kept, ".svg")!.bytes)).toContain("<text");
   });
 
-  it("rescales the sheet artboard and lets the JPEG follow it or the MP", async () => {
-    const seen: { jpeg?: { width: number; height: number } } = {};
+  it("rescales the sheet artboard and lets the PNG follow it or the MP (2026-11-23: the JPEG's size rule)", async () => {
+    const seen: { png?: { width: number; height: number } } = {};
     const scaled = await buildSheetPackage(args({ rescaleArtboard: true, rescaleMegapixels: 1, jpegMatchArtboard: true }), deps(seen));
     expect(text(file(scaled, ".svg")!.bytes)).toContain('width="1414"');
-    expect(seen.jpeg).toMatchObject({ width: 1414, height: 707 });
-    const seenMp: { jpeg?: { width: number; height: number } } = {};
+    expect(seen.png).toMatchObject({ width: 1414, height: 707 });
+    const seenMp: { png?: { width: number; height: number } } = {};
     await buildSheetPackage(args({ jpegMatchArtboard: false, jpegMegapixels: 1 }), deps(seenMp));
-    expect(seenMp.jpeg).toMatchObject({ width: 1414, height: 707 });
-    const seenBox: { jpeg?: { width: number; height: number } } = {};
+    expect(seenMp.png).toMatchObject({ width: 1414, height: 707 });
+    const seenBox: { png?: { width: number; height: number } } = {};
     await buildSheetPackage(args({ jpegMatchArtboard: true }), deps(seenBox));
-    expect(seenBox.jpeg).toMatchObject({ width: 200, height: 100 });
+    expect(seenBox.png).toMatchObject({ width: 200, height: 100 });
   });
 
-  it("names the built-in EPS writer's real limit: with no outliner the text cannot be outlined, and the rest still ships", async () => {
+  it("names the built-in EPS writer's real limit: live text is outside its subset, and the rest still ships", async () => {
     const out = await buildSheetPackage(args({ includeEps: true, expandText: false }),
       { ...deps({}), eps: (input: { svg: string; background: string; title: string }) =>
         builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") }) });
     expect(out.files.some((f) => f.name.endsWith(".eps"))).toBe(false);
-    expect(out.problems.join(" ")).toMatch(/EPS: no text outliner is available/);
+    // The honest refusal: no outliner exists in this environment, and the hint
+    // names both ways out (outline the copy, or pick the Inkscape converter).
+    expect(out.problems.join(" ")).toMatch(/EPS: .*(outliner|<text> is outside the EPS subset)/);
+    expect(out.problems.join(" ")).toMatch(/Inkscape/);
     expect(out.record.status).toBe("partial");
     expect(out.files.some((f) => f.name.endsWith(".svg"))).toBe(true); // the rest is untouched
+  });
+
+  it("the EPS follows the rescaled artboard too, not only the SVG (2026-11-23)", async () => {
+    const plain = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect x="10" y="10" width="50" height="40" fill="#123456"/></svg>';
+    const eps = (input: { svg: string; background: string; title: string }) => builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") });
+    const box = async (patch: Partial<UploadSettings>) => {
+      const out = await buildSheetPackage({ ...args({ includeEps: true, ...patch }), svg: plain }, { ...deps({}), eps });
+      const doc = text(file(out, ".eps")!.bytes);
+      return /%%HiResBoundingBox: ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)/.exec(doc)!.slice(3, 5).map(Number);
+    };
+    expect(await box({})).toEqual([150, 75]); // 200 × 100 px = 150 × 75 pt
+    const [w, h] = await box({ rescaleArtboard: true, rescaleMegapixels: 1 });
+    expect(w).toBeCloseTo(1414, 0); // the 1 MP target, in points (Illustrator's px): 1414 × 707
+    expect(h).toBeCloseTo(707, 0);
   });
 
   it("ships nothing but a named problem when an expansion is refused", async () => {

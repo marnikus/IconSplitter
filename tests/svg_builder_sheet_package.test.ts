@@ -27,10 +27,28 @@ function deps() {
         const jpeg = minimalJpeg(t.width, t.height);
         return { ok: true as const, jpeg, record: { width: t.width, height: t.height, megapixels: t.width * t.height / 1e6, quality: t.quality, bytes: jpeg.length, hash: "h", profile: "baseline" } };
       },
-      eps: async (input: { svg: string }) => { seen.eps = input.svg; return { ok: true as const, eps: "%!PS-Adobe-3.0 EPSF-3.0\n%%EOF\n", writer: "test", fixes: [] }; },
+      // A verifiable EPS 10: the delivered-file gate refuses a bare magic line.
+      eps: async (input: { svg: string }) => { seen.eps = input.svg; return { ok: true as const, eps: MINIMAL_EPS, writer: "test", fixes: [] }; },
     },
   };
 }
+
+const MINIMAL_EPS = [
+  "%!PS-Adobe-3.0 EPSF-3.0",
+  "%%BoundingBox: 0 0 1080 660",
+  "%%HiResBoundingBox: 0 0 1080 660",
+  "%%DocumentData: Clean7Bit",
+  "%%LanguageLevel: 3",
+  "%%EndComments",
+  "%%BeginProlog",
+  "%%EndProlog",
+  "%%BeginSetup",
+  "%%EndSetup",
+  "0 0 m 10 10 l S",
+  "%%PageTrailer",
+  "%%Trailer",
+  "%%EOF",
+].join("\n");
 
 const args = (over: Partial<Parameters<typeof buildSheetPackage>[0]> = {}) => ({
   svg: SVG, metadata: META, settings: { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true }, folder: "_artboard_sheets/2026-11/2026-11-09/x_sheet_1_icons_green_palette_id00001/artboard_variant_1",
@@ -38,16 +56,17 @@ const args = (over: Partial<Parameters<typeof buildSheetPackage>[0]> = {}) => ({
 });
 
 describe("artboard sheet package", () => {
-  it("writes SVG, JPG, EPS and a full PNG named by the stem, and an export.json the stock tab can read", async () => {
+  it("writes SVG, EPS and a PNG named by the stem (a PNG instead of the JPEG, 2026-11-23), and an export.json the stock tab can read", async () => {
     const { d, seen } = deps();
     const pkg = await buildSheetPackage(args(), d);
     expect(pkg.problems).toEqual([]);
-    expect(pkg.files.map((f) => f.name).sort()).toEqual(["export.json", "x_sheet_1_icons_green_palette_id00001_v1.eps", "x_sheet_1_icons_green_palette_id00001_v1.jpg",
+    expect(pkg.files.map((f) => f.name).sort()).toEqual(["export.json", "x_sheet_1_icons_green_palette_id00001_v1.eps",
       "x_sheet_1_icons_green_palette_id00001_v1.png", "x_sheet_1_icons_green_palette_id00001_v1.svg"]);
     const svg = new TextDecoder().decode(pkg.files.find((f) => f.name.endsWith(".svg"))!.bytes);
     expect(readEmbeddedMetadata(svg)?.title).toBe(META.title);
-    expect(seen.jpg.w * seen.jpg.h).toBeLessThanOrEqual(DEFAULT_UPLOAD_SETTINGS.jpegMegapixels * 1e6);
-    expect(seen.png).toEqual({ w: 2160, h: 1320 });
+    expect(seen.jpg).toEqual({ w: 0, h: 0 }); // never rasterised to JPEG
+    expect(seen.png.w * seen.png.h).toBeLessThanOrEqual(DEFAULT_UPLOAD_SETTINGS.jpegMegapixels * 1e6 + 1); // the raster size rule, now for the PNG
+    expect(Math.abs(seen.png.w / seen.png.h - 1080 / 660)).toBeLessThan(0.01);
     expect(seen.eps).not.toContain("currentColor"); // the converter gets real colours
     const record = parseExportRecord(JSON.parse(new TextDecoder().decode(pkg.files.find((f) => f.name === "export.json")!.bytes)));
     expect(record).not.toBeNull();

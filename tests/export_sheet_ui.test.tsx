@@ -50,7 +50,7 @@ describe("the shared export format sheet", () => {
   it("renders every format row exactly once under the dialog's own scope", () => {
     render("upload-set", { ...DEFAULT_FORMAT_OPTIONS, rescaleArtboard: true });
     // the upload flow's shipped converter selector is `upload-set-eps-converter`; everything else is `<scope>-<row>`
-    for (const id of ["svg", "jpeg", "eps", "eps-converter", "mp", "mp-match", "mp-note", "quality", "optimize", "expand", "expandtext", "rescale", "rescale-mp", "rescale-strokes"]) {
+    for (const id of ["svg", "jpeg", "eps", "eps-converter", "mp", "mp-match", "mp-note", "quality", "optimize", "clean", "expand", "expandtext", "rescale", "rescale-mp", "rescale-strokes"]) {
       expect(all(`upload-set-${id}`), id).toHaveLength(1);
     }
     expect(host.textContent).toContain("Export SVG");
@@ -58,6 +58,19 @@ describe("the shared export format sheet", () => {
     expect(host.textContent).toContain("EPS converter");
     expect(host.textContent).toContain("Expand text to fills");
     expect(host.textContent).toContain("Scale strokes proportionally");
+  });
+
+  it("offers the clean pass in BOTH dialogs, on, and patches it in one click", () => {
+    // 2026-11-19: the box gates the SVG tidy pass AND the EPS document clean
+    // form in either flow — turning it off is how a stock site that only reads
+    // IPTC gets the legacy two-carrier EPS back.
+    for (const scope of ["upload-set", "bld-set"]) {
+      render(scope, { ...DEFAULT_FORMAT_OPTIONS });
+      expect(all(`${scope}-clean`), scope).toHaveLength(1);
+      expect((q(`${scope}-clean`) as HTMLInputElement).checked, scope).toBe(true);
+      click(`${scope}-clean`);
+      expect(patches.at(-1), scope).toEqual({ cleanExport: false });
+    }
   });
 
   it("names the real JPEG size in the note — the artboard, rescaled while the rescale box is on", () => {

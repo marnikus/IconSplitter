@@ -1,9 +1,12 @@
 // exporter.ts — atomic delivery of a composed sheet. The SVG/PNG/preset blob is
 // built completely before one download; no partial file is ever offered.
 import { svgDataUrl, validateSvg } from "../lib/svgvalidate";
-import { withIntrinsicSize } from "../lib/upload/raster";
+import { cleanSheetSvg } from "../lib/svgBuilder/cleansheet";
 import { presetFileName, sheetSlug, stringifySheetPreset } from "../lib/svgBuilder/preset";
 import type { BuilderIconAsset, SheetDocument, SheetPreset } from "../lib/svgBuilder/types";
+import { embedMetadataInSvg } from "../lib/upload/embed";
+import { withIntrinsicSize } from "../lib/upload/raster";
+import { solidPaint } from "../lib/upload/solidpaint";
 
 export interface SheetVerification { ok: boolean; errors: readonly string[] }
 
@@ -25,8 +28,18 @@ export function sheetFileName(title: string, suffix: string): string {
   return `${sheetSlug(title)}${suffix}`;
 }
 
+/** Clean, solid-ink, attribution-free SVG markup for delivery or clipboard (RULE 26). */
+export function exportSheetSvgText(doc: SheetDocument): string {
+  if (typeof DOMParser === "undefined") return doc.svg;
+  const cleaned = cleanSheetSvg(solidPaint(doc.svg)).svg;
+  const meta = doc.metadata?.state === "accepted"
+    ? { title: doc.metadata.title, description: doc.metadata.description, tags: [...doc.metadata.tags] }
+    : null;
+  return meta === null ? cleaned : embedMetadataInSvg(cleaned, meta);
+}
+
 export function downloadSheetSvg(doc: SheetDocument, title: string): void {
-  downloadBlob(new Blob([doc.svg], { type: "image/svg+xml" }), sheetFileName(title, ".svg"));
+  downloadBlob(new Blob([exportSheetSvgText(doc)], { type: "image/svg+xml" }), sheetFileName(title, ".svg"));
 }
 
 export function downloadSheetPreset(preset: SheetPreset, title: string): void {
@@ -39,13 +52,14 @@ export function downloadJsonText(text: string, title: string): void {
 }
 
 export async function copySheetSvg(doc: SheetDocument): Promise<void> {
-  await navigator.clipboard.writeText(doc.svg);
+  await navigator.clipboard.writeText(exportSheetSvgText(doc));
 }
 
 export async function downloadSheetPng(doc: SheetDocument, title: string, scale = 2): Promise<void> {
-  const width = Math.round(artboardSize(doc.svg, "width", 1080) * scale);
-  const height = Math.round(artboardSize(doc.svg, "height", 660) * scale);
-  downloadBlob(await sheetPngBlob(doc.svg, width, height), sheetFileName(title, `@${scale}x.png`));
+  const cleanSvg = exportSheetSvgText(doc);
+  const width = Math.round(artboardSize(cleanSvg, "width", 1080) * scale);
+  const height = Math.round(artboardSize(cleanSvg, "height", 660) * scale);
+  downloadBlob(await sheetPngBlob(cleanSvg, width, height), sheetFileName(title, `@${scale}x.png`));
 }
 
 /** The sheet SVG drawn at width × height as one PNG — the PNG export's renderer, shared with the metadata image. */

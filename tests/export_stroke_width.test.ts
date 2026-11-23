@@ -10,6 +10,9 @@ import { packageOf, sheetSvg, textOf } from "./helpers/sheetpackage";
 
 afterEach(() => setTextOutliner(null));
 
+/** RULE 26's written precision: one decimal, computed the way the writer does. */
+const oneDecimal = (n: number): number => Math.round(n * 10) / 10;
+
 /**
  * Every `stroke-width` in the document with the scale its own `transform`
  * applies — the width a reader actually paints.
@@ -55,10 +58,15 @@ describe("the saved EPS strokes with the same pen as the SVG", () => {
     expect(pkg.problems).toEqual([]);
     const eps = textOf(pkg, ".eps");
     expect(eps).not.toBeNull();
-    // Every local width the document paints, minus the setup's own default (1 w):
-    // a pen that is already 1 is never written twice.
-    const expected = [...new Set(paintedWidths(svg).map((width) => width.local))].filter((width) => width !== 1).map(String).sort();
-    expect([...new Set(penWidths(eps as string))]).toEqual(expected);
+    // Every width the document really paints — RULE 26 leaves no transform to
+    // multiply it by. The body writes only CHANGES, so a pen equal to the setup
+    // default is not restated unless an earlier pen moved the state away from it
+    // (a 1 px cell after a 1.1 px hero does). What must hold is: no width the
+    // SVG never paints, and every width it does paint (but the default).
+    const painted = [...new Set(paintedWidths(svg).map((width) => width.local))].map(String);
+    const written = [...new Set(penWidths(eps as string))];
+    for (const width of written) expect(painted).toContain(width);
+    for (const width of painted.filter((width) => width !== "1")) expect(written).toContain(width);
   });
 });
 
@@ -72,9 +80,15 @@ describe("expanding strokes bakes the artboard's own pen into the outline", () =
     expect(out).not.toContain("stroke-width");
     expect(out).not.toContain("vector-effect");
     const pens = paintedWidths(svg, true).map((width) => width.local);
-    // Icon outlines come in cell order; the square's 2-unit edge moves out by pen/2.
-    const edges = [...out.matchAll(/<path[^>]*d="M2 ([\d.]+)/g)].map((match) => 2 - Number(match[1]));
-    expect(edges.length).toBe(pens.length);
-    edges.forEach((edge, index) => expect(edge).toBeCloseTo(pens[index] / 2, 2));
+    const origTops = [...svg.matchAll(/data-asset-id="[^"]+"[\s\S]*?<path d="M([\d.]+) ([\d.]+)/g)].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }));
+    expect(origTops.length).toBe(pens.length);
+    origTops.forEach((orig, index) => {
+      const match = new RegExp(`<path[^>]*d="M${orig.x} ([\\d.]+)`).exec(out);
+      expect(match).not.toBeNull();
+      // The outline grows by pen/2 and the result is written at one decimal, so
+      // both sides of the comparison are computed the way the file computes them.
+      const grown = oneDecimal(orig.y - pens[index] / 2);
+      expect(Number(match![1])).toBeCloseTo(grown, 1);
+    });
   });
 });

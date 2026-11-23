@@ -49,7 +49,8 @@ function CellOverlays({ b, placed }: { b: BuilderApi; placed: readonly string[] 
   return <div className="bld-overlay" style={{ color: b.config.icons.color }}>
     {b.layout.cells.map((cell) => {
       const id = placed[cell.index];
-      return id === undefined || isEmptySlot(id) ? <Placeholder key={`e${cell.index}`} cell={cell} /> : <PlacedCell key={id} b={b} cell={cell} id={id} />;
+      return id === undefined || isEmptySlot(id) ? <Placeholder key={`e${cell.index}`} cell={cell} />
+        : <PlacedCell key={id} b={b} cell={cell} id={id} marked={b.mergeMarks.includes(cell.pos ?? cell.index)} />;
     })}
   </div>;
 }
@@ -61,11 +62,14 @@ function Placeholder({ cell }: { cell: CellFrame }) {
 }
 
 /** Hover controls (lock, exclude) and the optional % closeness to the reference group. */
-function PlacedCell({ b, cell, id }: { b: BuilderApi; cell: CellFrame; id: string }) {
+/** `marked`: ⊞ marked to combine into a big icon (2026-11-23) — a bright red frame; a big icon is `is-big`. */
+function PlacedCell({ b, cell, id, marked }: { b: BuilderApi; cell: CellFrame; id: string; marked: boolean }) {
   const locked = b.lockedIds.includes(id);
   const label = locked ? "Unlock this icon" : "Lock this icon while reshuffling";
   const small = Math.max(7, Math.min(13, cell.size * 0.22));
-  return <span className={`bld-cell${locked ? " is-locked" : ""}`} data-asset-id={id} style={{ left: cell.x, top: cell.y, width: cell.size, height: cell.size }}>
+  const cls = `bld-cell${locked ? " is-locked" : ""}${marked ? " is-marked" : ""}${cell.span === 2 ? " is-big" : ""}`;
+  return <span className={cls} data-asset-id={id} data-cell-index={cell.index} data-testid={`builder-cell-${cell.index}`}
+    style={{ left: cell.x, top: cell.y, width: cell.size, height: cell.size }}>
     <button type="button" className="bld-cell-lock" data-testid={`builder-cell-lock-${cell.index}`} aria-pressed={locked}
       aria-label={label} title={label} onClick={() => b.actions.toggleLock(id)}>{locked ? "🔒" : "○"}</button>
     <button type="button" className="bld-cell-decline" data-testid={`builder-cell-decline-${cell.index}`}

@@ -32,14 +32,18 @@ ICC, non-Photoshop APP13 and non-IPTC Photoshop resources survive. Stale IPTC
 digest resources are removed. Parsing stops at SOS; compressed scan bytes are
 never scanned for markers or altered. Metadata edits do not re-encode pixels.
 
-EPS retains Adobe's document-level XMP stream/pdfmarks and adds a Photoshop
-IPTC resource 0x0404 AND XMP resource 0x0424 in ASCII-hex `%%BeginPhotoshop: 6` / `%%EndPhotoshop` comments. No raster
-preview is added; JPEG APP markers are never written into EPS. The document
-stream and resource0424 carry the same XMP packet. Both copies and IIM are
-checked against accepted fields. The vector-only verifier removes ONLY a byte-for-byte
-canonical generated metadata envelope before auditing executable artwork;
-modified envelopes and other opaque Photoshop blocks fail closed. LF/CRLF/CR
-are supported. Download all continues to copy these committed file bytes.
+EPS retains Adobe's document-level XMP stream/pdfmarks (`%BeginDocumentMetadata`,
+`MetadataDict_<id>`, `MetadataStream_<id>`) and, when the two-carrier envelope is
+selected (`cleanExport: false`), adds Photoshop IPTC resource 0x0404 AND XMP
+resource 0x0424 in ASCII-hex `%%BeginPhotoshop: 6` / `%%EndPhotoshop` comments
+(`cleanExport: true` keeps only the single XMP carrier). Neither JPEG XMP nor EPS
+headers/trailers ever emit `x:xmptk`, `%%Creator` or `IconSplitter` markers
+(RULE 26; legacy `% IconSplitter …` envelopes are still stripped when repairing
+older files). No raster preview is added; JPEG APP markers are never written into
+EPS. The vector-only verifier removes ONLY a byte-for-byte canonical generated
+metadata envelope before auditing executable artwork; modified envelopes and
+other opaque Photoshop blocks fail closed. LF/CRLF/CR are supported. Download all
+continues to copy these committed file bytes.
 
 ## Incremental repair and validation
 

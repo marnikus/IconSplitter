@@ -93,6 +93,7 @@ function ScoreOpacity({ b }: { b: BuilderApi }) {
 function PresetThumb({ id }: { id: LayoutPresetId }) {
   const body = id === "editorial" ? <rect x="1" y="1" width="6" height="12" />
     : id === "masthead" ? <><rect x="1" y="1" width="18" height="4" /><rect x="1" y="1" width="7" height="4" opacity=".55" /></>
+      : id === "line" ? <><rect x="4" y="3" width="3" height="3" /><rect x="9" y="3" width="3" height="3" /><rect x="14" y="3" width="3" height="3" /><rect x="1" y="9" width="18" height=".8" /></>
       : <><rect x="4" y="5" width="3" height="3" /><rect x="9" y="5" width="3" height="3" /><rect x="14" y="5" width="3" height="3" /></>;
   return <svg className="bld-preset-thumb" viewBox="0 0 20 14" aria-hidden="true"><rect x=".5" y=".5" width="19" height="13" rx="1.5" fill="none" stroke="currentColor" />{body}</svg>;
 }

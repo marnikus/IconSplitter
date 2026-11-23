@@ -19,6 +19,8 @@ import type { DirHandleLike } from "../lib/fs";
 export interface BuilderActionContext {
   model: BuilderModel;
   assets: readonly BuilderIconAsset[];
+  /** The icons the STYLES filter allows in sheets (2026-11-23): every pick draws from these. */
+  pickable: readonly BuilderIconAsset[];
   visibleAssets: readonly BuilderIconAsset[];
   placedIds: readonly string[];
   repository: AssetRepository | null;
@@ -66,6 +68,15 @@ export interface BuilderActions {
   dropAssets: (ids: readonly string[]) => void;
   /** Show / hide the "used N times" index on the artboard's icons (display-only). */
   toggleUsage: (show: boolean) => void;
+  /** ◀ ▶ / ← →: the previous / next template; ↑ ↓: the previous / next artboard of the template on the stage (2026-11-23). */
+  stepTemplate: (by: -1 | 1) => void;
+  stepArtboard: (by: -1 | 1) => void;
+  /** STYLES (2026-11-23): which icon styles may be in sheets; icons of an unchecked style leave the sheet (one undo step). */
+  setStyleFilter: (next: import("../lib/multifilter").Multi<string>) => void;
+  /** Big icons (2026-11-23): ⊞ marks / unmarks a cell (four of a 2 × 2 square combine), ✕ breaks a big icon, its own stroke (0 = the sheet's). */
+  markMergeCell: (slot: number) => void;
+  breakMerge: (slot: number) => void;
+  setMergeStroke: (slot: number, width: number) => void;
   /** Show / hide the red layout guides, and their opacity 1–100 (display-only). */
   toggleGuides: (show: boolean) => void;
   setGuideOpacity: (percent: number) => void;
@@ -113,6 +124,10 @@ export interface BuilderActions {
   closeDialog: () => void;
   /** ↺ Template (2026-11-14): the artboard drops its own look changes and inherits everything again. */
   resetArtboardLook: (id: string) => void;
+  /** ↺ Template (N) (2026-11-23): the checked artboards with own look changes follow their templates again — one undo step. */
+  resetArtboardLooks: (ids: readonly string[]) => void;
+  /** Metadata confirmation choices (2026-11-23): the whole sheet or only its icons; the title onto the banner or not. */
+  setMetaOptions: (patch: { fullSheet?: boolean; titleToBanner?: boolean }) => void;
   /** Double-click on a row (2026-11-14): open that artboard on the stage (a changed template asks first). */
   openArtboard: (id: string) => void;
   /** After undo / redo took the open artboard away (2026-11-16): show this one, else edit its template. */
@@ -131,7 +146,13 @@ export interface BuilderActions {
   saveTemplateAsNew: () => void;
   editTemplate: (id: string) => void;
   renameTemplate: (id: string, name: string) => void;
+  /** Removing (2026-11-22): at once, with every artboard of them; folders into `_artboard_sheets/.removed versions`; ONE undo step. */
   removeTemplate: (id: string) => void;
+  removeTemplates: (ids: readonly string[]) => void;
+  /** ✕ Remove (N) in the Saved templates header: the checked templates, else the checked artboards in view (`removalScope`). */
+  removeChecked: () => void;
+  /** Undo / redo of a "builderArtboards" step: folders, lists, then the stage (`recent` = artboards viewed, newest first). */
+  applySheetLists: (side: import("../lib/svgBuilder/removal").ListsDelta, recent: readonly string[]) => Promise<boolean>;
   /** Height of the template pictures (shared 48–800 px zoom); display-only. */
   setTemplateZoom: (px: number) => void;
   /** Preset JSON (2026-11-13): open the window, the sheet as JSON, apply pasted JSON (true when read), copy, copy for AI, download. */
@@ -160,8 +181,10 @@ export interface BuilderActions {
   exportSelectedArtboards: () => void;
   /** Rewrites the open artboard's sheet.json from the stage (2026-11-16). */
   syncSheetJson: () => void;
-  /** Registers hand-added template / artboard folders (2026-11-16). */
+  /** Registers hand-added template / artboard folders (2026-11-16) and reads back files changed outside the app (2026-11-22). */
   registerSheets: (quiet?: boolean) => void;
+  /** The app's newer state into its JSON files (2026-11-22): every file ("all") or the given artboards'; never over an outside edit. */
+  syncSheetFiles: (scope: "all" | readonly string[]) => void;
   setAutoRegister: (on: boolean) => void;
   /** 📂 Location (2026-11-16): the open artboard's / edited template's folder in Explorer, through the helper. */
   openLocation: () => void;

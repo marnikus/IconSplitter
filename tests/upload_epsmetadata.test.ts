@@ -47,8 +47,8 @@ describe("EPS XMP metadata", () => {
     expect(bdcAt).toBeLessThan(drawingAt);
     expect(drawingAt).toBeLessThan(emcAt);
     expect(emcAt).toBeLessThan(pageTrailerAt);
-    const dictionary = eps.match(/^(IconSplitterXmp_[a-f0-9]+) begin$/m)?.[1];
-    const stream = eps.match(/^\[\/_objdef \{(IconSplitterStream_[a-f0-9]+)\} \/type \/stream \/OBJ pdfmark$/m)?.[1];
+    const dictionary = eps.match(/^(MetadataDict_[a-f0-9]+) begin$/m)?.[1];
+    const stream = eps.match(/^\[\/_objdef \{(MetadataStream_[a-f0-9]+)\} \/type \/stream \/OBJ pdfmark$/m)?.[1];
     expect(dictionary).toBeDefined();
     expect(stream).toBeDefined();
     expect(Array.from(eps.matchAll(new RegExp(`^${dictionary} begin$`, "gm")))).toHaveLength(2);
@@ -69,7 +69,7 @@ describe("EPS XMP metadata", () => {
       "%%EOF",
     ].join("\n");
     const eps = embedXmpMetadataInEps(bareEps, META);
-    const setupAt = eps.indexOf("% IconSplitter XMP setup begin");
+    const setupAt = eps.indexOf("%BeginDocumentMetadata");
     const artworkAt = eps.indexOf("/paint { 0 0 moveto fill } def");
     const emcAt = eps.indexOf("[/EMC pdfmark");
     const trailerAt = eps.indexOf("%%Trailer");

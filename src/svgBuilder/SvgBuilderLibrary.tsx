@@ -15,8 +15,10 @@ const MAX_TILES = 480;
 export default function SvgBuilderLibrary({ b }: { b: BuilderApi }) {
   return <aside className="bld-col bld-library" data-testid="builder-library" aria-label="Icon library">
     <div className="bld-col-head">
-      <h3>Icon library <span className="bld-count" data-testid="builder-library-count">{b.assets.length}</span></h3>
-      <span className="bld-eyebrow">STROKE ONLY</span>
+      <h3>Icon library <span className="bld-count" data-testid="builder-library-count"
+        title={b.pickable.length === b.assets.length ? undefined : `${b.pickable.length} of ${b.assets.length} approved icons have a checked style (STYLES)`}>
+        {b.pickable.length === b.assets.length ? b.assets.length : `${b.pickable.length} / ${b.assets.length}`}</span></h3>
+      <span className="bld-eyebrow" data-testid="builder-library-styles">{b.styleSummary.toUpperCase()}</span>
       <GetDataButton testid="builder" count={b.checked.length} rows={() => builderDataRows(b.assets, b.checked)} />
     </div>
     <div className="bld-col-scroll">

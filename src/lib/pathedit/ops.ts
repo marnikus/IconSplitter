@@ -6,7 +6,7 @@
 // shape is kept), and Draw's add / close / join.
 
 import {
-  cloneModel, modeOf, nextIndex, prevIndex, segmentCubic, splitCubic,
+  cloneModel, mapSelectedAnchors, modeOf, nextIndex, prevIndex, segmentCubic, splitCubic,
   type Anchor, type AnchorRef, type PathModel, type Pt, type SubPath,
 } from "./model";
 
@@ -15,23 +15,19 @@ const mirror = (a: Pt, p: Pt): Pt => ({ x: 2 * a.x - p.x, y: 2 * a.y - p.y });
 
 /** Moves each anchor (and its handles) by the same delta. */
 export function moveAnchors(m: PathModel, refs: readonly AnchorRef[], dx: number, dy: number): PathModel {
-  const out = cloneModel(m);
-  for (const r of refs) {
-    const a = out.subs[r.sub]?.anchors[r.i];
-    if (a === undefined) continue;
-    out.subs[r.sub].anchors[r.i] = { ...a, x: a.x + dx, y: a.y + dy, in: shift(a.in, dx, dy), out: shift(a.out, dx, dy) };
-  }
-  return out;
+  return mapSelectedAnchors(m, refs, (a) => ({
+    ...a, x: a.x + dx, y: a.y + dy, in: shift(a.in, dx, dy), out: shift(a.out, dx, dy),
+  }));
 }
 
 /** One handle to `p`; a smooth point mirrors the other at the same length, a broken one does not. */
 export function moveHandle(m: PathModel, ref: AnchorRef, side: "in" | "out", p: Pt): PathModel {
-  const out = cloneModel(m);
-  const a = out.subs[ref.sub]?.anchors[ref.i];
-  if (a === undefined || a[side] === null) return out;
-  a[side] = { x: p.x, y: p.y };
-  if (a.mode === "smooth") a[side === "in" ? "out" : "in"] = mirror(a, p);
-  return out;
+  return mapSelectedAnchors(m, [ref], (a) => {
+    if (a[side] === null) return a;
+    const next: Anchor = { ...a, [side]: { x: p.x, y: p.y } };
+    if (next.mode === "smooth") next[side === "in" ? "out" : "in"] = mirror(next, p);
+    return next;
+  });
 }
 
 /** Alt on a smooth point's handle: the mirror is broken (it is never restored silently). */
@@ -123,10 +119,9 @@ export function addAnchor(m: PathModel, active: number | null, p: Pt, owner?: nu
 
 /** Draw's mouse-down drag: pulls a smooth pair out of the anchor just placed. */
 export function pullHandles(m: PathModel, ref: AnchorRef, to: Pt): PathModel {
-  const out = cloneModel(m);
-  const a = out.subs[ref.sub]?.anchors[ref.i];
-  if (a !== undefined) Object.assign(a, { out: { x: to.x, y: to.y }, in: mirror(a, to), mode: "smooth" });
-  return out;
+  return mapSelectedAnchors(m, [ref], (a) => ({
+    ...a, out: { x: to.x, y: to.y }, in: mirror(a, to), mode: "smooth",
+  }));
 }
 
 /** Clicking the first anchor of the open path closes it. */

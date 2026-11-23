@@ -9,7 +9,7 @@
 // While a run is in flight the bar shows the live batch progress and a Cancel that
 // keeps everything already saved.
 
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import type { PreviewBackground } from "../lib/svgbackground";
 import { clampZoom, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP, zoomLabel } from "../lib/zoom";
 import { costText, fmtTokens } from "../lib/svgusage";
@@ -79,7 +79,7 @@ export interface SvgBulkBarProps {
   styles?: ReactNode;
 }
 
-export default function SvgBulkBar(p: SvgBulkBarProps) {
+function SvgBulkBarView(p: SvgBulkBarProps) {
   return (
     <div className="svg-bulk" data-testid="svg-bulk">
       <BulkLeft p={p} />
@@ -87,6 +87,8 @@ export default function SvgBulkBar(p: SvgBulkBarProps) {
     </div>
   );
 }
+
+export default memo(SvgBulkBarView);
 
 function BulkLeft({ p }: { p: SvgBulkBarProps }) {
   return (

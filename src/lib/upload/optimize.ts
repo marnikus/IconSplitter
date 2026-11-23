@@ -1,7 +1,9 @@
 // optimize.ts — the SVGO wrapper for the export SVG copy (design §3.1):
 // preset-default with the removals that would eat content DISABLED
 // (removeMetadata/removeTitle/removeDesc/removeViewBox: false — the artwork's
-// own metadata, title, desc and viewBox survive), floatPrecision 3. The
+// own metadata, title, desc and viewBox survive), floatPrecision 3, and colour
+// NAMES never invented (2026-11-19): the default shortened `#ffa500` to
+// `orange`, which the EPS writer cannot read. Hex in, hex out. The
 // record captures version, config, before/after size and hash. Only the
 // export copy is optimized; the approved source is never touched.
 
@@ -38,6 +40,7 @@ export const OPTIMIZE_CONFIG: Config = {
           removeTitle: false,
           removeDesc: false,
           removeViewBox: false,
+          convertColors: { shortname: false, names2hex: true },
         },
       },
     },

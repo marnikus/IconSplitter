@@ -22,7 +22,7 @@ export default function SvgBuilderCustomize({ b }: { b: BuilderApi }) {
     <div className="bld-col-scroll">
       <ArtboardSection c={c} edit={edit} />
       <GridSection c={c} edit={edit} />
-      <IconStyleSection c={c} edit={edit} />
+      <IconStyleSection c={c} edit={edit} styled={b.hasStyled} />
       <BannerSection b={b} edit={edit} />
     </div>
   </aside>;

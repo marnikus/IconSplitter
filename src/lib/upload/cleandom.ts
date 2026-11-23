@@ -228,8 +228,13 @@ function hoistNamespaces(root: Element): void {
       el.removeAttribute(name);
     }
   }
+  // The default namespace always stays on the root: it is SVG's own, and without
+  // it the file has no namespace at all (2026-11-19 — hoisting dropped it).
+  const svgNs = declared.get("xmlns");
+  if (svgNs !== undefined) root.setAttributeNS(XMLNS_NS, "xmlns", svgNs);
   const used = usedPrefixes(elements);
   for (const [name, uri] of declared) {
+    if (name === "xmlns") continue;
     if (used.has(name.slice("xmlns:".length))) root.setAttributeNS(XMLNS_NS, name, uri);
   }
 }

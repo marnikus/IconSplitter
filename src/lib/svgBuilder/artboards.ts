@@ -6,7 +6,7 @@
 import { isRecord } from "../isrecord";
 import { applyCopy, parseCaptionTexts } from "./config";
 import { DEFAULT_ARTBOARD_SUBTITLE, cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
-import { emptySlotFor, isEmptySlot } from "./slots";
+import { MAX_SLOTS, isEmptySlot, withEmptyFor } from "./slots";
 import { lookOf, sheetFolderOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
 import { parseOverrides, withOverrides, type LookOverrides } from "./lookoverrides";
 import type { BuilderIconAsset, SheetConfig, SheetMetadata } from "./types";
@@ -65,16 +65,17 @@ export function newArtboard(template: SheetTemplate, artboards: readonly FinalAr
  * its VISIBLE words — Title-Artboard as the banner title (kept when the answer
  * had none) and the default subtitle phrase.
  */
-export function withSheetAnswer(artboard: FinalArtboard, answer: { metadata: SheetMetadata; artboardTitle: string }): FinalArtboard {
-  return { ...artboard, metadata: answer.metadata, ...(answer.artboardTitle === "" ? {} : { title: answer.artboardTitle, subtitle: DEFAULT_ARTBOARD_SUBTITLE }) };
+/** `toBanner` false (2026-11-23): only the metadata — the artboard's words stay as they are. */
+export function withSheetAnswer(artboard: FinalArtboard, answer: { metadata: SheetMetadata; artboardTitle: string }, toBanner = true): FinalArtboard {
+  const words = toBanner && answer.artboardTitle !== "" ? { title: answer.artboardTitle, subtitle: DEFAULT_ARTBOARD_SUBTITLE } : {};
+  return { ...artboard, metadata: answer.metadata, ...words };
 }
 
 /** One artboard without the icons `known` does not have; the same object when nothing changes. */
 function artboardWithout(a: FinalArtboard, known: ReadonlySet<string>): FinalArtboard {
   const gone = (id: string) => !isEmptySlot(id) && !known.has(id);
   if (!a.placedIds.some(gone) && !a.lockedIds.some(gone) && !(a.heroIconId !== null && gone(a.heroIconId))) return a;
-  const placedIds: string[] = [];
-  for (const id of a.placedIds) placedIds.push(gone(id) ? emptySlotFor([...a.placedIds, ...placedIds]) : id);
+  const placedIds = withEmptyFor(a.placedIds, gone);
   return { ...a, placedIds, lockedIds: a.lockedIds.filter((id) => !gone(id)), heroIconId: a.heroIconId !== null && gone(a.heroIconId) ? null : a.heroIconId };
 }
 
@@ -147,9 +148,9 @@ function parseArtboard(input: unknown, templateIds: ReadonlySet<string> | null):
   return {
     id: key.id.slice(0, 80), templateId: key.templateId, name, title: text(raw.title, 90), subtitle: text(raw.subtitle, 140),
     heroIconId: typeof raw.heroIconId === "string" && raw.heroIconId !== "" ? raw.heroIconId : null,
-    placedIds: strings(raw.placedIds, 192), lockedIds: strings(raw.lockedIds, 192), metadata: parseMetadata(raw.metadata),
+    placedIds: strings(raw.placedIds, MAX_SLOTS), lockedIds: strings(raw.lockedIds, MAX_SLOTS), metadata: parseMetadata(raw.metadata),
     created: text(raw.created, 40), updated: text(raw.updated, 40),
-    exportedAt: typeof raw.exportedAt === "string" ? raw.exportedAt : null, countedIds: strings(raw.countedIds, 192),
+    exportedAt: typeof raw.exportedAt === "string" ? raw.exportedAt : null, countedIds: strings(raw.countedIds, MAX_SLOTS),
     overrides: parseOverrides(raw.overrides), captionTexts: parseCaptionTexts(raw.captionTexts),
     folder: sheetFolderOf(raw.folder),
   };

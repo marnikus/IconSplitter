@@ -10,6 +10,7 @@ import { loadHandles } from "../batch/store";
 import { ensureDirPath, probePath, readBytesAt, TRASH_DIR, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { isRecord } from "../lib/isrecord";
 import type { PairMeta } from "../lib/pairmeta";
+import { STYLE_ID_SEP } from "../lib/svgstyles";
 import { saveMetaAt } from "../selection/pairstore";
 import { getAppState } from "../state/appstore";
 import type { HistoryActions } from "../state/HistoryProvider";
@@ -72,7 +73,9 @@ function withoutVersion(meta: PairMeta, kind: VersionKind, version: number): { m
   }
   const v = meta.imageVersions.find((x) => x.version === version);
   if (v === undefined) return null;
-  return { file: v.file, meta: { ...meta, imageVersions: meta.imageVersions.filter((x) => x !== v), imagePreferred: meta.imagePreferred === version ? null : meta.imagePreferred } };
+  const imageVersions = meta.imageVersions.filter((x) => x !== v);
+  const fallback = meta.id.includes(STYLE_ID_SEP) && meta.ai.fingerprint === "" ? imageVersions.find((x) => x.status === "done")?.version ?? null : null;
+  return { file: v.file, meta: { ...meta, imageVersions, imagePreferred: meta.imagePreferred === version ? fallback : meta.imagePreferred } };
 }
 
 /** Applies one side: its file moves, then its pair file is written and the row redrawn. */

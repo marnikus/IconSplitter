@@ -33,15 +33,14 @@ import {
 const changed = (patch: Partial<UploadSettings>): UploadSettings => ({ ...DEFAULT_UPLOAD_SETTINGS, ...patch });
 
 describe("defaults and clamps", () => {
-  it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
+  it("ships the documented defaults (8% padding, transparent, no stroke override, the artwork's stroke colour, 15.1 MP, quality 0.92, optimize on, clean on, EPS off, content-hugging artboard, JPEG follows the artboard)", () => {
     expect(DEFAULT_UPLOAD_SETTINGS).toEqual({
       paddingPct: 8, background: "transparent", strokePx: 0, strokeColor: "#000000", strokeLinecap: "source",
-      jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, includeSvg: true, includeJpeg: true, includeEps: false,
+      jpegMegapixels: 15.1, jpegQuality: 0.92, optimizeSvg: true, cleanExport: true, includeSvg: true, includeJpeg: true, includeEps: false,
       artboard: { mode: "content", size: 512, width: 512, height: 512 },
       jpegMatchArtboard: true,
       epsConverter: "builtin", expandStrokes: false, // 2026-10-09
       expandText: false, rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true, // 2026-11-17
-      cleanExport: false, // off in the shared domain; the builder turns it on (2026-11-19)
       scaleToMegapixels: false, artboardMegapixels: 5, // 2026-10-09 (I-62)
       shadowEnabled: false, shadowWidthPct: 80, shadowGapPct: 5, shadowTemplateSvg: "",
       badgeEnabled: false, badgeTemplateSvg: "", badgeCorner: "bottom-right", badgeWidthPct: 40, badgeOffsetXPct: 3, badgeOffsetYPct: 3,

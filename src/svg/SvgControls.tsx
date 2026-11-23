@@ -5,6 +5,7 @@
 // lives only on this device), then the filter/sort/search row. No rule lives
 // here — every value comes from the hook and every change goes back to it.
 
+import { memo } from "react";
 import type { KeySource } from "../lib/keyvault";
 import { ConnectionRow, ImageSettingsGrid } from "./SvgConnections";
 import type { Connection, ConnectionKind } from "../lib/svgconnections";
@@ -74,7 +75,7 @@ export interface SvgControlsProps {
   onClearFilters: () => void;
 }
 
-export default function SvgControls(p: SvgControlsProps) {
+function SvgControlsView(p: SvgControlsProps) {
   return (
     <section className="svg-controls" aria-label="SVG generation controls">
       <SourceLine rootName={p.rootName} root={p.root} discovery={p.discovery} busy={p.busy} counts={p.counts}
@@ -94,6 +95,8 @@ export default function SvgControls(p: SvgControlsProps) {
     </section>
   );
 }
+
+export default memo(SvgControlsView);
 
 interface ProviderHeadProps extends Pick<SvgControlsProps, "provider" | "config" | "caps" | "params"> {
   kind: ConnectionKind;

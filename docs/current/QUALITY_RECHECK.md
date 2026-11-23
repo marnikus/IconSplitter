@@ -5687,8 +5687,10 @@ saved", as a checkbox, keeping ONLY title, description and tags as metadata.
   `hoistNamespaces` deleted the genuine one — now both handled), and `clean.ts`
   called the root default `xmlns` "unused". `attributeViolations`/`namespaceViolations`
   plus `insideMetadata` scoping keep the DC block legal.
-- Validation compares `shippedMetadata(...)` (title/description/tags), never a
-  field the cleaner removed.
+- Validation compares `shippedMetadata(...)`, never a field the cleaner removed.
+  That set is title/description/tags plus the user's OWN `creator`/`copyright`:
+  RULE 26 forbids machine attribution, and a by-line the user typed is the
+  artwork's metadata, not the tool's.
 
 Tests: `export_clean_dom.test.ts` (8), `export_clean_eps.test.ts` (5),
 `builder_export_clean.test.tsx` (4, incl. the `bld-set-clean` gesture).
@@ -5736,8 +5738,11 @@ Real smells, all fixed:
 * **EPS header** gained the Illustrator-compatible set (DocumentProcessColors,
   DocumentSuppliedResources, Pages/PageOrder/PageOrigin, `%AI3_ColorUsage`,
   `%AI5_FileFormat`, `%AI3_DocumentPreview`, `%AI5_NumLayers`, `%AI3_TileBox`),
-  `%%Title` as a DSC string, and `%%CreationDate` in DSC's `D:…` form via the
-  new `dscDate` (no zone → no line, never a guessed date).
+  `%%Title` as a DSC string. **No `%%Creator` and no `%%CreationDate`** — this
+  round first wrote them (the header named `IconSplitter` and a `D:…` date via a
+  new `dscDate`); RULE 26 (2026-11-23, same review) rejected that outright, so
+  both are GONE and `dscDate` was deleted with them. `EpsOptions.createdAt` is
+  still accepted and deliberately ignored.
 * **Empty prolog/setup** replaced with a real `procset VectorEPS`
   (`/n /m /l /c /h /f /f* /S /W /w /J /j /M /d /rg /q /Q`) and a setup holding
   the uprighting matrix and the pen defaults `1 w [] 0 d 0 J 0 j 4 M`.
@@ -5751,10 +5756,11 @@ Real smells, all fixed:
 * **SVG skeleton** (`lib/upload/skeleton.ts`): bare `<g>` chains unwrap,
   default-restating attributes drop — except an explicit default that overrides
   an inherited value (that is a decision). Reported as removed traces.
-* **Honesty line held**: no spoofed `%%Creator: Adobe Illustrator(R)`, no
-  fabricated `xmpMM:DocumentID`, no Adobe procset name. The clean option still
-  removes `%%Creator`/`%%CreationDate` when the user wants no producer
-  identity — anonymous is honest, falsely attributed is not.
+* **Honesty line held, and then tightened into RULE 26**: no spoofed
+  `%%Creator: Adobe Illustrator(R)`, no fabricated `xmpMM:DocumentID`, no Adobe
+  procset name — and, as the rule now says, no producer line of OUR OWN either.
+  A delivered EPS names neither the tool nor the moment it ran; `epsclean.ts`
+  still strips a converter's `%%Creator`/`%%CreationDate`/`%%For`/`%%Copyright`.
 
 Side effect found by the full suite: `validateBadgeTemplate` stores a canonical
 document and re-validates it on read, so the new attribute removals changed the
@@ -5767,8 +5773,492 @@ where they pinned the verbose one, none weakened: caps/joins/widths are now read
 out of the program the way an interpreter reads it (a value not written IS the
 setup's default).
 
-Gates: `tsc --noEmit` clean · `tools/quality.mjs --changed` GATE PASSED ·
-full suite **498 files / 4939 tests green**. Docs: new sibling page
+Gates after the RULE 26 merge: `tsc --noEmit` clean · `tools/quality.mjs
+--changed` GATE PASSED · full suite **530 files / 5170 tests green**. Docs: new sibling page
 `docs/current/sor/upload-eps-document.md` (the header/prolog/body/gate contract),
 `upload-eps.md` and `export-formats.md` point at it, archive design
 `docs/archive/2026-11-19-human-export/design.md`.
+## 2026-11-19 (b) — exported ink, and the EPS colour-name trap
+
+Measured in the same sandbox, on top of the entry above:
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `npx vitest run` (full) | **487 files, 4872 tests, all passed** | 153.05 s (the earlier run's lone `algo_efficiency` failure was a stray concurrent `vitest` process from a killed command; clean, the same suite is green) |
+| new `tests/export_stroke_color.test.ts` | 4 passed | red before the fix: saved SVG kept `currentColor`; with `#ffa500` the EPS stage failed with `unsupported paint: orange` |
+| `tests/svg_builder*.test.ts*` + `tests/export_*.test.ts*` + `upload_optimize*` + `upload_prepare*` | 40 files, 346 tests passed | 27.1 s |
+| `npm run test:builder:fast` | 14 passed, 0 failed | 337.0 ms |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `solidpaint.ts` 33 lines / 3 fns, `sheetpackage.ts` now 161 lines / 16 fns |
+| `npm run build` | 3,615.18 kB `dist/index.html` | 15.6 s |
+| `npm run verify:fast` | ALL LANES PASSED | 225 s |
+| `tests/docs_navigation.test.ts` | 4 passed | export-formats 8,787 B, svg-builder 8,810 B — both under the 9,000 B gate |
+
+The ink pass (`lib/upload/solidpaint.ts`) runs FIRST in `prepareSheetSvg`, so the
+SVG, the JPEG raster and the EPS all get the artboard's real hex; the optimizer
+keeps hex (`convertColors: { shortname: false, names2hex: true }`) so the EPS
+writer never meets a name it cannot parse (`#ffa500` → `orange` before).
+
+## 2026-11-19 (c) — style-mode `imagePreferred` carried onto this branch
+
+The base branch's `ae07946` ("preserve and fill selected style AI source version
+in `.svg.json`") is cherry-picked here unchanged; measured after the pick:
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `npx vitest run` (full) | **488 files, 4875 tests, all passed** | 131.6 s on an idle 2-CPU sandbox |
+| new `tests/svg_style_image_preferred.test.tsx` | 3 passed | Base → Style switch keeps `imagePreferred`, SVG generation uses it, numbered-only style fills it |
+| `tests/svg_*`, scan/style/version/pair suites | 128 files, 1293 tests passed | 61.3 s |
+| `npm run test:builder:fast` | 14 passed, 0 failed | 459.1 ms |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `styles.ts` 298 lines / 53 fns, `scan.ts` 224 / 21, `runbatch.ts` 256 / 25 |
+| `npm run build` | 3,615.4 kB `dist/index.html` | 14.7 s |
+| `npm run verify:fast` | ALL LANES PASSED | 210 s |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-styles.md` 7,726 B |
+
+Method note (RULE 15): two full runs first showed `algo_efficiency`,
+`getty_web_batch` and `tailcut_speed` timing out. They passed standalone, and
+the cause was a leaked `tools/bridge/server.mjs --watch-dir /tmp/helper-watch-*`
+process from an earlier interrupted run spinning at 56 % CPU on this 2-CPU box.
+Killed, the same suite is fully green; no budget or test was changed to hide it.
+
+## 2026-11-19 (d) — the clean pass on the saved SVG/EPS
+
+A shipped sheet's forensic dump (asset ids, cell indexes, a config hash, an
+approve flag, a provenance `<metadata>` JSON, repeated `xmlns` on every child,
+`stroke-width="1.9992750000000001"`) is the pass's spec: `cleanSheetSvg`
+(`lib/svgBuilder/cleansheet.ts`) runs the upload tab's own policy over the
+finished sheet and the package's SVG/JPEG/PNG/EPS all derive from the result.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| new `tests/export_clean.test.ts` | 9 passed | No `data-*`/`class`/`aria-*` survives, one `xmlns`, no provenance block, no 4+-decimal number, DC tags read back via `readEmbeddedMetadata`, px/viewBox/drawables unchanged, `cleanExport: false` keeps the comment, EPS from the cleaned copy |
+| `tests/builder_sheetpackage_formats.test.ts` | 8 passed | The old "SVGO off keeps `<!-- note -->`" pin now needs `cleanExport: false` too — the clean pass removes comments independently |
+| `tests/export_sheet_ui.test.tsx`, `tests/builder_export_settings_ui.test.tsx` | 7 + 11 passed | `bld-set-clean` on by default, one click patches `{ cleanExport: false }`, no dead box under `upload-set` |
+| `tests/upload_settings.test.ts` | 24 passed | Default object now carries `cleanExport: true` |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `cleansheet.ts` 124 lines / 11 fns, `sheetpackage.ts` 168 / 16, `exportsheet.tsx` 156 / 26 |
+| `npm run verify:fast` | ALL LANES PASSED | 199 s, build 3,618.57 kB (+3.2 kB) |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/export-formats.md` 8,976 B, `sor/svg-builder.md` 8,960 B, `selectors/svg-builder.md` 8,934 B — all under 9,000 B |
+
+The box is builder-scope on purpose: the upload chain already runs the policy
+unconditionally (`prepare.ts`), so a box there would be dead; the builder's
+stock package was the only path that shipped a raw stitched sheet.
+`cleanExport` is not in `settingsFingerprint` — the upload chain's output does
+not depend on it, and adding it would re-export every existing package.
+
+## 2026-11-19 (e) — the tidy passes (second clean round)
+
+A second forensic read of a shipped sheet called out what survived round (d):
+`color="#6d0b04"` beside the real stroke, `<g><g><text>` stitch wrappers, paint
+repeated on children that already inherit it. `lib/svgBuilder/cleantree.ts` now
+runs after the stock policy in `cleanSheetSvg`; the report's other two items are
+deliberately untouched — the 0.05 "twip" grid and the per-icon `scale()` with a
+2 px painted pen are the HUMAN markers it cites, so rounding them would be the
+machine move, and only 4+ decimal values are rounded.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/export_clean.test.ts` | 16 passed | +7 tidy cases: dead `color` (guard test keeps it while `currentColor` needs it), inherited/initial paint dropped, `<defs>` subtree skipped, bare `<g>` unwrapped with the drawable count unchanged, empty containers + indentation gone, `xlink:href` → `href`, the 0.05 grid byte-identical, idempotent |
+| builder/export/upload sweep | 149 files, 1738 tests passed | 60.1 s |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `cleantree.ts` 184 lines / 17 fns, `cleansheet.ts` 137 / 13 |
+| `npx vitest run` (full) | **489 files, 4894 tests, all passed** | 133.8 s |
+| `npm run verify:fast` | ALL LANES PASSED | 219 s, build 3,621.27 kB (+2.7 kB) |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/export-formats.md` 8,985 B, `sor/svg-builder.md` 8,963 B, `sor/tests/svg-builder.md` 8,696 B |
+
+A real sheet's export shrank from 17 bare `<g>` wrappers and 6 repeated paint
+attributes to `<text>` inside its transform group: the picture, the px, the
+viewBox, the Title/description and the DC tags are unchanged.
+
+## 2026-11-19 (f) — the clean pass reaches the EPS document itself
+
+The question that opened this round: the EPS *artwork* was already clean (it is
+written from the cleaned SVG copy, in both flows) — but the PostScript *document*
+still named its producer. `lib/upload/epsclean.ts` now strips
+`%%Creator`/`%%CreationDate`/`%%For`/`%%Copyright`, the `%ADO_*` flags, any
+foreign `%%BeginPhotoshop` block and every packet but the one it re-derives, then
+re-embeds ONE carrier with no `x:xmptk` signature
+(`embedXmpMetadataInEps(…, { clean: true })`).
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/export_clean_eps.test.ts` (new) | 8 passed | One packet, no producer/ADO/Photoshop lines, `verifyEpsDocument` still ok, Title/description/tags read back, a second copy refused, byte-stable and `verifiedEpsArtwork` re-derives it, zero carriers without metadata, non-PostScript untouched, legacy envelope byte-identical, package on/off |
+| eps/export/builder/stockupload sweep | 75 files, 613 tests passed | 27.5 s |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed` | GATE PASSED | `epsclean.ts` 62 lines / 5 fns, `epsiptc.ts` +3 fns, `epsmetadata.ts` mode-aware |
+| `npx vitest run` (full) | **4902 tests, all passed** | 130.0 s, after the upload-flow pins were moved to the clean contract |
+| `npm run verify:fast` | ALL LANES PASSED | build 3,622.4 kB |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/upload-eps.md` 8,836 B, `sor/tests/svg-builder.md` 8,952 B |
+
+`verifyEpsMetadata` accepts either envelope and, for a clean one, requires
+exactly one packet — the "keeps a second copy" case fails closed instead of
+being tolerated. The legacy two-carrier envelope (XMP + Photoshop/IPTC,
+`%ADO_ContainsXMP`) is untouched and is still what the stock upload writes, so
+Shutterstock-style IPTC readers keep working.
+
+Follow-up the same round: the box now renders in BOTH dialogs (it gates a real
+upload-flow difference — the EPS envelope), `upload_runexport`,
+`upload_padding_sides_export`, `upload_metadata_page` and `upload_stockrepair`
+pin the clean contract (one carrier; the independent reader still reads all
+three fields and reports `carriers: ["XMP"]`), and the reader's IPTC branches are
+exercised on a legacy envelope built on purpose, so neither carrier can hide the
+other. `readJpegIptc` keeps the JPEG's IPTC: the JPEG is untouched by the EPS
+clean form.
+
+## 2026-11-20 — edit-mode cuts (fills, tails) and the upload clean copy
+
+Three requests in one round: (g) **Alt + Shift over a filled area** cuts that
+area out — the *fill region* gesture — and (h) the same gesture now also removes
+a **tail**, an open line bounded by ONE crossing instead of two (`stretchAt`
+returns `{0,to}` / `{from,segCount}` for open subpaths; a line with no crossing
+stays untouched by design, Alt + click already removes a whole segment); and (i)
+the **clean copy reaches the upload flow**: `lib/svgBuilder/cleansheet.ts` +
+`cleantree.ts` became `lib/upload/svgclean.ts` + `lib/upload/svgtidy.ts`, shared
+by the sheet package (`keepSize: true`) and `exportstages.ts`
+(`keepSize: false`), so an uploaded icon SVG loses the dead `color`, the bare
+`<g>` wrappers, the provenance `<metadata>` and the float noise the stock policy
+left behind. `enforceExportSvg` re-checks the cleaned text and a pass that broke
+the icon contract is discarded, not committed; the settings fingerprint moves
+only for `cleanExport: false`, so legacy hashes stay.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_region_cut.test.ts` (new) | 14 passed | innermost closed subpath wins, open lines are never regions, the winding flip keeps geometry (`M10 10L90 10L90 90L10 90ZM40 60L60 60L60 40L40 40Z`), self-inverse, curved ring keeps its cubics, Alt alone or a plain click is not a cut |
+| `tests/pathedit_cut_tail.test.ts` (new) | 11 passed | one crossing ⇒ the tail (`M0 50L100 50` + `M30 0L30 100`, click at 60 ⇒ `M0 50L30 50M30 0L30 100`), either side by click position, one undo step, closed shapes unchanged, no crossing ⇒ null |
+| `tests/pathedit_region_cut_ui.test.tsx` (new) | 3 passed | Alt + Shift over a filled path marks `[data-cut-region]` in `#ff0000`, releasing either key clears it, the click cuts and leaves no mark, Finish writes the reversed subpath, Ctrl+Z disables Finish, the legend names the gesture |
+| `tests/export_clean_upload.test.ts` (new) | 9 passed | dead `color`/bare `<g>`/provenance/float noise go with the box on, the stock output with it off, `verifyExportSvg` clean either way, embedded Title/description/tags identical, px never returned (`keepSize`), idempotent, refusals by name, fingerprint moves only for off |
+| `npx tsc --noEmit` | clean | — |
+| `npm run lint` | 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `stretchAt` was CC 14 → split into `closedStretch`/`openStretch` (`stretch.ts` 33 fns / 218 lines); `region.ts` 8 fns / 106 lines, `svgclean.ts` 8 / 130, `svgtidy.ts` 17 / 186, `cleansheet.ts` 1 / 16 |
+| `npx vitest run` (full) | 494 files, 4,939 tests — 4,938 passed | 161–191 s; the ONE failure is `algo_efficiency`'s 200 ms synthetic-detect budget at 222–259 ms on this host, and it measures 226.7 ms with this round's `src`/`tests` changes stashed, so it is the machine, not the round — the budget was NOT touched; `verify:fast` once failed `bridge_update_watch` under full load and that file passes 8/8 alone |
+| `npm run verify:fast` | ALL LANES PASSED | 235.5 s with coverage; build 3,625.42 kB (gzip 1,072.05 kB) |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 3,801 B, `sor/svg-path-editor.md` 8,974 B, `sor/svg-path-editor-handles.md` 6,926 B, `sor/tests/upload.md` 8,996 B, `sor/owners/upload.md` 8,992 B, `sor/export-formats.md` 8,981 B |
+
+The legend gained a second row ("Alt+Shift+Click fill"), the line row now says
+"…or a tail", and `hotkeys.ts` is the one place both gestures are announced. A
+`fill-rule="evenodd"` outline is already holed where a subpath is nested, so a
+cut is not offered there — the missing feature is the right answer, not a bug.
+
+## 2026-11-20 (b) — the fill-region cut looked like a no-op: it now removes paint
+
+Reported straight after the round above: "Alt shift do select area but click it
+not apply the cut and the hole is not appear." The gesture and the commit were
+fine — the MODEL changed — but noneness of the change was wrong. Reversing a
+ring flips its *winding*, and that is only a hole when something else paints the
+same pixels: the common icon is ONE `<path>` with ONE ring, where the same ring
+walked backwards paints exactly the same area, and under
+`fill-rule="evenodd"` direction means nothing at all. Two faults, one cause:
+the cut changed a direction instead of the paint.
+
+`lib/pathedit/region.ts` now decides from the paint. `ringsAt` collects every
+closed ring that holds the point with the direction it adds, `painted` applies
+the subpath's own rule (nonzero: the directions must not sum to 0; evenodd: the
+count of rings must be odd), and `cutRegion(m, sub, p)` removes the paint:
+a ring nested in another painting ring is walked the other way; a lone ring gets
+a reversed TWIN that cancels it; under evenodd one extra ring flips the parity
+(direction irrelevant). `fill-rule` is read where the file states it —
+`svgdoc.pathTags` (attribute or `style`) → `SubPath.fillRule` → the session, so
+`loadObjects` carries it. Points that are already holes are no longer regions,
+so the mark disappears after the cut instead of inviting a dead second click.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_region_cut.test.ts` | 20 passed (+6) | a lone ring is cancelled by a reversed twin (winding 1 → 0, the drawn ring untouched), a nested ring is still flipped in place with the surrounding fill kept, evenodd gets ONE extra ring with the same walk, an evenodd outline already holed there is not offered, a backwards nonzero inner ring is recognised as a hole, and after the cut the region is not marked again |
+| `tests/pathedit_region_cut_ui.test.tsx` | 6 passed (+3) | the artboard itself changes: a one-ring `<path>` becomes `M10 10L90 10L90 90L10 90ZM10 90L90 90L90 10L10 10Z` (and Finish writes it), an `fill-rule="evenodd"` outline becomes `…Z…Z` with the attribute kept, and an already-holed evenodd point shows no mark while the ring around it still does |
+| pathedit sweep | 271 passed | `pathedit_*`, `svg_edit_*`, `tailcut_*` |
+| `npx vitest run` (full) | 494 files, 4,948 tests — 4,947 passed | 158 s; the single failure is still `algo_efficiency`'s 200 ms budget on this host (unchanged code, budget untouched) |
+| `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 18 fns / 155 lines, `svgdoc.ts` 16 / 154, `model.ts` `SubPath.fillRule`, `objects.ts` carries it |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 4,384 B, `sor/svg-path-editor-handles.md` 7,074 B |
+
+## 2026-11-20 (c) — the map pin: a stroked circle is a cutter, not a hole
+
+The user's own file made the previous rule fail: the pin's middle circle is a
+closed ring of a `fill="none"` stroked path. `regionAt` counted every closed
+ring, so at that middle the pin body (+1) and the circle (−1) cancelled, the
+point read as "already a hole", the red mark never appeared and no cut was
+offered. The lesson is that **a ring is only paint when its shape fills**, and
+that an unfilled outline is exactly what a user holds over a filled area to ask
+for a hole in it.
+
+`lib/pathedit/svgdoc.ts` now resolves `fill` and `fill-rule` the way the file
+states them — the shape's own attribute or `style`, else its `<g>` ancestors'
+(`paintOf`, one tag pass with a `<g>` stack) — and `PathTag.paints` carries it as
+`SubPath.paints` (model clone keeps it). `region.ts` separates the two ideas:
+
+- `paintAt` = the filling rings at the point, their rule and the object that
+  paints there; `painted` says whether they sum (nonzero) or count (evenodd) to
+  paint. A point nothing paints is not a region.
+- `regionAt` = the innermost closed ring under the pointer, filled or not — the
+  CUTTER.
+- `cutRegion(m, sub, p)` knocks it out of the paint: a filled ring nested in one
+  other filling ring is walked the other way (unchanged); everything else gets
+  copies of the cutter's ring, walked against the sum, added to the FILLED
+  path's own `d` — so the pin's `d` gains the circle and the stroked path stays
+  byte for byte; under evenodd one added ring flips the parity.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_region_cut.test.ts` | 25 passed (+5) | the real pin: `fill="none"` reads as `paints: false`, the circle is marked (`regionAt` = its subpath), the click leaves the stroked path alone and writes the ring into the pin's object (owner 0), the middle is a hole afterwards and not offered again, a stroked ring with no fill behind it is not a cutter, and `fill`/`fill-rule` are inherited from `<g>` |
+| `tests/pathedit_region_cut_ui.test.tsx` | 8 passed (+2) | the pin in the real surface: the mark is the circle, the pin's own `data-edit-path` gains a ring (2 → 3) while the stroked one keeps its `d`, the region under the mark is gone after the cut, the pin body itself is still a region elsewhere, and Finish writes all of it |
+| pathedit sweep | 278 passed | `pathedit_*`, `svg_edit_*`, `tailcut_*` |
+| `npx vitest run` (full) | 494 files, **4,955 tests, all passed** | 145 s (this run had a quiet host, so `algo_efficiency` passed too) |
+| `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 22 fns / 186 lines, `svgdoc.ts` 17 / 187, `model.ts` 35 / 227, `objects.ts` 9 / 46 |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 4,588 B, `sor/svg-path-editor-handles.md` 7,215 B |
+
+`pathTags` now walks every tag once (shape + `<g>` stack) instead of a shape-only
+regex, so the extra information costs no second pass over the file.
+
+## 2026-11-20 (d) — a cut subtracts from every layer, and holes compose
+
+Two reports in one message: a second hole painted the first one back in, and a
+hole could not be made at all when several closed shapes sit one inside another
+("the current selecting problem"). Both are one mistake with two faces.
+
+The cut used to subtract from the **innermost painting object only** and to
+recompute that object's winding from all its rings. So:
+
+1. after a hole, the same object held the hole ring too, and a new cut's copies
+   were walked against a sum the new ring had already changed — the new ring
+   re-painted the old hole (only the newest hole survived);
+2. when the shapes are separate paths (a pin sitting on a body, a dot in a pin)
+   the layer below still painted the area: white on white, i.e. "no hole".
+
+`region.ts` now plans one knock-out **per object that paints** at the pointer
+(`layersAt` groups the filling rings by owner and keeps the ones that paint,
+`knockouts` → `knockoutFor`, `Cut` carries the ring and its walk) and applies
+them together (`applyCut`): the same rules as before per object — copies walked
+against that object's own winding, an in-place walk-round when the cutter is the
+inner ring of a two-ring cancel, one ring under evenodd — plus one new rule:
+whatever that object drew **inside** the cut is dropped (`drawnInside`), because
+the area is being emptied anyway and a surviving ring would only have to be
+cancelled again. A stroke-only outline is never dropped: its `d` also draws the
+stroke, which a cut must leave alone.
+
+The invariant is now the one the user asked for: a cut changes paint **inside its
+own ring only**. Every earlier hole is still a hole, next to the new one or
+swallowed by it, and no click can ever bring paint back.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_region_cut.test.ts` | 30 passed (+5) | every painted layer knocked out (two nested objects → paint 0), an earlier hole kept when a later cut contains it, two disjoint holes that neither refills, a dot inside the cut dropped, three nested rings where cutting the middle keeps the inner hole |
+| `tests/pathedit_region_cut_ui.test.tsx` | 9 passed (+1) | the real pin: hole in the middle, the hole is not offered again, then the whole body cut — the old hole copy drops, the body gets its copy, and the middle is STILL a hole (the reported bug), the stroked path keeps its `d` |
+| pathedit sweep | 284 passed | `pathedit_*`, `svg_edit_*`, `tailcut_*` |
+| `npx vitest run` (full) | 494 files, **4,961 tests, all passed** | 141 s |
+| `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `region.ts` 29 fns / 247 lines (was 22 / 186) |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 5,124 B, `sor/svg-path-editor-handles.md` 7,215 B |
+| `npm run build` | built in 14.26 s | `dist/index.html` 3,628,080 B |
+
+## 2026-11-20 (e) — a punched hole moves with its fill as one object
+
+After punching a hole (`Alt + Shift + click`), shifting the fill left the hole
+ring behind, producing an unwanted half-inverted mask (`image-8.png`):
+`doubleClick` only selected `subs[sub].anchors`, `selectDown` could not drag a
+painted fill interior, `hit.ts` `objectAt` matched transparent `fill="none"`
+interiors ahead of painted fills, and `region.ts` `copyOf` dropped `evenodd`
+when copying a `fill="none"` cutter into an `evenodd` fill.
+
+`fill.ts` (`pieceAnchors`, `paintedPieceAt`) now groups area-sharing closed
+filling rings of the same `owner` into one compound fill piece while keeping
+disjoint glyphs separate; `linegesture.ts` (`doubleClick`), `gesture.ts`
+(`pressPaint` / `anchorMove`), `hit.ts` (`objectAt`), `region.ts`
+(`paintedSubAt`, `copyOf`), and `clipboard.ts` (`ownerLook`) all treat the fill
+and its holes as one object (`Alt+Double-click` still excludes a single ring).
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_object_move.test.ts` | 8 passed (new) | double-click + drag, painted-interior drag + 1 undo step, interior double-click + Arrow nudge, multiple holes, `evenodd` fill cut by `fill="none"` cutter, disjoint glyphs in one `<path>`, `Alt+Double-click` single-ring exclusion, `image-8` nested magnifier |
+| `tests/pathedit_region_cut_ui.test.tsx` | 10 passed (+1) | `PIN` `<SvgPathEditor>` cut + interior drag carries the hole along and keeps it unpainted |
+| pathedit & SVG edit sweep | 33 files, **313 passed** | all `pathedit_*`, `svg_*edit*`, `svgimgedit` |
+| `npx tsc --noEmit` / `npm run lint` | clean / 0 errors | 27 pre-existing warnings, 0 in changed files |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `clipboard.ts` 77 L, `fill.ts` 105 L, `gesture.ts` 300 L, `hit.ts` 187 L, `linegesture.ts` 137 L, `region.ts` 263 L |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 5,932 B |
+| `npm run build` | built in 19.79 s | `dist/index.html` 3,630,784 B |
+
+## 2026-11-20 (f) — partial-overlap region cuts subtract only `Fill \ Cutter`
+
+When a closed cutter ring only partly overlapped a filled shape (`image-9.png`:
+a stroked circle hanging off the slanted edge of a blue card), appending the
+whole cutter ring inverted the unpainted outside crescent into fill (`evenodd`
+parity `0 → 1`, `nonzero` winding `0 → −1`), and `regionAt` ranked partial
+cutters by their full area rather than their painted overlap.
+
+`curvecut.ts` and `boolean.ts` (`clipLayerIfPartial`, `clippedRegionAt`) now
+split intersecting cubic Beziers and lines at their exact crossings and shared
+endpoints, clip the red hover mark and cutter ranking to `Fill ∩ Cutter`, and
+trace the exact Bezier boundary of `Fill \ Cutter` whenever a cutter crosses a
+layer's edge or an existing hole (preserving the intact-ring fast path when
+strictly inside).
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_partial_cut.test.ts` | 9 passed (new) | `image-9` `evenodd` & `nonzero`, bar split into 2 pieces, collinear protruding cutter, overlapping `evenodd` holes merged without refill, large partial cutter, 2-arc curved crescent, `<circle>` element, interior hole + partial cut + drag |
+| `tests/pathedit_region_cut_ui.test.tsx` | 11 passed (+1) | `<SvgPathEditor>` partial circle over slanted card removes overlap and leaves outside crescent unpainted |
+| pathedit & SVG edit sweep | 34 files, **323 passed** | all `pathedit_*`, `svg_*edit*`, `svgimgedit` |
+| `npx tsc --noEmit` / `eslint` | clean / 0 errors | 0 warnings in changed files |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `boolean.ts` 236 L, `curvecut.ts` 258 L, `linegesture.ts` 137 L, `region.ts` 288 L |
+| `tests/docs_navigation.test.ts` | 4 passed | `sor/svg-edit-cuts.md` 6,803 B |
+| `npm run build` | built in 14.11 s | `dist/index.html` 3,641,048 B |
+
+## 2026-11-20 (g) — toolbar popup z-order over AI source card + planar-cell fill cuts by open/crossing lines & overlapping fills
+
+1. **Edit-mode toolbar popup stacking (`image-10.png`):** `.svg-edit-toolbar` and `.svg-edit-aside` both shared `position: relative; z-index: 2`, trapping `.svg-edit-settings-pop` (`z-index: 60` inside `.svg-edit-toolbar`) below the later-in-DOM `.svg-edit-aside` (`AI SOURCE` card). Promoted `.svg-edit-toolbar` to `z-index: 20` and `.svg-edit-leave` to `z-index: 30` in `src/index.css` while keeping `.svg-edit-aside`, `.svg-edit-arrow`, and `.svg-edit-legend` at `z-index: 2`.
+2. **Planar-cell fill cutting (`image-11.png`):** added `src/lib/pathedit/planarface.ts` (`cellHintAt`, `cutCellAt`) and `anySubSegs` / `subtractFaceFromGroup` so `Alt + Shift` hover preview and click cut any bounded painted cell enclosed by an open curve/line spanning part of a fill, crossing lines (`#`, `V`), or overlapping fills, while pruning dead-end bridges (`faceOf[h] === faceOf[twin(h)]`) in one pass and delegating uncrossed closed rings to `cutRegion`.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_line_cut_fill.test.ts` | 7 passed (new) | `image-11` open U-arch cap, either side of spanning open line, crossing-lines wedge, `#` grid interior hole, fill-by-fill overlap (`A \ B` & `A ∩ B`), T-junction endpoints, half-crossing bridge ignored |
+| `tests/pathedit_ai_source.test.tsx` | 5 passed (+1) | real `src/index.css` cascade stacks `.svg-edit-toolbar` (`Cutter algo` popup) strictly above `.svg-edit-aside` |
+| `tests/pathedit_region_cut_ui.test.tsx` | 12 passed (+1) | `<SvgPathEditor>` open arch marks & cuts bounded cap while keeping upper fill & strokes intact |
+| pathedit, SVG edit & docs sweep | 36 files, **336 passed** | all `pathedit_*`, `svg_*edit*`, `svgimgedit`, `docs_navigation` |
+| `npx tsc --noEmit` / `eslint` | clean / 0 errors | 0 warnings in changed files |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `planarface.ts` 159 L, `boolean.ts` 246 L, `curvecut.ts` 269 L, `linegesture.ts` 134 L, `region.ts` 288 L |
+| `npm run build` | built in 14.08 s | `dist/index.html` 3,643.96 kB |
+
+## 2026-11-20 (h) — inverted-mask edit-mode freeze fix & coincident-curve boolean tail deletion
+
+1. **Root causes (`image-12.png`):**
+   - **Coincident / 2-decimal-quantized mask curve shattering & braiding (`curvecut.ts` vs `model.ts` `toPathData(..., digits = 2)`):** when a filled shape already carried an inverted mask subpath (saved at `0.01` rounding) coincident with a 3-decimal stroked badge/ribbon outline, `meetChords` reported false crossings at all 23 interior chord joints per cubic (`24×` anchor explosion, `1,702–1,840` hint points) while `SNAP = 1e-3` missed `±0.005` rounding deltas (`~0.0071` Euclidean), braiding `65–79` micro-sliver edges and corrupting `nonzero` DCEL face winding. Raised `SNAP = 1.5e-2` / `T_EPS = 1e-4`, deduplicated forward/reversed coincident segments (`dedupSegs` + `SegBox`), and filtered local overlap touches (`coincidentHit`).
+   - **Uncached per-pixel `regionAt` → `clippedRegionAt` + `splitArrangement` (`planarface.ts`, `stretch.ts`):** every `Alt+Shift` `pointermove` rebuilt the full Bezier arrangement and invoked `regionAt` → `clippedRegionAt` (two additional boolean arrangements per pixel: `5.24 s` per hover on a 208-segment icon, `104 s` across 20 hovers). Cached `ModelPlanar` per `PathModel` (`WeakMap`) with lazy area/crossing `findIntactSub` (dropping `regionAt` from `planarface.ts`) and cached `crossingParams` (`WeakMap`) + `subCtrlDisjoint` culling in `stretch.ts` (`5,236 ms → 50.5 ms` first hover, `0.39 ms` cached hover, `5,535 ms → 32.2 ms` boolean tail cut).
+   - **Control-box culling & wrap clamp (`boolean.ts`, `hit.ts`, `fill.ts`, `region.ts`, `stretch.ts`):** added `cubicNearBox` culling in `probeOffset` (`near = 0.2`), `inCtrlBox` (`maxDist`) pruning in `nearestOnSegment`, bbox guards in `pointOnSegment` / `segmentsCross`, fast-fail `ringsShareArea`, and `Math.max(0, p)` wrap clamp in `endOf`.
+
+| Lane | Result | Measurement |
+|---|---|---|
+| `tests/pathedit_inverted_mask_perf.test.tsx` | 4 passed (new) | `nonzero` & `evenodd` protruding ribbon-tail deletion (`<45` anchors, no splintering, post-cut drag + undo), 350+ seg `<250 ms` hover/cut/drag benchmark, `<SvgPathEditor>` DOM cut + drag + Finish edit |
+| pathedit, SVG edit & docs sweep | 37 files, **340 passed** | all `pathedit_*`, `svg_*edit*`, `svgimgedit`, `docs_navigation` |
+| `npx tsc --noEmit` / `eslint` | clean / 0 errors | 0 warnings in changed files |
+| `node tools/quality.mjs --changed --allow-legacy` | GATE PASSED | `curvecut.ts` 297 L, `boolean.ts` 246 L, `planarface.ts` 206 L, `stretch.ts` 255 L, `region.ts` 288 L, `hit.ts` 191 L, `fill.ts` 108 L |
+| `npm run build` | built in 13.04 s | `dist/index.html` 3,645.24 kB |
+
+## 2026-11-19 — Generate SVG list & path-editor lag elimination + vmThreads recycling
+
+- **Scope:** Eliminated warm-interaction lag across both the `Generate SVG` panel (`src/svg/**`, `src/lib/svgpreview.ts`) and the `Edit SVG` path editor (`src/svg/pathedit/**`, `src/lib/pathedit/**`), and added `vmMemoryLimit: "768MB"` + `testTimeout: 30000` in `vitest.config.ts` so full-suite `vmThreads` workers recycle cleanly inside swapless 3.8 GiB sandboxes.
+- **Root causes fixed:**
+  1. **Path editor live gestures (`useEditMode.ts`, `useEditorTailCut.ts`, `objects.ts`, `ops.ts`, `scale.ts`, `skew.ts`, `editoroverlay.ts`, `overlaymarks.ts`, `hit.ts`, `svgdoc.ts`, `SvgEditModal.tsx`):** Removed per-render `DOMParser` + `XMLSerializer` (`writeObjects`) round-trips on live drags (`33 -> 0`), added structural sharing (`mapSelectedAnchors`) + `isIdentityAffine` + `changedPreviewData` so only mutated `<path>` owners update `d` (`620 -> 30` writes on a 20-path / 30-step drag), pooled `<circle>` and scale-box overlay nodes (`7,471 -> 0` `<circle>` allocations), replaced allocating Bézier hit refinement with scalar `cubicDist2` + `WeakMap` `outlinePoints`, cached `cachedPathTags`/`pathTagCount` (256-entry LRU), and skipped redundant `patchSvg({ activeId })` dispatches when already active.
+  2. **Generate SVG list & preview isolation (`useSvgGen.ts`, `ctx.ts`, `rowmodel.ts`, `panelcounts.ts`, `SvgPanel.tsx`, `panelbits.tsx`, `SvgControls.tsx`, `SvgBulkBar.tsx`, `SvgList.tsx`, `SvgRow.tsx`, `SvgThumbs.tsx`, `SvgPreview.tsx`, `usesvgtext.ts`, `useimageurl.ts`, `tailcut/tailreview.ts`, `svgpreview.ts`):** Lazy-initialized `bootRef`/`refsRef` (`160 -> 0` warm `localStorage` reads), `WeakMap`-memoized `toListRow`, decoupled `filtered` from live queue ticks, introduced single-pass `indexSvgRows` (`1` `r.status` read/row) + `countInSet`, memo-isolated `SvgControls`/`SvgBulkBar`/`SvgList`/`RowDetails`/`MemoShadowSvg`, stripped `thumb`/`bg`/`imgRunning` from `SvgRowPresentation`, added a 512-entry LRU `buildSvgPreview` cache (`1,200 -> 0` warm `DOMParser` parses across 32 gestures on 150 rows), and scoped `usesvgtext` + `useRowTailReview` listeners per path/row.
+- **Measured single-worker benchmarks (`--maxWorkers=1`):**
+  - `tests/svg_list_perf.test.tsx` (150 mounted rows, 32 warm gestures): `1,771.1 ms -> 619.6 ms` (`-65.0%`, `2.86x` faster); initial `DOMParser` parses `300 -> 140`; warm parses `1,200 -> 0`; warm boot storage reads `160 -> 0`; warm `pathTags` parses `2,400 -> 0`.
+  - `tests/svg_editor_perf.test.tsx` (20 paths / 240 anchors): 30-step drag `1,745.0 ms -> 59.4 ms` (`1.98 ms/frame`, `-96.6%`, `29.4x` faster); 15-step `Alt+Shift` hover `176.5 ms -> 88.2 ms` (`5.88 ms/frame`, `-50.0%`).
+- **Verification (`npm run verify`):** ALL LANES PASSED — Types (`5.8s`), Lint (`1.7s`, `0` errors, `26` legacy warnings, `0` in changed files), Quality gate (`0.9s`, `35` changed files `[OK]`), Perf budgets native (`3.5s`, `5` files / `30` tests), Tests + coverage (`178.0s`, `500` files / `4,999` tests passed, Istanbul `src/lib/**` line threshold >= 80% met), Build (`13.6s`).
+
+## 2026-11-19 — Ctrl+Shift+X sets the decline marker in edit mode
+
+- **Scope:** Changed `Ctrl+Shift+X` in `Edit SVG` mode from discard-only navigation (`"Discard & next SVG"`) to `"Discard, decline & next SVG"` (`src/svg/pathedit/{hotkeys,useEditMode,useRowMoves,SvgEditModal}.ts(x)`, `src/svg/svgedit.ts`).
+- **Behavior:** Discards unsaved artboard changes without prompting, marks the current row `"declined"` (`✕` decline marker) in Generate SVG via `reviewEditedSvg` / `declineEditedSvg` as its own undoable `svgReview` step (already-declined rows record no duplicate history entry), and opens the next editable row — or closes edit mode when pressed on the last editable row (`canNext === false`).
+- **Verification:** `node tools/affected-tests.mjs --base HEAD --run` (`164/164` affected files, `1,696/1,696` tests passed), `node tools/quality.mjs --base HEAD --changed --allow-legacy` (`GATE PASSED`), `npx tsc --noEmit` (`0` errors), `npx eslint` (`0` errors), `tests/docs_navigation.test.ts` (`4/4` passed), `npm run build` (`PASS`).
+
+## 2026-11-22 — SVG builder: removing templates / artboards moves their folders and is one undo step
+
+- **Scope:** `src/lib/svgBuilder/removal.ts` (new, pure plan + `ListsDelta` steps), `src/svgBuilder/sheetmove.ts` (new, folder copy-then-remove move), `src/svgBuilder/actions/sheetlists.ts` (new, remove / undo / redo path), `artboardsundo.ts`, `useArtboardUndo.ts`, `actions/{templates,artboards,sheetexport,register,index}.ts`, `lib/svgBuilder/sheetfolders.ts` (`templateHomes`), `actiontypes.ts`, `SvgBuilderTemplates.tsx`.
+- **Behavior:** ✕ on a template removes it at once with every artboard of it; its folder (template.json + artboard folders) moves into `_artboard_sheets/.removed versions/<folder>~<stamp>`; artboard removal moves its folders there too (no longer deleted). One `builderArtboards` undo step records only what went out and its place (never whole lists), so Undo restores the lists and moves the folders back without rewinding later saves; ＋ Artboard steps are recorded the same way; older whole-list steps still apply. The stage moves off what is gone without an undo step of its own. Register skips the trash.
+- **Verification:** focused builder suites `89/89`; `node tools/verify.mjs --full --base HEAD`: Types PASS, Lint PASS (`0` errors), Quality gate PASS (`14` files), Perf budgets PASS, Build PASS, Tests + coverage `4993/5020` (`493/502` files) — the `27` failures in `9` files (bridge/Getty helpers, verify runner, `quality_base`, `fs_case_collisions`, `upload_flag_viewport`, `docs_navigation`) fail identically on clean `095251ca` (separate worktree), i.e. pre-existing on this Windows checkout; `docs_navigation` size check: `21` pages over 9000 B only because of CRLF, `0` in LF. `quality:changed` against `main` still reports the untouched `src/lib/svglist.ts` `inStyle` CC 12.
+
+## 2026-11-22 — SVG builder: ✕ Remove (N) in the Saved templates header
+
+- **Scope:** `src/svgBuilder/SvgBuilderTemplates.tsx` (`RemoveChecked`, `builder-templates-remove`), `artboardview.ts` (`removalScope`), `actions/sheetlists.ts` (`removeChecked`), `actiontypes.ts`.
+- **Behavior:** one header button removes every checked template with all its artboards — or, with no template checked, the checked artboards in view — at once as ONE undo step through the same path as ✕ (folders into `_artboard_sheets/.removed versions`, back with Undo); disabled with nothing checked; the removed rows leave the checks.
+- **Verification:** `tests/svg_builder_remove.test.tsx` `8/8` (2 new), affected suites `457/458` (`34/35` files; the one failure is the CRLF-only `docs_navigation` size check); `node tools/verify.mjs --full --base HEAD`: Types, Lint (`0` errors), Quality gate, Perf budgets, Build PASS; Tests + coverage `4995/5022` with the same `27` pre-existing failures in the same `9` files as clean `095251ca`.
+
+## 2026-11-22 — SVG builder: 🗂 Register reads back JSON files edited outside the app
+
+- **Scope:** new `src/lib/svgBuilder/{sheetsync,registerplan}.ts` (pure), `src/svgBuilder/{filesigstore,sheetfiles,useSheetFileMirror,autoregisterstore}.ts`, `src/svgBuilder/actions/sheetsync.ts`; changed `actions/{register,sheetjson,templatefolder,index}.ts`, `sheetwriter.ts`, `model.ts`, `useSvgBuilder.ts`, `actiontypes.ts`.
+- **Behavior:** the app fingerprints every template.json / sheet.json / metadata.json it writes or reads. 🗂 Register (and Automatic register) still adds new folders and now updates KNOWN templates (template.json → look) and artboards (sheet.json → words, icons by name, locks, own look changes measured against the template the file was written with, metadata; metadata.json → metadata, accepted → edited) — only from files changed outside the app, never from the app's own older copies or the open artboard's live draft; a template.json from before fingerprints only when newer than the template's last save. The artboards' files follow their saved state (a template save rewrites them); automatic writes never go over an outside edit; differing artboard files from before fingerprints are replaced once, a copy kept in that folder's `.removed versions`; the stage follows an update unless it holds unsaved edits.
+- **Verification:** new suites `svg_builder_sheet_sync` (6), `svg_builder_register` update cases (4), `svg_builder_register_sync` (7, each witnessed failing under a mutant of the code it guards); builder + apply/session/workbench suites `346/346`; affected `474/475` (CRLF docs check only); `node tools/verify.mjs --full --base HEAD`: Types, Lint (`0` errors), Quality gate, Perf budgets, Build PASS; Tests + coverage `5012/5039` with the same `27` pre-existing failures in the same `9` files; line coverage `removal.ts` / `registerplan.ts` / `sheetsync.ts` `100%`, `sheetfolders.ts` `95.45%`.
+
+## 2026-11-23 — SVG builder: STYLES filter in the pinned header
+
+- **Scope:** new `src/lib/svgBuilder/iconstyles.ts` (pure), `src/svgBuilder/actions/styles.ts`; changed `useBuilderComputed.ts` (`pickable`, options, summary), `actions/{selection,startpick,index}.ts`, `actiontypes.ts`, `prefsstore.ts`, `SvgBuilderControls.tsx` (`StyleFilterControl`), `SvgBuilderHeader.tsx`, `SvgBuilderLibrary.tsx`; docs `sor/svg-builder-styles.md` (new) and its links.
+- **Behavior:** a checkbox dropdown (shared `MultiSelect`) after ◈ Icons indexing — All styles, Line stroke, every style the library has (Colored wiggle …) — sets which icon styles may be in sheets: the library list and count, every pick (Reshuffle, SEED, automatic placement, growth, top-up, refill, a new artboard's start icon) and the template sample use only allowed icons; icons of an unchecked style leave the current sheet as one undo step; saved artboards untouched; remembered in prefs.
+- **Verification:** `svg_builder_icon_styles` 4, `svg_builder_styles_ui` 2 (witnessed failing with picks drawn from every icon); builder + apply/session/workbench `352/352`; affected `474/475` (CRLF docs check only); `node tools/verify.mjs --full --base HEAD`: Types, Lint (`0` errors), Quality gate, Perf budgets, Build PASS; Tests + coverage `5018/5045`, the same `27` pre-existing failures in the same `9` files; `iconstyles.ts` `100%` lines/branches.
+
+## 2026-11-23 — SVG builder: ◀ ▶ / ← → walk templates, ↑ ↓ walk a template's artboards
+
+- **Scope:** new `src/svgBuilder/{stagenav,useStageHotkeys}.ts`, `src/svgBuilder/actions/stagenav.ts`; changed `SvgBuilderEditingLabel.tsx` (◀ ▶ beside 📂 Location), `SvgBuilderPanel.tsx`, `actions/index.ts`, `actiontypes.ts`, `svgBuilder.css`.
+- **Behavior:** ◀ ▶ and ← → open the previous / next template (Saved templates order, no wrapping, buttons disabled at the ends); ↑ ↓ open the previous / next artboard of the template on the stage (from the template: ↓ first, ↑ last). Opening goes through the usual Save / Discard question. Keys only while the builder tab is shown; never while typing, with a modifier, in a dialog or the icon editor, when a focused list already used them, or with nothing to open.
+- **Verification:** `svg_builder_stage_nav` 6 (witnessed failing with the key guard removed); builder + apply/session/workbench `358/358`; `node tools/verify.mjs --full --base HEAD`: Types, Lint (`0` errors), Quality gate, Perf budgets, Build PASS; Tests + coverage `5024/5051`, the same `27` pre-existing failures in the same `9` files.
+
+## 2026-11-23 — SVG builder: colored icons keep their own paints; strokes and fills set apart
+
+- **Scope:** new `src/lib/svgBuilder/stylepaint.ts`, `src/svgBuilder/SvgBuilderColoredStyle.tsx`; changed `svgAsset.ts`, `compose.ts` (hero), `config.ts`/`types.ts` (`coloredStroke`, `coloredStrokeWidth`, `coloredFill`), `presetjson.ts`, `quickedit.ts` (`styled` kind), `quickplace.ts`, `SvgBuilderQuickEdit.tsx`, `SvgBuilderCustomize*.tsx`, `SvgBuilderAssetThumb.tsx`, `useBuilderComputed.ts`, CSS.
+- **Behavior:** icons of a registered style (`~colored_wiggle`) are drawn with their own strokes and fills; the sheet's colored-icon stroke colour / width change only strokes and the fill colour only fills ("" / 0 = own); set in Customize ▸ Colored icons and the colored-icon quick toolbar (ring = stroke, dot = fill, ↺ own); line-stroke icons unchanged.
+- **Verification:** `svg_builder_colored_icons` 6, `svg_builder_colored_ui` 2 (witnessed failing under mutants); builder + export + apply/session/workbench `448/448`; `node tools/verify.mjs --full --base HEAD`: Types, Lint, Quality gate, Perf budgets, Build PASS; Tests + coverage `5032/5059`, the same `27` pre-existing failures in the same `9` files; `stylepaint.ts` `100%` lines.
+
+## 2026-11-23 — SVG builder: grid up to 100 columns × 100 rows
+
+- **Scope:** `lib/svgBuilder/{ranges,slots,artboards,presetjson}.ts`, `svgBuilder/{declineasset.ts,actions/artboards.ts,actions/presetjson.ts,actions/styles.ts}`.
+- **Behavior:** columns and rows range 1–100 (was 16 / 12); placeholder ids for empty cells cover 10 000 cells; saved artboard lists keep every cell; empty cells are made in one pass (`freshEmpty`, `padEmpty`, `withEmptyFor`) instead of once per cell.
+- **Verification:** `svg_builder_grid_limits` 3; builder + export suites `451/451`; `node tools/verify.mjs --full --base HEAD`: Types, Lint, Quality gate, Perf budgets, Build PASS; Tests + coverage `5034/5062` — the same `27` pre-existing failures plus `pathedit_inverted_mask_perf` at 264 ms over its 250 ms budget under coverage (untouched code; passes alone with and without coverage, 7/7).
+
+## 2026-11-23 — edit mode: stroke-only lines are picked on their line and move as their own object
+
+- Cause: line icons put `fill="none"` and the pen on the root `<svg>`, which `svgdoc.scanPathTags` did not inherit, so every stroke path counted as filled — a press inside a closed stroke shape picked and dragged it, and nested rings of one path moved as one "filled piece".
+- Fix: root `<svg>` paint + `stroke-width` inherited (`PathTag.strokeWidth`, `SubPath.halfStroke` scaled by the object's matrix); `hit.objectAt` no longer picks the empty inside of an unfilled shape; new `lib/pathedit/strokepress.ts` (72 lines): a press within half the pen + click tolerance of a stroke line selects and drags that one line; with a point of it picked, segments edit points.
+- Measured: `pathedit_stroke_lines` 7/7 (each new rule mutation-witnessed: root inheritance, half-pen tolerance); editor + SVG suites 165 files / 1507 tests pass; full vitest 5042 pass / 27 fail — the same 27 pre-existing environment failures in 9 files; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS (gesture.ts kept at 300 lines).
+
+## 2026-11-23 — SVG builder: ＋ Save as new template on the stage
+
+- The header's *Save as new* only shows while a template is edited (never removed); it is now also on the stage (`builder-stage-template-save-new`) whenever a template or an artboard is open. Saving a new template from an open artboard no longer marks the new template as edited while the artboard stays open (`actions/templates.ts` `saveAsNew`).
+- Measured: `svg_builder_save_new` 2/2 (the artboard rule mutation-witnessed); builder suites 41 files / 302 tests pass; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS (stage actions CC kept ≤ 10 by `SaveAsNewButton` / `TemplateDraftButtons`).
+
+## 2026-11-23 — SVG builder: Line masthead and the Line banner layout preset
+
+- `banner.style` `"line"`: no banner colour (the canvas shows through, words laid out as Solid on the canvas colour) and one separator line on the banner's grid-side edge (`lib/svgBuilder/bannerline.ts`, 28 lines; `lineWidth` 0.5–12 px, `lineColor`). Customize ▸ Masthead Line (line colour + width; banner chip hidden), quick toolbar kind `line`, preset JSON schema text, template name "· Line", folder colour words canvas + line. Preset **Line banner** after Plain grid.
+- Measured: `svg_builder_line_banner` 6/6 + workspace Line UI test (UI wiring mutation-witnessed); builder suites 42 files / 309 tests pass; full vitest 5051 pass / 27 fail — the same 27 pre-existing environment failures in 9 files; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS; touched docs ≤ 9000 bytes (Line text lives on `svg-builder-styles.md`).
+
+## 2026-11-23 — SVG builder: big icons over 2 × 2 cells
+
+- ⊞ in an icon's quick toolbar marks its cell (red frame); four marks of a 2 × 2 square combine into one big icon (the first marked one's) — `config.grid.merges` (`lib/svgBuilder/merges.ts`, `layout.ts` `mergedCells`), one undo step; ✕ breaks it back (hidden icons kept by grid position, a lost one refilled), ≡ its own stroke. The store keeps grid positions, the builder sees slots (`toSlots` / `toFull` at one boundary); auto placement refits only on columns × rows changes. `SvgBuilderQuickSize.tsx` split out of the quick toolbar to keep it under 300 lines.
+- Measured: `svg_builder_big_icons` 6/6 + `svg_builder_big_icons_ui` 1/1 (pick and the refit rule mutation-witnessed); builder suites 44 files / 316 tests pass; full vitest 5058 pass / 27 fail — the same 27 pre-existing environment failures in 9 files; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS; docs ≤ 9000 bytes (new `sor/svg-builder-big-icons.md`).
+
+## 2026-11-23 — SVG builder: no limit on the number of saved templates
+
+- `TEMPLATE_LIMIT` (60) removed from `parseTemplates` and `saveAsNew`; storage is the only bound (localStorage holds thousands of looks).
+- Measured: `svg_builder_template_count` 1/1 (failed at 60 before the change); template suites 27/27; tsc PASS.
+
+## 2026-11-23 — SVG builder: STYLES label and dropdown on one row
+
+- Header-scoped CSS (`.bld-header-index .multi-select` inline-flex, label without its stacked margin); the shared MultiSelect elsewhere is unchanged.
+- Measured: `svg_builder_styles_row` 1/1 (fails without the rules); not checked in a real browser.
+
+## 2026-11-23 — SVG builder: ↺ Template (N) for the checked artboards
+
+- New list-head button resets the look of every checked artboard in view that has overrides; the row's ↺ Template goes the same way. One `builderArtboards` undo step with only those artboards (`removal.ts` `replaceSides`: out + back at the same place); the open artboard's stage look swaps quietly (`showLookOf`), and undo / redo swap it back (`sheetlists.ts` `followedReplaced`).
+- Measured: artboard suite 27/27 incl. the new bulk test (the undo look swap mutation-witnessed); builder suites 46 files / 319 tests; tsc, eslint (0 errors, no new warnings), `quality:changed --base HEAD` PASS.
+
+## 2026-11-23 — SVG builder: metadata confirmation choices (whole sheet / title onto the banner)
+
+- Two remembered prefs (`metaFullSheet` off, `metaTitleToBanner` on = the old behaviour) with checkboxes in both confirmations (`SvgBuilderMetaOptions.tsx`); `iconsImageFor({ full })`; ticking "whole sheet" redraws the exact requests (bulk plans keep their `ids`); `withSheetAnswer(…, toBanner)` and the sheet's `applyAnswer` leave the banner words when unticked.
+- Measured: `svg_builder_meta_options` 4/4, `svg_builder_meta_autoapply` 2/2 (the title switch mutation-witnessed); builder suites pass; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS.
+
+## 2026-11-23 — SVG builder: export package writes no JPEG (the 2× PNG is the only raster)
+
+- `buildSheetPackage` forces `includeJpeg: false` (no rasterising, `export.json` records JPEG off, status not "partial"); the shared format sheet gets `noJpeg` (builder only: JPEG rows and the "nothing ticked" warning hidden, stroke hint names the PNG); Export menu / header / dialog texts name `PNG 2×`. The upload tab keeps its JPEG controls.
+- Measured: builder package + format tests 12/12, builder export settings UI 11/11, shared sheet UI 7/7; related suites 1827 pass / 10 fail (`upload_flag_viewport`, pre-existing); tsc, eslint, `quality:changed --base HEAD` PASS.
+
+## 2026-11-23 — EPS follows "Rescale artboard to MP" (built-in writer)
+
+- The rescale moves the root px size and keeps the viewBox; the built-in EPS writer sized its page from the viewBox alone, so the EPS never grew. `eps.ts` `unitOf` now draws the viewBox at the root's plain px size (same ratio only, else the viewBox as before); `epsdoc.assemble` takes that `unit` into the upright matrix. Shared by the builder package and the upload export.
+- Measured: `builder_sheetpackage_formats` 9/9 incl. the new EPS rescale case (failed at 150 pt before); EPS / upload / export / builder / stock suites 2008 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc PASS.
+
+## 2026-11-23 — SVG builder: a PNG in place of the JPEG (corrects 39753d92)
+
+- 39753d92 removed the JPEG and its size rows and left a fixed 2× PNG; the ask was to REPLACE the JPEG with a PNG. Now the shared format sheet takes `raster="png"` (Export PNG / PNG (MP) / same size as the artboard, notes and warning name PNG, no quality row); the package renders its PNG with `jpegTargetSize` (artboard after any rescale, or the MP) when the raster switch is on, and writes no JPEG (`export.json` JPEG off). The upload tab's JPEG rows are unchanged.
+- Measured: builder package / format / settings UI + shared sheet tests 31/31; related suites 2002 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc, eslint, `quality:changed --base HEAD` PASS.
+
+## 2026-11-23 — EPS page = the rescale target in points
+
+- After "Rescale artboard to MP" the EPS page was the target × 0.75 (px → pt), so a 16 MP target came out ≈ 9 MP as Illustrator / the stocks count it (1 pt = 1 px). `rescale.ts` `epsInputSvg` hands both converters the root px size × 4/3 when the rescale is on (viewBox and drawing untouched); used by the builder package and the upload export. No rescale: unchanged.
+- Measured: `eps_rescale_target` 4/4 (2000×1000 @ 16 MP → 5657×2828 pt; 4 / 9 / 25 MP within 0.5 %; failed at 4242 pt before, mutation-witnessed); EPS / upload / export / stock suites 1681 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc, eslint, `quality:changed --base HEAD` PASS.
+
+## 2026-11-19 — Clean direct-geometry exports & zero machine/tool evidence (RULE 26)
+- Added RULE 26 across `docs/current/rules/*`, `docs/current/AGENT_RULES.md`, `AGENTS.md`, `docs/archive/2026-11-19-clean-direct-exports/design.md`, and `docs/current/sor/{export-formats,svg-builder,upload-file-metadata,upload-eps}.md`.
+- Implemented `src/lib/upload/{svgdirectpath,svgdirect}.ts` and `src/lib/svgBuilder/svgAssetNodes.ts`, removing all machine/tool/AI attribution (`IconSplitter`, `SVG builder`, `Generated with…`, `— icon sheet`, `x:xmptk`, `%%Creator`, `%%CreationDate`, tool-named PS/IPTC comments, `data-*` hooks) and baking all exported SVG coordinates, `viewBox`, sizes, and `stroke-width` directly at target dimensions rounded to at most 1 decimal place (including styled/colored icons).
+- Verification: `npm run verify` (`ALL LANES PASSED` — Types, Lint, Quality gate, Native perf budgets, Full test + coverage suite including `tests/export_no_machine_evidence.test.ts` 7/7, and Vite production build).

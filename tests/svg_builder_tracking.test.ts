@@ -33,7 +33,9 @@ const expectEm = (svg: string, which: "title" | "subtitle", em: number) => {
   const run = runOf(svg, which);
   expect(run.size).toBeGreaterThan(0);
   expect(run.px / run.size).toBeCloseTo(em, 3);
-  expect(run.px).toBeCloseTo(em * run.size, 2); // and that is the px a consumer adds
+  // And that is the px a consumer adds — written at RULE 26's one decimal, so a
+  // 32 px run's 0.8 px can land on 0.8 and never on 0.825.
+  expect(run.px).toBeCloseTo(em * run.size, 1);
 };
 
 describe("banner letter spacing", () => {

@@ -4,8 +4,8 @@
 // into, so a saved document can never restyle the app or reach the network.
 // Every rule about the document itself lives in lib/svgpreview.
 
-import { useEffect, useMemo, useRef } from "react";
-import { buildSvgPreview, PREVIEW_CSS } from "../lib/svgpreview";
+import { memo, useEffect, useMemo, useRef } from "react";
+import { buildSvgPreview, PREVIEW_CSS, type SvgPreview } from "../lib/svgpreview";
 import type { StrokeSheet } from "./strokesheet";
 import { useAnchorOverlay, useCtrlHover } from "./anchoroverlay";
 import { usePreviewZoom } from "../ui/usePreviewZoom";
@@ -14,6 +14,8 @@ import { useTailMarks, type TailMarks } from "./tailcut/tailmarks";
 
 export interface SvgPreviewProps {
   code: string | null;
+  /** Optional pre-compiled preview from SvgThumbs to skip a redundant lookup. */
+  preview?: SvgPreview;
   /** The frame's box in px — its own ratio at the row's zoom height (I-55). */
   box: { width: number; height: number };
   testid: string;
@@ -26,15 +28,15 @@ export interface SvgPreviewProps {
   marks?: TailMarks;
 }
 
-export default function SvgPreviewBox({ code, box, testid, label, version, strokeSheet, marks }: SvgPreviewProps) {
-  const preview = useMemo(() => buildSvgPreview(code), [code]);
+export default function SvgPreviewBox({ code, preview: given, box, testid, label, version, strokeSheet, marks }: SvgPreviewProps) {
+  const preview = useMemo(() => given ?? buildSvgPreview(code), [given, code]);
   if (code === null || code.trim() === "") {
     return <Chip className="svg-thumb missing" box={box} testid={testid}>No SVG</Chip>;
   }
   if (!preview.ok) {
     return <Chip className="svg-thumb missing error" box={box} testid={testid} error={preview.error}>Preview failed</Chip>;
   }
-  return <ShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} stroke={strokeSheet} marks={marks} />;
+  return <MemoShadowSvg html={preview.html} box={box} testid={testid} label={label} version={version} stroke={strokeSheet} marks={marks} />;
 }
 
 interface ChipProps {
@@ -63,7 +65,13 @@ interface ShadowProps {
   marks: TailMarks | undefined;
 }
 
-function ShadowSvg({ html, box, testid, label, version, stroke, marks }: ShadowProps) {
+function sameShadow(a: ShadowProps, b: ShadowProps): boolean {
+  return a.html === b.html && a.box.width === b.box.width && a.box.height === b.box.height
+    && a.testid === b.testid && a.label === b.label && a.version === b.version
+    && a.stroke === b.stroke && a.marks === b.marks;
+}
+
+const MemoShadowSvg = memo(function ShadowSvg({ html, box, testid, label, version, stroke, marks }: ShadowProps) {
   const host = useRef<HTMLDivElement | null>(null);
   const frame = useRef<HTMLDivElement | null>(null);
   useShadowArt(html, host, stroke);
@@ -79,7 +87,7 @@ function ShadowSvg({ html, box, testid, label, version, stroke, marks }: ShadowP
       <ZoomReset testid={testid} zoom={zoom} />
     </div>
   );
-}
+}, sameShadow);
 
 /** Paints the sanitized document inside its own shadow root (RULE 20). */
 export function useShadowArt(html: string, host: { current: HTMLDivElement | null }, stroke: StrokeSheet | undefined): void {

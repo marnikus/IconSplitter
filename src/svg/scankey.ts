@@ -19,6 +19,7 @@ function rowKey(row: SvgRow): string {
     row.meta ? `n${row.meta.versions.length}` : "n0",
     v ? `v${v.version}:${v.svgPath}:${v.status}` : "v0",
     `r${row.review}`,
+    row.meta ? `i${row.meta.imageVersions.length}:${row.meta.imagePreferred ?? 0}` : "i0",
   ].join("~");
 }
 

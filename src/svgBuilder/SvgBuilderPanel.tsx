@@ -16,10 +16,12 @@ import SvgBuilderTemplates from "./SvgBuilderTemplates";
 import SvgBuilderArtboards from "./SvgBuilderArtboards";
 import { useSvgBuilder } from "./useSvgBuilder";
 import { useBuilderReviewFollower } from "./declineasset";
+import { useStageHotkeys } from "./useStageHotkeys";
 
 export default function SvgBuilderPanel({ active }: { active: boolean }) {
   const b = useSvgBuilder();
   useBuilderReviewFollower(b);
+  useStageHotkeys(b, active);
   return <section className="bld-panel" data-testid="builder-panel" data-active={active} aria-label="SVG builder workspace">
     {!b.supported && <div className="bld-note is-warn" data-testid="builder-unsupported" role="note">
       This browser does not expose the File System Access folder picker. A Chromium-based browser is required to open and scan a folder.

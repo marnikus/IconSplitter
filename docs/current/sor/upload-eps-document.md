@@ -14,16 +14,14 @@ DSC minimum (`%%BoundingBox`, `%%HiResBoundingBox`, `%%DocumentData: Clean7Bit`,
 `%AI5_FileFormat`, `%AI3_DocumentPreview: None`, `%AI5_ArtSize` (height then
 width, per AI7), `%AI5_NumLayers`, `%AI3_TemplateBox`, `%AI3_TileBox`.
 
-`%%Title: (…)` is a DSC string (escaped). `%%CreationDate` is DSC's own form
-`D:YYYYMMDDHHmmSS±HH'MM'` (`dscDate`); an input that is not a timestamp with a
-zone omits the line — a made-up date is worse than none.
-
-**`%%Creator: IconSplitter`.** Never `Adobe Illustrator(R)`, never a fabricated
-`xmpMM:DocumentID`: satisfying the review by claiming another program wrote the
-file misrepresents authorship. The procset is our own name (`VectorEPS`), so the
-header never names an Adobe resource either. The clean-export option still
-removes `%%Creator`/`%%CreationDate` for a file with no producer identity — an
-anonymous file is honest, a falsely attributed one is not.
+`%%Title` is the artwork's own name (DSC-escaped). **No `%%Creator`, no
+`%%CreationDate`, no `%ADO_*`** (RULE 26, 2026-11-23): a delivered file names
+neither the tool that wrote it nor the moment it ran. `EpsOptions.createdAt` is
+still accepted by callers and deliberately ignored. Never `Adobe Illustrator(R)`
+and never a fabricated `xmpMM:DocumentID` either: claiming another program wrote
+the file misrepresents authorship just as much. The procset is our own name
+(`VectorEPS`); `epsclean.ts` still strips a converter's `%%Creator` /
+`%%CreationDate` / `%%For` / `%%Copyright` from older files.
 
 ## Prolog + setup
 

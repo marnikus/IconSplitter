@@ -102,7 +102,8 @@ describe("the edit session", () => {
     const second = shadow().querySelector("[data-edit-path='1']") as Element;
     await act(async () => { pointer(second, "pointerdown", 20, 20); });
     expect(q("[data-testid=e-pick]")).toBeNull();
-    expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(2);
+    // its two anchors + the rotate knob: a press on a stroke line selects that line (2026-11-23)
+    expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(3);
   });
 });
 
@@ -117,7 +118,9 @@ describe("several paths in the page", () => {
       second.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true, button: 0, clientX: 210, clientY: 210, shiftKey: true, pointerId: 1 }));
       second.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, composed: true, button: 0, clientX: 210, clientY: 210, pointerId: 1 }));
     });
-    expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(5);
+    expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(6); // + 2 anchors and the added line's rotate knob
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+    expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(5); // the line's points go first, both paths stay
     await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
     expect(shadow().querySelectorAll("[data-edit-overlay] circle")).toHaveLength(0);
     expect(q("[data-testid=e-pick]")).not.toBeNull();

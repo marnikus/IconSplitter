@@ -11,10 +11,10 @@ Since 2026-11-14 the builder's metadata is the **same system as the SVG to uploa
   - Older saves are read with `subtitle` → `description` and `keywords` → `tags`.
 - **Prompt**: `DEFAULT_SHEET_PROMPT` is the stock prompt. It asks for Title 1, Title 2, Title, Description, Tags and **Title-Artboard**. A saved copy of the old JSON prompt is replaced with it on read (`isLegacySheetPrompt`).
 - **Image** (`lib/svgBuilder/metaimage.ts`, `metaimagefor.ts`, `preview.ts` `sheetPngFor`):
-  - the sheet's **icons only**: the banner strip is cut off and the banner turned off, so the icon grid keeps its exact size;
+  - the sheet's **icons only**: the banner strip is cut off and the banner turned off, so the icon grid keeps its exact size — or, with **Send the whole sheet with its banner** ticked in the confirmation (2026-11-23, `builder-meta-full-sheet`, pref `metaFullSheet`, default off), the whole sheet; ticking it draws the exact images again before anything is sent;
   - rendered by the PNG export's renderer (`exporter.ts` `sheetPngBlob`) as **one PNG of at most 1 megapixel** (`megapixelSize`);
   - shown in the confirmation and sent unchanged.
-- **Answer** (`parseSheetAnswer`): Title, Description and Tags become the metadata. **Title-Artboard** (2–5 words) is not metadata: it becomes the artboard's **visible banner title**, and the subtitle becomes the default phrase "Editable stroke width".
+- **Answer** (`parseSheetAnswer`): Title, Description and Tags become the metadata. **Title-Artboard** (2–5 words) is not metadata: it becomes the artboard's **visible banner title**, and the subtitle becomes the default phrase "Editable stroke width" — unless **Put the answer's title on the banner** is unticked in the confirmation (2026-11-23, `builder-meta-title-banner`, pref `metaTitleToBanner`, default on): then only the metadata is filled and the banner words stay. Both choices are in the sheet's and the artboards' confirmations (`SvgBuilderMetaOptions.tsx`) and remembered.
   - On artboards (✦ Generate metadata, `withSheetAnswer`) this happens at once. An artboard open on the stage gets the same words and metadata there, so it shows no unsaved change.
   - For the current sheet the answer is **applied at once** (2026-11-15: no draft step, no Accept draft button). It is accepted when it passes the upload rules, else kept as invalid with its errors in the editor. The Title-Artboard goes onto the banner as one undo step, and the confirmation closes.
 - **Banner text**: metadata never replaces the banner words any more (`sheetCopy`). The SVG's hidden `<title>` uses the accepted metadata title, and `<desc>` holds the description and tags.
@@ -36,7 +36,7 @@ The tree mirrors single icons' `_split_output`, but under **`_artboard_sheets`**
 _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/
   template.json                                   ← the template's blueprint
   artboard_<NN>_<its title>/                      ← one per derived artboard
-    metadata.json  preview.png  export/…
+    sheet.json  metadata.json  preview.png  export/…
 ```
 
 - **Template folder**: `<its title>_sheet_<cells>_icons_<colour>_<colour>_palette_id<code>` (`templateFolder`).
@@ -45,7 +45,7 @@ _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/
   - With no folder open, nothing is written yet: the folder is made the first time one of its artboards is written.
   - The template remembers its folder (`SheetTemplate.folder`, validated on read).
 - **Artboard folders** sit inside their template's folder: `artboard_<NN>_<its title>`, where NN is its "#N" and the title is its Title-Artboard after generation (`artboardFolder`). The artboard remembers its folder (`FinalArtboard.folder`), so later saves land in the same place even after a rename.
-- **When metadata is generated** (✦ Generate metadata): the variant folder is created with `metadata.json` (Title, Description, Tags, Title-Artboard, validation, prompt, model) and `preview.png`, the exact icons-only image that was sent (`sheetwriter.ts`).
+- **When metadata is generated** (✦ Generate metadata): the variant folder is created with `metadata.json` (Title, Description, Tags, Title-Artboard, validation, prompt, model) and `preview.png`, the exact image that was sent (`sheetwriter.ts`).
 - **⇪ Export all selected** (header, `builder-export-selected`): exports the checked artboards (else the open one), from their **saved** state. Each one goes into `…/artboard_variant_<N>/export/` (`actions/sheetexport.ts`, `sheetpackage.ts`):
   - `<stem>.svg` with the metadata embedded, where `<stem>` is the sheet folder name + `_v<N>`;
   - `<stem>.jpg` at the Upload settings' megapixels, with XMP metadata;
@@ -55,4 +55,10 @@ _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/
   - Every failed part is reported in the toast and the rest still ships.
   - The export counts the icons' use once per artboard, and the artboard remembers its folder and `exportedAt`.
 - The builder header is pinned to the top while the page scrolls.
+
+## Files edited outside the app — 🗂 Register (2026-11-16; reading back 2026-11-22)
+
+- **sheet.json** (`actions/sheetjson.ts`): each artboard folder's full preset (`presetJsonOf`). For the artboard open on the stage it follows the stage live; every other artboard's follows its SAVED state, rewritten when the artboard or its template's look changes (`useSheetFileMirror.ts`, `actions/sheetsync.ts`). metadata.json follows the saved metadata too (its prompt, model and time kept).
+- **🗂 Register templates and artboards** (`builder-register`; *Automatic register* `builder-auto-register` runs it after every scan; `actions/register.ts`, `lib/svgBuilder/registerplan.ts`): new template folders (template.json) and artboard folders (sheet.json / metadata.json) join the lists. A KNOWN template or artboard is updated from a file edited outside the app: template.json → its look; sheet.json → words, icons by name (names not in the library stay empty and are counted), locks, its own look changes (measured against the template the file was written with), metadata; metadata.json → metadata (an accepted one turns *edited* until ✓ Accept). What the stage shows follows its files unless it holds unsaved edits (kept; the toast says so). Then files still holding an older copy get the app's state. Folders deleted by hand are not removed from the app.
+- **Fingerprints** (`filesigstore.ts`, `lib/svgBuilder/sheetsync.ts`): the app remembers a fingerprint of every JSON file it writes or reads, so its own copies — older ones, the open artboard's live draft — are never read back as edits, and its automatic writes never go over a file changed outside the app (the stage says once that it waits for Register). ✓ Save template still writes template.json and says when that replaced an outside change. A template.json from before fingerprints is read when newer than the template's last save; artboard files from before fingerprints that differ are replaced once, after a copy goes to that folder's `.removed versions/<file>~<stamp>`.
 - **✦ Generate metadata in the pinned header** (2026-11-15, `builder-header-generate-metadata`, beside ⇪ Export all selected): it generates for the checked artboards, else the open artboard, else the current sheet. The exact-request confirmation is shown first, as everywhere else.

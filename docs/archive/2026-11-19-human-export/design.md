@@ -13,7 +13,8 @@ machine-assembled rather than drawn:
 3. `[1 0 0 1 0 0] concat` before almost every shape, plus `gsave`/`grestore`
    around each one — the walker's decisions, visible;
 4. an ISO `%%CreationDate` (`2026-11-19T00:00:00.000Z`) where DSC wants `D:…`,
-   and a `%%Creator` naming the tab;
+   and a `%%Creator` naming the tab — **both now dropped entirely** (RULE 26,
+   see below: a delivered file names neither the tool nor the moment);
 5. an SVG that still had the composer's skeleton after the clean pass: chains
    of `<g>` and attributes that only restate SVG's defaults.
 
@@ -34,19 +35,26 @@ are recorded here so nobody "fixes" them later:
 
 `%%Creator: Adobe Illustrator(R) 24.1 (Windows)` and a fabricated
 `xmpMM:DocumentID` would satisfy the letter of the request and misrepresent the
-authorship of the file. Both were refused. The writer names itself
-(`%%Creator: IconSplitter`), supplies its OWN procset (`VectorEPS` — never an
-Adobe resource name), and no `Adobe Illustrator` string appears anywhere. The
-"clean up final SVG and EPS" option still removes `%%Creator`/`%%CreationDate`
-when the user wants a file with no producer identity at all — and a file with
-no creator is honest, while a file with a false one is not.
+authorship of the file. Both were refused, and no `Adobe Illustrator` string
+appears anywhere; the writer supplies its OWN procset (`VectorEPS` — never an
+Adobe resource name).
+
+**Superseded the same day by RULE 26** (`docs/current/rules/DOCS_AND_SAFETY.md`,
+2026-11-23): this round first answered the attribution question the other way,
+naming itself (`%%Creator: IconSplitter`) and stamping a DSC `%%CreationDate`.
+The user's rule is stricter and simpler — **a delivered file carries ZERO
+machine attribution**, its own tool's included. So there is no `%%Creator`, no
+`%%CreationDate`, no `%ADO_*`, no `x:xmptk`, and `dscDate` was deleted with
+them; `EpsOptions.createdAt` is still accepted and deliberately ignored.
+Anonymous is honest; a false attribution is not; a true one the user did not ask
+for is still theirs to refuse.
 
 ## What changed
 
 ### EPS document layer (`src/lib/upload/epsdoc.ts`)
 
 * The comment set a real Illustrator-compatible export carries:
-  `%%Creator`, `%%Title: (…)` as a DSC string, `%%CreationDate: D:…`,
+  `%%Title` as a DSC string (DSC-escaped),
   both boxes, `%%DocumentData: Clean7Bit`, `%%LanguageLevel: 3`,
   `%%DocumentProcessColors`, `%%DocumentSuppliedResources: procset VectorEPS`,
   `%%Pages`, `%%PageOrder`, `%%PageOrigin`, `%AI3_ColorUsage`,
@@ -63,9 +71,8 @@ no creator is honest, while a file with a false one is not.
 * One named layer around the artwork (`%AI5_BeginLayer`, the `Lb`/`Ln` operand
   lines, `LB`, `%AI5_EndLayer--`) instead of a bare body — a drawing program
   names its layers.
-* `dscDate(iso)` converts a timestamp to `D:YYYYMMDDHHmmSS±HH'MM'`; anything
-  that is not a timestamp with a zone yields `null` and the line is omitted. A
-  made-up date is worse than none.
+* `dscDate(iso)` converted a timestamp to `D:YYYYMMDDHHmmSS±HH'MM'`; RULE 26
+  then removed the `%%CreationDate` line it fed, so the function is gone.
 
 ### EPS body (`src/lib/upload/eps.ts`, `epspath.ts`, `epsgradientfill.ts`)
 

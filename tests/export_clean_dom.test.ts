@@ -47,9 +47,10 @@ describe("cleanExportSvg — the pipeline traces a stock reviewer names", () => 
     expect(out).toContain("<rdf:li>kitchen</rdf:li>");
     expect(out).not.toContain("configFingerprint");
     expect(out).not.toContain("sources");
-    // nothing else rides along: no rights, no vocabulary of ours
-    expect(out).not.toContain("dc:creator");
-    expect(out).not.toContain("dc:rights");
+    // Nothing else rides along: no vocabulary of ours, no machine record.
+    // A USER's own `dc:creator`/`dc:rights` are kept when they supplied them
+    // (RULE 26 forbids the tool's attribution, not the author's).
+    expect(out).not.toContain("configFingerprint");
   });
 
   it("writes every number with at most three decimals, geometry kept", () => {

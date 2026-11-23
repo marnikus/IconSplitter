@@ -19,9 +19,10 @@ describe("writeEps — a genuine EPS document", () => {
     if (!result.ok) throw new Error(result.reason);
     const head = result.eps.split("%%EndComments")[0];
     expect(head.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
-    expect(head).toContain("%%Creator: IconSplitter\n");
-    expect(head).toContain("%%Title: (fog_AI.eps)"); // a DSC string, as a document names itself
-    expect(head).toContain("%%CreationDate: D:20261008000000+00'00'"); // the DSC date form, never ISO
+    expect(head).not.toContain("%%Creator");
+    expect(head).not.toContain("IconSplitter");
+    expect(head).toContain("%%Title: fog_AI.eps");
+    expect(head).not.toContain("%%CreationDate");
     expect(head).toContain("%%BoundingBox: 0 0 70 70");
     expect(head).toContain("%%HiResBoundingBox: 0 0 69.6 69.6");
     expect(head).toContain("%%DocumentData: Clean7Bit");
@@ -42,7 +43,7 @@ describe("writeEps — a genuine EPS document", () => {
   it("escapes a title so a stray parenthesis cannot break the DSC string", () => {
     const result = writeEps(PREPARED, "#ffffff", { title: "odd (1) name.eps" });
     if (!result.ok) throw new Error(result.reason);
-    expect(result.eps).toContain("%%Title: (odd \\(1\\) name.eps)");
+    expect(result.eps).toContain("%%Title: odd \\(1\\) name.eps");
   });
 
   it("verifies the EPS 10 markers, not just the header", () => {
@@ -288,6 +289,8 @@ describe("verifyEps", () => {
     const broken = (result.ok ? result.eps : "").replace("[0.75 0 0 -0.75 0 69.6] concat", "0.75 0 0 -0.75 0 69.6 concat");
     const verdict = verifyEps(broken);
     expect(verdict.ok).toBe(false);
-    expect(verdict.errors).toContain("line 43: concat expects an array, found number"); // the setup's CTM, after the header + procset
+    // The header grew two prolog/setup sections (2026-11-19), so the CTM sits
+    // lower; the RULE 26 header has no creator/date line to count either.
+    expect(verdict.errors.some((e) => /concat expects an array, found number/.test(e))).toBe(true);
   });
 });

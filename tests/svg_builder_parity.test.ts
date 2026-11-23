@@ -60,8 +60,8 @@ describe("ranges and config parsing", () => {
 });
 
 describe("layout presets", () => {
-  it("offers Side banner, Top split and Plain grid with the reference values", () => {
-    expect(LAYOUT_PRESETS.map((p) => p.label)).toEqual(["Side banner", "Top split", "Plain grid"]);
+  it("offers Side banner, Top split and Plain grid with the reference values (+ Line banner, 2026-11-23)", () => {
+    expect(LAYOUT_PRESETS.map((p) => p.label)).toEqual(["Side banner", "Top split", "Plain grid", "Line banner"]);
     const top = applyPresetConfig(DEFAULT_CONFIG, "masthead");
     expect(top.grid).toMatchObject({ columns: 10, rows: 5, gapX: 16, gapY: 12, captions: false });
     expect(top.banner).toMatchObject({ position: "top", style: "split", size: 76, hero: false });

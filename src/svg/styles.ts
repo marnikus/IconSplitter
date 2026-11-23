@@ -69,8 +69,9 @@ export function styledRows(bases: readonly SvgRow[], metaOf: (id: string) => Pai
 }
 
 function styleRow(base: SvgRow, meta: PairMeta, metaOf: (id: string) => PairMeta | null | undefined): SvgRow {
-  const face = baseFaceOf(meta.id, metaOf) ?? mainImageOf(base.meta, base.source.relPath);
-  return { ...toRow(styleSourceOf(base.source, meta), meta, false), baseAiPath: face };
+  const norm = meta.imagePreferred === null && meta.ai.fingerprint === "" ? { ...meta, imagePreferred: meta.imageVersions.find((v) => v.status === "done")?.version ?? null } : meta;
+  const face = baseFaceOf(norm.id, metaOf) ?? mainImageOf(base.meta, base.source.relPath);
+  return { ...toRow(styleSourceOf(base.source, norm), norm, false), baseAiPath: face };
 }
 
 /** The base face a style row shows beside its own previews (2026-11-16): the
@@ -131,7 +132,9 @@ export function rowsForAllStyles(discovery: Discovery, metaOf: (id: string) => P
 
 function rowsForPrefs(discovery: Discovery, refs: SvgRefs): SvgRow[] {
   const metaOf = (id: string) => (refs.metas.has(id) ? refs.metas.get(id) : discovery.metas.get(id));
-  return prefs.showAll ? rowsForAllStyles(discovery, metaOf, prefs.styles) : rowsForStyle(discovery, refs, prefs.active);
+  const next = prefs.showAll ? rowsForAllStyles(discovery, metaOf, prefs.styles) : rowsForStyle(discovery, refs, prefs.active);
+  for (const r of next) if (r.meta !== null) refs.metas.set(r.source.id, r.meta);
+  return next;
 }
 
 const withDir = (dir: string, name: string) => (dir === "" ? name : `${dir}/${name}`);
@@ -201,15 +204,10 @@ async function registerRow(root: DirHandleLike, refs: SvgRefs, base: SvgSource):
       return { style: null, failure: `_${style}: ${errorMessage(error)}` };
     }
   }));
-  return {
-    styles: results.flatMap((result) => result.style === null ? [] : [result.style]),
-    failures: results.flatMap((result) => result.failure === null ? [] : [result.failure]),
-  };
+  return { styles: results.flatMap((r) => r.style === null ? [] : [r.style]), failures: results.flatMap((r) => r.failure === null ? [] : [r.failure]) };
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+const errorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 export interface StyleCtx {
   refs: SvgRefs;

@@ -43,6 +43,21 @@ its previous Download all package: changing checkboxes is not a destructive
 operation on already committed packages. Superseded-name housekeeping remains
 unchanged.
 
+## Clean copy (2026-11-20)
+
+The upload chain already ran the stock policy in `prepare.ts`. With the shared
+**Clean the saved files** box on it also runs the clean copy the builder's sheet
+package uses (`lib/upload/svgclean`, `lib/upload/svgtidy`): dead `color` beside
+an explicit stroke, inherited paint a child repeats, SVG initial values, bare
+`<g>` wrappers, empty containers, whitespace, `xlink:href` → `href`, any
+`<metadata>` that is not the tag list, and 4+ decimal float noise. Title,
+description, the DC tags, geometry and viewBox survive; `keepSize: false` means
+no px `width`/`height` can come back, and `enforceExportSvg` re-checks the result
+— a pass that broke the icon contract is discarded, not committed. The box off
+keeps the stock policy's output. The hash moves only when the box is off
+(`settingsfingerprint.ts`), so default rows stay current. EPS is unaffected here
+— see [upload EPS](upload-eps.md).
+
 ## Selectors
 
 - `upload-set-svg`: Export SVG checkbox, checked by default.

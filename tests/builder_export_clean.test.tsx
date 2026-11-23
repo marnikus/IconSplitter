@@ -155,10 +155,13 @@ describe("the delivered sheet files are clean", () => {
     expect(verifyEpsDocument(eps).ok).toBe(true);
   });
 
-  it("off, both files ship exactly as before — the fingerprint survives", async () => {
+  it("off: the tidy pass is skipped, but no `data-*` hook ships anyway (RULE 26)", async () => {
     const pkg = await buildSheetPackage(args({ cleanExport: false }), deps);
     const svg = textOf(file(pkg, ".svg")?.bytes);
-    expect(svg).toContain("data-config-fingerprint");
+    // The composer's preview hooks are editor bookkeeping; RULE 26 drops them in
+    // EVERY export, ticked or not, so the box only decides the tidy/rounding pass.
+    expect(svg).not.toContain("data-config-fingerprint");
+    expect(svg).not.toMatch(/\bdata-[a-z-]+=/);
     expect(readEmbeddedMetadata(svg)).toEqual(META);
   });
 });

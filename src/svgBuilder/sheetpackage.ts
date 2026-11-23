@@ -1,31 +1,32 @@
 // sheetpackage.ts — an artboard sheet's stock package (2026-11-14), built with
-// the SVG to upload tab's parts: the SVG with its metadata embedded, a JPEG at
-// the Upload settings' megapixels with XMP metadata, an EPS from the Upload
-// settings' converter (colours resolved first), and a full 2× PNG — recorded
-// in the same export.json the stock upload tab discovers. A failing part is
-// reported and left out; the rest still ships ("partial"). The browser renderers
+// the SVG to upload tab's parts: the SVG with its metadata embedded, an EPS from
+// the Upload settings' converter (colours resolved first), and a PNG in place
+// of the upload flow's JPEG (2026-11-23: the same switch and size rule) —
+// recorded in the same export.json the stock upload tab discovers. A failing
+// part is reported and left out; the rest still ships ("partial"). The renderer
 // and the converter are injected for tests.
 import { embedMetadataInSvg } from "../lib/upload/embed";
+import { cleanSheetSvg } from "../lib/svgBuilder/cleansheet";
+import { stripPreviewHooks } from "../lib/svgBuilder/striphooks";
+import { solidPaint } from "../lib/upload/solidpaint";
+import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
 import { expandStrokes } from "../lib/upload/expand";
 import { expandTextToFills } from "../lib/upload/expandtext";
-import { rescaleSvg } from "../lib/upload/rescale";
+import { epsInputSvg, rescaleSvg } from "../lib/upload/rescale";
 import { optimizeSvg, type OptimizeRecord } from "../lib/upload/optimize";
 import { jpegTargetSize, rescaledArtboard } from "../lib/exportformats";
 import { NO_OUTPUT_FORMATS, hasOutputFormats } from "../lib/upload/formats";
 import { outlineForEps } from "../lib/svgBuilder/epsoutline";
 import { metadataBlock, newExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
 import { sha256Hex } from "../lib/upload/hash";
-import { embedXmpMetadata } from "../lib/upload/jpeg";
 import type { IconMetadata } from "../lib/upload/meta";
-import { rasterizeJpeg } from "../lib/upload/raster";
 import { flattenColor, type UploadSettings } from "../lib/upload/settings";
 import { settingsFingerprint } from "../lib/upload/settingsfingerprint";
 import type { ConvertResult, EpsConvertInput } from "../lib/upload/epsconv/types";
 import type { SheetMetadata } from "../lib/svgBuilder/types";
 import { sheetPngBlob } from "./exporter";
-import { cleanExportSvg } from "../lib/upload/svgclean";
-import { cleanExportEps } from "../lib/upload/epsclean";
-import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
+import { verifyEpsDocument } from "../lib/upload/eps";
+import { cleanEpsDocument, stripEpsProducerLines } from "../lib/upload/epsclean";
 import { shippedMetadata } from "../upload/exportstages";
 
 export interface SheetFile { name: string; bytes: Uint8Array }
@@ -48,22 +49,13 @@ export interface SheetTransform {
 
 export interface SheetPackageDeps {
   pngBlob?: (svg: string, width: number, height: number) => Promise<Blob>;
-  rasterize?: (svg: string, target: { width: number; height: number; quality: number; background: string }) => Promise<{ ok: true; jpeg: Uint8Array } | { ok: false; reason: string }>;
   eps?: (input: EpsConvertInput) => Promise<ConvertResult>;
 }
 
 const text = (s: string) => new TextEncoder().encode(s);
 
-/** `stroke`/`fill="currentColor"` → the nearest ancestor's `color` (the EPS writers need real paint). */
-export function solidPaint(svg: string): string {
-  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
-  for (const el of Array.from(doc.getElementsByTagName("*"))) {
-    const colour = el.closest("[color]")?.getAttribute("color");
-    if (colour == null) continue;
-    for (const attr of ["stroke", "fill"]) if (el.getAttribute(attr) === "currentColor") el.setAttribute(attr, colour);
-  }
-  return new XMLSerializer().serializeToString(doc.documentElement);
-}
+/** `stroke`/`fill="currentColor"` → the concrete ink the sheet set (the EPS writers need real paint). */
+export { solidPaint } from "../lib/upload/solidpaint";
 
 function sizeOf(svg: string): { width: number; height: number; background: string } {
   const num = (name: string, fallback: number) => Number(new RegExp(`\\b${name}=["'](\\d+(?:\\.\\d+)?)["']`).exec(svg)?.[1] ?? fallback);
@@ -84,33 +76,57 @@ const SVGO_OFF: OptimizeRecord = { enabled: false, version: "none", config: "{}"
 /**
  * The shared format chain over the composed sheet (2026-11-17): expand strokes,
  * expand text, rescale the artboard, optimize the export copy — in this order,
- * each refusal named before anything ships.
+ * then the clean copy — each refusal named before anything ships.
  */
 export async function prepareSheetSvg(svg: string, settings: UploadSettings): Promise<{ ok: true; svg: string; svgo: OptimizeRecord; transform: SheetTransform } | { ok: false; reason: string }> {
   const transform: SheetTransform = { strokes: 0, textsOutlined: 0, rescale: null };
+  // `stroke="currentColor"` → the group's own ink (the EPS writers need real
+  // paint, and after that the `color` it named is dead paperwork), and the
+  // composer's `data-*` preview hooks out in EVERY case (RULE 26): they are how
+  // the editor finds a cell, never something a delivered file carries.
+  const base = stripPreviewHooks(solidPaint(svg));
+  const expanded = expandSheet(base, settings, transform);
+  if (!expanded.ok) return expanded;
+  const placed = rescaleSheet(expanded.svg, settings, transform);
+  if (!placed.ok) return placed;
+  const optimized = await optimizeSvg(placed.svg, settings.optimizeSvg);
+  // Then the paperwork (2026-11-19): the saved SVG — and the EPS built from it —
+  // carry the picture and its Title/description/tags, never the generator's
+  // hooks, provenance block or float noise. A sheet keeps its px (the rasters
+  // are sized from them); refused content is named, never guessed.
+  if (!settings.cleanExport) return { ok: true, svg: optimized.svg, svgo: optimized.record, transform };
+  const cleaned = cleanSheetSvg(optimized.svg);
+  if (cleaned.refused !== null) return { ok: false, reason: `clean: ${cleaned.refused}` };
+  return { ok: true, svg: cleaned.svg, svgo: optimized.record, transform };
+}
+
+type Step = { ok: true; svg: string } | { ok: false; reason: string };
+
+/** Strokes → fills, then text → glyph outlines; what cannot be expanded is named. */
+function expandSheet(svg: string, settings: UploadSettings, t: SheetTransform): Step {
   let out = svg;
   if (settings.expandStrokes) {
     const doc = new DOMParser().parseFromString(out, "image/svg+xml");
     const expanded = expandStrokes(doc.documentElement);
     if (expanded.refused !== null) return { ok: false, reason: `strokes: ${expanded.refused}` };
     out = new XMLSerializer().serializeToString(doc.documentElement);
-    transform.strokes = expanded.shapes;
+    t.strokes = expanded.shapes;
   }
-  if (settings.expandText) {
-    const outlined = expandTextToFills(out);
-    if (!outlined.ok) return { ok: false, reason: outlined.reason };
-    out = outlined.svg;
-    transform.textsOutlined = outlined.runs;
-  }
-  if (settings.rescaleArtboard) {
-    const scaled = rescaleSvg(out, settings);
-    if (!scaled.ok) return { ok: false, reason: scaled.reason };
-    out = scaled.svg;
-    const box = rescaledArtboard(...sizePairOf(out), { rescaleArtboard: true, rescaleMegapixels: settings.rescaleMegapixels });
-    transform.rescale = { factor: scaled.factor, width: box.width, height: box.height };
-  }
-  const optimized = await optimizeSvg(out, settings.optimizeSvg);
-  return { ok: true, svg: optimized.svg, svgo: optimized.record, transform };
+  if (!settings.expandText) return { ok: true, svg: out };
+  const outlined = expandTextToFills(out);
+  if (!outlined.ok) return { ok: false, reason: outlined.reason };
+  t.textsOutlined = outlined.runs;
+  return { ok: true, svg: outlined.svg };
+}
+
+/** The full-artboard rescale, recorded at the px it really reached. */
+function rescaleSheet(svg: string, settings: UploadSettings, t: SheetTransform): Step {
+  if (!settings.rescaleArtboard) return { ok: true, svg };
+  const scaled = rescaleSvg(svg, settings);
+  if (!scaled.ok) return { ok: false, reason: scaled.reason };
+  const box = rescaledArtboard(...sizePairOf(scaled.svg), { rescaleArtboard: true, rescaleMegapixels: settings.rescaleMegapixels });
+  t.rescale = { factor: scaled.factor, width: box.width, height: box.height };
+  return { ok: true, svg: scaled.svg };
 }
 
 function acceptedOf(m: SheetMetadata | null): IconMetadata | null {
@@ -118,16 +134,6 @@ function acceptedOf(m: SheetMetadata | null): IconMetadata | null {
 }
 
 interface Part { name: string; bytes: Uint8Array | null; problem: string | null; fixes?: string[]; writer?: string }
-
-async function renderJpegFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: IconMetadata | null): Promise<Part> {
-  const name = `${a.stem}.jpg`;
-  if (!a.settings.includeJpeg) return { name, bytes: null, problem: null };
-  const box = sizeOf(a.svg);
-  const size = jpegTargetSize(box.width, box.height, a.settings);
-  const out = await (d.rasterize ?? rasterizeJpeg)(a.svg, { ...size, quality: a.settings.jpegQuality, background: flattenColor(box.background) });
-  if (!out.ok) return { name, bytes: null, problem: `JPG: ${out.reason}` };
-  return { name, bytes: meta === null ? out.jpeg : embedXmpMetadata(out.jpeg, meta), problem: null };
-}
 
 /**
  * SVG → EPS for the composed sheet (2026-11-19): a sheet always carries live
@@ -141,24 +147,37 @@ async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: Ic
   if (!a.settings.includeEps) return { name, bytes: null, problem: null };
   const outlined = outlineForEps(solidPaint(a.svg), a.settings);
   if (!outlined.ok) return { name, bytes: null, problem: `EPS: ${outlined.reason} — ${outlined.fix}`, fixes: [] };
-  const input = { svg: outlined.svg, background: flattenColor(sizeOf(a.svg).background), title: name, createdAt: a.now };
+  // A rescaled page is the target in POINTS — what Illustrator and the stock
+  // sites count as px (2026-11-23); without a rescale the 0.75 px→pt stands.
+  const input = {
+    svg: epsInputSvg(outlined.svg, a.settings.rescaleArtboard),
+    background: flattenColor(sizeOf(a.svg).background), title: name, createdAt: a.now,
+  };
   const part = await runConverter(name, d.eps, input, outlined.fixes);
-  return a.settings.cleanExport === false ? part : cleanedEps(part, meta);
+  return deliveredEps(part, meta, a.settings.cleanExport);
 }
 
 /**
- * The delivered EPS (2026-11-19): title, description and tags only, one carrier,
- * no producer fingerprint. A file the clean pass cannot verify is reported and
- * left out — the rest of the package still ships (this stage's own rule).
+ * The delivered EPS (2026-11-19). Producer and date lines go in EVERY case
+ * (RULE 26: a delivered file names neither the tool nor the moment it ran).
+ * With the clean box on, one carrier carries title/description/tags and the
+ * second copy plus the `%ADO_*` flag are gone; off, the stock upload's legacy
+ * two-carrier envelope is what ships — the same choice the upload flow makes.
+ * A file that does not verify is reported and left out: the rest still ships.
  */
-function cleanedEps(part: Part, meta: IconMetadata | null): Part {
+function deliveredEps(part: Part, meta: IconMetadata | null, clean: boolean): Part {
   if (part.bytes === null) return part;
-  const eps = new TextDecoder().decode(part.bytes);
-  const carrier = meta === null ? eps : embedXmpMetadataInEps(eps, shippedMetadata(meta));
-  const cleaned = cleanExportEps(carrier);
-  if (!cleaned.ok) return { name: part.name, bytes: null, problem: `EPS: ${cleaned.reason}`, fixes: part.fixes };
-  return { ...part, bytes: text(cleaned.eps) };
+  const producerFree = stripEpsProducerLines(new TextDecoder().decode(part.bytes));
+  // What a cleaned file may carry: title, description and tags, nothing else.
+  const shipped = meta === null ? null : shippedMetadata(meta);
+  const eps = clean ? cleanEpsDocument(producerFree, shipped) : withEnvelope(producerFree, shipped);
+  const verdict = verifyEpsDocument(eps);
+  if (!verdict.ok) return { name: part.name, bytes: null, problem: `EPS: ${verdict.errors.join("; ")}`, fixes: part.fixes };
+  return { ...part, bytes: text(eps) };
 }
+
+/** The clean box off: the legacy envelope (XMP stream + Photoshop/IPTC copy), no metadata when none was accepted. */
+const withEnvelope = (eps: string, meta: IconMetadata | null): string => (meta === null ? eps : embedXmpMetadataInEps(eps, meta));
 
 /** One converter call, its auto-fixes merged, and every failure named (never guessed at). */
 async function runConverter(name: string, convert: SheetPackageDeps["eps"], input: EpsConvertInput, fixes: string[]): Promise<Part> {
@@ -172,11 +191,18 @@ async function runConverter(name: string, convert: SheetPackageDeps["eps"], inpu
   }
 }
 
-async function renderPngFile(a: SheetPackageArgs, d: SheetPackageDeps): Promise<Part> {
+/**
+ * The raster, a PNG (2026-11-23): the builder writes no JPEG — the same switch
+ * and the same size rule drive a PNG instead (the artboard after any rescale,
+ * or the MP at its ratio), so the file and the settings row agree.
+ */
+async function renderPngFile(a: SheetPackageArgs, d: SheetPackageDeps, wanted: boolean): Promise<Part> {
   const name = `${a.stem}.png`;
+  if (!wanted) return { name, bytes: null, problem: null };
   try {
     const box = sizeOf(a.svg);
-    const blob = await (d.pngBlob ?? sheetPngBlob)(a.svg, box.width * 2, box.height * 2);
+    const size = jpegTargetSize(box.width, box.height, a.settings);
+    const blob = await (d.pngBlob ?? sheetPngBlob)(a.svg, size.width, size.height);
     return { name, bytes: new Uint8Array(await blob.arrayBuffer()), problem: null };
   } catch (error) {
     return { name, bytes: null, problem: `PNG: ${error instanceof Error ? error.message : "render failed"}` };
@@ -229,18 +255,16 @@ async function recordOf(
     timestamps: { ...base.timestamps, committedAt: a.now } };
 }
 
-/** The shipped SVG: cleaned (fingerprints gone, title/description/tags only) unless the box is off. */
+/**
+ * The shipped SVG. The clean copy already ran inside `prepareSheetSvg` (with the
+ * sheet's px kept — the rasters are sized from them), so this step only decides
+ * WHAT metadata rides along: the three accepted fields, rebuilt into a fresh
+ * Dublin Core block so nothing else can survive.
+ */
 async function cleanedSvgFile(a: SheetPackageArgs, svg: string, meta: IconMetadata | null): Promise<Part> {
   const name = `${a.stem}.svg`;
-  if (meta === null) {
-    if (a.settings.cleanExport === false) return { name, bytes: text(svg), problem: null };
-    const cleaned = cleanExportSvg(svg);
-    return cleaned.ok ? { name, bytes: text(cleaned.svg), problem: null } : { name, bytes: null, problem: `SVG: ${cleaned.reason}` };
-  }
-  const embedded = embedMetadataInSvg(svg, meta);
-  if (a.settings.cleanExport === false) return { name, bytes: text(embedded), problem: null };
-  const cleaned = cleanExportSvg(embedded, shippedMetadata(meta));
-  return cleaned.ok ? { name, bytes: text(cleaned.svg), problem: null } : { name, bytes: null, problem: `SVG: ${cleaned.reason}` };
+  if (meta === null) return { name, bytes: text(svg), problem: null };
+  return { name, bytes: text(embedMetadataInSvg(svg, shippedMetadata(meta))), problem: null };
 }
 
 const NOTHING_TRANSFORM: SheetTransform = { strokes: 0, textsOutlined: 0, rescale: null };
@@ -252,7 +276,13 @@ async function refusedPackage(a: SheetPackageArgs, meta: IconMetadata | null, re
   return { files: [], record: { ...record, status: "failed" }, problems: [reason] };
 }
 
-export async function buildSheetPackage(a: SheetPackageArgs, d: SheetPackageDeps = {}): Promise<SheetPackage> {
+/** The builder writes a PNG instead of a JPEG (2026-11-23): the record says JPEG off, the PNG switch is the raster's. */
+const NO_JPEG = (a: SheetPackageArgs): SheetPackageArgs => ({ ...a, settings: { ...a.settings, includeJpeg: false } });
+
+
+export async function buildSheetPackage(given: SheetPackageArgs, d: SheetPackageDeps = {}): Promise<SheetPackage> {
+  const rasterWanted = given.settings.includeJpeg;
+  const a = NO_JPEG(given);
   const meta = acceptedOf(a.metadata);
   // Nothing ticked is not an empty success: say what to pick before any file work (the upload flow's own rule).
   if (!hasOutputFormats(a.settings)) return refusedPackage(a, meta, NO_OUTPUT_FORMATS);
@@ -260,9 +290,10 @@ export async function buildSheetPackage(a: SheetPackageArgs, d: SheetPackageDeps
   if (!prepared.ok) return refusedPackage(a, meta, prepared.reason);
   const worked: SheetPackageArgs = { ...a, svg: prepared.svg };
   const svg: Part = a.settings.includeSvg ? await cleanedSvgFile(a, prepared.svg, meta) : { name: `${a.stem}.svg`, bytes: null, problem: null };
-  const [jpg, eps, png] = await Promise.all([renderJpegFile(worked, d, meta), convertEpsFile(worked, d, meta), renderPngFile(worked, d)]);
+  const jpg: Part = { name: `${a.stem}.jpg`, bytes: null, problem: null };
+  const [eps, png] = await Promise.all([convertEpsFile(worked, d, meta), renderPngFile(worked, d, rasterWanted)]);
   const record = await recordOf(a, { svg, jpg, eps }, meta, prepared);
   const files = [svg, jpg, eps, png].filter((p): p is Part & { bytes: Uint8Array } => p.bytes !== null).map((p) => ({ name: p.name, bytes: p.bytes }));
   files.push({ name: "export.json", bytes: text(serializeExportRecord(record)) });
-  return { files, record, problems: [jpg, eps, png].map((p) => p.problem).filter((p): p is string => p !== null) };
+  return { files, record, problems: [eps, png].map((p) => p.problem).filter((p): p is string => p !== null) };
 }

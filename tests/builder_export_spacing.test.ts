@@ -34,7 +34,8 @@ describe("letter spacing survives into the files", () => {
     for (const run of runs) {
       expect(run.size).toBeGreaterThan(0);
       expect(run.px).toBeGreaterThan(0);
-      expect(run.px).toBeCloseTo(em * run.size, 2); // 7/100 em at the run's own size, in px
+      // 7/100 em at the run's own size, in px — written at RULE 26's one decimal
+      expect(run.px).toBeCloseTo(em * run.size, 1);
     }
     expect(markup).not.toMatch(/letter-spacing="[^"]*em"/); // no em string can be misread as 0
   });
@@ -44,7 +45,7 @@ describe("letter spacing survives into the files", () => {
     expect(em).toBeCloseTo(0.19, 6);
     const runs = runsOf(svg(), "subtitle");
     expect(runs.length).toBeGreaterThan(0);
-    for (const run of runs) expect(run.px).toBeCloseTo(em * run.size, 2);
+    for (const run of runs) expect(run.px).toBeCloseTo(em * run.size, 1); // one decimal (RULE 26)
   });
 
   it("the outliner RECEIVES that px per glyph, not 0 — the reported reset", () => {
@@ -56,7 +57,9 @@ describe("letter spacing survives into the files", () => {
     expect(seen.length).toBeGreaterThan(0);
     for (const run of seen) expect(run.letterSpacing).not.toBe(0);
     const em = titleStyle(BANNER).spacingEm;
-    expect(seen.some((r) => Math.abs(r.letterSpacing - em * r.size) < 0.01)).toBe(true);
+    // The file states the spacing at one decimal, and the outliner is handed
+    // exactly what the file says — never 0, never the em fraction.
+    expect(seen.some((r) => Math.abs(r.letterSpacing - em * r.size) < 0.05)).toBe(true);
   });
 
   it("an EM length from a third-party sheet is resolved against its own font size", () => {
