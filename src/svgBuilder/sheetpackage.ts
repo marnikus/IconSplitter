@@ -12,7 +12,7 @@ import { cleanSheetSvg } from "../lib/svgBuilder/cleansheet";
 import { cleanEpsDocument } from "../lib/upload/epsclean";
 import { expandStrokes } from "../lib/upload/expand";
 import { expandTextToFills } from "../lib/upload/expandtext";
-import { rescaleSvg } from "../lib/upload/rescale";
+import { epsInputSvg, rescaleSvg } from "../lib/upload/rescale";
 import { optimizeSvg, type OptimizeRecord } from "../lib/upload/optimize";
 import { jpegTargetSize } from "../lib/exportformats";
 import { metadataBlock, newExportRecord, serializeExportRecord, type ExportRecord, type OutputRecord } from "../lib/upload/export";
@@ -94,7 +94,8 @@ async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: Ic
   const name = `${a.stem}.eps`;
   if (!a.settings.includeEps || d.eps === undefined) return { name, bytes: null, problem: a.settings.includeEps ? "EPS: no converter" : null };
   try {
-    const out = await d.eps({ svg: solidPaint(a.svg), background: flattenColor(sizeOf(a.svg).background), title: name, createdAt: a.now });
+    // a rescaled page is the target in POINTS — what Illustrator and the stocks count as px (2026-11-23)
+    const out = await d.eps({ svg: epsInputSvg(solidPaint(a.svg), a.settings.rescaleArtboard), background: flattenColor(sizeOf(a.svg).background), title: name, createdAt: a.now });
     // The EPS is written from the CLEANED sheet above, so the artwork is already
     // clean; this strips the PostScript paperwork a converter adds (`%%Creator`,
     // `%%CreationDate`, `%ADO_*`, a second metadata carrier) and leaves exactly

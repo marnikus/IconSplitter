@@ -111,8 +111,8 @@ describe("the builder package follows the format options", () => {
     };
     expect(await box({})).toEqual([150, 75]); // 200 × 100 px = 150 × 75 pt
     const [w, h] = await box({ rescaleArtboard: true, rescaleMegapixels: 1 });
-    expect(w).toBeCloseTo(1414 * 0.75, 0); // the 1 MP artboard, 1414 × 707 px
-    expect(h).toBeCloseTo(707 * 0.75, 0);
+    expect(w).toBeCloseTo(1414, 0); // the 1 MP target, in points (Illustrator's px): 1414 × 707
+    expect(h).toBeCloseTo(707, 0);
   });
 
   it("ships nothing but a named problem when an expansion is refused", async () => {

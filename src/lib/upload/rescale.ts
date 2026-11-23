@@ -73,3 +73,24 @@ export function rescaleSvg(svg: string, o: RescaleOptions): RescaleResult {
   root.setAttribute("height", String(height));
   return { ok: true, svg: new XMLSerializer().serializeToString(root), factor };
 }
+
+/** EPS points per CSS px — what both EPS converters map a document's px size by. */
+const PT_PER_PX = 0.75;
+
+/**
+ * The document an EPS converter gets (2026-11-23). An EPS page is measured in
+ * points, and Illustrator and the stock sites count one point as one px — so
+ * after "Rescale artboard to MP" the page must be the rescale target in POINTS.
+ * Both converters map px to pt by 0.75 (the built-in writer and Inkscape), so
+ * the root's px size is handed over × 4/3; the viewBox and drawing stay. Without
+ * a rescale the document goes as it is.
+ */
+export function epsInputSvg(svg: string, rescaled: boolean): string {
+  if (!rescaled) return svg;
+  const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+  const w = num(root.getAttribute("width")), h = num(root.getAttribute("height"));
+  if (root.nodeName.toLowerCase() !== "svg" || w === null || h === null) return svg;
+  root.setAttribute("width", String(Number((w / PT_PER_PX).toFixed(3))));
+  root.setAttribute("height", String(Number((h / PT_PER_PX).toFixed(3))));
+  return new XMLSerializer().serializeToString(root);
+}

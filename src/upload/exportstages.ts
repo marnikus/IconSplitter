@@ -3,6 +3,7 @@
 // planner's rebuild flags. The artifacts are built BEFORE any validation or
 // commit, so a failed stage never touches the last valid package.
 
+import { epsInputSvg } from "../lib/upload/rescale";
 import { verifyEpsDocument } from "../lib/upload/eps";
 import { prepareExportSvg, type PrepareResult } from "../lib/upload/prepare";
 import { warmTextFonts } from "../lib/upload/textoutline";
@@ -131,7 +132,8 @@ async function buildJpegArtifact(plan: StagePlan, ctx: StageContext, art: Artifa
 async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   const converter = CONVERTERS[ctx.settings.epsConverter]; // the setting's choice (2026-10-09)
   const eps = await converter.convert({
-    svg: art.optimizedSvg as string, background: flattenColor(ctx.settings.background),
+    // a rescaled page is the target in POINTS — what Illustrator and the stocks count as px (2026-11-23)
+    svg: epsInputSvg(art.optimizedSvg as string, ctx.settings.rescaleArtboard), background: flattenColor(ctx.settings.background),
     title: `${ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
   }, ctx.converter, ctx.signal);
   if (eps.ok) {

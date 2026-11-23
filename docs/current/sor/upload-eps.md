@@ -41,7 +41,7 @@ record and Download all. Converter selection remains explicit.
   SVG, `writer: "inkscape-cli@<version>"`). `epsConverter` is NOT in the settings
   fingerprint: switching rebuilds the EPS only, and choosing a converter never
   toggles `includeEps`.
-  It treats the prepared `viewBox` at the root's px size (a rescale grows it, 2026-11-23) as the artboard: `%%HiResBoundingBox` exact,
+  It treats the prepared `viewBox` at the root's px size as the artboard (rescaled: the target in pt, `epsInputSvg`): `%%HiResBoundingBox` exact,
   `%%BoundingBox` rounded outward, Illustrator's `%AI5_ArtSize: height width`
   and centered `%AI3_TemplateBox` from the HiRes box, the upright transform
   anchored to it, and no `%%PageBoundingBox` (EPS, not a page). Writer ID

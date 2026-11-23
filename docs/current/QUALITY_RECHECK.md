@@ -6142,3 +6142,8 @@ strictly inside).
 
 - 39753d92 removed the JPEG and its size rows and left a fixed 2× PNG; the ask was to REPLACE the JPEG with a PNG. Now the shared format sheet takes `raster="png"` (Export PNG / PNG (MP) / same size as the artboard, notes and warning name PNG, no quality row); the package renders its PNG with `jpegTargetSize` (artboard after any rescale, or the MP) when the raster switch is on, and writes no JPEG (`export.json` JPEG off). The upload tab's JPEG rows are unchanged.
 - Measured: builder package / format / settings UI + shared sheet tests 31/31; related suites 2002 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc, eslint, `quality:changed --base HEAD` PASS.
+
+## 2026-11-23 — EPS page = the rescale target in points
+
+- After "Rescale artboard to MP" the EPS page was the target × 0.75 (px → pt), so a 16 MP target came out ≈ 9 MP as Illustrator / the stocks count it (1 pt = 1 px). `rescale.ts` `epsInputSvg` hands both converters the root px size × 4/3 when the rescale is on (viewBox and drawing untouched); used by the builder package and the upload export. No rescale: unchanged.
+- Measured: `eps_rescale_target` 4/4 (2000×1000 @ 16 MP → 5657×2828 pt; 4 / 9 / 25 MP within 0.5 %; failed at 4242 pt before, mutation-witnessed); EPS / upload / export / stock suites 1681 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc, eslint, `quality:changed --base HEAD` PASS.
