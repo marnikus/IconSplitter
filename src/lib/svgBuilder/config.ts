@@ -14,7 +14,7 @@ export const DEFAULT_CONFIG: SheetConfig = {
   artboard: { width: 1080, height: 660, background: "#F4F0E7", padding: 34, radius: 0 },
   grid: { columns: 8, rows: 4, gapX: 22, gapY: 18, captions: true,
     captionColor: "#787A6C", captionSize: 9, captionCase: "upper", captionGap: 0 },
-  icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round" },
+  icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round", coloredStroke: "", coloredStrokeWidth: 0, coloredFill: "" },
   banner: { position: "left", size: 242, background: "#17271F", accent: "#D9F36C",
     textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid",
     title: "ICON SHEET", subtitle: "Editable stroke width",
@@ -100,7 +100,13 @@ function parseIcons(raw: unknown): SheetConfig["icons"] {
   const d = DEFAULT_CONFIG.icons;
   if (!isRecord(raw)) return { ...d };
   return { box: num(RANGES.box, raw.box, d.box), strokeWidth: num(RANGES.strokeWidth, raw.strokeWidth, d.strokeWidth),
-    color: hex(raw.color, d.color), linecap: oneOf(raw.linecap, ["round", "square"], d.linecap) as "round" | "square" };
+    color: hex(raw.color, d.color), linecap: oneOf(raw.linecap, ["round", "square"], d.linecap) as "round" | "square",
+    coloredStroke: hex(raw.coloredStroke, ""), coloredStrokeWidth: ownWidth(raw.coloredStrokeWidth), coloredFill: hex(raw.coloredFill, "") };
+}
+
+/** A colored-icon stroke width (2026-11-23): 0 (or anything not a positive number) = each icon's own; else clamped to the stroke range. */
+function ownWidth(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? clampTo(RANGES.strokeWidth, value) : 0;
 }
 
 const CASES = ["normal", "capitalized", "upper"];

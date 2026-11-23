@@ -10,7 +10,7 @@ import { cleanHex, smartSwatches } from "../lib/svgBuilder/swatches";
 import { bothScale, withBothScale } from "../lib/svgBuilder/herosize";
 import { RANGES } from "../lib/svgBuilder/ranges";
 import type { TitleFace , TextCase } from "../lib/svgBuilder/types";
-import { QUICK_SPECS, quickTargetOf, slotValue, withSlot, type ColorSlot, type QuickKind, type SizeSlot } from "./quickedit";
+import { QUICK_SPECS, isIconKind, quickTargetOf, slotValue, withSlot, type ColorSlot, type QuickKind, type QuickSpec, type SizeSlot } from "./quickedit";
 import type { BuilderApi } from "./useSvgBuilder";
 import SvgBuilderTextMove from "./SvgBuilderTextMove";
 import { anchorOf } from "./quickplace";
@@ -18,7 +18,7 @@ import { canRebalance, isColumn, rebalanceSpan, rebalancedBanner } from "../lib/
 import RowProportions from "./SvgBuilderRowProportions";
 import SvgBuilderTextWidth from "./SvgBuilderTextWidth";
 
-type Panel = "color" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | "box" | "rebalance" | null;
+type Panel = "color" | "fill" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | "box" | "rebalance" | null;
 interface Hover { kind: QuickKind; el: Element }
 
 const FACES: ReadonlyArray<{ value: TitleFace; label: string }> = [
@@ -128,8 +128,8 @@ function IconEditButton({ b, el }: { b: BuilderApi; el: Element }) {
 function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKind; panel: Panel; el: Element; toggle: (p: Exclude<Panel, null>) => void }) {
   const spec = QUICK_SPECS[kind];
   return <div className="bld-quick-bar" role="toolbar" aria-label={`Quick edit: ${spec.name}`}>
-    <button type="button" className="bld-quick-dot" data-testid="builder-quick-color" title={spec.color.label} aria-label={spec.color.label}
-      style={{ background: String(slotValue(b.config, spec.color)) }} onClick={() => toggle("color")} />
+    <ColorDot b={b} slot={spec.color} testid="builder-quick-color" ring={spec.fill !== undefined} onClick={() => toggle("color")} />
+    {spec.fill && <ColorDot b={b} slot={spec.fill} testid="builder-quick-fill" ring={false} onClick={() => toggle("fill")} />}
     {spec.stroke && <button type="button" className="bld-quick-btn" data-testid="builder-quick-stroke" title={spec.stroke.label}
       aria-label={spec.stroke.label} onClick={() => toggle("stroke")}>≡</button>}
     {spec.text && <button type="button" className="bld-quick-btn bld-quick-a" data-testid="builder-quick-text" title="Font and size"
@@ -140,7 +140,7 @@ function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKi
     {kind === "hero" && <HeroButtons toggle={toggle} />}
     {spec.box && <button type="button" className="bld-quick-btn" data-testid="builder-quick-box" title={spec.box.label}
       aria-label={spec.box.label} onClick={() => toggle("box")}>⬚</button>}
-    {kind === "icon" && <IconEditButton b={b} el={el} />}
+    {isIconKind(kind) && <IconEditButton b={b} el={el} />}
     {offersRebalance(b, kind) && <button type="button" className="bld-quick-btn" data-testid="builder-quick-rebalance"
       title="Rebalance the row: one line each, equal gaps" aria-label="Rebalance the banner row" onClick={() => toggle("rebalance")}>⇔</button>}
   </div>;
@@ -148,9 +148,13 @@ function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKi
 
 interface MoveCtx { board: RefObject<HTMLDivElement | null>; wrap: RefObject<HTMLDivElement | null>; anchor: { x: number; y: number } }
 
+/** The colour a panel edits: the element's colour, or a colored icon's fill colour (2026-11-23). */
+const colorSlotOf = (spec: QuickSpec, panel: Panel): ColorSlot | undefined => (panel === "color" ? spec.color : panel === "fill" ? spec.fill : undefined);
+
 function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: QuickKind; panel: Panel; done: () => void; move: MoveCtx }) {
   const spec = QUICK_SPECS[kind];
-  if (panel === "color") return <ColorPanel b={b} slot={spec.color} onDone={done} />;
+  const color = colorSlotOf(spec, panel);
+  if (color !== undefined) return <ColorPanel b={b} slot={color} onDone={done} />;
   if (panel === "stroke" && spec.stroke) return <SizePanel b={b} slot={spec.stroke} testid="builder-quick-stroke-range" />;
   if (panel === "box" && spec.box) return <SizePanel b={b} slot={spec.box} testid="builder-quick-box-range" />;
   if (panel === "rebalance" && offersRebalance(b, kind)) return <RebalancePanel b={b} />;
@@ -200,14 +204,28 @@ function HeroPanel({ b, panel }: { b: BuilderApi; panel: "ring" | "scale" }) {
   </div>;
 }
 
+/** The toolbar's colour button: the colour, or a many-coloured dot while each icon keeps its OWN (2026-11-23); a ring = a stroke colour. */
+function ColorDot({ b, slot, testid, ring, onClick }: { b: BuilderApi; slot: ColorSlot; testid: string; ring: boolean; onClick: () => void }) {
+  const value = String(slotValue(b.config, slot));
+  return <button type="button" className={`bld-quick-dot${value === "" ? " is-own" : ""}${ring ? " is-ring" : ""}`} data-testid={testid}
+    title={value === "" && slot.own ? `${slot.label}: ${slot.own}` : slot.label} aria-label={slot.label}
+    style={value === "" ? undefined : ring ? { borderColor: value } : { background: value }} onClick={onClick} />;
+}
+
+/** Where the swatches start while each icon keeps its own colour. */
+const OWN_START = "#7A869A";
+
 function ColorPanel({ b, slot, onDone }: { b: BuilderApi; slot: ColorSlot; onDone: () => void }) {
-  const current = String(slotValue(b.config, slot)).toUpperCase();
-  const [hex, setHex] = useState(current);
-  useEffect(() => { setHex(current); }, [current]);
-  const set = (value: string, gesture = false) => b.actions.setConfig(withSlot(b.config, slot, value), slot.label, gesture);
-  const commitHex = () => { const clean = cleanHex(hex); if (clean !== null && clean !== current) set(clean); else setHex(current); };
+  const value = String(slotValue(b.config, slot)).toUpperCase();
+  const own = slot.own !== undefined && value === "";
+  const current = own ? OWN_START : value;
+  const [hex, setHex] = useState(value);
+  useEffect(() => { setHex(value); }, [value]);
+  const set = (next: string, gesture = false) => b.actions.setConfig(withSlot(b.config, slot, next), slot.label, gesture);
+  const commitHex = () => { const clean = cleanHex(hex); if (clean !== null && clean !== value) set(clean); else setHex(value); };
   return <div className="bld-quick-panel" data-testid="builder-quick-color-panel">
     <b className="bld-quick-title">{slot.label}</b>
+    {slot.own !== undefined && <OwnRow own={own} label={slot.own} testid="builder-quick-own" onOwn={() => set("")} />}
     <div className="bld-quick-swatches">
       {smartSwatches(current).map((c) => <button type="button" key={c} className="bld-quick-dot" data-testid={`builder-quick-swatch-${c.slice(1)}`}
         style={{ background: c }} title={c} aria-label={`Use ${c}`} onClick={() => set(c)} />)}
@@ -224,10 +242,19 @@ function ColorPanel({ b, slot, onDone }: { b: BuilderApi; slot: ColorSlot; onDon
   </div>;
 }
 
+/** "Own …" while each icon keeps its own paint; else ↺ puts the icons' own paint back (2026-11-23). */
+function OwnRow({ own, label, testid, onOwn }: { own: boolean; label: string; testid: string; onOwn: () => void }) {
+  return own ? <span className="bld-quick-own-note" data-testid={`${testid}-note`}>{label}</span>
+    : <button type="button" className="svg-btn tiny" data-testid={testid} onClick={onOwn}>↺ {label}</button>;
+}
+
 function SizePanel({ b, slot, testid }: { b: BuilderApi; slot: SizeSlot; testid: string }) {
-  const value = Number(slotValue(b.config, slot));
+  const raw = Number(slotValue(b.config, slot));
+  const own = slot.own !== undefined && raw === 0;
+  const value = own ? b.config.icons.strokeWidth : raw; // an own width starts the slider at the outlined icons' pen
   return <div className="bld-quick-panel" data-testid={`${testid}-panel`}>
-    <div className="bld-quick-row"><b className="bld-quick-title">{slot.label}</b><span className="bld-quick-value">{value} {slot.unit}</span></div>
+    <div className="bld-quick-row"><b className="bld-quick-title">{slot.label}</b><span className="bld-quick-value">{own ? slot.own : `${value} ${slot.unit}`}</span></div>
+    {slot.own !== undefined && !own && <OwnRow own={false} label={slot.own} testid={`${testid}-own`} onOwn={() => b.actions.setConfig(withSlot(b.config, slot, 0), slot.label)} />}
     <input type="range" className="bld-range" data-testid={testid} aria-label={slot.label} min={slot.range.min} max={slot.range.max} step={slot.range.step}
       value={value} onChange={(e) => b.actions.setConfig(withSlot(b.config, slot, Number(e.target.value)), slot.label, true)} />
     <div className="bld-quick-row bld-quick-ends"><span>{slot.range.min}</span><span>{slot.range.max}</span></div>

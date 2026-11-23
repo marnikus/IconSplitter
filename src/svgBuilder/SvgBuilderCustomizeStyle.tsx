@@ -7,6 +7,7 @@ import type { Edit } from "./SvgBuilderCustomize";
 import { ColorChip, Field, Section, Segmented, Slider, Swatches, TextBox, Toggle, type SegOption } from "./SvgBuilderFields";
 import type { BuilderApi } from "./useSvgBuilder";
 import TextPlacement from "./SvgBuilderTextPlacement";
+import ColoredIconStyle from "./SvgBuilderColoredStyle";
 
 /** Banner text case (2026-11-15). */
 const CASE_OPTIONS = [{ value: "normal" as const, label: "Aa normal" }, { value: "capitalized" as const, label: "Capitalized" }, { value: "upper" as const, label: "UPPER" }];
@@ -20,8 +21,10 @@ const FACES: readonly SegOption<TitleFace>[] = [
   { value: "sans", label: "Aa Grotesk" }, { value: "serif", label: "Aa Editorial" }, { value: "mono", label: "Aa Mono" },
 ];
 
-export function IconStyleSection({ c, edit }: { c: SheetConfig; edit: Edit }) {
+/** `styled`: the library has colored icons (2026-11-23) — their own block shows (also while any of its settings is in use). */
+export function IconStyleSection({ c, edit, styled }: { c: SheetConfig; edit: Edit; styled: boolean }) {
   const i = c.icons;
+  const colored = styled || i.coloredStroke !== "" || i.coloredFill !== "" || i.coloredStrokeWidth > 0;
   return <Section title="Icon style" badge="fit to box" testid="builder-section-icons">
     <p className="bld-info">☰ Proportional fit · stroke-aware bounds</p>
     <Slider label="Icon box" value={i.box} range={RANGES.box} testid="builder-icon-box" display={`${i.box} × ${i.box} px`}
@@ -33,6 +36,7 @@ export function IconStyleSection({ c, edit }: { c: SheetConfig; edit: Edit }) {
       <Segmented label="Line ends" value={i.linecap} testid="builder-linecap"
         options={[{ value: "round", label: "Round" }, { value: "square", label: "Square" }]} onChange={(linecap) => edit("icons", { linecap })} />
     </Field>
+    {colored && <ColoredIconStyle i={i} edit={edit} />}
     <p className="bld-hint">Every glyph is scaled inside its box. Strokes never cross the edge.</p>
   </Section>;
 }

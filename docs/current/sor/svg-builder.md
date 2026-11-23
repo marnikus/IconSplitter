@@ -8,7 +8,7 @@ Folder bar (Open folder, Rescan, scope, approved count, audit, path) → **metad
 
 ## Behaviour
 
-- **Discovery**: `discoverBuilderAssets(root)` reads all folders and registers only valid approved SVG versions; problems are reported, never substituted. Thumbnails are drawn stroke-only with the same sanitiser/recolour as the artboard.
+- **Discovery**: `discoverBuilderAssets(root)` reads all folders and registers only valid approved SVG versions; problems are reported, never substituted. Thumbnails use the artboard's recolour (colored icons: [own paints](svg-builder-styles.md)).
 - **Export metadata** (2026-11-07): when `<pair-folder>/export/export.json` names this pair and has a title, the **title is the icon's name** (library, tooltip); **captions show the one-word Icon Name** (`metadata.name`, cleaned like the Upload tab; fallback: the title, else the file name — `captionOf`, 2026-11-13) and the title, description and tags all become searchable, scorable tags. Search matches name, category, description and tags (leading `#` stripped). Tags shared by ≥ 2 icons (generic stock tags excluded) become `#tag (N)` Similar profiles, so the threshold works on them. Missing, corrupt or foreign records keep the file-name fallback; the audit line counts icons "with export metadata".
 - **Auto placement**: the first scan with an empty sheet draws the current recipe once (no undo entry); ids that vanished from a rescan are pruned.
 - **Cells** = columns × rows, always. Empty cells show dashed `+` placeholders (preview only). Shrinking the grid truncates the selection; growing appends seeded picks (seed + capacity), seed unchanged.

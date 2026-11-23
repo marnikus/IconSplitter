@@ -1,14 +1,14 @@
 // svgAsset.ts — turns one approved SVG file into a safe, fitted cell group.
 // Reuses the app's validated preview sanitizer, then recolours the artwork for
-// the sheet. Preview, artboard and export all use this same source.
+// the sheet: a line-stroke icon is drawn stroke-only in the sheet's ink and pen;
+// an icon of a registered style (`~colored_wiggle`, 2026-11-23) keeps its own
+// strokes and fills (stylepaint.ts). Preview, artboard and export all use this.
 import { buildSvgPreview } from "../svgpreview";
 import { validateSvg } from "../svgvalidate";
 import { fnv1a32 } from "../pairing";
+import { isStyledIcon } from "./iconstyles";
+import { DRAWABLE, OPACITY, UNSAFE, markPaints, paintsOf } from "./stylepaint";
 import type { BuilderIconAsset, CellFrame, SheetConfig } from "./types";
-
-const DRAWABLE = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "use"]);
-const OPACITY = ["opacity", "fill-opacity", "stroke-opacity"];
-const UNSAFE = new Set(["script", "foreignobject", "handler", "listener", "iframe", "object", "embed"]);
 
 export interface CellSvgArgs {
   code: string;
@@ -59,7 +59,8 @@ function sanitize(code: string, assetId: string, index: number): Sanitized {
   const box = viewBoxOf(preview.viewBox);
   if (box === null) return { ok: false, error: "approved SVG has no usable viewBox" };
   scopeLocalIds(root, `b${fnv1a32(`${assetId}:${index}`).toString(16)}`);
-  recolor(root);
+  if (isStyledIcon(assetId)) markPaints(root);
+  else recolor(root);
   return { ok: true, children: childrenOf(root), box };
 }
 
@@ -67,19 +68,30 @@ export function cellGroupOf(args: CellSvgArgs): CellSvgResult {
   const s = sanitizedOf(args.code, args.asset.id, args.frame.index);
   if (!s.ok) return s;
   const placed = placementOf(args.frame, s.box);
-  return { ok: true, html: groupOf(args, s.children, s.box, placed) };
+  const html = isStyledIcon(args.asset.id) ? styledGroupOf(args, s.children, s.box, placed) : groupOf(args, s.children, s.box, placed);
+  return { ok: true, html };
+}
+
+/** The marks every cell group carries: which icon, that it is approved, which cell, where. */
+function cellMarks(args: CellSvgArgs, placed: Placement): string[] {
+  return [`data-asset-id="${attr(args.asset.id)}"`, 'data-approved="true"', `data-cell-index="${args.frame.index}"`, `transform="${placed.transform}"`];
 }
 
 function groupOf(args: CellSvgArgs, children: string, box: readonly number[], placed: Placement): string {
   const style = args.style;
   const attrs = [
-    `data-asset-id="${attr(args.asset.id)}"`, 'data-approved="true"',
-    `data-cell-index="${args.frame.index}"`, `transform="${placed.transform}"`,
+    ...cellMarks(args, placed),
     'fill="none"', 'stroke="currentColor"', `color="${attr(style.color)}"`,
     `stroke-width="${penWidth(style.strokeWidth, placed.scale)}"`, `stroke-linecap="${style.linecap}"`,
     `stroke-linejoin="${style.linecap === "square" ? "miter" : "round"}"`, `data-view-box="${attr(box.join(" "))}"`,
   ];
   return `<g ${attrs.join(" ")}>${children}</g>`;
+}
+
+/** A colored icon's group (2026-11-23): no stroke-only paint of its own — each element paints itself, the sheet's settings filled in. */
+function styledGroupOf(args: CellSvgArgs, children: string, box: readonly number[], placed: Placement): string {
+  const attrs = [...cellMarks(args, placed), `color="${attr(args.style.color)}"`, `data-view-box="${attr(box.join(" "))}"`];
+  return `<g ${attrs.join(" ")}>${paintsOf(children, args.style, (width) => penWidth(width, placed.scale))}</g>`;
 }
 
 function childrenOf(root: Element): string {

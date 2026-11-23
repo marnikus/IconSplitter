@@ -80,6 +80,8 @@ export interface SheetConfig {
   };
   icons: {
     box: number; strokeWidth: number; color: string; linecap: "round" | "square";
+    /** Icons of a registered style (`~colored_wiggle`, 2026-11-23): "" / 0 = each icon's own; else their strokes' colour and width, their fills' colour. */
+    coloredStroke: string; coloredStrokeWidth: number; coloredFill: string;
   };
   banner: {
     position: BannerPosition; size: number; background: string; accent: string;

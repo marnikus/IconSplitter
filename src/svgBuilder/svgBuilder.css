@@ -458,3 +458,11 @@
 .bld-editing-step { min-height: 36px; min-width: 30px; padding: 0 8px; font-size: 11px; line-height: 1; }
 .bld-editing-step:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .bld-editing-step:last-child { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+/* Colored icons in the quick toolbar (2026-11-23): a ring = the stroke colour, a dot = the fill colour; many colours = each icon keeps its own. */
+.bld-quick-dot.is-ring { background: transparent; border-width: 4px; }
+.bld-quick-dot.is-own { background: conic-gradient(#e5484d, #f5a623, #46a758, #3e63dd, #8e4ec6, #e5484d); }
+.bld-quick-dot.is-ring.is-own { background: transparent; border-color: #f5a623 #46a758 #3e63dd #e5484d; }
+.bld-quick-own-note { font-size: 10px; color: var(--v2-muted, #9aa3b5); }
+/* "Colored icons" under Icon style (2026-11-23). */
+.bld-colored { display: grid; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--v2-line, #2a3142); }
+.bld-own-row { display: flex; align-items: center; gap: 8px; }

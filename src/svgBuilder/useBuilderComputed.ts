@@ -2,7 +2,7 @@
 // ids to the library, layout, repository and the composition that gets exported.
 import { useEffect, useMemo } from "react";
 import { categoriesOf, filterAssets, profilesOf } from "../lib/svgBuilder/assets";
-import { ALL_STYLES, allowedAssets, styleLabel, styleOptions } from "../lib/svgBuilder/iconstyles";
+import { ALL_STYLES, allowedAssets, isStyledIcon, styleLabel, styleOptions } from "../lib/svgBuilder/iconstyles";
 import { multiText } from "../lib/multifilter";
 import { computeLayout } from "../lib/svgBuilder/layout";
 import { composeSheet } from "../lib/svgBuilder/compose";
@@ -33,6 +33,8 @@ export interface BuilderComputed extends IconIndexView {
   /** The STYLES dropdown's [value, label] options, and what it says now. */
   styleOptions: ReadonlyArray<readonly [string, string]>;
   styleSummary: string;
+  /** The library has icons of a registered style (Colored wiggle …): their own settings show (2026-11-23). */
+  hasStyled: boolean;
   visibleAssets: readonly BuilderIconAsset[];
   categories: readonly string[];
   profiles: readonly BuilderProfile[];
@@ -70,7 +72,8 @@ function useStyleFilter(assets: readonly BuilderIconAsset[], want: BuilderModel[
   const pickable = useMemo(() => allowedAssets(assets, want), [assets, want]);
   const options = useMemo(() => styleOptions(assets, want), [assets, want]);
   const styleSummary = useMemo(() => multiText(want, ALL_STYLES, styleLabel) || "All styles", [want]);
-  return { pickable, styleOptions: options, styleSummary };
+  const hasStyled = useMemo(() => assets.some((a) => isStyledIcon(a.id)), [assets]);
+  return { pickable, styleOptions: options, styleSummary, hasStyled };
 }
 
 interface StageArgs {

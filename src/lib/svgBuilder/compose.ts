@@ -94,7 +94,8 @@ function heroPainter(args: ComposeSheetArgs, ids: readonly string[]): HeroPainte
   return (x, y, size, ink) => {
     if (asset === undefined || typeof code !== "string" || code === "") return "";
     const frame: CellFrame = { index: -1, x, y, size, glyph: size, captionY: 0, captionSize: 0 };
-    const cell = cellGroupOf({ code, asset, frame, style: { ...args.config.icons, color: ink, strokeWidth: args.config.banner.heroStroke } });
+    const pen = args.config.banner.heroStroke; // a colored hero (2026-11-23): its strokes take the ink and pen too; its fills stay its own
+    const cell = cellGroupOf({ code, asset, frame, style: { ...args.config.icons, color: ink, strokeWidth: pen, coloredStroke: ink, coloredStrokeWidth: pen } });
     return cell.ok ? cell.html : "";
   };
 }
