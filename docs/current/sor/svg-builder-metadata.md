@@ -11,10 +11,10 @@ Since 2026-11-14 the builder's metadata is the **same system as the SVG to uploa
   - Older saves are read with `subtitle` → `description` and `keywords` → `tags`.
 - **Prompt**: `DEFAULT_SHEET_PROMPT` is the stock prompt. It asks for Title 1, Title 2, Title, Description, Tags and **Title-Artboard**. A saved copy of the old JSON prompt is replaced with it on read (`isLegacySheetPrompt`).
 - **Image** (`lib/svgBuilder/metaimage.ts`, `metaimagefor.ts`, `preview.ts` `sheetPngFor`):
-  - the sheet's **icons only**: the banner strip is cut off and the banner turned off, so the icon grid keeps its exact size;
+  - the sheet's **icons only**: the banner strip is cut off and the banner turned off, so the icon grid keeps its exact size — or, with **Send the whole sheet with its banner** ticked in the confirmation (2026-11-23, `builder-meta-full-sheet`, pref `metaFullSheet`, default off), the whole sheet; ticking it draws the exact images again before anything is sent;
   - rendered by the PNG export's renderer (`exporter.ts` `sheetPngBlob`) as **one PNG of at most 1 megapixel** (`megapixelSize`);
   - shown in the confirmation and sent unchanged.
-- **Answer** (`parseSheetAnswer`): Title, Description and Tags become the metadata. **Title-Artboard** (2–5 words) is not metadata: it becomes the artboard's **visible banner title**, and the subtitle becomes the default phrase "Editable stroke width".
+- **Answer** (`parseSheetAnswer`): Title, Description and Tags become the metadata. **Title-Artboard** (2–5 words) is not metadata: it becomes the artboard's **visible banner title**, and the subtitle becomes the default phrase "Editable stroke width" — unless **Put the answer's title on the banner** is unticked in the confirmation (2026-11-23, `builder-meta-title-banner`, pref `metaTitleToBanner`, default on): then only the metadata is filled and the banner words stay. Both choices are in the sheet's and the artboards' confirmations (`SvgBuilderMetaOptions.tsx`) and remembered.
   - On artboards (✦ Generate metadata, `withSheetAnswer`) this happens at once. An artboard open on the stage gets the same words and metadata there, so it shows no unsaved change.
   - For the current sheet the answer is **applied at once** (2026-11-15: no draft step, no Accept draft button). It is accepted when it passes the upload rules, else kept as invalid with its errors in the editor. The Title-Artboard goes onto the banner as one undo step, and the confirmation closes.
 - **Banner text**: metadata never replaces the banner words any more (`sheetCopy`). The SVG's hidden `<title>` uses the accepted metadata title, and `<desc>` holds the description and tags.
@@ -45,7 +45,7 @@ _artboard_sheets/<YYYY-MM>/<YYYY-MM-DD>/<template>/
   - With no folder open, nothing is written yet: the folder is made the first time one of its artboards is written.
   - The template remembers its folder (`SheetTemplate.folder`, validated on read).
 - **Artboard folders** sit inside their template's folder: `artboard_<NN>_<its title>`, where NN is its "#N" and the title is its Title-Artboard after generation (`artboardFolder`). The artboard remembers its folder (`FinalArtboard.folder`), so later saves land in the same place even after a rename.
-- **When metadata is generated** (✦ Generate metadata): the variant folder is created with `metadata.json` (Title, Description, Tags, Title-Artboard, validation, prompt, model) and `preview.png`, the exact icons-only image that was sent (`sheetwriter.ts`).
+- **When metadata is generated** (✦ Generate metadata): the variant folder is created with `metadata.json` (Title, Description, Tags, Title-Artboard, validation, prompt, model) and `preview.png`, the exact image that was sent (`sheetwriter.ts`).
 - **⇪ Export all selected** (header, `builder-export-selected`): exports the checked artboards (else the open one), from their **saved** state. Each one goes into `…/artboard_variant_<N>/export/` (`actions/sheetexport.ts`, `sheetpackage.ts`):
   - `<stem>.svg` with the metadata embedded, where `<stem>` is the sheet folder name + `_v<N>`;
   - `<stem>.jpg` at the Upload settings' megapixels, with XMP metadata;

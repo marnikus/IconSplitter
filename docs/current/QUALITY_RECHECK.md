@@ -6122,3 +6122,8 @@ strictly inside).
 
 - New list-head button resets the look of every checked artboard in view that has overrides; the row's ↺ Template goes the same way. One `builderArtboards` undo step with only those artboards (`removal.ts` `replaceSides`: out + back at the same place); the open artboard's stage look swaps quietly (`showLookOf`), and undo / redo swap it back (`sheetlists.ts` `followedReplaced`).
 - Measured: artboard suite 27/27 incl. the new bulk test (the undo look swap mutation-witnessed); builder suites 46 files / 319 tests; tsc, eslint (0 errors, no new warnings), `quality:changed --base HEAD` PASS.
+
+## 2026-11-23 — SVG builder: metadata confirmation choices (whole sheet / title onto the banner)
+
+- Two remembered prefs (`metaFullSheet` off, `metaTitleToBanner` on = the old behaviour) with checkboxes in both confirmations (`SvgBuilderMetaOptions.tsx`); `iconsImageFor({ full })`; ticking "whole sheet" redraws the exact requests (bulk plans keep their `ids`); `withSheetAnswer(…, toBanner)` and the sheet's `applyAnswer` leave the banner words when unticked.
+- Measured: `svg_builder_meta_options` 4/4, `svg_builder_meta_autoapply` 2/2 (the title switch mutation-witnessed); builder suites pass; tsc, eslint (0 errors), `quality:changed --base HEAD` PASS.

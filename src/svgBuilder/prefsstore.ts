@@ -33,9 +33,12 @@ export interface BuilderPrefs {
   guideOpacity: number;
   /** Which icon styles may be in sheets (2026-11-23, lib/svgBuilder/iconstyles.ts): "all", one, or several. */
   styles: Multi<string>;
+  /** Metadata requests (2026-11-23): send the whole sheet with its banner (else only the icons); the answer's title replaces the banner words (else only the metadata). */
+  metaFullSheet: boolean;
+  metaTitleToBanner: boolean;
 }
 
-export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true, showGuides: false, guideOpacity: 70, styles: ALL_STYLES };
+export const DEFAULT_BUILDER_PREFS: BuilderPrefs = { zoom: 1, fit: true, providerOpen: true, layout: "editorial", metaOpen: true, metaHeight: null, showScores: true, scoreOpacity: 100, templateZoom: 140, showUsage: true, showGuides: false, guideOpacity: 70, styles: ALL_STYLES, metaFullSheet: false, metaTitleToBanner: true };
 export const META_HEIGHT = { min: 160, max: 1200 } as const;
 const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain", "line", "custom"];
 
@@ -55,6 +58,8 @@ export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
     guideOpacity: Math.round(num(raw.guideOpacity, 70, 1, 100)),
     metaHeight: typeof raw.metaHeight === "number" ? num(raw.metaHeight, 0, META_HEIGHT.min, META_HEIGHT.max) || null : null,
     styles: parseStyleFilter(raw.styles),
+    metaFullSheet: raw.metaFullSheet === true,
+    metaTitleToBanner: raw.metaTitleToBanner !== false,
   };
 }
 

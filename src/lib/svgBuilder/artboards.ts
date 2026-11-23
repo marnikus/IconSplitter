@@ -65,8 +65,10 @@ export function newArtboard(template: SheetTemplate, artboards: readonly FinalAr
  * its VISIBLE words — Title-Artboard as the banner title (kept when the answer
  * had none) and the default subtitle phrase.
  */
-export function withSheetAnswer(artboard: FinalArtboard, answer: { metadata: SheetMetadata; artboardTitle: string }): FinalArtboard {
-  return { ...artboard, metadata: answer.metadata, ...(answer.artboardTitle === "" ? {} : { title: answer.artboardTitle, subtitle: DEFAULT_ARTBOARD_SUBTITLE }) };
+/** `toBanner` false (2026-11-23): only the metadata — the artboard's words stay as they are. */
+export function withSheetAnswer(artboard: FinalArtboard, answer: { metadata: SheetMetadata; artboardTitle: string }, toBanner = true): FinalArtboard {
+  const words = toBanner && answer.artboardTitle !== "" ? { title: answer.artboardTitle, subtitle: DEFAULT_ARTBOARD_SUBTITLE } : {};
+  return { ...artboard, metadata: answer.metadata, ...words };
 }
 
 /** One artboard without the icons `known` does not have; the same object when nothing changes. */

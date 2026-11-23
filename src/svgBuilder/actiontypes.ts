@@ -126,6 +126,8 @@ export interface BuilderActions {
   resetArtboardLook: (id: string) => void;
   /** ↺ Template (N) (2026-11-23): the checked artboards with own look changes follow their templates again — one undo step. */
   resetArtboardLooks: (ids: readonly string[]) => void;
+  /** Metadata confirmation choices (2026-11-23): the whole sheet or only its icons; the title onto the banner or not. */
+  setMetaOptions: (patch: { fullSheet?: boolean; titleToBanner?: boolean }) => void;
   /** Double-click on a row (2026-11-14): open that artboard on the stage (a changed template asks first). */
   openArtboard: (id: string) => void;
   /** After undo / redo took the open artboard away (2026-11-16): show this one, else edit its template. */

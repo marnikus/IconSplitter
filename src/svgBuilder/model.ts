@@ -33,7 +33,8 @@ export interface LeaveTarget { kind: "template" | "artboard" | "add-artboard"; i
 export interface ArtboardMetaRequest { id: string; name: string; preview: string }
 
 /** The checked artboards' requests awaiting confirmation (and their progress once sent). */
-export interface ArtboardMetaPlan { requests: ArtboardMetaRequest[]; skipped: string[]; done: number; running: boolean }
+/** `ids`: the artboards asked for (2026-11-23) — the requests are drawn again when the image choice changes. */
+export interface ArtboardMetaPlan { ids: string[]; requests: ArtboardMetaRequest[]; skipped: string[]; done: number; running: boolean }
 
 export interface BuilderKeyInfo {
   value: string | null;
