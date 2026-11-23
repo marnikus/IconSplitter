@@ -42,6 +42,8 @@ export interface EpsVerification {
 export interface EpsDoc {
   /** The root viewBox — its origin and size place the artwork. */
   viewBox: number[];
+  /** Root px per viewBox unit (2026-11-23): the document's own px size over its viewBox; absent = 1. */
+  unit?: number;
   /** The integer DSC box (`%%BoundingBox`), what a Level-1 reader uses. */
   box: EpsBoundingBox;
   /** The exact box (`%%HiResBoundingBox`), in points. */
@@ -52,7 +54,7 @@ export interface EpsDoc {
 }
 
 /** The EPS 10 document: DSC comments, the uprighting CTM, then the body. */
-export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
+export function assemble({ viewBox, unit = 1, box, hires, body, opts }: EpsDoc): string {
   const header = [
     "%!PS-Adobe-3.0 EPSF-3.0",
     ...commentLines(box, hires, opts),
@@ -65,9 +67,10 @@ export function assemble({ viewBox, box, hires, body, opts }: EpsDoc): string {
   // Anchor the artwork to the exact HiRes artboard; the integer DSC box only
   // rounds outward for legacy readers (AI5_ArtSize preserves the exact size).
   // `concat` takes ONE matrix, never six bare numbers (I-61 / Illustrator).
-  const tx = fmt(hires.llx - PX_TO_PT * viewBox[0]);
-  const ty = fmt(hires.ury + PX_TO_PT * viewBox[1]);
-  const upright = `[${fmt(PX_TO_PT)} 0 0 ${fmt(-PX_TO_PT)} ${tx} ${ty}] concat`;
+  const s = PX_TO_PT * unit; // a rescaled artboard (root px ≠ viewBox) is drawn at its px size
+  const tx = fmt(hires.llx - s * viewBox[0]);
+  const ty = fmt(hires.ury + s * viewBox[1]);
+  const upright = `[${fmt(s)} 0 0 ${fmt(-s)} ${tx} ${ty}] concat`;
   return `${header}\n${upright}\n${body.join("\n")}\n%%EOF\n`;
 }
 

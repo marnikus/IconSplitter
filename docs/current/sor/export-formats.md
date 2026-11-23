@@ -20,7 +20,7 @@ fingerprint and the builder's settings can never drift apart.
 | `cleanExport` | on | clean the saved SVG and the EPS document — see **Clean rule**; Title, description and tags stay. In BOTH dialogs: off restores the legacy two-carrier EPS |
 | `expandStrokes` | off | strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes |
 | `expandText` | off | NEW: every `<text>` becomes filled glyph outlines; what cannot be outlined fails that stage honestly, in BOTH flows |
-| `rescaleArtboard` | off | NEW: rescale the FULL artboard, keeping its ratio, until its area is `rescaleMegapixels` (1000×1000 @ 20 MP → 4472×4472) |
+| `rescaleArtboard` | off | rescale the FULL artboard (SVG and EPS alike), keeping its ratio, to `rescaleMegapixels` (1000×1000 @ 20 MP → 4472×4472) |
 | `rescaleMegapixels` | 20 | the target area of that rescale (1…64); dormant while the box is off |
 | `rescaleStrokes` | on | while rescaling: scale stroke widths proportionally; untick and every stroke keeps its printed px (widths ÷ factor) |
 

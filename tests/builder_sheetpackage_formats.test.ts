@@ -90,6 +90,20 @@ describe("the builder package follows the format options", () => {
     expect(out.files.some((f) => f.name.endsWith(".svg"))).toBe(true); // the rest is untouched
   });
 
+  it("the EPS follows the rescaled artboard too, not only the SVG (2026-11-23)", async () => {
+    const plain = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect x="10" y="10" width="50" height="40" fill="#123456"/></svg>';
+    const eps = (input: { svg: string; background: string; title: string }) => builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") });
+    const box = async (patch: Partial<UploadSettings>) => {
+      const out = await buildSheetPackage({ ...args({ includeEps: true, ...patch }), svg: plain }, { ...deps({}), eps });
+      const doc = text(file(out, ".eps")!.bytes);
+      return /%%HiResBoundingBox: ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)/.exec(doc)!.slice(3, 5).map(Number);
+    };
+    expect(await box({})).toEqual([150, 75]); // 200 × 100 px = 150 × 75 pt
+    const [w, h] = await box({ rescaleArtboard: true, rescaleMegapixels: 1 });
+    expect(w).toBeCloseTo(1414 * 0.75, 0); // the 1 MP artboard, 1414 × 707 px
+    expect(h).toBeCloseTo(707 * 0.75, 0);
+  });
+
   it("ships nothing but a named problem when an expansion is refused", async () => {
     setTextOutliner(() => null);
     const out = await buildSheetPackage(args({ expandText: true }), deps({}));

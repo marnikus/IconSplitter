@@ -6132,3 +6132,8 @@ strictly inside).
 
 - `buildSheetPackage` forces `includeJpeg: false` (no rasterising, `export.json` records JPEG off, status not "partial"); the shared format sheet gets `noJpeg` (builder only: JPEG rows and the "nothing ticked" warning hidden, stroke hint names the PNG); Export menu / header / dialog texts name `PNG 2×`. The upload tab keeps its JPEG controls.
 - Measured: builder package + format tests 12/12, builder export settings UI 11/11, shared sheet UI 7/7; related suites 1827 pass / 10 fail (`upload_flag_viewport`, pre-existing); tsc, eslint, `quality:changed --base HEAD` PASS.
+
+## 2026-11-23 — EPS follows "Rescale artboard to MP" (built-in writer)
+
+- The rescale moves the root px size and keeps the viewBox; the built-in EPS writer sized its page from the viewBox alone, so the EPS never grew. `eps.ts` `unitOf` now draws the viewBox at the root's plain px size (same ratio only, else the viewBox as before); `epsdoc.assemble` takes that `unit` into the upright matrix. Shared by the builder package and the upload export.
+- Measured: `builder_sheetpackage_formats` 9/9 incl. the new EPS rescale case (failed at 150 pt before); EPS / upload / export / builder / stock suites 2008 pass, only the 10 pre-existing `upload_flag_viewport` failures; tsc PASS.
