@@ -1,5 +1,6 @@
 // artboardview.ts — which final artboards the list shows (2026-11-13): those of
 // the CHECKED templates, else of the active template; grouped in template order.
+import { checkedInView } from "../lib/reviewselect";
 import type { FinalArtboard } from "../lib/svgBuilder/artboards";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 import type { BuilderModel } from "./model";
@@ -23,4 +24,14 @@ export function artboardGroups(m: View): ArtboardGroup[] {
 /** The visible order the gestures (Shift range, arrows, header checkbox) use. */
 export function visibleArtboards(m: View): FinalArtboard[] {
   return artboardGroups(m).flatMap((g) => g.artboards);
+}
+
+/**
+ * What ✕ Remove in the Saved templates header takes (2026-11-22): the checked
+ * templates (each with every artboard of it), else the checked artboards in view.
+ */
+export function removalScope(m: View & Pick<BuilderModel, "artboardSel">): { kind: "templates" | "artboards"; ids: string[] } {
+  const templates = m.templates.filter((t) => m.templateSel.checked.includes(t.id)).map((t) => t.id);
+  if (templates.length > 0) return { kind: "templates", ids: templates };
+  return { kind: "artboards", ids: checkedInView(visibleArtboards(m).map((a) => a.id), m.artboardSel.checked) };
 }

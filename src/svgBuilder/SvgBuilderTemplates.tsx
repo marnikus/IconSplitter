@@ -9,6 +9,7 @@ import { isNativeListKeyTarget, isRowGestureClick } from "../ui/rowgesture";
 import { templateFacts, templatePreviewSvg, type SheetTemplate } from "../lib/svgBuilder/templates";
 import ZoomSliderBase from "../ui/ZoomSliderBase";
 import { pictureReady, useTextSubset } from "./textsubset";
+import { removalScope } from "./artboardview";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderTemplates({ b }: { b: BuilderApi }) {
@@ -27,6 +28,7 @@ export default function SvgBuilderTemplates({ b }: { b: BuilderApi }) {
           {editing === null ? "＋ Save template" : "✓ Save template"}</button>
         {editing !== null && <button type="button" className="svg-btn tiny" data-testid="builder-template-save-new" onClick={b.actions.saveTemplateAsNew}
           title="Keep the edited template as it was and save this look as a new one">Save as new</button>}
+        {b.templates.length > 0 && <RemoveChecked b={b} />}
       </div>
     </div>
     {b.templates.length === 0
@@ -35,6 +37,19 @@ export default function SvgBuilderTemplates({ b }: { b: BuilderApi }) {
         tabIndex={0} data-testid="builder-templates-grid" onKeyDown={(e) => onTemplateKeys(e, b)}>
         {b.templates.map((t) => <TemplateBlock key={t.id} b={b} template={t} />)}</div>}
   </section>;
+}
+
+/**
+ * ✕ Remove (N) (2026-11-22): the checked templates, each with every artboard of
+ * it — or, with no template checked, the checked artboards in view. At once, one
+ * undo step; the folders move to `_artboard_sheets/.removed versions`.
+ */
+function RemoveChecked({ b }: { b: BuilderApi }) {
+  const scope = removalScope(b);
+  const what = scope.kind === "templates" ? "the checked templates with all their artboards" : "the checked artboards";
+  return <button type="button" className="svg-btn tiny danger" data-testid="builder-templates-remove" disabled={scope.ids.length === 0}
+    title={`Remove ${what} (with no template checked: the checked artboards) — their folders move to _artboard_sheets/.removed versions; Undo brings everything back`}
+    onClick={b.actions.removeChecked}>✕ Remove ({scope.ids.length})</button>;
 }
 
 /** The header checkbox (RULE 25): tri-state over the templates; checked ones show their artboards together. */

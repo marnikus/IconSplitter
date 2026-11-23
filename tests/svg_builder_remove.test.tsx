@@ -232,3 +232,46 @@ describe("removing artboards — their folders go into .removed versions too, on
     expect(trashed()).toEqual([]);
   });
 });
+
+describe("✕ Remove (N) in the Saved templates header (2026-11-22)", () => {
+  it("removes every checked template with its artboards and folders — ONE undo step brings all back", async () => {
+    await openLibrary();
+    const t1 = await saveTemplate();
+    const t2 = await saveTemplate(true);
+    const t3 = await saveTemplate(true);
+    const a1 = await addArtboard(t1.id);
+    const a3 = await addArtboard(t3.id);
+    expect((q("builder-templates-remove") as HTMLButtonElement).disabled).toBe(true); // nothing checked
+    await clickWith(`builder-template-check-${t1.id}`);
+    await clickWith(`builder-template-check-${t2.id}`);
+    expect(text("builder-templates-remove")).toContain("(2)");
+    await click("builder-templates-remove");
+    await waitUntil(() => dirAt(t1.folder) === undefined && dirAt(t2.folder) === undefined, "both folders moved away");
+    expect(q("builder-remove-dialog")).toBeNull();
+    expect(savedTemplates().map((t) => t.id)).toEqual([t3.id]);
+    expect(savedArtboards().map((a) => a.id)).toEqual([a3.id]);
+    expect(trashed()).toHaveLength(2);
+    expect((q("builder-templates-remove") as HTMLButtonElement).disabled).toBe(true); // their checks went with them
+    await click("builder-undo");
+    await waitUntil(() => savedTemplates().length === 3 && dirAt(t1.folder) !== undefined && dirAt(t2.folder) !== undefined, "both back");
+    expect(savedTemplates().map((t) => t.id)).toEqual([t1.id, t2.id, t3.id]);
+    expect(savedArtboards().map((a) => a.id)).toEqual([a1.id, a3.id]);
+    expect(trashed()).toEqual([]);
+  });
+
+  it("with no template checked it removes the checked artboards — the template and its folder stay", async () => {
+    await openLibrary();
+    const t1 = await saveTemplate();
+    const a1 = await addArtboard(t1.id);
+    const a2 = await addArtboard(t1.id);
+    await clickWith(`builder-artboard-check-${a1.id}`);
+    expect(text("builder-templates-remove")).toContain("(1)");
+    await click("builder-templates-remove");
+    await waitUntil(() => dirAt(a1.folder) === undefined, "artboard folder moved away");
+    expect(savedTemplates().map((t) => t.id)).toEqual([t1.id]);
+    expect(savedArtboards().map((a) => a.id)).toEqual([a2.id]);
+    expect(dirAt(t1.folder)?.children.has("template.json")).toBe(true);
+    await click("builder-undo");
+    await waitUntil(() => dirAt(a1.folder) !== undefined && savedArtboards().length === 2, "back");
+  });
+});

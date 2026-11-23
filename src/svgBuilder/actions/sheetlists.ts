@@ -16,6 +16,7 @@ import { SHEETS_DIR } from "../../lib/svgBuilder/sheetfolders";
 import type { SheetTemplate } from "../../lib/svgBuilder/templates";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
+import { removalScope } from "../artboardview";
 import type { BuilderModel } from "../model";
 import { moveSheetFolders } from "../sheetmove";
 import { saveTemplates } from "../templatestore";
@@ -25,16 +26,22 @@ import { showTemplate } from "./templates";
 
 type Get = () => BuilderActionContext;
 
-export function sheetListActions(get: Get): Pick<BuilderActions, "removeTemplate" | "removeTemplates" | "removeArtboards" | "applySheetLists"> {
+export function sheetListActions(get: Get): Pick<BuilderActions, "removeTemplate" | "removeTemplates" | "removeArtboards" | "removeChecked" | "applySheetLists"> {
   const removeTemplates = (ids: readonly string[]) => {
     void removeNow(get, { plan: templatesRemoval(listsOf(get().model), ids, stampNow()), empty: "No template selected", preferred: [] });
+  };
+  const removeArtboards = (ids: readonly string[]) => {
+    const m = get().model;
+    void removeNow(get, { plan: artboardsRemoval(listsOf(m), ids, stampNow()), empty: "No artboard selected", preferred: siblingOfOpen(m, ids) });
   };
   return {
     removeTemplate: (id) => removeTemplates([id]),
     removeTemplates,
-    removeArtboards: (ids) => {
-      const m = get().model;
-      void removeNow(get, { plan: artboardsRemoval(listsOf(m), ids, stampNow()), empty: "No artboard selected", preferred: siblingOfOpen(m, ids) });
+    removeArtboards,
+    removeChecked: () => {
+      const scope = removalScope(get().model);
+      if (scope.kind === "templates") removeTemplates(scope.ids);
+      else removeArtboards(scope.ids);
     },
     applySheetLists: (side, recent) => applyListsSide(get, side, recent),
   };

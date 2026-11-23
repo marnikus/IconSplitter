@@ -134,6 +134,8 @@ export interface BuilderActions {
   /** Removing (2026-11-22): at once, with every artboard of them; folders into `_artboard_sheets/.removed versions`; ONE undo step. */
   removeTemplate: (id: string) => void;
   removeTemplates: (ids: readonly string[]) => void;
+  /** ✕ Remove (N) in the Saved templates header: the checked templates, else the checked artboards in view (`removalScope`). */
+  removeChecked: () => void;
   /** Undo / redo of a "builderArtboards" step: folders, lists, then the stage (`recent` = artboards viewed, newest first). */
   applySheetLists: (side: import("../lib/svgBuilder/removal").ListsDelta, recent: readonly string[]) => Promise<boolean>;
   /** Height of the template pictures (shared 48–800 px zoom); display-only. */
