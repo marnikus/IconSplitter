@@ -70,6 +70,8 @@ export interface BuilderModel {
   lockedIds: readonly string[];
   /** Removed with the artboard ×; kept out of reshuffles until restored (working state, like locks). */
   excludedIds: readonly string[];
+  /** Cells marked with ⊞ to combine into one big icon (2026-11-23): grid positions, at most four; not undone. */
+  mergeMarks: readonly number[];
   listView: BuilderListView;
   prefs: BuilderPrefs;
   prompt: string;
@@ -111,7 +113,7 @@ export function initialBuilderModel(): BuilderModel {
     supported: hasFolderPicker(), autoRegister: loadAutoRegister(), root: null, discovery: null, busy: null,
     status: "Open a folder to build from approved SVGs", error: false,
     config: loadSheetConfig(), recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SEED,
-    lockedIds: getAppState().builder.lockedIds ?? [], excludedIds: getAppState().builder.excludedIds ?? [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
+    lockedIds: getAppState().builder.lockedIds ?? [], excludedIds: getAppState().builder.excludedIds ?? [], mergeMarks: [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
     prompt: loadBuilderPrompt(), presets: builderPresets.load(), presetPick: "",
     gemini: loadGeminiConfig(), key: emptyKeyInfo(),
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null, draftTitle: "",

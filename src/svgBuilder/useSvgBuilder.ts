@@ -1,6 +1,7 @@
 // useSvgBuilder.ts — the only hook the builder panel calls. It composes the
 // boot, persistence, computed projection and action slices into one API.
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { toSlots } from "../lib/svgBuilder/merges";
 import { useAppSlice } from "../state/useAppState";
 import { useOptionalHistory } from "../state/HistoryProvider";
 import type { BuilderIconAsset, BuilderListView, SelectionRecipe, SheetConfig, SheetDocument, SheetLayout } from "../lib/svgBuilder/types";
@@ -24,13 +25,17 @@ export interface BuilderApi extends BuilderModel, BuilderComputed {
 export function useSvgBuilder(): BuilderApi {
   const [model, rawDispatch] = useReducer(builderReducer, undefined, initialBuilderModel);
   const patch = useCallback((value: Partial<BuilderModel>) => rawDispatch({ type: "patch", patch: value }), []);
-  const slice = useAppSlice("builder");
+  const stored = useAppSlice("builder");
+  // big icons (2026-11-23): the app stores placements by grid position; everything here sees slots (merges.ts)
+  const slots = useMemo(() => toSlots(stored.checked, model.config.grid), [stored.checked, model.config.grid]);
+  const slice = useMemo(() => ({ ...stored, checked: slots as string[] }), [stored, slots]);
   const hist = useOptionalHistory();
   const boot = useBuilderBoot(patch, model.supported);
   useBuilderPersistence(model, patch);
   const computed = useBuilderComputed(model, slice.checked, patch);
   const actions = useBuilderActions({ model, computed, boot, slice, hist, patch });
-  useAutoPlacement(actions, computed.assets, computed.layout.capacity);
+  // the grid's size, not the drawn cells: combining / breaking a big icon never grows or truncates the sheet (2026-11-23)
+  useAutoPlacement(actions, computed.assets, model.config.grid.columns * model.config.grid.rows);
   useIconEditBinding(model, computed, patch);
   useArtboardUndo(model, actions);
   useSheetJsonSync(model, slice.checked, actions);

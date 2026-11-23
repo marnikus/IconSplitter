@@ -4,6 +4,7 @@
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { RANGES, clampTo, type NumRange } from "./ranges";
+import { parseMerges } from "./merges";
 import type { BannerPosition, BannerStyle, CaptionCase, SelectionMode, SheetConfig, TitleFace , TextCase } from "./types";
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -12,7 +13,7 @@ const MODES: readonly SelectionMode[] = ["similar", "random", "filtered"];
 /** Reference "Glyph" defaults (FIXES §D); the banner copy is neutral, not "FOOD ICONS". */
 export const DEFAULT_CONFIG: SheetConfig = {
   artboard: { width: 1080, height: 660, background: "#F4F0E7", padding: 34, radius: 0 },
-  grid: { columns: 8, rows: 4, gapX: 22, gapY: 18, captions: true,
+  grid: { columns: 8, rows: 4, gapX: 22, gapY: 18, captions: true, merges: [],
     captionColor: "#787A6C", captionSize: 9, captionCase: "upper", captionGap: 0 },
   icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round", coloredStroke: "", coloredStrokeWidth: 0, coloredFill: "" },
   banner: { position: "left", size: 242, background: "#17271F", accent: "#D9F36C",
@@ -71,7 +72,7 @@ export function parseSheetConfig(raw: unknown): SheetConfig {
 }
 
 export function copyConfig(c: SheetConfig): SheetConfig {
-  return { artboard: { ...c.artboard }, grid: { ...c.grid }, icons: { ...c.icons }, banner: { ...c.banner, captionTexts: { ...c.banner.captionTexts } } };
+  return { artboard: { ...c.artboard }, grid: { ...c.grid, merges: c.grid.merges.map((m) => ({ ...m })) }, icons: { ...c.icons }, banner: { ...c.banner, captionTexts: { ...c.banner.captionTexts } } };
 }
 
 export function configFingerprint(config: SheetConfig): string {
@@ -95,13 +96,13 @@ function parseArtboard(raw: unknown): SheetConfig["artboard"] {
 
 function parseGrid(raw: unknown): SheetConfig["grid"] {
   const d = DEFAULT_CONFIG.grid;
-  if (!isRecord(raw)) return { ...d };
+  if (!isRecord(raw)) return { ...d, merges: [] };
   return { columns: num(RANGES.columns, raw.columns, d.columns), rows: num(RANGES.rows, raw.rows, d.rows),
     gapX: num(RANGES.gapX, raw.gapX, d.gapX), gapY: num(RANGES.gapY, raw.gapY, d.gapY),
     captions: bool(raw.captions, d.captions), captionColor: hex(raw.captionColor, d.captionColor),
     captionSize: num(RANGES.captionSize, raw.captionSize, d.captionSize),
     captionCase: oneOf(raw.captionCase, ["upper", "normal"], d.captionCase) as CaptionCase,
-    captionGap: num(RANGES.captionGap, raw.captionGap, d.captionGap) };
+    captionGap: num(RANGES.captionGap, raw.captionGap, d.captionGap), merges: parseMerges(raw.merges) };
 }
 
 function parseIcons(raw: unknown): SheetConfig["icons"] {

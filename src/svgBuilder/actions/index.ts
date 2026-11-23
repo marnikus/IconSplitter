@@ -21,6 +21,7 @@ import { sheetListActions } from "./sheetlists";
 import { sheetSyncActions } from "./sheetsync";
 import { styleActions } from "./styles";
 import { stageNavActions } from "./stagenav";
+import { mergeActions } from "./merges";
 
 export function createBuilderActions(get: () => BuilderActionContext): BuilderActions {
   const folder = folderActions(get);
@@ -44,8 +45,9 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const files = sheetSyncActions(get);
   const styles = styleActions(get);
   const walk = stageNavActions(get);
+  const merges = mergeActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...location, ...register, ...lists, ...files, ...styles, ...walk,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...location, ...register, ...lists, ...files, ...styles, ...walk, ...merges,
     presets: get().presetActions,
   };
 }

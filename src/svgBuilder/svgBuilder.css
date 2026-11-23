@@ -120,6 +120,8 @@
 .bld-overlay { position: absolute; inset: 0; pointer-events: none; }
 .bld-cell-empty { position: absolute; display: grid; place-items: center; border: 1px dashed currentColor; border-radius: 4px; opacity: 0.3; line-height: 1; }
 .bld-cell { position: absolute; pointer-events: auto; }
+/* Big icons (2026-11-23): a ⊞ marked cell wears a bright red frame until four of a 2 × 2 square combine. */
+.bld-cell.is-marked { outline: 2px solid #FF2D2D; outline-offset: 1px; border-radius: 2px; box-shadow: 0 0 0 4px rgba(255, 45, 45, 0.18); }
 .bld-cell-lock { position: absolute; top: -6px; right: -6px; width: 15px; height: 15px; padding: 0; display: grid; place-items: center; border: 1px solid var(--v2-line-strong);
   border-radius: 50%; background: var(--v2-surface-2); color: var(--v2-text); font-size: 8px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity .12s; }
 .bld-cell:hover .bld-cell-lock, .bld-cell.is-locked .bld-cell-lock, .bld-cell-lock:focus-visible { opacity: 1; }
@@ -349,6 +351,9 @@
 
 /* Move text on the artboard (2026-11-14): dashed frame, side handles, red guide, value badge, Apply. */
 .bld-quick-btn.is-on { background: #5548BE; border-color: #5548BE; color: #fff; }
+.bld-quick-merge { color: #F5C518; border-color: rgba(245, 197, 24, 0.55); }
+.bld-quick-merge-glyph { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.bld-quick-merge.is-on { background: rgba(245, 197, 24, 0.18); border-color: #F5C518; color: #F5C518; }
 .bld-quick-move-layer { position: absolute; width: 0; height: 0; }
 .bld-quick-move { position: absolute; border: 1px dashed #887FC4; border-radius: 2px; outline: none; }
 .bld-quick-move:focus-visible { border-color: #C5BEFF; }

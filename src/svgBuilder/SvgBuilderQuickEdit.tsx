@@ -17,8 +17,10 @@ import { anchorOf } from "./quickplace";
 import { canRebalance, isColumn, rebalanceSpan, rebalancedBanner } from "../lib/svgBuilder/rebalance";
 import RowProportions from "./SvgBuilderRowProportions";
 import SvgBuilderTextWidth from "./SvgBuilderTextWidth";
+import { OwnRow, SizePanel } from "./SvgBuilderQuickSize";
+import { MergeButtons, MergeStrokePanel, isBigCell } from "./SvgBuilderQuickMerge";
 
-type Panel = "color" | "fill" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | "box" | "rebalance" | null;
+type Panel = "color" | "fill" | "stroke" | "text" | "move" | "ring" | "scale" | "width" | "box" | "rebalance" | "merge" | null;
 interface Hover { kind: QuickKind; el: Element }
 
 const FACES: ReadonlyArray<{ value: TitleFace; label: string }> = [
@@ -98,7 +100,7 @@ export default function SvgBuilderQuickEdit({ b, board, wrap }: { b: BuilderApi;
     <div className="bld-quick" data-testid="builder-quick" data-kind={kind}
       style={{ left: at.x, top: at.y }} onMouseEnter={keep} onMouseMove={keep} onMouseLeave={() => { if (panel === null) later(); }}>
       <QuickBar b={b} kind={kind} panel={panel} el={hover.el} toggle={(next) => setPanel(panel === next ? null : next)} />
-      <QuickPanel b={b} kind={kind} panel={panel} done={done} move={{ board, wrap, anchor: at }} />
+      <QuickPanel b={b} kind={kind} panel={panel} el={hover.el} done={done} move={{ board, wrap, anchor: at }} />
     </div>
     {isText(kind) && (panel === null || panel === "width") && <SvgBuilderTextWidth b={b} which={kind} el={hover.el} board={board} wrap={wrap}
       onDrag={(on) => setPanel(on ? "width" : null)} onEnter={keep} />}
@@ -130,8 +132,7 @@ function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKi
   return <div className="bld-quick-bar" role="toolbar" aria-label={`Quick edit: ${spec.name}`}>
     <ColorDot b={b} slot={spec.color} testid="builder-quick-color" ring={spec.fill !== undefined} onClick={() => toggle("color")} />
     {spec.fill && <ColorDot b={b} slot={spec.fill} testid="builder-quick-fill" ring={false} onClick={() => toggle("fill")} />}
-    {spec.stroke && <button type="button" className="bld-quick-btn" data-testid="builder-quick-stroke" title={spec.stroke.label}
-      aria-label={spec.stroke.label} onClick={() => toggle("stroke")}>≡</button>}
+    <StrokeButton b={b} spec={spec} el={el} toggle={toggle} />
     {spec.text && <button type="button" className="bld-quick-btn bld-quick-a" data-testid="builder-quick-text" title="Font and size"
       aria-label="Font and size" onClick={() => toggle("text")}>A</button>}
     {isText(kind) && <button type="button" className={`bld-quick-btn${panel === "move" ? " is-on" : ""}`}
@@ -140,10 +141,17 @@ function QuickBar({ b, kind, panel, el, toggle }: { b: BuilderApi; kind: QuickKi
     {kind === "hero" && <HeroButtons toggle={toggle} />}
     {spec.box && <button type="button" className="bld-quick-btn" data-testid="builder-quick-box" title={spec.box.label}
       aria-label={spec.box.label} onClick={() => toggle("box")}>⬚</button>}
-    {isIconKind(kind) && <IconEditButton b={b} el={el} />}
+    {isIconKind(kind) && <><IconEditButton b={b} el={el} /><MergeButtons b={b} el={el} toggle={toggle} /></>}
     {offersRebalance(b, kind) && <button type="button" className="bld-quick-btn" data-testid="builder-quick-rebalance"
       title="Rebalance the row: one line each, equal gaps" aria-label="Rebalance the banner row" onClick={() => toggle("rebalance")}>⇔</button>}
   </div>;
+}
+
+/** ≡ the element's stroke — not on a big icon, which has its own (2026-11-23). */
+function StrokeButton({ b, spec, el, toggle }: { b: BuilderApi; spec: QuickSpec; el: Element; toggle: (p: Exclude<Panel, null>) => void }) {
+  if (spec.stroke === undefined || isBigCell(b, el)) return null;
+  return <button type="button" className="bld-quick-btn" data-testid="builder-quick-stroke" title={spec.stroke.label}
+    aria-label={spec.stroke.label} onClick={() => toggle("stroke")}>≡</button>;
 }
 
 interface MoveCtx { board: RefObject<HTMLDivElement | null>; wrap: RefObject<HTMLDivElement | null>; anchor: { x: number; y: number } }
@@ -151,7 +159,7 @@ interface MoveCtx { board: RefObject<HTMLDivElement | null>; wrap: RefObject<HTM
 /** The colour a panel edits: the element's colour, or a colored icon's fill colour (2026-11-23). */
 const colorSlotOf = (spec: QuickSpec, panel: Panel): ColorSlot | undefined => (panel === "color" ? spec.color : panel === "fill" ? spec.fill : undefined);
 
-function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: QuickKind; panel: Panel; done: () => void; move: MoveCtx }) {
+function QuickPanel({ b, kind, panel, el, done, move }: { b: BuilderApi; kind: QuickKind; panel: Panel; el: Element; done: () => void; move: MoveCtx }) {
   const spec = QUICK_SPECS[kind];
   const color = colorSlotOf(spec, panel);
   if (color !== undefined) return <ColorPanel b={b} slot={color} onDone={done} />;
@@ -159,11 +167,12 @@ function QuickPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: Quick
   if (panel === "box" && spec.box) return <SizePanel b={b} slot={spec.box} testid="builder-quick-box-range" />;
   if (panel === "rebalance" && offersRebalance(b, kind)) return <RebalancePanel b={b} />;
   if (panel === "text" && spec.text) return <TextPanel b={b} slot={spec.text} face={spec.face === true} gap={spec.gap} textCase={spec.textCase} />;
-  return <KindPanel b={b} kind={kind} panel={panel} done={done} move={move} />;
+  return <KindPanel b={b} kind={kind} panel={panel} el={el} done={done} move={move} />;
 }
 
 /** Panels only some elements have: a text's move frame, the banner icon's circle and sizes. */
-function KindPanel({ b, kind, panel, done, move }: { b: BuilderApi; kind: QuickKind; panel: Panel; done: () => void; move: MoveCtx }) {
+function KindPanel({ b, kind, panel, el, done, move }: { b: BuilderApi; kind: QuickKind; panel: Panel; el: Element; done: () => void; move: MoveCtx }) {
+  if (panel === "merge") return <MergeStrokePanel b={b} el={el} />;
   if (kind === "hero" && (panel === "ring" || panel === "scale")) return <HeroPanel b={b} panel={panel} />;
   if (panel === "move" && isText(kind)) return <MovePortal b={b} board={move.board} wrap={move.wrap} which={kind} anchor={move.anchor} onDone={done} />;
   return null;
@@ -239,25 +248,6 @@ function ColorPanel({ b, slot, onDone }: { b: BuilderApi; slot: ColorSlot; onDon
         onChange={(e) => setHex(e.target.value)} onBlur={commitHex} onKeyDown={(e) => { if (e.key === "Enter") commitHex(); }} />
       <button type="button" className="svg-btn primary tiny" data-testid="builder-quick-done" onClick={() => { commitHex(); onDone(); }}>Done</button>
     </div>
-  </div>;
-}
-
-/** "Own …" while each icon keeps its own paint; else ↺ puts the icons' own paint back (2026-11-23). */
-function OwnRow({ own, label, testid, onOwn }: { own: boolean; label: string; testid: string; onOwn: () => void }) {
-  return own ? <span className="bld-quick-own-note" data-testid={`${testid}-note`}>{label}</span>
-    : <button type="button" className="svg-btn tiny" data-testid={testid} onClick={onOwn}>↺ {label}</button>;
-}
-
-function SizePanel({ b, slot, testid }: { b: BuilderApi; slot: SizeSlot; testid: string }) {
-  const raw = Number(slotValue(b.config, slot));
-  const own = slot.own !== undefined && raw === 0;
-  const value = own ? b.config.icons.strokeWidth : raw; // an own width starts the slider at the outlined icons' pen
-  return <div className="bld-quick-panel" data-testid={`${testid}-panel`}>
-    <div className="bld-quick-row"><b className="bld-quick-title">{slot.label}</b><span className="bld-quick-value">{own ? slot.own : `${value} ${slot.unit}`}</span></div>
-    {slot.own !== undefined && !own && <OwnRow own={false} label={slot.own} testid={`${testid}-own`} onOwn={() => b.actions.setConfig(withSlot(b.config, slot, 0), slot.label)} />}
-    <input type="range" className="bld-range" data-testid={testid} aria-label={slot.label} min={slot.range.min} max={slot.range.max} step={slot.range.step}
-      value={value} onChange={(e) => b.actions.setConfig(withSlot(b.config, slot, Number(e.target.value)), slot.label, true)} />
-    <div className="bld-quick-row bld-quick-ends"><span>{slot.range.min}</span><span>{slot.range.max}</span></div>
   </div>;
 }
 

@@ -54,10 +54,15 @@ function cellMarkup(args: ComposeSheetArgs, p: Placed, brokenIds: string[]): str
   if (p.asset === undefined) return ""; // not in the library (declined / removed): never drawn, never "Unavailable" (2026-11-14)
   const code = args.svgTexts[p.id];
   const cell = p.asset !== undefined && typeof code === "string" && code !== ""
-    ? cellGroupOf({ code, asset: p.asset, frame: p.frame, style: args.config.icons }) : null;
+    ? cellGroupOf({ code, asset: p.asset, frame: p.frame, style: penOf(args.config.icons, p.frame) }) : null;
   if (cell !== null && cell.ok) return cell.html;
   brokenIds.push(p.id);
   return brokenMarkup(p.frame, p.id, cell?.ok === false ? cell.error : "approved SVG is still loading or unreadable");
+}
+
+/** A big icon's own stroke (2026-11-23): outlined and colored icons alike. */
+function penOf(icons: SheetConfig["icons"], frame: CellFrame): SheetConfig["icons"] {
+  return frame.stroke === undefined ? icons : { ...icons, strokeWidth: frame.stroke, coloredStrokeWidth: icons.coloredStrokeWidth > 0 ? frame.stroke : 0 };
 }
 
 function rootOpen(config: SheetConfig, fingerprint: string): string {

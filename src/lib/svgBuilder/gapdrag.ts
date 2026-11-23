@@ -30,10 +30,12 @@ export function gapStrips(config: SheetConfig, layout: { cells: readonly CellFra
   const { columns } = config.grid;
   const gx = config.grid.gapX * layout.fitScale, gy = config.grid.gapY * layout.fitScale;
   const out: GapStrip[] = [];
-  for (const c of layout.cells) {
-    const right = layout.cells[c.index + 1];
-    const below = layout.cells[c.index + columns];
-    if (right !== undefined && (c.index + 1) % columns !== 0) out.push(xStrip(c, right, gx));
+  // by grid position (2026-11-23): a big icon's cell and the cells it covers have no gap strips
+  const plain = new Map(layout.cells.filter((c) => c.span === undefined).map((c) => [c.pos ?? c.index, c]));
+  for (const [pos, c] of plain) {
+    const right = plain.get(pos + 1);
+    const below = plain.get(pos + columns);
+    if (right !== undefined && (pos + 1) % columns !== 0) out.push(xStrip(c, right, gx));
     if (below !== undefined) out.push(yStrip(c, below, gy));
   }
   return out;

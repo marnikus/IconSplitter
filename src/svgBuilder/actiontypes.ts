@@ -73,6 +73,10 @@ export interface BuilderActions {
   stepArtboard: (by: -1 | 1) => void;
   /** STYLES (2026-11-23): which icon styles may be in sheets; icons of an unchecked style leave the sheet (one undo step). */
   setStyleFilter: (next: import("../lib/multifilter").Multi<string>) => void;
+  /** Big icons (2026-11-23): ⊞ marks / unmarks a cell (four of a 2 × 2 square combine), ✕ breaks a big icon, its own stroke (0 = the sheet's). */
+  markMergeCell: (slot: number) => void;
+  breakMerge: (slot: number) => void;
+  setMergeStroke: (slot: number, width: number) => void;
   /** Show / hide the red layout guides, and their opacity 1–100 (display-only). */
   toggleGuides: (show: boolean) => void;
   setGuideOpacity: (percent: number) => void;

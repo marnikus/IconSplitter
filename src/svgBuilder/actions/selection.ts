@@ -29,7 +29,7 @@ export function selectionActions(get: () => BuilderActionContext): SelectionActi
   };
 }
 
-function pickOf(ctx: BuilderActionContext, recipe: SelectionRecipe, seed: number): SheetPick {
+export function pickOf(ctx: BuilderActionContext, recipe: SelectionRecipe, seed: number): SheetPick {
   return { assets: ctx.pickable, profiles: ctx.profiles, recipe, seed, capacity: ctx.layout.capacity, // only the STYLES the sheet allows (2026-11-23)
     current: ctx.placedIds, lockedIds: ctx.model.lockedIds, score: ctx.reference.image === null ? undefined : ctx.scoreOf,
     excludedIds: ctx.model.excludedIds };

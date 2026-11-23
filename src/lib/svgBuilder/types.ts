@@ -13,7 +13,11 @@ export type MetadataState = "empty" | "draft" | "invalid" | "accepted" | "edited
 
 export interface Rect { x: number; y: number; width: number; height: number }
 /** One grid cell: `size` is the fitted icon box, `glyph` the stroke-aware drawing size inside it. */
-export interface CellFrame { index: number; x: number; y: number; size: number; glyph: number; captionY: number; captionSize: number }
+/**
+ * One drawn cell. `index` is its SLOT (2026-11-23: big icons leave out the cells they cover); `pos` its grid
+ * position (absent = the same); `span` 2 = a big icon over 2 × 2 cells, `stroke` its own pen in px.
+ */
+export interface CellFrame { index: number; x: number; y: number; size: number; glyph: number; captionY: number; captionSize: number; pos?: number; span?: 2; stroke?: number }
 
 export interface BuilderIconAsset {
   id: string;
@@ -79,6 +83,8 @@ export interface SheetConfig {
     captionColor: string; captionSize: number; captionCase: CaptionCase;
     /** Extra space between an icon and its caption, px (2026-11-14). */
     captionGap: number;
+    /** Big icons (2026-11-23, merges.ts): a 2 × 2 square by its top-left cell, which cell's icon (0–3), its own stroke (0 = the sheet's). */
+    merges: { col: number; row: number; pick: number; strokeWidth: number }[];
   };
   icons: {
     box: number; strokeWidth: number; color: string; linecap: "round" | "square";

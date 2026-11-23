@@ -13,6 +13,8 @@ import type { BuilderActionContext, BuilderActions } from "./actiontypes";
 import type { BuilderBoot } from "./useBuilderBoot";
 import type { BuilderComputed } from "./useBuilderComputed";
 import type { BuilderModel } from "./model";
+import { toFull } from "../lib/svgBuilder/merges";
+import type { SheetConfig } from "../lib/svgBuilder/types";
 
 interface Args {
   model: BuilderModel;
@@ -33,11 +35,15 @@ export function useBuilderActions(args: Args): BuilderActions {
     say: boot.say,
   }), [patch, boot.say]);
   const presetActions = usePresetActions(presetModel, presetIo);
-  const { setChecked, setCheckedQuiet } = useCheckedWriters(hist);
+  // the grid a write is mapped into: updated at once when an action dispatches a new config (big icons, 2026-11-23)
+  const grid = useRef(model.config.grid);
+  grid.current = model.config.grid;
+  const dispatch = useCallback((value: Partial<BuilderModel>) => { if (value.config !== undefined) grid.current = value.config.grid; patch(value); }, [patch]);
+  const { setChecked, setCheckedQuiet } = useCheckedWriters(hist, grid);
   const checked: RowSelection = { checked: slice.checked, anchor: slice.anchorId, active: slice.activeId };
   const ctx: BuilderActionContext = {
     model, ...computed, placedIds: slice.checked, checked, discovery: model.discovery, scanRefs: boot.scanRefs.current,
-    hist, presetActions, dispatch: patch, setChecked, setCheckedQuiet, setRoot: boot.setRoot,
+    hist, presetActions, dispatch, setChecked, setCheckedQuiet, setRoot: boot.setRoot,
     setDiscovery: boot.setDiscovery, setBusy: boot.setBusy, say: boot.say,
   };
   const ctxRef = useRef(ctx);
@@ -46,17 +52,22 @@ export function useBuilderActions(args: Args): BuilderActions {
   return useMemo(() => ({ ...actions, presets: presetActions }), [actions, presetActions]);
 }
 
-/** The two ways placements are written: one global selection entry, or quietly (automatic placement). */
-function useCheckedWriters(hist: HistoryActions | null) {
+/**
+ * The two ways placements are written: one global selection entry, or quietly (automatic placement).
+ * Actions write SLOTS; the store keeps grid positions (big icons, 2026-11-23: merges.ts `toFull`).
+ */
+function useCheckedWriters(hist: HistoryActions | null, grid: { current: SheetConfig["grid"] }) {
   const setChecked = useCallback((next: RowSelection, label: string) => {
     const b = getAppState().builder;
-    const payloads = selectionPayloads({ checked: b.checked, anchor: b.anchorId, active: b.activeId }, next);
+    const full = { ...next, checked: [...toFull(next.checked, grid.current, b.checked)] };
+    const payloads = selectionPayloads({ checked: b.checked, anchor: b.anchorId, active: b.activeId }, full);
     hist?.push({ type: "builderChecked", label, origin: "svgBuilder", ids: payloads.ids, before: payloads.before, after: payloads.after });
-    patchBuilder({ checked: next.checked, anchorId: next.anchor, activeId: next.active });
-  }, [hist]);
+    patchBuilder({ checked: full.checked, anchorId: next.anchor, activeId: next.active });
+  }, [hist, grid]);
   const setCheckedQuiet = useCallback((ids: readonly string[]) => {
-    patchBuilder({ checked: [...ids], anchorId: null, activeId: ids[0] ?? null });
-  }, []);
+    const full = [...toFull(ids, grid.current, getAppState().builder.checked)];
+    patchBuilder({ checked: full, anchorId: null, activeId: ids[0] ?? null });
+  }, [grid]);
   return { setChecked, setCheckedQuiet };
 }
 
