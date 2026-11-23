@@ -1,13 +1,19 @@
-// renameexport.ts — atomically renames an already-exported package inside
-// `<exportDir>/` to its new `uploadName` while preserving `workName` and `pair.id`
-// in `export.json` (RULE 23: write+verify new files -> commit export.json ->
-// remove superseded files last, so the user never loses their only copy).
+// renameexport.ts — atomic rename of exported files inside an `export/` folder
+// (both `SVG to upload` pair packages and `SVG builder` `_artboard_sheets`
+// exports). Keeps `workName` + `pair.id` unchanged while renaming exported
+// artifacts (`svg`, `jpeg`, `jpg`, `eps`, `zip`, `png`) to `<uploadName>.<ext>`
+// and updating `export.json` (`workName`, `uploadName`, and `outputs.*.path`).
 
-import { probePath, readBytesAt, readTextAt, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
+import { nameExists, probePath, readBytesAt, readTextAt, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { isRecord } from "../lib/isrecord";
-import { parseExportRecord, serializeExportRecord, type ExportRecord } from "../lib/upload/export";
-import { effectiveExportStem } from "../lib/upload/uploadname";
 import { sameBytes } from "./exportcommit";
+import {
+  parseExportRecord,
+  serializeExportRecord,
+  stemOf,
+  type ExportRecord,
+} from "../lib/upload/export";
+import { effectiveExportStem, shrinkUploadNameToBudget } from "../lib/upload/uploadname";
 
 export interface RenameExportArgs {
   root: DirHandleLike;
@@ -25,86 +31,126 @@ const OUTPUT_KEYS = ["svg", "jpg", "png", "eps", "zip"] as const;
 const utf8 = (s: string) => new TextEncoder().encode(s);
 const unutf8 = (b: Uint8Array) => new TextDecoder().decode(b);
 
-function fileNameOf(path: string): string {
-  const clean = path.replace(/\\/g, "/");
-  return clean.slice(clean.lastIndexOf("/") + 1);
+async function writeVerifiedBytes(dir: DirHandleLike, name: string, expected: Uint8Array): Promise<void> {
+  await writeFileOverwrite(dir, name, new Blob([expected as BlobPart]));
+  const back = await readBytesAt(dir, name);
+  if (back === null || !sameBytes(back, expected)) throw new Error(`verify failed for ${name}`);
+}
+
+function fileNameOf(relPath: string): string {
+  const norm = relPath.replace(/\\/g, "/");
+  const idx = norm.lastIndexOf("/");
+  return idx >= 0 ? norm.slice(idx + 1) : norm;
 }
 
 function extOf(name: string): string {
   const dot = name.lastIndexOf(".");
-  return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
 }
 
-async function writeVerifiedBytes(dir: DirHandleLike, name: string, expected: Uint8Array): Promise<void> {
-  await writeFileOverwrite(dir, name, new Blob([expected as BlobPart]));
-  const back = await readBytesAt(dir, name);
-  if (back === null || !sameBytes(back, expected)) {
-    throw new Error(`verify failed for ${name}`);
-  }
+function replaceLeaf(relPath: string, newName: string): string {
+  const slash = relPath.replace(/\\/g, "/").lastIndexOf("/");
+  return slash >= 0 ? `${relPath.slice(0, slash)}/${newName}` : newName;
 }
 
-async function atomicCopy(dir: DirHandleLike, fromName: string, toName: string): Promise<void> {
-  if (fromName === toName) return;
-  const src = await readBytesAt(dir, fromName);
-  if (src === null) throw new Error(`missing exported file ${fromName}`);
-  const tmp = `${toName}.tmp`;
-  await writeVerifiedBytes(dir, tmp, src);
+async function atomicCopy(dir: DirHandleLike, src: Uint8Array, ext: string, toName: string): Promise<void> {
+  const stage = `_rename_stage.${ext}`;
+  await writeVerifiedBytes(dir, stage, src);
+  await writeVerifiedBytes(dir, toName, src);
+  try { await dir.removeEntry?.(stage); } catch { /* ignore */ }
+}
+
+async function canCreateStem(dir: DirHandleLike, stem: string): Promise<boolean> {
+  const probe = `${stem}.jpeg`;
+  if (await nameExists("file", dir, probe)) return true;
   try {
-    await writeVerifiedBytes(dir, toName, src);
-  } catch (err) {
-    try { await dir.removeEntry?.(toName); } catch { /* ignore */ }
-    throw err;
+    const fh = await dir.getFileHandle(probe, { create: true });
+    const w = await fh.createWritable();
+    await w.close();
+    try { await dir.removeEntry?.(probe); } catch { /* ignore */ }
+    return true;
+  } catch {
+    return false;
   }
-  try { await dir.removeEntry?.(tmp); } catch { /* ignore */ }
+}
+
+/**
+ * Fits `desired` to the OS/filesystem path limit of `dir` (e.g. Win32 MAX_PATH
+ * inside deep `_artboard_sheets/.../export/`), stepping down word-by-word so
+ * no partial word is ever kept. Falls back to `workName` if needed.
+ */
+export async function fitStemToDir(dir: DirHandleLike, desired: string, workName: string): Promise<string> {
+  if (desired === "" || await canCreateStem(dir, desired)) return desired || workName;
+  let cur = desired;
+  while (cur.includes("_")) {
+    const shorter = shrinkUploadNameToBudget(cur, cur.length - 1);
+    if (shorter === "" || shorter === cur) break;
+    if (await canCreateStem(dir, shorter)) return shorter;
+    cur = shorter;
+  }
+  return (await canCreateStem(dir, workName)) ? workName : desired;
 }
 
 async function commitJson(dir: DirHandleLike, record: ExportRecord): Promise<void> {
   const bytes = utf8(serializeExportRecord(record));
-  const tmp = "export.json.tmp";
-  await writeFileOverwrite(dir, tmp, new Blob([bytes as BlobPart]));
-  const back = await readBytesAt(dir, tmp);
-  if (back === null || parseExportRecord(JSON.parse(unutf8(back))) === null) {
-    throw new Error("tmp verify failed for export.json");
-  }
-  await writeFileOverwrite(dir, "export.json", new Blob([bytes as BlobPart]));
-  try { await dir.removeEntry?.(tmp); } catch { /* ignore */ }
+  const stage = "_rename_export.json";
+  await writeVerifiedBytes(dir, stage, bytes);
+  if (parseExportRecord(JSON.parse(unutf8(bytes))) === null) throw new Error("invalid export.json");
+  await writeVerifiedBytes(dir, "export.json", bytes);
+  try { await dir.removeEntry?.(stage); } catch { /* ignore */ }
 }
 
-function collectRenames(record: ExportRecord, targetStem: string): {
-  pairs: Array<{ from: string; to: string }>;
-  prevStems: Set<string>;
-} {
+interface CopyOutcome { touched: number; obsolete: Set<string> }
+
+async function copyOneSlot(
+  dir: DirHandleLike,
+  slot: Record<string, unknown>,
+  targetStem: string,
+  out: CopyOutcome,
+): Promise<{ keep: boolean; oldStem: string }> {
+  const oldPath = slot.path as string;
+  const oldName = fileNameOf(oldPath);
+  const ext = extOf(oldName);
+  if (ext === "") return { keep: true, oldStem: "" };
+  const oldStem = oldName.slice(0, -(ext.length + 1));
+  const newName = `${targetStem}.${ext}`;
+  const src = oldName === newName ? await readBytesAt(dir, newName) : await readBytesAt(dir, oldName);
+  if (src !== null) {
+    if (oldName !== newName) { await atomicCopy(dir, src, ext, newName); out.obsolete.add(oldName); }
+    slot.path = replaceLeaf(oldPath, newName);
+    out.touched += 1;
+    return { keep: true, oldStem };
+  }
+  if ((await readBytesAt(dir, newName)) !== null) {
+    slot.path = replaceLeaf(oldPath, newName);
+    out.touched += 1;
+    return { keep: true, oldStem };
+  }
+  return { keep: false, oldStem };
+}
+
+async function copyRecordedSlots(dir: DirHandleLike, record: ExportRecord, targetStem: string, prevStems: Set<string>): Promise<CopyOutcome> {
   const outs = record.outputs as unknown as Record<string, unknown>;
-  const pairs: Array<{ from: string; to: string }> = [];
-  const prevStems = new Set<string>();
-  if (record.uploadName) prevStems.add(record.uploadName);
+  const out: CopyOutcome = { touched: 0, obsolete: new Set<string>() };
   for (const key of OUTPUT_KEYS) {
     const slot = outs[key];
     if (!isRecord(slot) || typeof slot.path !== "string") continue;
-    const oldName = fileNameOf(slot.path);
-    const ext = extOf(oldName);
-    if (ext === "") continue;
-    prevStems.add(oldName.slice(0, -(ext.length + 1)));
-    const newName = `${targetStem}.${ext}`;
-    pairs.push({ from: oldName, to: newName });
-    const slash = slot.path.replace(/\\/g, "/").lastIndexOf("/");
-    slot.path = slash >= 0 ? `${slot.path.slice(0, slash)}/${newName}` : newName;
+    const res = await copyOneSlot(dir, slot, targetStem, out);
+    if (res.oldStem !== "") prevStems.add(res.oldStem);
+    if (!res.keep) outs[key] = null;
   }
-  return { pairs, prevStems };
+  return out;
 }
 
-async function copyCompanionPngs(
-  dir: DirHandleLike,
-  prevStems: ReadonlySet<string>,
-  targetStem: string,
-  removed: Set<string>,
-): Promise<void> {
+async function copyCompanionPngs(dir: DirHandleLike, prevStems: ReadonlySet<string>, targetStem: string, out: CopyOutcome): Promise<void> {
   for (const prev of prevStems) {
-    if (prev === targetStem) continue;
+    if (!prev || prev === targetStem) continue;
     const oldPng = `${prev}.png`;
-    if ((await readBytesAt(dir, oldPng)) === null) continue;
-    await atomicCopy(dir, oldPng, `${targetStem}.png`);
-    removed.add(oldPng);
+    const src = await readBytesAt(dir, oldPng);
+    if (src === null) continue;
+    await atomicCopy(dir, src, "png", `${targetStem}.png`);
+    out.obsolete.add(oldPng);
+    out.touched += 1;
   }
 }
 
@@ -119,43 +165,41 @@ async function readCommittedRecord(dir: DirHandleLike | null): Promise<{ ready: 
   return { ready: parsed !== null && parsed.timestamps.committedAt !== null, record: parsed };
 }
 
+function seedPrevStems(workName: string, record: ExportRecord): Set<string> {
+  const baseRaw = (record.pair.base || "").replace(/\.svg$/i, "");
+  return new Set<string>([workName, baseRaw, stemOf(record.pair.base || ""), record.uploadName ?? ""]);
+}
+
 async function removeObsoleteFiles(dir: DirHandleLike, obsolete: ReadonlySet<string>): Promise<void> {
   for (const oldName of obsolete) {
     try { await dir.removeEntry?.(oldName); } catch { /* ignore */ }
   }
 }
 
-async function copyRenamedArtifacts(
-  dir: DirHandleLike,
-  next: ExportRecord,
-  targetStem: string,
-): Promise<Set<string>> {
-  const { pairs, prevStems } = collectRenames(next, targetStem);
-  const obsolete = new Set<string>();
-  for (const p of pairs) {
-    await atomicCopy(dir, p.from, p.to);
-    if (p.from !== p.to) obsolete.add(p.from);
-  }
-  await copyCompanionPngs(dir, prevStems, targetStem, obsolete);
-  return obsolete;
+async function executeDiskRename(dir: DirHandleLike, loaded: ExportRecord, args: RenameExportArgs, desiredStem: string): Promise<RenameExportResult> {
+  const targetStem = await fitStemToDir(dir, desiredStem, args.workName);
+  const next: ExportRecord = JSON.parse(JSON.stringify(loaded)) as ExportRecord;
+  const prevStems = seedPrevStems(args.workName, next);
+  const outcome = await copyRecordedSlots(dir, next, targetStem, prevStems);
+  await copyCompanionPngs(dir, prevStems, targetStem, outcome);
+  if (outcome.touched === 0) return { ok: true, diskRenamed: false, uploadName: desiredStem, record: loaded };
+  next.workName = args.workName;
+  next.uploadName = targetStem;
+  next.timestamps.committedAt = args.now ?? new Date().toISOString();
+  await commitJson(dir, next);
+  await removeObsoleteFiles(dir, outcome.obsolete);
+  return { ok: true, diskRenamed: true, uploadName: targetStem, record: next };
 }
 
 export async function renameExportPackage(args: RenameExportArgs): Promise<RenameExportResult> {
-  const targetStem = effectiveExportStem(args.workName, args.nextUploadName);
+  const desiredStem = effectiveExportStem(args.workName, args.nextUploadName);
   const dir = args.exportDir === "" ? args.root : await probePath(args.root, args.exportDir);
   const loaded = await readCommittedRecord(dir);
   if (dir === null || !loaded.ready || loaded.record === null) {
-    return { ok: true, diskRenamed: false, uploadName: targetStem, record: loaded.record };
+    return { ok: true, diskRenamed: false, uploadName: desiredStem, record: loaded.record };
   }
   try {
-    const next: ExportRecord = JSON.parse(JSON.stringify(loaded.record)) as ExportRecord;
-    const obsolete = await copyRenamedArtifacts(dir, next, targetStem);
-    next.workName = args.workName;
-    next.uploadName = targetStem;
-    next.timestamps.committedAt = args.now ?? new Date().toISOString();
-    await commitJson(dir, next);
-    await removeObsoleteFiles(dir, obsolete);
-    return { ok: true, diskRenamed: true, uploadName: targetStem, record: next };
+    return await executeDiskRename(dir, loaded.record, args, desiredStem);
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : "could not rename exported files" };
   }

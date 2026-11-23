@@ -154,4 +154,102 @@ describe("uploadnamestore & export.json workName + uploadName", () => {
     expect(node!.children.has("Bakery_and_coffee_icons_collection.png")).toBe(true);
     expect(node!.children.has(`${firstUpload}.png`)).toBe(false);
   });
+
+  it("handles legacy exports with missing optional format files or PNG-only exports without throwing", async () => {
+    const root = new FakeDir("workspace");
+    const folder = "_artboard_sheets/2026-11/2026-11-19/icon-sheet_sheet_4_icons_ice_blue_palette_id91588/artboard_variant_1";
+    const workName = "icon-sheet_sheet_4_icons_ice_blue_palette_id91588_v1";
+    const pkg = await buildSheetPackage(
+      {
+        svg: SVG,
+        metadata: null,
+        settings: { ...DEFAULT_UPLOAD_SETTINGS, includeSvg: true, includeJpeg: true, includeEps: false, expandText: false },
+        folder,
+        stem: workName,
+        pairId: "art-mwteva47-01hulw",
+        now: "2026-11-19T12:00:00.000Z",
+        prompt: "p",
+        model: "gemini-2.5-flash",
+      },
+      { pngBlob: async () => new Blob(["png"], { type: "image/png" }) },
+    );
+    // Simulate a legacy export.json without uploadName/workName AND a stale eps slot whose file was removed:
+    const legacyRec = JSON.parse(JSON.stringify(pkg.record));
+    delete legacyRec.workName;
+    delete legacyRec.uploadName;
+    legacyRec.outputs.eps = { path: `${workName}.eps`, bytes: 10, hash: "sha256:00" };
+    const files = pkg.files.map((f) => (
+      f.name === "export.json" ? { name: "export.json", bytes: new TextEncoder().encode(JSON.stringify(legacyRec)) } : f
+    ));
+    await writeSheetExport(root, folder, files);
+
+    const target = buildUploadName({
+      title: "Breakfast meal and morning food icons",
+      description: "Enjoying a peaceful morning breakfast ritual. Toaster pan egg pancake cup icons",
+    });
+    const res = await renameExportPackage({
+      root,
+      exportDir: `${folder}/export`,
+      workName,
+      nextUploadName: target,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.diskRenamed).toBe(true);
+    expect(res.uploadName).toBe(target);
+    expect(res.record?.outputs.eps).toBeNull();
+  });
+
+  it("automatically trims uploadName on a whole-word boundary when OS MAX_PATH limits filename length in deep folders", async () => {
+    const root = new FakeDir("workspace");
+    const folder = "_artboard_sheets/2026-11/2026-11-19/icon-sheet_sheet_4_icons_ice_blue_palette_id91588/artboard_variant_1";
+    const workName = "icon-sheet_sheet_4_icons_ice_blue_palette_id91588_v1";
+    const pkg = await buildSheetPackage(
+      {
+        svg: SVG,
+        metadata: null,
+        settings: { ...DEFAULT_UPLOAD_SETTINGS, includeSvg: true, includeJpeg: true, includeEps: false, expandText: false },
+        folder,
+        workName,
+        stem: workName,
+        pairId: "art-mwteva47-01hulw",
+        now: "2026-11-19T12:00:00.000Z",
+        prompt: "p",
+        model: "gemini-2.5-flash",
+      },
+      { pngBlob: async () => new Blob(["png"], { type: "image/png" }) },
+    );
+    await writeSheetExport(root, folder, pkg.files);
+
+    // Navigate to exportDir and enforce a 76-char filename limit (simulating Win32 259-char MAX_PATH in a 183-char folder):
+    let exportDir: FakeDir | undefined = root;
+    for (const part of `${folder}/export`.split("/")) exportDir = exportDir?.children.get(part) as FakeDir | undefined;
+    const origGetFile = exportDir!.getFileHandle.bind(exportDir!);
+    exportDir!.getFileHandle = async (name: string, opts?: { create?: boolean }) => {
+      if (opts?.create && name.length > 76) throw new Error("NotFoundError: Path exceeds Win32 MAX_PATH");
+      return origGetFile(name, opts);
+    };
+
+    const longDesired = buildUploadName({
+      title: "Breakfast meal and morning food icons",
+      description: "Enjoying a peaceful morning breakfast ritual. Toaster pan egg pancake cup icons",
+    });
+    expect(longDesired.length).toBe(116);
+
+    const res = await renameExportPackage({
+      root,
+      exportDir: `${folder}/export`,
+      workName,
+      nextUploadName: longDesired,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.diskRenamed).toBe(true);
+    expect(res.uploadName.length).toBeLessThanOrEqual(72);
+    expect(res.uploadName.endsWith("_")).toBe(false);
+    // Must end on a complete word from the source phrase:
+    expect(longDesired.startsWith(`${res.uploadName}_`)).toBe(true);
+    expect(exportDir!.children.has(`${res.uploadName}.svg`)).toBe(true);
+    expect(exportDir!.children.has(`${res.uploadName}.png`)).toBe(true);
+  });
 });

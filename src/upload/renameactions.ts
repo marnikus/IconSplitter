@@ -6,11 +6,13 @@
 import { useCallback, useRef } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { exportDirOf, stemOf, type ExportRecord } from "../lib/upload/export";
-import { buildUploadName, effectiveExportStem } from "../lib/upload/uploadname";
+import { buildUploadName, effectiveExportStem, sanitizeUploadName } from "../lib/upload/uploadname";
 import type { Slice, UploadCtx } from "./actions";
-import { renameExportPackage } from "./renameexport";
+import { renameExportPackage, type RenameExportResult } from "./renameexport";
 import type { UploadRow } from "./types";
 import { setUploadName } from "./uploadnamestore";
+
+type RowOutcome = { kind: "disk" | "pending" } | { kind: "failed"; reason: string };
 
 function patchRowRecord(c: UploadCtx, id: string, record: ExportRecord): void {
   c.refs.scanKey.current = null;
@@ -25,47 +27,61 @@ function renameRowMessage(stored: string | null, workName: string, target: strin
   return stored === null ? `Upload file name reset to ${workName}` : `Upload file name saved for export: ${target}`;
 }
 
-async function applyOneRowRename(
-  c: UploadCtx,
-  row: UploadRow,
-  rawName: string | null,
-  silent = false,
-): Promise<"disk" | "pending" | "failed"> {
+function desiredRowStem(rawName: string | null): string | null {
+  return rawName === null ? null : (sanitizeUploadName(rawName) || null);
+}
+
+async function renameRowOnDisk(root: DirHandleLike | null, dirPath: string, workName: string, desired: string | null): Promise<RenameExportResult> {
+  if (root === null) {
+    return { ok: true, diskRenamed: false, uploadName: effectiveExportStem(workName, desired), record: null };
+  }
+  return renameExportPackage({ root, exportDir: exportDirOf(dirPath), workName, nextUploadName: desired });
+}
+
+async function applyOneRowRename(c: UploadCtx, row: UploadRow, rawName: string | null, silent = false): Promise<RowOutcome> {
   const workName = stemOf(row.source.svgName);
-  const stored = setUploadName(row.source.id, rawName, workName);
-  const target = effectiveExportStem(workName, stored);
-  const root = c.refs.root.current as DirHandleLike | null;
-  const res = root !== null
-    ? await renameExportPackage({ root, exportDir: exportDirOf(row.source.dirPath), workName, nextUploadName: stored })
-    : { ok: true as const, diskRenamed: false, uploadName: target, record: null };
+  const desired = desiredRowStem(rawName);
+  const res = await renameRowOnDisk(c.refs.root.current as DirHandleLike | null, row.source.dirPath, workName, desired);
   if (!res.ok) {
     if (!silent) c.say(`Could not rename exported files — ${res.reason}`, true);
-    return "failed";
+    return { kind: "failed", reason: res.reason };
   }
+  const finalCustom = desired === null || res.uploadName === workName ? null : res.uploadName;
+  const stored = setUploadName(row.source.id, finalCustom, workName);
   if (res.diskRenamed && res.record !== null) patchRowRecord(c, row.source.id, res.record);
-  if (!silent) c.say(renameRowMessage(stored, workName, target, res.diskRenamed));
-  return res.diskRenamed ? "disk" : "pending";
+  if (!silent) c.say(renameRowMessage(stored, workName, res.uploadName, res.diskRenamed));
+  return { kind: res.diskRenamed ? "disk" : "pending" };
+}
+
+function summarizeRowBatch(counts: { disk: number; pending: number; skipped: number; failures: string[] }): { msg: string; err: boolean } {
+  const okTotal = counts.disk + counts.pending;
+  if (okTotal === 0 && counts.failures.length > 0) {
+    return { msg: `Could not rename exported files (${counts.failures.length} failed) — ${counts.failures[0]}`, err: true };
+  }
+  if (okTotal === 0) {
+    return { msg: "No selected icons have Title + Description metadata to build an upload name", err: true };
+  }
+  const parts = [`Renamed ${okTotal} icon(s) for upload`];
+  if (counts.pending > 0) parts.push(`${counts.pending} ready for first export`);
+  if (counts.skipped > 0) parts.push(`${counts.skipped} skipped (no metadata)`);
+  if (counts.failures.length > 0) parts.push(`${counts.failures.length} failed (${counts.failures[0]})`);
+  return { msg: parts.join(" · "), err: counts.failures.length > 0 };
 }
 
 async function renameBatch(c: UploadCtx, ids: readonly string[]): Promise<void> {
   const selected = c.rows.filter((r) => ids.includes(r.source.id));
   if (selected.length === 0) return c.say("Check the icons to rename first", true);
-  let disk = 0;
-  let pending = 0;
-  let skipped = 0;
+  const counts = { disk: 0, pending: 0, skipped: 0, failures: [] as string[] };
   for (const row of selected) {
-    const m = row.meta.metadata;
+    const m = row.meta.metadata ?? row.record?.metadata ?? null;
     const gen = m ? buildUploadName({ title: m.title, description: m.description }) : "";
-    if (gen === "") { skipped += 1; continue; }
+    if (gen === "") { counts.skipped += 1; continue; }
     const out = await applyOneRowRename(c, row, gen, true);
-    if (out === "disk") disk += 1;
-    else if (out === "pending") pending += 1;
+    if (out.kind === "failed") counts.failures.push(out.reason);
+    else counts[out.kind] += 1;
   }
-  if (disk + pending === 0) return c.say("No selected icons have Title + Description metadata to build an upload name", true);
-  const parts = [`Renamed ${disk + pending} icon(s) for upload`];
-  if (pending > 0) parts.push(`${pending} ready for first export`);
-  if (skipped > 0) parts.push(`${skipped} skipped (no metadata)`);
-  c.say(parts.join(" · "));
+  const summary = summarizeRowBatch(counts);
+  c.say(summary.msg, summary.err);
 }
 
 export function useRenameActions(ctx: UploadCtx): Slice<"setRowUploadName" | "renameSelectedForUpload"> {

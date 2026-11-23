@@ -22,9 +22,14 @@ import { settle, waitUntil } from "./helpers/quiet";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const savedHandles = vi.hoisted(() => new Map<string, unknown>());
 vi.mock("../src/batch/store", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/batch/store")>();
-  return { ...actual, saveHandles: vi.fn(async () => undefined), loadHandles: vi.fn(async () => null) };
+  return {
+    ...actual,
+    saveHandles: vi.fn(async (k: string, v: unknown) => { savedHandles.set(k, v); }),
+    loadHandles: vi.fn(async (k: string) => savedHandles.get(k) ?? null),
+  };
 });
 
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 3h18v18H3z" fill="none" stroke="#111111" stroke-width="2"/></svg>';
@@ -81,6 +86,7 @@ async function typeInto(id: string, value: string): Promise<void> {
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })));
   localStorage.clear();
+  savedHandles.clear();
   clearUploadNamesInMemory();
   resetAppStore();
   dir = workspaceDir();
@@ -154,6 +160,81 @@ describe("Rename exported upload files across SVG builder, SVG to upload, and Up
     // Also verify SVG builder's bulk button (`builder-artboards-rename`) is present & wired:
     await click("tab-svg-builder");
     expect(q("builder-artboards-rename")).not.toBeNull();
+  }, 20_000);
+
+  it("SVG builder bulk Rename for upload: renames exported artboards from Title + Description (or reports real disk error, never false 'no metadata')", async () => {
+    saveBuilderFormats({ ...loadBuilderFormats(), includeSvg: true, includeJpeg: true, includeEps: false, expandText: false });
+    vi.spyOn(exporter, "sheetPngBlob").mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+
+    await click("tab-svg-builder");
+    await click("builder-open-folder");
+    await waitUntil(() => text("builder-library-count") === "4", "library scanned");
+    await waitUntil(() => q("builder-artboard") !== null, "sheet composed");
+    await click("builder-template-save");
+    await waitUntil(() => host.querySelector('[data-testid^="builder-template-add-artboard-"]') !== null, "template saved");
+    const addBtn = host.querySelector('[data-testid^="builder-template-add-artboard-"]') as HTMLElement;
+    await click(addBtn.getAttribute("data-testid")!);
+
+    await waitUntil(() => host.querySelector('[data-testid^="builder-artboard-art-"]') !== null, "artboard added");
+    const row = host.querySelector('[data-testid^="builder-artboard-art-"]') as HTMLElement;
+    const abId = row.getAttribute("data-testid")!.replace("builder-artboard-", "");
+
+    // Export artboard first, then populate Title + Description in Stock Upload / artboard metadata:
+    await click(`builder-artboard-check-${abId}`);
+    await click("builder-export-selected");
+    await waitUntil(() => /exported/i.test(text("builder-toast")), "artboard exported");
+
+    // Put accepted metadata in export.json on disk (simulating an exported artboard whose disk metadata exists
+    // OR whose metadata is set), then make disk read-only and click builder-artboards-rename:
+    await click("tab-stock-upload");
+    await click("stock-pick-root-btn");
+    await waitUntil(() => q(`stock-row-${abId}`) !== null, "stock row discovered");
+    await click(`stock-row-${abId}`);
+    await typeInto(`stock-meta-title-${abId}`, "Breakfast meal and morning food icons");
+    await typeInto(`stock-meta-description-${abId}`, "Enjoying a peaceful morning breakfast ritual. Toaster pan egg pancake cup icons");
+    await typeInto(`stock-meta-tags-${abId}`, "icon, pictogram, vector, stroke, line, editable, web, breakfast, morning, food, toaster, pancake");
+    await click(`stock-meta-accept-${abId}`);
+    await waitUntil(() => /accepted|embedded/i.test(text("stock-toast")), "metadata embedded into export.json");
+
+    // Return to SVG builder and click `builder-artboards-rename` on the checked exported artboard:
+    // Even if `artboard.metadata` in memory wasn't populated yet, it reads Title + Description from disk / artboard and renames!
+    await click("tab-svg-builder");
+    if (!(q(`builder-artboard-check-${abId}`) as HTMLInputElement).checked) {
+      await click(`builder-artboard-check-${abId}`);
+    }
+    await click("builder-artboards-rename");
+    const expected = "Breakfast_meal_and_morning_food_icons_Enjoying_a_peaceful_morning_breakfast_ritual_Toaster_pan_egg_pancake_cup_icons";
+    await waitUntil(() => /renamed/i.test(text("builder-toast")), "bulk artboard rename succeeded");
+    expect(text("builder-toast")).not.toContain("No selected artboards have Title + Description");
+    expect(text(`builder-artboard-upload-name-${abId}`)).toContain(expected);
+
+    // Reset back to workName first, then break writes inside `export/` while keeping reads working (simulating OS write error):
+    // clicking `builder-artboards-rename` must report the REAL disk error and NEVER blame missing metadata!
+    await click(`builder-artboard-${abId}`);
+    await click(`upload-name-reset-${abId}`);
+    await waitUntil(() => q(`builder-artboard-upload-name-${abId}`) === null, "reset to work name");
+    const sheetsDir = dir.children.get("_artboard_sheets") as BinDir;
+    const findExportDir = (d: BinDir): BinDir | null => {
+      for (const [k, child] of d.children) {
+        if (child.kind !== "directory") continue;
+        if (k === "export") return child as BinDir;
+        const hit = findExportDir(child as BinDir);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    const expDir = findExportDir(sheetsDir)!;
+    const origGetFile = expDir.getFileHandle.bind(expDir);
+    expDir.getFileHandle = async (name: string, opts?: { create?: boolean }) => {
+      if (opts?.create) throw new Error("Access denied by OS");
+      return origGetFile(name, opts);
+    };
+    await click("builder-artboards-rename");
+    await waitUntil(() => /Access denied by OS/i.test(text("builder-toast")), "real disk error shown");
+    expect(text("builder-toast")).toContain("Could not rename exported files");
+    expect(text("builder-toast")).not.toContain("No selected artboards have Title + Description");
+    // And UI uploadName was NOT prematurely overwritten with the failed target!
+    expect(q(`builder-artboard-upload-name-${abId}`)).toBeNull();
   }, 20_000);
 
   it("SVG to upload: bulk-renames selected icons from Title + Description before export, exports under uploadName, then renames existing export/ files on disk", async () => {

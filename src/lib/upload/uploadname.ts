@@ -50,3 +50,10 @@ export function effectiveExportStem(workName: string, uploadName: string | null 
   const clean = typeof uploadName === "string" ? sanitizeUploadName(uploadName) : "";
   return clean !== "" ? clean : workName;
 }
+
+/** Shrinks an underscore-joined stem to `<= maxChars` strictly at a whole-word boundary. */
+export function shrinkUploadNameToBudget(stem: string, maxChars: number): string {
+  const clean = sanitizeUploadName(stem, UPLOAD_NAME_MAX_CHARS);
+  if (clean.length <= maxChars) return clean;
+  return joinWholeWords(clean.split("_").filter(Boolean), Math.max(8, maxChars));
+}

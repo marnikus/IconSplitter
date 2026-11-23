@@ -22,10 +22,12 @@ import { writeArtboardSeed, writeSheetExport, writeSheetMetadata, type SheetMeta
 import { recordUse } from "../usagestore";
 import { writeTemplateFolder } from "./templatefolder";
 import { sheetsRoot } from "./sheetsroot";
+import { ensureDirPath } from "../../lib/fs";
 import { writeSheetJson } from "./sheetjson";
 import { svgTextsFor } from "./artboardmeta";
 import { beginBuilderExport, type BuilderExportRun } from "../exportprogress";
 import { effectiveExportStem } from "../../lib/upload/uploadname";
+import { fitStemToDir } from "../../upload/renameexport";
 import { getUploadName } from "../../upload/uploadnamestore";
 
 export function sheetExportActions(get: () => BuilderActionContext): Pick<BuilderActions, "exportSelectedArtboards" | "syncSheetJson"> {
@@ -79,7 +81,8 @@ async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboar
   const settings = sheetSettings();
   if (settings.expandText) await warmTextFonts(doc.svg); // the outliner is sync; fonts load here
   const workName = sheetStem(folder);
-  const exportStem = effectiveExportStem(workName, artboard.uploadName ?? getUploadName(artboard.id));
+  const desiredStem = effectiveExportStem(workName, artboard.uploadName ?? getUploadName(artboard.id));
+  const exportStem = await fitStemToDir(await ensureDirPath(root, `${folder}/export`), desiredStem, workName);
   const pkg = await buildSheetPackage({ svg: doc.svg, metadata: artboard.metadata, settings, folder, workName, stem: exportStem, pairId: artboard.id,
     now: now.toISOString(), prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(settings.epsConverter, signal) });
   if (signal?.aborted) return [];

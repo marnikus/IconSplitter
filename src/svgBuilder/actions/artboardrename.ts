@@ -1,17 +1,23 @@
 // actions/artboardrename.ts — per-artboard and bulk upload file renaming for
 // SVG builder Final artboards (before or after export; workName & id stay).
 
+import { probePath, readTextAt, type DirHandleLike } from "../../lib/fs";
+import { isRecord } from "../../lib/isrecord";
 import type { FinalArtboard } from "../../lib/svgBuilder/artboards";
 import { artboardFolder, sheetStem } from "../../lib/svgBuilder/sheetfolders";
 import type { SheetTemplate } from "../../lib/svgBuilder/templates";
+import { parseExportRecord } from "../../lib/upload/export";
 import { buildUploadName, effectiveExportStem, sanitizeUploadName } from "../../lib/upload/uploadname";
-import { renameExportPackage } from "../../upload/renameexport";
+import { renameExportPackage, type RenameExportResult } from "../../upload/renameexport";
 import { getUploadName, setUploadName } from "../../upload/uploadnamestore";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
-import { sheetsRoot } from "./sheetsroot";
+import { bootBuilderRoot } from "../scan";
+import { isSplitOutput, sheetsRoot } from "./sheetsroot";
 
 type RenameSlice = Pick<BuilderActions, "setArtboardUploadName" | "renameArtboardsForUpload">;
+type OneOutcome = { kind: "disk" | "pending" } | { kind: "failed"; reason: string };
+interface TitleDesc { title: string; description: string }
 
 export function artboardWorkName(
   artboard: FinalArtboard,
@@ -48,50 +54,126 @@ function renameDoneMessage(stored: string | null, workName: string, target: stri
   return stored === null ? `Upload file name reset to ${workName}` : `Upload file name saved for export: ${target}`;
 }
 
+async function resolveRoot(ctx: BuilderActionContext, silent: boolean): Promise<DirHandleLike | null> {
+  const cur = sheetsRoot(ctx, silent);
+  if (cur !== null) return cur;
+  if (ctx.model.root !== null) return null;
+  const booted = await bootBuilderRoot().catch(() => null);
+  return booted !== null && !isSplitOutput(booted) ? booted : null;
+}
+
+function parseMetaJson(raw: string | null): TitleDesc | null {
+  if (raw === null) return null;
+  try {
+    const m = JSON.parse(raw);
+    if (!isRecord(m)) return null;
+    const cand = { title: typeof m.title === "string" ? m.title : "", description: typeof m.description === "string" ? m.description : "" };
+    return buildUploadName(cand) !== "" ? cand : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseExportMeta(raw: string | null): TitleDesc | null {
+  if (raw === null) return null;
+  try {
+    const rec = parseExportRecord(JSON.parse(raw));
+    return rec?.metadata ? { title: rec.metadata.title, description: rec.metadata.description } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function readDiskMeta(root: DirHandleLike | null, folder: string | null): Promise<TitleDesc | null> {
+  if (root === null || folder === null) return null;
+  const folderDir = await probePath(root, folder);
+  if (folderDir === null) return null;
+  const fromMeta = parseMetaJson(await readTextAt(folderDir, "metadata.json"));
+  if (fromMeta !== null) return fromMeta;
+  const expDir = await probePath(folderDir, "export");
+  if (expDir === null) return null;
+  return parseExportMeta(await readTextAt(expDir, "export.json"));
+}
+
+async function resolveGeneratedStem(ctx: BuilderActionContext, a: FinalArtboard): Promise<string> {
+  const stageMeta = ctx.model.editingArtboardId === a.id ? ctx.model.metadata : null;
+  const mem = a.metadata && (a.metadata.title || a.metadata.description) ? a.metadata : stageMeta;
+  if (mem) {
+    const built = buildUploadName({ title: mem.title, description: mem.description });
+    if (built !== "") return built;
+  }
+  const disk = await readDiskMeta(await resolveRoot(ctx, true), a.folder);
+  return disk ? buildUploadName(disk) : "";
+}
+
+function desiredArtboardStem(rawName: string | null): string | null {
+  return rawName === null ? null : (sanitizeUploadName(rawName) || null);
+}
+
+async function renameArtboardOnDisk(
+  root: DirHandleLike | null,
+  folder: string | null,
+  workName: string,
+  desired: string | null,
+): Promise<RenameExportResult> {
+  if (root === null || folder === null) {
+    return { ok: true, diskRenamed: false, uploadName: effectiveExportStem(workName, desired), record: null };
+  }
+  return renameExportPackage({ root, exportDir: `${folder}/export`, workName, nextUploadName: desired });
+}
+
 async function applyOneArtboardRename(
   get: () => BuilderActionContext,
   id: string,
   rawName: string | null,
   silent = false,
-): Promise<"disk" | "pending" | "failed"> {
+): Promise<OneOutcome> {
   const ctx = get();
   const artboard = ctx.model.artboards.find((a) => a.id === id);
-  if (!artboard) return "failed";
+  if (!artboard) return { kind: "failed", reason: "artboard not found" };
   const workName = artboardWorkName(artboard, ctx.model.artboards, ctx.model.templates);
-  const stored = setUploadName(id, rawName, workName);
-  saveUploadField(get(), id, stored);
-  const target = effectiveExportStem(workName, stored);
-  const root = sheetsRoot(get());
-  const res = root !== null && artboard.folder !== null
-    ? await renameExportPackage({ root, exportDir: `${artboard.folder}/export`, workName, nextUploadName: stored })
-    : { ok: true as const, diskRenamed: false, uploadName: target, record: null };
+  const desired = desiredArtboardStem(rawName);
+  const res = await renameArtboardOnDisk(await resolveRoot(ctx, silent), artboard.folder, workName, desired);
   if (!res.ok) {
     if (!silent) get().say(`Could not rename exported files — ${res.reason}`, true);
-    return "failed";
+    return { kind: "failed", reason: res.reason };
   }
-  if (!silent) get().say(renameDoneMessage(stored, workName, target, res.diskRenamed));
-  return res.diskRenamed ? "disk" : "pending";
+  const finalCustom = desired === null || res.uploadName === workName ? null : res.uploadName;
+  const stored = setUploadName(id, finalCustom, workName);
+  saveUploadField(get(), id, stored);
+  if (!silent) get().say(renameDoneMessage(stored, workName, res.uploadName, res.diskRenamed));
+  return { kind: res.diskRenamed ? "disk" : "pending" };
+}
+
+function summarizeBatch(counts: { disk: number; pending: number; skipped: number; failures: string[] }): { msg: string; err: boolean } {
+  const okTotal = counts.disk + counts.pending;
+  if (okTotal === 0 && counts.failures.length > 0) {
+    return { msg: `Could not rename exported files (${counts.failures.length} failed) — ${counts.failures[0]}`, err: true };
+  }
+  if (okTotal === 0) {
+    return { msg: "No selected artboards have Title + Description metadata to build an upload name", err: true };
+  }
+  const parts = [`Renamed ${okTotal} artboard(s) for upload`];
+  if (counts.pending > 0) parts.push(`${counts.pending} ready for first export`);
+  if (counts.skipped > 0) parts.push(`${counts.skipped} skipped (no metadata)`);
+  if (counts.failures.length > 0) parts.push(`${counts.failures.length} failed (${counts.failures[0]})`);
+  return { msg: parts.join(" · "), err: counts.failures.length > 0 };
 }
 
 async function renameSelectedArtboards(get: () => BuilderActionContext, ids: readonly string[]): Promise<void> {
   const start = get();
   const selected = start.model.artboards.filter((a) => ids.includes(a.id));
   if (selected.length === 0) return start.say("Check the artboards to rename first", true);
-  let disk = 0;
-  let pending = 0;
-  let skipped = 0;
+  const counts = { disk: 0, pending: 0, skipped: 0, failures: [] as string[] };
   for (const a of selected) {
-    const gen = a.metadata ? buildUploadName({ title: a.metadata.title, description: a.metadata.description }) : "";
-    if (gen === "") { skipped += 1; continue; }
+    const gen = await resolveGeneratedStem(get(), a);
+    if (gen === "") { counts.skipped += 1; continue; }
     const out = await applyOneArtboardRename(get, a.id, gen, true);
-    if (out === "disk") disk += 1;
-    else if (out === "pending") pending += 1;
+    if (out.kind === "failed") counts.failures.push(out.reason);
+    else counts[out.kind] += 1;
   }
-  if (disk + pending === 0) return get().say("No selected artboards have Title + Description metadata to build an upload name", true);
-  const parts = [`Renamed ${disk + pending} artboard(s) for upload`];
-  if (pending > 0) parts.push(`${pending} ready for first export`);
-  if (skipped > 0) parts.push(`${skipped} skipped (no metadata)`);
-  get().say(parts.join(" · "));
+  const summary = summarizeBatch(counts);
+  get().say(summary.msg, summary.err);
 }
 
 export function artboardRenameActions(get: () => BuilderActionContext): RenameSlice {
