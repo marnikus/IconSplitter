@@ -2,6 +2,8 @@
 // item (Title, Description, Tags) + Accept & re-embed.
 
 import { countWords, dedupeTags, type IconMetadata, type MetadataValidation } from "../lib/upload/meta";
+import UploadNameField from "../ui/UploadNameField";
+import type { UploadRenameBinding } from "../upload/UploadMetaFields";
 import type { StockMetaDraft } from "./rowlist";
 
 export interface StockUploadMetaFieldsProps {
@@ -10,12 +12,17 @@ export interface StockUploadMetaFieldsProps {
   onEdit: (patch: Partial<IconMetadata>) => void;
   onAccept: () => void;
   onCopy: (field: "title" | "description" | "tags") => void;
+  rename?: UploadRenameBinding;
 }
 
-export default function StockUploadMetaFields({ id, draft, onEdit, onAccept, onCopy }: StockUploadMetaFieldsProps) {
+export default function StockUploadMetaFields({ id, draft, onEdit, onAccept, onCopy, rename }: StockUploadMetaFieldsProps) {
   const m = draft.metadata;
   return (
     <div className="up-meta" data-testid={`stock-meta-fields-${id}`}>
+      {rename && (
+        <UploadNameField id={id} workName={rename.workName} uploadName={rename.uploadName}
+          titleText={m.title} descriptionText={m.description} onApply={rename.onApply} />
+      )}
       <MetaField id={id} label="Title" slug="title" value={m.title} count={countWords(m.title)}
         hint="At least 5 words, sentence case, no trailing period"
         onChange={(v) => onEdit({ title: v })} onCopy={() => onCopy("title")} />

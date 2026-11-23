@@ -13,8 +13,8 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 
 | Testid | Element | Notes |
 |---|---|---|
-| `builder-artboards` | list window | `builder-artboards-hint`, `builder-artboards-check-all`, `builder-artboards-checked`, `builder-artboards-metadata`, `builder-artboards-reset-look` (↺ Template (N), 2026-11-23), `builder-artboards-remove`, `builder-artboard-close`, `builder-artboard-list` (keys), `builder-artboard-group-<templateId>` + `builder-artboard-add-<templateId>` |
-| `builder-artboard-<id>` | row (`is-active`, `is-open`) | `builder-artboard-check-<id>`, `-preview-<id>`, `-name-<id>`, `-id-<id>`, `-meta-<id>`, `-exported-<id>`, `-remove-<id>` |
+| `builder-artboards` | list window | `builder-artboards-hint`, `builder-artboards-check-all`, `builder-artboards-checked`, `builder-artboards-metadata`, `builder-artboards-rename` (✎ Rename for upload, [upload-rename.md](../sor/upload-rename.md)), `builder-artboards-reset-look` (↺ Template (N), 2026-11-23), `builder-artboards-remove`, `builder-artboard-close`, `builder-artboard-list` (keys), `builder-artboard-group-<templateId>` + `builder-artboard-add-<templateId>` |
+| `builder-artboard-<id>` | row (`is-active`, `is-open`) | `builder-artboard-check-<id>`, `-preview-<id>`, `-name-<id>`, `-id-<id>`, `-upload-name-<id>`, `-meta-<id>`, `-exported-<id>`, `-remove-<id>` |
 | `builder-artboards-meta-dialog` | metadata confirmation | `builder-artboards-meta-preview-<id>`, `-prompt`, `-skipped`, `-confirm`, `-cancel`, `-close` |
 
 ## Library tile use

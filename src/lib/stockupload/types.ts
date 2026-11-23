@@ -60,7 +60,10 @@ export interface ExportedFiles {
 
 export interface ExportedItem {
   id: string;
+  /** The exported upload stem on disk (sent to stock websites). */
   stem: string;
+  /** The app's original working stem (preserved unchanged across upload renames). */
+  workName?: string;
   exportDir: string;
   recordPath: string;
   record: ExportRecord;

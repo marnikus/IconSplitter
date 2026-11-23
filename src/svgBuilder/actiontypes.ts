@@ -193,4 +193,7 @@ export interface BuilderActions {
   /** An artboard row's metadata editor (2026-11-15): edit its fields, ✓ Accept re-validates; saved into that artboard. */
   editArtboardMetadata: (id: string, patch: Partial<SheetMetadataFields>) => void;
   acceptArtboardMetadata: (id: string) => void;
+  /** Upload file naming (`workName` stays; exported files use `uploadName`). */
+  setArtboardUploadName: (id: string, next: string | null) => void;
+  renameArtboardsForUpload: (ids: readonly string[]) => void;
 }

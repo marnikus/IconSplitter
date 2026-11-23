@@ -61,6 +61,7 @@ export interface UploadBulkBarProps {
   onMetadata: () => void;
   onRegenerateMetadata: () => void;
   onAcceptMetadata: () => void;
+  onRenameSelected?: () => void;
   onExport: () => void;
   onDownload: () => void;
   /** Declines the checked items in Generate SVG — they leave this list. */
@@ -125,6 +126,16 @@ function BulkRight({ p }: { p: UploadBulkBarProps }) {
   );
 }
 
+function RenameSelectedButton({ p }: { p: UploadBulkBarProps }) {
+  if (!p.onRenameSelected) return null;
+  return (
+    <button type="button" className="svg-btn" data-testid="upload-rename-selected"
+      disabled={p.checkedCount === 0 || p.metaAcceptBusy} onClick={p.onRenameSelected}
+      title="Rename exported files of selected icons from Title + Description (keeps ID and working name unchanged)">
+      ✎ Rename for upload ({p.checkedCount})</button>
+  );
+}
+
 /** The five bulk actions, every one on the SELECTION only. */
 function BulkActions({ p }: { p: UploadBulkBarProps }) {
   return (
@@ -140,6 +151,7 @@ function BulkActions({ p }: { p: UploadBulkBarProps }) {
         disabled={p.metaAcceptCount === 0 || p.metaAcceptBusy} onClick={p.onAcceptMetadata}
         title="Accept existing metadata for selected icons only; invalid drafts stay unaccepted. No AI requests.">
         ✓ Accept metadata ({p.metaAcceptCount})</button>
+      <RenameSelectedButton p={p} />
       <button type="button" className="svg-btn primary" data-testid="upload-export-selected"
         disabled={p.checkedCount === 0} onClick={p.onExport}>⇪ Export selected</button>
       <button type="button" className="svg-btn" data-testid="upload-download-selected"

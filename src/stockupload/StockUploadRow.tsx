@@ -13,6 +13,7 @@ import { isRowGestureClick } from "../ui/rowgesture";
 import UploadRowBadges from "../upload/UploadRowBadges";
 import StockUploadMetaFields from "./StockUploadMetaFields";
 import StockUploadPreview from "./StockUploadPreview";
+import { itemWorkName } from "./renameops";
 import type { StockMetaDraft } from "./rowlist";
 import LazyPreview from "../ui/LazyPreview";
 
@@ -31,6 +32,7 @@ export interface StockRowPresentation {
   editMeta: (item: ExportedItem, patch: Partial<IconMetadata>) => void;
   acceptMeta: (item: ExportedItem) => void;
   copyMeta: (item: ExportedItem, field: "title" | "description" | "tags") => void;
+  renameItem: (id: string, nextUploadName: string | null) => void;
   uploading: boolean;
   removeItems: (ids: string[]) => void;
 }
@@ -67,11 +69,14 @@ function StockUploadRowView({ item, a, active = false, register }: {
 }
 
 function ExpandedRowMeta({ item, a }: { item: ExportedItem; a: StockRowPresentation }) {
+  const workName = itemWorkName(item);
+  const customUpload = item.stem !== workName ? item.stem : null;
   return (
     <div className="up-detail" data-testid={`stock-detail-${item.id}`}>
       <StockUploadMetaFields
         id={item.id}
         draft={a.metaDraftOf(item)}
+        rename={{ workName, uploadName: customUpload, onApply: (next) => a.renameItem(item.id, next) }}
         onEdit={(patch) => a.editMeta(item, patch)}
         onAccept={() => a.acceptMeta(item)}
         onCopy={(f) => a.copyMeta(item, f)}
@@ -94,9 +99,13 @@ function primaryPathOf(item: ExportedItem): string {
 
 function FileIdentityCell({ item, a }: { item: ExportedItem; a: StockRowPresentation }) {
   const primary = primaryPathOf(item);
+  const workName = itemWorkName(item);
   return (
     <div className="svg-file-main">
       <div className="svg-file-name" data-testid={`stock-name-${item.id}`} title={item.stem}>{item.stem}</div>
+      <div className="svg-file-sub" data-testid={`stock-work-name-${item.id}`} title={`Working name: ${workName}`}>
+        Work name: {workName}
+      </div>
       <div className="svg-file-sub" data-testid={`stock-path-${item.id}`} title={primary}>{primary}</div>
       <div className="svg-persist" title={item.recordPath}>export folder → {item.exportDir || "export"}</div>
       <UploadRowBadges pairId={item.id} state={a.rowBadges}

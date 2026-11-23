@@ -26,6 +26,7 @@ import {
   exportDirOf, newExportRecord, planStages, stemOf,
   type ExportRecord, type Stage, type StagePlan,
 } from "../lib/upload/export";
+import { effectiveExportStem } from "../lib/upload/uploadname";
 
 import { commitExport, type CommitExportInput, type CommitValidation } from "./exportcommit";
 import { converterDeps, fillToolBlocks, jpegBlock, metadataBlockOf } from "./exportrecord";
@@ -73,6 +74,8 @@ export interface ExportRunArgs {
   savedMetadata?: SavedMetadata | null;
   /** The previous export.json, parsed (null = none/corrupt). */
   record: ExportRecord | null;
+  /** Optional custom/human-readable upload file stem (null/absent = workName). */
+  uploadName?: string | null;
   signal?: AbortSignal;
   deps?: ExportRunDeps;
 }
@@ -100,16 +103,18 @@ interface PlanFor {
   sourceText: string;
   sourceHash: string;
   exportDir: string;
+  workName: string;
   stem: string;
   error: ExportRunError | null;
 }
 
 async function planFor(args: ExportRunArgs): Promise<PlanFor> {
-  const stem = stemOf(args.row.svgName);
+  const workName = stemOf(args.row.svgName);
+  const stem = effectiveExportStem(workName, args.uploadName ?? args.record?.uploadName);
   const exportDir = exportDirOf(args.row.dirPath);
   const sourceText = await readTextAt(args.root, args.row.svgPath);
   if (sourceText === null) {
-    return { plan: { stages: [], rebuild: { svg: false, jpg: false, eps: false } }, sourceText: "", sourceHash: "", exportDir, stem, error: { klass: "preflight", detail: "the source SVG could not be read" } };
+    return { plan: { stages: [], rebuild: { svg: false, jpg: false, eps: false } }, sourceText: "", sourceHash: "", exportDir, workName, stem, error: { klass: "preflight", detail: "the source SVG could not be read" } };
   }
   const sourceHash = `sha256:${await sha256HexText(sourceText)}`;
   const { outputs, metadataOutputs } = await probeOutputs(args, exportDir, stem);
@@ -126,7 +131,7 @@ async function planFor(args: ExportRunArgs): Promise<PlanFor> {
     outputs,
     metadataOutputs,
   });
-  return { plan, sourceText, sourceHash, exportDir, stem, error: null };
+  return { plan, sourceText, sourceHash, exportDir, workName, stem, error: null };
 }
 
 /** Disk probes only inspect requested files; absent disabled outputs never trigger repairs. */
@@ -200,6 +205,7 @@ function artifactsInvalid(art: Artifacts, validation: CommitValidation): boolean
 async function assembleRecord(args: ExportRunArgs, plan: PlanFor, art: Artifacts): Promise<ExportRecord> {
   const record = newExportRecord({
     pair: { id: args.row.id, base: args.row.base, suffix: args.row.suffix, dir: args.row.dirPath },
+    workName: plan.workName, uploadName: plan.stem,
     source: { svgPath: args.row.svgPath, version: args.row.version, approval: "approved", fingerprint: plan.sourceHash },
     settings: {
       defaults: args.defaults, overrides: args.overrides, effective: args.settings,
@@ -244,19 +250,11 @@ async function commitAll(args: ExportRunArgs, plan: PlanFor, payload: CommitPayl
 function commitInput(args: ExportRunArgs, plan: PlanFor, payload: CommitPayload): CommitExportInput {
   const dims = payload.art.jpegRecord ?? (payload.art.jpeg === null ? null : readJpegDimensions(payload.art.jpeg));
   return {
-    root: args.root,
-    exportDir: plan.exportDir,
-    stem: plan.stem,
-    svgOut: payload.art.svgOut,
-    jpeg: payload.art.jpeg,
-    epsText: payload.art.epsText,
-    metadata: args.metadata,
-    jpegExpected: dims === null ? { width: 0, height: 0 } : { width: dims.width, height: dims.height },
-    record: payload.record,
-    partial: payload.partial,
-    epsFailure: payload.art.epsFailure,
-    validation: payload.validation,
-    now: args.deps?.now?.() ?? new Date().toISOString(),
+    root: args.root, exportDir: plan.exportDir, stem: plan.stem,
+    svgOut: payload.art.svgOut, jpeg: payload.art.jpeg, epsText: payload.art.epsText,
+    metadata: args.metadata, jpegExpected: dims === null ? { width: 0, height: 0 } : { width: dims.width, height: dims.height },
+    record: payload.record, partial: payload.partial, epsFailure: payload.art.epsFailure,
+    validation: payload.validation, now: args.deps?.now?.() ?? new Date().toISOString(),
   };
 }
 
@@ -281,11 +279,7 @@ function failedResult(fail: { rowId: string; stages: Stage[]; record: ExportReco
 }
 
 function outputsOf(record: ExportRecord | null): ExportRunResult["outputs"] {
-  return {
-    svg: record?.outputs.svg?.path ?? null,
-    jpg: record?.outputs.jpg?.path ?? null,
-    eps: record?.outputs.eps?.path ?? null,
-  };
+  return { svg: record?.outputs.svg?.path ?? null, jpg: record?.outputs.jpg?.path ?? null, eps: record?.outputs.eps?.path ?? null };
 }
 
 function passthroughOptimize(): OptimizeRecord {

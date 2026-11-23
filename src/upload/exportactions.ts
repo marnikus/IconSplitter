@@ -19,6 +19,7 @@ import { validateUploadMetadata, type IconMetadata } from "../lib/upload/meta";
 import { rowSettings } from "../lib/upload/decorations";
 import { PROVIDER_NAME } from "../lib/upload/gemini";
 import { runExport, type ExportRunArgs, type ExportRunResult } from "./runexport";
+import { getUploadName } from "./uploadnamestore";
 import type { SavedMetadata } from "./recorddraft";
 import { poolSize } from "../lib/upload/jpegworker";
 import { rememberJob } from "./jobstore";
@@ -218,7 +219,7 @@ async function exportOne(args: ExportOneArgs): Promise<{ fixed: number; failed: 
     metadata: meta === null ? null : meta.metadata,
     metadataInfo: metadataInfoOf(c, meta),
     savedMetadata: meta === null ? savedDraftOf(c, args.freshMeta.get(args.id) ?? row.meta) : null,
-    record: row.record, signal: args.signal,
+    record: row.record, uploadName: getUploadName(args.id), signal: args.signal,
     deps: { converter: browserConverterDeps() },
   });
   applyExportResult(args.latest, args.id, row, result);

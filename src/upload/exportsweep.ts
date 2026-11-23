@@ -37,7 +37,7 @@ export async function sweepSuperseded(
   const present = new Set(await listChildNames(dir));
   const removed: string[] = [];
   for (const name of present) {
-    if (!candidate(name, stem) || !removable(name, stem, present, named)) continue;
+    if (!candidate(name, stem, named) || !removable(name, stem, present, named)) continue;
     try {
       await dir.removeEntry?.(name);
       removed.push(name);
@@ -48,11 +48,11 @@ export async function sweepSuperseded(
   return removed;
 }
 
-/** Ours and superseded: our bookkeeping in the name, and not the current artifact. */
-function candidate(name: string, stem: string): boolean {
+/** Ours and superseded: named by the previous record or carrying our bookkeeping, and not the current artifact. */
+function candidate(name: string, stem: string, named: ReadonlySet<string>): boolean {
   const ext = extOf(name);
   if (!isArtifactExt(ext)) return false;
-  return name !== `${stem}.${ext}` && owns(name, stem);
+  return name !== `${stem}.${ext}` && (named.has(name) || owns(name, stem));
 }
 
 /** Never the last copy of an output the package still claims; an orphan goes. */

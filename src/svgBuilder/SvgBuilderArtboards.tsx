@@ -10,6 +10,8 @@ import { overrideCount } from "../lib/svgBuilder/lookoverrides";
 import type { SheetTemplate } from "../lib/svgBuilder/templates";
 import { isNativeListKeyTarget, isRowGestureClick } from "../ui/rowgesture";
 import { artboardGroups, visibleArtboards } from "./artboardview";
+import { artboardWorkName } from "./actions/artboardrename";
+import { useUploadNames } from "../upload/uploadnamestore";
 import SvgBuilderRowMeta from "./SvgBuilderRowMeta";
 import { pictureReady, useTextSubset } from "./textsubset";
 import type { BuilderIconAsset } from "../lib/svgBuilder/types";
@@ -42,6 +44,10 @@ function ArtboardsHead({ b, ids }: { b: BuilderApi; ids: string[] }) {
       <button type="button" className="svg-btn tiny" data-testid="builder-artboards-metadata" disabled={scope.length === 0}
         onClick={() => b.actions.generateArtboardsMetadata(scope)} title="One sheet-metadata request per checked artboard, after you confirm the exact requests">
         ✦ Generate metadata ({scope.length})</button>
+      <button type="button" className="svg-btn tiny" data-testid="builder-artboards-rename" disabled={scope.length === 0}
+        onClick={() => b.actions.renameArtboardsForUpload(scope)}
+        title="Rename exported files of checked artboards from Title + Description (keeps ID and working name unchanged)">
+        ✎ Rename for upload ({scope.length})</button>
       <ResetLooks b={b} scope={scope} />
       <button type="button" className="svg-btn tiny danger" data-testid="builder-artboards-remove" disabled={scope.length === 0}
         onClick={() => b.actions.removeArtboards(scope)}>✕ Remove ({scope.length})</button>
@@ -100,10 +106,7 @@ function ArtboardRow({ b, template, artboard }: { b: BuilderApi; template: Sheet
     <ArtboardPreview b={b} template={template} artboard={artboard} />
     <div className="bld-artboard-main">
       <ArtboardName artboard={artboard} onRename={b.actions.renameArtboard} />
-      <span className="bld-artboard-facts">
-        <code data-testid={`builder-artboard-id-${artboard.id}`}>{artboard.id}</code>
-        {` · ${artboardIcons(artboard).length}/${cells} icons · ${artboard.title === "" ? "no title yet" : artboard.title}`}
-      </span>
+      <ArtboardFacts b={b} artboard={artboard} cells={cells} />
     </div>
     <span className="bld-meta-state" data-state={artboard.metadata?.state ?? "empty"} data-testid={`builder-artboard-meta-${artboard.id}`}>
       {artboard.metadata === null ? "no metadata" : `metadata ${artboard.metadata.state}`}</span>
@@ -112,6 +115,22 @@ function ArtboardRow({ b, template, artboard }: { b: BuilderApi; template: Sheet
 }
 
 /** The row's end: exported chip, ↺ Template (own look changes), ↻ Metadata, ✕. */
+function ArtboardFacts({ b, artboard, cells }: { b: BuilderApi; artboard: FinalArtboard; cells: number }) {
+  const names = useUploadNames();
+  const workName = artboardWorkName(artboard, b.artboards, b.templates);
+  const upload = artboard.uploadName ?? names[artboard.id] ?? null;
+  const custom = upload && upload !== workName ? upload : null;
+  return (
+    <span className="bld-artboard-facts">
+      <code data-testid={`builder-artboard-id-${artboard.id}`}>{artboard.id}</code>
+      {` · ${artboardIcons(artboard).length}/${cells} icons · ${artboard.title === "" ? "no title yet" : artboard.title}`}
+      {custom !== null && (
+        <> · <span data-testid={`builder-artboard-upload-name-${artboard.id}`} title={`Upload file name: ${custom}`}>upload → {custom}</span></>
+      )}
+    </span>
+  );
+}
+
 function RowActions({ b, artboard, own }: { b: BuilderApi; artboard: FinalArtboard; own: number }) {
   return <>
     {artboard.exportedAt !== null && <span className="v2-chip approved" data-testid={`builder-artboard-exported-${artboard.id}`}>exported</span>}

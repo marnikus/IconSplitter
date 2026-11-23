@@ -21,6 +21,7 @@ import {
   type StockModelAction, type StockRefs, type StockUploadModel,
 } from "./model";
 import { useStockPanelOps, type StockPanelOps } from "./panelops";
+import { useStockRenameOps, type StockRenameOps } from "./renameops";
 import { getStockPresetState, subscribeStockPresets } from "./presetstore";
 import { filterAndSortItems, stockHeaderState } from "./rowlist";
 import { bootStockRoot, scanStockUpload } from "./scan";
@@ -30,7 +31,7 @@ import {
   type StockBadgeApi, type StockSelectionApi,
 } from "./selectionactions";
 
-export interface StockUploadApi extends StockSelectionApi, StockBadgeApi, StockFtpActions, StockPanelOps {
+export interface StockUploadApi extends StockSelectionApi, StockBadgeApi, StockFtpActions, StockPanelOps, StockRenameOps {
   supported: boolean;
   model: StockUploadModel;
   rootRef: { current: DirHandleLike | null };
@@ -165,11 +166,12 @@ export function useStockUpload(): StockUploadApi {
     setTestStatus: (testStatus) => dispatch({ type: "patch", patch: { testStatus } }),
   });
   const ops = useStockPanelOps({ model, items, checked: selSlice.checked, presetState, rowBadges, r, dispatch, say, runScan });
+  const rename = useStockRenameOps({ model, items, checked: selSlice.checked, r, dispatch, say, runScan });
   const removeItems = useRemoveItems({ model, items, r, dispatch, runScan, say, hist });
   return {
     supported: fsSupported(), model, rootRef: r.root, presetState, rowBadges,
     items, visible, checked: selSlice.checked, activeId: selSlice.activeId, header,
-    ...selection, ...badges, ...ftp, ...ops, removeItems,
+    ...selection, ...badges, ...ftp, ...ops, ...rename, removeItems,
   };
 }
 

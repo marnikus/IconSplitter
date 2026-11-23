@@ -16,6 +16,7 @@ import { leaveActions } from "./leave";
 import { sheetExportActions } from "./sheetexport";
 import { locationActions } from "./location";
 import { artboardMetaEditActions } from "./artboardmetaedit";
+import { artboardRenameActions } from "./artboardrename";
 import { registerActions } from "./register";
 import { sheetListActions } from "./sheetlists";
 import { sheetSyncActions } from "./sheetsync";
@@ -40,6 +41,7 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const sheetExport = sheetExportActions(get);
   const location = locationActions(get);
   const metaEdit = artboardMetaEditActions(get);
+  const artboardRename = artboardRenameActions(get);
   const register = registerActions(get);
   const lists = sheetListActions(get);
   const files = sheetSyncActions(get);
@@ -47,7 +49,7 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const walk = stageNavActions(get);
   const merges = mergeActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...location, ...register, ...lists, ...files, ...styles, ...walk, ...merges,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...artboardRename, ...location, ...register, ...lists, ...files, ...styles, ...walk, ...merges,
     presets: get().presetActions,
   };
 }

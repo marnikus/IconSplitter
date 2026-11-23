@@ -62,10 +62,10 @@ function hasFormat(item: ExportedItem, fmt: UploadFormatKey): boolean {
   return item.files[fmt] !== null;
 }
 
-/** Name, folder, title, tags, metadata state and source approval (lib/textsearch). */
+/** Name, working name, folder, title, tags, metadata state and source approval (lib/textsearch). */
 function inSearch(item: ExportedItem, query: string): boolean {
   const meta = item.record.metadata;
-  return matchesSearch(query, [item.stem, item.exportDir, meta?.title, meta?.tags, meta?.state, item.record.source?.approval]);
+  return matchesSearch(query, [item.stem, item.workName, item.exportDir, meta?.title, meta?.tags, meta?.state, item.record.source?.approval]);
 }
 
 export function filterAndSortItems(args: {

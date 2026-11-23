@@ -84,6 +84,10 @@ export interface ArtboardBlock {
 export interface ExportRecord {
   v: number;
   pair: { id: string; base: string; suffix: string; dir: string };
+  /** Working file stem inside the app (never changed by upload rename). */
+  workName?: string;
+  /** Human-readable stem for exported files uploaded to websites. */
+  uploadName?: string;
   source: { svgPath: string; version: number; approval: string; fingerprint: string };
   settings: { defaults: UploadSettings; overrides: SettingsOverrides; effective: UploadSettings; fingerprint: string };
   jpeg: { width: number; height: number; megapixels: number; quality: number; profile: string };
@@ -137,6 +141,8 @@ export interface ExportRecord {
 
 export interface NewRecordArgs {
   pair: { id: string; base: string; suffix: string; dir: string };
+  workName?: string;
+  uploadName?: string;
   source: { svgPath: string; version: number; approval: string; fingerprint: string };
   settings: { defaults: UploadSettings; overrides: SettingsOverrides; effective: UploadSettings; fingerprint: string };
   svgo: OptimizeRecord;
@@ -147,9 +153,13 @@ export interface NewRecordArgs {
 
 /** A fresh record: discovered, nothing rendered, nothing committed. */
 export function newExportRecord(args: NewRecordArgs): ExportRecord {
+  const fallbackWork = stemOf(args.source.svgPath.slice(args.source.svgPath.lastIndexOf("/") + 1) || args.pair.base);
+  const workName = args.workName ?? fallbackWork;
   return {
     v: EXPORT_RECORD_VERSION,
     pair: args.pair,
+    workName,
+    uploadName: args.uploadName ?? workName,
     source: args.source,
     settings: args.settings,
     jpeg: { width: 0, height: 0, megapixels: 0, quality: args.settings.effective.jpegQuality, profile: "baseline" },

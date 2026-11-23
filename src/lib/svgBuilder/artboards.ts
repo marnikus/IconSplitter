@@ -9,6 +9,7 @@ import { DEFAULT_ARTBOARD_SUBTITLE, cleanSheetMetadata, sheetMetadataFingerprint
 import { MAX_SLOTS, isEmptySlot, withEmptyFor } from "./slots";
 import { lookOf, sheetFolderOf, sheetPreviewSvg, type SheetTemplate } from "./templates";
 import { parseOverrides, withOverrides, type LookOverrides } from "./lookoverrides";
+import { sanitizeUploadName } from "../upload/uploadname";
 import type { BuilderIconAsset, SheetConfig, SheetMetadata } from "./types";
 
 export const ARTBOARD_LIMIT = 400;
@@ -36,6 +37,8 @@ export interface FinalArtboard {
   captionTexts: Record<string, string>;
   /** Its `artboard_variant_N` folder under `_artboard_sheets` once saved there (2026-11-14, sheetfolders.ts); null before. */
   folder: string | null;
+  /** Optional custom/human-readable upload file stem (`uploadName`); null/absent uses `sheetStem(folder)`. */
+  uploadName?: string | null;
 }
 
 /** "Side banner · 8×4 · Solid — #3": the template's name and the next free number. */
@@ -141,10 +144,17 @@ function keyOf(raw: unknown, templateIds: ReadonlySet<string> | null): { raw: Re
   return name === "" ? null : { raw, id: raw.id, templateId: raw.templateId, name };
 }
 
+function parseUploadNameField(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const clean = sanitizeUploadName(raw);
+  return clean === "" ? null : clean;
+}
+
 function parseArtboard(input: unknown, templateIds: ReadonlySet<string> | null): FinalArtboard | null {
   const key = keyOf(input, templateIds);
   if (key === null) return null;
   const { raw, name } = key;
+  const uploadName = parseUploadNameField(raw.uploadName);
   return {
     id: key.id.slice(0, 80), templateId: key.templateId, name, title: text(raw.title, 90), subtitle: text(raw.subtitle, 140),
     heroIconId: typeof raw.heroIconId === "string" && raw.heroIconId !== "" ? raw.heroIconId : null,
@@ -153,6 +163,7 @@ function parseArtboard(input: unknown, templateIds: ReadonlySet<string> | null):
     exportedAt: typeof raw.exportedAt === "string" ? raw.exportedAt : null, countedIds: strings(raw.countedIds, MAX_SLOTS),
     overrides: parseOverrides(raw.overrides), captionTexts: parseCaptionTexts(raw.captionTexts),
     folder: sheetFolderOf(raw.folder),
+    ...(uploadName !== null ? { uploadName } : {}),
   };
 }
 

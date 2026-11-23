@@ -1,6 +1,6 @@
 # SVG to upload — current behaviour
 
-See [upload invariants](invariants/upload.md), [upload selectors](../selectors/upload.md), [storage](STORAGE.md) and [tests](TESTS.md). The export package is local; only confirmed Gemini metadata generation sends its disclosed inputs.
+See [upload invariants](invariants/upload.md), [upload selectors](../selectors/upload.md), [upload file naming](upload-rename.md), [storage](STORAGE.md) and [tests](TESTS.md). The export package is local; only confirmed Gemini metadata generation sends its disclosed inputs.
 
 [Reversible selection/approval sorting](list-state-sorting.md) defines the new list groups and controls.
 

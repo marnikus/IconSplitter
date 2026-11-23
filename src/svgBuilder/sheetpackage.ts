@@ -30,7 +30,7 @@ export interface SheetPackage { files: SheetFile[]; record: ExportRecord; proble
 
 export interface SheetPackageArgs {
   svg: string; metadata: SheetMetadata | null; settings: UploadSettings;
-  folder: string; stem: string; pairId: string; now: string; prompt: string; model: string;
+  folder: string; workName?: string; stem: string; pairId: string; now: string; prompt: string; model: string;
 }
 
 export interface SheetPackageDeps {
@@ -140,8 +140,11 @@ async function output(part: Part): Promise<OutputRecord | null> {
 
 async function recordOf(a: SheetPackageArgs, parts: { svg: Part; jpg: Part; eps: Part }, meta: IconMetadata | null, svgo: OptimizeRecord): Promise<ExportRecord> {
   const s = a.settings;
+  const workName = a.workName ?? a.stem;
   const base = newExportRecord({
-    pair: { id: a.pairId, base: a.stem, suffix: "", dir: a.folder },
+    pair: { id: a.pairId, base: workName, suffix: "", dir: a.folder },
+    workName,
+    uploadName: a.stem,
     source: { svgPath: `${a.folder}/export/${a.stem}.svg`, version: 1, approval: "approved", fingerprint: await sha256Hex(text(a.svg)) },
     settings: { defaults: s, overrides: {}, effective: s, fingerprint: settingsFingerprint(s) },
     svgo,

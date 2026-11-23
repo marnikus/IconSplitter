@@ -4,7 +4,7 @@
 // (`<variant>` = sheetfolders.ts `artboardFolder`). Each file is written whole.
 // Every JSON file the builder reads back remembers its fingerprint (2026-11-22,
 // filesigstore.ts), so a later change made outside the app is recognised.
-import { ensureDirPath, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
+import { ensureDirPath, listChildNames, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import type { SheetMetadata } from "../lib/svgBuilder/types";
 import { rememberSig } from "./filesigstore";
 import { jsonText } from "./sheetfiles";
@@ -57,8 +57,14 @@ export async function writeTemplateBlueprint(root: DirHandleLike, folder: string
   await writeJson(await ensureDirPath(root, folder), folder, "template.json", json);
 }
 
-/** The export package into `<variant>/export/`. */
+/** The export package into `<variant>/export/`. Removes superseded artifact files after writing. */
 export async function writeSheetExport(root: DirHandleLike, folder: string, files: readonly SheetFile[]): Promise<void> {
   const dir = await ensureDirPath(root, `${folder}/export`);
+  const kept = new Set(files.map((f) => f.name));
   for (const f of files) await writeFileOverwrite(dir, f.name, blob(f.bytes, f.name.endsWith(".json") ? "application/json" : "application/octet-stream"));
+  for (const existing of await listChildNames(dir)) {
+    if (!kept.has(existing) && /\.(?:svg|png|jpe?g|eps|zip)$/i.test(existing)) {
+      try { await dir.removeEntry?.(existing); } catch { /* ignore */ }
+    }
+  }
 }

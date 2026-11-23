@@ -143,11 +143,18 @@ function hasAnyFile(files: ExportedFiles): boolean {
   return files.raster !== null || files.svg !== null || files.eps !== null || files.zip !== null;
 }
 
+function workNameFromRecord(record: ExportRecord): string {
+  if (typeof record.workName === "string" && record.workName !== "") return record.workName;
+  if (record.pair.base !== "") return stemOf(record.pair.base);
+  const srcName = record.source.svgPath.slice(record.source.svgPath.lastIndexOf("/") + 1);
+  return stemOf(srcName);
+}
+
 function stemFromItem(record: ExportRecord, files: ExportedFiles): string {
   const first = files.raster ?? files.svg ?? files.eps ?? files.zip;
   if (first !== null) return first.fileName.replace(/\.[^.]+$/, "");
-  const srcName = record.source.svgPath.slice(record.source.svgPath.lastIndexOf("/") + 1);
-  return stemOf(srcName || record.pair.base);
+  if (typeof record.uploadName === "string" && record.uploadName !== "") return record.uploadName;
+  return workNameFromRecord(record);
 }
 
 function isCommittedExport(record: ExportRecord): boolean {
@@ -242,6 +249,7 @@ async function collectBucket(root: DirHandleLike, bucket: ExportFolderBucket, st
   st.items.push({
     id: loaded.record.pair.id,
     stem: stemFromItem(loaded.record, resolved.files),
+    workName: workNameFromRecord(loaded.record),
     exportDir: bucket.exportDir,
     recordPath: loaded.recordPath,
     record: loaded.record,

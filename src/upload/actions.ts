@@ -28,6 +28,7 @@ import { rememberRoot } from "./scan";
 import type { UploadCounts } from "./rowmodel";
 import { useMetaActions } from "./metaactions";
 import { usePromptActions, type PromptActions } from "./promptactions";
+import { useRenameActions } from "./renameactions";
 import { useModelCheckActions } from "./modelcheck";
 import { useExportActions } from "./exportactions";
 import { useDownloadActions } from "./downloadactions";
@@ -138,6 +139,9 @@ export interface UploadActions extends PromptActions {
   openLocation: (id: string) => void;
   /** Remove from this list = decline the item in Generate SVG (Undo brings it back). */
   removeRows: (ids: string[]) => void;
+  /** Upload file naming (`workName` stays; exported files use `uploadName`). */
+  setRowUploadName: (id: string, next: string | null) => void;
+  renameSelectedForUpload: (ids: string[]) => void;
 }
 
 /** One hook's share of the action surface, so the composition stays typed. */
@@ -166,12 +170,11 @@ export function useUploadActions(ctx: UploadCtx): UploadActions {
   const download = useDownloadActions(ctx);
   const prompt = usePromptActions(ctx);
   const remove = useRemoveRows(ctx);
+  const rename = useRenameActions(ctx);
   return useMemo(() => ({
-    ...source, ...view, ...defaults, ...overrides, ...resets, ...selected,
-    ...shadow, ...badge, ...rowBadge, ...sizeGuide, ...gemini, ...modelCheck,
-    ...key, ...ui, ...meta, ...exp, ...download, ...prompt, ...remove,
-  }), [source, view, defaults, overrides, resets, selected, shadow, badge, rowBadge,
-    sizeGuide, gemini, modelCheck, key, ui, meta, exp, download, prompt, remove]);
+    ...source, ...view, ...defaults, ...overrides, ...resets, ...selected, ...shadow, ...badge, ...rowBadge,
+    ...sizeGuide, ...gemini, ...modelCheck, ...key, ...ui, ...meta, ...exp, ...download, ...prompt, ...remove, ...rename,
+  }), [source, view, defaults, overrides, resets, selected, shadow, badge, rowBadge, sizeGuide, gemini, modelCheck, key, ui, meta, exp, download, prompt, remove, rename]);
 }
 
 /** Remove + the list following every written item decision (a click, an undo, a redo). */

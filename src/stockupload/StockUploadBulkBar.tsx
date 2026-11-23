@@ -144,6 +144,16 @@ function TargetSiteCheckboxes({ g }: { g: StockUploadApi }) {
   );
 }
 
+function RenameSelectedButton({ g }: { g: StockUploadApi }) {
+  return (
+    <button type="button" className="svg-btn" data-testid="stock-rename-selected"
+      disabled={g.checked.length === 0 || g.model.uploading} onClick={g.renameSelected}
+      title="Rename exported files of selected packages from Title + Description (keeps ID and working name unchanged)">
+      ✎ Rename for upload ({g.checked.length})
+    </button>
+  );
+}
+
 function UploadButtons({ g }: { g: StockUploadApi }) {
   return (
     <>
@@ -163,6 +173,7 @@ function UploadButtons({ g }: { g: StockUploadApi }) {
         title="Remove the checked items from this list: declines their sources in Generate SVG, so they also leave SVG to upload (Undo brings them back)">
         🗑 Remove selected
       </button>
+      <RenameSelectedButton g={g} />
       <button type="button" className="svg-btn primary" data-testid="stock-upload-start"
         disabled={g.checked.length === 0 || g.model.uploading} onClick={g.startUploadFlow}>
         ⇪ Upload ({g.checked.length})

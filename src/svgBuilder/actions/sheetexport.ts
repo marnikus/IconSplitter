@@ -25,6 +25,8 @@ import { sheetsRoot } from "./sheetsroot";
 import { writeSheetJson } from "./sheetjson";
 import { svgTextsFor } from "./artboardmeta";
 import { beginBuilderExport, type BuilderExportRun } from "../exportprogress";
+import { effectiveExportStem } from "../../lib/upload/uploadname";
+import { getUploadName } from "../../upload/uploadnamestore";
 
 export function sheetExportActions(get: () => BuilderActionContext): Pick<BuilderActions, "exportSelectedArtboards" | "syncSheetJson"> {
   return { exportSelectedArtboards: () => { void exportSelected(get); }, syncSheetJson: () => { void writeSheetJson(get); } };
@@ -76,7 +78,9 @@ async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboar
   const doc = composeSheet({ config, layout: computeLayout(config), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts: texts, metadata: artboard.metadata });
   const settings = sheetSettings();
   if (settings.expandText) await warmTextFonts(doc.svg); // the outliner is sync; fonts load here
-  const pkg = await buildSheetPackage({ svg: doc.svg, metadata: artboard.metadata, settings, folder, stem: sheetStem(folder), pairId: artboard.id,
+  const workName = sheetStem(folder);
+  const exportStem = effectiveExportStem(workName, artboard.uploadName ?? getUploadName(artboard.id));
+  const pkg = await buildSheetPackage({ svg: doc.svg, metadata: artboard.metadata, settings, folder, workName, stem: exportStem, pairId: artboard.id,
     now: now.toISOString(), prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(settings.epsConverter, signal) });
   if (signal?.aborted) return [];
   await writeSheetExport(root, folder, pkg.files);

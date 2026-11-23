@@ -23,6 +23,7 @@ function toRowPresentation(g: StockUploadApi): StockRowPresentation {
     editMeta: g.editMeta,
     acceptMeta: g.acceptMeta,
     copyMeta: g.copyMeta,
+    renameItem: g.renameItem,
     uploading: g.model.uploading,
     removeItems: g.removeItems,
   };

@@ -17,12 +17,13 @@ import {
 } from "../lib/upload/settings";
 import { isAsIs } from "../lib/upload/asis";
 import { rowSettings, type AppliedMap } from "../lib/upload/decorations";
-import { exportDirOf } from "../lib/upload/export";
+import { exportDirOf, stemOf } from "../lib/upload/export";
 import type { PreviewBackground } from "../lib/svgbackground";
 import type { DirHandleLike } from "../lib/fs";
 import { statusOf, type UploadCounts } from "./rowmodel";
 import UploadPreview from "./UploadPreview";
 import UploadMetaFields from "./UploadMetaFields";
+import { useUploadNames } from "./uploadnamestore";
 import type { UploadJobStatus, UploadRow } from "./types";
 import type { RowBadgeState } from "../lib/upload/rowbadge";
 import UploadRowBadges from "./UploadRowBadges";
@@ -52,6 +53,7 @@ export interface UploadRowActions {
   rowBadges: RowBadgeState;
   toggleRowBadge: (pairId: string, badgeId: string) => void;
   removeRowBadgeSelected: (badgeId: string) => void;
+  setRowUploadName?: (id: string, next: string | null) => void;
 }
 
 export type UploadRowPresentation = Omit<UploadRowActions, "checked" | "activeId">;
@@ -102,9 +104,13 @@ const RowContent = memo(function RowContent({ row, a }: { row: UploadRow; a: Upl
 
 /** The expandable detail: text only — the editable, copiable metadata fields. */
 function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowPresentation }) {
+  const names = useUploadNames();
+  const workName = stemOf(row.source.svgName);
+  const uploadName = names[id] ?? row.record?.uploadName ?? null;
   return (
     <div className="up-detail" data-testid={`upload-detail-${id}`}>
       <UploadMetaFields id={id} meta={row.meta}
+        rename={a.setRowUploadName ? { workName, uploadName, onApply: (next) => a.setRowUploadName?.(id, next) } : undefined}
         onEdit={(patch) => a.editMetadata(id, patch)}
         onAccept={() => a.acceptMetadata(id)}
         onCopy={(field) => a.copyMeta(id, field)}
@@ -115,6 +121,10 @@ function RowDetail({ id, row, a }: { id: string; row: UploadRow; a: UploadRowPre
 
 function FileCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
   const id = row.source.id;
+  const names = useUploadNames();
+  const workName = stemOf(row.source.svgName);
+  const savedUpload = names[id] ?? row.record?.uploadName ?? null;
+  const custom = savedUpload && savedUpload !== workName ? savedUpload : null;
   return (
     <div className="svg-file-main">
       <div className="svg-file-name" title={row.source.svgName}>{row.source.svgName}</div>
@@ -122,6 +132,9 @@ function FileCell({ row, a }: { row: UploadRow; a: UploadRowPresentation }) {
       <div className="svg-persist" data-testid={`upload-export-path-${id}`} title={`everything commits into ${exportDirOf(row.source.dirPath)}`}>
         export → {exportDirOf(row.source.dirPath)} · approved v{row.source.version}
         {row.source.approvedValid > 1 ? ` · ${row.source.approvedValid} approved versions` : ""}
+        {custom !== null && (
+          <> · <span data-testid={`upload-export-name-${id}`} title={`Upload file name: ${custom}`}>upload → {custom}</span></>
+        )}
       </div>
       <UploadRowBadges pairId={id} state={a.rowBadges}
         onToggle={a.toggleRowBadge} onRemoveSelected={a.removeRowBadgeSelected} />
