@@ -1,6 +1,7 @@
 // SvgBuilderEditingLabel.tsx — what the stage edits now (2026-11-14): a final
 // artboard (and the template it comes from) or a template. Shown at the stage's
 // top-left so a selected template and a selected row are never confused.
+import { steppedTemplate } from "./stagenav";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderEditingLabel({ b }: { b: BuilderApi }) {
@@ -14,6 +15,7 @@ export default function SvgBuilderEditingLabel({ b }: { b: BuilderApi }) {
       </div>
       {template !== undefined && <AddArtboard b={b} templateId={template.id} />}
       <Location b={b} />
+      <TemplateSteps b={b} />
       <button type="button" className="svg-btn bld-editing-add" data-testid="builder-editing-remove-artboard"
         title="Remove this artboard (Undo brings it back)" onClick={() => b.actions.removeArtboards([artboard.id])}>✕ Remove artboard</button>
     </div>;
@@ -25,7 +27,19 @@ export default function SvgBuilderEditingLabel({ b }: { b: BuilderApi }) {
     </div>
     <AddArtboard b={b} templateId={template.id} />
     <Location b={b} />
+    <TemplateSteps b={b} />
   </div>;
+}
+
+/** ◀ ▶ beside 📂 Location (2026-11-23): the previous / next template — also ← → on the keyboard; ↑ ↓ walk its artboards. */
+function TemplateSteps({ b }: { b: BuilderApi }) {
+  const prev = steppedTemplate(b, -1), next = steppedTemplate(b, 1);
+  return <span className="bld-editing-steps" role="group" aria-label="Previous or next template">
+    <button type="button" className="svg-btn bld-editing-step" data-testid="builder-editing-prev-template" disabled={prev === null}
+      title="Previous template (←) · ↑ ↓ walk its artboards" aria-label="Previous template" onClick={() => b.actions.stepTemplate(-1)}>◀</button>
+    <button type="button" className="svg-btn bld-editing-step" data-testid="builder-editing-next-template" disabled={next === null}
+      title="Next template (→) · ↑ ↓ walk its artboards" aria-label="Next template" onClick={() => b.actions.stepTemplate(1)}>▶</button>
+  </span>;
 }
 
 /** 📂 Location (2026-11-16): this artboard's / template's folder in Explorer. */

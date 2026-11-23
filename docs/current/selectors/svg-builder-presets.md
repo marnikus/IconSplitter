@@ -32,7 +32,7 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 | `builder-edge-banner`, `builder-edge-pad-{left,right,top,bottom}`, `builder-edge-size-{right,bottom,corner}` | artboard edge grips | `builder-edge-badge` while dragging |
 | `builder-gap-x-<cell>`, `builder-gap-y-<cell>` | gap strips (guides on) right of / below that cell | `builder-gap-badge` while dragging |
 | `builder-artboard-reset-<id>` | artboard row, only with own look changes | ↺ Template N: inherit the whole template look again |
-| `builder-editing` (`data-kind` artboard / template) | stage top-left label | `builder-edit-main-template` (while an artboard is open) |
+| `builder-editing` (`data-kind` artboard / template) | stage top-left label | `builder-edit-main-template` (while an artboard is open); `builder-editing-prev-template` / `builder-editing-next-template` ◀ ▶ (← → keys; ↑ ↓ walk the artboards, 2026-11-23) |
 | `builder-export-selected` | header, beside Export | ⇪ Export all selected (checked artboards, else the open one) into `_artboard_sheets` |
 | `builder-style-filter` (+ `-menu`, `-opt-all`, `-opt-base`, `-opt-<style>`) / `builder-library-styles` | header, after Icons indexing / library eyebrow | STYLES: which icon styles may be in sheets ([icon styles](../sor/svg-builder-styles.md), 2026-11-23) / the checked styles' names |
 | `builder-register` / `builder-auto-register` | header, beside Icons indexing | 🗂 Register templates and artboards (new folders + files edited outside the app, 2026-11-22) / the after-every-scan switch |

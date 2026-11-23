@@ -20,6 +20,7 @@ import { registerActions } from "./register";
 import { sheetListActions } from "./sheetlists";
 import { sheetSyncActions } from "./sheetsync";
 import { styleActions } from "./styles";
+import { stageNavActions } from "./stagenav";
 
 export function createBuilderActions(get: () => BuilderActionContext): BuilderActions {
   const folder = folderActions(get);
@@ -42,8 +43,9 @@ export function createBuilderActions(get: () => BuilderActionContext): BuilderAc
   const lists = sheetListActions(get);
   const files = sheetSyncActions(get);
   const styles = styleActions(get);
+  const walk = stageNavActions(get);
   return {
-    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...location, ...register, ...lists, ...files, ...styles,
+    ...folder, ...config, ...selection, ...provider, ...exported, ...ui, ...indexing, ...templates, ...presetJson, ...artboards, ...artboardMeta, ...decline, ...leave, ...sheetExport, ...metaEdit, ...location, ...register, ...lists, ...files, ...styles, ...walk,
     presets: get().presetActions,
   };
 }

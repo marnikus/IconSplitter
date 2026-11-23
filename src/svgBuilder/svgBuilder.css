@@ -453,3 +453,8 @@
 .bld-editing-bar { position: absolute; top: 10px; left: 10px; z-index: 3; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 520px); }
 .bld-editing-bar .bld-editing { max-width: none; min-width: 0; }
 .bld-editing-add { flex: 0 0 auto; min-height: 36px; }
+/* ◀ ▶ beside 📂 Location (2026-11-23): the previous / next template — small, paired, the app's own buttons. */
+.bld-editing-steps { flex: 0 0 auto; display: inline-flex; gap: 2px; }
+.bld-editing-step { min-height: 36px; min-width: 30px; padding: 0 8px; font-size: 11px; line-height: 1; }
+.bld-editing-step:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.bld-editing-step:last-child { border-top-left-radius: 0; border-bottom-left-radius: 0; }

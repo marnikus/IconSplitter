@@ -68,6 +68,9 @@ export interface BuilderActions {
   dropAssets: (ids: readonly string[]) => void;
   /** Show / hide the "used N times" index on the artboard's icons (display-only). */
   toggleUsage: (show: boolean) => void;
+  /** ◀ ▶ / ← →: the previous / next template; ↑ ↓: the previous / next artboard of the template on the stage (2026-11-23). */
+  stepTemplate: (by: -1 | 1) => void;
+  stepArtboard: (by: -1 | 1) => void;
   /** STYLES (2026-11-23): which icon styles may be in sheets; icons of an unchecked style leave the sheet (one undo step). */
   setStyleFilter: (next: import("../lib/multifilter").Multi<string>) => void;
   /** Show / hide the red layout guides, and their opacity 1–100 (display-only). */
