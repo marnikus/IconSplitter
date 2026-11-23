@@ -6117,3 +6117,8 @@ strictly inside).
 
 - Header-scoped CSS (`.bld-header-index .multi-select` inline-flex, label without its stacked margin); the shared MultiSelect elsewhere is unchanged.
 - Measured: `svg_builder_styles_row` 1/1 (fails without the rules); not checked in a real browser.
+
+## 2026-11-23 — SVG builder: ↺ Template (N) for the checked artboards
+
+- New list-head button resets the look of every checked artboard in view that has overrides; the row's ↺ Template goes the same way. One `builderArtboards` undo step with only those artboards (`removal.ts` `replaceSides`: out + back at the same place); the open artboard's stage look swaps quietly (`showLookOf`), and undo / redo swap it back (`sheetlists.ts` `followedReplaced`).
+- Measured: artboard suite 27/27 incl. the new bulk test (the undo look swap mutation-witnessed); builder suites 46 files / 319 tests; tsc, eslint (0 errors, no new warnings), `quality:changed --base HEAD` PASS.

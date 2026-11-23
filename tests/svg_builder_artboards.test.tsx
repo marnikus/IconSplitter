@@ -268,6 +268,37 @@ describe("final artboards — the list under the templates", () => {
     expect(q(`builder-artboard-reset-${a2.id}`)).toBeNull();
   });
 
+  it("↺ Template (N) in the list head: every checked artboard with its own look follows its template again; one Undo brings them back (2026-11-23)", async () => {
+    await openLibrary();
+    await click("builder-template-save");
+    const [tpl] = savedTemplates();
+    const sheet = () => JSON.parse(localStorage.getItem("iconSplitter.svgBuilder.config.v1") ?? "{}");
+    const base = sheet().artboard.padding;
+    await click(`builder-template-add-artboard-${tpl.id}`);
+    if (q("builder-padding") === null) await act(async () => { q("builder-section-artboard")!.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    await typeIn("builder-padding", "50");
+    await click("builder-stage-artboard-save");
+    await click(`builder-template-add-artboard-${tpl.id}`); // the second one stays open
+    await typeIn("builder-padding", "60");
+    await click("builder-stage-artboard-save");
+    const pads = () => savedArtboards().map((a) => (a.overrides as { artboard?: { padding?: number } }).artboard?.padding ?? null);
+    await waitUntil(() => JSON.stringify(pads()) === "[50,60]", "both have their own padding");
+    const [a1, a2] = savedArtboards();
+    expect((q("builder-artboards-reset-look") as HTMLButtonElement).disabled).toBe(true); // nothing checked yet
+    await click(`builder-artboard-check-${a1.id}`);
+    await click(`builder-artboard-check-${a2.id}`);
+    expect(text("builder-artboards-reset-look")).toContain("2");
+
+    await click("builder-artboards-reset-look");
+    await waitUntil(() => JSON.stringify(pads()) === "[null,null]", "both follow the template again");
+    expect(sheet().artboard.padding).toBe(base); // the open one shows the template's look
+    expect((q("builder-artboards-reset-look") as HTMLButtonElement).disabled).toBe(true);
+
+    await click("builder-undo");
+    await waitUntil(() => JSON.stringify(pads()) === "[50,60]", "one Undo brings both back");
+    await waitUntil(() => sheet().artboard.padding === 60, "the open one shows its own look again");
+  });
+
   it("the stage says what is being edited; Edit main template and double-clicks switch between the artboard and its template (2026-11-14)", async () => {
     await openLibrary();
     expect(q("builder-editing")).toBeNull(); // a free sheet: nothing to name

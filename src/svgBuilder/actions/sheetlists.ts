@@ -20,7 +20,7 @@ import { removalScope } from "../artboardview";
 import type { BuilderModel } from "../model";
 import { moveSheetFolders } from "../sheetmove";
 import { saveTemplates } from "../templatestore";
-import { openArtboardRow } from "./artboards";
+import { openArtboardRow, showLookOf } from "./artboards";
 import { ensureSheetsParent, sheetsRoot } from "./sheetsroot";
 import { showTemplate } from "./templates";
 
@@ -85,7 +85,8 @@ export async function applyListsSide(get: Get, side: ListsDelta, preferred: read
   ctx.dispatch(patch);
   if (side.templatesOut.length > 0 || side.templatesIn.length > 0) saveTemplates(patch.templates);
   saveArtboards(patch.artboards);
-  moveStage(ctx.model, { ...ctx, model: { ...ctx.model, ...patch } }, preferred);
+  const after = { ...ctx, model: { ...ctx.model, ...patch } };
+  if (!followedReplaced(ctx.model, after)) moveStage(ctx.model, after, preferred);
   return true;
 }
 
@@ -122,6 +123,14 @@ function moveStage(before: BuilderModel, ctx: BuilderActionContext, preferred: r
     return showNearest(ctx, before.templates, templateId);
   }
   if (before.editingTemplateId !== null && m.editingTemplateId === null) showNearest(ctx, before.templates, before.editingTemplateId);
+}
+
+/** The open artboard changed in place (↺ Template undone / redone, 2026-11-23): its look follows on the stage. */
+function followedReplaced(before: BuilderModel, ctx: BuilderActionContext): boolean {
+  const replaced = ctx.model.artboards.find((a) => a.id === ctx.model.editingArtboardId);
+  if (replaced === undefined || before.artboards.includes(replaced)) return false;
+  showLookOf(ctx, replaced);
+  return true;
 }
 
 function showNearest(ctx: BuilderActionContext, all: readonly SheetTemplate[], id: string | null): void {

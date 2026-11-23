@@ -7,7 +7,8 @@
 // one random icon and the template's sample words (startpick.ts).
 import { applyRowGesture, setChecked as setCheckedIds, toggleChecked, type RowSelection, type SelectIntent } from "../../lib/reviewselect";
 import { ARTBOARD_LIMIT, artboardConfig, artboardsWithout, newArtboard, type FinalArtboard } from "../../lib/svgBuilder/artboards";
-import { addSides } from "../../lib/svgBuilder/removal";
+import { addSides, replaceSides } from "../../lib/svgBuilder/removal";
+import { overrideCount } from "../../lib/svgBuilder/lookoverrides";
 import { cleanTemplateName } from "../../lib/svgBuilder/templates";
 import { padEmpty, placedOnly } from "../../lib/svgBuilder/slots";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
@@ -23,7 +24,7 @@ import { artboardFromStage, openArtboardOf } from "../artboarddraft";
 
 type ArtboardActions = Pick<BuilderActions,
   "templateGesture" | "toggleTemplateCheck" | "setTemplateChecks" | "addArtboard" | "artboardGesture" | "toggleArtboardCheck"
-  | "setArtboardChecks" | "renameArtboard" | "closeArtboard" | "resetArtboardLook" | "openArtboard" | "saveArtboard" | "resetArtboard" | "showArtboard">;
+  | "setArtboardChecks" | "renameArtboard" | "closeArtboard" | "resetArtboardLook" | "resetArtboardLooks" | "openArtboard" | "saveArtboard" | "resetArtboard" | "showArtboard">;
 
 export function artboardActions(get: () => BuilderActionContext): ArtboardActions {
   return {
@@ -36,7 +37,8 @@ export function artboardActions(get: () => BuilderActionContext): ArtboardAction
     setArtboardChecks: (ids, on) => { const c = get(); c.dispatch({ artboardSel: { ...c.model.artboardSel, checked: setCheckedIds(c.model.artboardSel.checked, ids, on) } }); },
     renameArtboard: (id, name) => renameArtboard(get(), id, name),
     closeArtboard: () => get().dispatch({ editingArtboardId: null }),
-    resetArtboardLook: (id) => resetArtboardLook(get(), id),
+    resetArtboardLook: (id) => resetArtboardLooks(get(), [id]),
+    resetArtboardLooks: (ids) => resetArtboardLooks(get(), ids),
     saveArtboard: () => saveArtboard(get()),
     showArtboard: (id, templateId) => showArtboard(get(), id, templateId),
     resetArtboard: () => resetArtboard(get()),
@@ -110,18 +112,32 @@ function showing(sel: RowSelection, templateId: string): RowSelection {
 }
 
 /**
- * ↺ Template: the artboard inherits its template's whole look again. Open on
- * the stage, the sheet goes back to the template look as one undo step (and
- * the sync writes the empty override list); closed, the stored list empties.
+ * ↺ Template — one row, or ↺ Template (N) for the checked ones (2026-11-23):
+ * each artboard with own look changes inherits its template's whole look again,
+ * as ONE undo step holding only those artboards (removal.ts `replaceSides`). An
+ * open one is shown again with the template's look (undo shows its own again).
  */
-function resetArtboardLook(ctx: BuilderActionContext, id: string): void {
-  const artboard = ctx.model.artboards.find((a) => a.id === id);
-  const template = ctx.model.templates.find((t) => t.id === artboard?.templateId);
-  if (artboard === undefined || template === undefined) return;
-  const reset = { ...artboard, overrides: {}, updated: new Date().toISOString() };
-  storeArtboards(ctx, ctx.model.artboards.map((a) => (a.id === id ? reset : a)));
-  if (ctx.model.editingArtboardId === id) commitConfig(ctx, { config: artboardConfig(template, reset), label: `“${artboard.name}” follows its template again` });
-  ctx.say(`“${artboard.name}” follows its template again`);
+function resetArtboardLooks(ctx: BuilderActionContext, ids: readonly string[]): void {
+  const olds = ctx.model.artboards.filter((a) => ids.includes(a.id) && overrideCount(a.overrides) > 0);
+  if (olds.length === 0) return ctx.say("No checked artboard has look changes of its own", true);
+  const now = new Date().toISOString();
+  const news = olds.map((a) => ({ ...a, overrides: {}, updated: now }));
+  const { before, after } = replaceSides({ templates: ctx.model.templates, artboards: ctx.model.artboards }, olds, news);
+  const label = olds.length === 1 ? `“${olds[0].name}” follows its template again` : `${olds.length} artboards follow their templates again`;
+  storeArtboards(ctx, ctx.model.artboards.map((a) => news.find((n) => n.id === a.id) ?? a));
+  ctx.hist?.push({ type: "builderArtboards", label, origin: "svgBuilder", ids: ["artboards"], before, after });
+  const open = news.find((a) => a.id === ctx.model.editingArtboardId);
+  if (open !== undefined) showLookOf(ctx, open);
+  ctx.say(label);
+}
+
+/** The open artboard's look on the stage, quietly (no undo step; its icons and words on the stage stay as they are). */
+export function showLookOf(ctx: BuilderActionContext, artboard: FinalArtboard): void {
+  const template = ctx.model.templates.find((t) => t.id === artboard.templateId);
+  if (template === undefined) return;
+  const config = artboardConfig(template, artboard);
+  ctx.dispatch({ config });
+  saveSheetConfig(config);
 }
 
 /** Saved artboards lose icons the library no longer has (scan, 🗑 decline); written at once. */

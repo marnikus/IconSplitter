@@ -124,6 +124,8 @@ export interface BuilderActions {
   closeDialog: () => void;
   /** ↺ Template (2026-11-14): the artboard drops its own look changes and inherits everything again. */
   resetArtboardLook: (id: string) => void;
+  /** ↺ Template (N) (2026-11-23): the checked artboards with own look changes follow their templates again — one undo step. */
+  resetArtboardLooks: (ids: readonly string[]) => void;
   /** Double-click on a row (2026-11-14): open that artboard on the stage (a changed template asks first). */
   openArtboard: (id: string) => void;
   /** After undo / redo took the open artboard away (2026-11-16): show this one, else edit its template. */

@@ -150,6 +150,13 @@ export function addSides(lists: SheetLists, made: FinalArtboard): { before: List
   return { before: { ...NO_CHANGE, artboardsOut: [made.id] }, after: { ...NO_CHANGE, artboardsIn: [{ at: lists.artboards.length, item: made }] } };
 }
 
+/** Artboards changed in place (↺ Template, 2026-11-23): each side takes them out and puts its version back at the same place — only these artboards. */
+export function replaceSides(lists: SheetLists, olds: readonly FinalArtboard[], news: readonly FinalArtboard[]): { before: ListsDelta; after: ListsDelta } {
+  const ids = olds.map((a) => a.id);
+  return { before: { ...NO_CHANGE, artboardsOut: ids, artboardsIn: placesIn(lists.artboards, olds) },
+    after: { ...NO_CHANGE, artboardsOut: ids, artboardsIn: placesIn(lists.artboards, news) } };
+}
+
 /** The items put back at their places (in place order); one already there stays as it is. */
 function placeIn<T extends { id: string }>(list: readonly T[], items: readonly Placed<T>[]): T[] {
   const out = [...list];
