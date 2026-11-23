@@ -4,25 +4,34 @@
 // text editor). Element marks come from compose/banner/svgAsset.
 import type { NumRange } from "../lib/svgBuilder/ranges";
 import { RANGES } from "../lib/svgBuilder/ranges";
+import { isStyledIcon } from "../lib/svgBuilder/iconstyles";
 import type { SheetConfig } from "../lib/svgBuilder/types";
 
-export type QuickKind = "icon" | "hero" | "title" | "subtitle" | "caption" | "block" | "banner" | "canvas";
+/** `styled`: an icon of a registered style (`~colored_wiggle`, 2026-11-23) — its own stroke and fill settings. */
+/** `line`: a Line banner's separator (2026-11-23) — its colour and width. */
+export type QuickKind = "icon" | "styled" | "hero" | "title" | "subtitle" | "caption" | "block" | "line" | "banner" | "canvas";
 
 export interface QuickTarget { kind: QuickKind; el: Element }
 
 /** Plain marks, in priority order (after the cell and banner-text checks). */
 const MARKS: readonly [string, QuickKind][] = [
-  ["data-caption", "caption"], ["data-split-block", "block"], ["data-banner", "banner"], ["data-artboard", "canvas"],
+  ["data-caption", "caption"], ["data-split-block", "block"], ["data-banner-line", "line"], ["data-banner", "banner"], ["data-artboard", "canvas"],
 ];
+
+/** An outlined icon or a colored one (2026-11-23): both are icon cells. */
+export const isIconKind = (kind: QuickKind): boolean => kind === "icon" || kind === "styled";
+
+/** A cell's kind: its icon's style says outlined or colored. */
+const cellKind = (el: Element): QuickKind => (isStyledIcon(el.getAttribute("data-asset-id") ?? "") ? "styled" : "icon");
 
 /** The innermost marked element on the path decides; the hero's own icon belongs to the hero. */
 function kindOf(el: Element): QuickKind | null {
-  if (el.classList.contains("bld-cell")) return "icon";
+  if (el.classList.contains("bld-cell")) return cellKind(el);
   const text = el.getAttribute("data-banner-text");
   if (text === "title" || text === "subtitle") return text;
   if (el.hasAttribute("data-banner-hero")) return "hero";
   const cell = el.getAttribute("data-cell-index");
-  if (cell !== null && cell !== "-1") return "icon";
+  if (cell !== null && cell !== "-1") return cellKind(el);
   return MARKS.find(([attr]) => el.hasAttribute(attr))?.[1] ?? null;
 }
 
@@ -37,19 +46,27 @@ export function quickTargetOf(path: readonly EventTarget[]): QuickTarget | null 
 }
 
 type Group = keyof SheetConfig;
-export interface ColorSlot { label: string; group: Group; key: string }
-export interface SizeSlot { label: string; group: Group; key: string; range: NumRange; unit: string }
+/** `own` (2026-11-23): the empty value keeps each icon's own paint — its label names that choice. */
+export interface ColorSlot { label: string; group: Group; key: string; own?: string }
+export interface SizeSlot { label: string; group: Group; key: string; range: NumRange; unit: string; own?: string }
 
 /** What each element offers: one colour, and maybe a stroke or text size (+ font for the title). */
 /** `gap`: a second slider in the text panel (captions: the icon–caption gap). */
 /** `textCase`: which banner case field the text panel switches (2026-11-15). */
 /** `box`: the icon box size slider (2026-11-15). */
-export interface QuickSpec { name: string; color: ColorSlot; stroke?: SizeSlot; text?: SizeSlot; face?: boolean; gap?: SizeSlot; textCase?: "titleCase" | "subtitleCase"; box?: SizeSlot }
+/** `fill`: a second colour, for the fills of a colored icon (2026-11-23). */
+export interface QuickSpec { name: string; color: ColorSlot; fill?: ColorSlot; stroke?: SizeSlot; text?: SizeSlot; face?: boolean; gap?: SizeSlot; textCase?: "titleCase" | "subtitleCase"; box?: SizeSlot }
 
 export const QUICK_SPECS: Readonly<Record<QuickKind, QuickSpec>> = {
   icon: {
     name: "Outlined icon", color: { label: "Icon color", group: "icons", key: "color" },
     stroke: { label: "Stroke width", group: "icons", key: "strokeWidth", range: RANGES.strokeWidth, unit: "px" },
+    box: { label: "Icon box (all icons)", group: "icons", key: "box", range: RANGES.box, unit: "px" },
+  },
+  styled: {
+    name: "Colored icon", color: { label: "Stroke color (colored icons)", group: "icons", key: "coloredStroke", own: "Own stroke colors" },
+    fill: { label: "Fill color (colored icons)", group: "icons", key: "coloredFill", own: "Own fill colors" },
+    stroke: { label: "Stroke width (colored icons)", group: "icons", key: "coloredStrokeWidth", range: RANGES.strokeWidth, unit: "px", own: "Own stroke widths" },
     box: { label: "Icon box (all icons)", group: "icons", key: "box", range: RANGES.box, unit: "px" },
   },
   hero: {
@@ -72,6 +89,8 @@ export const QUICK_SPECS: Readonly<Record<QuickKind, QuickSpec>> = {
     gap: { label: "Letter spacing", group: "banner", key: "subtitleTracking", range: RANGES.tracking, unit: "/100 em" },
   },
   block: { name: "Banner block", color: { label: "Block color", group: "banner", key: "accent" } },
+  line: { name: "Separator line", color: { label: "Line color", group: "banner", key: "lineColor" },
+    stroke: { label: "Line width", group: "banner", key: "lineWidth", range: RANGES.lineWidth, unit: "px" } },
   banner: { name: "Banner", color: { label: "Banner background", group: "banner", key: "background" } },
   canvas: { name: "Background", color: { label: "Background color", group: "artboard", key: "background" } },
 };

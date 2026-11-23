@@ -8,16 +8,12 @@ import type { IconMetadata } from "./meta";
 const RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const DC_NS = "http://purl.org/dc/elements/1.1/";
 
-/** How a packet is written: `clean` drops the toolkit fingerprint (`x:xmptk`, 2026-11-19). */
-export interface XmpPacketOptions { clean?: boolean }
-
 /** The XMP packet for metadata (Adobe XMP, rdf:Alt for text and rdf:Bag for tags). */
-export function buildXmpPacket(meta: IconMetadata, opts: XmpPacketOptions = {}): string {
-  const toolkit = opts.clean === true ? "" : ' x:xmptk="IconSplitter"';
+export function buildXmpPacket(meta: IconMetadata): string {
   const li = (text: string) => `<rdf:li xml:lang="x-default">${escapeXml(text)}</rdf:li>`;
   const tags = meta.tags.map((tag) => `<rdf:li>${escapeXml(tag)}</rdf:li>`).join("");
   return `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="adobe:ns:meta/"${toolkit}>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
  <rdf:RDF xmlns:rdf="${RDF_NS}">
   <rdf:Description rdf:about="" xmlns:dc="${DC_NS}">
    <dc:title><rdf:Alt>${li(meta.title)}</rdf:Alt></dc:title>

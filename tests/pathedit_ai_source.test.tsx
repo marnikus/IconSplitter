@@ -51,4 +51,27 @@ describe("in the edit mode", () => {
     expect(src).toContain("mainImageOf(");
     expect(src).toContain("<AiSourcePanel");
   });
+
+  it("stacks the top toolbar (and its Cutter algo popup) strictly above the AI source panel", async () => {
+    const style = document.createElement("style");
+    style.textContent = readFileSync("src/index.css", "utf8");
+    document.head.append(style);
+    try {
+      await act(async () => {
+        ui.render(<SvgPathEditor source={'<svg viewBox="0 0 24 24"><path d="M2 2L12 2"/></svg>'} box={{ width: 200, height: 200 }}
+          testid="e" label="icon" onFinish={vi.fn()} onCancel={vi.fn()} aside={<AiSourcePanel url="blob:ai" name="x" testid="ai" />} />);
+      });
+      await act(async () => { q("[data-testid=e-cut-settings]")?.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+      const popup = q("[data-testid=e-cut-settings-dialog]") as HTMLElement | null;
+      const toolbar = q(".svg-edit-toolbar") as HTMLElement;
+      const aside = q(".svg-edit-aside") as HTMLElement;
+      expect(popup).not.toBeNull();
+      expect(toolbar.contains(popup)).toBe(true);
+      const toolbarZ = Number(getComputedStyle(toolbar).zIndex);
+      const asideZ = Number(getComputedStyle(aside).zIndex);
+      expect(toolbarZ).toBeGreaterThan(asideZ);
+    } finally {
+      style.remove();
+    }
+  });
 });

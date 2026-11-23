@@ -96,3 +96,22 @@ its end-to-end comparison remains unmeasured in this integration.
 Upload now also isolates work outside the shared list boundary: see the
 [implemented Upload-specific response redesign](upload-response.md). Its work
 budgets exercise the full panel; diagnostic times are not browser speedup claims.
+
+## Generate SVG panel isolation (2026-11-19)
+
+Generate SVG (`src/svg/`) isolates warm list gestures so all rows and controls
+stay mounted without redundant storage, list, or DOM-parser passes:
+- `useSvgGen` initializes boot storage once via lazy `useRef`, and `useSvgCtx`
+  lazily allocates refs, decouples `filtered` from `queue`, caches `toListRow`
+  per `SvgRow` (`WeakMap`), and preserves `visibleIds` order in `checkedInView`
+  with $O(k \log k)$ lookup on sparse selections.
+- `panelcounts.indexSvgRows` computes counts and lookup sets (`knownIds`,
+  `decidableIds`, `generatedIds`) in one pass per `rows` snapshot; `SvgControls`,
+  `SvgBulkBar`, `SvgList` (`sameListProps`), and `SvgStatus` are memoized.
+- `SvgRow` splits `RowPreview` (`thumb`, `bg`, `imgBusy`) from `RowDetails` so
+  zoom and background changes skip row text/action subtrees; `MemoShadowSvg`
+  skips shadow-DOM work on `bg` changes.
+- `lib/svgpreview.buildSvgPreview` uses a 512-entry LRU cache (`1` parse per
+  unique SVG), `usesvgtext` scopes revisions by path and caches loaded text per
+  `DirHandleLike`, `tailreview` subscribes per row id, and `useImageUrl` skips
+  empty paths. Verified by `tests/svg_list_perf.test.tsx`.

@@ -1,6 +1,6 @@
 // model.ts — the builder workspace's one React state shape. Pure reducer and
 // validated initial state; storage, provider calls and disk IO stay in siblings.
-import { loadAutoRegister } from "./actions/register";
+import { loadAutoRegister } from "./autoregisterstore";
 import type { GeminiConfig } from "../lib/upload/gemini";
 import { loadGeminiConfig } from "../upload/configstore";
 import { getAppState } from "../state/appstore";
@@ -33,7 +33,8 @@ export interface LeaveTarget { kind: "template" | "artboard" | "add-artboard"; i
 export interface ArtboardMetaRequest { id: string; name: string; preview: string }
 
 /** The checked artboards' requests awaiting confirmation (and their progress once sent). */
-export interface ArtboardMetaPlan { requests: ArtboardMetaRequest[]; skipped: string[]; done: number; running: boolean }
+/** `ids`: the artboards asked for (2026-11-23) — the requests are drawn again when the image choice changes. */
+export interface ArtboardMetaPlan { ids: string[]; requests: ArtboardMetaRequest[]; skipped: string[]; done: number; running: boolean }
 
 export interface BuilderKeyInfo {
   value: string | null;
@@ -70,6 +71,8 @@ export interface BuilderModel {
   lockedIds: readonly string[];
   /** Removed with the artboard ×; kept out of reshuffles until restored (working state, like locks). */
   excludedIds: readonly string[];
+  /** Cells marked with ⊞ to combine into one big icon (2026-11-23): grid positions, at most four; not undone. */
+  mergeMarks: readonly number[];
   listView: BuilderListView;
   prefs: BuilderPrefs;
   prompt: string;
@@ -111,7 +114,7 @@ export function initialBuilderModel(): BuilderModel {
     supported: hasFolderPicker(), autoRegister: loadAutoRegister(), root: null, discovery: null, busy: null,
     status: "Open a folder to build from approved SVGs", error: false,
     config: loadSheetConfig(), recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SEED,
-    lockedIds: getAppState().builder.lockedIds ?? [], excludedIds: getAppState().builder.excludedIds ?? [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
+    lockedIds: getAppState().builder.lockedIds ?? [], excludedIds: getAppState().builder.excludedIds ?? [], mergeMarks: [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
     prompt: loadBuilderPrompt(), presets: builderPresets.load(), presetPick: "",
     gemini: loadGeminiConfig(), key: emptyKeyInfo(),
     modelCheck: { state: "idle", detail: "" }, metadata: null, draft: null, draftTitle: "",

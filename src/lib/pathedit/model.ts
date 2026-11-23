@@ -24,7 +24,7 @@ export interface Anchor {
  * the editor loads every path of the icon into one model, edits the selected
  * objects and snaps against all of them; Finish writes each changed object back.
  */
-export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number }
+export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number; /** The object's `fill-rule="evenodd"` — absent means nonzero (2026-11-20). */ fillRule?: "evenodd"; /** `false` when the object does not fill (stroked only): absent means it fills (2026-11-20). */ paints?: boolean; /** Half the drawn pen width in model units — a press that far from the line is on it (2026-11-23); absent = no stroke. */ halfStroke?: number }
 export interface PathModel { subs: SubPath[] }
 /** One anchor: its subpath and its index there. */
 export interface AnchorRef { sub: number; i: number }
@@ -173,6 +173,9 @@ export function cloneModel(m: PathModel): PathModel {
     subs: m.subs.map((s) => ({
       closed: s.closed,
       ...(s.owner === undefined ? {} : { owner: s.owner }),
+      ...(s.fillRule === undefined ? {} : { fillRule: s.fillRule }),
+      ...(s.paints === undefined ? {} : { paints: s.paints }),
+      ...(s.halfStroke === undefined ? {} : { halfStroke: s.halfStroke }),
       anchors: s.anchors.map((a) => ({ ...a, in: a.in && { ...a.in }, out: a.out && { ...a.out } })),
     })),
   };
@@ -192,6 +195,28 @@ export function ownersOf(m: PathModel): number[] {
 export interface Affine { a: number; b: number; c: number; d: number; e: number; f: number }
 
 export const IDENTITY: Affine = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+
+export function isIdentityAffine(m: Affine): boolean {
+  return m.a === 1 && m.b === 0 && m.c === 0 && m.d === 1 && m.e === 0 && m.f === 0;
+}
+
+/** Updates only the anchors named in `refs`, preserving untouched SubPath and Anchor references. */
+export function mapSelectedAnchors(m: PathModel, refs: readonly AnchorRef[], mapAnchor: (a: Anchor) => Anchor): PathModel {
+  if (refs.length === 0) return m;
+  const subs = m.subs.slice();
+  const clonedSubs = new Set<number>();
+  for (const r of refs) {
+    const sub = subs[r.sub];
+    const a = sub?.anchors[r.i];
+    if (sub === undefined || a === undefined) continue;
+    if (!clonedSubs.has(r.sub)) {
+      subs[r.sub] = { ...sub, anchors: sub.anchors.slice() };
+      clonedSubs.add(r.sub);
+    }
+    subs[r.sub].anchors[r.i] = mapAnchor(subs[r.sub].anchors[r.i]);
+  }
+  return clonedSubs.size === 0 ? m : { subs };
+}
 
 export function applyAffine(m: Affine, p: Pt): Pt {
   return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };

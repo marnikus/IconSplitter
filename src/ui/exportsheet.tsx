@@ -27,7 +27,16 @@ export interface FormatSheetProps {
   marker?: (field: keyof ExportFormatOptions, testid: string) => ReactNode;
   /** The upload dialog's "skipped while every visual setting is default" hint. */
   optimizeHint?: string;
+  /**
+   * The raster the rows make (2026-11-23): the upload flow's JPEG (default), or
+   * the sheet builder's PNG — the same switch, MP and artboard match, named PNG,
+   * and no quality row (PNG is lossless).
+   */
+  raster?: "jpeg" | "png";
 }
+
+const isPng = (p: FormatSheetProps) => p.raster === "png";
+const rasterName = (p: FormatSheetProps): "JPEG" | "PNG" => (isPng(p) ? "PNG" : "JPEG");
 
 const HINTS = {
   svg: "unchecked: no SVG file is written or included in the next exported package",
@@ -36,7 +45,10 @@ const HINTS = {
   converter: "who writes the EPS when \"Also write EPS\" is on — the built-in subset writer, or Inkscape on this machine",
   clean: "strips the generator's fingerprints before saving (data-* attributes, repeated namespaces, float-math junk) and keeps only the title, description and tags as metadata",
   optimize: "the export copy only — viewBox, geometry, strokes and metadata are preserved",
+  clean: "drop the generator's paperwork — data-* hooks, class/aria, repeated xmlns, comments, provenance blocks, dead color, bare groups, float noise, and the EPS's %%Creator/%%CreationDate plus its second metadata copy; the picture, Title, description and tags stay (a sheet keeps its px too)",
   expand: "strokes become filled shapes (what some stocks require); the SVG, JPEG and EPS all ship without strokes",
+  png: "unchecked: no PNG is rendered, written or included in the next exported package",
+  expandPng: "strokes become filled shapes (what some stocks require); the SVG, PNG and EPS all ship without strokes",
   expandText: "text becomes filled glyph outlines; what cannot be outlined fails that stage honestly",
   rescale: "the full artboard keeps its ratio and grows until its area is the megapixel target",
   rescaleMp: "the artboard area in megapixels (1 – 64)",
@@ -62,16 +74,22 @@ function DeliveryRows(p: FormatSheetProps) {
   return <>
     <ExportCheckRow {...rowOf(p, "includeSvg", "svg")} label="Export SVG" checked={p.value.includeSvg}
       hint={HINTS.svg} onChange={(v) => p.patch({ includeSvg: v })} />
-    <ExportCheckRow {...rowOf(p, "includeJpeg", "jpeg")} label="Export JPEG" checked={p.value.includeJpeg}
-      hint={HINTS.jpeg} onChange={(v) => p.patch({ includeJpeg: v })} />
+    <RasterRow {...p} />
     <ExportCheckRow {...rowOf(p, "includeEps", "eps")} label="Also write EPS" checked={p.value.includeEps}
       hint={HINTS.eps} onChange={(v) => p.patch({ includeEps: v })} />
     <ExportSelectRow {...rowOf(p, "epsConverter", converterSuffix(p.scope))} label="EPS converter" value={p.value.epsConverter}
       options={CONVERTER_IDS.map((id) => ({ value: id, label: CONVERTERS[id].label }))}
       hint={HINTS.converter} onChange={(v) => p.patch({ epsConverter: parseConverterId(v) })} />
     {p.value.epsConverter === "inkscape" && <EpsHelperRow scope={helperScope(p.scope)} />}
-    {!hasOutputFormats(p.value) && <small className="svg-error" role="alert" data-testid={`${p.scope}-formats-warning`}>{NO_OUTPUT_FORMATS}. The previous package is kept unchanged.</small>}
+    {!hasOutputFormats(p.value) && <small className="svg-error" role="alert" data-testid={`${p.scope}-formats-warning`}>
+      {isPng(p) ? NO_OUTPUT_FORMATS.replace("JPEG", "PNG") : NO_OUTPUT_FORMATS}. The previous package is kept unchanged.</small>}
   </>;
+}
+
+/** Export JPEG — or, in the builder, Export PNG: the same switch (`includeJpeg`). */
+function RasterRow(p: FormatSheetProps) {
+  return <ExportCheckRow {...rowOf(p, "includeJpeg", isPng(p) ? "png" : "jpeg")} label={`Export ${rasterName(p)}`} checked={p.value.includeJpeg}
+    hint={isPng(p) ? HINTS.png : HINTS.jpeg} onChange={(v) => p.patch({ includeJpeg: v })} />;
 }
 
 /** Typing a resolution also decides against the artboard match (one gesture, one undo entry). */
@@ -85,12 +103,12 @@ function JpegPixels(p: FormatSheetProps) {
   const box = p.artboard === null ? null : exportArtboardSize(p.artboard, p.value);
   return (
     <div className="svg-field up-set-field">
-      <span className="svg-label">JPEG (MP){p.marker?.("jpegMegapixels", "mp")}</span>
-      <input className="svg-input" data-testid={`${p.scope}-mp`} type="number" aria-label="JPEG megapixels"
+      <span className="svg-label">{rasterName(p)} (MP){p.marker?.("jpegMegapixels", "mp")}</span>
+      <input className="svg-input" data-testid={`${p.scope}-mp`} type="number" aria-label={`${rasterName(p)} megapixels`}
         min={MP_MIN} max={MP_MAX} step={0.1} value={p.value.jpegMegapixels}
         onChange={(e) => p.patch(megapixelPatch(p.artboard, Number(e.target.value)))} />
       {box !== null && <MatchBox p={p} />}
-      <small className="up-hint" data-testid={`${p.scope}-mp-note`}>{jpegNote(box, p.value.jpegMatchArtboard)}</small>
+      <small className="up-hint" data-testid={`${p.scope}-mp-note`}>{jpegNote(box, p.value.jpegMatchArtboard, rasterName(p))}</small>
     </div>
   );
 }
@@ -121,8 +139,10 @@ function ExpandRows(p: FormatSheetProps) {
       hint={HINTS.clean} onChange={(v) => p.patch({ cleanExport: v })} />
     <ExportCheckRow {...rowOf(p, "optimizeSvg", "optimize")} label="Optimize SVG (SVGO)" checked={p.value.optimizeSvg}
       hint={p.optimizeHint ?? HINTS.optimize} onChange={(v) => p.patch({ optimizeSvg: v })} />
+    <ExportCheckRow {...rowOf(p, "cleanExport", "clean")} label="Clean the saved files"
+      checked={p.value.cleanExport} hint={HINTS.clean} onChange={(v) => p.patch({ cleanExport: v })} />
     <ExportCheckRow {...rowOf(p, "expandStrokes", "expand")} label="Expand strokes to fills" checked={p.value.expandStrokes}
-      hint={HINTS.expand} onChange={(v) => p.patch({ expandStrokes: v })} />
+      hint={isPng(p) ? HINTS.expandPng : HINTS.expand} onChange={(v) => p.patch({ expandStrokes: v })} />
     <ExportCheckRow {...rowOf(p, "expandText", "expandtext")} label="Expand text to fills" checked={p.value.expandText}
       hint={HINTS.expandText} onChange={(v) => p.patch({ expandText: v })} />
   </>;
@@ -148,7 +168,7 @@ export function ExportFormatSheet(p: FormatSheetProps) {
   return <>
     <DeliveryRows {...p} />
     <JpegPixels {...p} />
-    <QualityRow {...p} />
+    {!isPng(p) && <QualityRow {...p} />}
     <ExpandRows {...p} />
     <RescaleRows {...p} />
   </>;

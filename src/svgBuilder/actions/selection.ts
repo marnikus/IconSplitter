@@ -29,8 +29,8 @@ export function selectionActions(get: () => BuilderActionContext): SelectionActi
   };
 }
 
-function pickOf(ctx: BuilderActionContext, recipe: SelectionRecipe, seed: number): SheetPick {
-  return { assets: ctx.assets, profiles: ctx.profiles, recipe, seed, capacity: ctx.layout.capacity,
+export function pickOf(ctx: BuilderActionContext, recipe: SelectionRecipe, seed: number): SheetPick {
+  return { assets: ctx.pickable, profiles: ctx.profiles, recipe, seed, capacity: ctx.layout.capacity, // only the STYLES the sheet allows (2026-11-23)
     current: ctx.placedIds, lockedIds: ctx.model.lockedIds, score: ctx.reference.image === null ? undefined : ctx.scoreOf,
     excludedIds: ctx.model.excludedIds };
 }
@@ -51,6 +51,7 @@ function setRecipe(ctx: BuilderActionContext, patch: Partial<SelectionRecipe>): 
 
 function reshuffle(ctx: BuilderActionContext, recipe: SelectionRecipe, opts: { toast: boolean }): void {
   if (ctx.assets.length === 0) return ctx.say("Open a folder with approved SVGs first", true);
+  if (ctx.pickable.length === 0) return ctx.say("No icon has a checked style — pick more in STYLES", true);
   if (recipe.mode === "similar" && ctx.reference.image === null) return ctx.say(NO_REFERENCE, true);
   const seed = ctx.model.seed + 1;
   const result = reshuffleSheet(pickOf(ctx, recipe, seed));

@@ -92,13 +92,17 @@ function joinPath(dir: string, name: string): string {
   return dir === "" ? name : `${dir}/${name}`;
 }
 
+const listRowCache = new WeakMap<SvgRow, SvgListRow>();
+
 export function toListRow(row: SvgRow): SvgListRow {
+  const cached = listRowCache.get(row);
+  if (cached !== undefined) return cached;
   const v = shownVersion(row);
   const sep = row.source.id.indexOf(STYLE_ID_SEP);
   const styleName = sep === -1 ? "base" : row.source.id.slice(sep + STYLE_ID_SEP.length);
   const hasAi = row.source.relPath !== "" || (row.meta?.imageVersions?.length ?? 0) > 0;
   const hasSvg = row.newest !== null;
-  return {
+  const built: SvgListRow = {
     id: row.source.id, name: row.source.name, relPath: row.source.relPath,
     generation: row.status, review: row.review, ...versionFields(v),
     svgCreatedAt: svgCreatedAtOf(v), aiCreatedAt: aiCreatedAtOf(row),
@@ -107,6 +111,8 @@ export function toListRow(row: SvgRow): SvgListRow {
     hasAi,
     hasSvg,
   };
+  listRowCache.set(row, built);
+  return built;
 }
 
 /**
@@ -182,7 +188,14 @@ export function visibleRows(rows: SvgRow[], filter: SvgListFilter, sort: SvgSort
 /** The rows with their "next attempt" flag: whoever waits in some batch, and is not the one in flight. */
 export function withQueued(rows: SvgRow[], queue: readonly QueueItem[]): SvgRow[] {
   const waiting = queuedIds(queue);
-  return rows.map((r) => (r.queued === waiting.has(r.source.id) ? r : { ...r, queued: waiting.has(r.source.id) }));
+  let changed = false;
+  const next = rows.map((r) => {
+    const want = waiting.has(r.source.id);
+    if (r.queued === want) return r;
+    changed = true;
+    return { ...r, queued: want };
+  });
+  return changed ? next : rows;
 }
 
 /** Every row's id in the sort's order — what the pin is refreshed from. */

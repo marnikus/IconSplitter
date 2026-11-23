@@ -1,11 +1,13 @@
-// artboardsundo.ts — adding and removing final artboards are undo steps
-// (2026-11-16): one global history entry ("builderArtboards") holds the whole
-// artboard list before and after; undo / redo put that list back (validated on
-// the way in). The mounted builder lends the applier, like the config one.
-import { parseArtboards, type FinalArtboard } from "../lib/svgBuilder/artboards";
-import { isRecord } from "../lib/isrecord";
+// artboardsundo.ts — adding and removing final artboards and templates are undo
+// steps (2026-11-16; templates and folders 2026-11-22): one global history entry
+// ("builderArtboards"). Since 2026-11-22 each side records only what it takes
+// out, what it puts back at its place, and the folder moves under
+// `_artboard_sheets` (into and out of `.removed versions`) — `ListsDelta`; an
+// older entry's whole artboard list still applies. Validated on the way in; the
+// mounted builder lends the applier.
+import { parseListsDelta, type ListsDelta } from "../lib/svgBuilder/removal";
 
-type ArtboardsApplier = (artboards: FinalArtboard[]) => boolean;
+type ArtboardsApplier = (side: ListsDelta) => Promise<boolean>;
 let applier: ArtboardsApplier | null = null;
 
 export function bindArtboardsApplier(next: ArtboardsApplier): () => void {
@@ -13,7 +15,8 @@ export function bindArtboardsApplier(next: ArtboardsApplier): () => void {
   return () => { if (applier === next) applier = null; };
 }
 
-export function applyBuilderArtboards(value: unknown): boolean {
-  if (!isRecord(value) || !Array.isArray(value.artboards) || applier === null) return false;
-  return applier(parseArtboards(value.artboards));
+export function applyBuilderArtboards(value: unknown): boolean | Promise<boolean> {
+  const side = parseListsDelta(value);
+  if (side === null || applier === null) return false;
+  return applier(side);
 }

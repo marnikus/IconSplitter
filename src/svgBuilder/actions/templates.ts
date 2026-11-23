@@ -1,22 +1,22 @@
 // actions/templates.ts — saved sheet templates (2026-11-13). Save the current
 // look as a template (a generated, editable name), open one to edit it on the
 // sheet (one undo entry, the sheet's words and hero kept), save the edit back,
-// rename, remove. The list is a saved library, not sheet history: it is
-// written to localStorage at once; applying a template IS undoable.
+// rename. The list is a saved library, written to localStorage at once;
+// applying a template IS undoable, and so is removing one (sheetlists.ts, 2026-11-22).
 import {
-  TEMPLATE_LIMIT, cleanTemplateName, lookOf, newTemplate, templateConfig, type SheetTemplate,
+  cleanTemplateName, lookOf, newTemplate, templateConfig, type SheetTemplate,
 } from "../../lib/svgBuilder/templates";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
+import { saveSheetConfig } from "../configstore";
 import { clampZoom } from "../../lib/zoom";
 import { commitConfig, prefs } from "./config";
-import { saveArtboards } from "../artboardstore";
 import { blockLeave, editedTemplate } from "./leaveguard";
 import { writeTemplateFolder } from "./templatefolder";
 import { currentJson } from "./presetjson";
 
 type TemplateActions = Pick<BuilderActions,
-  "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "renameTemplate" | "removeTemplate" | "setTemplateZoom" | "resetTemplate">;
+  "saveTemplate" | "saveTemplateAsNew" | "editTemplate" | "renameTemplate" | "setTemplateZoom" | "resetTemplate">;
 
 export function templateActions(get: () => BuilderActionContext): TemplateActions {
   return {
@@ -24,7 +24,6 @@ export function templateActions(get: () => BuilderActionContext): TemplateAction
     saveTemplateAsNew: () => withFolder(get, saveAsNew(get())),
     editTemplate: (id) => editTemplate(get(), id),
     renameTemplate: (id, name) => renameTemplate(get(), id, name),
-    removeTemplate: (id) => removeTemplate(get(), id),
     setTemplateZoom: (px) => prefs(get(), { templateZoom: clampZoom(px) }),
     resetTemplate: () => resetTemplate(get()),
   };
@@ -54,9 +53,9 @@ export function saveTemplate(ctx: BuilderActionContext): SheetTemplate | null {
 
 function saveAsNew(ctx: BuilderActionContext): SheetTemplate | null {
   const list = ctx.model.templates;
-  if (list.length >= TEMPLATE_LIMIT) { ctx.say(`At most ${TEMPLATE_LIMIT} templates — remove one first`, true); return null; }
   const created = newTemplate(ctx.model.config, list.map((t) => t.name), new Date().toISOString(), templateId());
-  store(ctx, [...list, created], created.id); // the new template is the one being edited: later changes are tracked
+  // the new template is the one being edited (later changes are tracked) — unless an artboard is open: it stays open, its draft untouched (2026-11-23)
+  store(ctx, [...list, created], ctx.model.editingArtboardId === null ? created.id : undefined);
   ctx.say(`Saved as template “${created.name}” — rename it on its block`);
   return created;
 }
@@ -75,6 +74,21 @@ export function editTemplate(ctx: BuilderActionContext, id: string, guard = true
   ctx.say(`Editing template “${template.name}” — change the sheet, then ✓ Save template`);
 }
 
+/**
+ * Puts a template on the stage WITHOUT an undo step (2026-11-22): where the stage
+ * goes when what it showed was removed, or undone away — like opening an
+ * artboard, this is navigation, so the removal stays one Undo away.
+ */
+export function showTemplate(ctx: BuilderActionContext, id: string): void {
+  const template = ctx.model.templates.find((t) => t.id === id);
+  if (template === undefined) return;
+  const config = templateConfig(template);
+  ctx.dispatch({ config, editingTemplateId: id, editingArtboardId: null,
+    templateSel: { ...ctx.model.templateSel, active: id, anchor: id }, artboardSel: { ...ctx.model.artboardSel, active: null } });
+  saveSheetConfig(config);
+  prefs(ctx, { layout: "custom", fit: true });
+}
+
 /** Reset (2026-11-14): the sheet back to the edited template's saved look — one undo step. */
 function resetTemplate(ctx: BuilderActionContext): void {
   const template = editedTemplate(ctx.model);
@@ -91,31 +105,3 @@ function renameTemplate(ctx: BuilderActionContext, id: string, name: string): vo
   store(ctx, ctx.model.templates.map((t) => (t.id === id ? { ...t, name: clean } : t)));
 }
 
-/** A removed template takes its final artboards with it. */
-function dropArtboardsOf(ctx: BuilderActionContext, templateId: string): void {
-  const kept = ctx.model.artboards.filter((a) => a.templateId !== templateId);
-  const sel = ctx.model.templateSel;
-  const open = ctx.model.artboards.find((a) => a.id === ctx.model.editingArtboardId);
-  ctx.dispatch({
-    artboards: kept, templateSel: { checked: sel.checked.filter((x) => x !== templateId), active: sel.active === templateId ? null : sel.active, anchor: null },
-    ...(open?.templateId === templateId ? { editingArtboardId: null } : {}),
-  });
-  saveArtboards(kept);
-}
-
-function removeTemplate(ctx: BuilderActionContext, id: string): void {
-  const template = ctx.model.templates.find((t) => t.id === id);
-  if (template === undefined) return;
-  const shown = ctx.model.editingTemplateId === id || ctx.model.artboards.some((a) => a.id === ctx.model.editingArtboardId && a.templateId === id);
-  const next = shown ? neighbourTemplate(ctx.model.templates, id) : null;
-  store(ctx, ctx.model.templates.filter((t) => t.id !== id), ctx.model.editingTemplateId === id ? null : undefined);
-  dropArtboardsOf(ctx, id);
-  ctx.say(`Template “${template.name}” removed`);
-  if (next !== null) { ctx.dispatch({ templateSel: { ...ctx.model.templateSel, active: next, anchor: next } }); editTemplate(ctx, next, false); }
-}
-
-/** The template the stage moves to when the shown one is removed (2026-11-16): the one above, else below — no dead preview. */
-function neighbourTemplate(all: readonly SheetTemplate[], id: string): string | null {
-  const at = all.findIndex((t) => t.id === id);
-  return (all[at - 1] ?? all[at + 1])?.id ?? null;
-}

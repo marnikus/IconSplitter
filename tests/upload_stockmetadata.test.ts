@@ -107,7 +107,7 @@ describe("metadata carrier integrity", () => {
     expect(readEpsIptc(out)).toEqual(META);
     expect(embedXmpMetadataInEps(out, META)).toBe(out);
     expect(verifyEpsDocument(out).ok).toBe(true);
-    expect(verifyEpsDocument(out.replace("% IconSplitter IPTC end", "0 0 1 1 image\n% IconSplitter IPTC end")).ok).toBe(false);
+    expect(verifyEpsDocument(out.replace("%%EndPhotoshop", `0 0 1 1 image${eol}%%EndPhotoshop`)).ok).toBe(false);
   });
   it("rejects unverified Photoshop opaque resources and malformed hex in EPS", () => {
     const out = embedXmpMetadataInEps(EPS, META);

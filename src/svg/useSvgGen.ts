@@ -36,7 +36,9 @@ export type SvgGenApi = SvgModel & SvgActions & {
 };
 
 export function useSvgGen(): SvgGenApi {
-  const boot = useRef(loadBoot()).current;
+  const bootRef = useRef<Boot | null>(null);
+  if (bootRef.current === null) bootRef.current = loadBoot();
+  const boot = bootRef.current;
   const [model, dispatch] = useSvgModel(boot.config, boot.prompt, boot.prefs, { presets: boot.presets, conns: boot.connections });
   const ctx = useSvgCtx(model, dispatch);
   const actions = useSvgActions(ctx);

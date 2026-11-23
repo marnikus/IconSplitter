@@ -21,7 +21,7 @@ import { endRequest } from "./journal";
 import { allocateUsage } from "../lib/svgusage";
 import { type PairMeta } from "../lib/pairmeta";
 import { sendBatch } from "./runsend";
-import { saveMetaAt } from "../selection/pairstore";
+import { loadMetaAt, saveMetaAt } from "../selection/pairstore";
 import { buildComposite, type BuiltComposite } from "./composite";
 import { compositeLayout } from "../lib/svgcomposite";
 import { mainImageOf, withImagesOf } from "../lib/svgimgreg";
@@ -32,6 +32,7 @@ import type { RunState } from "./runtypes";
 export async function runBatch(state: RunState, plan: BatchPlan, index: number, signal: AbortSignal = state.args.signal): Promise<void> {
   const items = plan.items.map((i) => state.args.sources.find((s) => s.id === i.sourceId)).filter(isSource);
   if (items.length === 0) return;
+  await ensureMetas(state, items);
   const ctx = newBatchCtx({
     state, plan, index, items, signal, startedAt: Date.now(),
     hash: "", usage: null, share: null, error: null, requestId: null, unsettled: false,
@@ -202,11 +203,25 @@ async function rejectOne(ctx: BatchCtx, item: SvgSource, position: number, error
   state.args.onEvent({ kind: "item-failed", batchId: plan.id, position, sourceId: item.id, error, failure: "malformed", retryAfterMs: null });
 }
 
+/** Ensures each item's pair record is in memory before building the composite or saving. */
+async function ensureMetas(state: RunState, items: readonly SvgSource[]): Promise<void> {
+  for (const item of items) {
+    if (state.args.metas.get(item.id) != null) continue;
+    const read = await loadMetaAt(state.args.root, item.metaPath);
+    if (read.meta !== null) state.args.metas.set(item.id, withActiveImage(read.meta));
+  }
+}
+
+function withActiveImage(meta: PairMeta): PairMeta {
+  if (meta.imagePreferred !== null || meta.ai.fingerprint !== "") return meta;
+  return { ...meta, imagePreferred: meta.imageVersions.find((v) => v.status === "done")?.version ?? null };
+}
+
 /** Writes the pair's own file and keeps the in-memory copy in step (RULE 24). */
 async function persist(state: RunState, item: SvgSource, next: PairMeta | null): Promise<PairMeta | null> {
   if (!next) return null;
   // the image fields are the image writer's: taken from the latest copy (RC6)
-  const meta = withImagesOf(next, state.args.metas.get(item.id) ?? null);
+  const meta = withActiveImage(withImagesOf(next, state.args.metas.get(item.id) ?? null));
   state.args.metas.set(item.id, meta);
   try {
     await saveMetaAt(state.args.root, item.metaPath, meta);

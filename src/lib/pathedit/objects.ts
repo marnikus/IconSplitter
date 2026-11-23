@@ -6,39 +6,140 @@
 // that changed — each through the inverse matrix into its own units — and
 // leaves every other path byte for byte. Pure.
 
-import { cloneModel, IDENTITY, invertAffine, ownersOf, subsOf, toPathData, transformModel, type Affine, type PathModel } from "./model";
+import { IDENTITY, invertAffine, isIdentityAffine, toPathData, transformModel, type Affine, type PathModel, type SubPath } from "./model";
 import { fromPathData } from "./model";
 import type { EditSession } from "./session";
-import { pathTags, withPathD } from "./svgdoc";
+import { cachedPathTags, withPathDs, type PathTag } from "./svgdoc";
+
+const ownerGroupsCache = new WeakMap<PathModel, Map<number, SubPath[]>>();
+const ownerDataCache = new WeakMap<PathModel, Map<number, string>>();
+const dirtyListCache = new WeakMap<PathModel, WeakMap<PathModel, number[]>>();
+
+/** Groups owned subpaths by owner index in one O(S) pass per PathModel. */
+export function subsByOwner(model: PathModel): Map<number, SubPath[]> {
+  const hit = ownerGroupsCache.get(model);
+  if (hit !== undefined) return hit;
+  const grouped = new Map<number, SubPath[]>();
+  for (const s of model.subs) {
+    if (s.owner === undefined) continue;
+    let bucket = grouped.get(s.owner);
+    if (bucket === undefined) {
+      bucket = [];
+      grouped.set(s.owner, bucket);
+    }
+    bucket.push(s);
+  }
+  ownerGroupsCache.set(model, grouped);
+  return grouped;
+}
+
+export function sameSubRefs(a: readonly SubPath[] | undefined, b: readonly SubPath[] | undefined): boolean {
+  const la = a?.length ?? 0;
+  const lb = b?.length ?? 0;
+  if (la !== lb) return false;
+  for (let i = 0; i < la; i++) if (a![i] !== b![i]) return false;
+  return true;
+}
+
+function ownerCanonicalData(model: PathModel, owner: number): string {
+  let byOwner = ownerDataCache.get(model);
+  if (byOwner === undefined) {
+    byOwner = new Map();
+    ownerDataCache.set(model, byOwner);
+  }
+  const hit = byOwner.get(owner);
+  if (hit !== undefined) return hit;
+  const subs = subsByOwner(model).get(owner) ?? [];
+  const data = toPathData({ subs });
+  byOwner.set(owner, data);
+  return data;
+}
+
+/** How a path's subpaths fill and how wide their pen is in root space (its matrix scales the pen). */
+function lookOf(tag: PathTag, m: Affine): Pick<SubPath, "fillRule" | "paints" | "halfStroke"> {
+  const half = (tag.strokeWidth / 2) * Math.sqrt(Math.abs(m.a * m.d - m.b * m.c));
+  return { ...(tag.fillRule === "evenodd" ? { fillRule: "evenodd" as const } : {}), ...(tag.paints ? {} : { paints: false }), ...(half > 0 ? { halfStroke: half } : {}) };
+}
 
 /** All paths of `source` as one model in root space; `matrices[i]` maps path i into it (identity when absent). */
 export function loadObjects(source: string, matrices: readonly Affine[]): PathModel {
-  const subs = pathTags(source).flatMap((tag) => transformModel(fromPathData(tag.d, tag.index), matrices[tag.index] ?? IDENTITY).subs);
+  const subs = cachedPathTags(source).flatMap((tag) => {
+    const parsed = fromPathData(tag.d, tag.index);
+    const m = matrices[tag.index] ?? IDENTITY;
+    const moved = isIdentityAffine(m) ? parsed : transformModel(parsed, m);
+    const look = lookOf(tag, m);
+    return moved.subs.map((s) => ({ ...s, ...look }));
+  });
   return { subs };
 }
 
 /** One object's path data in its own units. */
-function objectData(model: PathModel, owner: number, m: Affine): string {
-  return toPathData(transformModel(subsOf(model, owner), invertAffine(m)));
+function objectData(model: PathModel, owner: number, m: Affine, precision?: number): string {
+  const subs = subsByOwner(model).get(owner) ?? [];
+  return toPathData(isIdentityAffine(m) ? { subs } : transformModel({ subs }, invertAffine(m)), precision);
 }
 
 /** The objects whose written path would differ from the one the session started with. */
 export function dirtyObjects(s: EditSession): number[] {
-  const owners = [...new Set([...ownersOf(s.original), ...ownersOf(s.model)])].sort((a, b) => a - b);
-  return owners.filter((o) => toPathData(subsOf(s.model, o)) !== toPathData(subsOf(s.original, o)));
+  let byOriginal = dirtyListCache.get(s.model);
+  if (byOriginal === undefined) {
+    byOriginal = new WeakMap();
+    dirtyListCache.set(s.model, byOriginal);
+  }
+  const cached = byOriginal.get(s.original);
+  if (cached !== undefined) return cached;
+  const cur = subsByOwner(s.model);
+  const orig = subsByOwner(s.original);
+  const owners = [...new Set([...orig.keys(), ...cur.keys()])].sort((a, b) => a - b);
+  const dirty = owners.filter((o) => !sameSubRefs(cur.get(o), orig.get(o))
+    && ownerCanonicalData(s.model, o) !== ownerCanonicalData(s.original, o));
+  byOriginal.set(s.original, dirty);
+  return dirty;
 }
 
-/** The file with every changed object's `d` rewritten; null when nothing changed. */
+/** Fast O(1)-cached dirty check for the Finish button without serializing SVG markup. */
+export function hasDirtyObjects(s: EditSession): boolean {
+  return dirtyObjects(s).length > 0;
+}
+
+/** The file with every changed object's `d` rewritten in a single pass; null when nothing changed. */
 export function writeObjects(source: string, s: EditSession, matrices: readonly Affine[]): string | null {
   const dirty = dirtyObjects(s);
   if (dirty.length === 0) return null;
-  let out: string | null = source;
-  for (const o of dirty) out = out === null ? null : withPathD(out, o, objectData(s.model, o, matrices[o] ?? IDENTITY));
-  return out;
+  const tags = cachedPathTags(source);
+  const ds = new Map<number, string>();
+  for (const o of dirty) {
+    if (tags[o] === undefined) return null;
+    ds.set(o, objectData(s.model, o, matrices[o] ?? IDENTITY));
+  }
+  return withPathDs(source, ds);
 }
 
 /** The d the preview shows for object `o`: the working copy when it changed, else the file's own. */
 export function previewData(source: string, s: EditSession, o: number, m: Affine): string {
-  const changed = toPathData(subsOf(s.model, o)) !== toPathData(subsOf(s.original, o));
-  return changed ? toPathData(transformModel(subsOf(cloneModel(s.model), o), invertAffine(m)), 3) : pathTags(source)[o]?.d ?? "";
+  const cur = subsByOwner(s.model).get(o);
+  const orig = subsByOwner(s.original).get(o);
+  const changed = !sameSubRefs(cur, orig) && ownerCanonicalData(s.model, o) !== ownerCanonicalData(s.original, o);
+  return changed ? objectData(s.model, o, m, 3) : cachedPathTags(source)[o]?.d ?? "";
+}
+
+/** Computes preview `d` ONLY for objects whose SubPath references changed since `previous`. */
+export function changedPreviewData(
+  tags: readonly PathTag[],
+  s: EditSession,
+  matrices: readonly Affine[],
+  previous: PathModel | null,
+): Map<number, string> {
+  const out = new Map<number, string>();
+  if (previous === s.model) return out;
+  const cur = subsByOwner(s.model);
+  const orig = subsByOwner(s.original);
+  const prev = previous === null ? null : subsByOwner(previous);
+  for (const t of tags) {
+    const o = t.index;
+    if (prev !== null && sameSubRefs(cur.get(o), prev.get(o))) continue;
+    const changed = !sameSubRefs(cur.get(o), orig.get(o)) && ownerCanonicalData(s.model, o) !== ownerCanonicalData(s.original, o);
+    out.set(o, changed ? objectData(s.model, o, matrices[o] ?? IDENTITY, 3) : t.d ?? "");
+  }
+  return out;
 }

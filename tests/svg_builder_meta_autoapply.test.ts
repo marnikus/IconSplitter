@@ -8,14 +8,15 @@ import { DEFAULT_GEMINI_CONFIG } from "../src/lib/upload/gemini";
 import { DEFAULT_SELECTION_RECIPE } from "../src/lib/svgBuilder/selection";
 import { providerActions } from "../src/svgBuilder/actions/provider";
 import type { BuilderActionContext } from "../src/svgBuilder/actiontypes";
+import { DEFAULT_BUILDER_PREFS } from "../src/svgBuilder/prefsstore";
 
 const ANSWER = `Title: Asian noodle soup bowl icon set
 Description: Healthy enjoyment of hot meals. Bowls contain noodles steam and chopsticks
 Tags: icon, pictogram, vector, stroke, line, editable, web, noodles, bowl, steam, soup
 Title-Artboard: noodle bowl icons asset`;
 
-function fakeCtx() {
-  const model: Record<string, unknown> = {
+function fakeCtx(prefs = DEFAULT_BUILDER_PREFS) {
+  const model: Record<string, unknown> = { prefs,
     config: DEFAULT_CONFIG, seed: 1, lockedIds: [], recipe: DEFAULT_SELECTION_RECIPE, metadata: null, draft: null, draftTitle: "",
     preview: "data:image/png;base64,iVBORw0KGgo=", dialog: "metadata", key: { value: "test-key" }, gemini: DEFAULT_GEMINI_CONFIG, prompt: "P",
   };
@@ -40,5 +41,14 @@ describe("sheet metadata applies automatically", () => {
     expect(model.draft).toBeNull();
     expect((model.config as typeof DEFAULT_CONFIG).banner).toMatchObject({ title: "noodle bowl icons asset", subtitle: "Editable stroke width" });
     expect(said.join(" ")).toMatch(/applied/);
+  });
+
+  it("with the title option unticked only the metadata is filled; the banner words stay (2026-11-23)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: ANSWER }] }, finishReason: "STOP" }] }), { status: 200 })));
+    const { ctx, model } = fakeCtx({ ...DEFAULT_BUILDER_PREFS, metaTitleToBanner: false });
+    providerActions(() => ctx).confirmMetadata();
+    await vi.waitFor(() => expect(model.dialog).toBe("none"));
+    expect(model.metadata).toMatchObject({ state: "accepted", title: "Asian noodle soup bowl icon set" });
+    expect((model.config as typeof DEFAULT_CONFIG).banner).toMatchObject({ title: DEFAULT_CONFIG.banner.title, subtitle: DEFAULT_CONFIG.banner.subtitle });
   });
 });

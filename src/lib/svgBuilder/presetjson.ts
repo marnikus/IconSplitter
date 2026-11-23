@@ -10,7 +10,7 @@ import { parseSheetConfig } from "./config";
 import { RANGES } from "./ranges";
 import { cleanSheetMetadata, sheetMetadataFingerprint, validateSheetMetadata } from "./metadata";
 import { parseSelectionRecipe } from "./selection";
-import { emptySlotFor, isEmptySlot } from "./slots";
+import { freshEmpty, isEmptySlot } from "./slots";
 import type { BuilderIconAsset, SelectionRecipe, SheetConfig, SheetMetadata } from "./types";
 
 export const PRESET_FORMAT = "iconsplitter-sheet-preset";
@@ -90,16 +90,21 @@ function refText(ref: Exclude<IconRef, null>): string {
 
 /** The placement the JSON describes: ids in cell order (empty cells kept), and what was not found. */
 export function resolveIcons(refs: readonly unknown[], assets: readonly BuilderIconAsset[]): { ids: string[]; unresolved: string[] } {
-  const ids: string[] = [];
+  const picked: (string | null)[] = [];
+  const seen = new Set<string>();
   const unresolved: string[] = [];
   for (const raw of refs) {
     const ref = asRef(raw);
     if (ref === undefined) continue;
     const hit = ref === null ? undefined : findIcon(ref, assets);
     if (ref !== null && hit === undefined) unresolved.push(refText(ref));
-    ids.push(hit !== undefined && !ids.includes(hit.id) ? hit.id : emptySlotFor(ids));
+    const fresh = hit !== undefined && !seen.has(hit.id);
+    if (fresh) seen.add(hit.id);
+    picked.push(fresh ? hit.id : null);
   }
-  return { ids, unresolved };
+  const holes = freshEmpty([...seen], picked.filter((id) => id === null).length); // one pass, however many cells (2026-11-23)
+  let k = 0;
+  return { ids: picked.map((id) => id ?? holes[k++]), unresolved };
 }
 
 function asRef(raw: unknown): IconRef | undefined {
@@ -167,7 +172,8 @@ export function presetSchemaText(): string {
     "config.artboard: width " + range("width") + ", height " + range("height") + ", background \"#RRGGBB\", padding " + range("padding") + " (margin around everything), radius " + range("radius") + ".",
     "config.grid: columns " + range("columns") + ", rows " + range("rows") + ", gapX/gapY " + range("gapX") + " (space between cells), captions true|false, captionColor \"#RRGGBB\", captionSize " + range("captionSize") + ", captionGap " + range("captionGap") + " (icon to caption), captionCase \"upper\"|\"normal\".",
     "config.icons: box " + range("box") + " (cell size), strokeWidth " + range("strokeWidth") + ", color \"#RRGGBB\" (stroke colour), linecap \"round\"|\"square\".",
-    "config.banner: position \"left\"|\"right\"|\"top\"|\"bottom\"|\"none\", size " + range("bannerSide") + " for left/right (width) or " + range("bannerEdge") + " for top/bottom (height), style \"solid\"|\"split\", background/accent/textColor/subtitleColor \"#RRGGBB\", title (≤ 90 chars), subtitle (≤ 140), titleSize " + range("titleSize") + ", subtitleSize " + range("subtitleSize") + ", titleFace \"sans\"|\"serif\"|\"mono\", hero true|false (a ringed icon in the banner), heroIconId (null = first icon), divider true|false (accent rule).",
+    "config.icons for colored icons (styles like colored_wiggle): coloredStroke \"#RRGGBB\" or \"\" (each icon's own stroke colours), coloredStrokeWidth " + range("strokeWidth") + " or 0 (own widths), coloredFill \"#RRGGBB\" or \"\" (own fill colours) — strokes and fills apart; line-stroke icons keep color/strokeWidth.",
+    "config.banner: position \"left\"|\"right\"|\"top\"|\"bottom\"|\"none\", size " + range("bannerSide") + " for left/right (width) or " + range("bannerEdge") + " for top/bottom (height), style \"solid\"|\"split\"|\"line\" (line: no banner colour, one separator line), lineWidth " + range("lineWidth") + ", lineColor \"#RRGGBB\", background/accent/textColor/subtitleColor \"#RRGGBB\", title (≤ 90 chars), subtitle (≤ 140), titleSize " + range("titleSize") + ", subtitleSize " + range("subtitleSize") + ", titleFace \"sans\"|\"serif\"|\"mono\", hero true|false (a ringed icon in the banner), heroIconId (null = first icon), divider true|false (accent rule).",
     "config.banner hero style: heroScale " + range("heroScale") + " (% icon size), heroStroke " + range("heroStroke") + " (icon stroke px), ringScale " + range("ringScale") + " (% circle size), ringStroke " + range("ringStroke") + " (circle stroke px, 0 hides the circles).",
     "config.banner text placement: textPadding " + range("textPadding") + " (inset of the text from the banner edge), titleDx/titleDy and subtitleDx/subtitleDy " + range("textOffset") + " (move the text by exact pixels).",
     "icons: the grid's icons in cell order (left to right, top to bottom) — each an Icon Name from the list below (or {\"name\": …}); null leaves a cell empty. Names not in the list are reported and skipped.",

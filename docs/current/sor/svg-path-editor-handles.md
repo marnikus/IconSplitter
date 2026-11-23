@@ -23,11 +23,28 @@ dropped. Legend: "Alt+Click line". Test: `pathedit_remove_segment.test.ts`.
 around the click, even with no anchors there (`stretch.ts`): a crossing is where
 another line (or a far part of the same one) cuts it or ends on it. Anchors are
 made on both crossings (the shape is kept), the part between goes: an open line
-splits, a closed shape opens, an anchor inside goes too. It needs a crossing on
-both sides of an open line (else nothing happens). While both keys are held
+splits, a closed shape opens, an anchor inside goes too. A **tail** — an open
+line bounded by ONE crossing — is now removable the same way: the mark runs from
+that crossing to the line's end and the click drops it, leaving the end on the
+other line; a line with no crossing is never touched. While both keys are held
 over a line the part is drawn red (`cutHint`, overlay `data-cut-hint`, never
 written; it follows the next pointer move). One undo step. Tests:
-`pathedit_cut_between.test.ts`, `pathedit_cut_between_ui.test.tsx`.
+`pathedit_cut_between.test.ts`, `pathedit_cut_tail.test.ts`,
+`pathedit_cut_between_ui.test.tsx`. Rules together: [edit-mode cuts](svg-edit-cuts.md).
+
+## Alt + Shift over a filled area (2026-11-20)
+
+On empty space over a **closed, filled** area, both keys mark that area's own
+outline red (`cutRegionHint`, overlay `data-cut-region`); the click **cuts it
+out**, so the paint inside it goes (`lib/pathedit/region.ts` `cutRegion`). Only
+filled rings paint: a `fill="none"` outline — a stroked circle inside a filled
+pin — is a CUTTER, and the click adds its ring to the filled path behind it, so
+the pin gets the hole and the stroke keeps its look. Under `nonzero` a ring
+nested in one other filling ring is walked the other way instead; under
+`evenodd` one added ring flips the parity. The artboard repaints from the model,
+so the hole shows at once. The innermost closed ring wins; a point that is
+already a hole gets no mark. One undo step, selection kept clear. Legend: "Alt+Shift+Click fill". Tests:
+`pathedit_region_cut.test.ts`, `pathedit_region_cut_ui.test.tsx`.
 
 ## Beyond the artboard's border (2026-11-10)
 
@@ -68,9 +85,9 @@ never written. One undo step. Test: `pathedit_skew.test.ts`.
 
 ## Tests
 
-`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_live_shapes.test.tsx` (moved circle drawn live, no guide in preset), `pathedit_nudge.test.tsx` (arrow keys), `pathedit_copy_drag.test.ts` (copy / paste, drag by a selected line), `pathedit_scale.test.ts` (box, free / proportional / edge scale), `pathedit_line_ops.test.ts` (double-click, Ctrl+click, Delete / Ctrl+Delete), `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting)
+`pathedit_core.test.ts` (model, ops, hit/snap, gestures, file), `pathedit_objects.test.ts`, `pathedit_live_shapes.test.tsx` (moved circle drawn live, no guide in preset), `pathedit_nudge.test.tsx` (arrow keys), `pathedit_copy_drag.test.ts` (copy / paste, drag by a selected line), `pathedit_scale.test.ts` (box, free / proportional / edge scale), `pathedit_line_ops.test.ts` (double-click, Ctrl+click, Delete / Ctrl+Delete), `pathedit_select_mods.test.ts` (Shift adds, Alt removes), `pathedit_shapes.test.ts` (shapes as objects, thin-line picking, shape → path write), `pathedit_pick_tolerance.test.tsx` (tolerance rule + setting), `pathedit_stroke_lines.test.ts` (root `<svg>` paint, a stroke line its own object, half-pen tolerance)
 (objects: select, Shift, Esc, marquee, joint moves, snap to unselected, per-object write), `pathedit_bg.test.tsx` (artboard background), `pathedit_modal.test.tsx` (full-screen mode: layout, keys, rows, Save/Discard, 50-step history), `pathedit_ui.test.tsx`
-(session in the page, Finish + undo/redo, Edit settings, wiring).
+(session in the page, Finish + undo/redo, Edit settings, wiring), `svg_editor_perf.test.tsx` (real-time structural sharing via `mapSelectedAnchors`, cached `svgdoc.cachedPathTags`, lazy `writeObjects` only on Finish/cut, incremental `changedPreviewData` per-dirty-owner `d` writes, and pooled `<circle>` / scale-box layers in `editoroverlay.ts`).
 
 <a id="edit-settings"></a>
 

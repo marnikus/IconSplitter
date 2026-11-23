@@ -10,7 +10,7 @@
 // Positions come from the layout and the drawn elements, never the pointer.
 import { freeSpot, type Size } from "../lib/svgBuilder/freespot";
 import type { Rect } from "../lib/svgBuilder/types";
-import { QUICK_SPECS, type QuickKind } from "./quickedit";
+import { QUICK_SPECS, isIconKind, type QuickKind } from "./quickedit";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export interface Anchor { x: number; y: number }
@@ -23,7 +23,7 @@ const LIVE_SELECTOR: Partial<Record<QuickKind, string>> = {
 /** The toolbar's size: a 20 px dot, then 26 px buttons, 6 px gaps, padding and border. */
 export function toolbarSize(kind: QuickKind): Size {
   const s = QUICK_SPECS[kind];
-  const buttons = (s.stroke ? 1 : 0) + (s.text ? 1 : 0) + (kind === "title" || kind === "subtitle" ? 1 : 0) + (kind === "hero" ? 2 : 0) + (kind === "icon" ? 2 : 0) + (kind === "banner" || kind === "block" ? 1 : 0);
+  const buttons = (s.stroke ? 1 : 0) + (s.text ? 1 : 0) + (kind === "title" || kind === "subtitle" ? 1 : 0) + (kind === "hero" ? 2 : 0) + (isIconKind(kind) ? 2 : 0) + (s.fill ? 1 : 0) + (kind === "banner" || kind === "block" ? 1 : 0);
   return { width: 12 + 20 + buttons * 32, height: 38 };
 }
 
@@ -63,7 +63,7 @@ function obstaclesOf(ctx: Ctx): Rect[] {
   if (ctx.kind === "canvas") return [...(ctx.b.layout.banner === null ? [] : [scaled(ctx.b.layout.banner, ctx.zoom)]), ...cellRects(ctx)];
   if (ctx.kind === "banner") return [...texts, shadowRect(ctx, "[data-split-block]")].filter((r): r is Rect => r !== null);
   if (ctx.kind === "block") return texts.filter((r): r is Rect => r !== null);
-  if (ctx.kind === "icon") return [...ctx.el.querySelectorAll(".bld-cell-lock, .bld-cell-exclude, .bld-cell-decline")].map((e) => rectOn(e, ctx.origin)).filter((r): r is Rect => r !== null);
+  if (isIconKind(ctx.kind)) return [...ctx.el.querySelectorAll(".bld-cell-lock, .bld-cell-exclude, .bld-cell-decline")].map((e) => rectOn(e, ctx.origin)).filter((r): r is Rect => r !== null);
   return [];
 }
 
@@ -81,7 +81,7 @@ export function anchorOf(hover: { kind: QuickKind; el: Element }, b: BuilderApi,
   const area = areaOf(ctx);
   if (area === null) return null;
   if (hover.kind === "caption") return { x: area.x + area.width / 2 - toolbarSize("caption").width / 2, y: area.y + area.height - 4 };
-  const spot = freeSpot(area, toolbarSize(hover.kind), obstaclesOf(ctx), { inset: hover.kind === "icon" ? 2 : 6 });
+  const spot = freeSpot(area, toolbarSize(hover.kind), obstaclesOf(ctx), { inset: isIconKind(hover.kind) ? 2 : 6 });
   // Too small for the toolbar: it stays on the element's own top edge (below an icon's buttons), still reachable directly.
-  return spot ?? { x: area.x, y: area.y + (hover.kind === "icon" ? 12 : 0) };
+  return spot ?? { x: area.x, y: area.y + (isIconKind(hover.kind) ? 12 : 0) };
 }

@@ -1,14 +1,17 @@
-// EPS Photoshop resource comments, ASCII hex only, no executable PostScript.
+// EPS Photoshop resource comments, ASCII hex only, no executable PostScript
+// and zero tool-identity wrapper comments (RULE 26).
 import type { IconMetadata } from "./meta";
 import { iptcResource, readPhotoshopIptc, photoshopResource, photoshopResources } from "./photoshop";
 import { decodeUtf8, joinBytes, utf8 } from "./metadatabytes";
 import { buildXmpPacket, readXmpPacket } from "./xmp";
-const BEGIN = "% IconSplitter IPTC begin";
-const END = "% IconSplitter IPTC end";
-const BLOCK = /^% IconSplitter IPTC begin(?:\r\n|\r|\n)[\s\S]*?^% IconSplitter IPTC end(?:\r\n|\r|\n|$)/gm;
+
+const LEGACY_BLOCK = /^% IconSplitter IPTC begin(?:\r\n|\r|\n)[\s\S]*?^% IconSplitter IPTC end(?:\r\n|\r|\n|$)/gm;
+const CANONICAL_BLOCK = /^%%BeginPhotoshop: 6(?:\r\n|\r|\n)(?:% [0-9a-f]+(?:\r\n|\r|\n))+%%EndPhotoshop(?:\r\n|\r|\n|$)/gm;
+
 export function stripEpsIptc(eps: string): string {
-  return eps.replace(BLOCK, "");
+  return eps.replace(LEGACY_BLOCK, "").replace(CANONICAL_BLOCK, "");
 }
+
 export function embedIptcInEps(eps: string, meta: IconMetadata): string {
   const clean = stripEpsIptc(eps);
   const eol = /\r\n|\n|\r/.exec(clean)?.[0] ?? "\n";
@@ -16,10 +19,29 @@ export function embedIptcInEps(eps: string, meta: IconMetadata): string {
   const resources = joinBytes(iptcResource(meta), photoshopResource(0x0424, packet));
   const hex = Array.from(resources, (b) => b.toString(16).padStart(2, "0")).join("");
   const lines = hex.match(/.{1,64}/g) ?? [];
-  const block = [BEGIN, "%%BeginPhotoshop: 6", ...lines.map((l) => `% ${l}`), "%%EndPhotoshop", END, ""].join(eol);
+  const block = ["%%BeginPhotoshop: 6", ...lines.map((l) => `% ${l}`), "%%EndPhotoshop", ""].join(eol);
   const at = clean.indexOf(eol) + eol.length;
   return `${clean.slice(0, at)}${block}${clean.slice(at)}`;
 }
+
+/** Whether the file carries a Photoshop/IPTC resource block (the second carrier). */
+export function hasEpsIptc(eps: string): boolean {
+  const blocks = eps.match(/^%%BeginPhotoshop:[^\r\n]*(?:\r\n|\r|\n)(?:% [0-9a-f]+(?:\r\n|\r|\n))+%%EndPhotoshop/gm);
+  return blocks !== null && blocks.length > 0;
+}
+
+/**
+ * Clean form: ONE carrier. No Photoshop block, no Adobe `%ADO_*` flag, and at
+ * most one XMP packet in the whole file.
+ */
+export function isCleanEpsEnvelope(eps: string): boolean {
+  return !hasEpsIptc(eps) && !/^%ADO_[A-Za-z]+:/im.test(eps) && countXmpPackets(eps) <= 1;
+}
+
+export function countXmpPackets(eps: string): number {
+  return (eps.match(/<\?xpacket begin=/g) ?? []).length;
+}
+
 function resourceBytes(eps: string): Uint8Array | null {
   const blocks = eps.match(/^%%BeginPhotoshop:[^\r\n]*(?:\r\n|\r|\n)(?:% [0-9a-f]+(?:\r\n|\r|\n))+%%EndPhotoshop/gm);
   if (blocks?.length !== 1) return null;
@@ -32,6 +54,7 @@ export function readEpsIptc(eps: string): IconMetadata | null {
   const bytes = resourceBytes(eps);
   return bytes === null ? null : readPhotoshopIptc(bytes);
 }
+
 export function readEpsPhotoshopXmp(eps: string): IconMetadata | null {
   try {
     const bytes = resourceBytes(eps);

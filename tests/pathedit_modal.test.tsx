@@ -34,11 +34,11 @@ describe("session history", () => {
 });
 
 describe("the edit mode's keys", () => {
-  it("maps arrows, save/discard & next, I, V and P", () => {
+  it("maps arrows, save/decline & next, I, V and P", () => {
     expect(modalKeyAction(key("ArrowRight"))).toBe("next");
     expect(modalKeyAction(key("ArrowLeft"))).toBe("prev");
     expect(modalKeyAction(key("S", { ctrlKey: true, shiftKey: true }))).toBe("save-next");
-    expect(modalKeyAction(key("X", { ctrlKey: true, shiftKey: true }))).toBe("discard-next");
+    expect(modalKeyAction(key("X", { ctrlKey: true, shiftKey: true }))).toBe("decline-next");
     expect(modalKeyAction(key("i"))).toBe("toggle-stroke");
     expect(modalKeyAction(key("v"))).toBe("tool-select");
     expect(modalKeyAction(key("p"))).toBe("tool-draw");
@@ -118,7 +118,7 @@ describe("the edit surface", () => {
     expect(onGo).toHaveBeenLastCalledWith(1, null);
   });
 
-  it("Save in the question, and Ctrl+Shift+S, hand over the rewritten file; Ctrl+Shift+X discards", async () => {
+  it("Save in the question, and Ctrl+Shift+S, hand over the rewritten file; Ctrl+Shift+X discards and declines", async () => {
     const onGo = await mount();
     await edit();
     await act(async () => { (q("[data-testid=e-next]") as HTMLButtonElement).click(); });
@@ -126,8 +126,9 @@ describe("the edit surface", () => {
     expect(onGo.mock.calls.at(-1)?.[1]).toContain('d="M2 2L14 4L12 12"');
     await act(async () => { window.dispatchEvent(key("S", { ctrlKey: true, shiftKey: true })); });
     expect(onGo.mock.calls.at(-1)?.[1]).toContain('d="M2 2L14 4L12 12"');
+    expect(onGo.mock.calls.at(-1)?.[2]).toBe("approved");
     await act(async () => { window.dispatchEvent(key("X", { ctrlKey: true, shiftKey: true })); });
-    expect(onGo).toHaveBeenLastCalledWith(1, null);
+    expect(onGo).toHaveBeenLastCalledWith(1, null, "declined");
   });
 
   it("I switches thin / preset stroke; V and P pick the tools; other app keys never fire", async () => {

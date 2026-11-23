@@ -28,6 +28,13 @@ export interface ExportFormatOptions {
   jpegMatchArtboard: boolean;
   /** Optimize the export SVG copy with SVGO — viewBox, geometry, strokes and metadata preserved. */
   optimizeSvg: boolean;
+  /**
+   * Clean the saved SVG and the EPS built from it (2026-11-19): the stock-clean
+   * pass drops the generator's paperwork — `data-*` hooks, `class`/`aria-*`,
+   * repeated xmlns, comments, our provenance `<metadata>` JSON and float noise.
+   * The picture, its viewBox, the artboard's px and Title/description/tags stay.
+   */
+  cleanExport: boolean;
   /** Strokes become filled shapes; the SVG, JPEG and EPS all ship without strokes. */
   expandStrokes: boolean;
   /** Every <text> becomes filled glyph outlines; what cannot be outlined fails honestly. */
@@ -38,32 +45,25 @@ export interface ExportFormatOptions {
   rescaleMegapixels: number;
   /** While rescaling: scale stroke widths proportionally; off = every stroke keeps its printed px. */
   rescaleStrokes: boolean;
-  /**
-   * Clean the delivered SVG and EPS: strip the generator's fingerprints
-   * (custom `data-*`, stitched per-element `xmlns`, float-math junk, duplicate
-   * metadata carriers) and keep ONLY title, description and tags as metadata.
-   */
-  cleanExport: boolean;
 }
 
 export const DEFAULT_FORMAT_OPTIONS: ExportFormatOptions = {
   includeSvg: true, includeJpeg: true, includeEps: false, epsConverter: DEFAULT_CONVERTER,
   jpegMegapixels: MP_DEFAULT, jpegQuality: QUALITY_DEFAULT, jpegMatchArtboard: true,
-  optimizeSvg: true, expandStrokes: false, expandText: false,
-  // Off in the shared domain: the upload tab's delivered files keep their
-  // identity fields (its own long-standing contract). The builder turns it ON
-  // as ITS default (formatstore.ts) — a stock sheet ships clean.
-  rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true, cleanExport: false,
+  optimizeSvg: true, cleanExport: true, expandStrokes: false, expandText: false,
+  rescaleArtboard: false, rescaleMegapixels: 20, rescaleStrokes: true,
 };
 
 /** Boolean fields, in the order the dialogs show them. */
 export const FORMAT_FLAGS = [
   "includeSvg", "includeJpeg", "includeEps", "jpegMatchArtboard", "optimizeSvg",
-  "expandStrokes", "expandText", "rescaleArtboard", "rescaleStrokes", "cleanExport",
+  "cleanExport", "expandStrokes", "expandText", "rescaleArtboard", "rescaleStrokes",
 ] as const;
 
 /** Fields that default ON read back on unless stored `false`; the rest read back off unless stored `true`. */
-const DEFAULT_ON = new Set<string>(["includeSvg", "includeJpeg", "jpegMatchArtboard", "optimizeSvg", "rescaleStrokes"]);
+const DEFAULT_ON = new Set<string>([
+  "includeSvg", "includeJpeg", "jpegMatchArtboard", "optimizeSvg", "cleanExport", "rescaleStrokes",
+]);
 
 const FORMAT_NUMBERS: ["jpegMegapixels" | "jpegQuality" | "rescaleMegapixels", (value: unknown) => number][] = [
   ["jpegMegapixels", clampMegapixels],
@@ -136,30 +136,6 @@ export function jpegTargetSize(width: number, height: number, o: Pick<ExportForm
   return o.jpegMatchArtboard ? { width, height } : megapixelSize(width, height, o.jpegMegapixels * 1_000_000);
 }
 
-export type ArtboardBox = { width: number; height: number };
-
-/** The artboard the package really ships: the rescale's px while it is on, else the composed px. */
-export function rescaledArtboard(width: number, height: number, o: Pick<ExportFormatOptions, "rescaleArtboard" | "rescaleMegapixels">): ArtboardBox & { factor: number } {
-  return o.rescaleArtboard ? rescaleSize(width, height, o.rescaleMegapixels) : { width, height, factor: 1 };
-}
-
-/**
- * The JPEG the options spell out for a composed `width × height` sheet — the
- * rescale first (it decides the artboard), then the match/MP choice. Both the
- * stage and the settings row's hint read THIS, so the number the user reads is
- * the number the file gets.
- */
-export function jpegBoxFor(o: ExportFormatOptions, width: number, height: number): ArtboardBox {
-  const art = rescaledArtboard(width, height, o);
-  return jpegTargetSize(art.width, art.height, o);
-}
-
-/** What a run will ship, in the reference sheet's order — "no formats" when nothing is ticked. */
-export function formatSummary(o: Pick<ExportFormatOptions, "includeSvg" | "includeJpeg" | "includeEps">): string {
-  const names = [o.includeSvg ? "SVG" : null, o.includeJpeg ? "JPEG" : null, o.includeEps ? "EPS" : null].filter((n) => n !== null);
-  return names.length === 0 ? "no formats" : names.join(" + ");
-}
-
 /**
  * The artboard the export really has: its own px, or the rescale's px while
  * that box is on. Both dialogs name this size in the JPEG row, so the hint and
@@ -175,9 +151,10 @@ export function exportArtboardSize(
 }
 
 /** What the JPEG row says it will write: the artboard's own px, or the MP rule at its ratio. */
-export function jpegNote(size: { width: number; height: number } | null, match = true): string {
+/** `kind`: the raster the row makes — the upload flow's JPEG, or the sheet builder's PNG (2026-11-23). */
+export function jpegNote(size: { width: number; height: number } | null, match = true, kind: "JPEG" | "PNG" = "JPEG"): string {
   if (size === null) return "rendered from the vectors at this resolution (default 15.1)";
   return match
-    ? `the JPEG is the artboard itself: ${size.width}×${size.height} px — untick for a bigger file`
+    ? `the ${kind} is the artboard itself: ${size.width}×${size.height} px — untick for a bigger file`
     : "rendered from the vectors at this resolution, at the artboard's aspect ratio";
 }

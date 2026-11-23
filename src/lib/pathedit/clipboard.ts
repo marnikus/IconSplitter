@@ -43,15 +43,21 @@ export function copyPieces(m: PathModel, refs: readonly AnchorRef[]): SubPath[] 
 
 const shift = (p: Pt | null, d: Pt): Pt | null => (p === null ? null : { x: p.x + d.x, y: p.y + d.y });
 
+function ownerLook(m: PathModel, owner: number | undefined): Pick<SubPath, "owner" | "fillRule" | "paints"> {
+  if (owner === undefined) return {};
+  const sample = m.subs.find((s) => s.owner === owner);
+  return { owner, ...(sample?.fillRule ? { fillRule: sample.fillRule } : {}), ...(sample?.paints === false ? { paints: false } : {}) };
+}
+
 /** The pieces added to object `owner`, moved by `offset`; the pasted anchors become the selection. */
 export function pastePieces(m: PathModel, pieces: readonly SubPath[], owner: number | undefined, offset: Pt): { model: PathModel; selection: AnchorRef[] } {
   const out = cloneModel(m);
+  const look = ownerLook(m, owner);
   const selection: AnchorRef[] = [];
   for (const piece of pieces) {
     const sub = out.subs.length;
     out.subs.push({
-      closed: piece.closed,
-      ...(owner === undefined ? {} : { owner }),
+      closed: piece.closed, ...look,
       anchors: piece.anchors.map((a) => ({ ...a, x: a.x + offset.x, y: a.y + offset.y, in: shift(a.in, offset), out: shift(a.out, offset) })),
     });
     piece.anchors.forEach((_, i) => selection.push({ sub, i }));

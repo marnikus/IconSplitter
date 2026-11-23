@@ -18,10 +18,15 @@ export interface PathTag {
   /** The shape as path data (a path's own `d`). */
   d: string | null;
   selfClosing: boolean;
+  /** How the shape fills: `fill-rule="evenodd"`, the attribute or a `style`, else nonzero. */
+  fillRule: "evenodd" | "nonzero";
+  /** False when nothing fills this shape (`fill="none"`, its own or inherited) — a stroked outline. */
+  paints: boolean;
+  /** The drawn pen width in the shape's own units (`stroke-width`, own or inherited); 0 when no stroke is drawn (2026-11-23). */
+  strokeWidth: number;
 }
 
 const D_ATTR = /\sd\s*=\s*("([^"]*)"|'([^']*)')/;
-const SHAPE_TAG = /<(path|circle|ellipse|rect|line|polyline|polygon)\b[^>]*>/gi;
 const NOT_DRAWN = /<(defs|clipPath|mask|symbol|marker|pattern)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
 /** The attributes that only describe a shape's geometry (they go when it becomes a <path>). */
 export const GEOMETRY: Record<ShapeKind, string[]> = {
@@ -78,17 +83,96 @@ function shapeD(kind: ShapeKind, tag: string): string | null {
   return pointsD(tag, kind === "polygon");
 }
 
-/** Every drawn shape's start tag in document order, with its path data. */
-export function pathTags(markup: string): PathTag[] {
+/** What paints a shape: the fill that reaches it, the rule it fills by and its pen (a group's or the root's, inherited). */
+interface Paint { fill: string; fillRule: "evenodd" | "nonzero"; stroke: string; strokeWidth: number }
+
+/** Every tag, so `<g>` nesting can be followed while the shapes are collected. */
+const ANY_TAG = /<(\/?)([a-zA-Z][\w:.-]*)([^>]*)>/g;
+const SHAPE_KINDS = new Set(["path", "circle", "ellipse", "rect", "line", "polyline", "polygon"]);
+
+/** A presentation property as the tag states it: the attribute, else a `style` declaration. */
+function prop(tag: string, name: string): string | null {
+  const style = /\sstyle\s*=\s*("([^"]*)"|'([^']*)')/i.exec(tag);
+  const inline = (style?.[2] ?? style?.[3] ?? "").match(new RegExp(`(?:^|;)\\s*${name}\\s*:\\s*([^;]+)`, "i"))?.[1];
+  return (attr(tag, name) ?? inline)?.trim() ?? null;
+}
+
+/** The paint a tag starts, given what it inherits. */
+function paintOf(attrs: string, inherited: Paint): Paint {
+  const fill = prop(attrs, "fill") ?? inherited.fill;
+  const rule = prop(attrs, "fill-rule") ?? inherited.fillRule;
+  const stroke = prop(attrs, "stroke") ?? inherited.stroke;
+  const width = Number.parseFloat(prop(attrs, "stroke-width") ?? "");
+  return {
+    fill: fill === "inherit" ? inherited.fill : fill, fillRule: rule === "evenodd" ? "evenodd" : "nonzero",
+    stroke: stroke === "inherit" ? inherited.stroke : stroke, strokeWidth: Number.isFinite(width) && width >= 0 ? width : inherited.strokeWidth,
+  };
+}
+
+/** The pen a shape is drawn with: its width, or 0 when no stroke reaches it. */
+const penOf = (p: Paint): number => (p.stroke === "none" ? 0 : p.strokeWidth);
+
+/**
+ * Every drawn shape's start tag in document order, with its path data, the rule
+ * it fills by and whether anything fills it at all. `<g>` nesting is followed so
+ * a group's `fill`/`fill-rule` reaches its children (2026-11-20): a stroked
+ * outline (`fill="none"`) paints no area, which the region cut has to know.
+ * The root <svg> passes its paint and pen down too (2026-11-23): line icons
+ * state `fill="none" stroke-width=…` there, on no <g>.
+ */
+const TAG_CACHE_MAX = 256;
+const tagCache = new Map<string, readonly PathTag[]>();
+
+function scanPathTags(markup: string): readonly PathTag[] {
   const out: PathTag[] = [];
   const text = blanked(markup);
-  SHAPE_TAG.lastIndex = 0;
-  for (let m = SHAPE_TAG.exec(text); m !== null; m = SHAPE_TAG.exec(text)) {
-    const tag = markup.slice(m.index, m.index + m[0].length);
-    const kind = m[1].toLowerCase() as ShapeKind;
-    out.push({ index: out.length, kind, start: m.index, end: m.index + m[0].length, d: shapeD(kind, tag), selfClosing: /\/\s*>$/.test(tag) });
+  const stack: Paint[] = [{ fill: "#000000", fillRule: "nonzero", stroke: "none", strokeWidth: 1 }];
+  ANY_TAG.lastIndex = 0;
+  for (let m = ANY_TAG.exec(text); m !== null; m = ANY_TAG.exec(text)) {
+    const name = m[2].toLowerCase();
+    const closing = m[1] === "/";
+    if (name === "g" || name === "svg") {
+      if (closing) { if (stack.length > 1) stack.pop(); continue; }
+      const own = paintOf(m[3], stack[stack.length - 1]);
+      if (/\/\s*>$/.test(m[3])) stack[stack.length - 1] = own;
+      else stack.push(own);
+      continue;
+    }
+    if (closing || !SHAPE_KINDS.has(name)) continue;
+    const head = m[0];
+    const tag = markup.slice(m.index, m.index + head.length);
+    const kind = name as ShapeKind;
+    const paint = paintOf(m[3], stack[stack.length - 1]);
+    out.push({ index: out.length, kind, start: m.index, end: m.index + head.length, d: shapeD(kind, tag),
+      selfClosing: /\/\s*>$/.test(head), fillRule: paint.fillRule, paints: paint.fill !== "none", strokeWidth: penOf(paint) });
   }
-  return out;
+  return Object.freeze(out);
+}
+
+/** Shared immutable tag list for hot callers that do not mutate the array. */
+export function cachedPathTags(markup: string): readonly PathTag[] {
+  const hit = tagCache.get(markup);
+  if (hit !== undefined) {
+    tagCache.delete(markup);
+    tagCache.set(markup, hit);
+    return hit;
+  }
+  const built = scanPathTags(markup);
+  if (tagCache.size >= TAG_CACHE_MAX) {
+    const oldest = tagCache.keys().next().value;
+    if (oldest !== undefined) tagCache.delete(oldest);
+  }
+  tagCache.set(markup, built);
+  return built;
+}
+
+/** Fast count of editable drawn shapes in `markup` without cloning the tag list. */
+export function pathTagCount(markup: string): number {
+  return cachedPathTags(markup).length;
+}
+
+export function pathTags(markup: string): PathTag[] {
+  return cachedPathTags(markup).slice();
 }
 
 /** A basic shape's start tag as a <path> with `d`, its geometry attributes removed. */
@@ -100,7 +184,7 @@ function asPathTag(t: PathTag, tag: string, d: string): string {
 
 /** The file with shape `index` drawn by `d` (a basic shape becomes a <path>); null when there is no such shape. */
 export function withPathD(markup: string, index: number, d: string): string | null {
-  const t = pathTags(markup)[index];
+  const t = cachedPathTags(markup)[index];
   if (t === undefined) return null;
   const old = markup.slice(t.start, t.end);
   if (t.kind === "path") {
@@ -115,8 +199,9 @@ export function withPathD(markup: string, index: number, d: string): string | nu
 /** Many shapes redrawn in ONE pass over the file (the tail cutter's batch write, 2026-11-06). */
 export function withPathDs(markup: string, ds: ReadonlyMap<number, string>): string {
   let out = markup;
-  const tags = pathTags(markup);
-  for (const t of [...tags].reverse()) {
+  const tags = cachedPathTags(markup);
+  for (let i = tags.length - 1; i >= 0; i--) {
+    const t = tags[i];
     const d = ds.get(t.index);
     if (d === undefined) continue;
     const old = out.slice(t.start, t.end);
@@ -135,7 +220,9 @@ export function withPathDs(markup: string, ds: ReadonlyMap<number, string>): str
 /** The preview copy: each drawn shape tagged with its number, so a click names the shape it hit. */
 export function annotatePaths(markup: string): string {
   let out = markup;
-  for (const t of pathTags(markup).reverse()) {
+  const tags = cachedPathTags(markup);
+  for (let i = tags.length - 1; i >= 0; i--) {
+    const t = tags[i];
     const name = `<${markup.slice(t.start + 1, t.start + 1 + t.kind.length)}`;
     out = `${out.slice(0, t.start)}${name} data-edit-path="${t.index}"${out.slice(t.start + name.length)}`;
   }

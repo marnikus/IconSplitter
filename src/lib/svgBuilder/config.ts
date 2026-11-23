@@ -4,7 +4,8 @@
 import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { RANGES, clampTo, type NumRange } from "./ranges";
-import type { BannerPosition, CaptionCase, SelectionMode, SheetConfig, TitleFace , TextCase } from "./types";
+import { parseMerges } from "./merges";
+import type { BannerPosition, BannerStyle, CaptionCase, SelectionMode, SheetConfig, TitleFace , TextCase } from "./types";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const MODES: readonly SelectionMode[] = ["similar", "random", "filtered"];
@@ -12,11 +13,11 @@ const MODES: readonly SelectionMode[] = ["similar", "random", "filtered"];
 /** Reference "Glyph" defaults (FIXES §D); the banner copy is neutral, not "FOOD ICONS". */
 export const DEFAULT_CONFIG: SheetConfig = {
   artboard: { width: 1080, height: 660, background: "#F4F0E7", padding: 34, radius: 0 },
-  grid: { columns: 8, rows: 4, gapX: 22, gapY: 18, captions: true,
+  grid: { columns: 8, rows: 4, gapX: 22, gapY: 18, captions: true, merges: [],
     captionColor: "#787A6C", captionSize: 9, captionCase: "upper", captionGap: 0 },
-  icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round" },
+  icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round", coloredStroke: "", coloredStrokeWidth: 0, coloredFill: "" },
   banner: { position: "left", size: 242, background: "#17271F", accent: "#D9F36C",
-    textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid",
+    textColor: "#FBFAF6", subtitleColor: "#CBD6C8", style: "solid", lineWidth: 1.5, lineColor: "#E8C547",
     title: "ICON SHEET", subtitle: "Editable stroke width",
     titleSize: 32, subtitleSize: 9, titleFace: "sans", hero: true, heroIconId: null, divider: true,
     textPadding: 0, titleDx: 0, titleDy: 0, subtitleDx: 0, subtitleDy: 0,
@@ -26,7 +27,7 @@ export const DEFAULT_CONFIG: SheetConfig = {
 /** The 8 swatches shown under Canvas and Stroke colour. */
 export const SWATCHES: readonly string[] = ["#17271F", "#202A24", "#3D5A44", "#D9F36C", "#F4F0E7", "#FBFAF6", "#E7B37C", "#C96B4B"];
 
-export type LayoutPresetId = "editorial" | "masthead" | "plain";
+export type LayoutPresetId = "editorial" | "masthead" | "plain" | "line";
 export interface LayoutPreset { id: LayoutPresetId; label: string; hint: string; patch: (d: SheetConfig) => SheetConfig }
 
 export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
@@ -42,6 +43,14 @@ export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
     grid: { ...d.grid, columns: 8, rows: 3, gapX: 30, gapY: 26, captions: false },
     icons: { ...d.icons, box: 58, strokeWidth: 1.8 },
     banner: { ...d.banner, position: "none" },
+  }) },
+  // 2026-11-23: no banner colour — the words sit on the canvas under one separator line
+  { id: "line", label: "Line banner", hint: "Words on the canvas under one line", patch: (d) => ({
+    artboard: { ...d.artboard, height: 600, background: "#FDF8E8", padding: 40 },
+    grid: { ...d.grid, columns: 7, rows: 3, gapX: 30, gapY: 26, captions: false },
+    icons: { ...d.icons, box: 64, strokeWidth: 1.6, color: "#4A3B1F" },
+    banner: { ...d.banner, position: "bottom", style: "line", size: 76, hero: false, divider: false,
+      textColor: "#4A3B1F", subtitleColor: "#4A3B1F", lineColor: "#E8C547", lineWidth: 1.5 },
   }) },
 ];
 
@@ -63,7 +72,7 @@ export function parseSheetConfig(raw: unknown): SheetConfig {
 }
 
 export function copyConfig(c: SheetConfig): SheetConfig {
-  return { artboard: { ...c.artboard }, grid: { ...c.grid }, icons: { ...c.icons }, banner: { ...c.banner, captionTexts: { ...c.banner.captionTexts } } };
+  return { artboard: { ...c.artboard }, grid: { ...c.grid, merges: c.grid.merges.map((m) => ({ ...m })) }, icons: { ...c.icons }, banner: { ...c.banner, captionTexts: { ...c.banner.captionTexts } } };
 }
 
 export function configFingerprint(config: SheetConfig): string {
@@ -87,20 +96,26 @@ function parseArtboard(raw: unknown): SheetConfig["artboard"] {
 
 function parseGrid(raw: unknown): SheetConfig["grid"] {
   const d = DEFAULT_CONFIG.grid;
-  if (!isRecord(raw)) return { ...d };
+  if (!isRecord(raw)) return { ...d, merges: [] };
   return { columns: num(RANGES.columns, raw.columns, d.columns), rows: num(RANGES.rows, raw.rows, d.rows),
     gapX: num(RANGES.gapX, raw.gapX, d.gapX), gapY: num(RANGES.gapY, raw.gapY, d.gapY),
     captions: bool(raw.captions, d.captions), captionColor: hex(raw.captionColor, d.captionColor),
     captionSize: num(RANGES.captionSize, raw.captionSize, d.captionSize),
     captionCase: oneOf(raw.captionCase, ["upper", "normal"], d.captionCase) as CaptionCase,
-    captionGap: num(RANGES.captionGap, raw.captionGap, d.captionGap) };
+    captionGap: num(RANGES.captionGap, raw.captionGap, d.captionGap), merges: parseMerges(raw.merges) };
 }
 
 function parseIcons(raw: unknown): SheetConfig["icons"] {
   const d = DEFAULT_CONFIG.icons;
   if (!isRecord(raw)) return { ...d };
   return { box: num(RANGES.box, raw.box, d.box), strokeWidth: num(RANGES.strokeWidth, raw.strokeWidth, d.strokeWidth),
-    color: hex(raw.color, d.color), linecap: oneOf(raw.linecap, ["round", "square"], d.linecap) as "round" | "square" };
+    color: hex(raw.color, d.color), linecap: oneOf(raw.linecap, ["round", "square"], d.linecap) as "round" | "square",
+    coloredStroke: hex(raw.coloredStroke, ""), coloredStrokeWidth: ownWidth(raw.coloredStrokeWidth), coloredFill: hex(raw.coloredFill, "") };
+}
+
+/** A colored-icon stroke width (2026-11-23): 0 (or anything not a positive number) = each icon's own; else clamped to the stroke range. */
+function ownWidth(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? clampTo(RANGES.strokeWidth, value) : 0;
 }
 
 const CASES = ["normal", "capitalized", "upper"];
@@ -110,7 +125,8 @@ function parseBanner(raw: unknown): SheetConfig["banner"] {
   if (!isRecord(raw)) return { ...d };
   return {
     position: oneOf(raw.position, ["left", "right", "top", "bottom", "none"], d.position) as BannerPosition,
-    size: num(RANGES.bannerAny, raw.size, d.size), style: oneOf(raw.style, ["solid", "split"], d.style) as "solid" | "split",
+    size: num(RANGES.bannerAny, raw.size, d.size), style: oneOf(raw.style, ["solid", "split", "line"], d.style) as BannerStyle,
+    lineWidth: num(RANGES.lineWidth, raw.lineWidth, d.lineWidth), lineColor: hex(raw.lineColor, d.lineColor),
     background: hex(raw.background, d.background), accent: hex(raw.accent, d.accent),
     textColor: hex(raw.textColor, d.textColor), subtitleColor: hex(raw.subtitleColor, d.subtitleColor),
     title: text(raw.title, d.title, 90), subtitle: text(raw.subtitle, d.subtitle, 140),

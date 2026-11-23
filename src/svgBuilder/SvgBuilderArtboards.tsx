@@ -42,12 +42,21 @@ function ArtboardsHead({ b, ids }: { b: BuilderApi; ids: string[] }) {
       <button type="button" className="svg-btn tiny" data-testid="builder-artboards-metadata" disabled={scope.length === 0}
         onClick={() => b.actions.generateArtboardsMetadata(scope)} title="One sheet-metadata request per checked artboard, after you confirm the exact requests">
         ✦ Generate metadata ({scope.length})</button>
+      <ResetLooks b={b} scope={scope} />
       <button type="button" className="svg-btn tiny danger" data-testid="builder-artboards-remove" disabled={scope.length === 0}
         onClick={() => b.actions.removeArtboards(scope)}>✕ Remove ({scope.length})</button>
       {b.editingArtboardId !== null && <button type="button" className="svg-btn tiny" data-testid="builder-artboard-close"
         onClick={b.actions.closeArtboard} title="Stop writing stage edits into the open artboard">Done</button>}
     </div>
   </div>;
+}
+
+/** ↺ Template (N) (2026-11-23): the checked artboards in view that changed their own look follow their templates again. */
+function ResetLooks({ b, scope }: { b: BuilderApi; scope: readonly string[] }) {
+  const own = b.artboards.filter((a) => scope.includes(a.id) && overrideCount(a.overrides) > 0).map((a) => a.id);
+  return <button type="button" className="svg-btn tiny" data-testid="builder-artboards-reset-look" disabled={own.length === 0}
+    title="The checked artboards follow their template in everything again — their own look changes go (one Undo brings them back)"
+    onClick={() => b.actions.resetArtboardLooks(own)}>↺ Template ({own.length})</button>;
 }
 
 function onListKeys(e: KeyboardEvent<HTMLDivElement>, b: BuilderApi, ids: string[]): void {

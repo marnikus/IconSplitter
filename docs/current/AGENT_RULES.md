@@ -3,8 +3,8 @@
 What an AI agent (or a human) **MUST** follow when adding or changing code here.
 Rules 1–24 adapt the rules from
 `Process-Images-in-Areana/docs/current/AGENT_RULES.md` to this React + Vite +
-TypeScript browser app; RULE 25 adds a shared list-selection contract. Never
-renumber; append instead.
+TypeScript browser app; RULE 25–26 add shared list-selection and clean-export
+contracts. Never renumber; append instead.
 
 **In brief:** Keep pixel logic in `src/lib/`, report progress and failures honestly,
 and test real behaviour. Use one undo timeline, validate persisted state, verify
@@ -45,6 +45,7 @@ implemented (see its linked text).
 | [RULE 23 — Delivery is atomic; never a partial file](rules/DOCS_AND_SAFETY.md#rule-23) | data | PIA RULE 23 — atomic save |
 | [RULE 24 — LIVE SYNC: the UI mirrors the stored value at the moment of change](rules/BEHAVIOR.md#rule-24) | behaviour | PIA RULE 24 |
 | [RULE 25 — One list-selection gesture contract](rules/BEHAVIOR.md#rule-25) | behaviour | Batch-authoritative across list tabs |
+| [RULE 26 — Exported files carry zero machine, AI, script or tool evidence](rules/DOCS_AND_SAFETY.md#rule-26) | compliance | User export-hygiene & direct-geometry mandate |
 
 Related current references: the [root router](README.md) (task read packs) and
 [Code Verification](CODE_VERIFICATION.md). The dated

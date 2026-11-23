@@ -25,6 +25,10 @@ instructions. The app builds into one self-contained `dist/index.html`.
 - RULE 16 gates new production functions/components at 30 lines, 4 params,
   CC 10 and nesting 4; new files at 300 lines, hooks/component at 15. Read
   [RULE 16 gates](docs/current/rules/QUALITY_GATES.md) before changing code.
+- Exported deliverables across Upload and SVG Builder must never carry machine,
+  AI, script or tool attribution/provenance, `scale(…)` wrappers or divided
+  `stroke-width` compensation; bake scaled geometry directly at real target
+  coordinates/sizes rounded to ≤ 1 decimal place (RULE 26).
 - Report progress and failures honestly; Stop blocks unsent work. One global
   undo timeline; validate persisted data on read. Full rule index:
   [`AGENT_RULES.md`](docs/current/AGENT_RULES.md).

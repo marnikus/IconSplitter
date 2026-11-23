@@ -4,10 +4,8 @@
 // (the upload flow's own popup, 2026-11-19) and the Export dropdown.
 import { useOptionalHistoryView } from "../state/HistoryProvider";
 import { sheetCopy } from "../lib/svgBuilder/compose";
-import { formatSummary } from "../lib/exportformats";
-import { useBuilderFormats } from "./formatstore";
 import SvgBuilderExportMenu from "./SvgBuilderExportMenu";
-import { IndexingControl, RegisterControl } from "./SvgBuilderControls";
+import { IndexingControl, RegisterControl, StyleFilterControl } from "./SvgBuilderControls";
 import type { BuilderApi } from "./useSvgBuilder";
 
 export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
@@ -17,7 +15,7 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <span className="bld-eyebrow">COLLECTION / 01 · <i className="bld-live-dot" /> LIVE</span>
       <h2 data-testid="builder-sheet-title">{title === "" ? "Untitled icon sheet" : title}</h2>
     </div>
-    <div className="bld-header-index" data-testid="builder-header-index"><IndexingControl b={b} /><RegisterControl b={b} /></div>
+    <div className="bld-header-index" data-testid="builder-header-index"><IndexingControl b={b} /><StyleFilterControl b={b} /><RegisterControl b={b} /></div>
     <div className="bld-header-actions">
       <UndoRedo b={b} />
       <button type="button" className="svg-btn" data-testid="builder-seed" title="Re-roll this seed" disabled={b.assets.length === 0}
@@ -27,27 +25,14 @@ export default function SvgBuilderHeader({ b }: { b: BuilderApi }) {
       <button type="button" className="svg-btn" data-testid="builder-brief" onClick={b.actions.openBrief}>▤ Prompt brief</button>
       <button type="button" className="svg-btn" data-testid="builder-open-metadata" onClick={b.actions.openMetadata}
         title="Show the metadata prompt and Gemini widget">✦ Sheet metadata</button>
-      <FormatSettingsButton b={b} />
+      <button type="button" className="svg-btn" data-testid="builder-export-settings"
+        title="What the next export writes: SVG / PNG / EPS, PNG size, expansion, rescale — the same popup the SVG to upload tab opens"
+        onClick={b.actions.openExportFormats}>⚙ Export settings</button>
       <SvgBuilderExportMenu b={b} />
       <GenerateSelected b={b} />
       <ExportSelected b={b} />
     </div>
   </header>;
-}
-
-/**
- * ⚙ Export settings (2026-11-19): its OWN toolbar button, beside Export ▾. The
- * settings decided which files a package carries and how they are cut, but they
- * lived only inside the Export ▾ menu, where nobody found them — the toolbar is
- * where every other switch of this header lives. Same action as the menu item
- * (`openExportFormats`), and the title names the formats the toolbar's own
- * "Export all selected" will ship.
- */
-export function FormatSettingsButton({ b }: { b: Pick<BuilderApi, "busy" | "actions"> }) {
-  const { value: formats } = useBuilderFormats();
-  return <button type="button" className="svg-btn" data-testid="builder-export-settings" disabled={b.busy !== null}
-    title={`Export settings — ${formatSummary(formats)}: SVG, JPEG, EPS, quality, expansion, rescale for the next package`}
-    onClick={b.actions.openExportFormats}>⚙ Export settings</button>;
 }
 
 /** ✦ Generate metadata (2026-11-15): the checked artboards, else the open one, else the current sheet — the exact-request confirmation first. */
@@ -59,17 +44,11 @@ function GenerateSelected({ b }: { b: BuilderApi }) {
     onClick={run}>✦ Generate metadata{ids.length > 0 ? ` (${ids.length})` : ""}</button>;
 }
 
-/**
- * Export all selected (2026-11-14): the checked artboards (else the open one)
- * into `_artboard_sheets` in the folder, carrying the chosen formats
- * (2026-11-19) — the title names them, so the button never promises an EPS the
- * settings have switched off.
- */
+/** Export all selected (2026-11-14): the checked artboards (else the open one) into `_artboard_sheets` in the folder. */
 function ExportSelected({ b }: { b: BuilderApi }) {
   const count = b.artboardSel.checked.length > 0 ? b.artboardSel.checked.length : b.editingArtboardId !== null ? 1 : 0;
-  const { value: formats } = useBuilderFormats();
   return <button type="button" className="svg-btn primary" data-testid="builder-export-selected" disabled={count === 0 || b.root === null || b.busy !== null}
-    title={`Save each checked artboard (else the open one) as ${formatSummary(formats)} + PNG + export.json under _artboard_sheets in the folder (Export ▾ · Export settings…)`}
+    title="Save each checked artboard (else the open one) as SVG + JPG + EPS + PNG + export.json under _artboard_sheets in the folder"
     onClick={b.actions.exportSelectedArtboards}>⇪ Export all selected{count > 0 ? ` (${count})` : ""}</button>;
 }
 

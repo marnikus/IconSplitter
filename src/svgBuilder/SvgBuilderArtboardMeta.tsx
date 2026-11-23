@@ -3,6 +3,7 @@
 // will be sent, one request per artboard, no retry. Nothing leaves before
 // "Send N exact requests"; the key is masked.
 import type { BuilderApi } from "./useSvgBuilder";
+import SvgBuilderMetaOptions, { imageWords } from "./SvgBuilderMetaOptions";
 
 export default function SvgBuilderArtboardMeta({ b }: { b: BuilderApi }) {
   const plan = b.artboardMeta;
@@ -16,8 +17,9 @@ export default function SvgBuilderArtboardMeta({ b }: { b: BuilderApi }) {
       </div>
       <div className="bld-artboard-meta-grid">
         {plan.requests.map((r) => <figure key={r.id} data-testid={`builder-artboards-meta-preview-${r.id}`}>
-          <img src={r.preview} alt={`Exact icons-only PNG of ${r.name}`} /><figcaption>{r.name}</figcaption></figure>)}
+          <img src={r.preview} alt={`Exact PNG of ${r.name} — ${imageWords(b)}`} /><figcaption>{r.name}</figcaption></figure>)}
       </div>
+      <SvgBuilderMetaOptions b={b} disabled={plan.running} />
       {plan.skipped.length > 0 && <p className="builder-warning" data-testid="builder-artboards-meta-skipped">Not sent: {plan.skipped.join("; ")}</p>}
       <label className="builder-field"><span>PROMPT SENT WITH EACH IMAGE</span>
         <textarea className="builder-meta-prompt" readOnly value={b.prompt} data-testid="builder-artboards-meta-prompt" /></label>

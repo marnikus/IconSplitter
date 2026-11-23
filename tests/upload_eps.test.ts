@@ -19,9 +19,10 @@ describe("writeEps — a genuine EPS document", () => {
     if (!result.ok) throw new Error(result.reason);
     const head = result.eps.split("%%EndComments")[0];
     expect(head.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
-    expect(head).toContain("%%Creator: IconSplitter");
+    expect(head).not.toContain("%%Creator");
+    expect(head).not.toContain("IconSplitter");
     expect(head).toContain("%%Title: fog_AI.eps");
-    expect(head).toContain("%%CreationDate: 2026-10-08T00:00:00.000Z");
+    expect(head).not.toContain("%%CreationDate");
     expect(head).toContain("%%BoundingBox: 0 0 70 70");
     expect(head).toContain("%%HiResBoundingBox: 0 0 69.6 69.6");
     expect(head).toContain("%%DocumentData: Clean7Bit");
@@ -281,6 +282,6 @@ describe("verifyEps", () => {
     const broken = (result.ok ? result.eps : "").replace("[0.75 0 0 -0.75 0 69.6] concat", "0.75 0 0 -0.75 0 69.6 concat");
     const verdict = verifyEps(broken);
     expect(verdict.ok).toBe(false);
-    expect(verdict.errors).toContain("line 15: concat expects an array, found number"); // the two AI artboard comments precede the CTM
+    expect(verdict.errors).toContain("line 14: concat expects an array, found number"); // the two AI artboard comments precede the CTM
   });
 });

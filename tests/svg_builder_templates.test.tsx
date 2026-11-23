@@ -470,9 +470,8 @@ describe("hero style", () => {
     // The pen is authored in artboard px and written in the cell's own scale
     // (2026-11-19): local × scale is the 2.5 px the panel set, in every format.
     const cell = /<g data-asset-id[^>]*>/.exec(hero)?.[0] ?? "";
-    const local = Number(/stroke-width="([\d.]+)"/.exec(cell)?.[1]);
-    const scale = Number(/scale\(([\d.]+)\)/.exec(cell)?.[1]);
-    expect(local * scale).toBeCloseTo(2.5, 3);
+    expect(cell).not.toContain("scale(");
+    expect(Number(/stroke-width="([\d.]+)"/.exec(cell)?.[1])).toBe(2.5);
   });
 
   it("gaps go up to 200 px (2026-11-14; was 60)", () => {

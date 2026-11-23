@@ -1,13 +1,12 @@
 // useRowMoves.ts — the edit mode's way to the previous / next row and out
 // (2026-11-06; own hook 2026-11-10): nothing changed → go at once; changes → ask
-// Save / Discard / Stay; Ctrl+Shift+S saves, approves and goes; Finish hands
-// the rewritten file to the caller. `markup` is the file text as the session
-// would write it now, or null when nothing changed.
+// Save / Discard / Stay; Ctrl+Shift+S saves, approves and goes; Ctrl+Shift+X
+// discards, declines and goes; Finish hands the rewritten file to the caller.
 
 import { useCallback, useState } from "react";
 import type { EditNav } from "./useEditMode";
 
-export type GoMode = "ask" | "save" | "discard" | "save-approve";
+export type GoMode = "ask" | "save" | "discard" | "save-approve" | "discard-decline";
 
 export interface RowMoves {
   /** A move asked while something changed: Save / Discard / Stay. */
@@ -21,9 +20,11 @@ export function useRowMoves(a: { nav?: EditNav; onFinish: (markup: string) => vo
   const [leave, setLeave] = useState<1 | -1 | null>(null);
   const go = useCallback((dir: 1 | -1, mode: GoMode) => {
     const nav = a.nav;
-    if (nav === undefined || !(dir === 1 ? nav.canNext : nav.canPrev)) return;
+    if (nav === undefined) return;
+    if (mode === "save-approve") { nav.onGo(dir, markup(), "approved"); return; }
+    if (mode === "discard-decline") { nav.onGo(dir, null, "declined"); return; }
+    if (!(dir === 1 ? nav.canNext : nav.canPrev)) return;
     const out = markup();
-    if (mode === "save-approve") { nav.onGo(dir, out, true); return; } // approves even with nothing to save
     if (out === null || mode === "discard") nav.onGo(dir, null);
     else if (mode === "save") nav.onGo(dir, out);
     else setLeave(dir);

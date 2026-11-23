@@ -8,6 +8,7 @@ import { verifyEpsDocument } from "../src/lib/upload/eps";
 import { verifyJpeg } from "../src/lib/upload/jpeg";
 import { readJpegIptc } from "../src/lib/upload/jpegiptc";
 import { readEpsIptc } from "../src/lib/upload/epsiptc";
+import { readXmpMetadataFromEps } from "../src/lib/upload/epsmetadata";
 import { settingsFingerprint } from "../src/lib/upload/settings";
 import { shippedBounds } from "../src/lib/upload/place";
 import { stockExportArgs, STOCK_TEST_META } from "./helpers/stockexport";
@@ -52,7 +53,10 @@ describe("independent padding in the real supplied SVG -> SVG/JPEG/vector EPS pi
     expect(eps).toContain("%%HiResBoundingBox: 0 0 4125 2325");
     expect(eps).not.toMatch(/\b(?:image|colorimage|imagemask)\b/);
     expect(verifyJpeg(jpg, { width: 5500, height: 3100, metadata: STOCK_TEST_META }).ok).toBe(true);
-    expect(readJpegIptc(jpg)).toEqual(STOCK_TEST_META); expect(readEpsIptc(eps)).toEqual(STOCK_TEST_META);
+    expect(readJpegIptc(jpg)).toEqual(STOCK_TEST_META);
+    // the EPS ships the clean envelope (2026-11-19): ONE carrier, still readable
+    expect(readXmpMetadataFromEps(eps)).toEqual(STOCK_TEST_META);
+    expect(readEpsIptc(eps)).toBeNull();
     expect(result.record?.validation).toMatchObject({ svg: true, jpeg: true, eps: true });
     expect(new TextDecoder().decode(await readBytesAt(root, "temporary.svg") as Uint8Array)).toBe(USER_SVG);
     expect(readFileSync(`${BASE}icon-handshake-heart_7_03_v2.svg`, "utf8")).toBe(USER_SVG);

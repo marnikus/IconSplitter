@@ -2231,7 +2231,7 @@
   padding: 1px 6px; border-radius: 4px; border: 1px solid var(--v2-line); background: #0f1830; font-family: inherit; font-size: 11px; color: #cfe0ff;
 }
 .svg-edit-leave {
-  position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   max-width: 460px; padding: 16px; border-radius: 10px; background: var(--v2-surface); border: 1px solid var(--v2-line); box-shadow: 0 10px 30px rgb(0 0 0 / 60%);
 }
 .svg-edit-leave p { flex-basis: 100%; margin: 0 0 4px; color: var(--v2-text); }
@@ -2253,8 +2253,10 @@
 .getty-wait.doing { color: #8fb8ff; }
 .getty-wait small { color: var(--v2-muted); }
 .svg-edit-pasteboard { position: absolute; inset: -72px; cursor: crosshair; touch-action: none; user-select: none; }
-/* the margin reaches 72 px under its neighbours: the bar, the arrows, the AI panel and the legend paint (and click) above it */
-.svg-edit-toolbar, .svg-edit-legend, .svg-edit-arrow, .svg-edit-aside { position: relative; z-index: 2; }
+/* the margin reaches 72 px under its neighbours: the bar, the arrows, the AI panel and the legend paint (and click) above it;
+   the toolbar stacks higher still so its popups (Cutter algo, Edit settings) never slip behind the AI source card */
+.svg-edit-legend, .svg-edit-arrow, .svg-edit-aside { position: relative; z-index: 2; }
+.svg-edit-toolbar { position: relative; z-index: 20; }
 .zoom-reset {
   position: absolute; top: 4px; right: 4px; z-index: 3; padding: 1px 6px; border-radius: 6px; border: 1px solid var(--v2-line);
   background: rgb(12 18 34 / 88%); color: var(--v2-text); font-size: 11px; cursor: pointer; white-space: nowrap;

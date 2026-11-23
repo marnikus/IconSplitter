@@ -12,6 +12,9 @@ import type { BuilderActionContext } from "../actiontypes";
 import { saveTemplates } from "../templatestore";
 import { writeTemplateBlueprint } from "../sheetwriter";
 import { probePath, type DirHandleLike } from "../../lib/fs";
+import { fileState } from "../../lib/svgBuilder/sheetsync";
+import { knownSig } from "../filesigstore";
+import { readSheetFile } from "../sheetfiles";
 import { sheetsRoot } from "./sheetsroot";
 
 /**
@@ -29,10 +32,16 @@ async function dropStray(root: DirHandleLike, folder: string): Promise<void> {
   try { await dir.removeEntry("template.json"); await parent.removeEntry(folder.slice(cut + 1)); } catch { /* left as it was */ }
 }
 
-/** A blueprint from the template alone (an older template, first written by an artboard). */
-function blueprintOf(ctx: BuilderActionContext, template: SheetTemplate): Record<string, unknown> {
+/** A blueprint from the template alone (an older template first written by an artboard; a stale copy refreshed, 2026-11-22). */
+export function blueprintOf(ctx: BuilderActionContext, template: SheetTemplate): Record<string, unknown> {
   return presetJsonOf({ name: template.config.banner.title, config: template.config, placedIds: [], lockedIds: [],
     seed: ctx.model.seed, recipe: ctx.model.recipe, metadata: null, assets: ctx.assets });
+}
+
+/** True when the file was changed outside the app since the app last wrote or read it (2026-11-22). */
+async function changedOutside(root: DirHandleLike, path: string): Promise<boolean> {
+  const file = await readSheetFile(root, path).catch(() => null);
+  return file !== null && fileState(file.text, knownSig(path)) === "edited";
 }
 
 /** Writes the template's folder and template.json; remembers the folder on the template. Answers the folder, or null. */
@@ -41,19 +50,24 @@ export async function writeTemplateFolder(get: () => BuilderActionContext, templ
   const root = sheetsRoot(ctx, true);
   if (root === null) return null;
   const folder = templateFolder(template, new Date(), ctx.model.artboards); // where its artboards live, when any do
+  const outside = await changedOutside(root, `${folder}/template.json`);
   try {
     await writeTemplateBlueprint(root, folder, json ?? blueprintOf(ctx, template));
   } catch (error) {
     ctx.say(`Template folder not written — ${error instanceof Error ? error.message : "the folder may be read-only"}`, true);
     return null;
   }
+  if (outside) ctx.say(`template.json of “${template.name}” had changes made outside the app — this save replaced them (🗂 Register reads outside changes)`, true);
   const before = template.folder ?? null;
   if (before !== null && before !== folder) await dropStray(root, before);
-  const now = get();
-  if (now.model.templates.find((t) => t.id === template.id)?.folder !== folder) {
-    const templates = now.model.templates.map((t) => (t.id === template.id ? { ...t, folder } : t));
-    now.dispatch({ templates });
-    saveTemplates(templates);
-  }
+  rememberFolder(get(), template.id, folder);
   return folder;
+}
+
+/** The template remembers its folder (written at once; nothing when it already does). */
+function rememberFolder(ctx: BuilderActionContext, id: string, folder: string): void {
+  if (ctx.model.templates.find((t) => t.id === id)?.folder === folder) return;
+  const templates = ctx.model.templates.map((t) => (t.id === id ? { ...t, folder } : t));
+  ctx.dispatch({ templates });
+  saveTemplates(templates);
 }

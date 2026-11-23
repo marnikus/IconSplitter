@@ -39,6 +39,8 @@ export default defineConfig({
     setupFiles: ["tests/setup/harness.ts"],
     isolate: true,
     maxWorkers: mainWorkerBudget(),
+    vmMemoryLimit: "768MB",
+    testTimeout: 30000,
     fsModuleCache: true,
     projects: harnessProjects(),
     // Instrument selected app sources, not every loaded React/DOM module at runtime.

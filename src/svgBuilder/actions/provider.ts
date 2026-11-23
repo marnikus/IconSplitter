@@ -66,14 +66,14 @@ async function forgetKey(ctx: BuilderActionContext): Promise<void> {
   ctx.say("Gemini API key removed from this device");
 }
 
-/** The exact request: the icons of the current sheet (no banner) as one PNG of at most 1 MP (2026-11-14). */
-async function prepareMetadata(ctx: BuilderActionContext): Promise<void> {
+/** The exact request: the icons of the current sheet (no banner) — or the whole sheet when chosen (2026-11-23) — as one PNG of at most 1 MP (2026-11-14). */
+export async function prepareMetadata(ctx: BuilderActionContext, full = ctx.model.prefs.metaFullSheet): Promise<void> {
   if (ctx.document === null) return ctx.say("Compose a sheet before generating metadata", true);
   if (ctx.model.key.value === null) return ctx.say("Save the Gemini API key before generating metadata", true);
-  const preview = await iconsImageFor({ config: ctx.model.config, assets: ctx.assets, placedIds: ctx.placedIds, svgTexts: ctx.model.svgTexts });
+  const preview = await iconsImageFor({ config: ctx.model.config, assets: ctx.assets, placedIds: ctx.placedIds, svgTexts: ctx.model.svgTexts, full });
   if (!preview.ok) return ctx.say(`Sheet image failed — ${preview.reason}`, true);
   ctx.dispatch({ preview: preview.dataUrl, dialog: "metadata", draft: null, draftTitle: "",
-    status: "Confirm the exact icons image and prompt before sending" });
+    status: `Confirm the exact ${full ? "sheet" : "icons"} image and prompt before sending` });
 }
 
 async function confirmMetadata(ctx: BuilderActionContext): Promise<void> {
@@ -99,7 +99,7 @@ async function confirmMetadata(ctx: BuilderActionContext): Promise<void> {
 function applyAnswer(ctx: BuilderActionContext, draft: SheetMetadata, artboardTitle: string, truncated: boolean): void {
   const metadata = acceptSheetMetadata(draft);
   ctx.dispatch({ metadata, draft: null, preview: null, dialog: "none" });
-  applyArtboardTitle(ctx, artboardTitle);
+  applyArtboardTitle(ctx, ctx.model.prefs.metaTitleToBanner ? artboardTitle : ""); // unticked: only the metadata (2026-11-23)
   const note = truncated ? " (the answer was truncated — check it)" : "";
   ctx.say(metadata.state === "accepted" ? `Sheet metadata applied${note}` : `Sheet metadata saved but invalid — ${metadata.validation?.errors.join("; ")}${note}`, metadata.state !== "accepted");
 }

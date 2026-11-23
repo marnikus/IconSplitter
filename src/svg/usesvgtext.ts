@@ -1,49 +1,122 @@
-// usesvgtext.ts — reading one saved SVG document for a row's preview (RULE 24).
-// ONE implementation for both tabs (RULE 10): the text is stored WITH the
-// identity it was read for (folder generation + path) and only that identity's
-// text is handed back, so a row can never paint the document another row — or
-// another folder — loaded, not even for the one frame between a rescan and the
-// new read landing.
+// usesvgtext.ts — reads one relative SVG file out of the picked root for its
+// row's preview and the editor modal, with per-path revision subscriptions and
+// per-DirHandleLike text caching so opening the editor on an already-loaded SVG
+// needs zero disk reads and bumping 1 file wakes only listeners of that file.
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { DirHandleLike } from "../lib/fs";
 import { readSvgText } from "./svgfiles";
 
-// 2026-11-06: an in-app rewrite of a file (the path editor's Finish, its undo)
-// bumps that path's revision, so every preview showing it reads it again.
 const revisions = new Map<string, number>();
-const listeners = new Set<() => void>();
+const listenersByPath = new Map<string, Set<() => void>>();
 
-/** The file at `relPath` was rewritten by the app: previews read it again. */
+const TEXT_CACHE_MAX = 512;
+const exactByRoot = new WeakMap<DirHandleLike, Map<string, string | null>>();
+const latestByRoot = new WeakMap<DirHandleLike, Map<string, string | null>>();
+
+function getBucket(store: WeakMap<DirHandleLike, Map<string, string | null>>, root: DirHandleLike): Map<string, string | null> {
+  let map = store.get(root);
+  if (map === undefined) {
+    map = new Map();
+    store.set(root, map);
+  }
+  return map;
+}
+
+function lruGet(map: Map<string, string | null>, key: string): string | null | undefined {
+  if (!map.has(key)) return undefined;
+  const val = map.get(key)!;
+  map.delete(key);
+  map.set(key, val);
+  return val;
+}
+
+function lruSet(map: Map<string, string | null>, key: string, val: string | null): void {
+  if (map.has(key)) map.delete(key);
+  else if (map.size >= TEXT_CACHE_MAX) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
+  }
+  map.set(key, val);
+}
+
+/** Tells only the preview(s) showing `relPath` to read the file again. */
 export function bumpSvgFile(relPath: string): void {
   revisions.set(relPath, (revisions.get(relPath) ?? 0) + 1);
-  for (const fn of [...listeners]) fn();
+  const subs = listenersByPath.get(relPath);
+  if (subs !== undefined) subs.forEach((fn) => fn());
 }
 
-function subscribe(fn: () => void): () => void {
-  listeners.add(fn);
-  return () => { listeners.delete(fn); };
+function usePathRevision(relPath: string): number {
+  return useSyncExternalStore(
+    (onChange) => {
+      if (relPath === "") return () => {};
+      let subs = listenersByPath.get(relPath);
+      if (subs === undefined) {
+        subs = new Set();
+        listenersByPath.set(relPath, subs);
+      }
+      subs.add(onChange);
+      return () => {
+        subs!.delete(onChange);
+        if (subs!.size === 0) listenersByPath.delete(relPath);
+      };
+    },
+    () => (relPath === "" ? 0 : revisions.get(relPath) ?? 0),
+  );
 }
 
-/** Text of the saved SVG at `relPath`; null while nothing is read yet. */
-export function useSvgText(rootRef: { current: DirHandleLike | null }, rootToken: number, relPath: string): string | null {
-  const [shown, setShown] = useState<{ key: string; file: string; text: string | null } | null>(null);
-  // The file to read is (folder generation, path): a rescan has to re-read it.
-  const revision = useSyncExternalStore(subscribe, () => revisions.get(relPath) ?? 0);
-  const wanted = useMemo(() => ({ token: rootToken, path: relPath }), [rootToken, relPath]);
-  const file = `${wanted.token}\u0000${wanted.path}`;
-  const key = `${file}\u0000${revision}`;
+function readCachedExact(root: DirHandleLike | null, token: number, relPath: string, rev: number): string | null | undefined {
+  if (root === null || relPath === "") return null;
+  return lruGet(getBucket(exactByRoot, root), `${token}\0${relPath}\0${rev}`);
+}
+
+function readCachedFallback(root: DirHandleLike | null, token: number, relPath: string, rev: number): string | null {
+  const exact = readCachedExact(root, token, relPath, rev);
+  if (exact !== undefined) return exact;
+  return root === null ? null : lruGet(getBucket(latestByRoot, root), `${token}\0${relPath}`) ?? null;
+}
+
+function useLoadMissingSvg(
+  rootRef: { current: DirHandleLike | null },
+  key: { token: number; relPath: string; rev: number },
+  onLoaded: (exactKey: string, text: string | null) => void,
+): void {
   useEffect(() => {
-    let live = true;
-    const root = rootRef.current;
-    if (root !== null && wanted.path !== "") {
-      void readSvgText(root, wanted.path)
-        .then((t) => live && setShown({ key, file, text: t }), () => live && setShown({ key, file, text: null }));
-    }
-    return () => { live = false; };
-  }, [key, file, wanted, rootRef]);
-  if (shown === null) return null;
-  // Only the revision moved (the app rewrote this very file): keep the old text
-  // until the new one is read — no blank frame that resizes the row (2026-11-06).
-  return shown.key === key || shown.file === file ? shown.text : null;
+    const r = rootRef.current;
+    if (r === null || key.relPath === "") return;
+    const exactKey = `${key.token}\0${key.relPath}\0${key.rev}`;
+    if (lruGet(getBucket(exactByRoot, r), exactKey) !== undefined) return;
+    let cancelled = false;
+    void readSvgText(r, key.relPath).then((next) => {
+      lruSet(getBucket(exactByRoot, r), exactKey, next);
+      lruSet(getBucket(latestByRoot, r), `${key.token}\0${key.relPath}`, next);
+      if (!cancelled) onLoaded(exactKey, next);
+    }, () => {
+      lruSet(getBucket(exactByRoot, r), exactKey, null);
+      lruSet(getBucket(latestByRoot, r), `${key.token}\0${key.relPath}`, null);
+      if (!cancelled) onLoaded(exactKey, null);
+    });
+    return () => { cancelled = true; };
+  }, [rootRef, key.token, key.relPath, key.rev, onLoaded]);
+}
+
+export function useSvgText(
+  rootRef: { current: DirHandleLike | null },
+  rootToken: number,
+  relPath: string,
+): string | null {
+  const rev = usePathRevision(relPath);
+  const root = rootRef.current;
+  const exactKey = `${rootToken}\0${relPath}\0${rev}`;
+  const cachedExact = readCachedExact(root, rootToken, relPath, rev);
+  const [state, setState] = useState<{ key: string; text: string | null }>(() => ({
+    key: exactKey,
+    text: readCachedFallback(root, rootToken, relPath, rev),
+  }));
+  const onLoaded = useMemo(() => (k: string, text: string | null) => setState({ key: k, text }), []);
+  useLoadMissingSvg(rootRef, { token: rootToken, relPath, rev }, onLoaded);
+  if (relPath === "") return null;
+  if (cachedExact !== undefined) return cachedExact;
+  return state.key === exactKey ? state.text : readCachedFallback(root, rootToken, relPath, rev);
 }

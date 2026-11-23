@@ -1,6 +1,7 @@
 // layout.ts — pure artboard geometry (reference "Glyph" containment chain:
 // artboard → free area → grid → icon box → glyph + stroke). The same layout
 // drives the live preview, its overlays and the exported SVG (RULE 15).
+import { activeMerges, type ActiveMerge } from "./merges";
 import type { CellFrame, Rect, SheetConfig, SheetLayout } from "./types";
 
 interface GridBox { box: number; gapX: number; gapY: number; caption: number; scale: number }
@@ -13,8 +14,8 @@ export function computeLayout(config: SheetConfig): SheetLayout {
   const width = columns * fit.box + (columns - 1) * fit.gapX;
   const height = rows * (fit.box + fit.caption) + (rows - 1) * fit.gapY;
   const grid: Rect = { x: content.x + (content.width - width) / 2, y: content.y + (content.height - height) / 2, width, height };
-  return { content, banner, grid, cells: cellsOf(config, grid, fit), fitScale: fit.scale,
-    overflow: fit.scale < 0.999, capacity: columns * rows };
+  const cells = mergedCells(config, cellsOf(config, grid, fit), fit);
+  return { content, banner, grid, cells, fitScale: fit.scale, overflow: fit.scale < 0.999, capacity: cells.length };
 }
 
 /** Caption row height at scale 1: `max(captionSize × 1.65, 10) + 7` plus the caption gap, when captions are on. */
@@ -66,4 +67,23 @@ function cellsOf(config: SheetConfig, grid: Rect, fit: GridBox): CellFrame[] {
     const y = grid.y + Math.floor(index / columns) * (fit.box + fit.caption + fit.gapY);
     return { index, x, y, size: fit.box, glyph, captionSize: fontSize, captionY: y + fit.box + captionTop + fontSize * 0.83 };
   });
+}
+
+/** Big icons (2026-11-23, merges.ts): each square's icon cell becomes the big cell, its other three leave; slots renumbered. */
+function mergedCells(config: SheetConfig, all: CellFrame[], fit: GridBox): CellFrame[] {
+  const merges = activeMerges(config.grid);
+  if (merges.length === 0) return all;
+  const covered = new Set(merges.flatMap((m) => m.cells.filter((c) => c !== m.source)));
+  const big = new Map(merges.map((m) => [m.source, bigFrame(config, all, m, fit)]));
+  return all.filter((c) => !covered.has(c.index)).map((c, slot) => ({ ...(big.get(c.index) ?? c), pos: c.index, index: slot }));
+}
+
+/** As big as the square's four boxes with their gaps (one caption row under it, the lower row's), centred. */
+function bigFrame(config: SheetConfig, all: readonly CellFrame[], m: ActiveMerge, fit: GridBox): CellFrame {
+  const tl = all[m.cells[0]], bl = all[m.cells[2]];
+  const width = 2 * fit.box + fit.gapX, height = 2 * fit.box + fit.caption + fit.gapY;
+  const size = Math.min(width, height);
+  const pen = m.strokeWidth > 0 ? m.strokeWidth : config.icons.strokeWidth;
+  return { ...tl, x: tl.x + (width - size) / 2, y: tl.y + (height - size) / 2, size, glyph: Math.max(4, size - pen * 2.2),
+    captionY: bl.captionY, span: 2, ...(m.strokeWidth > 0 ? { stroke: m.strokeWidth } : {}) };
 }

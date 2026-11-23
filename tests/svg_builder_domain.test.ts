@@ -44,11 +44,11 @@ function acceptedMetadata(): SheetMetadata {
 }
 
 describe("sheet config and layout", () => {
-  it("has dark-app-friendly defaults and three presets", () => {
+  it("has dark-app-friendly defaults and four presets (Line banner since 2026-11-23)", () => {
     expect(DEFAULT_CONFIG.artboard.width).toBeGreaterThan(600);
     expect(DEFAULT_CONFIG.icons.color).not.toBe("#000000");
-    expect(LAYOUT_PRESETS).toHaveLength(3);
-    expect(new Set(LAYOUT_PRESETS.map((p) => p.id)).size).toBe(3);
+    expect(LAYOUT_PRESETS).toHaveLength(4);
+    expect(new Set(LAYOUT_PRESETS.map((p) => p.id)).size).toBe(4);
   });
 
   it("validates a stored config, dropping foreign fields", () => {
@@ -169,11 +169,13 @@ describe("approved SVG embedding and composition", () => {
     });
     expect(doc.placedIds).toEqual(["a", "b"]);
     expect(doc.brokenIds).toEqual([]);
-    expect(doc.svg).toContain("<title>Quiet line icons — icon sheet</title>"); // the embedded title is the accepted metadata title
+    expect(doc.svg).toContain("<title>Quiet line icons</title>");
+    expect(doc.svg).not.toContain("— icon sheet");
     expect(doc.svg).toContain("<desc>Approved vector set. Tags: icon, vector, line</desc>");
     expect(doc.svg).toContain('data-asset-id="a"');
     expect(doc.svg).toContain('data-config-fingerprint="' + doc.configFingerprint + '"');
-    expect(doc.svg).toContain("\"id\":\"a\"");
+    expect(doc.svg).not.toContain("approvedOnly");
+    expect(doc.sourceFingerprints).toEqual([{ id: "a", fingerprint: "10:1" }, { id: "b", fingerprint: "11:2" }]);
     expect(validateSvg(doc.svg).ok).toBe(true);
   });
 

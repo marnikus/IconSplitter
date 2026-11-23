@@ -45,3 +45,8 @@ Focused test inventory; [all tests](../TESTS.md).
   navigation and old-session migration to V2; `session.test.ts` covers retained
   view/check state and discarded sidebar-collapse state, `apply.test.ts` refuses
   obsolete collapse-only history while preserving valid V2 comparison changes.
+* `svg_list_perf.test.tsx`, `svg_editor_perf.test.tsx` — Generate SVG warm-gesture
+  response isolation (`0` warm boot `localStorage` reads, `0` warm `DOMParser` /
+  `toListRow` / `pathTags` passes across checkbox, background, zoom, prompt and
+  filter gestures) and path-editor live-gesture work budgets (`0` per-frame
+  `writeObjects` or `<circle>` allocations, edited-path-only `<path d>` updates).

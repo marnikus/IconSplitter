@@ -3,6 +3,7 @@
 // and the generation status with the review status.
 
 import { fileOf, type DataRow } from "../lib/getdata";
+import { mainImageOf } from "../lib/svgimgreg";
 import { REVIEW_LABEL } from "../lib/svgmodel";
 import { previewTargetOf } from "./rowmodel";
 import type { RowStatus, SvgRow } from "./types";
@@ -13,9 +14,12 @@ const GENERATION: Record<RowStatus, string> = {
 
 export function svgDataRows(rows: readonly SvgRow[], checked: readonly string[]): DataRow[] {
   const on = new Set(checked);
-  return rows.filter((r) => on.has(r.source.id)).map((r) => ({
-    svg: fileOf(previewTargetOf(r)?.svgPath ?? ""),
-    png: { name: r.source.name, path: r.source.relPath },
-    status: [GENERATION[r.status], REVIEW_LABEL[r.review]],
-  }));
+  return rows.filter((r) => on.has(r.source.id)).map((r) => {
+    const ai = mainImageOf(r.meta, r.source.relPath);
+    return {
+      svg: fileOf(previewTargetOf(r)?.svgPath ?? ""),
+      png: fileOf(ai) ?? { name: r.source.name, path: r.source.relPath },
+      status: [GENERATION[r.status], REVIEW_LABEL[r.review]],
+    };
+  });
 }
