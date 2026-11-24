@@ -353,6 +353,41 @@ describe("SVG builder workspace", () => {
       .toEqual(["builder-export-svg", "builder-export-png", "builder-export-copy", "builder-export-package", "builder-export-formats", "builder-export-preset", "builder-export-preset-json", "builder-export-load"]);
   });
 
+  it("stage navigation: Ctrl + wheel zooms (page zoom blocked), Ctrl + Shift + wheel steps round %, middle button pans", async () => {
+    await openLibrary();
+    await click("builder-zoom-1");
+    const canvas = q("builder-canvas")!;
+    const wheel = async (init: WheelEventInit) => {
+      const ev = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init });
+      // happy-dom's WheelEvent drops modifier keys and deltaX: pin what a browser reports
+      for (const k of ["ctrlKey", "shiftKey", "deltaX", "deltaY"] as const) Object.defineProperty(ev, k, { value: init[k] ?? (k.startsWith("delta") ? 0 : false) });
+      await act(async () => { canvas.dispatchEvent(ev); });
+      return ev;
+    };
+    const plain = await wheel({ deltaY: -100 });
+    expect(plain.defaultPrevented).toBe(false); // a plain wheel still scrolls
+    expect(text("builder-zoom")).toBe("100%");
+    const zin = await wheel({ deltaY: -100, ctrlKey: true });
+    expect(zin.defaultPrevented).toBe(true);
+    expect(Number.parseInt(text("builder-zoom"), 10)).toBeGreaterThan(100);
+    await click("builder-zoom-1");
+    await wheel({ deltaX: -100, ctrlKey: true, shiftKey: true }); // Windows: Shift moves the wheel into deltaX
+    expect(text("builder-zoom")).toBe("150%");
+    await wheel({ deltaY: 100, ctrlKey: true, shiftKey: true });
+    await wheel({ deltaY: 100, ctrlKey: true, shiftKey: true });
+    expect(text("builder-zoom")).toBe("75%");
+    canvas.scrollLeft = 40;
+    canvas.scrollTop = 30;
+    const down = new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 1, clientX: 200, clientY: 200 });
+    await act(async () => { canvas.dispatchEvent(down); });
+    expect(down.defaultPrevented).toBe(true);
+    expect(canvas.classList.contains("is-panning")).toBe(true);
+    await act(async () => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 190, clientY: 185 })); });
+    expect([canvas.scrollLeft, canvas.scrollTop]).toEqual([50, 45]);
+    await act(async () => { window.dispatchEvent(new PointerEvent("pointerup", {})); });
+    expect(canvas.classList.contains("is-panning")).toBe(false);
+  });
+
   it("Export settings is its own toolbar button and opens the upload flow's popup", async () => {
     await openLibrary();
     const button = q("builder-export-settings")!;

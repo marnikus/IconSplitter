@@ -7,6 +7,7 @@ import SvgBuilderArtboard from "./SvgBuilderArtboard";
 import SvgBuilderStageActions from "./SvgBuilderStageActions";
 import SvgBuilderEditingLabel from "./SvgBuilderEditingLabel";
 import SvgBuilderArtboardStrip, { stageTemplateId } from "./SvgBuilderArtboardStrip";
+import { useStageNavigation } from "./useStageNavigation";
 
 /** The screen px the right artboard strip needs beside the artboard. */
 const STRIP_ROOM = 150;
@@ -19,6 +20,7 @@ export default function SvgBuilderStage({ b }: { b: BuilderApi }) {
   const strip = b.artboards.some((a) => a.templateId === stageTemplateId(b)) ? STRIP_ROOM : 0;
   const fit = useFitScale(box, { w: b.config.artboard.width, h: b.config.artboard.height }, strip);
   const zoom = b.prefs.fit ? fit : b.prefs.zoom;
+  useStageNavigation(box, zoom, b.actions.setZoom); // Ctrl + wheel zoom, middle-button pan (2026-11-24)
   return <main className="bld-stage" data-testid="builder-stage" aria-label="Sheet stage">
     <StageToolbar b={b} zoom={zoom} />
     <div className="bld-canvas" ref={box} data-testid="builder-canvas" style={strip > 0 ? { paddingLeft: strip } : undefined}>

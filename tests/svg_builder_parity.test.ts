@@ -5,7 +5,7 @@
 // seeded selection with locks, grow/shrink and the export slug.
 import { describe, expect, it } from "vitest";
 import { validateSvg } from "../src/lib/svgvalidate";
-import { DEFAULT_CONFIG, LAYOUT_PRESETS, applyPresetConfig, parseSheetConfig } from "../src/lib/svgBuilder/config";
+import { DEFAULT_CONFIG, LAYOUT_PRESETS, applyPresetConfig, applyPresetLayoutOnly, parseSheetConfig } from "../src/lib/svgBuilder/config";
 import { RANGES, bannerRange, clampTo } from "../src/lib/svgBuilder/ranges";
 import { computeLayout } from "../src/lib/svgBuilder/layout";
 import { filterAssets, profilesOf, scoreOf } from "../src/lib/svgBuilder/assets";
@@ -68,6 +68,26 @@ describe("layout presets", () => {
     const plain = applyPresetConfig(DEFAULT_CONFIG, "plain");
     expect(plain.artboard).toMatchObject({ width: 1080, height: 560, padding: 46 });
     expect(plain.banner.position).toBe("none");
+  });
+
+  it("on an open template only the banner type changes and its text placement resets (2026-11-24)", () => {
+    const mine = parseSheetConfig({ ...DEFAULT_CONFIG,
+      artboard: { ...DEFAULT_CONFIG.artboard, background: "#222222", width: 1500 },
+      grid: { ...DEFAULT_CONFIG.grid, columns: 7, rows: 2, captionColor: "#ABCDEF" },
+      icons: { ...DEFAULT_CONFIG.icons, color: "#F0E0D0", strokeWidth: 2 },
+      banner: { ...DEFAULT_CONFIG.banner, background: "#A07050", textColor: "#111111", subtitleColor: "#333333", titleFace: "serif",
+        titleSize: 40, subtitleSize: 14, titleTracking: 0.1, titleDx: 30, subtitleDy: -12, textPadding: 20, title: "Fast food" } });
+    const next = applyPresetLayoutOnly(mine, "masthead");
+    expect(next.banner).toMatchObject({ position: "top", style: "split", size: 76, hero: false });
+    expect(next.banner).toMatchObject({ titleDx: 0, subtitleDy: 0, textPadding: 0 }); // placed afresh for the new banner
+    expect(next.artboard).toEqual(mine.artboard);
+    expect(next.grid).toEqual(mine.grid);
+    expect(next.icons).toEqual(mine.icons);
+    const changed = ["position", "style", "size", "hero", "divider", "titleDx", "titleDy", "subtitleDx", "subtitleDy", "textPadding", "titleWidth", "subtitleWidth", "edgeSpread"];
+    const rest = (b: object) => Object.fromEntries(Object.entries(b).filter(([k]) => !changed.includes(k)));
+    expect(rest(next.banner)).toEqual(rest(mine.banner)); // colours, font family, sizes, tracking, words untouched
+    expect(applyPresetLayoutOnly(mine, "plain").banner.position).toBe("none");
+    expect(applyPresetLayoutOnly(mine, "line").banner).toMatchObject({ position: "bottom", style: "line", textColor: "#111111" });
   });
 
   it("keeps the user's title, subtitle and hero icon across presets", () => {

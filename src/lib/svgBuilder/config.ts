@@ -60,6 +60,23 @@ export function applyPresetConfig(current: SheetConfig, id: LayoutPresetId): She
   return applyCopy(preset.patch(copyConfig(DEFAULT_CONFIG)), current);
 }
 
+/** What a layout button may change on an open template: the banner type… */
+const BANNER_TYPE_KEYS = ["position", "style", "size", "hero", "divider"] as const;
+/** …and the text placement, reset so the words are placed afresh for that banner. */
+const TEXT_PLACEMENT_KEYS = ["textPadding", "titleDx", "titleDy", "subtitleDx", "subtitleDy", "titleWidth", "subtitleWidth", "edgeSpread"] as const;
+
+/**
+ * A layout button on an open template or artboard (2026-11-24): only the banner
+ * type changes and the text is placed afresh; colours, font family, text sizes,
+ * tracking, grid, icons and artboard stay the template's own.
+ */
+export function applyPresetLayoutOnly(current: SheetConfig, id: LayoutPresetId): SheetConfig {
+  const look = applyPresetConfig(current, id).banner;
+  const pick = (src: SheetConfig["banner"], keys: readonly (keyof SheetConfig["banner"])[]) => Object.fromEntries(keys.map((k) => [k, src[k]]));
+  const banner = { ...current.banner, ...pick(look, BANNER_TYPE_KEYS), ...pick(DEFAULT_CONFIG.banner, TEXT_PLACEMENT_KEYS) };
+  return parseSheetConfig({ ...copyConfig(current), banner });
+}
+
 /** A look (preset or saved template) on the current sheet: its banner words and hero are kept. */
 export function applyCopy(look: SheetConfig, current: SheetConfig): SheetConfig {
   const { title, subtitle, heroIconId, captionTexts } = current.banner;

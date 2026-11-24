@@ -114,6 +114,8 @@
 .bld-zoom-value { min-width: 48px; }
 .bld-canvas { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; padding: 28px;
   background-color: var(--v2-bg); background-image: radial-gradient(var(--v2-line) 1px, transparent 1px); background-size: 18px 18px; }
+/* Middle-button pan (2026-11-24): the hand cursor while the canvas is dragged. */
+.bld-canvas.is-panning, .bld-canvas.is-panning * { cursor: grabbing !important; user-select: none; }
 .bld-artboard-wrap { position: relative; flex: 0 0 auto; margin: auto; }
 /* Hover reaches the size grips just outside the artboard (2026-11-14). */
 .bld-artboard-wrap::before { content: ""; position: absolute; inset: 0 -26px -26px 0; }

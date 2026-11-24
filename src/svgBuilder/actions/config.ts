@@ -1,9 +1,10 @@
 // actions/config.ts — layout config, presets, reset and view prefs. Config
 // edits join ONE global undo timeline (sliders coalesce into one gesture);
 // any manual edit marks the layout "custom". Display-only prefs are not undone.
-import { applyPresetConfig, DEFAULT_CONFIG, LAYOUT_PRESETS, parseSheetConfig, type LayoutPresetId } from "../../lib/svgBuilder/config";
+import { applyPresetConfig, applyPresetLayoutOnly, DEFAULT_CONFIG, LAYOUT_PRESETS, parseSheetConfig, type LayoutPresetId } from "../../lib/svgBuilder/config";
 import { DEFAULT_SHEET_PROMPT } from "../../lib/svgBuilder/metadata";
 import type { SheetConfig } from "../../lib/svgBuilder/types";
+import { clampStageZoom } from "../../lib/svgBuilder/stagezoom";
 import { builderUndoPatchOf } from "../../lib/svgBuilder/undo";
 import { configUndoPatchOf } from "../model";
 import { saveSheetConfig } from "../configstore";
@@ -21,7 +22,7 @@ export function configActions(get: () => BuilderActionContext): ConfigActions {
     setConfig: (config, label, gesture) => { commitConfig(get(), { config, label: label ?? "Change sheet layout", gesture }); prefs(get(), { layout: "custom" }); },
     applyLayoutPreset: (id) => applyLayoutPreset(get(), id),
     resetConfig: () => resetConfig(get()),
-    setZoom: (zoom) => prefs(get(), { zoom: Math.min(2, Math.max(0.1, Math.round(zoom * 100) / 100)), fit: false }),
+    setZoom: (zoom) => prefs(get(), { zoom: clampStageZoom(zoom), fit: false }),
     fitZoom: () => prefs(get(), { fit: true }),
     toggleProvider: (providerOpen) => prefs(get(), { providerOpen }),
     toggleMeta: (metaOpen) => prefs(get(), { metaOpen }),
@@ -58,7 +59,10 @@ export function commitConfig(ctx: BuilderActionContext, c: Commit): void {
 function applyLayoutPreset(ctx: BuilderActionContext, id: LayoutPresetId): void {
   const preset = LAYOUT_PRESETS.find((p) => p.id === id);
   if (preset === undefined) return ctx.say("Unknown layout preset", true);
-  commitConfig(ctx, { config: applyPresetConfig(ctx.model.config, id), label: `${preset.label} layout` });
+  // an open template/artboard keeps its design: only the banner type and text placement change (2026-11-24)
+  const open = ctx.model.editingTemplateId !== null || ctx.model.editingArtboardId !== null;
+  const config = open ? applyPresetLayoutOnly(ctx.model.config, id) : applyPresetConfig(ctx.model.config, id);
+  commitConfig(ctx, { config, label: `${preset.label} layout` });
   prefs(ctx, { layout: id, fit: true });
   ctx.say(`${preset.label} layout applied`);
 }

@@ -3,6 +3,7 @@ import { isRecord } from "../lib/isrecord";
 import type { Multi } from "../lib/multifilter";
 import { ALL_STYLES, parseStyleFilter } from "../lib/svgBuilder/iconstyles";
 import { clampZoom } from "../lib/zoom";
+import { STAGE_ZOOM_MAX, STAGE_ZOOM_MIN } from "../lib/svgBuilder/stagezoom";
 import { readKey, writeKey } from "../state/safestorage";
 
 export const BUILDER_PREFS_KEY = "iconSplitter.svgBuilder.prefs.v1";
@@ -45,7 +46,7 @@ const LAYOUTS: readonly BuilderLayoutChoice[] = ["editorial", "masthead", "plain
 export function parseBuilderPrefs(raw: unknown): BuilderPrefs {
   if (!isRecord(raw)) return { ...DEFAULT_BUILDER_PREFS };
   return {
-    zoom: num(raw.zoom, DEFAULT_BUILDER_PREFS.zoom, 0.1, 2),
+    zoom: num(raw.zoom, DEFAULT_BUILDER_PREFS.zoom, STAGE_ZOOM_MIN, STAGE_ZOOM_MAX),
     fit: raw.fit !== false,
     providerOpen: raw.providerOpen !== false,
     layout: LAYOUTS.includes(raw.layout as BuilderLayoutChoice) ? raw.layout as BuilderLayoutChoice : "custom",
