@@ -20,33 +20,25 @@ function ownStroke(el: Element): string | null {
   return value === null ? null : value.trim().toLowerCase();
 }
 
-function effectiveStroke(el: Element): string {
-  let cur: Element | null = el;
-  while (cur !== null) {
-    const own = ownStroke(cur);
-    if (own !== null) return own;
-    cur = cur.parentElement;
-  }
-  return "none";
+export type RescaleDomResult = { ok: true; factor: number } | { ok: false; reason: string };
+
+function hasOwnStrokeWidth(el: Element): boolean {
+  if (num(el.getAttribute("stroke-width")) !== null) return true;
+  const style = el.getAttribute("style");
+  return style !== null && /stroke-width\s*:/i.test(style);
 }
 
-function hasInheritedStrokeWidth(el: Element): boolean {
-  let cur: Element | null = el;
-  while (cur !== null) {
-    if (num(cur.getAttribute("stroke-width")) !== null) return true;
-    const style = cur.getAttribute("style");
-    if (style && /stroke-width\s*:/i.test(style)) return true;
-    cur = cur.parentElement;
+/** Single top-down pass to materialise implicit SVG default `stroke-width="1"` before proportional scaling. */
+function walkImplicitStrokes(el: Element, inheritedStroke: string, inheritedWidth: boolean): void {
+  const own = ownStroke(el);
+  const stroke = own ?? inheritedStroke;
+  let hasWidth = inheritedWidth || hasOwnStrokeWidth(el);
+  if (stroke !== "none" && !hasWidth) {
+    el.setAttribute("stroke-width", "1");
+    hasWidth = true;
   }
-  return false;
-}
-
-/** Materialise implicit SVG default `stroke-width="1"` before proportional scaling. */
-function seedImplicitStrokes(root: Element): void {
-  for (const el of [root, ...Array.from(root.querySelectorAll("*"))]) {
-    if (effectiveStroke(el) !== "none" && !hasInheritedStrokeWidth(el)) {
-      el.setAttribute("stroke-width", "1");
-    }
+  for (let child = el.firstElementChild; child !== null; child = child.nextElementSibling) {
+    walkImplicitStrokes(child, stroke, hasWidth);
   }
 }
 
@@ -65,23 +57,45 @@ function baseSizeOf(root: Element): { width: number; height: number } | null {
   return vb === null ? null : { width: vb[2], height: vb[3] };
 }
 
-export function rescaleSvg(svg: string, o: RescaleOptions): RescaleResult {
-  const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
-  if (root.nodeName.toLowerCase() !== "svg") return { ok: false, svg, reason: "the document root is not an <svg> element" };
+/** Computes the target rescale factor for `root`, or null if `root` lacks usable dimensions. */
+export function rescaleFactorOf(root: Element, megapixels: number): number | null {
+  if (root.nodeName.toLowerCase() !== "svg") return null;
   const base = baseSizeOf(root);
-  if (base === null) return { ok: false, svg, reason: "the document has no readable px size or viewBox to rescale" };
+  return base === null ? null : rescaleSize(base.width, base.height, megapixels).factor;
+}
+
+/** Rescales `root` in place to target megapixels (RULE 26 direct coordinates). */
+export function rescaleSvgDom(root: Element, o: RescaleOptions, skipElements?: ReadonlySet<Element>): RescaleDomResult {
+  if (root.nodeName.toLowerCase() !== "svg") return { ok: false, reason: "the document root is not an <svg> element" };
+  const base = baseSizeOf(root);
+  if (base === null) return { ok: false, reason: "the document has no readable px size or viewBox to rescale" };
   const vb = viewBoxOf(root) ?? [0, 0, base.width, base.height];
   const { width, height, factor } = rescaleSize(base.width, base.height, o.rescaleMegapixels);
-  if (o.rescaleStrokes) seedImplicitStrokes(root);
-  bakeDirectSvg(root, { scale: factor, scaleStrokes: o.rescaleStrokes });
+  if (o.rescaleStrokes) walkImplicitStrokes(root, "none", false);
+  bakeDirectSvg(root, { scale: factor, scaleStrokes: o.rescaleStrokes, skipElements });
   root.setAttribute("viewBox", `${fmt1(vb[0] * factor)} ${fmt1(vb[1] * factor)} ${fmt1(vb[2] * factor, 0.1)} ${fmt1(vb[3] * factor, 0.1)}`);
   root.setAttribute("width", String(width));
   root.setAttribute("height", String(height));
-  return { ok: true, svg: new XMLSerializer().serializeToString(root), factor };
+  return { ok: true, factor };
+}
+
+export function rescaleSvg(svg: string, o: RescaleOptions): RescaleResult {
+  const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+  const res = rescaleSvgDom(root, o);
+  if (!res.ok) return { ok: false, svg, reason: res.reason };
+  return { ok: true, svg: new XMLSerializer().serializeToString(root), factor: res.factor };
 }
 
 /** EPS points per CSS px — what both EPS converters map a document's px size by. */
 const PT_PER_PX = 0.75;
+
+function scaleRootDimensionAttr(tag: string, name: "width" | "height"): string | null {
+  const re = new RegExp(`(\\b${name}=["'])([^"']+)(["'])`);
+  const m = re.exec(tag);
+  const v = m === null ? null : num(m[2]);
+  if (m === null || v === null) return null;
+  return tag.replace(re, `$1${Number((v / PT_PER_PX).toFixed(3))}$3`);
+}
 
 /**
  * The document an EPS converter gets (2026-11-23). An EPS page is measured in
@@ -93,6 +107,13 @@ const PT_PER_PX = 0.75;
  */
 export function epsInputSvg(svg: string, rescaled: boolean): string {
   if (!rescaled) return svg;
+  const openEnd = svg.indexOf(">");
+  const openTag = openEnd > 0 ? svg.slice(0, openEnd + 1) : "";
+  if (/^<svg\b/i.test(openTag.trimStart())) {
+    const withW = scaleRootDimensionAttr(openTag, "width");
+    const withWH = withW === null ? null : scaleRootDimensionAttr(withW, "height");
+    if (withWH !== null) return withWH + svg.slice(openEnd + 1);
+  }
   const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
   const w = num(root.getAttribute("width")), h = num(root.getAttribute("height"));
   if (root.nodeName.toLowerCase() !== "svg" || w === null || h === null) return svg;

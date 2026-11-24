@@ -8,6 +8,7 @@ export type EpsConverterId = "builtin" | "inkscape";
 /** What a conversion needs — the prepared SVG text and the flatten colour (RULE 3: explicit inputs). */
 export interface EpsConvertInput {
   svg: string;
+  svgRoot?: Element;
   background: string;
   title: string;
   createdAt?: string;

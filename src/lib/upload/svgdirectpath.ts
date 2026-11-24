@@ -33,10 +33,10 @@ const NUM_RE = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/y;
 
 /** Rounds to at most 1 decimal place; positive values honour `minPositive` when > 0. */
 export function round1(value: number, minPositive = 0): number {
-  if (!Number.isFinite(value)) return 0;
   const rounded = Math.round(value * 10) / 10;
+  if (!Number.isFinite(rounded)) return 0;
   if (minPositive > 0 && value > 0 && rounded < minPositive) return minPositive;
-  return Object.is(rounded, -0) ? 0 : rounded;
+  return rounded + 0;
 }
 
 /** Formats a number to at most 1 decimal place with trailing `.0` stripped. */
@@ -234,9 +234,17 @@ export function emitPathCommands(cmds: readonly PathCmd[], transform?: DirectTra
   return out;
 }
 
+function isAlreadyDirectPath(d: string): boolean {
+  if (!/^[MLHVCSQTZmlhvcsqtz0-9 .+-]+$/.test(d)) return false;
+  if (/\.\d{2,}|\.0(?!\d)|\d-|(?:\.\d*\.)|(?:^|[^\d])\.\d/.test(d)) return false;
+  return !/[Mm]\s*[-+]?\d+(?:\.\d+)?\s+[-+]?\d+(?:\.\d+)?\s+[-+]?\d/.test(d);
+}
+
 /** Scales, translates and rounds an SVG `d` string directly to ≤ 1 decimal place. */
 export function directPathData(d: string, transform?: DirectTransform): string {
   const trimmed = d.trim();
   if (!trimmed) return "";
+  const isIdentity = (transform?.scale ?? 1) === 1 && (transform?.dx ?? 0) === 0 && (transform?.dy ?? 0) === 0;
+  if (isIdentity && isAlreadyDirectPath(trimmed)) return trimmed;
   return emitPathCommands(scanPathCommands(trimmed), transform);
 }

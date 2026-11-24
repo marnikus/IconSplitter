@@ -65,9 +65,7 @@ async function canCreateStem(dir: DirHandleLike, stem: string): Promise<boolean>
   const probe = `${stem}.jpeg`;
   if (await nameExists("file", dir, probe)) return true;
   try {
-    const fh = await dir.getFileHandle(probe, { create: true });
-    const w = await fh.createWritable();
-    await w.close();
+    await dir.getFileHandle(probe, { create: true });
     try { await dir.removeEntry?.(probe); } catch { /* ignore */ }
     return true;
   } catch {
@@ -81,7 +79,8 @@ async function canCreateStem(dir: DirHandleLike, stem: string): Promise<boolean>
  * no partial word is ever kept. Falls back to `workName` if needed.
  */
 export async function fitStemToDir(dir: DirHandleLike, desired: string, workName: string): Promise<string> {
-  if (desired === "" || await canCreateStem(dir, desired)) return desired || workName;
+  if (desired === "" || desired === workName) return workName;
+  if (await canCreateStem(dir, desired)) return desired;
   let cur = desired;
   while (cur.includes("_")) {
     const shorter = shrinkUploadNameToBudget(cur, cur.length - 1);

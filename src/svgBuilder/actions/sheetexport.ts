@@ -18,11 +18,13 @@ import type { UploadSettings } from "../../lib/upload/settings";
 import { loadBuilderFormats } from "../formatstore";
 import { warmTextFonts } from "../../lib/upload/textoutline";
 import { buildSheetPackage } from "../sheetpackage";
-import { writeArtboardSeed, writeSheetExport, writeSheetMetadata, type SheetMetaFile } from "../sheetwriter";
-import { recordUse } from "../usagestore";
+import { prepareSheetExportDir, writeArtboardSeed, writeSheetExportPrepared, writeSheetMetadata, type PreparedExportDir, type SheetMetaFile } from "../sheetwriter";
+import { createUsageBatchSession, type UsageBatchSession } from "../usagestore";
 import { writeTemplateFolder } from "./templatefolder";
 import { sheetsRoot } from "./sheetsroot";
-import { ensureDirPath } from "../../lib/fs";
+import { ensureDirPath, withDirCache, type DirHandleLike } from "../../lib/fs";
+import { createLimiter } from "../../lib/limiter";
+import { jpegWorkersAvailable, poolSize } from "../../lib/upload/jpegworker";
 import { writeSheetJson } from "./sheetjson";
 import { svgTextsFor } from "./artboardmeta";
 import { beginBuilderExport, type BuilderExportRun } from "../exportprogress";
@@ -65,64 +67,159 @@ export function sheetSettings(): UploadSettings {
   return { ...loadUploadSettings().defaults, ...loadBuilderFormats() };
 }
 
+export function sheetExportLanes(settings: UploadSettings): number {
+  return settings.epsConverter === "inkscape" || !jpegWorkersAvailable() ? 1 : poolSize();
+}
+
 const epsOf = (converter: Parameters<typeof converterOf>[0], signal?: AbortSignal) => (input: Parameters<ReturnType<typeof converterOf>["convert"]>[0]) =>
   converterOf(converter).convert(input, { bridgeUrl: loadBridgeConfig().url, fetch: (url, init) => globalThis.fetch(url, init) }, signal);
 
-async function exportOne(get: () => BuilderActionContext, artboard: FinalArtboard, texts: Record<string, string>, signal?: AbortSignal): Promise<string[]> {
-  const ctx = get();
-  const root = sheetsRoot(ctx, true);
-  const template = ctx.model.templates.find((t) => t.id === artboard.templateId);
-  if (root === null || template === undefined) return [`${artboard.name}: its template or the folder is gone`];
-  const now = new Date();
-  const folder = await folderFor(get, artboard, now);
-  if (folder === null) return [`${artboard.name}: its template is gone`];
-  const config = artboardConfig(template, artboard);
-  const doc = composeSheet({ config, layout: computeLayout(config), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts: texts, metadata: artboard.metadata });
-  const settings = sheetSettings();
-  if (settings.expandText) await warmTextFonts(doc.svg); // the outliner is sync; fonts load here
-  const workName = sheetStem(folder);
-  const desiredStem = effectiveExportStem(workName, artboard.uploadName ?? getUploadName(artboard.id));
-  const exportStem = await fitStemToDir(await ensureDirPath(root, `${folder}/export`), desiredStem, workName);
-  const pkg = await buildSheetPackage({ svg: doc.svg, metadata: artboard.metadata, settings, folder, workName, stem: exportStem, pairId: artboard.id,
-    now: now.toISOString(), prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(settings.epsConverter, signal) });
-  if (signal?.aborted) return [];
-  await writeSheetExport(root, folder, pkg.files);
-  await countUse(get, artboard, now.toISOString());
-  remember(get(), artboard.id, { folder, exportedAt: now.toISOString() });
-  return pkg.problems.map((p) => `${artboard.name}: ${p}`);
+interface CompletedExport { id: string; name: string; folder: string; at: string; freshIds: string[]; problems: string[] }
+interface PrecomposedItem { folder: string; svg: string; at: string; preparedDirTask: Promise<PreparedExportDir> }
+interface BatchEnv {
+  get: () => BuilderActionContext; root: DirHandleLike; settings: UploadSettings;
+  texts: Record<string, string>; run: BuilderExportRun; precomposed: Map<string, Promise<PrecomposedItem | null>>;
 }
 
-/** Its icons' use, once per artboard (the Export menu's rule, `countedIds`). */
-async function countUse(get: () => BuilderActionContext, artboard: FinalArtboard, at: string): Promise<void> {
-  const ctx = get();
-  const fresh = [...new Set(artboardIcons(artboard))].filter((id) => !artboard.countedIds.includes(id));
-  if (ctx.model.root === null || ctx.model.discovery === null || fresh.length === 0) return;
-  const { records } = await recordUse({ root: ctx.model.root, assets: ctx.assets, ids: fresh, artboard: `${artboard.id} ${artboard.name}`, at });
-  const discovery = get().model.discovery;
-  if (discovery !== null) get().dispatch({ discovery: { ...discovery, usage: new Map([...discovery.usage, ...records]) } });
-  remember(get(), artboard.id, { countedIds: [...artboard.countedIds, ...fresh] });
+async function ensureTemplateFolders(get: () => BuilderActionContext, targets: readonly FinalArtboard[]): Promise<void> {
+  const seen = new Set<string>();
+  for (const a of targets) {
+    if (seen.has(a.templateId)) continue;
+    seen.add(a.templateId);
+    const t = get().model.templates.find((x) => x.id === a.templateId);
+    if (t !== undefined && t.folder == null) await writeTemplateFolder(get, t);
+  }
+}
+
+async function resolveExportStem(root: DirHandleLike, folder: string, artboard: FinalArtboard): Promise<{ workName: string; exportStem: string }> {
+  const workName = sheetStem(folder);
+  const desiredStem = effectiveExportStem(workName, artboard.uploadName ?? getUploadName(artboard.id));
+  if (desiredStem === workName) return { workName, exportStem: workName };
+  const exportStem = await fitStemToDir(await ensureDirPath(root, `${folder}/export`), desiredStem, workName);
+  return { workName, exportStem };
+}
+
+async function buildPrecomposed(env: BatchEnv, artboard: FinalArtboard): Promise<PrecomposedItem | null> {
+  const ctx = env.get();
+  const template = ctx.model.templates.find((t) => t.id === artboard.templateId);
+  if (template === undefined) return null;
+  const now = new Date();
+  const folder = await folderFor(env.get, artboard, now);
+  if (folder === null) return null;
+  const preparedDirTask = prepareSheetExportDir(env.root, folder);
+  preparedDirTask.catch(() => undefined);
+  const config = artboardConfig(template, artboard);
+  const doc = composeSheet({ config, layout: computeLayout(config), assets: ctx.assets, placedIds: artboard.placedIds, svgTexts: env.texts, metadata: artboard.metadata });
+  return { folder, svg: doc.svg, at: now.toISOString(), preparedDirTask };
+}
+
+function getOrStartPrecompose(env: BatchEnv, artboard: FinalArtboard): Promise<PrecomposedItem | null> {
+  const existing = env.precomposed.get(artboard.id);
+  if (existing !== undefined) return existing;
+  const task = buildPrecomposed(env, artboard);
+  env.precomposed.set(artboard.id, task);
+  return task;
+}
+
+function freshIdsOf(artboard: FinalArtboard): string[] {
+  return [...new Set(artboardIcons(artboard))].filter((id) => !artboard.countedIds.includes(id));
+}
+
+function buildLastIconTargets(targets: readonly FinalArtboard[]): Map<string, number> {
+  const last = new Map<string, number>();
+  targets.forEach((t, idx) => { for (const id of freshIdsOf(t)) last.set(id, idx); });
+  return last;
+}
+
+function startUsageSession(ctx: BuilderActionContext, lastByIcon: ReadonlyMap<string, number>): UsageBatchSession | null {
+  const useRoot = ctx.repository?.dirRoot ?? ctx.model.root;
+  if (useRoot === null || ctx.model.discovery === null || lastByIcon.size === 0) return null;
+  return createUsageBatchSession(useRoot, ctx.assets, [...lastByIcon.keys()]);
+}
+
+async function exportOneInBatch(env: BatchEnv, artboard: FinalArtboard, nextTarget?: FinalArtboard): Promise<CompletedExport | string[]> {
+  const pre = await getOrStartPrecompose(env, artboard);
+  if (pre === null) return [`${artboard.name}: its template is gone`];
+  if (env.settings.expandText) await warmTextFonts(pre.svg);
+  const { workName, exportStem } = await resolveExportStem(env.root, pre.folder, artboard);
+  const ctx = env.get();
+  const pkg = await buildSheetPackage({ svg: pre.svg, metadata: artboard.metadata, settings: env.settings, folder: pre.folder, workName, stem: exportStem, pairId: artboard.id,
+    now: pre.at, prompt: ctx.model.prompt, model: ctx.model.gemini.model }, { eps: epsOf(env.settings.epsConverter, env.run.signal) });
+  if (env.run.isCancelled()) return [];
+  const writeTask = writeSheetExportPrepared(await pre.preparedDirTask, pkg.files);
+  if (nextTarget !== undefined && !env.run.isCancelled()) {
+    const nextArtboard = env.get().model.artboards.find((x) => x.id === nextTarget.id) ?? nextTarget;
+    void getOrStartPrecompose(env, nextArtboard);
+  }
+  await writeTask;
+  return { id: artboard.id, name: artboard.name, folder: pre.folder, at: pre.at, freshIds: freshIdsOf(artboard), problems: pkg.problems.map((p) => `${artboard.name}: ${p}`) };
+}
+
+async function commitBatchState(get: () => BuilderActionContext, completed: readonly CompletedExport[], usageSession: UsageBatchSession | null): Promise<void> {
+  const useOut = usageSession !== null ? await usageSession.finish() : null;
+  if (completed.length === 0) return;
+  const latest = get();
+  const byId = new Map(completed.map((c) => [c.id, c]));
+  const artboards = latest.model.artboards.map((a) => {
+    const c = byId.get(a.id);
+    if (c === undefined) return a;
+    return { ...a, folder: c.folder, exportedAt: c.at, countedIds: c.freshIds.length === 0 ? a.countedIds : [...a.countedIds, ...c.freshIds] };
+  });
+  saveArtboards(artboards);
+  const disc = latest.model.discovery;
+  const nextDisc = disc !== null && useOut !== null && useOut.records.size > 0
+    ? { ...disc, usage: new Map([...disc.usage, ...useOut.records]) }
+    : undefined;
+  latest.dispatch({ artboards, ...(nextDisc === undefined ? {} : { discovery: nextDisc }) });
+}
+
+function recordCompletedItem(res: CompletedExport, idx: number, lastByIcon: ReadonlyMap<string, number>, usageSession: UsageBatchSession | null): void {
+  if (usageSession === null || res.freshIds.length === 0) return;
+  usageSession.enqueue(res.freshIds, `${res.id} ${res.name}`, res.at);
+  usageSession.flushIcons(res.freshIds.filter((id) => lastByIcon.get(id) === idx));
+}
+
+interface LoopState {
+  env: BatchEnv; lanes: number; targets: readonly FinalArtboard[]; lastByIcon: ReadonlyMap<string, number>;
+  usageSession: UsageBatchSession | null; completed: CompletedExport[]; problems: string[]; done: number;
+}
+
+async function runOneExportTarget(st: LoopState, target: FinalArtboard, idx: number): Promise<void> {
+  const { env } = st;
+  if (env.run.isCancelled()) return;
+  const a = env.get().model.artboards.find((x) => x.id === target.id) ?? target;
+  env.run.startItem(a.name);
+  let itemProblems: string[] = [];
+  try {
+    const res = await exportOneInBatch(env, a, st.lanes === 1 ? st.targets[idx + 1] : undefined);
+    if (Array.isArray(res)) itemProblems = res;
+    else { st.completed.push(res); recordCompletedItem(res, idx, st.lastByIcon, st.usageSession); itemProblems = res.problems; }
+  } catch (error) {
+    if (!env.run.isCancelled()) itemProblems = [`${a.name}: ${error instanceof Error ? error.message : "could not be written"}`];
+  }
+  if (env.run.isCancelled()) return;
+  st.done += 1;
+  st.problems.push(...itemProblems);
+  env.run.advance(itemProblems);
 }
 
 async function runExportLoop(get: () => BuilderActionContext, targets: readonly FinalArtboard[], run: BuilderExportRun): Promise<{ done: number; problems: string[] }> {
-  const texts = await svgTextsFor(get(), targets);
-  const problems: string[] = [];
-  let done = 0;
-  for (const a of targets) {
-    if (run.isCancelled()) break;
-    run.startItem(a.name);
-    get().setBusy(`Exporting artboards (${done}/${targets.length} · ${targets.length - done} left) — ${a.name}…`);
-    let itemProblems: string[] = [];
-    try {
-      itemProblems = await exportOne(get, get().model.artboards.find((x) => x.id === a.id) ?? a, texts, run.signal);
-    } catch (error) {
-      if (!run.isCancelled()) itemProblems = [`${a.name}: ${error instanceof Error ? error.message : "could not be written"}`];
-    }
-    if (run.isCancelled()) break;
-    done += 1;
-    problems.push(...itemProblems);
-    run.advance(itemProblems);
+  const rawRoot = sheetsRoot(get(), true);
+  if (rawRoot === null) return { done: 0, problems: ["Export folder is unavailable"] };
+  const settings = sheetSettings();
+  const lastByIcon = buildLastIconTargets(targets);
+  const usageSession = startUsageSession(get(), lastByIcon);
+  const [texts] = await Promise.all([svgTextsFor(get(), targets), ensureTemplateFolders(get, targets)]);
+  const env: BatchEnv = { get, root: withDirCache(rawRoot), settings, texts, run, precomposed: new Map() };
+  const lanes = sheetExportLanes(settings);
+  const limit = createLimiter(lanes);
+  const st: LoopState = { env, lanes, targets, lastByIcon, usageSession, completed: [], problems: [], done: 0 };
+  try {
+    await Promise.all(targets.map((target, idx) => limit(() => runOneExportTarget(st, target, idx))));
+  } finally {
+    await commitBatchState(get, st.completed, usageSession);
   }
-  return { done, problems };
+  return { done: st.done, problems: st.problems };
 }
 
 async function exportSelected(get: () => BuilderActionContext): Promise<void> {

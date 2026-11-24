@@ -199,7 +199,10 @@ async function fileAt(root: DirHandleLike, relPath: string): Promise<FileHandleL
  * wrapper is made per batch and dropped with it, so a handle never outlives the
  * run it was cached for. Files are never cached: every read still opens the file.
  */
+const CACHED_DIRS = new WeakSet<DirHandleLike>();
+
 export function withDirCache(dir: DirHandleLike): DirHandleLike {
+  if (CACHED_DIRS.has(dir)) return dir;
   const children = new Map<string, Promise<DirHandleLike>>();
   const open = (name: string, create: boolean): Promise<DirHandleLike> => {
     const known = children.get(name);
@@ -209,7 +212,7 @@ export function withDirCache(dir: DirHandleLike): DirHandleLike {
     pending.catch(() => { if (children.get(name) === pending) children.delete(name); });
     return pending;
   };
-  return {
+  const wrapped: DirHandleLike = {
     kind: "directory",
     name: dir.name,
     getDirectoryHandle: (name, opts) => open(name, opts?.create === true),
@@ -221,6 +224,8 @@ export function withDirCache(dir: DirHandleLike): DirHandleLike {
     },
     isSameEntry: dir.isSameEntry === undefined ? undefined : (other) => dir.isSameEntry!(other),
   };
+  CACHED_DIRS.add(wrapped);
+  return wrapped;
 }
 
 /** Names of every child (dirs and files) of a directory. */

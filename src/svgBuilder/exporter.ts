@@ -5,6 +5,7 @@ import { cleanSheetSvg } from "../lib/svgBuilder/cleansheet";
 import { presetFileName, sheetSlug, stringifySheetPreset } from "../lib/svgBuilder/preset";
 import type { BuilderIconAsset, SheetDocument, SheetPreset } from "../lib/svgBuilder/types";
 import { embedMetadataInSvg } from "../lib/upload/embed";
+import { encodeInWorker, jpegWorkersAvailable, transparentBitmapOf } from "../lib/upload/jpegworker";
 import { withIntrinsicSize } from "../lib/upload/raster";
 import { solidPaint } from "../lib/upload/solidpaint";
 
@@ -62,11 +63,33 @@ export async function downloadSheetPng(doc: SheetDocument, title: string, scale 
   downloadBlob(await sheetPngBlob(cleanSvg, width, height), sheetFileName(title, `@${scale}x.png`));
 }
 
-/** The sheet SVG drawn at width × height as one PNG — the PNG export's renderer, shared with the metadata image. */
-export async function sheetPngBlob(svg: string, width: number, height: number): Promise<Blob> {
+async function decodeSvgImage(sizedSvg: string): Promise<HTMLImageElement> {
   const image = new Image();
-  image.src = svgDataUrl(withIntrinsicSize(svg, width, height));
+  if (typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+    const url = URL.createObjectURL(new Blob([sizedSvg], { type: "image/svg+xml;charset=utf-8" }));
+    try {
+      image.src = url;
+      await image.decode();
+      return image;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+  image.src = svgDataUrl(sizedSvg);
   await image.decode();
+  return image;
+}
+
+/** The sheet SVG drawn at width × height as one PNG — worker pool when available, main-thread canvas fallback. */
+export async function sheetPngBlob(svg: string, width: number, height: number): Promise<Blob> {
+  const image = await decodeSvgImage(withIntrinsicSize(svg, width, height));
+  if (jpegWorkersAvailable()) {
+    try {
+      const bitmap = transparentBitmapOf(image, width, height);
+      const bytes = await encodeInWorker({ bitmap, width, height, quality: 1, background: "", format: "image/png" });
+      return new Blob([bytes as BlobPart], { type: "image/png" });
+    } catch { /* fall back to main-thread canvas */ }
+  }
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;

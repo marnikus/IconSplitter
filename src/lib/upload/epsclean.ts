@@ -26,11 +26,11 @@ const ADO_LINES = /^%ADO_[A-Za-z]+:[^\r\n]*(?:\r\n|\r|\n|$)/gm;
 /** Somebody else's Photoshop resource block — a second metadata carrier. */
 const FOREIGN_PHOTOSHOP = /^%%BeginPhotoshop:[^\r\n]*(?:\r\n|\r|\n)(?:% [0-9a-fA-F]+(?:\r\n|\r|\n))*%%EndPhotoshop(?:\r\n|\r|\n|$)/gm;
 const PACKET = /<\?xpacket begin[\s\S]*?<\?xpacket end[^>]*\?>(?:\r\n|\r|\n)?/g;
-const XMPMETA = /[\s\S]*?<x:xmpmeta[\s\S]*?<\/x:xmpmeta>(?:\r\n|\r|\n)?/g;
+const XMPMETA = /<x:xmpmeta[\s\S]*?<\/x:xmpmeta>(?:\r\n|\r|\n)?/g;
 
 /** True when the text is a PostScript program this pass may touch at all. */
 function isEps(text: string): boolean {
-  return /^%!PS-Adobe/m.test(text);
+  return text.startsWith("%!PS-Adobe") || /^%!PS-Adobe/m.test(text);
 }
 
 /**
@@ -47,17 +47,22 @@ export function cleanEpsDocument(eps: string, metadata: IconMetadata | null): st
 
 /** Producer/date removal (always applied so converter attribution never leaks, RULE 26). */
 export function stripEpsProducerLines(eps: string): string {
+  if (!eps.includes("%%Cr") && !eps.includes("%%Fo") && !eps.includes("%%Co")) return eps;
   return eps.replace(PRODUCER_LINES, "");
 }
 
 /** Producer/date/ADO/foreign-carrier removal. Idempotent. */
 export function stripEpsFingerprints(eps: string): string {
-  return eps.replace(FOREIGN_PHOTOSHOP, "").replace(PRODUCER_LINES, "").replace(ADO_LINES, "");
+  let out = eps.includes("%%BeginPhotoshop:") ? eps.replace(FOREIGN_PHOTOSHOP, "") : eps;
+  out = stripEpsProducerLines(out);
+  return out.includes("%ADO_") ? out.replace(ADO_LINES, "") : out;
 }
 
 /** No metadata, so no packet: the XML is dropped whole, never half-cut. */
 function dropAllCarriers(eps: string): string {
-  return eps.replace(PACKET, "").replace(XMPMETA, "");
+  let out = eps.includes("<?xpacket begin") ? eps.replace(PACKET, "") : eps;
+  if (out.includes("<x:xmpmeta")) out = out.replace(XMPMETA, "");
+  return out;
 }
 
 /** Whether a shipped EPS is already in the one-carrier clean form. */

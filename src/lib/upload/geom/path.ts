@@ -36,7 +36,7 @@ export interface PathCmd { cmd: string; nums: number[] }
 const ARITY: Record<string, number> = { M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, T: 2, A: 7, Z: 0 };
 
 /** How many distinct path strings the tokenizer remembers (2026-11-08, export speed). */
-const TOKEN_CACHE_MAX = 512;
+const TOKEN_CACHE_MAX = 4096;
 const tokenCache = new Map<string, PathCmd[]>();
 
 /** Splits path data into (command, numbers) items; case is preserved (relative
@@ -48,36 +48,66 @@ export function tokenizePath(d: string): PathCmd[] {
   const hit = tokenCache.get(d);
   if (hit !== undefined) return hit;
   const steps = tokenizeUncached(d);
-  if (tokenCache.size >= TOKEN_CACHE_MAX) tokenCache.clear();
+  if (tokenCache.size >= TOKEN_CACHE_MAX) {
+    const oldest = tokenCache.keys().next().value;
+    if (oldest !== undefined) tokenCache.delete(oldest);
+  }
   tokenCache.set(d, steps);
   return steps;
 }
 
+function isSep(ch: number): boolean {
+  return ch === 32 || ch === 44 || ch === 10 || ch === 13 || ch === 9;
+}
+
+function skipDigits(d: string, from: number, len: number): number {
+  let i = from;
+  while (i < len && d.charCodeAt(i) >= 48 && d.charCodeAt(i) <= 57) i += 1;
+  return i;
+}
+
+function skipOptionalSign(d: string, from: number, len: number): number {
+  if (from < len && (d.charCodeAt(from) === 43 || d.charCodeAt(from) === 45)) return from + 1;
+  return from;
+}
+
+function scanNumberEnd(d: string, start: number, len: number): number {
+  let i = skipDigits(d, skipOptionalSign(d, start, len), len);
+  if (i < len && d.charCodeAt(i) === 46) i = skipDigits(d, i + 1, len);
+  if (i < len && (d.charCodeAt(i) | 32) === 101) i = skipDigits(d, skipOptionalSign(d, i + 1, len), len);
+  return i;
+}
+
 function tokenizeUncached(d: string): PathCmd[] {
-  const tokens = d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?)(?:e[-+]?\d+)?/gi) ?? [];
-  const out: Tokenizer = { steps: [], cmd: "", nums: [] };
-  for (const t of tokens) {
-    // A letter token is one letter; a number token never starts with one.
-    const lower = t.charCodeAt(0) | 32;
-    if (lower >= 97 && lower <= 122) takeLetter(t, out);
-    else takeNumber(t, out);
+  const out: Tokenizer = { steps: [], cmd: "", arity: 0, nums: [] };
+  const len = d.length;
+  let i = 0;
+  while (i < len) {
+    const ch = d.charCodeAt(i);
+    if (isSep(ch)) { i += 1; continue; }
+    const lower = ch | 32;
+    if (lower >= 97 && lower <= 122) { takeLetter(d[i], out); i += 1; continue; }
+    const end = scanNumberEnd(d, i, len);
+    if (end > i) { takeNumber(Number(d.slice(i, end)), out); i = end; } else i += 1;
   }
   flush(out);
   return out.steps;
 }
 
-interface Tokenizer { steps: PathCmd[]; cmd: string; nums: number[] }
+interface Tokenizer { steps: PathCmd[]; cmd: string; arity: number; nums: number[] }
 
 function takeLetter(t: string, out: Tokenizer): void {
   if (out.cmd !== "" && out.nums.length > 0) out.steps.push({ cmd: out.cmd, nums: out.nums });
   out.cmd = t;
+  const upper = t.toUpperCase();
+  out.arity = ARITY[upper] ?? 0;
   out.nums = [];
-  if (out.cmd.toUpperCase() === "Z") out.steps.push({ cmd: out.cmd, nums: [] });
+  if (upper === "Z") out.steps.push({ cmd: out.cmd, nums: [] });
 }
 
-function takeNumber(t: string, out: Tokenizer): void {
-  out.nums.push(Number(t));
-  if (out.nums.length === (ARITY[out.cmd.toUpperCase()] ?? 0) && out.cmd !== "") {
+function takeNumber(numVal: number, out: Tokenizer): void {
+  out.nums.push(numVal);
+  if (out.nums.length === out.arity && out.cmd !== "") {
     out.steps.push({ cmd: out.cmd, nums: out.nums });
     if (out.cmd === "M" || out.cmd === "m") out.cmd = out.cmd === "M" ? "L" : "l"; // SVG 1.1 §8.3.2
     out.nums = [];

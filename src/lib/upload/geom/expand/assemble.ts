@@ -36,8 +36,9 @@ export function subpathsOf(o: Outline): Subpath[] {
 /** The stroke of `o` under `pen` (and dash spec) as a fill outline. */
 export function expandOutline(o: Outline, pen: Pen, dash: DashSpec | null = null): Outline {
   const ops: OutlineOp[] = [];
+  const hasDash = dash !== null && dash.pattern !== null && dash.pattern.length > 0;
   for (const sub of subpathsOf(o)) {
-    const pieces = dash?.pattern ? dashPieces(sub, dash.pattern, dash.offset) : [sub];
+    const pieces = hasDash ? dashPieces(sub, dash!.pattern!, dash!.offset) : [sub];
     for (const piece of pieces) ops.push(...expandSubpath(piece, pen));
   }
   return { ops };

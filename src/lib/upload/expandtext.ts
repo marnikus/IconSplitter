@@ -101,14 +101,24 @@ function replaceRuns(root: Element, jobs: Job[]): void {
   }
 }
 
+export type ExpandTextDomResult = { ok: true; runs: number } | { ok: false; reason: string };
+
+/** Expands `<text>` elements to filled `<path>` outlines in place on `root`. */
+export function expandTextDom(root: Element): ExpandTextDomResult {
+  const texts = Array.from(root.getElementsByTagName("text"));
+  if (texts.length === 0) return { ok: true, runs: 0 };
+  const outliner = textOutliner();
+  if (outliner === null) return { ok: false, reason: "no text outliner is available on this machine — the fonts of this document cannot be outlined here" };
+  const collected = collectJobs(texts, outliner);
+  if ("reason" in collected) return { ok: false, reason: collected.reason };
+  replaceRuns(root, collected.jobs);
+  return { ok: true, runs: collected.jobs.length };
+}
+
 export function expandTextToFills(svg: string): ExpandTextResult {
   const root = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
-  const texts = Array.from(root.getElementsByTagName("text"));
-  if (texts.length === 0) return { ok: true, svg, runs: 0 };
-  const outliner = textOutliner();
-  if (outliner === null) return { ok: false, svg, reason: "no text outliner is available on this machine — the fonts of this document cannot be outlined here" };
-  const collected = collectJobs(texts, outliner);
-  if ("reason" in collected) return { ok: false, svg, reason: collected.reason };
-  replaceRuns(root, collected.jobs);
-  return { ok: true, svg: new XMLSerializer().serializeToString(root), runs: collected.jobs.length };
+  const res = expandTextDom(root);
+  if (!res.ok) return { ok: false, svg, reason: res.reason };
+  if (res.runs === 0) return { ok: true, svg, runs: 0 };
+  return { ok: true, svg: new XMLSerializer().serializeToString(root), runs: res.runs };
 }

@@ -57,14 +57,40 @@ export async function writeTemplateBlueprint(root: DirHandleLike, folder: string
   await writeJson(await ensureDirPath(root, folder), folder, "template.json", json);
 }
 
-/** The export package into `<variant>/export/`. Removes superseded artifact files after writing. */
+export interface PreparedExportDir {
+  dir: DirHandleLike;
+  existing: string[];
+}
+
+/** Resolves `<variant>/export/` and snapshots existing filenames ahead of time. */
+export async function prepareSheetExportDir(root: DirHandleLike, folder: string): Promise<PreparedExportDir> {
+  const dir = await ensureDirPath(root, `${folder}/export`);
+  return { dir, existing: await listChildNames(dir) };
+}
+
+/** Writes sibling artifacts concurrently into a prepared export dir and commits export.json last (RULE 23). */
+export async function writeSheetExportPrepared(prepared: PreparedExportDir, files: readonly SheetFile[]): Promise<void> {
+  const { dir, existing } = prepared;
+  const kept = new Set(files.map((f) => f.name));
+  const artifacts = files.filter((f) => f.name !== "export.json");
+  const commit = files.find((f) => f.name === "export.json");
+  await Promise.all(artifacts.map((f) => writeFileOverwrite(dir, f.name, blob(f.bytes, "application/octet-stream"))));
+  if (commit !== undefined) await writeFileOverwrite(dir, commit.name, blob(commit.bytes, "application/json"));
+  const stale = existing.filter((n) => !kept.has(n) && /\.(?:svg|png|jpe?g|eps|zip)$/i.test(n));
+  await Promise.all(stale.map((n) => dir.removeEntry?.(n).catch(() => undefined)));
+}
+
+/** The export package into `<variant>/export/`. Writes sibling artifacts concurrently and commits export.json last (RULE 23). */
 export async function writeSheetExport(root: DirHandleLike, folder: string, files: readonly SheetFile[]): Promise<void> {
   const dir = await ensureDirPath(root, `${folder}/export`);
   const kept = new Set(files.map((f) => f.name));
-  for (const f of files) await writeFileOverwrite(dir, f.name, blob(f.bytes, f.name.endsWith(".json") ? "application/json" : "application/octet-stream"));
-  for (const existing of await listChildNames(dir)) {
-    if (!kept.has(existing) && /\.(?:svg|png|jpe?g|eps|zip)$/i.test(existing)) {
-      try { await dir.removeEntry?.(existing); } catch { /* ignore */ }
-    }
-  }
+  const artifacts = files.filter((f) => f.name !== "export.json");
+  const commit = files.find((f) => f.name === "export.json");
+  const [, existing] = await Promise.all([
+    Promise.all(artifacts.map((f) => writeFileOverwrite(dir, f.name, blob(f.bytes, "application/octet-stream")))),
+    listChildNames(dir),
+  ]);
+  if (commit !== undefined) await writeFileOverwrite(dir, commit.name, blob(commit.bytes, "application/json"));
+  const stale = existing.filter((n) => !kept.has(n) && /\.(?:svg|png|jpe?g|eps|zip)$/i.test(n));
+  await Promise.all(stale.map((n) => dir.removeEntry?.(n).catch(() => undefined)));
 }

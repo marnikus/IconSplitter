@@ -18,23 +18,29 @@ export interface JpegJob {
   height: number;
   /** JPEG quality 0.5..1. */
   quality: number;
-  /** Normalized #rrggbb the canvas is pre-filled with. */
+  /** Normalized #rrggbb the canvas is pre-filled with (empty string keeps transparency for PNG). */
   background: string;
+  /** Output MIME format; defaults to "image/jpeg". */
+  format?: "image/jpeg" | "image/png";
 }
 
 /** The worker body: fill, draw the transferred bitmap, encode, transfer the bytes back. */
 export const WORKER_SOURCE = `
 self.onmessage = async (event) => {
-  const { id, bitmap, width, height, quality, background } = event.data;
+  const { id, bitmap, width, height, quality, background, format } = event.data;
   try {
     const canvas = new OffscreenCanvas(width, height);
     const ctx = canvas.getContext("2d");
     if (ctx === null) throw new Error("no 2d canvas context");
-    ctx.fillStyle = background;
-    ctx.fillRect(0, 0, width, height);
+    if (format !== "image/png" || background) {
+      ctx.fillStyle = background;
+      ctx.fillRect(0, 0, width, height);
+    }
     ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
-    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+    const blob = format === "image/png"
+      ? await canvas.convertToBlob({ type: "image/png" })
+      : await canvas.convertToBlob({ type: "image/jpeg", quality });
     canvas.width = 0; canvas.height = 0;
     const buffer = await blob.arrayBuffer();
     self.postMessage({ id, buffer }, [buffer]);
@@ -85,10 +91,19 @@ export function bitmapOf(img: HTMLImageElement, width: number, height: number, b
   return canvas.transferToImageBitmap();
 }
 
+export function transparentBitmapOf(img: HTMLImageElement, width: number, height: number): ImageBitmap {
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  if (ctx === null) throw new Error("no 2d canvas context");
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.transferToImageBitmap();
+}
+
 /** Encodes one job on a pool worker; the job's bitmap is transferred (and closed by the worker). */
 export function encodeInWorker(job: JpegJob): Promise<Uint8Array> {
   return new Promise<Uint8Array>((resolve, reject) => {
-    queue.push({ job: { ...job, background: normalizeHex(job.background) ?? "#ffffff" }, resolve, reject });
+    const bg = job.format === "image/png" && job.background === "" ? "" : normalizeHex(job.background) ?? "#ffffff";
+    queue.push({ job: { ...job, background: bg }, resolve, reject });
     if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null; }
     pump();
   });
@@ -101,9 +116,10 @@ function pump(): void {
     const waiting = queue.shift() as Waiting;
     const id = nextId++;
     slot.current = { id, resolve: waiting.resolve, reject: waiting.reject };
-    const { bitmap, width, height, quality, background } = waiting.job;
+    const { bitmap, width, height, quality, background, format } = waiting.job;
     try {
-      slot.worker.postMessage({ id, bitmap, width, height, quality, background }, [bitmap]);
+      const payload = format === undefined ? { id, bitmap, width, height, quality, background } : { id, bitmap, width, height, quality, background, format };
+      slot.worker.postMessage(payload, [bitmap]);
     } catch (error) {
       slot.current = null;
       waiting.reject(error instanceof Error ? error : new Error(String(error)));

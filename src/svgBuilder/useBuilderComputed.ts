@@ -47,7 +47,8 @@ export interface BuilderComputed extends IconIndexView {
 export function useBuilderComputed(
   model: BuilderModel, placedIds: readonly string[], patch: (value: Partial<BuilderModel>) => void,
 ): BuilderComputed {
-  const assets = useMemo(() => model.discovery?.assets ?? [], [model.discovery]);
+  const rawAssets = model.discovery?.assets;
+  const assets = useMemo(() => rawAssets ?? [], [rawAssets]);
   const styles = useStyleFilter(assets, model.prefs.styles);
   const categories = useMemo(() => categoriesOf(assets), [assets]);
   const profiles = useMemo(() => profilesOf(assets), [assets]);

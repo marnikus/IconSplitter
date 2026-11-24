@@ -2,7 +2,7 @@
 // `writeEps` behind the common contract. Always available; the writer id tracks
 // output changes so the planner can refresh stale EPS files selectively.
 
-import { verifyEps, writeEps } from "../eps";
+import { verifyEps, writeEps, writeEpsFromRoot } from "../eps";
 import type { ConvertResult, EpsConverter, EpsConvertInput } from "./types";
 
 export const BUILTIN_WRITER = "builtin-vector-4";
@@ -12,9 +12,10 @@ export const builtinConverter: EpsConverter = {
   label: "Built-in (vector gradients, Level 3)",
   probe: async () => ({ ok: true, version: BUILTIN_WRITER }),
   convert: async (input: EpsConvertInput): Promise<ConvertResult> => {
-    const out = writeEps(input.svg, input.background, {
-      title: input.title, ...(input.createdAt === undefined ? {} : { createdAt: input.createdAt }),
-    });
+    const opts = { title: input.title, ...(input.createdAt === undefined ? {} : { createdAt: input.createdAt }) };
+    const out = input.svgRoot !== undefined
+      ? writeEpsFromRoot(input.svgRoot, input.svg, input.background, opts)
+      : writeEps(input.svg, input.background, opts);
     if (!out.ok) return { ok: false, reason: out.reason };
     // The program is checked before it is answered (I-61): a document the
     // interpreter would stop in is an honest stage failure, never a file.

@@ -12,7 +12,14 @@ const ID_REF = /url\(\s*#([^)\s"']+)\s*\)/g;
 
 /** The root and every descendant, in document order. */
 export function allElements(root: Element): Element[] {
-  return [root, ...Array.from(root.querySelectorAll("*"))];
+  const out: Element[] = [];
+  const stack: Element[] = [root];
+  while (stack.length > 0) {
+    const el = stack.pop()!;
+    out.push(el);
+    for (let c = el.lastElementChild; c !== null; c = c.previousElementSibling) stack.push(c);
+  }
+  return out;
 }
 
 export function attributeNames(el: Element): string[] {

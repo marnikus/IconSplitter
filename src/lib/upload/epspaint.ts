@@ -163,3 +163,21 @@ function fillRule(raw: string | null, inherited: boolean): boolean {
   if (!["evenodd", "nonzero"].includes(raw)) throw new Unsupported("unsupported EPS fill-rule");
   return raw === "evenodd";
 }
+
+/** Fast paint cascade for plain `<path>` elements carrying only `d`, `fill`, and/or `fill-rule`. */
+export function resolvePathPaintFast(el: Element, parent: Paint): Paint | null {
+  const attrs = el.attributes;
+  let fillRaw: string | null = null;
+  let ruleRaw: string | null = null;
+  for (let i = 0; i < attrs.length; i++) {
+    const name = attrs[i].name;
+    if (name === "d") continue;
+    if (name === "fill") { fillRaw = attrs[i].value; continue; }
+    if (name === "fill-rule") { ruleRaw = attrs[i].value; continue; }
+    return null;
+  }
+  const fill = fillRaw === null || fillRaw === "" ? parent.fill : fillPaint(fillRaw);
+  const evenOdd = fillRule(ruleRaw, parent.evenOdd);
+  if (fill === parent.fill && evenOdd === parent.evenOdd && parent.dash === null) return parent;
+  return { ...parent, fill, evenOdd, dash: null };
+}

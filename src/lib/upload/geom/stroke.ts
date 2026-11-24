@@ -40,10 +40,13 @@ export function inheritStroke(el: Element, parent: Stroke): Stroke {
   };
 }
 
+const EMPTY_STYLE: Record<string, string> = Object.freeze({}) as Record<string, string>;
+
 /** The inline `style` attribute as a lowercase-keyed declaration map. */
 export function styleMap(style: string | null): Record<string, string> {
+  if (style === null || style === "") return EMPTY_STYLE;
   const out: Record<string, string> = {};
-  for (const decl of (style ?? "").split(";")) {
+  for (const decl of style.split(";")) {
     const at = decl.indexOf(":");
     if (at > 0) out[decl.slice(0, at).trim().toLowerCase()] = decl.slice(at + 1).trim();
   }

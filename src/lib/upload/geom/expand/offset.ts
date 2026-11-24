@@ -21,33 +21,52 @@ export function offsetSeg(s: Seg, d: number): Seg[] {
     const n = mul(leftNormal(unit(sub(s.b, s.a))), d);
     return [{ kind: "L", a: add(s.a, n), b: add(s.b, n) }];
   }
-  return offsetCubic(s, d, 0);
+  const out: Seg[] = [];
+  offsetCubicInto(s, d, 0, out);
+  return out;
 }
 
-function offsetCubic(s: Extract<Seg, { kind: "C" }>, d: number, depth: number): Seg[] {
+function offsetCubicInto(s: Extract<Seg, { kind: "C" }>, d: number, depth: number, out: Seg[]): void {
   const guess = tillerHanson(s, d);
-  if (depth >= MAX_DEPTH || offsetFits(s, guess, d)) return [guess];
+  if (depth >= MAX_DEPTH || offsetFits(s, guess, d)) {
+    out.push(guess);
+    return;
+  }
   const [a, b] = splitSeg(s, 0.5) as [Extract<Seg, { kind: "C" }>, Extract<Seg, { kind: "C" }>];
-  return [...offsetCubic(a, d, depth + 1), ...offsetCubic(b, d, depth + 1)];
+  offsetCubicInto(a, d, depth + 1, out);
+  offsetCubicInto(b, d, depth + 1, out);
+}
+
+function shiftLeg(a: Pt, b: Pt, d: number): [Pt, Pt] {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy);
+  const ux = len < 1e-9 ? 0 : dx / len;
+  const uy = len < 1e-9 ? 0 : dy / len;
+  const nx = uy * d, ny = (-ux) * d;
+  return [[a[0] + nx, a[1] + ny], [b[0] + nx, b[1] + ny]];
 }
 
 /** The control polygon's three legs each moved by d; the new controls are where neighbouring legs meet. */
 function tillerHanson(s: Extract<Seg, { kind: "C" }>, d: number): Extract<Seg, { kind: "C" }> {
+  if (!same(s.p0, s.p1) && !same(s.p1, s.p2) && !same(s.p2, s.p3)) {
+    const m0 = shiftLeg(s.p0, s.p1, d);
+    const m1 = shiftLeg(s.p1, s.p2, d);
+    const m2 = shiftLeg(s.p2, s.p3, d);
+    return {
+      kind: "C",
+      p0: m0[0],
+      p1: intersect(m0, m1) ?? m0[1],
+      p2: intersect(m1, m2) ?? m2[0],
+      p3: m2[1],
+    };
+  }
   const legs = distinctLegs(s);
-  const moved = legs.map((leg) => {
-    const n = mul(leftNormal(unit(sub(leg[1], leg[0]))), d);
-    return [add(leg[0], n), add(leg[1], n)] as [Pt, Pt];
-  });
+  const moved = legs.map((leg) => shiftLeg(leg[0], leg[1], d));
   const p0 = moved[0][0];
   const p3 = moved[moved.length - 1][1];
   if (moved.length === 1) return { kind: "C", p0, p1: add(p0, mul(sub(p3, p0), 1 / 3)), p2: add(p0, mul(sub(p3, p0), 2 / 3)), p3 };
-  if (moved.length === 2) {
-    const c = intersect(moved[0], moved[1]) ?? moved[0][1];
-    return { kind: "C", p0, p1: c, p2: c, p3 };
-  }
-  const p1 = intersect(moved[0], moved[1]) ?? moved[0][1];
-  const p2 = intersect(moved[1], moved[2]) ?? moved[2][0];
-  return { kind: "C", p0, p1, p2, p3 };
+  const c = intersect(moved[0], moved[1]) ?? moved[0][1];
+  return { kind: "C", p0, p1: c, p2: c, p3 };
 }
 
 /** The polygon legs with zero-length legs dropped (a control on its anchor). */

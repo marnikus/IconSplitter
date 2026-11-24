@@ -13,6 +13,7 @@ export interface DirectBakeOptions {
   dx?: number;
   dy?: number;
   scaleStrokes?: boolean;
+  skipElements?: ReadonlySet<Element>;
 }
 
 interface WalkState {
@@ -21,6 +22,7 @@ interface WalkState {
   dy: number;
   scaleStrokes: boolean;
   rootSw: number | null;
+  skipElements?: ReadonlySet<Element>;
 }
 
 type LocalTransform =
@@ -97,7 +99,9 @@ function bakeRadius(el: Element, name: string, s: number): void {
 
 function bakePath(el: Element, st: WalkState): void {
   const d = el.getAttribute("d");
-  if (d !== null) el.setAttribute("d", directPathData(d, { scale: st.s, dx: st.dx, dy: st.dy }));
+  if (d === null) return;
+  const next = directPathData(d, { scale: st.s, dx: st.dx, dy: st.dy });
+  if (next !== d) el.setAttribute("d", next);
 }
 
 function bakeRect(el: Element, st: WalkState): void {
@@ -152,17 +156,31 @@ function bakeDasharray(el: Element, ss: number): void {
   el.setAttribute("stroke-dasharray", parts.join(" "));
 }
 
+function hasStrokeAttr(el: Element): boolean {
+  return el.hasAttribute("stroke-width") || el.hasAttribute("stroke-dasharray")
+    || el.hasAttribute("stroke-dashoffset") || el.hasAttribute("stroke-miterlimit") || el.hasAttribute("style");
+}
+
+function applyInheritedStrokeWidth(el: Element, scaleStrokes: boolean, localS: number, width: number | null): void {
+  if (scaleStrokes && Math.abs(localS - 1) > 1e-6 && width !== null) {
+    el.setAttribute("stroke-width", fmt1(width, 0.1));
+  }
+}
+
 function bakeStrokes(el: Element, st: WalkState, localS: number): number | null {
+  const inheritedSw = st.rootSw === null ? null : st.rootSw * (st.scaleStrokes ? localS : 1);
+  if (!hasStrokeAttr(el)) {
+    applyInheritedStrokeWidth(el, st.scaleStrokes, localS, inheritedSw);
+    return inheritedSw;
+  }
   const ss = st.scaleStrokes ? st.s : 1;
   const ownSw = parseNumAttr(el.getAttribute("stroke-width"));
-  const factor = st.scaleStrokes ? localS : 1;
-  let nextRootSw = st.rootSw === null ? null : st.rootSw * factor;
+  let nextRootSw = inheritedSw;
   if (ownSw !== null) {
-    const baked = ownSw * ss;
-    el.setAttribute("stroke-width", ownSw > 0 ? fmt1(baked, 0.1) : "0");
-    nextRootSw = baked;
-  } else if (st.scaleStrokes && Math.abs(localS - 1) > 1e-6 && nextRootSw !== null) {
-    el.setAttribute("stroke-width", fmt1(nextRootSw, 0.1));
+    nextRootSw = ownSw * ss;
+    el.setAttribute("stroke-width", ownSw > 0 ? fmt1(nextRootSw, 0.1) : "0");
+  } else {
+    applyInheritedStrokeWidth(el, st.scaleStrokes, localS, nextRootSw);
   }
   bakeDasharray(el, ss);
   scaleAttr(el, "stroke-dashoffset", ss);
@@ -191,7 +209,9 @@ function bakeDefs(defs: Element, st: WalkState): void {
 }
 
 function advanceState(el: Element, parent: WalkState): [WalkState, number] {
-  let local = classifyTransform(el.getAttribute("transform"));
+  const raw = el.getAttribute("transform");
+  if (raw === null) return [parent, 1];
+  let local = classifyTransform(raw);
   if (local.kind === "general" && el.localName !== "text" && el.querySelector("text") === null) {
     bakeGeometry(el, identity());
     local = { kind: "uniform", s: 1, dx: 0, dy: 0 };
@@ -204,18 +224,22 @@ function advanceState(el: Element, parent: WalkState): [WalkState, number] {
     dy: parent.dy + parent.s * local.dy,
     scaleStrokes: parent.scaleStrokes,
     rootSw: parent.rootSw,
+    skipElements: parent.skipElements,
   };
   return [st, local.s];
 }
 
 function walkElement(el: Element, parent: WalkState): void {
+  if (parent.skipElements?.has(el)) return;
   const tag = el.localName;
   if (SKIP_TAGS.has(tag)) return;
-  const [st, ls] = advanceState(el, parent);
-  st.rootSw = bakeStrokes(el, st, ls);
+  const [advanced, ls] = advanceState(el, parent);
+  const nextSw = bakeStrokes(el, advanced, ls);
+  const st = nextSw === advanced.rootSw ? advanced : { ...advanced, rootSw: nextSw };
   if (tag === "defs") { bakeDefs(el, st); return; }
   if (tag === "text" || tag === "tspan") bakeText(el, st, tag === "text");
   else SHAPE_BAKERS[tag]?.(el, st);
+  if (el.firstElementChild === null) return;
   for (const child of Array.from(el.children)) walkElement(child, st);
 }
 
@@ -240,6 +264,7 @@ export function bakeDirectSvg(root: Element, opts?: DirectBakeOptions): void {
     dy: opts?.dy ?? 0,
     scaleStrokes: opts?.scaleStrokes ?? true,
     rootSw: null,
+    skipElements: opts?.skipElements,
   };
   walkElement(root, initial);
   roundRootFrame1(root);

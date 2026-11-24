@@ -131,9 +131,10 @@ const TemplatePreview = memo(function TemplatePreview({ b, template }: { b: Buil
   const ids = b.templateSampleIds;
   const texts = useTextSubset(ids, b.svgTexts);
   const ready = pictureReady({ root: b.root, scanned: b.discovery !== null, known: b.knownIds, booting: b.booting }, ids, texts);
+  const look = template.config;
   const src = useMemo(() => (!ready ? null : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(templatePreviewSvg({
-    template, assets: b.assets, placedIds: ids, svgTexts: texts,
-  }))}`), [ready, template, b.assets, ids, texts]);
+    template: { ...template, config: look }, assets: b.assets, placedIds: ids, svgTexts: texts,
+  }))}`), [ready, look, b.assets, ids, texts]); // eslint-disable-line react-hooks/exhaustive-deps
   if (src === null) return <span className="bld-pic-loading" data-testid={`builder-template-preview-${template.id}`} aria-label="Loading the preview" />;
   return <img src={src} alt={`Preview of ${template.name}`} data-testid={`builder-template-preview-${template.id}`} />;
 });

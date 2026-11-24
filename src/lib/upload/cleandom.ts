@@ -10,7 +10,7 @@
 // (RULE 5): raster content, and any stylesheet outside the documented subset.
 
 import {
-  allElements, attributeNames, comments, insideMetadata, isIdReference, isNamespaceDecl,
+  allElements, comments, insideMetadata, isIdReference, isNamespaceDecl,
   isSvgElement, localName, referencedIds, rewriteRefs, usedPrefixes, XMLNS_NS,
 } from "./svgdom";
 
@@ -48,8 +48,10 @@ export function unsupportedContent(root: Element): string | null {
 
 /** Folds every paint-only `<style>` block it can; reports the first it cannot. */
 function foldStylesheets(root: Element): string | null {
+  const blocks = Array.from(root.getElementsByTagName("style"));
+  if (blocks.length === 0) return null;
   let refusal: string | null = null;
-  for (const block of allElements(root).filter((el) => localName(el) === "style")) {
+  for (const block of blocks) {
     const rules = parseCssSubset(block.textContent ?? "");
     if (rules === null) {
       refusal ??= "a <style> block that is not a simple paint-only rule list";
@@ -62,25 +64,31 @@ function foldStylesheets(root: Element): string | null {
 }
 
 /** The rebuilding pass. Idempotent: running it twice changes nothing the second time. */
-export function cleanExportDom(root: Element, opts: CleanOptions = {}): void {
+export function cleanExportDom(root: Element, opts: CleanOptions = {}, hasCommentNodes = true): void {
   root.setAttribute("version", "1.1");
   root.removeAttribute("width"); // the viewBox is the size (stock review item 4)
   root.removeAttribute("height");
-  foldInlineStyles(root);
-  // Fold what we can BEFORE removing anything: a block that is merely deleted
-  // would take its paint with it and silently change the picture. A block the
-  // subset cannot fold stays in the tree, so the check keeps flagging it.
-  foldStylesheets(root);
-  for (const node of comments(root)) node.parentNode?.removeChild(node);
-  for (const el of allElements(root)) removeJunkElement(el, opts);
-  for (const el of allElements(root)) stripAttributes(el);
-  renameReferencedIds(root);
-  hoistNamespaces(root);
+  const initial = allElements(root);
+  if (initial.some((el) => el.hasAttribute("style"))) foldInlineStyles(initial);
+  if (initial.some((el) => localName(el) === "style")) foldStylesheets(root);
+  if (hasCommentNodes) {
+    for (const node of comments(root)) node.parentNode?.removeChild(node);
+  }
+  const elements = allElements(root);
+  const checkMeta = elements.some((el) => localName(el) === "metadata");
+  let removedAny = false;
+  for (const el of elements) {
+    if (removeJunkElement(el, opts, checkMeta)) removedAny = true;
+  }
+  const surviving = removedAny ? allElements(root) : elements;
+  for (const el of surviving) stripAttributes(el, checkMeta);
+  if (surviving.some((el) => el.hasAttribute("id"))) renameReferencedIds(root, surviving);
+  hoistNamespaces(root, surviving);
 }
 
 /** `style="fill:#000"` → `fill="#000"`, for the properties we are allowed to inline. */
-function foldInlineStyles(root: Element): void {
-  for (const el of allElements(root)) {
+function foldInlineStyles(elements: readonly Element[]): void {
+  for (const el of elements) {
     const style = el.getAttribute("style");
     if (style === null) continue;
     const kept = style.split(";").map((decl) => foldDeclaration(el, decl)).filter((decl) => decl !== null);
@@ -172,9 +180,10 @@ function matches(el: Element, selector: CssRule["selector"]): boolean {
   return localName(el) === selector.tag;
 }
 
-function stripAttributes(el: Element): void {
-  if (insideMetadata(el)) return; // RDF/DC attributes are the block's own vocabulary
-  for (const name of attributeNames(el)) {
+function stripAttributes(el: Element, checkMeta: boolean): void {
+  if (checkMeta && insideMetadata(el)) return; // RDF/DC attributes are the block's own vocabulary
+  for (let i = el.attributes.length - 1; i >= 0; i -= 1) {
+    const name = el.attributes[i].name;
     if (name.startsWith("xmlns:") || name.startsWith("xlink:")) continue;
     const drop = name.includes(":") || BLOAT_ATTRS.includes(name)
       || name.startsWith("data-") || name.startsWith("aria-");
@@ -182,17 +191,17 @@ function stripAttributes(el: Element): void {
   }
 }
 
-function removeJunkElement(el: Element, opts: CleanOptions): void {
-  if (insideMetadata(el) && localName(el) !== "metadata") return; // the check exempts the subtree too
+function removeJunkElement(el: Element, opts: CleanOptions, checkMeta: boolean): boolean {
+  if (checkMeta && insideMetadata(el) && localName(el) !== "metadata") return false; // the check exempts the subtree too
   const embed = EMBED_TAGS.includes(localName(el));
   const nested = el.parentElement?.parentElement !== null;
   const junk = !isSvgElement(el) || (embed && (nested || opts.keepRootEmbeds !== true));
   if (junk) el.parentNode?.removeChild(el);
+  return junk;
 }
 
 /** Renames every referenced id to a, b, c… in document order, refs included. */
-function renameReferencedIds(root: Element): void {
-  const elements = allElements(root);
+function renameReferencedIds(root: Element, elements = allElements(root)): void {
   const referenced = referencedIds(elements);
   const map = new Map<string, string>();
   for (const el of elements) {
@@ -208,7 +217,7 @@ function renameReferencedIds(root: Element): void {
     }
   }
   if (map.size === 0) return;
-  for (const el of allElements(root)) rewriteRefs(el, map);
+  for (const el of elements) rewriteRefs(el, map);
 }
 
 /**
@@ -217,15 +226,17 @@ function renameReferencedIds(root: Element): void {
  * for a prefix wins — a document that binds one prefix to two URIs is beyond
  * what a clean export may contain anyway, and the check reports what is left.
  */
-function hoistNamespaces(root: Element): void {
-  const elements = allElements(root);
+function hoistNamespaces(root: Element, elements = allElements(root)): void {
   const declared = new Map<string, string>();
   for (const el of elements) {
-    for (const name of attributeNames(el).filter(isNamespaceDecl)) {
-      if (!declared.has(name)) declared.set(name, el.getAttribute(name) ?? "");
-      el.removeAttribute(name);
+    for (let i = el.attributes.length - 1; i >= 0; i -= 1) {
+      const attr = el.attributes[i];
+      if (!isNamespaceDecl(attr.name)) continue;
+      if (!declared.has(attr.name)) declared.set(attr.name, attr.value);
+      el.removeAttribute(attr.name);
     }
   }
+  if (declared.size === 0) return;
   const used = usedPrefixes(elements);
   for (const [name, uri] of declared) {
     if (used.has(name.slice("xmlns:".length))) root.setAttributeNS(XMLNS_NS, name, uri);

@@ -179,19 +179,35 @@ function ArtboardName({ artboard, onRename }: { artboard: FinalArtboard; onRenam
 }
 
 interface PictureArgs { template: SheetTemplate; artboard: FinalArtboard; assets: readonly BuilderIconAsset[]; texts: Readonly<Record<string, string>> }
-const PICTURES = new WeakMap<FinalArtboard, PictureArgs & { src: string }>();
+const PICTURES = new Map<string, PictureArgs & { src: string }>();
+const PICTURES_MAX = 512;
 
 const sameTexts = (x: Readonly<Record<string, string>>, y: Readonly<Record<string, string>>) => {
   const keys = Object.keys(x);
   return keys.length === Object.keys(y).length && keys.every((k) => x[k] === y[k]);
 };
 
-/** One composed picture per artboard state, shared by the list and the stage strip (2026-11-16): never composed twice. */
+function sameVisualArtboard(a: FinalArtboard, b: FinalArtboard): boolean {
+  return a === b || (
+    a.templateId === b.templateId
+    && a.placedIds === b.placedIds
+    && a.overrides === b.overrides
+    && a.title === b.title
+    && a.subtitle === b.subtitle
+  );
+}
+
+/** One composed picture per artboard visual state, shared by the list and the stage strip: never recomposed on export/count/rename metadata ticks. */
 function artboardPicture(p: PictureArgs): string {
-  const hit = PICTURES.get(p.artboard);
-  if (hit !== undefined && hit.template === p.template && hit.assets === p.assets && sameTexts(hit.texts, p.texts)) return hit.src;
+  const hit = PICTURES.get(p.artboard.id);
+  if (hit !== undefined && hit.template.config === p.template.config && hit.assets === p.assets && sameVisualArtboard(hit.artboard, p.artboard) && sameTexts(hit.texts, p.texts)) {
+    return hit.src;
+  }
   const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(artboardPreviewSvg({ template: p.template, artboard: p.artboard, assets: p.assets, svgTexts: p.texts }))}`;
-  PICTURES.set(p.artboard, { ...p, src });
+  if (PICTURES.size >= PICTURES_MAX && !PICTURES.has(p.artboard.id)) {
+    PICTURES.delete(PICTURES.keys().next().value as string);
+  }
+  PICTURES.set(p.artboard.id, { ...p, src });
   return src;
 }
 

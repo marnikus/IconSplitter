@@ -3,12 +3,12 @@
 // direct `stroke-width` px (no `scale(...)` wrappers, no pen-width compensation
 // — RULE 26). Line-stroke icons draw in the sheet's ink and pen; registered
 // style icons (`~colored_wiggle`, 2026-11-23) keep their own strokes and fills.
-import { buildSvgPreview } from "../svgpreview";
-import { validateSvg } from "../svgvalidate";
+import { extractValidatedIconRoot } from "./svgIconRoot";
+import { allElements } from "../upload/svgdom";
 import { fnv1a32 } from "../pairing";
 import { fmt1 } from "../upload/svgdirectpath";
 import { isStyledIcon } from "./iconstyles";
-import { DRAWABLE, OPACITY, UNSAFE, markPaints, paintsOf } from "./stylepaint";
+import { markPaints, paintsOf } from "./stylepaint";
 import { compilePreparedNodes, renderPreparedNodes, type DirectPlacement, type PreparedNode } from "./svgAssetNodes";
 import type { BuilderIconAsset, CellFrame, SheetConfig } from "./types";
 
@@ -39,8 +39,13 @@ export function clearSanitizedIcons(): void {
   SANITIZED.clear();
 }
 
+function sanitizedKey(code: string, assetId: string, index: number): string {
+  const slot = /\bid\s*=/i.test(code) ? index : -1;
+  return `${assetId}\u0000${slot}\u0000${code.length}\u0000${fnv1a32(code)}`;
+}
+
 function sanitizedOf(code: string, assetId: string, index: number): Sanitized {
-  const key = `${assetId}\u0000${index}\u0000${code.length}\u0000${fnv1a32(code)}`;
+  const key = sanitizedKey(code, assetId, index);
   const hit = SANITIZED.get(key);
   if (hit !== undefined) return hit;
   const made = sanitize(code, assetId, index);
@@ -50,21 +55,15 @@ function sanitizedOf(code: string, assetId: string, index: number): Sanitized {
 }
 
 function sanitize(code: string, assetId: string, index: number): Sanitized {
-  const check = validateSvg(code);
-  if (!check.ok) return { ok: false, error: check.errors[0] ?? "invalid approved SVG" };
-  const preview = buildSvgPreview(code);
-  if (!preview.ok) return { ok: false, error: preview.error ?? "cannot fit approved SVG" };
-  const doc = new DOMParser().parseFromString(preview.html, "image/svg+xml");
-  if (doc.getElementsByTagName("parsererror").length > 0 || name(doc.documentElement) !== "svg") {
-    return { ok: false, error: "sanitized SVG could not be embedded" };
-  }
-  const root = doc.documentElement;
+  const styled = isStyledIcon(assetId);
+  const hasIds = /\bid\s*=/i.test(code);
+  const preview = extractValidatedIconRoot(code, !styled && !hasIds);
+  if (!preview.ok) return { ok: false, error: preview.error };
+  const root = preview.root;
   const box = viewBoxOf(preview.viewBox);
   if (box === null) return { ok: false, error: "approved SVG has no usable viewBox" };
-  scopeLocalIds(root, `b${fnv1a32(`${assetId}:${index}`).toString(16)}`);
-  const styled = isStyledIcon(assetId);
+  if (hasIds) scopeLocalIds(root, `b${fnv1a32(`${assetId}:${index}`).toString(16)}`);
   if (styled) markPaints(root);
-  else recolor(root);
   return { ok: true, nodes: compilePreparedNodes(root, styled), box, rendered: new Map() };
 }
 
@@ -73,7 +72,7 @@ function renderedChildren(s: Extract<Sanitized, { ok: true }>, placed: DirectPla
   const hit = s.rendered.get(key);
   if (hit !== undefined) return hit;
   const built = renderPreparedNodes(s.nodes, placed);
-  if (s.rendered.size >= 8) s.rendered.delete(s.rendered.keys().next().value as string);
+  if (s.rendered.size >= 32) s.rendered.delete(s.rendered.keys().next().value as string);
   s.rendered.set(key, built);
   return built;
 }
@@ -115,19 +114,8 @@ function styledGroupOf(args: CellSvgArgs, children: string, placed: DirectPlacem
   return `<g ${attrs.join(" ")}>${painted}</g>`;
 }
 
-function recolor(root: Element): void {
-  for (const el of [root, ...Array.from(root.getElementsByTagName("*"))]) {
-    if (UNSAFE.has(name(el))) continue;
-    el.removeAttribute("style");
-    for (const a of OPACITY) el.removeAttribute(a);
-    if (!DRAWABLE.has(name(el))) continue;
-    el.setAttribute("fill", "none");
-    el.setAttribute("stroke", "currentColor");
-  }
-}
-
 function scopeLocalIds(root: Element, prefix: string): void {
-  const elements = [root, ...Array.from(root.getElementsByTagName("*"))];
+  const elements = allElements(root);
   const ids = new Map<string, string>();
   for (const el of elements) {
     const id = el.getAttribute("id");
@@ -170,10 +158,6 @@ function viewBoxOf(text: string): [number, number, number, number] | null {
   const parts = text.trim().split(/[\s,]+/).map(Number);
   if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
   return parts[2] > 0 && parts[3] > 0 ? parts as [number, number, number, number] : null;
-}
-
-function name(el: Element): string {
-  return el.localName.toLowerCase();
 }
 
 function attr(value: string): string {

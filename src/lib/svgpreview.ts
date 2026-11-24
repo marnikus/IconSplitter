@@ -53,14 +53,29 @@ export function buildSvgPreview(code: string | null): SvgPreview {
   return cachedPreview(code, () => compileSvgPreview(code));
 }
 
+let sharedPreviewParser: DOMParser | null = null;
+
+export function readSvgViewBox(root: Element): { viewBox: string; ratio: number } | null {
+  const declared = root.getAttribute("viewBox");
+  const size = declared ? boxSize(declared) : sizePair(root);
+  if (size === null) return null;
+  const [width, height] = size;
+  const viewBox = declared ? declared.trim().replace(/\s+/g, " ") : `0 0 ${width} ${height}`;
+  return { viewBox, ratio: width / height };
+}
+
+export function sanitizeIconSubtree(root: Element, code: string): void {
+  sanitize(root);
+  if (/\bid\s*=/i.test(code)) scopeIds(root, idPrefix(code));
+}
+
 function compileSvgPreview(code: string): SvgPreview {
   const parsed = parseDocument(code);
   if (parsed.doc === null) return failed(parsed.error ?? "no SVG to preview");
   const root = parsed.doc.documentElement;
-  const box = fitBox(root);
+  const box = fitBox(root, code.includes("xlink:"));
   if (box === null) return failed("no viewBox and no usable width/height");
-  sanitize(root);
-  scopeIds(root, idPrefix(code));
+  sanitizeIconSubtree(root, code);
   return {
     ok: true,
     // The root element alone: a prolog or doctype is not markup to inline.
@@ -89,9 +104,10 @@ function parseDocument(code: string | null): ParsedDoc {
   return repaired.doc !== null ? repaired : { doc: null, error: direct.error };
 }
 
-function parseXml(code: string): ParsedDoc {
+export function parseXml(code: string): ParsedDoc {
   if (!/<svg\b/i.test(code)) return { doc: null, error: "no SVG markup found" };
-  const doc = new DOMParser().parseFromString(code, "image/svg+xml");
+  const parser = sharedPreviewParser ?? (sharedPreviewParser = new DOMParser());
+  const doc = parser.parseFromString(code, "image/svg+xml");
   if (doc.getElementsByTagName("parsererror").length > 0) return { doc: null, error: "not well-formed XML" };
   return name(doc.documentElement) === "svg"
     ? { doc, error: null }
@@ -123,21 +139,18 @@ interface Box {
  * `xMidYMid meet` so the artwork scales uniformly (strokes keep their weight),
  * fits the frame and is centred on both axes.
  */
-function fitBox(root: Element): Box | null {
-  const declared = root.getAttribute("viewBox");
-  const size = declared ? boxSize(declared) : sizePair(root);
-  if (size === null) return null;
-  const [width, height] = size;
-  const viewBox = declared ? declared.trim().replace(/\s+/g, " ") : `0 0 ${width} ${height}`;
+function fitBox(root: Element, checkXlink = true): Box | null {
+  const box = readSvgViewBox(root);
+  if (box === null) return null;
   root.setAttribute("xmlns", SVG_NS);
-  if (usesXlink(root)) root.setAttribute("xmlns:xlink", XLINK_NS);
-  root.setAttribute("viewBox", viewBox);
+  if (checkXlink && usesXlink(root)) root.setAttribute("xmlns:xlink", XLINK_NS);
+  root.setAttribute("viewBox", box.viewBox);
   root.setAttribute("width", "100%");
   root.setAttribute("height", "100%");
   root.setAttribute("preserveAspectRatio", "xMidYMid meet");
   applyStandaloneInk(root);
   root.setAttribute("style", fittedStyle(root.getAttribute("style")));
-  return { viewBox, ratio: width / height };
+  return box;
 }
 
 /** True when the document decides its own `currentColor` (root attribute or style). */
@@ -206,11 +219,14 @@ function safeCss(css: string): boolean {
 }
 
 function cleanAttributes(el: Element): void {
-  for (const attr of Array.from(el.attributes)) {
-    const value = attr.value.trim();
-    const drop = attr.name.toLowerCase().startsWith("on")
-      || value.toLowerCase().startsWith("javascript:")
-      || (URL_ATTRS.includes(attr.name.toLowerCase()) && !LOCAL_REF.test(value));
+  const attrs = el.attributes;
+  for (let i = attrs.length - 1; i >= 0; i -= 1) {
+    const attr = attrs[i];
+    const nameL = attr.name.toLowerCase();
+    const valueL = attr.value.trim().toLowerCase();
+    const drop = nameL.startsWith("on")
+      || valueL.startsWith("javascript:")
+      || (URL_ATTRS.includes(nameL) && !LOCAL_REF.test(valueL));
     if (drop) el.removeAttribute(attr.name);
   }
 }
@@ -268,7 +284,14 @@ function escapeRe(text: string): string {
 }
 
 function elementsOf(root: Element): Element[] {
-  return Array.from(root.ownerDocument.getElementsByTagName("*"));
+  const out: Element[] = [];
+  const stack: Element[] = [root];
+  while (stack.length > 0) {
+    const el = stack.pop()!;
+    out.push(el);
+    for (let c = el.lastElementChild; c !== null; c = c.previousElementSibling) stack.push(c);
+  }
+  return out;
 }
 
 function name(el: Element): string {

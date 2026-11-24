@@ -70,8 +70,8 @@ function useSheetJsonSync(model: BuilderModel, placedIds: readonly string[], act
 
 /** After each scan, with "Automatic register" on: hand-added folders join the lists (2026-11-16). */
 function useAutoRegister(model: BuilderModel, actions: BuilderActions): void {
-  const on = model.autoRegister, discovery = model.discovery;
-  useEffect(() => { if (on && discovery !== null) actions.registerSheets(true); }, [on, discovery, actions]);
+  const on = model.autoRegister, scannedAssets = model.discovery?.assets ?? null;
+  useEffect(() => { if (on && scannedAssets !== null) actions.registerSheets(true); }, [on, scannedAssets, actions]);
 }
 
 export type { BuilderIconAsset, BuilderListView, SelectionRecipe, SheetConfig, SheetDocument, SheetLayout };

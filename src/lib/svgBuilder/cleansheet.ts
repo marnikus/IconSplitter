@@ -10,6 +10,6 @@ export type SheetCleanReport = SvgCleanReport;
 export type SheetCleanResult = SvgCleanResult;
 
 /** The finished sheet's cleaned copy; the input string is untouched. */
-export function cleanSheetSvg(svgText: string): SheetCleanResult {
-  return cleanSvgText(svgText, { keepSize: true });
+export function cleanSheetSvg(svgText: string, resolveCurrentColor = false, skipReport = false): SheetCleanResult {
+  return cleanSvgText(svgText, { keepSize: true, resolveCurrentColor, skipReport });
 }

@@ -21,8 +21,18 @@ export interface ComposeSheetArgs {
 
 interface Placed { id: string; asset: BuilderIconAsset | undefined; frame: CellFrame }
 
+const ASSET_INDEX = new WeakMap<readonly BuilderIconAsset[], Map<string, BuilderIconAsset>>();
+
+function assetIndexOf(assets: readonly BuilderIconAsset[]): Map<string, BuilderIconAsset> {
+  const cached = ASSET_INDEX.get(assets);
+  if (cached !== undefined) return cached;
+  const built = new Map(assets.map((asset) => [asset.id, asset]));
+  ASSET_INDEX.set(assets, built);
+  return built;
+}
+
 export function composeSheet(args: ComposeSheetArgs): SheetDocument {
-  const byId = new Map(args.assets.map((asset) => [asset.id, asset]));
+  const byId = assetIndexOf(args.assets);
   const placed: Placed[] = [...new Set(args.placedIds)].slice(0, args.layout.cells.length)
     .map((id, index) => ({ id, asset: byId.get(id), frame: args.layout.cells[index] }))
     .filter((p) => !isEmptySlot(p.id));

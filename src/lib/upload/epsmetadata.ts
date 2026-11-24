@@ -36,8 +36,12 @@ export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata, optio
   const clean = stripPreviousEmbedding(eps);
   const eol = lineEndingOf(clean);
   const packet = buildXmpPacket(metadata).replace(/\n/g, eol);
-  const identity = clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
-    .replace(/^%%DocumentData:.*(?:\r\n|\r|\n|$)/gm, "");
+  const withoutAdo = clean.includes("%ADO_ContainsXMP:")
+    ? clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
+    : clean;
+  const identity = withoutAdo.includes("%%DocumentData:")
+    ? withoutAdo.replace(/^%%DocumentData:.*(?:\r\n|\r|\n|$)/gm, "")
+    : withoutAdo;
   // The id names what the FILE carries: the Icon Name (2026-11-08) is never written into it, so it must not
   // reach the id — the audit rebuilds this envelope from the file's own metadata and must reproduce it exactly.
   const id = `${metadataFingerprint({ ...metadata, name: undefined })}${fnv1a32(identity).toString(16).padStart(8, "0")}`;
@@ -121,6 +125,7 @@ export function stripEpsEnvelope(eps: string): string {
 }
 
 function stripPreviousEmbedding(eps: string): string {
+  if (!hasEnvelopeMarkers(eps)) return eps;
   let clean = stripMarkedBlock(stripEpsIptc(eps), SETUP_BEGIN, SETUP_END);
   clean = stripMarkedBlock(clean, TRAILER_BEGIN, TRAILER_END);
   clean = stripMarkedBlock(clean, LEGACY_SETUP_BEGIN, LEGACY_SETUP_END);
@@ -148,7 +153,7 @@ function stripMarkedBlock(text: string, begin: string, end: string): string {
 
 /** Clean mode is one carrier: no `%ADO_*` flag, and no `%%DocumentData` rewrite. */
 function withoutAdobeFlags(eps: string): string {
-  return eps.replace(/^%ADO_[A-Za-z]+:[^\r\n]*(?:\r\n|\r|\n|$)/gm, "");
+  return eps.includes("%ADO_") ? eps.replace(/^%ADO_[A-Za-z]+:[^\r\n]*(?:\r\n|\r|\n|$)/gm, "") : eps;
 }
 
 function addXmpHeader(eps: string, eol: string): string {
@@ -177,32 +182,48 @@ function headerEnd(lines: string[]): number {
 }
 
 function afterSetup(eps: string): number {
-  const pageSetup = findLineSpan(eps, /^%%EndPageSetup\b/);
+  const pageSetup = findDscLine(eps, "%%EndPageSetup");
   if (pageSetup !== null) return pageSetup.end;
-  const setup = findLineSpan(eps, /^%%EndSetup\b/);
+  const setup = findDscLine(eps, "%%EndSetup");
   if (setup !== null) return setup.end;
-  const comments = findLineSpan(eps, /^%%EndComments\b/);
+  const comments = findDscLine(eps, "%%EndComments");
   if (comments !== null) return comments.end;
   return startOfLine(eps, headerEnd(linesOf(eps)));
 }
 
 function beforeTrailer(eps: string): number | null {
   const eof = eps.lastIndexOf("%%EOF");
-  return findLineSpan(eps, /^%%PageTrailer\b/)?.start
-    ?? findLineSpan(eps, /^%%Trailer\b/)?.start
-    ?? findLineSpan(eps, /^%%EOF\b/)?.start
+  return findDscLine(eps, "%%PageTrailer")?.start
+    ?? findDscLine(eps, "%%Trailer")?.start
+    ?? findDscLine(eps, "%%EOF")?.start
     ?? (eof < 0 ? null : eof);
 }
 
 interface LineSpan { start: number; end: number }
 
-/** Find a DSC line once and expose both insertion boundaries. */
-function findLineSpan(eps: string, pattern: RegExp): LineSpan | null {
-  let start = 0;
-  for (const line of linesOf(eps)) {
-    const end = start + line.length;
-    if (pattern.test(lineText(line))) return { start, end };
-    start = end;
+function isDscWordCode(c: number): boolean {
+  return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95;
+}
+
+function lineEndAfter(eps: string, at: number): number {
+  let i = at;
+  while (i < eps.length && eps.charCodeAt(i) !== 10 && eps.charCodeAt(i) !== 13) i++;
+  if (i >= eps.length) return eps.length;
+  return eps.charCodeAt(i) === 13 && eps.charCodeAt(i + 1) === 10 ? i + 2 : i + 1;
+}
+
+/** Find a DSC line once via substring search and expose both insertion boundaries. */
+function findDscLine(eps: string, tag: string): LineSpan | null {
+  let from = 0;
+  while (from <= eps.length - tag.length) {
+    const start = eps.indexOf(tag, from);
+    if (start < 0) return null;
+    const atLineStart = start === 0 || eps.charCodeAt(start - 1) === 10 || eps.charCodeAt(start - 1) === 13;
+    const after = start + tag.length;
+    if (atLineStart && (after >= eps.length || !isDscWordCode(eps.charCodeAt(after)))) {
+      return { start, end: lineEndAfter(eps, after) };
+    }
+    from = start + 1;
   }
   return null;
 }

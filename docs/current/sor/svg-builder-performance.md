@@ -1,6 +1,6 @@
 # SVG builder — performance budget
 
-Parent: [SVG builder](svg-builder.md) · tests: `tests/svg_builder_perf.test.tsx`, `tests/svg_builder_perf_compose.test.ts`.
+Parent: [SVG builder](svg-builder.md) · sibling: [artboard export speed](svg-builder-export-speed.md) · tests: `tests/svg_builder_perf.test.tsx`, `tests/svg_builder_perf_compose.test.ts`.
 
 **Composing a sheet** (`composeSheet`) is the builder's costly step. Every template picture, every artboard row picture and the stage are full sheets.
 

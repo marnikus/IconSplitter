@@ -45,27 +45,96 @@ export function checkPostScript(program: string): string[] {
   let artwork: string;
   try { artwork = verifiedEpsArtwork(program); }
   catch { return ["EPS metadata envelope is not verified vector-only content"]; }
-  if (/^\s*%%(?:BeginPreview|BeginBinary|BeginData|BeginPhotoshop)\b/m.test(artwork)) return ["embedded raster preview or opaque data is forbidden in EPS"];
-  const lines = artwork.split(/\r\n|\r|\n/);
-  for (let i = 0; i < lines.length && st.errors.length === 0; i++) {
-    if (!lines[i].startsWith("%")) runLine(lines[i], st, i + 1); // DSC comments and %%EOF are skipped
+  if (artwork.includes("%%Begin") && /^\s*%%(?:BeginPreview|BeginBinary|BeginData|BeginPhotoshop)\b/m.test(artwork)) {
+    return ["embedded raster preview or opaque data is forbidden in EPS"];
   }
+  scanProgramLines(artwork, st);
   return st.errors.length > 0 ? st.errors : atEnd(st);
 }
 
-function runLine(line: string, st: State, n: number): void {
-  const code = line.split("%")[0].trim();
-  if (code.startsWith("<<")) {
-    try {
-      if (!code.endsWith(" shfill") || st.stack.length !== 0) throw new Error("invalid shading operands");
-      checkShading(code.slice(0, -7));
-    } catch { st.errors.push(`line ${n}: invalid or raster-bearing shading`); }
+function findLineBreak(src: string, from: number): number {
+  let i = from;
+  while (i < src.length && src.charCodeAt(i) !== 10 && src.charCodeAt(i) !== 13) i++;
+  return i;
+}
+
+function nextLineStart(src: string, end: number): number {
+  return src.charCodeAt(end) === 13 && src.charCodeAt(end + 1) === 10 ? end + 2 : end + 1;
+}
+
+function scanProgramLines(artwork: string, st: State): void {
+  const len = artwork.length;
+  let pos = 0;
+  let lineNo = 1;
+  while (pos <= len && st.errors.length === 0) {
+    const end = findLineBreak(artwork, pos);
+    if (pos < end && artwork.charCodeAt(pos) !== 37) runLineSpan(artwork, [pos, end], st, lineNo);
+    if (end >= len) break;
+    pos = nextLineStart(artwork, end);
+    lineNo++;
+  }
+}
+
+function isLineWs(c: number): boolean {
+  return c === 32 || c === 9 || c === 11 || c === 12 || (c >= 160 && /\s/.test(String.fromCharCode(c)));
+}
+
+function runShadingLine(code: string, st: State, n: number): void {
+  try {
+    if (!code.endsWith(" shfill") || st.stack.length !== 0) throw new Error("invalid shading operands");
+    checkShading(code.slice(0, -7));
+  } catch {
+    st.errors.push(`line ${n}: invalid or raster-bearing shading`);
+  }
+}
+
+function trimCodeSpan(src: string, start: number, end: number): [number, number] {
+  let codeEnd = start;
+  while (codeEnd < end && src.charCodeAt(codeEnd) !== 37) codeEnd++;
+  let s = start;
+  let e = codeEnd;
+  while (s < e && isLineWs(src.charCodeAt(s))) s++;
+  while (e > s && isLineWs(src.charCodeAt(e - 1))) e--;
+  return [s, e];
+}
+
+function runLineSpan(src: string, span: [number, number], st: State, n: number): void {
+  const [s, e] = trimCodeSpan(src, span[0], span[1]);
+  if (s >= e) return;
+  if (src.charCodeAt(s) === 60 && s + 1 < e && src.charCodeAt(s + 1) === 60) {
+    runShadingLine(src.slice(s, e), st, n);
     return;
   }
-  for (const tok of tokens(code)) {
-    token(tok, st, n);
-    if (st.errors.length > 0) return;
+  scanLineTokens(src, [s, e], st, n);
+}
+
+function isTokenDelim(c: number): boolean {
+  return isLineWs(c) || c === 91 || c === 93;
+}
+
+function readWordEnd(src: string, start: number, limit: number): number {
+  let q = start + 1;
+  while (q < limit && !isTokenDelim(src.charCodeAt(q))) q++;
+  return q;
+}
+
+function scanLineTokens(src: string, span: [number, number], st: State, n: number): void {
+  let p = span[0];
+  const e = span[1];
+  while (p < e && st.errors.length === 0) {
+    const c = src.charCodeAt(p);
+    if (isLineWs(c)) { p++; continue; }
+    if (c === 91 || c === 93) { handleBracket(c, st); p++; continue; }
+    const q = readWordEnd(src, p, e);
+    if (isFinitePsNumber(src, p, q)) (st.array ?? st.stack).push(0);
+    else runOperator(src.slice(p, q), st, n);
+    p = q;
   }
+}
+
+function handleBracket(c: number, st: State): void {
+  if (c === 91) st.array = [];
+  else { st.stack.push(st.array ?? []); st.array = null; }
 }
 
 /** What is still wrong when the last token has run. */
@@ -80,38 +149,53 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-/** Whitespace-separated tokens, with `[` and `]` as tokens of their own. */
-function tokens(line: string): string[] {
-  return line.replace(/[[\]]/g, " $& ").trim().split(/\s+/).filter((t) => t !== "");
+function isFinitePsNumber(src: string, p: number, q: number): boolean {
+  let i = src.charCodeAt(p) === 45 ? p + 1 : p;
+  let digits = 0;
+  let seenDot = false;
+  for (; i < q; i++) {
+    const ch = src.charCodeAt(i);
+    if (ch >= 48 && ch <= 57) { digits++; continue; }
+    if (ch === 46 && !seenDot) { seenDot = true; continue; }
+    return false;
+  }
+  return digits > 0 && (q - p < 308 || Number.isFinite(Number(src.slice(p, q))));
 }
 
-function token(tok: string, st: State, line: number): void {
-  if (tok === "[") { st.array = []; return; }
-  if (tok === "]") { st.stack.push(st.array ?? []); st.array = null; return; }
-  if (/^-?(\d+\.?\d*|\.\d+)$/.test(tok) && Number.isFinite(Number(tok))) { (st.array ?? st.stack).push(Number(tok)); return; }
+function runOperator(tok: string, st: State, line: number): void {
   const pops = POPS[tok];
-  if (pops === undefined) { st.errors.push(`line ${line}: unknown operator ${tok.length <= 64 ? tok : "<unsupported token>"}`); return; }
-  const args = take(tok, pops, st, line);
-  if (args !== null) apply(tok, args, st, line);
+  if (pops === undefined) {
+    st.errors.push(`line ${line}: unknown operator ${tok.length <= 64 ? tok : "<unsupported token>"}`);
+    return;
+  }
+  const first = takeFirst(tok, pops, st, line);
+  if (st.errors.length === 0) apply(tok, first, st, line);
 }
 
-/** Pops the operands or reports why it cannot (arity, then type, like PostScript). */
-function take(op: string, pops: Kind[], st: State, line: number): Operand[] | null {
+/** Pops the operands in place or reports why it cannot (arity, then type, like PostScript). */
+function takeFirst(op: string, pops: Kind[], st: State, line: number): Operand | null {
   if (st.stack.length < pops.length) {
     st.errors.push(`line ${line}: ${op} expects ${plural(pops.length, "operand")}, found ${st.stack.length}`);
     st.stack.length = 0;
     return null;
   }
-  const args = st.stack.splice(st.stack.length - pops.length, pops.length);
-  const wrong = args.findIndex((a, i) => kindOf(a) !== pops[i]);
-  if (wrong < 0) return args;
-  st.errors.push(`line ${line}: ${op} expects ${article(pops[wrong])}, found ${kindOf(args[wrong])}`);
-  return null;
+  const base = st.stack.length - pops.length;
+  for (let i = 0; i < pops.length; i++) {
+    const got = kindOf(st.stack[base + i]);
+    if (got !== pops[i]) {
+      st.stack.length = base;
+      st.errors.push(`line ${line}: ${op} expects ${article(pops[i])}, found ${got}`);
+      return null;
+    }
+  }
+  const first = pops.length > 0 ? st.stack[base] : null;
+  st.stack.length = base;
+  return first;
 }
 
 /** The operator's effect on the path and the gsave stack; the error it raises, if any. */
-const EFFECTS: Record<string, (st: State, args: Operand[]) => string | null> = {
-  concat: (_st, args) => ((args[0] as number[]).length === 6 ? null : `concat expects an array of 6 numbers, found ${(args[0] as number[]).length}`),
+const EFFECTS: Record<string, (st: State, first: Operand | null) => string | null> = {
+  concat: (_st, first) => ((first as number[]).length === 6 ? null : `concat expects an array of 6 numbers, found ${(first as number[]).length}`),
   newpath: (st) => { st.hasPath = false; return null; },
   moveto: (st) => { st.hasPath = true; return null; },
   lineto: (st) => (st.hasPath ? null : "lineto has no current point"),
@@ -125,8 +209,8 @@ const EFFECTS: Record<string, (st: State, args: Operand[]) => string | null> = {
   grestore: (st) => restore(st),
 };
 
-function apply(op: string, args: Operand[], st: State, line: number): void {
-  const problem = EFFECTS[op]?.(st, args) ?? null;
+function apply(op: string, first: Operand | null, st: State, line: number): void {
+  const problem = EFFECTS[op]?.(st, first) ?? null;
   if (problem !== null) st.errors.push(`line ${line}: ${problem}`);
 }
 

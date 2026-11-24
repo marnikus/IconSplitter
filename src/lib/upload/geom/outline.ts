@@ -47,17 +47,27 @@ export function transformOutline(o: Outline, m: Matrix): Outline {
   };
 }
 
-/** SVG path data: absolute commands, 3 decimals, no separators the grammar does not need. */
-export function outlineToPathData(o: Outline): string {
-  return o.ops.map((op) => {
-    if (op.op === "Z") return "Z";
-    if (op.op === "C") return `C${f(op.x1)} ${f(op.y1)} ${f(op.x2)} ${f(op.y2)} ${f(op.x)} ${f(op.y)}`;
-    return `${op.op}${f(op.x)} ${f(op.y)}`;
-  }).join("");
+/** SVG path data: absolute commands, 3 decimals (or 1 when `decimals === 1`), optional uniform scale. */
+export function outlineToPathData(o: Outline, decimals: 1 | 3 = 3, scale = 1): string {
+  const fmtNum = decimals === 1 ? f1 : f;
+  const ops = o.ops;
+  const out = new Array<string>(ops.length);
+  for (let i = 0; i < ops.length; i += 1) {
+    const op = ops[i];
+    if (op.op === "Z") out[i] = "Z";
+    else if (op.op === "C") {
+      out[i] = `C${fmtNum(op.x1 * scale)} ${fmtNum(op.y1 * scale)} ${fmtNum(op.x2 * scale)} ${fmtNum(op.y2 * scale)} ${fmtNum(op.x * scale)} ${fmtNum(op.y * scale)}`;
+    } else out[i] = `${op.op}${fmtNum(op.x * scale)} ${fmtNum(op.y * scale)}`;
+  }
+  return out.join("");
 }
 
 function f(n: number): string {
   return String(Math.round(n * 1000) / 1000);
+}
+
+function f1(n: number): string {
+  return String((Math.round(n * 10) / 10) + 0);
 }
 
 // --- path data ----------------------------------------------------------------

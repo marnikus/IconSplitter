@@ -7,6 +7,7 @@
 // exact requests". Then one request per artboard, in order, no retry; a valid
 // answer is accepted on its artboard, an invalid one is kept and marked invalid.
 import { acceptSheetMetadata } from "../../lib/svgBuilder/metadata";
+import { createLimiter } from "../../lib/limiter";
 import { artboardConfig, artboardIcons, withSheetAnswer, type FinalArtboard } from "../../lib/svgBuilder/artboards";
 import type { SheetMetadata } from "../../lib/svgBuilder/types";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
@@ -41,13 +42,15 @@ function setMetaOptions(ctx: BuilderActionContext, patch: { fullSheet?: boolean;
   else if (ctx.model.dialog === "metadata") void prepareMetadata(ctx, patch.fullSheet);
 }
 
-/** Every icon's SVG text the artboards need, read once from the scanned folder. */
+/** Every icon's SVG text the artboards need, read concurrently once from the scanned folder. */
 export async function svgTextsFor(ctx: BuilderActionContext, artboards: readonly FinalArtboard[]): Promise<Record<string, string>> {
   const texts: Record<string, string> = { ...ctx.model.svgTexts };
   const repo = ctx.repository;
   if (repo === null) return texts;
   const missing = [...new Set(artboards.flatMap(artboardIcons))].filter((id) => texts[id] === undefined);
-  for (const id of missing) texts[id] = (await repo.readSvg(id)) ?? "";
+  if (missing.length === 0) return texts;
+  const limit = createLimiter(128);
+  await Promise.all(missing.map((id) => limit(async () => { texts[id] = (await repo.readSvg(id)) ?? ""; })));
   return texts;
 }
 

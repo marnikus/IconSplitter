@@ -21,7 +21,7 @@
 
 import { identity, multiply, type Matrix } from "./geom/matrix";
 import { styleMap } from "./geom/stroke";
-import { basePaint, resolvePaint, paintOf, mix, psColor, strokePs, Unsupported, type Rgb, type Paint } from "./epspaint";
+import { basePaint, resolvePaint, resolvePathPaintFast, paintOf, mix, psColor, strokePs, Unsupported, type Rgb, type Paint } from "./epspaint";
 import { shapePathPs } from "./epspath";
 import { rectRadii } from "./geom/shapes";
 import { gradientFill } from "./epsgradientfill";
@@ -48,25 +48,33 @@ export type EpsResult =
 /** The export SVG → a genuine EPS 10 document, or an honest subset failure. */
 export function writeEps(svgText: string, background: string, opts: EpsOptions = {}): EpsResult {
   try {
-    return writeEpsUnsafe(svgText, background, opts);
+    const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+    return writeEpsUnsafe(doc.documentElement, svgText, background, opts);
   } catch (error) {
     if (error instanceof Unsupported) return { ok: false, reason: error.message };
     throw error;
   }
 }
 
+/** Same EPS 10 writer over an already-parsed `<svg>` root (zero redundant `DOMParser` pass). */
+export function writeEpsFromRoot(root: Element | null, svgText: string, background: string, opts: EpsOptions = {}): EpsResult {
+  try {
+    return writeEpsUnsafe(root, svgText, background, opts);
+  } catch (error) {
+    if (error instanceof Unsupported) return { ok: false, reason: error.message };
+    throw error;
+  }
+}
 
-
-function writeEpsUnsafe(svgText: string, background: string, opts: EpsOptions): EpsResult {
-  const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
-  const root = doc.documentElement;
+function writeEpsUnsafe(root: Element | null, svgText: string, background: string, opts: EpsOptions): EpsResult {
   if (root === null || root.nodeName.toLowerCase() !== "svg") throw new Unsupported("not an SVG document");
   if (root.getAttribute("transform") !== null) throw new Unsupported("a transform on the root <svg> element");
   const vb = viewBoxOf(root);
   if (vb === null) throw new Unsupported("no viewBox on the root <svg>");
   const bg = paintOf(background);
   if (bg === null) throw new Unsupported(`unsupported background paint: ${background}`);
-  const ctx: WalkCtx = { ctm: identity(), paint: basePaint(), bg, root, viewport: vb, marks: [], body: [], count: { shapes: 0, roundedRects: 0 } };
+  const trackMarks = /<(?:linear|radial)Gradient\b/i.test(svgText);
+  const ctx: WalkCtx = { ctm: identity(), paint: basePaint(), bg, root, viewport: vb, marks: [], trackMarks, body: [], count: { shapes: 0, roundedRects: 0 } };
   walk(root, ctx);
   // Two boxes, as DSC wants: the integer one a Level-1 reader uses, and the
   // exact one (`%%HiResBoundingBox`) a modern consumer places the art by.
@@ -95,32 +103,42 @@ interface WalkCtx {
   root: Element;
   viewport: number[];
   marks: PaintMark[];
+  trackMarks: boolean;
   count: { shapes: number; roundedRects: number };
 }
 
 function walk(el: Element, ctx: WalkCtx): void {
   const tag = el.nodeName.toLowerCase();
+  if (tag === "path") {
+    const fastPaint = resolvePathPaintFast(el, ctx.paint);
+    if (fastPaint !== null) {
+      emitShape(el, fastPaint === ctx.paint ? ctx : { ...ctx, paint: fastPaint }, ctx);
+      return;
+    }
+  }
   if (SKIP.includes(tag)) return;
-  if (displayNone(el)) return;
-  checkSupported(el);
-  const next: WalkCtx = { ...ctx, ctm: multiply(ctx.ctm, epsTransform(el.getAttribute("transform"))), paint: resolvePaint(el, ctx.paint) };
+  const style = styleMap(el.getAttribute("style"));
+  if (displayNone(el, style)) return;
+  checkSupported(el, tag, style);
+  const tf = el.getAttribute("transform");
+  const ctm = tf === null ? ctx.ctm : multiply(ctx.ctm, epsTransform(tf));
+  const next: WalkCtx = { ...ctx, ctm, paint: resolvePaint(el, ctx.paint) };
   if (SHAPES.includes(tag)) emitShape(el, next, ctx);
   else if (CONTAINERS.includes(tag)) walkChildren(el, next);
   else throw new Unsupported(`<${tag}> is outside the EPS subset`);
 }
 
 function walkChildren(el: Element, ctx: WalkCtx): void {
-  for (const child of Array.from(el.children)) walk(child, ctx);
+  for (let child = el.firstElementChild; child !== null; child = child.nextElementSibling) walk(child, ctx);
 }
 
-function displayNone(el: Element): boolean {
-  return (styleMap(el.getAttribute("style"))["display"] ?? el.getAttribute("display") ?? "").trim().toLowerCase() === "none";
+function displayNone(el: Element, style: Record<string, string>): boolean {
+  return (style["display"] ?? el.getAttribute("display") ?? "").trim().toLowerCase() === "none";
 }
 
 /** The subset checks that fail the stage honestly (never guessed). */
-function checkSupported(el: Element): void {
-  if (el.nodeName.toLowerCase() === "style") throw new Unsupported("CSS <style> blocks are outside the EPS subset");
-  const style = styleMap(el.getAttribute("style"));
+function checkSupported(el: Element, tag: string, style: Record<string, string>): void {
+  if (tag === "style") throw new Unsupported("CSS <style> blocks are outside the EPS subset");
   if ((style["color-interpolation"] ?? el.getAttribute("color-interpolation") ?? "sRGB") !== "sRGB") throw new Unsupported("EPS gradients require sRGB color interpolation");
   if ((style["opacity"] ?? el.getAttribute("opacity")) !== null) throw new Unsupported("group opacity is outside the EPS subset");
   for (const effect of ["clip-path", "mask", "filter"]) {
@@ -143,7 +161,7 @@ function emitShape(el: Element, ctx: WalkCtx, out: WalkCtx): void {
   const fillPs = fillProgram(el, ctx);
   const paints = stroke === null ? fillPs : `${fill === null ? "" : ` gsave${fillPs} grestore`}${strokePs(ctx.paint, ctx.bg)}`;
   out.body.push(`gsave\n${m}\n${path}${paints}\ngrestore`);
-  recordPaint(el, ctx.ctm, ctx.paint, ctx.marks);
+  if (ctx.trackMarks) recordPaint(el, ctx.ctm, ctx.paint, ctx.marks);
   out.count.shapes++;
   if (isRoundedRect(el)) out.count.roundedRects++;
 }

@@ -5,7 +5,9 @@
 // tidies dead `color`, repeated/default presentation attributes and bare `<g>`
 // wrappers, and rounds geometry/sizes/`viewBox`/`stroke-*` to ≤ 1 decimal place.
 import { cleanExportDom } from "./cleandom";
+import { solidPaintDom } from "./solidpaint";
 import { bakeDirectSvg, roundRootFrame1 } from "./svgdirect";
+import { allElements, comments } from "./svgdom";
 import { tidySvgTree } from "./svgtidy";
 
 export interface SvgCleanReport {
@@ -27,9 +29,60 @@ export interface SvgCleanResult {
 export interface SvgCleanOptions {
   /** Put the root's own `width`/`height` back after the policy drops them. */
   keepSize?: boolean;
+  /** Resolve `currentColor` in place before cleaning so the caller avoids an extra DOM parse. */
+  resolveCurrentColor?: boolean;
+  /** Skip attribute/diff report bookkeeping when the caller only consumes `svg` and `refused`. */
+  skipReport?: boolean;
+  /** Elements whose geometry is already baked at target 1-decimal coordinates. */
+  skipElements?: ReadonlySet<Element>;
+  hasImage?: boolean;
+  hasMetadata?: boolean;
+  hasComments?: boolean;
 }
 
 const EMPTY: SvgCleanReport = { attributes: 0, elements: 0, rounded: 0 };
+
+function findRasterRefusal(root: Element, opts: SvgCleanOptions): string | null {
+  if ((opts.hasImage ?? true) === false) return null;
+  const raster = root.getElementsByTagName("image")[0];
+  return raster === undefined ? null : `a raster <${raster.nodeName.toLowerCase()}> element cannot be cleaned`;
+}
+
+function finalizeCleanedReport(
+  root: Element, preBake: Map<Element, Map<string, string>> | null, beforeAttrs: number, droppedElements: number,
+): SvgCleanReport {
+  if (preBake === null) return EMPTY;
+  return {
+    attributes: Math.max(0, beforeAttrs - countAttributes(root)),
+    elements: droppedElements,
+    rounded: diffSnapshot(preBake, root),
+  };
+}
+
+function stripMetaAndComments(root: Element, opts: SvgCleanOptions, track: boolean): number {
+  const hasComments = opts.hasComments ?? true;
+  const metaDropped = (opts.hasMetadata ?? true) ? dropJunkMetadata(root) : 0;
+  const commentDropped = track && hasComments ? countComments(root) : 0;
+  cleanExportDom(root, { keepRootEmbeds: true }, hasComments);
+  dropNestedNamespaces(root);
+  return metaDropped + commentDropped;
+}
+
+/** Cleans an already-parsed `<svg>` root element in place (single-DOM pipeline). */
+export function cleanSvgDom(root: Element, opts: SvgCleanOptions = {}): { report: SvgCleanReport; refused: string | null } {
+  const refused = findRasterRefusal(root, opts);
+  if (refused !== null) return { report: EMPTY, refused };
+  if (opts.resolveCurrentColor === true) solidPaintDom(root);
+  const size = { width: root.getAttribute("width"), height: root.getAttribute("height") };
+  const track = opts.skipReport !== true;
+  const before = track ? countAttributes(root) : 0;
+  const stripped = stripMetaAndComments(root, opts, track);
+  const preBake = track ? snapshotAttrValues(root) : null;
+  bakeDirectSvg(root, opts.skipElements === undefined ? undefined : { skipElements: opts.skipElements });
+  const tidy = tidySvgTree(root);
+  if (opts.keepSize === true) { restoreSize(root, size); roundRootFrame1(root); }
+  return { report: finalizeCleanedReport(root, preBake, before, stripped + tidy.nodes), refused: null };
+}
 
 /** The cleaned copy; the input string is untouched. */
 export function cleanSvgText(svgText: string, opts: SvgCleanOptions = {}): SvgCleanResult {
@@ -38,28 +91,14 @@ export function cleanSvgText(svgText: string, opts: SvgCleanOptions = {}): SvgCl
   if (root === null || root.nodeName.toLowerCase() !== "svg" || doc.getElementsByTagName("parsererror").length > 0) {
     return { svg: svgText, report: EMPTY, refused: "the document does not parse as an SVG" };
   }
-  const raster = root.getElementsByTagName("image")[0];
-  if (raster !== undefined) {
-    return { svg: svgText, report: EMPTY, refused: `a raster <${raster.nodeName.toLowerCase()}> element cannot be cleaned` };
-  }
-  const size = { width: root.getAttribute("width"), height: root.getAttribute("height") };
-  const before = countAttributes(root);
-  const elements = dropJunkMetadata(root) + countComments(root);
-  cleanExportDom(root, { keepRootEmbeds: true });
-  dropNestedNamespaces(root);
-  const preBake = snapshotAttrValues(root);
-  bakeDirectSvg(root);
-  const tidy = tidySvgTree(root);
-  if (opts.keepSize === true) {
-    restoreSize(root, size);
-    roundRootFrame1(root);
-  }
-  const rounded = diffSnapshot(preBake, root);
-  return {
-    svg: new XMLSerializer().serializeToString(root),
-    report: { attributes: Math.max(0, before - countAttributes(root)), elements: elements + tidy.nodes, rounded },
-    refused: null,
-  };
+  const res = cleanSvgDom(root, {
+    ...opts,
+    hasImage: /<image\b/i.test(svgText),
+    hasMetadata: /<metadata\b/i.test(svgText),
+    hasComments: svgText.includes("<!--"),
+  });
+  if (res.refused !== null) return { svg: svgText, report: EMPTY, refused: res.refused };
+  return { svg: new XMLSerializer().serializeToString(root), report: res.report, refused: null };
 }
 
 function restoreSize(root: Element, size: { width: string | null; height: string | null }): void {
@@ -83,23 +122,25 @@ function dropJunkMetadata(root: Element): number {
 
 function dropNestedNamespaces(root: Element): void {
   const declared = root.getAttribute("xmlns");
-  for (const el of Array.from(root.getElementsByTagName("*"))) {
+  const all = allElements(root);
+  for (let i = 1; i < all.length; i += 1) {
+    const el = all[i];
     const own = el.getAttribute("xmlns");
     if (own !== null && (declared === null || own === declared)) el.removeAttribute("xmlns");
   }
 }
 
 function countComments(root: Element): number {
-  return (new XMLSerializer().serializeToString(root).match(/<!--/g) ?? []).length;
+  return comments(root).length;
 }
 
 function countAttributes(root: Element): number {
-  return [root, ...Array.from(root.getElementsByTagName("*"))].reduce((sum, el) => sum + el.attributes.length, 0);
+  return allElements(root).reduce((sum, el) => sum + el.attributes.length, 0);
 }
 
 function snapshotAttrValues(root: Element): Map<Element, Map<string, string>> {
   const snap = new Map<Element, Map<string, string>>();
-  for (const el of [root, ...Array.from(root.getElementsByTagName("*"))]) {
+  for (const el of allElements(root)) {
     snap.set(el, new Map(Array.from(el.attributes, (a) => [a.name, a.value])));
   }
   return snap;
@@ -107,7 +148,7 @@ function snapshotAttrValues(root: Element): Map<Element, Map<string, string>> {
 
 function diffSnapshot(before: Map<Element, Map<string, string>>, root: Element): number {
   let changed = 0;
-  for (const el of [root, ...Array.from(root.getElementsByTagName("*"))]) {
+  for (const el of allElements(root)) {
     const prev = before.get(el);
     if (!prev) continue;
     for (const a of Array.from(el.attributes)) {

@@ -54,13 +54,25 @@ function optNumOf(el: Element, name: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const DROP_UNSTYLED = new Set(["opacity", "fill-opacity", "stroke-opacity", "fill", "stroke"]);
+const DRAWABLE_SHAPES = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "use"]);
+
+function isDroppedAttr(name: string, owned: ReadonlySet<string> | undefined, keepStrokes: boolean): boolean {
+  if (DROP_BASE.has(name) || name.startsWith("xmlns:")) return true;
+  if (!keepStrokes && (DROP_STROKE.has(name) || DROP_UNSTYLED.has(name))) return true;
+  return owned !== undefined && owned.has(name);
+}
+
 function keptAttrs(el: Element, tag: string, keepStrokes: boolean): [string, string][] {
   const owned = GEOM_OWNED[tag];
   const out: [string, string][] = [];
-  for (const a of Array.from(el.attributes)) {
-    if (DROP_BASE.has(a.name) || (!keepStrokes && DROP_STROKE.has(a.name)) || a.name.startsWith("xmlns:")) continue;
-    if (owned && owned.has(a.name)) continue;
-    out.push([a.name, a.value]);
+  const attrs = el.attributes;
+  for (let i = 0; i < attrs.length; i += 1) {
+    const a = attrs[i];
+    if (!isDroppedAttr(a.name, owned, keepStrokes)) out.push([a.name, a.value]);
+  }
+  if (!keepStrokes && DRAWABLE_SHAPES.has(tag)) {
+    out.push(["fill", "none"], ["stroke", "currentColor"]);
   }
   return out;
 }
@@ -137,22 +149,29 @@ function compileLeaf(el: Element, tag: string, xform: [number, number, number], 
   return null;
 }
 
-function compileElement(el: Element, parent: [number, number, number], keepStrokes: boolean): PreparedNode[] {
+function compileElementInto(el: Element, parent: [number, number, number], keepStrokes: boolean, out: PreparedNode[]): void {
   const tag = el.localName.toLowerCase();
-  if (UNSAFE.has(tag) || tag === "metadata" || tag === "title" || tag === "desc") return [];
+  if (UNSAFE.has(tag) || tag === "metadata" || tag === "title" || tag === "desc") return;
   const [ls, ldx, ldy] = resolveUniform(el);
   const cur: [number, number, number] = [parent[0] * ls, parent[1] + parent[0] * ldx, parent[2] + parent[0] * ldy];
   const leaf = compileLeaf(el, tag, cur, keepStrokes);
-  if (leaf !== null) return [leaf];
-  const children = Array.from(el.children).flatMap((c) => compileElement(c, cur, keepStrokes));
-  if (children.length === 0) return [];
+  if (leaf !== null) { out.push(leaf); return; }
+  const children: PreparedNode[] = [];
+  for (let c = el.firstElementChild; c !== null; c = c.nextElementSibling) {
+    compileElementInto(c, cur, keepStrokes, children);
+  }
+  if (children.length === 0) return;
   const attrs = keptAttrs(el, tag, keepStrokes);
-  if (tag === "g" && attrs.length === 0) return children;
-  return [{ kind: "group", tag, attrs, children }];
+  if (tag === "g" && attrs.length === 0) { out.push(...children); return; }
+  out.push({ kind: "group", tag, attrs, children });
 }
 
 export function compilePreparedNodes(root: Element, keepStrokes = false): PreparedNode[] {
-  return Array.from(root.children).flatMap((child) => compileElement(child, [1, 0, 0], keepStrokes));
+  const out: PreparedNode[] = [];
+  for (let c = root.firstElementChild; c !== null; c = c.nextElementSibling) {
+    compileElementInto(c, [1, 0, 0], keepStrokes, out);
+  }
+  return out;
 }
 
 function fmtAttrs(pairs: readonly [string, string][]): string {

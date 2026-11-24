@@ -100,6 +100,13 @@ async function recordOf(jpeg: Uint8Array, target: RasterTarget): Promise<RasterR
  * the renderer refuses it with its own honest reason.
  */
 export function withIntrinsicSize(svgText: string, width: number, height: number): string {
+  const openEnd = svgText.indexOf(">");
+  if (openEnd > 0) {
+    const tag = svgText.slice(0, openEnd + 1);
+    const wMatch = /\bwidth=["']([^"']+)["']/.exec(tag);
+    const hMatch = /\bheight=["']([^"']+)["']/.exec(tag);
+    if (wMatch?.[1] === String(width) && hMatch?.[1] === String(height)) return svgText;
+  }
   const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
   const root = doc.documentElement;
   if (root === null || root.nodeName.toLowerCase() !== "svg" || doc.querySelector("parsererror") !== null) return svgText;

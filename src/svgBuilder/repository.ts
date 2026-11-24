@@ -4,7 +4,7 @@
 import { buildSvgPreview, type SvgPreview } from "../lib/svgpreview";
 import { validateSvg } from "../lib/svgvalidate";
 import type { BuilderIconAsset } from "../lib/svgBuilder/types";
-import type { DirHandleLike } from "../lib/fs";
+import { withDirCache, type DirHandleLike } from "../lib/fs";
 import { readSvgText } from "../svg/svgfiles";
 
 export interface AssetRender {
@@ -12,6 +12,7 @@ export interface AssetRender {
 }
 
 export interface AssetRepository {
+  readonly dirRoot?: DirHandleLike;
   list(): readonly BuilderIconAsset[];
   byId(id: string): BuilderIconAsset | null;
   fingerprintOf(id: string): string | null;
@@ -21,29 +22,43 @@ export interface AssetRepository {
 }
 
 export function createAssetRepository(root: DirHandleLike, assets: readonly BuilderIconAsset[]): AssetRepository {
+  const cachedRoot = withDirCache(root);
   const byId = new Map(assets.map((asset) => [asset.id, asset]));
   const texts = new Map<string, string>();
+  const inflight = new Map<string, Promise<string | null>>();
   const previews = new Map<string, SvgPreview>();
   return {
+    dirRoot: cachedRoot,
     list: () => assets,
     byId: (id) => byId.get(id) ?? null,
     fingerprintOf: (id) => byId.get(id)?.fingerprint ?? null,
-    readSvg: (id) => readText(root, byId.get(id), texts),
-    render: (id) => renderAsset(root, byId.get(id), texts, previews),
-    invalidate: () => { texts.clear(); previews.clear(); },
+    readSvg: (id) => readText(cachedRoot, byId.get(id), texts, inflight),
+    render: (id) => renderAsset(cachedRoot, byId.get(id), texts, previews),
+    invalidate: () => { texts.clear(); inflight.clear(); previews.clear(); },
   };
 }
 
 async function readText(
-  root: DirHandleLike, asset: BuilderIconAsset | undefined, cache: Map<string, string>,
+  root: DirHandleLike, asset: BuilderIconAsset | undefined,
+  cache: Map<string, string>, inflight?: Map<string, Promise<string | null>>,
 ): Promise<string | null> {
   if (asset === undefined) return null;
   const hit = cache.get(asset.id);
   if (hit !== undefined) return hit;
-  const code = await readSvgText(root, asset.svgPath);
-  if (code === null || !validateSvg(code).ok) return null;
-  cache.set(asset.id, code);
-  return code;
+  const pending = inflight?.get(asset.id);
+  if (pending !== undefined) return pending;
+  const task = (async () => {
+    try {
+      const code = await readSvgText(root, asset.svgPath);
+      if (code === null || !validateSvg(code).ok) return null;
+      cache.set(asset.id, code);
+      return code;
+    } finally {
+      inflight?.delete(asset.id);
+    }
+  })();
+  inflight?.set(asset.id, task);
+  return task;
 }
 
 async function renderAsset(

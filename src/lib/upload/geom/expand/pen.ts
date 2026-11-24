@@ -55,25 +55,27 @@ export const segEnd = (s: Seg): Pt => (s.kind === "L" ? s.b : s.p3);
 /** Unit tangent leaving the segment's start (a degenerate control falls through to the next point). */
 export function startTangent(s: Seg): Pt {
   if (s.kind === "L") return unit(sub(s.b, s.a));
-  for (const p of [s.p1, s.p2, s.p3]) if (!same(p, s.p0)) return unit(sub(p, s.p0));
-  return [0, 0];
+  if (!same(s.p1, s.p0)) return unit(sub(s.p1, s.p0));
+  if (!same(s.p2, s.p0)) return unit(sub(s.p2, s.p0));
+  return !same(s.p3, s.p0) ? unit(sub(s.p3, s.p0)) : [0, 0];
 }
 
 /** Unit tangent arriving at the segment's end. */
 export function endTangent(s: Seg): Pt {
   if (s.kind === "L") return unit(sub(s.b, s.a));
-  for (const p of [s.p2, s.p1, s.p0]) if (!same(p, s.p3)) return unit(sub(s.p3, p));
-  return [0, 0];
+  if (!same(s.p2, s.p3)) return unit(sub(s.p3, s.p2));
+  if (!same(s.p1, s.p3)) return unit(sub(s.p3, s.p1));
+  return !same(s.p0, s.p3) ? unit(sub(s.p3, s.p0)) : [0, 0];
 }
 
 /** The point at parameter t. */
 export function pointAt(s: Seg, t: number): Pt {
-  if (s.kind === "L") return add(s.a, mul(sub(s.b, s.a), t));
-  const u = 1 - t;
-  const w = [u * u * u, 3 * u * u * t, 3 * u * t * t, t * t * t];
+  if (s.kind === "L") return [s.a[0] + (s.b[0] - s.a[0]) * t, s.a[1] + (s.b[1] - s.a[1]) * t];
+  const u = 1 - t, uu = u * u, tt = t * t;
+  const w0 = uu * u, w1 = 3 * uu * t, w2 = 3 * u * tt, w3 = tt * t;
   return [
-    w[0] * s.p0[0] + w[1] * s.p1[0] + w[2] * s.p2[0] + w[3] * s.p3[0],
-    w[0] * s.p0[1] + w[1] * s.p1[1] + w[2] * s.p2[1] + w[3] * s.p3[1],
+    w0 * s.p0[0] + w1 * s.p1[0] + w2 * s.p2[0] + w3 * s.p3[0],
+    w0 * s.p0[1] + w1 * s.p1[1] + w2 * s.p2[1] + w3 * s.p3[1],
   ];
 }
 
