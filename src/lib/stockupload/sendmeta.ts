@@ -2,6 +2,7 @@
 import JSZip from "jszip";
 import { embedMetadataInSvg, readEmbeddedMetadata } from "../upload/embed";
 import { embedXmpMetadataInEps, verifyEpsMetadata } from "../upload/epsmetadata";
+import { stripEpsIdentity } from "../upload/epsclean";
 import { embedXmpMetadata, readXmpMetadata } from "../upload/jpeg";
 import { readJpegIptc } from "../upload/jpegiptc";
 import { sameLegacyMetadata } from "../upload/iptc";
@@ -49,7 +50,7 @@ function verifiedText(name: string, bytes: Uint8Array, meta: IconMetadata, forma
     return new TextEncoder().encode(output);
   }
   if (format === "eps" && text.startsWith("%!PS-Adobe")) {
-    const output = embedXmpMetadataInEps(text, meta);
+    const output = embedXmpMetadataInEps(stripEpsIdentity(text), meta); // an older file leaves scrubbed (RULE 26)
     if (!verifyEpsMetadata(output, meta)) throw new Error(`Could not verify metadata in ${name}.`);
     return new TextEncoder().encode(output);
   }

@@ -200,8 +200,12 @@ function removeJunkElement(el: Element, opts: CleanOptions, checkMeta: boolean):
   return junk;
 }
 
-/** Renames every referenced id to a, b, c… in document order, refs included. */
-function renameReferencedIds(root: Element, elements = allElements(root)): void {
+/**
+ * Renames every referenced id to a, b, c… in document order, refs included, and
+ * drops unreferenced ids. Exported (2026-11-24) for the Builder's clean-off path,
+ * so hash-scoped composition ids never ship either way (RULE 26).
+ */
+export function renameReferencedIds(root: Element, elements = allElements(root)): void {
   const referenced = referencedIds(elements);
   const map = new Map<string, string>();
   for (const el of elements) {

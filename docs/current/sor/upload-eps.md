@@ -6,7 +6,7 @@ Inherited caps/joins and forced endpoint modes: [stroke endpoints](upload-stroke
 
 ## The clean EPS (2026-11-19)
 
-No exported EPS ever carries `IconSplitter`, `x:xmptk` or converter `%%Creator` / `%%CreationDate` headers (RULE 26 — `epsdoc.ts`, `epsmetadata.ts`, `epsiptc.ts` use neutral `%BeginDocumentMetadata` / `MetadataDict_<id>` / `MetadataStream_<id>` and bare `%%BeginPhotoshop: 6` markers, while still stripping legacy `% IconSplitter …` blocks from older files). `Clean the saved files` governs carrier count: on (default), `lib/upload/epsclean.ts` strips foreign `%ADO_*` / `%%For` / `%%Copyright` / `%%BeginPhotoshop` blocks and keeps ONE neutral pdfmark XMP stream; off, the two-carrier envelope (neutral pdfmark XMP + `%%BeginPhotoshop` IRB) is written. EPS 10 markers (`%%BoundingBox`, `%%HiResBoundingBox`, `%%DocumentData`, `%%LanguageLevel`, Prolog/Setup, `%%EOF`) stay intact, and `verifiedEpsArtwork` re-derives the envelope byte-identically.
+No exported EPS ever carries `IconSplitter`, `x:xmptk`, `%%Title`, `%%Creator` / `%%CreationDate`, Illustrator `%AI…` comments or hashed names (RULE 26). `epsdoc.ts`, `epsmetadata.ts`, `epsiptc.ts` use fixed neutral `%BeginDocumentMetadata` / `MetadataDict` / `MetadataStream` / `%EndPacket` and bare `%%BeginPhotoshop: 6` markers. `epsclean.stripEpsIdentity` (rule in `epsidentity.ts`) scrubs every EPS leaving the app — Upload stage, Builder package, rename, stock-upload copy, re-embed — and renames an older one-id hashed envelope (2026-11-24, design `2026-11-24-eps-identity-scrub`). `Clean the saved files` governs carrier count: on (default), `lib/upload/epsclean.ts` strips foreign `%ADO_*` / `%%For` / `%%Copyright` / `%%BeginPhotoshop` blocks and keeps ONE neutral pdfmark XMP stream; off, the two-carrier envelope (neutral pdfmark XMP + `%%BeginPhotoshop` IRB) is written. EPS 10 markers (`%%BoundingBox`, `%%HiResBoundingBox`, `%%DocumentData`, `%%LanguageLevel`, Prolog/Setup, `%%EOF`) stay intact, and `verifiedEpsArtwork` re-derives the envelope byte-identically.
 
 ## Converter choices
 
@@ -29,11 +29,10 @@ record and Download all. Converter selection remains explicit.
   fingerprint: switching rebuilds the EPS only, and choosing a converter never
   toggles `includeEps`.
   It treats the prepared `viewBox` at the root's px size as the artboard (rescaled: the target in pt, `epsInputSvg`): `%%HiResBoundingBox` exact,
-  `%%BoundingBox` rounded outward, Illustrator's `%AI5_ArtSize: height width`
-  and centered `%AI3_TemplateBox` from the HiRes box, the upright transform
-  anchored to it, and no `%%PageBoundingBox` (EPS, not a page). Writer ID
-  `builtin-vector-4`; planning compares it, so a writer change refreshes only
-  the EPS.
+  `%%BoundingBox` rounded outward, no `%%Title` and no `%AI…` comment, the upright
+  transform anchored to the HiRes box, and no `%%PageBoundingBox` (EPS, not a
+  page). Writer ID `builtin-vector-5`; planning compares it, so a writer change
+  refreshes only the EPS.
   Accepted metadata is embedded as the JPEG's Dublin Core XMP packet
   (`dc:title`, `dc:description`, `dc:subject`) in an EPS pdfmark stream with
   BDC/EMC around the drawing (see the clean form below). It is read back before

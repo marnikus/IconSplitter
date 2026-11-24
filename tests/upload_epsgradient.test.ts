@@ -27,7 +27,7 @@ describe("native vector-only EPS gradients", () => {
   });
 
   it("converts the actual transformed radial shadow with varying alpha as vector shading", async () => {
-    const out = await builtinConverter.convert({ svg: shadow, background: "#fff", title: "shadow.eps" }, {} as never);
+    const out = await builtinConverter.convert({ svg: shadow, background: "#fff" }, {} as never);
     expect(out.ok, out.ok ? "" : out.reason).toBe(true);
     if (!out.ok) return;
     expect(out.eps).toContain("/ShadingType 3");

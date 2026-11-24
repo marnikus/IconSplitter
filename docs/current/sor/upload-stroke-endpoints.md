@@ -38,8 +38,8 @@ own expansion and artboard-fit check. Keep source retains the supplied badge.
 The native writer's `epspaint.strokeOf` translates parent PostScript cap/join
 numbers back into SVG inheritance values; it must never reset a child to the
 initial butt/miter values. Local attributes/styles still override inherited
-paint. Native writer identity is `builtin-vector-4`, invalidating cached EPS
-written before the inheritance correction. Strict vector-only EPS audits are
+paint. Native writer identity is `builtin-vector-5` (`-4` invalidated EPS
+written before the inheritance correction; `-5`, 2026-11-24, drops `%%Title`/`%AI…`). Strict vector-only EPS audits are
 unchanged; no raster fallback or separately installed program is introduced.
 
 ## Owners and tests

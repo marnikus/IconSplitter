@@ -20,7 +20,7 @@ import type { StagePlan } from "../lib/upload/export";
 import type { RasterDeps } from "../lib/upload/raster";
 import { embedXmpMetadata } from "../lib/upload/jpeg";
 import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
-import { cleanEpsDocument, stripEpsProducerLines } from "../lib/upload/epsclean";
+import { cleanEpsDocument, stripEpsIdentity } from "../lib/upload/epsclean";
 import { enforceExportSvg } from "../lib/upload/clean";
 import { cleanSvgText } from "../lib/upload/svgclean";
 
@@ -135,13 +135,13 @@ async function buildEps(art: Artifacts, ctx: StageContext): Promise<void> {
   const eps = await converter.convert({
     // a rescaled page is the target in POINTS — what Illustrator and the stocks count as px (2026-11-23)
     svg: epsInputSvg(art.optimizedSvg as string, ctx.settings.rescaleArtboard), background: flattenColor(ctx.settings.background),
-    title: `${ctx.workName ?? ctx.stem}.eps`, ...(ctx.now === undefined ? {} : { createdAt: ctx.now }),
+    ...(ctx.now === undefined ? {} : { createdAt: ctx.now }), // no title: the file never names the work (RULE 26)
   }, ctx.converter, ctx.signal);
   if (eps.ok) {
-    const producerFree = stripEpsProducerLines(eps.eps);
+    const scrubbed = stripEpsIdentity(eps.eps); // any converter: no title, producer, %AI or hashed names
     art.epsText = ctx.settings.cleanExport
-      ? cleanEpsDocument(producerFree, ctx.metadata)
-      : (ctx.metadata === null ? producerFree : embedXmpMetadataInEps(producerFree, ctx.metadata));
+      ? cleanEpsDocument(scrubbed, ctx.metadata)
+      : (ctx.metadata === null ? scrubbed : embedXmpMetadataInEps(scrubbed, ctx.metadata));
     const checked = verifyEpsDocument(art.epsText);
     if (!checked.ok) {
       art.epsText = null;

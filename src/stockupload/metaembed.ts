@@ -5,6 +5,7 @@ import { probePath, readBytesAt, readTextAt, writeFileOverwrite, type DirHandleL
 import type { ExportedFileRef, ExportedItem } from "../lib/stockupload/types";
 import { embedMetadataInSvg, readEmbeddedMetadata } from "../lib/upload/embed";
 import { embedXmpMetadataInEps, verifyEpsMetadata } from "../lib/upload/epsmetadata";
+import { stripEpsIdentity } from "../lib/upload/epsclean";
 import { metadataBlock, parseExportRecord, serializeExportRecord, type ExportRecord } from "../lib/upload/export";
 import { sha256Hex } from "../lib/upload/hash";
 import { embedXmpMetadata, readXmpMetadata } from "../lib/upload/jpeg";
@@ -72,7 +73,7 @@ async function reembedEps(
 ): Promise<{ bytes: number; hash: string }> {
   const raw = await readTextAt(root, ref.relPath);
   if (raw === null) throw new Error(`missing ${ref.relPath}`);
-  const embedded = utf8Encode(embedXmpMetadataInEps(raw, meta));
+  const embedded = utf8Encode(embedXmpMetadataInEps(stripEpsIdentity(raw), meta)); // an older file is scrubbed on re-embed (RULE 26)
   await atomicWriteFile(dir, ref.fileName, embedded, (back) => verifyEpsMetadata(utf8Decode(back), meta));
   return { bytes: embedded.byteLength, hash: `sha256:${await sha256Hex(embedded)}` };
 }

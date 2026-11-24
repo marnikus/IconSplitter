@@ -46,7 +46,7 @@ export function sheetSvg(patch: SheetPatch = {}): string {
 const NO_BROWSER = {
   pngBlob: async () => new Blob([new Uint8Array([1])]),
   rasterize: async () => ({ ok: true as const, jpeg: new Uint8Array([1]) }),
-  eps: (input: { svg: string; background: string; title: string; xmp?: string }) =>
+  eps: (input: { svg: string; background: string; xmp?: string }) =>
     builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") }),
 };
 

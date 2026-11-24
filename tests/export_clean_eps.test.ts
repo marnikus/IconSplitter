@@ -25,7 +25,7 @@ const ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path 
 
 /** A real EPS 10 from the built-in writer. */
 function eps(): string {
-  const out = writeEps(ICON, "white", { title: "sheet.eps", createdAt: "2026-11-19T00:00:00.000Z" });
+  const out = writeEps(ICON, "white", { createdAt: "2026-11-19T00:00:00.000Z" });
   if (!out.ok) throw new Error(out.reason);
   return out.eps;
 }
@@ -36,7 +36,8 @@ afterEach(() => setTextOutliner(null));
 
 describe("cleanEpsDocument", () => {
   it("strips the producer's paperwork and the second metadata carrier", () => {
-    const converterEps = eps().replace("%%Title: sheet.eps", "%%Creator: Inkscape 1.3\n%%CreationDate: 2026-11-19T00:00:00Z\n%%Title: sheet.eps");
+    // what an external converter leaves (the built-in writer writes none of it since 2026-11-24)
+    const converterEps = eps().replace("%%BoundingBox:", "%%Creator: Inkscape 1.3\n%%CreationDate: 2026-11-19T00:00:00Z\n%%Title: sheet.eps\n%%BoundingBox:");
     const legacy = embedXmpMetadataInEps(converterEps, META);
     expect(legacy).toContain("%%Creator:");
     expect(legacy).toContain("%%CreationDate:");
@@ -48,6 +49,7 @@ describe("cleanEpsDocument", () => {
     const clean = cleanEpsDocument(converterEps, META);
     expect(clean).not.toContain("%%Creator");
     expect(clean).not.toContain("%%CreationDate");
+    expect(clean).not.toContain("%%Title"); // RULE 26 (2026-11-24): the file never names the work
     expect(clean).not.toContain("%ADO_");
     expect(clean).not.toContain("%%BeginPhotoshop");
     expect(clean).not.toContain("x:xmptk");

@@ -47,10 +47,11 @@ describe("EPS XMP metadata", () => {
     expect(bdcAt).toBeLessThan(drawingAt);
     expect(drawingAt).toBeLessThan(emcAt);
     expect(emcAt).toBeLessThan(pageTrailerAt);
-    const dictionary = eps.match(/^(MetadataDict_[a-f0-9]+) begin$/m)?.[1];
-    const stream = eps.match(/^\[\/_objdef \{(MetadataStream_[a-f0-9]+)\} \/type \/stream \/OBJ pdfmark$/m)?.[1];
-    expect(dictionary).toBeDefined();
-    expect(stream).toBeDefined();
+    // fixed, neutral names — no per-file hash (2026-11-24, RULE 26)
+    const dictionary = eps.match(/^(\w+) begin$/m)?.[1];
+    const stream = eps.match(/^\[\/_objdef \{(\w+)\} \/type \/stream \/OBJ pdfmark$/m)?.[1];
+    expect(dictionary).toBe("MetadataDict");
+    expect(stream).toBe("MetadataStream");
     expect(Array.from(eps.matchAll(new RegExp(`^${dictionary} begin$`, "gm")))).toHaveLength(2);
     expect(eps).toContain(`/Metadata {${stream}}`);
     expect(readXmpMetadataFromEps(eps)).toEqual(META);

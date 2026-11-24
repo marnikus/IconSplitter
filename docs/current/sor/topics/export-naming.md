@@ -62,8 +62,8 @@ case is not in the corpus and would be caught by T28 when it lands.
 `commitExport` writes exactly four names into `export/` — `${stem}.svg`,
 `${stem}.jpg`, `${stem}.eps` and `export.json` — and all three artifacts take
 `stem` from the same `plan.stem` (`stemOf(row.svgName)`), so within one run the
-EPS can never carry a different name than its siblings; the EPS's own
-`%%Title` is `${stem}.eps` for the same reason. A differently-named `.eps` in a
+EPS can never carry a different name than its siblings (the EPS itself names
+no file at all: no `%%Title` since 2026-11-24, RULE 26). A differently-named `.eps` in a
 folder can therefore only be a file no export of the current naming wrote: a
 leftover from before the rename. The sweep removes such a leftover in both
 shapes: named by the icon's own previous `export.json` (when the current EPS is

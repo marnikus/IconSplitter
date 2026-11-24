@@ -10,7 +10,6 @@ export interface EpsConvertInput {
   svg: string;
   svgRoot?: Element;
   background: string;
-  title: string;
   createdAt?: string;
 }
 

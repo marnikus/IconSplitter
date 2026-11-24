@@ -165,10 +165,13 @@ describe("packages and copies never carry the work name, a hash or a fake Illust
   });
 
   it("SVG builder with clean off ships no hash-scoped ids", async () => {
-    const icon = `<svg ${NS} viewBox="0 0 24 24"><defs><linearGradient id="g"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#111"/></linearGradient></defs><path d="M2 2h20v20H2z" stroke="url(#g)"/></svg>`;
+    // A referenced id survives the builder's node compiler (a `<use>` of a shape; gradients in
+    // `<defs>` are not carried since the 2026-11 compiled-node rewrite, so they cannot show it).
+    const icon = `<svg ${NS} viewBox="0 0 24 24"><path id="p" d="M2 2h20v20H2z"/><use href="#p" x="1"/></svg>`;
     const config = parseSheetConfig(DEFAULT_CONFIG);
     const svg = composeSheet({ config, layout: computeLayout(config), assets: [ICON_ASSET], placedIds: ["a"], svgTexts: { a: icon } }).svg;
-    expect(svg).toMatch(/id="b[0-9a-f]+-g"/); // the builder scopes ids by a hash while composing
+    expect(svg).toMatch(/id="b[0-9a-f]+-[\w-]*p"/); // the builder scopes ids by a hash while composing
+    expect(svg).toMatch(/href="#b[0-9a-f]+-/);
     setTextOutliner(() => ({ d: "M0 0 L10 0", width: 10 }));
     const pkg = await buildSheetPackage({
       svg, metadata: null, folder: "_artboard_sheets/x/a", workName: WORK, stem: WORK, pairId: "a1",
@@ -178,6 +181,8 @@ describe("packages and copies never carry the work name, a hash or a fake Illust
     const out = new TextDecoder().decode(pkg.files.find((f) => f.name.endsWith(".svg"))!.bytes);
     expect(out).not.toMatch(/id="b[0-9a-f]+-/);
     expect(out).not.toMatch(/url\(#b[0-9a-f]+-/);
+    expect(out).not.toMatch(/href="#b[0-9a-f]+-/);
+    expect(out).toMatch(/<use [^>]*href="#a"/); // the reference still resolves, under a neutral name
   });
 
   it("renaming an older exported package scrubs its EPS and records the new bytes", async () => {

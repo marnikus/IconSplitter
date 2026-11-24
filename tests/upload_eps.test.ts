@@ -14,14 +14,15 @@ const PREPARED = `<svg ${NS} viewBox="0 0 92.8 92.8" width="92.8" height="92.8">
 const art = (inner: string) => `<svg ${NS} viewBox="0 0 100 100">${inner}</svg>`;
 
 describe("writeEps — a genuine EPS document", () => {
-  it("emits an EPS 10 document: the DSC comments Illustrator 10 expects", () => {
-    const result = writeEps(PREPARED, "#ffffff", { title: "fog_AI.eps", createdAt: "2026-10-08T00:00:00.000Z" });
+  it("emits a plain EPS 10 document: the DSC boxes, data and level — no title, tool or %AI claim (2026-11-24)", () => {
+    const result = writeEps(PREPARED, "#ffffff", { createdAt: "2026-10-08T00:00:00.000Z" });
     if (!result.ok) throw new Error(result.reason);
     const head = result.eps.split("%%EndComments")[0];
     expect(head.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
     expect(head).not.toContain("%%Creator");
     expect(head).not.toContain("IconSplitter");
-    expect(head).toContain("%%Title: fog_AI.eps");
+    expect(head).not.toContain("%%Title"); // the work name never reaches the file (RULE 26)
+    expect(head).not.toMatch(/^%AI/m);
     expect(head).not.toContain("%%CreationDate");
     expect(head).toContain("%%BoundingBox: 0 0 70 70");
     expect(head).toContain("%%HiResBoundingBox: 0 0 69.6 69.6");
@@ -40,10 +41,10 @@ describe("writeEps — a genuine EPS document", () => {
     expect(verifyEps(result.eps).ok).toBe(true);
   });
 
-  it("escapes a title so a stray parenthesis cannot break the DSC string", () => {
-    const result = writeEps(PREPARED, "#ffffff", { title: "odd (1) name.eps" });
+  it("writes no %%Title at all, so no name can break or leak through the DSC block (2026-11-24)", () => {
+    const result = writeEps(PREPARED, "#ffffff", {});
     if (!result.ok) throw new Error(result.reason);
-    expect(result.eps).toContain("%%Title: odd \\(1\\) name.eps");
+    expect(result.eps).not.toContain("%%Title");
   });
 
   it("verifies the EPS 10 markers, not just the header", () => {
@@ -78,17 +79,13 @@ describe("writeEps — a genuine EPS document", () => {
     expect(result.shapes).toBe(2); // background rect + artwork rect
   });
 
-  it("pins Illustrator's artboard to the exact painted white rectangle, not the integer EPS box", () => {
+  it("pins the artwork to the exact HiRes box, with no fake Illustrator artboard comments (2026-11-24)", () => {
     const svg = `<svg ${NS} viewBox="10 20 1025 512"><rect x="10" y="20" width="1025" height="512" fill="#fff"/></svg>`;
     const result = writeEps(svg, "#ffffff");
     if (!result.ok) throw new Error(result.reason);
     expect(result.eps).toContain("%%BoundingBox: 0 0 769 384");
     expect(result.eps).toContain("%%HiResBoundingBox: 0 0 768.75 384");
-    expect(result.eps).toContain("%AI5_ArtSize: 384 768.75"); // AI5 stores height, then width
-    expect(result.eps).toContain("%AI3_TemplateBox: 384.375 192 384.375 192");
-    for (const tag of ["%AI5_ArtSize:", "%AI3_TemplateBox:"]) {
-      expect(result.eps.indexOf(tag)).toBeLessThan(result.eps.indexOf("%%EndComments"));
-    }
+    expect(result.eps).not.toMatch(/^%AI/m); // no %AI5_ArtSize / %AI3_TemplateBox claim (RULE 26)
     expect(result.eps).not.toContain("%%PageBoundingBox:");
     expect(result.eps).toContain("[0.75 0 0 -0.75 -7.5 399] concat");
     expect(runPostScript(result.eps).painted).toEqual(hiResBox(result.eps));
@@ -282,6 +279,7 @@ describe("verifyEps", () => {
     const broken = (result.ok ? result.eps : "").replace("[0.75 0 0 -0.75 0 69.6] concat", "0.75 0 0 -0.75 0 69.6 concat");
     const verdict = verifyEps(broken);
     expect(verdict.ok).toBe(false);
-    expect(verdict.errors).toContain("line 14: concat expects an array, found number"); // the two AI artboard comments precede the CTM
+    const line = broken.split("\n").findIndex((text) => text.endsWith(" concat")) + 1; // the CTM follows the DSC block
+    expect(verdict.errors).toContain(`line ${line}: concat expects an array, found number`);
   });
 });

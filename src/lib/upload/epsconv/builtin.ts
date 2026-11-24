@@ -5,14 +5,15 @@
 import { verifyEps, writeEps, writeEpsFromRoot } from "../eps";
 import type { ConvertResult, EpsConverter, EpsConvertInput } from "./types";
 
-export const BUILTIN_WRITER = "builtin-vector-4";
+// -5 (2026-11-24): no %%Title / %AI comments — older EPS files are rebuilt by the planner.
+export const BUILTIN_WRITER = "builtin-vector-5";
 
 export const builtinConverter: EpsConverter = {
   id: "builtin",
   label: "Built-in (vector gradients, Level 3)",
   probe: async () => ({ ok: true, version: BUILTIN_WRITER }),
   convert: async (input: EpsConvertInput): Promise<ConvertResult> => {
-    const opts = { title: input.title, ...(input.createdAt === undefined ? {} : { createdAt: input.createdAt }) };
+    const opts = input.createdAt === undefined ? {} : { createdAt: input.createdAt };
     const out = input.svgRoot !== undefined
       ? writeEpsFromRoot(input.svgRoot, input.svg, input.background, opts)
       : writeEps(input.svg, input.background, opts);

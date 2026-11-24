@@ -33,7 +33,7 @@ digest resources are removed. Parsing stops at SOS; compressed scan bytes are
 never scanned for markers or altered. Metadata edits do not re-encode pixels.
 
 EPS retains Adobe's document-level XMP stream/pdfmarks (`%BeginDocumentMetadata`,
-`MetadataDict_<id>`, `MetadataStream_<id>`) and, when the two-carrier envelope is
+fixed `MetadataDict` / `MetadataStream` — no per-file hash since 2026-11-24) and, when the two-carrier envelope is
 selected (`cleanExport: false`), adds Photoshop IPTC resource 0x0404 AND XMP
 resource 0x0424 in ASCII-hex `%%BeginPhotoshop: 6` / `%%EndPhotoshop` comments
 (`cleanExport: true` keeps only the single XMP carrier). Neither JPEG XMP nor EPS

@@ -326,9 +326,10 @@ describe("runExport — the full package commits per icon", () => {
     }));
     expect(result.status).toBe("processed");
     const eps = fileText(root, `${DIR}/export/${ART}.eps`);
-    // a real EPS 10 document, carrying the icon's own file name and the run's clock
+    // a real EPS 10 document that names neither the icon's file nor the work (2026-11-24, RULE 26)
     expect(eps.startsWith("%!PS-Adobe-3.0 EPSF-3.0")).toBe(true);
-    expect(eps).toContain(`%%Title: ${ART}.eps`);
+    expect(eps).not.toContain("%%Title");
+    expect(eps).not.toContain(`${ART}.eps`);
     // the run's clock is NOT shipped: `Clean the saved files` (2026-11-19) strips the
     // converter's own paperwork, and a creation second is provenance, not artwork
     expect(eps).not.toContain("%%CreationDate");
@@ -369,8 +370,8 @@ describe("runExport — the full package commits per icon", () => {
     expect(readXmpMetadataFromEps(eps)).toEqual(META);
     expect(verifyEpsDocument(eps).ok).toBe(true);
     expect(readRecord(root).validation).toMatchObject({ eps: true, readback: true });
-    // Metadata postprocessing preserves the built-in EPS artboard and artwork.
-    expect(eps).toContain("%AI5_ArtSize:");
+    // Metadata postprocessing preserves the built-in EPS artwork, and adds no %AI claim.
+    expect(eps).not.toMatch(/^%AI/m);
     expect(eps).toContain("[0.75 0 0 -0.75");
     expect(eps).toContain("newpath");
     expect(eps.indexOf("/BDC pdfmark")).toBeLessThan(eps.indexOf("newpath"));
@@ -459,7 +460,7 @@ describe("runExport — the full package commits per icon", () => {
     const settings: UploadSettings = { ...DEFAULT_UPLOAD_SETTINGS, includeEps: true };
     const result = await runExport(args(root, { settings, defaults: settings, deps: { raster: fakeRaster(3886, 3886) } }));
     expect(result.status).toBe("processed");
-    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-vector-4" });
+    expect(readRecord(root).tools.eps).toMatchObject({ enabled: true, converter: "builtin", writer: "builtin-vector-5" });
     expect(readRecord(root).tools.expand).toEqual({ enabled: false, shapes: 0 });
   });
 

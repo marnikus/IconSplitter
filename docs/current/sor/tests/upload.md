@@ -37,12 +37,12 @@
   opacity and collision-free paint ID, icon-relative width/gap after stroke,
   source-frame margins/overflow, width/height-only frames, clipped-art refusal,
   zero-opacity and hidden geometry, pinned artboard fit and clean/SVGO references.
-  `upload_runexport.test.ts` checks preview/JPEG prepared input, committed
-  gradient SVG and built-in-EPS partial output; its two-pass regression proves
-  that a previously committed EPS stays on disk but vanishes from the new
-  partial or EPS-disabled record and Download all. `export_clean_upload.test.ts`
-  (9) — the same clean copy the sheet gets: dead `color`, bare `<g>`, provenance
-  and float noise; the fingerprint moves only for off.
+  `upload_runexport.test.ts`: preview/JPEG input, gradient SVG, built-in-EPS
+  partial output; two-pass regression: a committed EPS stays on disk but
+  leaves the new partial/EPS-off record + Download all. `export_clean_upload.test.ts`
+  (9) — the sheet clean copy: dead `color`, bare `<g>`, provenance, float
+  noise; fingerprint moves only for off. `export_eps_identity.test.ts` —
+  no work name, hash or `%AI…` in shipped EPS/SVG (RULE 26).
 * `upload_badge_settings.test.ts`, `upload_badge_geometry.test.ts`,
   `upload_badge.test.ts` and `upload_outline.test.ts` — opt-in/default
   fingerprints, scientific-notation path parsing, exact four-corner insets,

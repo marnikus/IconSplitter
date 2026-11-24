@@ -9,10 +9,9 @@ Dated, opt-in context from the former system-of-record sections. If a dated expl
   edit path, so a pasted list with repeats becomes one clean list before the
   policy ever looks at it.
 * **EPS 10 after the SVG is optimized** (point 2): the EPS stage runs on the
-  CLEANED/optimized export SVG and writes an **EPS 10 /
-  Illustrator-10-compatible** document — `%!PS-Adobe-3.0 EPSF-3.0`, the DSC
-  order `%%Creator` → `%%Title` (the `${stem}.eps` name, DSC-escaped) →
-  `%%CreationDate` (the run's clock) → `%%BoundingBox` (integer) →
+  CLEANED/optimized export SVG and writes a plain **EPS 10** document —
+  `%!PS-Adobe-3.0 EPSF-3.0`, then (RULE 26, no `%%Creator`/`%%Title`/
+  `%%CreationDate`/`%AI…` since 2026-11-19/24) `%%BoundingBox` (integer) →
   `%%HiResBoundingBox` (exact points) → `%%DocumentData: Clean7Bit` →
   `%%LanguageLevel: 3`, then EndComments/Prolog/Setup sections, the uprighting
   CTM (`[a b c d tx ty] concat` — ONE array, I-61) and `%%EOF`. `verifyEps`

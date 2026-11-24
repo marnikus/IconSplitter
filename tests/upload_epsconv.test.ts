@@ -41,23 +41,23 @@ describe("the registry — one table", () => {
 
 describe("the built-in converter IS writeEps", () => {
   it("returns the same bytes as writeEps, is always available, and names its writer", async () => {
-    const direct = writeEps(PREPARED, "#ffffff", { title: "fog.eps", createdAt: "2026-10-09T00:00:00.000Z" });
+    const direct = writeEps(PREPARED, "#ffffff", { createdAt: "2026-10-09T00:00:00.000Z" });
     const viaRegistry = await CONVERTERS.builtin.convert(
-      { svg: PREPARED, background: "#ffffff", title: "fog.eps", createdAt: "2026-10-09T00:00:00.000Z" },
+      { svg: PREPARED, background: "#ffffff", createdAt: "2026-10-09T00:00:00.000Z" },
       deps(() => Promise.reject(new Error("never called"))),
     );
     expect(direct.ok).toBe(true);
     expect(viaRegistry.ok).toBe(true);
     if (!direct.ok || !viaRegistry.ok) return;
     expect(viaRegistry.eps).toBe(direct.eps);
-    expect(viaRegistry.writer).toBe("builtin-vector-4");
+    expect(viaRegistry.writer).toBe("builtin-vector-5");
     expect(viaRegistry.fixes).toEqual([]);
-    expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-vector-4" });
+    expect(await CONVERTERS.builtin.probe(deps(() => Promise.reject(new Error("never"))))).toEqual({ ok: true, version: "builtin-vector-5" });
   });
 
   it("the built-in converter verifies its own program before it answers ok (I-61)", async () => {
     const out = await CONVERTERS.builtin.convert(
-      { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="1" y="1" width="4" height="4" fill="#f00" stroke="#000"/></svg>`, background: "#ffffff", title: "x.eps" },
+      { svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect x="1" y="1" width="4" height="4" fill="#f00" stroke="#000"/></svg>`, background: "#ffffff" },
       deps(() => Promise.reject(new Error("never"))), undefined,
     );
     expect(out.ok).toBe(true);
@@ -67,7 +67,7 @@ describe("the built-in converter IS writeEps", () => {
 
   it("an honest subset failure stays a failure, with its reason", async () => {
     const out = await CONVERTERS.builtin.convert(
-      { svg: `<svg ${NS} viewBox="0 0 10 10"><text x="1" y="5">hi</text></svg>`, background: "#ffffff", title: "t.eps" },
+      { svg: `<svg ${NS} viewBox="0 0 10 10"><text x="1" y="5">hi</text></svg>`, background: "#ffffff" },
       deps(() => Promise.reject(new Error("never"))),
     );
     expect(out.ok).toBe(false);
@@ -107,18 +107,18 @@ describe("the Inkscape converter — a client to the local helper", () => {
       expect((init?.headers as Record<string, string>)["content-type"]).toBe("image/svg+xml");
       return new Response(EPS_OK, { status: 200, headers: { "content-type": "application/postscript", "x-inkscape-version": "1.3.2" } });
     });
-    const out = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#ffffff", title: "fog.eps" }, deps(f));
+    const out = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#ffffff" }, deps(f));
     expect(out).toEqual({ ok: true, eps: EPS_OK, writer: "inkscape-cli@1.3.2", fixes: [] });
     expect(String(f.mock.calls[0][0])).toBe(`${DEFAULT_BRIDGE_URL}/convert/eps`);
   });
 
   it("convert: a helper error carries the helper's reason; an unreachable helper carries the fix; a non-EPS body is refused", async () => {
-    const failed = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff", title: "t" }, deps(async () => json({ reason: "inkscape exited with code 1" }, 502)));
+    const failed = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff" }, deps(async () => json({ reason: "inkscape exited with code 1" }, 502)));
     expect(failed).toEqual({ ok: false, reason: "inkscape exited with code 1" });
-    const down = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff", title: "t" }, deps(() => Promise.reject(new TypeError("Failed to fetch"))));
+    const down = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff" }, deps(() => Promise.reject(new TypeError("Failed to fetch"))));
     expect(down.ok).toBe(false);
     if (!down.ok) expect(down.reason).toContain("not reachable");
-    const junk = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff", title: "t" }, deps(async () => new Response("<html>", { status: 200 })));
+    const junk = await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff" }, deps(async () => new Response("<html>", { status: 200 })));
     expect(junk).toEqual({ ok: false, reason: "the helper answered with something that is not an EPS" });
   });
 
@@ -128,7 +128,7 @@ describe("the Inkscape converter — a client to the local helper", () => {
       expect(init?.signal).toBe(ctl.signal);
       return new Response(EPS_OK, { status: 200 });
     });
-    await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff", title: "t" }, deps(f), ctl.signal);
+    await CONVERTERS.inkscape.convert({ svg: PREPARED, background: "#fff" }, deps(f), ctl.signal);
     expect(f).toHaveBeenCalledTimes(1);
   });
 });

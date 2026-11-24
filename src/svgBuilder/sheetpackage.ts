@@ -9,7 +9,8 @@
 import { embedMetadataInSvg } from "../lib/upload/embed";
 import { solidPaint, solidPaintDom } from "../lib/upload/solidpaint";
 import { cleanSvgDom } from "../lib/upload/svgclean";
-import { cleanEpsDocument, stripEpsProducerLines } from "../lib/upload/epsclean";
+import { renameReferencedIds } from "../lib/upload/cleandom";
+import { cleanEpsDocument, stripEpsIdentity } from "../lib/upload/epsclean";
 import { embedXmpMetadataInEps } from "../lib/upload/epsmetadata";
 import { expandStrokes } from "../lib/upload/expand";
 import { expandTextDom } from "../lib/upload/expandtext";
@@ -104,7 +105,10 @@ function prepareSheetDom(svg: string, settings: UploadSettings, cleanInPlace = f
     return cleanInPlace ? { ok: false, reason: "clean: the document does not parse as an SVG" } : { ok: true, svg };
   }
   solidPaintDom(root);
-  if (!settings.cleanExport) stripPreviewHooksDom(root);
+  if (!settings.cleanExport) {
+    stripPreviewHooksDom(root);
+    renameReferencedIds(root); // composition ids carry a hash prefix: a, b, c… instead (RULE 26)
+  }
   const scaledElements = new Set<Element>();
   const formatErr = runDomFormatPasses(root, settings, scaledElements);
   if (formatErr !== null) return { ok: false, reason: formatErr };
@@ -142,9 +146,9 @@ function acceptedOf(m: SheetMetadata | null): IconMetadata | null {
 interface Part { name: string; bytes: Uint8Array | null; problem: string | null }
 
 function finalizeEpsText(eps: string, cleanExport: boolean, meta: IconMetadata | null): string {
-  const producerFree = stripEpsProducerLines(eps);
-  if (cleanExport) return cleanEpsDocument(producerFree, meta);
-  return meta === null ? producerFree : embedXmpMetadataInEps(producerFree, meta);
+  const scrubbed = stripEpsIdentity(eps); // clean on or off: no title, producer, %AI or hashed names (RULE 26)
+  if (cleanExport) return cleanEpsDocument(scrubbed, meta);
+  return meta === null ? scrubbed : embedXmpMetadataInEps(scrubbed, meta);
 }
 
 function scaleRootForEps(root: Element | undefined, svg: string, rescaled: boolean): Element | undefined {
@@ -160,7 +164,6 @@ function scaleRootForEps(root: Element | undefined, svg: string, rescaled: boole
 
 async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: IconMetadata | null, svgRoot?: Element): Promise<Part> {
   const name = `${a.stem}.eps`;
-  const docTitle = `${a.workName ?? a.stem}.eps`;
   if (!a.settings.includeEps || d.eps === undefined) return { name, bytes: null, problem: a.settings.includeEps ? "EPS: no converter" : null };
   try {
     // a rescaled page is the target in POINTS — what Illustrator and the stocks count as px (2026-11-23)
@@ -168,7 +171,7 @@ async function convertEpsFile(a: SheetPackageArgs, d: SheetPackageDeps, meta: Ic
     const out = await d.eps({
       svg: epsInputSvg(solidPaint(a.svg), a.settings.rescaleArtboard),
       ...(epsRoot === undefined ? {} : { svgRoot: epsRoot }),
-      background: flattenColor(sizeOf(a.svg).background), title: docTitle, createdAt: a.now,
+      background: flattenColor(sizeOf(a.svg).background), createdAt: a.now,
     });
     if (!out.ok) return { name, bytes: null, problem: `EPS: ${out.reason}${out.fix === undefined ? "" : ` — ${out.fix}`}` };
     return { name, bytes: text(finalizeEpsText(out.eps, a.settings.cleanExport, meta)), problem: null };

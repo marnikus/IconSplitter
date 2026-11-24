@@ -1,8 +1,10 @@
 // epsdoc.ts — the document layer of the EPS writer (design §2.5): the DSC
-// comment block, the EPS and Illustrator artboard bounds, the uprighting CTM
-// and structural verification. Split out of `eps.ts` (RULE 18) so the
-// shape walker there stays about SVG, and every fact about what makes the file
-// an **EPS 10 / Illustrator-10-compatible** document lives in ONE place here.
+// comment block, the EPS bounds, the uprighting CTM and structural
+// verification. Split out of `eps.ts` (RULE 18) so the shape walker there stays
+// about SVG, and every fact about what makes the file a plain **EPS 10**
+// document lives in ONE place here. It names nothing and fakes no application
+// (2026-11-24, RULE 26): no `%%Title` (that was the internal work name) and no
+// Illustrator `%AI5_ArtSize` / `%AI3_TemplateBox` claims.
 
 import { checkPostScript } from "./epscheck";
 import { fmt } from "./geom";
@@ -17,11 +19,9 @@ export function integerBounds(box: EpsBoundingBox): EpsBoundingBox {
   return { llx: Math.floor(box.llx), lly: Math.floor(box.lly), urx: Math.ceil(box.urx), ury: Math.ceil(box.ury) };
 }
 
-/** The document identity the DSC comments carry (never invented, never Adobe's). */
+/** Writer options. No title (2026-11-24): a shipped EPS names neither the file nor the batch. */
 export interface EpsOptions {
-  /** `%%Title` — the artifact's own file name, by convention `${stem}.eps`. */
-  title?: string;
-  /** `%%CreationDate` — the run's clock; omitted when unknown. */
+  /** The run's clock — never written into the file (RULE 26); kept for callers' records. */
   createdAt?: string;
 }
 
@@ -54,10 +54,10 @@ export interface EpsDoc {
 }
 
 /** The EPS 10 document: DSC comments, the uprighting CTM, then the body. */
-export function assemble({ viewBox, unit = 1, box, hires, body, opts }: EpsDoc): string {
+export function assemble({ viewBox, unit = 1, box, hires, body }: EpsDoc): string {
   const header = [
     "%!PS-Adobe-3.0 EPSF-3.0",
-    ...commentLines(box, hires, opts),
+    ...commentLines(box, hires),
     "%%EndComments",
     "%%BeginProlog",
     "%%EndProlog",
@@ -65,7 +65,7 @@ export function assemble({ viewBox, unit = 1, box, hires, body, opts }: EpsDoc):
     "%%EndSetup",
   ].join("\n");
   // Anchor the artwork to the exact HiRes artboard; the integer DSC box only
-  // rounds outward for legacy readers (AI5_ArtSize preserves the exact size).
+  // rounds outward for legacy readers (%%HiResBoundingBox keeps the exact size).
   // `concat` takes ONE matrix, never six bare numbers (I-61 / Illustrator).
   const s = PX_TO_PT * unit; // a rescaled artboard (root px ≠ viewBox) is drawn at its px size
   const tx = fmt(hires.llx - s * viewBox[0]);
@@ -74,33 +74,14 @@ export function assemble({ viewBox, unit = 1, box, hires, body, opts }: EpsDoc):
   return `${header}\n${upright}\n${body.join("\n")}\n%%EOF\n`;
 }
 
-/** DSC comment order (Title, boxes, data, level — zero tool/date attribution, RULE 26). */
-function commentLines(box: EpsBoundingBox, hires: EpsBoundingBox, opts: EpsOptions): string[] {
+/** DSC comment order (boxes, data, level) — no title, no tool/date, no %AI claim (RULE 26). */
+function commentLines(box: EpsBoundingBox, hires: EpsBoundingBox): string[] {
   return [
-    `%%Title: ${dscString(opts.title ?? "export.eps")}`,
     `%%BoundingBox: ${box.llx} ${box.lly} ${box.urx} ${box.ury}`,
     `%%HiResBoundingBox: ${fmt(hires.llx)} ${fmt(hires.lly)} ${fmt(hires.urx)} ${fmt(hires.ury)}`,
     "%%DocumentData: Clean7Bit",
     "%%LanguageLevel: 3",
-    ...illustratorArtboard(hires),
   ];
-}
-
-/** Illustrator's AI5 comment stores height then width and a centered template point. */
-function illustratorArtboard(box: EpsBoundingBox): string[] {
-  const width = box.urx - box.llx;
-  const height = box.ury - box.lly;
-  const cx = (box.llx + box.urx) / 2;
-  const cy = (box.lly + box.ury) / 2;
-  return [
-    `%AI5_ArtSize: ${fmt(height)} ${fmt(width)}`,
-    `%AI3_TemplateBox: ${fmt(cx)} ${fmt(cy)} ${fmt(cx)} ${fmt(cy)}`,
-  ];
-}
-
-/** A DSC `(…)` string: backslash and parentheses escaped, newlines flattened. */
-function dscString(value: string): string {
-  return value.replace(/[\\()]/g, (ch) => `\\${ch}`).replace(/\s+/g, " ");
 }
 
 /**

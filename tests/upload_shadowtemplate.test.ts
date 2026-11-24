@@ -205,7 +205,7 @@ describe("the export pipeline uses the user's shadow", () => {
       expect(out.svg).toContain(marker);
       expect(out.svg).not.toContain("#1F1F1F");
       expect(out.svg).not.toContain("transform="); // no transform reaches the file
-      const eps = await CONVERTERS.builtin.convert({ svg: out.svg, background: "#ffffff", title: "x.eps" }, {} as never);
+      const eps = await CONVERTERS.builtin.convert({ svg: out.svg, background: "#ffffff" }, {} as never);
       expect(eps.ok, eps.ok ? "" : JSON.stringify(eps)).toBe(true);
       if (eps.ok) expect(verifyEpsDocument(eps.eps).errors).toEqual([]);
     });

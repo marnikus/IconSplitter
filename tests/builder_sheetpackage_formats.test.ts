@@ -93,7 +93,7 @@ describe("the builder package follows the format options", () => {
 
   it("names the built-in EPS writer's real limit: live text is outside its subset, and the rest still ships", async () => {
     const out = await buildSheetPackage(args({ includeEps: true, expandText: false }),
-      { ...deps({}), eps: (input: { svg: string; background: string; title: string }) =>
+      { ...deps({}), eps: (input: { svg: string; background: string }) =>
         builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") }) });
     expect(out.files.some((f) => f.name.endsWith(".eps"))).toBe(false);
     expect(out.problems.join(" ")).toMatch(/EPS: <text> is outside the EPS subset/);
@@ -103,7 +103,7 @@ describe("the builder package follows the format options", () => {
 
   it("the EPS follows the rescaled artboard too, not only the SVG (2026-11-23)", async () => {
     const plain = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect x="10" y="10" width="50" height="40" fill="#123456"/></svg>';
-    const eps = (input: { svg: string; background: string; title: string }) => builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") });
+    const eps = (input: { svg: string; background: string }) => builtinConverter.convert(input, { bridgeUrl: "", fetch: async () => new Response("") });
     const box = async (patch: Partial<UploadSettings>) => {
       const out = await buildSheetPackage({ ...args({ includeEps: true, ...patch }), svg: plain }, { ...deps({}), eps });
       const doc = text(file(out, ".eps")!.bytes);

@@ -1,10 +1,9 @@
 // eps.ts — the genuine EPS writer for the "SVG to upload" tab
 // (design §2.5): a documented SUBSET of SVG → real PostScript, written as an
-// **EPS 10 / Illustrator-10-compatible** document (2026-10-08): the full DSC
-// comment block stock sites and Illustrator expect — `%!PS-Adobe-3.0 EPSF-3.0`,
-// `%%BoundingBox` AND `%%HiResBoundingBox`, `%%DocumentData: Clean7Bit`,
-// `%%LanguageLevel: 3`, `%%Creator/%%Title/%%CreationDate`, the Prolog/Setup
-// sections — never a renamed PS/PDF. The conversion consumes the OPTIMIZED,
+// plain **EPS 10** document (2026-10-08): the DSC comment block stock sites
+// expect — `%!PS-Adobe-3.0 EPSF-3.0`, `%%BoundingBox` AND `%%HiResBoundingBox`,
+// `%%DocumentData: Clean7Bit`, `%%LanguageLevel: 3`, the Prolog/Setup sections
+// — never a renamed PS/PDF, never a `%%Title`/`%%Creator` or `%AI…` claim (RULE 26). The conversion consumes the OPTIMIZED,
 // cleaned export SVG (the pipeline runs it after prepare → optimize → clean),
 // so what Illustrator opens is what the package ships.
 //

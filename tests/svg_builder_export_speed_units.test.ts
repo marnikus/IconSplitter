@@ -182,7 +182,7 @@ describe("SVG builder export speed — unit & stage contracts", () => {
       <path d="M10 10 C20 5 40 15 50 10" fill="none" stroke="#112233" stroke-width="2"/>
       <circle cx="100" cy="50" r="20" fill="#224466"/>
     </svg>`;
-    const solidOut = writeEps(solidSheet, "#FFFFFF", { title: "solid.eps" });
+    const solidOut = writeEps(solidSheet, "#FFFFFF", {});
     expect(solidOut.ok).toBe(true);
     if (solidOut.ok) expect(verifyEps(solidOut.eps).ok).toBe(true);
     expect(spy).not.toHaveBeenCalled();
@@ -192,7 +192,7 @@ describe("SVG builder export speed — unit & stage contracts", () => {
       <rect width="200" height="100" fill="#FFFFFF"/>
       <ellipse cx="100" cy="50" rx="40" ry="12" fill="url(#g)" fill-opacity="0.4"/>
     </svg>`;
-    const gradOut = writeEps(gradSheet, "#FFFFFF", { title: "grad.eps" });
+    const gradOut = writeEps(gradSheet, "#FFFFFF", {});
     expect(gradOut.ok).toBe(true);
     expect(spy).toHaveBeenCalled();
   });

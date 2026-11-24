@@ -15,12 +15,16 @@
 //
 // Byte-stable, which is what `verifiedEpsArtwork` relies on: it re-derives the
 // envelope from the file alone and compares, so cleaning twice must be a no-op.
-import { embedXmpMetadataInEps, stripEpsEnvelope } from "./epsmetadata";
+//
+// `stripEpsIdentity` (2026-11-24) is the ALWAYS-ON part, applied wherever an EPS
+// leaves the app whatever the clean setting: no `%%Title` (the internal work
+// name), no producer/date lines, no Illustrator private `%AI<n>_…` comments, and
+// a legacy hashed envelope renamed to the fixed neutral names.
+import { embedXmpMetadataInEps, neutralizeLegacyEnvelopeNames, stripEpsEnvelope } from "./epsmetadata";
+import { stripEpsIdentityLines } from "./epsidentity";
 import { isCleanEpsEnvelope } from "./epsiptc";
 import type { IconMetadata } from "./meta";
 
-/** DSC lines that name the producer or the moment, never the artwork. */
-const PRODUCER_LINES = /^%%(?:Creator|CreationDate|For|Copyright|CopyrightNotice)\b[^\r\n]*(?:\r\n|\r|\n|$)/gm;
 /** Adobe Document Object flags (`%ADO_ContainsXMP: MainFirst` and friends). */
 const ADO_LINES = /^%ADO_[A-Za-z]+:[^\r\n]*(?:\r\n|\r|\n|$)/gm;
 /** Somebody else's Photoshop resource block — a second metadata carrier. */
@@ -45,16 +49,21 @@ export function cleanEpsDocument(eps: string, metadata: IconMetadata | null): st
   return dropAllCarriers(stripEpsEnvelope(stripEpsFingerprints(eps)));
 }
 
-/** Producer/date removal (always applied so converter attribution never leaks, RULE 26). */
-export function stripEpsProducerLines(eps: string): string {
-  if (!eps.includes("%%Cr") && !eps.includes("%%Fo") && !eps.includes("%%Co")) return eps;
-  return eps.replace(PRODUCER_LINES, "");
+/**
+ * The identity scrub every shipped EPS passes, whoever wrote it (RULE 26):
+ * title/producer/date lines, Illustrator `%AI…` comments and hashed envelope
+ * names out; the DSC boxes, level, data and program untouched. Idempotent;
+ * text that is not PostScript is handed back as it came.
+ */
+export function stripEpsIdentity(eps: string): string {
+  if (!isEps(eps)) return eps;
+  return neutralizeLegacyEnvelopeNames(stripEpsIdentityLines(eps));
 }
 
-/** Producer/date/ADO/foreign-carrier removal. Idempotent. */
+/** Identity/ADO/foreign-carrier removal. Idempotent. */
 export function stripEpsFingerprints(eps: string): string {
   let out = eps.includes("%%BeginPhotoshop:") ? eps.replace(FOREIGN_PHOTOSHOP, "") : eps;
-  out = stripEpsProducerLines(out);
+  out = stripEpsIdentity(out);
   return out.includes("%ADO_") ? out.replace(ADO_LINES, "") : out;
 }
 

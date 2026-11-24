@@ -2,15 +2,17 @@
 // Photoshop comments contain IPTC-IIM0404 and the same XMP packet in0424.
 // The converter output is left intact; a pdfmark metadata stream is attached
 // before drawing and the drawing is bracketed by BDC/EMC, for both EPS writers.
+// The envelope's names are FIXED (2026-11-24, RULE 26): `MetadataDict`,
+// `MetadataStream`, `%EndPacket` — a per-file hash suffix read as batch output,
+// and `[/NamespacePush` … `[/NamespacePop` already isolates the names.
 
 import {
   countXmpPackets, embedIptcInEps, isCleanEpsEnvelope, readEpsIptc, readEpsPhotoshopXmp, stripEpsIptc,
 } from "./epsiptc";
 import { sameMetadata } from "./rights";
 import { sameLegacyMetadata } from "./iptc";
-import { fnv1a32 } from "../pairing";
 import type { IconMetadata } from "./meta";
-import { metadataFingerprint } from "./meta";
+import { stripEpsIdentityLines } from "./epsidentity";
 import { buildXmpPacket, readXmpPacket } from "./xmp";
 
 const SETUP_BEGIN = "%BeginDocumentMetadata";
@@ -21,6 +23,11 @@ const LEGACY_SETUP_BEGIN = "% IconSplitter XMP setup begin";
 const LEGACY_SETUP_END = "% IconSplitter XMP setup end";
 const LEGACY_TRAILER_BEGIN = "% IconSplitter XMP trailer begin";
 const LEGACY_TRAILER_END = "% IconSplitter XMP trailer end";
+const DICTIONARY = "MetadataDict";
+const STREAM = "MetadataStream";
+const PACKET_END = "%EndPacket";
+/** The hashed names written before 2026-11-24: `MetadataDict_<hex>`, `MetadataStream_<hex>`, `%EndPacket_<hex>`. */
+const LEGACY_HASHED_NAME = /(MetadataDict|MetadataStream|%EndPacket)_([0-9a-f]+)(?![0-9A-Za-z])/g;
 
 export interface EpsEmbedOptions {
   /**
@@ -36,18 +43,9 @@ export function embedXmpMetadataInEps(eps: string, metadata: IconMetadata, optio
   const clean = stripPreviousEmbedding(eps);
   const eol = lineEndingOf(clean);
   const packet = buildXmpPacket(metadata).replace(/\n/g, eol);
-  const withoutAdo = clean.includes("%ADO_ContainsXMP:")
-    ? clean.replace(/^%ADO_ContainsXMP:.*(?:\r\n|\r|\n|$)/gm, "")
-    : clean;
-  const identity = withoutAdo.includes("%%DocumentData:")
-    ? withoutAdo.replace(/^%%DocumentData:.*(?:\r\n|\r|\n|$)/gm, "")
-    : withoutAdo;
-  // The id names what the FILE carries: the Icon Name (2026-11-08) is never written into it, so it must not
-  // reach the id — the audit rebuilds this envelope from the file's own metadata and must reproduce it exactly.
-  const id = `${metadataFingerprint({ ...metadata, name: undefined })}${fnv1a32(identity).toString(16).padStart(8, "0")}`;
   const header = options.clean === true ? withoutAdobeFlags(clean) : embedIptcInEps(addXmpHeader(clean, eol), metadata);
-  const setup = setupBlock(id, packet, eol);
-  const trailer = trailerBlock(id, eol);
+  const setup = setupBlock(packet, eol);
+  const trailer = trailerBlock(eol);
   const setupAt = afterSetup(header);
   const trailerAt = beforeTrailer(header);
   const closeAt = trailerAt !== null && trailerAt > setupAt ? trailerAt : header.length;
@@ -82,41 +80,51 @@ export function verifyEpsMetadata(eps: string, expected: IconMetadata): boolean 
   return sameMetadata(readEpsPhotoshopXmp(eps), expected) && sameLegacyMetadata(readEpsIptc(eps), expected);
 }
 
-function setupBlock(id: string, packet: string, eol: string): string {
-  const dictionary = `MetadataDict_${id}`;
-  const stream = `MetadataStream_${id}`;
-  const marker = uniquePacketMarker(id, packet);
+function setupBlock(packet: string, eol: string): string {
+  const marker = uniquePacketMarker(packet);
   return [
     SETUP_BEGIN,
-    `/${dictionary} 8 dict def`,
-    `${dictionary} begin`,
+    `/${DICTIONARY} 8 dict def`,
+    `${DICTIONARY} begin`,
     "/currentdistillerparams where",
     "{pop currentdistillerparams /CoreDistVersion get 5000 lt} {true} ifelse",
     "{ /pdfmark /cleartomark load def /metafile_pdfmark {flushfile cleartomark} bind def}",
     "{ /metafile_pdfmark {/PUT pdfmark} bind def} ifelse",
     "[/NamespacePush pdfmark",
-    `[/_objdef {${stream}} /type /stream /OBJ pdfmark`,
-    `[{${stream}} 2 dict begin /Type /Metadata def /Subtype /XML def currentdict end /PUT pdfmark`,
-    `[{${stream}}`,
+    `[/_objdef {${STREAM}} /type /stream /OBJ pdfmark`,
+    `[{${STREAM}} 2 dict begin /Type /Metadata def /Subtype /XML def currentdict end /PUT pdfmark`,
+    `[{${STREAM}}`,
     `currentfile 0 (${marker}) /SubFileDecode filter metafile_pdfmark`,
     packet,
     marker,
-    `[/Document 1 dict begin /Metadata {${stream}} def currentdict end /BDC pdfmark`,
+    `[/Document 1 dict begin /Metadata {${STREAM}} def currentdict end /BDC pdfmark`,
     "[/NamespacePop pdfmark",
     "end",
     SETUP_END,
   ].join(eol);
 }
 
-function trailerBlock(id: string, eol: string): string {
-  const dictionary = `MetadataDict_${id}`;
-  return [TRAILER_BEGIN, `${dictionary} begin`, "[/EMC pdfmark", "end", TRAILER_END].join(eol);
+function trailerBlock(eol: string): string {
+  return [TRAILER_BEGIN, `${DICTIONARY} begin`, "[/EMC pdfmark", "end", TRAILER_END].join(eol);
 }
 
-function uniquePacketMarker(id: string, packet: string): string {
-  let marker = `%EndPacket_${id}`;
+/** The SubFileDecode end marker: fixed, lengthened only if the packet text itself contains it. */
+function uniquePacketMarker(packet: string): string {
+  let marker = PACKET_END;
   while (packet.includes(marker)) marker += "_";
   return marker;
+}
+
+/**
+ * An envelope written before 2026-11-24 with ONE consistent hashed id, renamed
+ * to today's fixed names (byte-for-byte what the writer now emits). Mixed ids
+ * are left alone, so a tampered envelope still fails the audit below.
+ */
+export function neutralizeLegacyEnvelopeNames(eps: string): string {
+  if (!eps.includes("MetadataDict_") && !eps.includes("%EndPacket_")) return eps;
+  const ids = new Set(Array.from(eps.matchAll(LEGACY_HASHED_NAME), (m) => m[2]));
+  if (ids.size !== 1) return eps;
+  return eps.replace(LEGACY_HASHED_NAME, (_hit, name: string) => name);
 }
 
 /** Everything our envelope added, gone: the converter's own program remains. */
@@ -268,9 +276,12 @@ function hasEnvelopeMarkers(eps: string): boolean {
  * vector grammar audit. Marker comments alone are never a bypass. */
 export function verifiedEpsArtwork(eps: string): string {
   if (!hasEnvelopeMarkers(eps)) return eps;
-  const metadata = readXmpMetadataFromEps(eps);
-  const clean = stripPreviousEmbedding(eps);
-  const mode = isCleanEpsEnvelope(eps) ? { clean: true } : {};
-  if (metadata === null || embedXmpMetadataInEps(clean, metadata, mode) !== eps) throw new Error("unverified EPS metadata envelope");
+  // Packages exported before 2026-11-24 keep verifying: identity COMMENTS (title, %AI…) cannot change what the
+  // program does, so they are not part of the envelope comparison; a legacy hashed id is renamed first.
+  const file = neutralizeLegacyEnvelopeNames(stripEpsIdentityLines(eps));
+  const metadata = readXmpMetadataFromEps(file);
+  const clean = stripPreviousEmbedding(file);
+  const mode = isCleanEpsEnvelope(file) ? { clean: true } : {};
+  if (metadata === null || embedXmpMetadataInEps(clean, metadata, mode) !== file) throw new Error("unverified EPS metadata envelope");
   return clean;
 }
