@@ -25,7 +25,7 @@ export interface RenameExportArgs {
 }
 
 export type RenameExportResult =
-  | { ok: true; diskRenamed: boolean; uploadName: string; record: ExportRecord | null }
+  | { ok: true; diskRenamed: boolean; alreadyNamed?: boolean; uploadName: string; record: ExportRecord | null }
   | { ok: false; reason: string };
 
 const OUTPUT_KEYS = ["svg", "jpg", "png", "eps", "zip"] as const;
@@ -101,7 +101,7 @@ async function commitJson(dir: DirHandleLike, record: ExportRecord): Promise<voi
   try { await dir.removeEntry?.(stage); } catch { /* ignore */ }
 }
 
-interface CopyOutcome { touched: number; obsolete: Set<string> }
+interface CopyOutcome { present: number; changed: number; obsolete: Set<string> }
 interface SlotCopyCtx { dir: DirHandleLike; workName: string; targetStem: string; out: CopyOutcome }
 
 function scrubEpsTitle(src: Uint8Array, ext: string, workName: string): { bytes: Uint8Array; changed: boolean } {
@@ -119,6 +119,7 @@ async function writeSlotBytes(ctx: SlotCopyCtx, slot: Record<string, unknown>, s
   if (oldName !== newName || cleaned.changed) {
     await atomicCopy(ctx.dir, cleaned.bytes, ext, newName);
     if (oldName !== newName) ctx.out.obsolete.add(oldName);
+    ctx.out.changed += 1;
   }
   if (cleaned.changed) {
     slot.bytes = cleaned.bytes.byteLength;
@@ -127,7 +128,7 @@ async function writeSlotBytes(ctx: SlotCopyCtx, slot: Record<string, unknown>, s
       : await sha256Hex(cleaned.bytes);
   }
   slot.path = replaceLeaf(slot.path as string, newName);
-  ctx.out.touched += 1;
+  ctx.out.present += 1;
 }
 
 async function copyOneSlot(ctx: SlotCopyCtx, slot: Record<string, unknown>): Promise<{ keep: boolean; oldStem: string }> {
@@ -156,7 +157,7 @@ async function copyRecordedSlots(
   targetStem: string,
 ): Promise<{ outcome: CopyOutcome; slotStems: string[] }> {
   const outs = record.outputs as unknown as Record<string, unknown>;
-  const outcome: CopyOutcome = { touched: 0, obsolete: new Set<string>() };
+  const outcome: CopyOutcome = { present: 0, changed: 0, obsolete: new Set<string>() };
   const slotStems: string[] = [];
   const ctx: SlotCopyCtx = { dir, workName, targetStem, out: outcome };
   for (const key of OUTPUT_KEYS) {
@@ -177,7 +178,7 @@ async function copyCompanionPngs(dir: DirHandleLike, prevStems: ReadonlySet<stri
     if (src === null) continue;
     await atomicCopy(dir, src, "png", `${targetStem}.png`);
     out.obsolete.add(oldPng);
-    out.touched += 1;
+    out.changed += 1;
   }
 }
 
@@ -210,13 +211,19 @@ async function executeDiskRename(dir: DirHandleLike, loaded: ExportRecord, args:
   const { outcome, slotStems } = await copyRecordedSlots(dir, next, args.workName, targetStem);
   for (const s of slotStems) prevStems.add(s);
   await copyCompanionPngs(dir, prevStems, targetStem, outcome);
-  if (outcome.touched === 0) return { ok: true, diskRenamed: false, uploadName: desiredStem, record: loaded };
+  if (outcome.present === 0 && outcome.changed === 0) {
+    return { ok: true, diskRenamed: false, alreadyNamed: false, uploadName: desiredStem, record: loaded };
+  }
+  const metaNeedsSync = loaded.workName !== args.workName || loaded.uploadName !== targetStem;
+  if (outcome.changed === 0 && !metaNeedsSync) {
+    return { ok: true, diskRenamed: false, alreadyNamed: true, uploadName: targetStem, record: loaded };
+  }
   next.workName = args.workName;
   next.uploadName = targetStem;
   next.timestamps.committedAt = args.now ?? new Date().toISOString();
   await commitJson(dir, next);
   await removeObsoleteFiles(dir, outcome.obsolete);
-  return { ok: true, diskRenamed: true, uploadName: targetStem, record: next };
+  return { ok: true, diskRenamed: true, alreadyNamed: false, uploadName: targetStem, record: next };
 }
 
 export async function renameExportPackage(args: RenameExportArgs): Promise<RenameExportResult> {

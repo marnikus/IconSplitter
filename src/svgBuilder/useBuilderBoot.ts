@@ -48,10 +48,11 @@ function useRestoredRoot({ scanRefs, setters, patch, supported }: RestoreArgs): 
 
 export function useBuilderBoot(patch: (value: Partial<BuilderModel>) => void, supported: boolean): BuilderBoot {
   const scanRefs = useRef<BuilderScanRefs>({ seq: { ...SCAN_IDLE } as ScanSeq, scanKey: { current: null } });
+  const statusSeqRef = useRef(0);
   const setRoot = (root: DirHandleLike | null) => patch({ root, svgTexts: {} });
   const setDiscovery = (discovery: BuilderDiscovery | null) => patch({ discovery, svgTexts: {} });
   const setBusy = (busy: string | null) => patch({ busy });
-  const say = (status: string, error = false) => patch({ status, error });
+  const say = (status: string, error = false) => { statusSeqRef.current += 1; patch({ status, statusSeq: statusSeqRef.current, error }); };
   useRestoredRoot({ scanRefs, setters: { setRoot, setDiscovery, setBusy, say }, patch, supported });
   useEffect(() => {
     let alive = true;

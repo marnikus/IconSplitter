@@ -1959,6 +1959,8 @@
 .up-meta-field textarea.svg-input { min-height: 44px; resize: vertical; }
 
 .up-hint { color: var(--v2-muted-2); font-size: 8px; line-height: 1.4; }
+.up-name-feedback { grid-column: 1 / -1; color: var(--v2-green); font-size: 9.5px; font-weight: 600; line-height: 1.4; }
+.up-name-feedback.is-error { color: var(--v2-red); }
 .up-helper { display: grid; gap: 4px; margin-top: 4px; }
 .up-helper-state { font-size: 8px; line-height: 1.4; color: var(--v2-muted-2); }
 .up-helper-state.ok { color: var(--v2-green); }

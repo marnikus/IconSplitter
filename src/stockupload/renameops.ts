@@ -1,13 +1,21 @@
 // renameops.ts — per-item and bulk upload file renaming on the "Upload"
 // (stockUpload) tab. Renames exported files in `export/` atomically, updates
 // `export.json` (`workName` + `uploadName` + `outputs.*.path`), syncs
-// `uploadnamestore`, and rescans while preserving `item.id` and `workName`.
+// `uploadnamestore`, rescans while preserving `item.id` and `workName`, and
+// publishes live ProcessProgressBar + per-item feedback.
 
 import { useCallback, useRef } from "react";
 import type { ExportedItem } from "../lib/stockupload/types";
 import { stemOf } from "../lib/upload/export";
 import { buildUploadName, sanitizeUploadName } from "../lib/upload/uploadname";
-import { renameExportPackage } from "../upload/renameexport";
+import { renameExportPackage, type RenameExportResult } from "../upload/renameexport";
+import { announceItemRename, singleRenameMessage } from "../upload/renamefeedback";
+import {
+  announceBatchRename,
+  beginRenameRun,
+  yieldRenameProgress,
+  type RenameItemOutcome,
+} from "../upload/renameprogress";
 import { setUploadName } from "../upload/uploadnamestore";
 import type { StockModelAction, StockRefs, StockUploadModel } from "./model";
 
@@ -37,10 +45,30 @@ function desiredStem(rawName: string | null): string | null {
   return rawName === null ? null : (sanitizeUploadName(rawName) || null);
 }
 
-function finishAudibleStockRename(d: RenameDeps, stored: string | null, workName: string, uploadName: string): void {
-  d.r.scan.scanKey.current = null;
-  d.runScan(false);
-  d.say(stored === null ? `Exported files reset to ${workName}` : `Exported files renamed to ${uploadName}`);
+function classifyStockOutcome(diskRenamed: boolean, unchanged: boolean): RenameItemOutcome {
+  if (diskRenamed) return { kind: "disk" };
+  return unchanged ? { kind: "unchanged" } : { kind: "pending" };
+}
+
+function isSameStockStem(diskRenamed: boolean, alreadyNamed: boolean | undefined, prev: string, next: string): boolean {
+  return !diskRenamed && (alreadyNamed === true || prev === next);
+}
+
+function finalizeStockRename(
+  d: RenameDeps,
+  item: ExportedItem,
+  res: Extract<RenameExportResult, { ok: true }>,
+  opts: { workName: string; desired: string | null; silent: boolean },
+): RenameItemOutcome {
+  const unchanged = isSameStockStem(res.diskRenamed, res.alreadyNamed, item.stem, res.uploadName);
+  const finalCustom = opts.desired === null || res.uploadName === opts.workName ? null : res.uploadName;
+  const stored = setUploadName(item.id, finalCustom, opts.workName);
+  if (!opts.silent) {
+    if (res.diskRenamed) { d.r.scan.scanKey.current = null; d.runScan(false); }
+    const msg = singleRenameMessage({ stored, workName: opts.workName, target: res.uploadName, diskRenamed: res.diskRenamed, unchanged });
+    announceItemRename(item.id, msg, d.say);
+  }
+  return classifyStockOutcome(res.diskRenamed, unchanged);
 }
 
 async function renameOneItem(
@@ -48,23 +76,20 @@ async function renameOneItem(
   item: ExportedItem,
   rawName: string | null,
   silent = false,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<RenameItemOutcome> {
   const root = d.r.root.current;
   if (!root) {
-    if (!silent) d.say("Choose a workspace folder first", true);
-    return { ok: false, reason: "no workspace folder selected" };
+    if (!silent) announceItemRename(item.id, "Choose a workspace folder first", d.say, true);
+    return { kind: "failed", reason: "no workspace folder selected" };
   }
   const workName = itemWorkName(item);
   const desired = desiredStem(rawName);
   const res = await renameExportPackage({ root, exportDir: item.exportDir, workName, nextUploadName: desired });
   if (!res.ok) {
-    if (!silent) d.say(`Could not rename ${item.stem} — ${res.reason}`, true);
-    return { ok: false, reason: res.reason };
+    if (!silent) announceItemRename(item.id, `Could not rename ${item.stem} — ${res.reason}`, d.say, true);
+    return { kind: "failed", reason: res.reason };
   }
-  const finalCustom = desired === null || res.uploadName === workName ? null : res.uploadName;
-  const stored = setUploadName(item.id, finalCustom, workName);
-  if (!silent) finishAudibleStockRename(d, stored, workName, res.uploadName);
-  return { ok: true };
+  return finalizeStockRename(d, item, res, { workName, desired, silent });
 }
 
 function generatedNameOf(d: RenameDeps, item: ExportedItem): string {
@@ -72,44 +97,26 @@ function generatedNameOf(d: RenameDeps, item: ExportedItem): string {
   return meta ? buildUploadName({ title: meta.title, description: meta.description }) : "";
 }
 
-function summarizeStockBatch(renamed: number, skipped: number, failures: readonly string[]): { msg: string; err: boolean } {
-  if (renamed === 0 && failures.length > 0) {
-    return { msg: `Could not rename exported packages (${failures.length} failed) — ${failures[0]}`, err: true };
-  }
-  if (renamed === 0) {
-    return { msg: "No selected packages have Title + Description metadata to build an upload name", err: true };
-  }
-  const parts = [`Renamed ${renamed} package(s) for upload`];
-  if (skipped > 0) parts.push(`${skipped} skipped (no metadata)`);
-  if (failures.length > 0) parts.push(`${failures.length} failed (${failures[0]})`);
-  return { msg: parts.join(" · "), err: failures.length > 0 };
-}
-
 async function renameCheckedItems(d: RenameDeps): Promise<void> {
   if (d.model.uploading) return d.say("Wait for the active upload to finish before renaming files", true);
   const selected = d.items.filter((i) => d.checked.includes(i.id));
   if (selected.length === 0) return d.say("Select items to rename first", true);
-  d.dispatch({ type: "patch", patch: { busy: `Renaming ${selected.length} package(s)…` } });
-  let renamed = 0;
-  let skipped = 0;
-  const failures: string[] = [];
-  try {
-    for (const item of selected) {
-      const gen = generatedNameOf(d, item);
-      if (gen === "") { skipped += 1; continue; }
-      const out = await renameOneItem(d, item, gen, true);
-      if (out.ok) renamed += 1;
-      else failures.push(out.reason);
-    }
-  } finally {
-    d.dispatch({ type: "patch", patch: { busy: null } });
+  const run = beginRenameRun("stockUpload", selected.length);
+  for (const item of selected) {
+    if (run.isCancelled()) break;
+    run.startItem(item.stem);
+    await yieldRenameProgress();
+    if (run.isCancelled()) break;
+    const gen = generatedNameOf(d, item);
+    if (gen === "") { run.record({ kind: "skipped" }); continue; }
+    run.record(await renameOneItem(d, item, gen, true));
   }
-  if (renamed > 0) {
+  const summary = run.finish();
+  if (summary.changed > 0) {
     d.r.scan.scanKey.current = null;
     d.runScan(false);
   }
-  const summary = summarizeStockBatch(renamed, skipped, failures);
-  d.say(summary.msg, summary.err);
+  announceBatchRename("stockUpload", summary, d.say);
 }
 
 export function useStockRenameOps(deps: RenameDeps): StockRenameOps {

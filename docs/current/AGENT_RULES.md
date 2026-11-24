@@ -3,8 +3,8 @@
 What an AI agent (or a human) **MUST** follow when adding or changing code here.
 Rules 1–24 adapt the rules from
 `Process-Images-in-Areana/docs/current/AGENT_RULES.md` to this React + Vite +
-TypeScript browser app; RULE 25–26 add shared list-selection and clean-export
-contracts. Never renumber; append instead.
+TypeScript browser app; RULE 25–27 add shared list-selection, clean-export, and
+live-progress/response contracts. Never renumber; append instead.
 
 **In brief:** Keep pixel logic in `src/lib/`, report progress and failures honestly,
 and test real behaviour. Use one undo timeline, validate persisted state, verify
@@ -13,7 +13,8 @@ inputs to a named provider after preview and confirmation. Meet the RULE 16 gate
 aim for RULE 18 sizes, and keep the current docs true.
 
 The RULE headings below link to the canonical text in
-[behaviour](rules/BEHAVIOR.md), [quality and verification](rules/QUALITY.md), and
+[behaviour](rules/BEHAVIOR.md), [live progress](rules/PROGRESS.md),
+[quality and verification](rules/QUALITY.md), and
 [documentation, privacy and delivery](rules/DOCS_AND_SAFETY.md). Only those
 modules define the rules. RULE 12 retains its old link label; undo/redo **is** now
 implemented (see its linked text).
@@ -46,6 +47,7 @@ implemented (see its linked text).
 | [RULE 24 — LIVE SYNC: the UI mirrors the stored value at the moment of change](rules/BEHAVIOR.md#rule-24) | behaviour | PIA RULE 24 |
 | [RULE 25 — One list-selection gesture contract](rules/BEHAVIOR.md#rule-25) | behaviour | Batch-authoritative across list tabs |
 | [RULE 26 — Exported files carry zero machine, AI, script or tool evidence](rules/DOCS_AND_SAFETY.md#rule-26) | compliance | User export-hygiene & direct-geometry mandate |
+| [RULE 27 — Every multi-item operation shows a live `ProcessProgressBar` with a persistent result; every single-item action gives an explicit visible response](rules/PROGRESS.md#rule-27) | behaviour | Global multi-item progress & no-silent-noop mandate |
 
 Related current references: the [root router](README.md) (task read packs) and
 [Code Verification](CODE_VERIFICATION.md). The dated

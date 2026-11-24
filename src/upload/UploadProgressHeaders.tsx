@@ -2,12 +2,20 @@
 import { createPortal } from "react-dom";
 import { processTotals, type ProcessStatus } from "../lib/processprogress";
 import ProcessProgressBar from "../ui/ProcessProgressBar";
+import UploadRenameProgress from "../ui/UploadRenameProgress";
 import { setAppState } from "../state/appstore";
 import type { UploadApi } from "./useUpload";
 import type { UploadProcessKind } from "./processprogress";
 
 export default function UploadProgressHeaders({ g }: { g: UploadApi }) {
-  const content = <><UploadProcess g={g} kind="metadata" /><UploadProcess g={g} kind="export" /><UploadProcess g={g} kind="download" /></>;
+  const content = (
+    <>
+      <UploadProcess g={g} kind="metadata" />
+      <UploadProcess g={g} kind="export" />
+      <UploadProcess g={g} kind="download" />
+      <UploadRenameProgress source="upload" />
+    </>
+  );
   const mount = document.getElementById("upload-progress-mount");
   return mount ? createPortal(content, mount) : content;
 }

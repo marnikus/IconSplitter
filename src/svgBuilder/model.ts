@@ -64,6 +64,7 @@ export interface BuilderModel {
   discovery: BuilderDiscovery | null;
   busy: string | null;
   status: string;
+  statusSeq?: number;
   error: boolean;
   config: SheetConfig;
   recipe: SelectionRecipe;
@@ -112,7 +113,7 @@ export interface BuilderAction { type: "patch"; patch: Partial<BuilderModel> }
 export function initialBuilderModel(): BuilderModel {
   return {
     supported: hasFolderPicker(), autoRegister: loadAutoRegister(), root: null, discovery: null, busy: null,
-    status: "Open a folder to build from approved SVGs", error: false,
+    status: "Open a folder to build from approved SVGs", statusSeq: 0, error: false,
     config: loadSheetConfig(), recipe: DEFAULT_SELECTION_RECIPE, seed: DEFAULT_SEED,
     lockedIds: getAppState().builder.lockedIds ?? [], excludedIds: getAppState().builder.excludedIds ?? [], mergeMarks: [], listView: loadBuilderListView(), prefs: loadBuilderPrefs(),
     prompt: loadBuilderPrompt(), presets: builderPresets.load(), presetPick: "",

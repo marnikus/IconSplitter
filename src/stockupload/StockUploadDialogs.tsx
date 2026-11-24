@@ -13,6 +13,7 @@ import type { StockUploadApi } from "./useStockUpload";
 import StockUploadHistoryDialog from "./StockUploadHistoryDialog";
 import StockRejectedUploadsDialog from "./StockRejectedUploadsDialog";
 import StockRemovalProgress from "./StockRemovalProgress";
+import UploadRenameProgress from "../ui/UploadRenameProgress";
 import { GettyWaitNote, GettyWaitSkip } from "./GettyWaitInfo";
 
 /** The Getty web target ids of a plan, so its icons can be sized per pair. */
@@ -26,6 +27,7 @@ export default function StockUploadDialogs({ g }: { g: StockUploadApi }) {
     <>
       <StockProgressPortal g={g} />
       <StockRemovalProgress />
+      <UploadRenameProgress source="stockUpload" />
       {d?.kind === "uploadHistory" && <StockUploadHistoryDialog g={g} />}
       {d?.kind === "rejectedUploads" && <StockRejectedUploadsDialog g={g} />}
       {d?.kind === "rowBadges" && (

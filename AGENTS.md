@@ -29,8 +29,11 @@ instructions. The app builds into one self-contained `dist/index.html`.
   AI, script or tool attribution/provenance, `scale(…)` wrappers or divided
   `stroke-width` compensation; bake scaled geometry directly at real target
   coordinates/sizes rounded to ≤ 1 decimal place (RULE 26).
-- Report progress and failures honestly; Stop blocks unsent work. One global
-  undo timeline; validate persisted data on read. Full rule index:
+- Report progress and failures honestly; Stop blocks unsent work. Every
+  multi-item operation must show a live, cancellable `ProcessProgressBar` with a
+  persistent result summary, and every single-item action must respond visibly
+  even when the value is unchanged ([RULE 27](docs/current/rules/PROGRESS.md#rule-27)).
+  One global undo timeline; validate persisted data on read. Full rule index:
   [`AGENT_RULES.md`](docs/current/AGENT_RULES.md).
 
 ## Open only what the task needs

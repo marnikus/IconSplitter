@@ -20,6 +20,19 @@ import {
   setUploadName,
 } from "../src/upload/uploadnamestore";
 import { renameExportPackage } from "../src/upload/renameexport";
+import {
+  beginRenameRun,
+  cancelRenameRun,
+  dismissRenameRun,
+  renameBarCopy,
+  renameSlotOf,
+  resetAllRenameProgress,
+} from "../src/upload/renameprogress";
+import {
+  clearRenameFeedback,
+  getRenameFeedback,
+  publishRenameFeedback,
+} from "../src/upload/renamefeedback";
 import { buildSheetPackage } from "../src/svgBuilder/sheetpackage";
 import { writeSheetExport } from "../src/svgBuilder/sheetwriter";
 import { artboardSheetJson, metaFileJson } from "../src/lib/svgBuilder/sheetsync";
@@ -36,6 +49,8 @@ const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" vi
 beforeEach(() => {
   localStorage.clear();
   clearUploadNamesInMemory();
+  resetAllRenameProgress();
+  clearRenameFeedback();
 });
 
 describe("buildUploadName & sanitizeUploadName", () => {
@@ -313,5 +328,94 @@ describe("uploadnamestore & export.json workName + uploadName", () => {
     const metaJson = metaFileJson(JSON.stringify({ uploadName: uploadStem }), ab.metadata);
     expect("uploadName" in metaJson).toBe(false);
     expect(JSON.stringify(metaJson)).not.toContain(uploadStem);
+  });
+
+  it("detects alreadyNamed without rewriting export.json when exported files already match target uploadName", async () => {
+    const root = new FakeDir("workspace");
+    const folder = "_artboard_sheets/2026-11/2026-11-19/tpl/art_same";
+    const workName = "art_same_v1";
+    const uploadStem = "Cafe_food_icons_collection";
+    const fixedTime = "2026-11-19T10:00:00.000Z";
+    const pkg = await buildSheetPackage(
+      {
+        svg: SVG,
+        metadata: null,
+        settings: { ...DEFAULT_UPLOAD_SETTINGS, includeSvg: true, includeJpeg: false, includeEps: false, expandText: false },
+        folder,
+        workName,
+        stem: uploadStem,
+        pairId: "art-same-1",
+        now: fixedTime,
+        prompt: "p",
+        model: "m",
+      },
+      { pngBlob: async () => new Blob(["png"], { type: "image/png" }) },
+    );
+    await writeSheetExport(root, folder, pkg.files);
+
+    const again = await renameExportPackage({
+      root,
+      exportDir: `${folder}/export`,
+      workName,
+      nextUploadName: uploadStem,
+      now: "2026-11-19T23:59:59.000Z",
+    });
+    expect(again.ok).toBe(true);
+    if (!again.ok) return;
+    expect(again.diskRenamed).toBe(false);
+    expect(again.alreadyNamed).toBe(true);
+    expect(again.uploadName).toBe(uploadStem);
+    expect(again.record?.timestamps.committedAt).toBe(fixedTime);
+  });
+});
+
+describe("renameprogress & renamefeedback contracts", () => {
+  it("tracks live done/total/left/percent, cancellation, and persistent result summary across sources", () => {
+    const slot = renameSlotOf("upload");
+    const run = beginRenameRun("upload", 4);
+    expect(slot.value?.status).toBe("running");
+    expect(renameBarCopy(slot.value!).totals).toEqual({ done: 0, total: 4, left: 4, percent: 0 });
+
+    run.startItem("coffee_AI.svg");
+    run.record({ kind: "disk" });
+    run.startItem("donut_AI.svg");
+    run.record({ kind: "unchanged" });
+    run.startItem("mug_AI.svg");
+    run.record({ kind: "skipped" });
+    run.startItem("boba_AI.svg");
+    run.record({ kind: "pending" });
+
+    const summary = run.finish();
+    expect(summary.err).toBe(false);
+    expect(slot.value?.status).toBe("completed");
+    const finishedCopy = renameBarCopy(slot.value!);
+    expect(finishedCopy.totals).toEqual({ done: 4, total: 4, left: 0, percent: 100 });
+    expect(finishedCopy.detail).toContain("2 renamed");
+    expect(finishedCopy.detail).toContain("1 already had same name");
+    expect(finishedCopy.detail).toContain("1 skipped");
+
+    // Stays visible until explicitly dismissed:
+    dismissRenameRun("upload");
+    expect(slot.value).toBeNull();
+
+    // Supports mid-batch cancellation:
+    const run2 = beginRenameRun("svgBuilder", 3);
+    run2.startItem("artboard_1");
+    run2.record({ kind: "disk" });
+    cancelRenameRun("svgBuilder");
+    expect(run2.isCancelled()).toBe(true);
+    const cancelledSummary = run2.finish();
+    expect(cancelledSummary.err).toBe(false);
+    expect(renameSlotOf("svgBuilder").value?.status).toBe("cancelled");
+  });
+
+  it("increments per-item feedback sequence on repeated identical single-item responses", () => {
+    publishRenameFeedback("row-1", "Upload file name is already Foo (no changes needed)");
+    const first = getRenameFeedback("row-1");
+    expect(first?.seq).toBe(1);
+    publishRenameFeedback("row-1", "Upload file name is already Foo (no changes needed)");
+    const second = getRenameFeedback("row-1");
+    expect(second?.seq).toBe(2);
+    expect(second?.msg).toContain("already Foo");
   });
 });

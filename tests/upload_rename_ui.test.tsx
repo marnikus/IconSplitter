@@ -11,6 +11,8 @@ import { loadBuilderFormats, saveBuilderFormats } from "../src/svgBuilder/format
 import { saveUploadSettings, loadUploadSettings } from "../src/upload/settingsstore";
 import { rememberMeta } from "../src/upload/metacache";
 import { clearUploadNamesInMemory } from "../src/upload/uploadnamestore";
+import { resetAllRenameProgress } from "../src/upload/renameprogress";
+import { clearRenameFeedback } from "../src/upload/renamefeedback";
 import { setIndexRuntime } from "../src/svgBuilder/indexer/runtime";
 import { sha256HexText } from "../src/lib/upload/hash";
 import * as exporter from "../src/svgBuilder/exporter";
@@ -88,6 +90,8 @@ beforeEach(() => {
   localStorage.clear();
   savedHandles.clear();
   clearUploadNamesInMemory();
+  resetAllRenameProgress();
+  clearRenameFeedback();
   resetAppStore();
   dir = workspaceDir();
   (window as unknown as { showDirectoryPicker: () => Promise<BinDir> }).showDirectoryPicker = async () => dir;
@@ -316,4 +320,136 @@ describe("Rename exported upload files across SVG builder, SVG to upload, and Up
     await click(`upload-name-from-meta-${coffeeId}`);
     await waitUntil(() => exportDir.children.has(`${expectedBulk}.svg`), "disk file rebuilt from meta");
   }, 20_000);
+
+  it("shows live ProcessProgressBar with persistent result summary on bulk rename AND always responds on single-item rename even when the name is already the same across all 3 tabs", async () => {
+    saveBuilderFormats({ ...loadBuilderFormats(), includeSvg: true, includeJpeg: false, includeEps: false, expandText: false });
+    const cur = loadUploadSettings();
+    saveUploadSettings({ ...cur, defaults: { ...cur.defaults, includeSvg: true, includeJpeg: false, includeEps: false, expandText: false } });
+    vi.spyOn(exporter, "sheetPngBlob").mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+
+    const coffeeId = pairFile("cafe/coffee", "coffee_AI.png").id;
+    const donutId = pairFile("cafe/donut", "donut_AI.png").id;
+    const mugId = pairFile("cafe/mug", "mug_AI.png").id;
+    rememberMeta(`sha256:${await sha256HexText(SVG)}`, {
+      state: "accepted",
+      meta: {
+        title: "Set of assorted cafe food icons",
+        description: "Providing refreshing culinary enjoyment for customers",
+        tags: ["icon", "pictogram", "vector", "stroke", "line", "editable", "web", "coffee", "cafe", "cup"],
+        name: "coffee",
+      },
+    });
+
+    // 1. SVG to upload: bulk rename across multiple items shows ProcessProgressBar + persistent result summary!
+    await click("tab-upload");
+    await click("upload-open-folder-empty");
+    await waitUntil(() => host.querySelectorAll('[data-testid^="upload-row-pair_"]').length === 4, "upload rows loaded");
+    await waitUntil(() => q("upload-busy") === null, "upload hashes settled");
+
+    await click(`upload-check-${coffeeId}`);
+    await click(`upload-check-${donutId}`);
+    await click(`upload-check-${mugId}`);
+
+    // Clicking bulk rename immediately shows the LIVE running ProcessProgressBar with Cancel before the batch finishes:
+    act(() => { q("upload-rename-selected")!.click(); });
+    expect(q("upload-rename-progress-header")?.getAttribute("data-status")).toBe("running");
+    expect(q("upload-rename-progress-cancel")).not.toBeNull();
+    expect(text("upload-rename-progress-remaining")).toBe("3 remaining");
+    act(() => { q("upload-rename-progress-cancel")!.click(); });
+    await waitUntil(() => q("upload-rename-progress-header")?.getAttribute("data-status") === "cancelled", "upload rename cancelled");
+
+    // Re-run bulk rename to completion:
+    await click("upload-rename-selected");
+
+    await waitUntil(() => q("upload-rename-progress-header")?.getAttribute("data-status") === "completed", "upload rename progress completed");
+    expect(text("upload-rename-progress-completed")).toBe("3 completed / 3");
+    expect(text("upload-rename-progress-remaining")).toBe("0 remaining");
+    expect(text("upload-rename-progress-file")).toContain("3 renamed");
+    // Stays visible until dismissed, and re-running bulk rename when all 3 ALREADY have that exact name reports 'already had same name':
+    await click("upload-rename-selected");
+    await waitUntil(
+      () => q("upload-rename-progress-header")?.getAttribute("data-status") === "completed"
+        && /already had same/i.test(text("upload-rename-progress-file")),
+      "bulk rename reports unchanged items explicitly",
+    );
+    expect(text("upload-toast")).toMatch(/already had same/i);
+    await click("upload-rename-progress-dismiss");
+    expect(q("upload-rename-progress-header")).toBeNull();
+
+    // Single-item rename in SVG to upload when item ALREADY has the exact same name:
+    // Apply button is NOT disabled and responds visibly on EVERY click (seq increments + toast)!
+    await click(`upload-rename-btn-${coffeeId}`);
+    expect((q(`upload-name-apply-${coffeeId}`) as HTMLButtonElement).disabled).toBe(false);
+    await click(`upload-name-apply-${coffeeId}`);
+    await waitUntil(() => q(`upload-name-status-${coffeeId}`) !== null, "inline feedback on first same-name click");
+    expect(text(`upload-name-status-${coffeeId}`)).toMatch(/already/i);
+    expect(text("upload-toast")).toMatch(/already/i);
+    const seq1 = q(`upload-name-status-${coffeeId}`)?.getAttribute("data-seq");
+
+    // Clicking Apply AGAIN with the exact same name STILL responds visibly (seq increments!):
+    await click(`upload-name-apply-${coffeeId}`);
+    await waitUntil(() => q(`upload-name-status-${coffeeId}`)?.getAttribute("data-seq") !== seq1, "seq incremented on repeat click");
+    const seq2 = q(`upload-name-status-${coffeeId}`)?.getAttribute("data-seq");
+
+    // Clicking '✦ From Title + Description' when it ALREADY has that generated name STILL responds visibly:
+    await click(`upload-name-from-meta-${coffeeId}`);
+    await waitUntil(() => q(`upload-name-status-${coffeeId}`)?.getAttribute("data-seq") !== seq2, "seq incremented on From Title + Description");
+
+    // Pressing Enter in the input when the name is STILL the exact same name also responds visibly:
+    const seq3 = q(`upload-name-status-${coffeeId}`)?.getAttribute("data-seq");
+    await act(async () => {
+      q(`upload-file-name-${coffeeId}`)!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await waitUntil(() => q(`upload-name-status-${coffeeId}`)?.getAttribute("data-seq") !== seq3, "seq incremented on Enter key");
+
+    // Export coffee, then test Stock Upload + SVG builder progress bars & same-name single-item feedback:
+    await click("upload-export-selected");
+    await waitUntil(() => /processed/i.test(text(`upload-status-${coffeeId}`)), "exported for stock");
+
+    // 2. Stock Upload (`tab-stock-upload`): bulk progress bar + single-item same-name response!
+    await click("tab-stock-upload");
+    if (q("stock-pick-root-btn") !== null) await click("stock-pick-root-btn");
+    await waitUntil(() => q(`stock-row-${coffeeId}`) !== null, "stock row loaded");
+    await click(`stock-check-${coffeeId}`);
+    await click("stock-rename-selected");
+    await waitUntil(() => q("stock-rename-progress-header")?.getAttribute("data-status") === "completed", "stock rename progress completed");
+    expect(text("stock-rename-progress-file")).toMatch(/already had same/i);
+    await click("stock-rename-progress-dismiss");
+    expect(q("stock-rename-progress-header")).toBeNull();
+
+    await click(`stock-rename-btn-${coffeeId}`);
+    expect((q(`stock-rename-panel-${coffeeId}`)!.querySelector(`[data-testid="upload-name-apply-${coffeeId}"]`) as HTMLButtonElement).disabled).toBe(false);
+    await click(`upload-name-apply-${coffeeId}`);
+    await waitUntil(() => /already/i.test(text(`upload-name-status-${coffeeId}`)), "stock single-item same-name response");
+    expect(text("stock-toast")).toMatch(/already/i);
+
+    // 3. SVG builder (`tab-svg-builder`): bulk progress bar + single-item same-name response (including Reset when already at workName)!
+    await click("tab-svg-builder");
+    await click("builder-open-folder");
+    await waitUntil(() => text("builder-library-count") === "4", "builder library scanned");
+    await waitUntil(() => q("builder-artboard") !== null, "builder sheet composed");
+    await click("builder-template-save");
+    await waitUntil(() => host.querySelector('[data-testid^="builder-template-add-artboard-"]') !== null, "builder template saved");
+    const addBtn = host.querySelector('[data-testid^="builder-template-add-artboard-"]') as HTMLElement;
+    await click(addBtn.getAttribute("data-testid")!);
+    await waitUntil(() => host.querySelector('[data-testid^="builder-artboard-art-"]') !== null, "builder artboard added");
+    const abId = (host.querySelector('[data-testid^="builder-artboard-art-"]') as HTMLElement)
+      .getAttribute("data-testid")!
+      .replace("builder-artboard-", "");
+
+    // Single-item Reset when ALREADY at workName responds explicitly!
+    await click(`builder-artboard-rename-btn-${abId}`);
+    expect((q(`upload-name-reset-${abId}`) as HTMLButtonElement).disabled).toBe(false);
+    await click(`upload-name-reset-${abId}`);
+    await waitUntil(() => /already using work name/i.test(text(`upload-name-status-${abId}`)), "reset when already at workName responds");
+    expect(text("builder-toast")).toMatch(/already using work name/i);
+
+    // Bulk rename on artboard without metadata shows ProcessProgressBar with failed/skipped result summary!
+    await click(`builder-artboard-check-${abId}`);
+    await click("builder-artboards-rename");
+    await waitUntil(() => q("builder-rename-progress-header")?.getAttribute("data-status") === "failed", "builder rename progress shows missing-meta result");
+    expect(text("builder-rename-progress-file")).toMatch(/skipped|no.*metadata/i);
+    await click("builder-rename-progress-dismiss");
+    expect(q("builder-rename-progress-header")).toBeNull();
+  }, 25_000);
 });

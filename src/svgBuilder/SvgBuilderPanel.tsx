@@ -15,6 +15,7 @@ import SvgBuilderStatusBar from "./SvgBuilderStatusBar";
 import SvgBuilderTemplates from "./SvgBuilderTemplates";
 import SvgBuilderArtboards from "./SvgBuilderArtboards";
 import SvgBuilderExportProgress from "./SvgBuilderExportProgress";
+import UploadRenameProgress from "../ui/UploadRenameProgress";
 import { useSvgBuilder } from "./useSvgBuilder";
 import { useBuilderReviewFollower } from "./declineasset";
 import { useStageHotkeys } from "./useStageHotkeys";
@@ -29,6 +30,7 @@ export default function SvgBuilderPanel({ active }: { active: boolean }) {
     </div>}
     <SvgBuilderControls b={b} />
     <SvgBuilderExportProgress />
+    <UploadRenameProgress source="svgBuilder" />
     <SvgBuilderMetaWidget b={b} />
     <SvgBuilderHeader b={b} />
     <div className="bld-workspace" data-testid="builder-workspace">

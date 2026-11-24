@@ -11,7 +11,7 @@ export default function SvgBuilderStatusBar({ b }: { b: BuilderApi }) {
     if (b.error) return;
     const t = setTimeout(() => setShown(false), 4200);
     return () => clearTimeout(t);
-  }, [b.status, b.error]);
+  }, [b.status, b.error, b.statusSeq]);
   return <div className="bld-toast-zone" aria-live="polite">
     {b.busy !== null && <span className="bld-toast is-busy" data-testid="builder-busy">{b.busy}</span>}
     <span className={`bld-toast${b.error ? " is-error" : ""}`} data-testid="builder-toast" data-shown={shown} hidden={!shown}>{b.status}</span>
