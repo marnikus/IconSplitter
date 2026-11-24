@@ -2,14 +2,15 @@
 // the movement in artboard pixels (screen px ÷ zoom) until the pointer is up.
 import type { PointerEvent as ReactPointerEvent } from "react";
 
-export interface Delta { dx: number; dy: number }
+/** `shift`: Shift is held at this moment of the drag (2026-11-24: a padding grip then sets every side). */
+export interface Delta { dx: number; dy: number; shift?: boolean }
 
 export function trackDrag(e: ReactPointerEvent, zoom: number, move: (d: Delta) => void, end: () => void): void {
   e.preventDefault();
   e.stopPropagation();
   const from = { x: e.clientX, y: e.clientY };
   const z = zoom > 0 ? zoom : 1;
-  const onMove = (ev: PointerEvent) => move({ dx: (ev.clientX - from.x) / z, dy: (ev.clientY - from.y) / z });
+  const onMove = (ev: PointerEvent) => move({ dx: (ev.clientX - from.x) / z, dy: (ev.clientY - from.y) / z, shift: ev.shiftKey });
   const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); end(); };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);

@@ -5,6 +5,7 @@ import { fnv1a32 } from "../pairing";
 import { isRecord } from "../isrecord";
 import { RANGES, clampTo, type NumRange } from "./ranges";
 import { parseMerges } from "./merges";
+import { foldPad, parsePadSides } from "./padsides";
 import type { BannerPosition, BannerStyle, CaptionCase, SelectionMode, SheetConfig, TitleFace , TextCase } from "./types";
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -12,7 +13,7 @@ const MODES: readonly SelectionMode[] = ["similar", "random", "filtered"];
 
 /** Reference "Glyph" defaults (FIXES §D); the banner copy is neutral, not "FOOD ICONS". */
 export const DEFAULT_CONFIG: SheetConfig = {
-  artboard: { width: 1080, height: 660, background: "#F4F0E7", padding: 34, radius: 0 },
+  artboard: { width: 1080, height: 660, background: "#F4F0E7", padding: 34, radius: 0, padSides: null },
   grid: { columns: 8, rows: 4, gapX: 22, gapY: 18, captions: true, merges: [],
     captionColor: "#787A6C", captionSize: 9, captionCase: "upper", captionGap: 0 },
   icons: { box: 52, strokeWidth: 1.4, color: "#202A24", linecap: "round", coloredStroke: "", coloredStrokeWidth: 0, coloredFill: "" },
@@ -89,7 +90,7 @@ export function parseSheetConfig(raw: unknown): SheetConfig {
 }
 
 export function copyConfig(c: SheetConfig): SheetConfig {
-  return { artboard: { ...c.artboard }, grid: { ...c.grid, merges: c.grid.merges.map((m) => ({ ...m })) }, icons: { ...c.icons }, banner: { ...c.banner, captionTexts: { ...c.banner.captionTexts } } };
+  return { artboard: { ...c.artboard, padSides: c.artboard.padSides === null ? null : { ...c.artboard.padSides } }, grid: { ...c.grid, merges: c.grid.merges.map((m) => ({ ...m })) }, icons: { ...c.icons }, banner: { ...c.banner, captionTexts: { ...c.banner.captionTexts } } };
 }
 
 export function configFingerprint(config: SheetConfig): string {
@@ -106,9 +107,10 @@ export function readableInk(background: string): string {
 function parseArtboard(raw: unknown): SheetConfig["artboard"] {
   const d = DEFAULT_CONFIG.artboard;
   if (!isRecord(raw)) return { ...d };
-  return { width: num(RANGES.width, raw.width, d.width), height: num(RANGES.height, raw.height, d.height),
-    background: hex(raw.background, d.background), padding: num(RANGES.padding, raw.padding, d.padding),
-    radius: num(RANGES.radius, raw.radius, d.radius) };
+  const padding = num(RANGES.padding, raw.padding, d.padding);
+  return foldPad({ width: num(RANGES.width, raw.width, d.width), height: num(RANGES.height, raw.height, d.height),
+    background: hex(raw.background, d.background), padding,
+    radius: num(RANGES.radius, raw.radius, d.radius), padSides: parsePadSides(raw.padSides, padding) });
 }
 
 function parseGrid(raw: unknown): SheetConfig["grid"] {

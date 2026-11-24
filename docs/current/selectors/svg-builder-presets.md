@@ -41,3 +41,10 @@ Parent: [SVG builder selectors](svg-builder.md) · behaviour: [templates & prese
 | `builder-style-filter` (+ `-menu`, `-opt-all`, `-opt-base`, `-opt-<style>`) / `builder-library-styles` | header, after Icons indexing / library eyebrow | STYLES: which icon styles may be in sheets ([icon styles](../sor/svg-builder-styles.md), 2026-11-23) / the checked styles' names |
 | `builder-register` / `builder-auto-register` | header, beside Icons indexing | 🗂 Register templates and artboards (new folders + files edited outside the app, 2026-11-22) / the after-every-scan switch |
 | `builder-artboard-meta-fields-<id>` | under the active artboard row | the upload editor `upload-meta-{title,description,tags,accept,regen,state}-<id>`; row button `builder-artboard-regen-<id>` |
+
+## Padding per side (2026-11-24)
+
+| Handle | Element | Contract |
+|---|---|---|
+| `builder-pad-sides` > `builder-pad-top` / `-right` / `-bottom` / `-left` | Customize → Artboard number boxes | one side each ([per side](../sor/svg-builder-stage.md#padding-per-side-2026-11-24)) |
+| `builder-edge-pad-<side>` | artboard padding grip | drags its own side; Shift held = all four; badge `builder-edge-badge` |

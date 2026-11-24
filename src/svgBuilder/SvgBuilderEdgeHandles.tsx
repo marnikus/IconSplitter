@@ -4,27 +4,30 @@
 // `zoom`); each drag is one coalesced undo step, with a live value badge.
 import { useState, type PointerEvent as ReactPointerEvent } from "react";
 import { bannerSizeAfter, edgeHandles, paddingAfter, type EdgeHandle } from "../lib/svgBuilder/edgedrag";
+import { padOf, withPadSide } from "../lib/svgBuilder/padsides";
 import type { SheetConfig } from "../lib/svgBuilder/types";
 import type { BuilderApi } from "./useSvgBuilder";
-import { dragGesture, trackDrag } from "./trackdrag";
+import { dragGesture, trackDrag, type Delta } from "./trackdrag";
 
-/** The sheet after a drag of (dx, dy) artboard pixels from the start config. */
-function dragged(start: SheetConfig, h: EdgeHandle, d: { dx: number; dy: number }): SheetConfig {
+/** The sheet after a drag of (dx, dy) artboard pixels from the start config: a padding grip moves its own side, Shift held = all four. */
+function dragged(start: SheetConfig, h: EdgeHandle, d: Delta): SheetConfig {
   if (h.kind === "banner") return { ...start, banner: { ...start.banner, size: bannerSizeAfter(start, start.banner.size, d) } };
-  return { ...start, artboard: { ...start.artboard, padding: paddingAfter(h.side, start.artboard.padding, d) } };
+  const value = paddingAfter(h.side, padOf(start.artboard)[h.side], d);
+  return { ...start, artboard: withPadSide(start.artboard, h.side, value, d.shift === true) };
 }
 
 const LABEL: Record<EdgeHandle["kind"], (side: string) => string> = {
   banner: () => "Banner size", pad: (side) => `Padding (${side} edge)`,
 };
 const TITLE: Record<EdgeHandle["kind"], string> = {
-  banner: "Drag: banner size", pad: "Drag: padding around the icons",
+  banner: "Drag: banner size", pad: "Drag: this side's padding — hold Shift for all four sides",
 };
 
 /** The live badge while dragging. */
 function badgeOf(c: SheetConfig, h: EdgeHandle): string {
   if (h.kind === "banner") return `${c.banner.size} px`;
-  return `Pad ${c.artboard.padding} px`;
+  const pad = padOf(c.artboard);
+  return c.artboard.padSides === null ? `Pad ${pad[h.side]} px · all` : `Pad ${h.side} ${pad[h.side]} px`;
 }
 
 function useEdgeDrag(b: BuilderApi, zoom: number, setActive: (id: string | null) => void) {

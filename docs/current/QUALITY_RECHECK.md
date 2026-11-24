@@ -6175,3 +6175,7 @@ quality:changed PASS (stagezoom.ts 7 fns/51 lines, useStageNavigation.ts 16 fns/
 ## 2026-11-24 — SVG builder: icons fitted by their real ink box, not their viewBox
 
 quality:changed PASS (inkbox.ts 24 fns/≈180 lines, params ≤ 4); tsc PASS; lint clean on changed files; cold sanitise of a 400-curve icon 2.69 → 2.80 ms, warm unchanged; svg_builder perf/export-speed budgets 8/8; full vitest 5137/5162 on Windows, the 25 failures are the same pre-existing set as the previous entry.
+
+## 2026-11-24 — SVG builder: padding per side (artboard grips, Shift = all four, T/R/B/L boxes)
+
+quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trackdrag within gates); tsc PASS; lint clean on changed files; build PASS; full vitest 5142/5167 on Windows, the same 25 pre-existing failures, none in svg_builder_*.

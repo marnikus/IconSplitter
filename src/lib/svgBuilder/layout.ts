@@ -2,6 +2,7 @@
 // artboard → free area → grid → icon box → glyph + stroke). The same layout
 // drives the live preview, its overlays and the exported SVG (RULE 15).
 import { activeMerges, type ActiveMerge } from "./merges";
+import { padOf } from "./padsides";
 import type { CellFrame, Rect, SheetConfig, SheetLayout } from "./types";
 
 interface GridBox { box: number; gapX: number; gapY: number; caption: number; scale: number }
@@ -33,17 +34,18 @@ function bannerRect(config: SheetConfig): Rect | null {
   return { x: 0, y: height - size, width, height: size };
 }
 
-/** Artboard minus the banner, then inset by the padding on every side. */
+/** Artboard minus the banner, then inset by each side's own padding (2026-11-24). */
 function contentRect(config: SheetConfig, banner: Rect | null): Rect {
-  const { width, height, padding } = config.artboard;
+  const { width, height } = config.artboard;
+  const pad = padOf(config.artboard);
   const free: Rect = { x: 0, y: 0, width, height };
   const pos = config.banner.position;
   if (banner !== null && pos === "left") Object.assign(free, { x: banner.width, width: width - banner.width });
   if (banner !== null && pos === "right") free.width = width - banner.width;
   if (banner !== null && pos === "top") Object.assign(free, { y: banner.height, height: height - banner.height });
   if (banner !== null && pos === "bottom") free.height = height - banner.height;
-  return { x: free.x + padding, y: free.y + padding,
-    width: Math.max(1, free.width - padding * 2), height: Math.max(1, free.height - padding * 2) };
+  return { x: free.x + pad.left, y: free.y + pad.top,
+    width: Math.max(1, free.width - pad.left - pad.right), height: Math.max(1, free.height - pad.top - pad.bottom) };
 }
 
 /** The grid only shrinks to fit (scale ≤ 1), never grows; box, gaps and caption row scale together. */

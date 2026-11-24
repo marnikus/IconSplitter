@@ -57,7 +57,7 @@
 |---|---|---|
 | `builder-inspector` | column | `builder-reset` (RESET) |
 | `builder-section-{artboard,grid,icons,banner}` | collapsible sections | badge `W×H`, `C × R`, `fit to box`, position/`hidden`; Artboard starts collapsed |
-| `builder-width` / `builder-height` / `builder-padding` / `builder-radius` | px number boxes | commit on Enter/blur, clamp |
+| `builder-width` / `builder-height` / `builder-padding` / `builder-radius` | px number boxes | commit on Enter/blur, clamp; Pad = all sides ([T/R/B/L](svg-builder-presets.md)) |
 | `builder-canvas`… swatches: `builder-canvas-picker`, `builder-canvas-{hex}` | Canvas colour | 8 swatches |
 | `builder-columns` / `builder-rows` | steppers | `-dec`, `-inc`, `-value` |
 | `builder-gap-x` / `builder-gap-y` / `builder-caption-size` | sliders | `{id}-value` pill |

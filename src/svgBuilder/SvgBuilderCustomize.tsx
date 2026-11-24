@@ -2,6 +2,7 @@
 // RESET, then collapsible Artboard (starts collapsed), Grid, Icon style, Banner.
 // Every edit yields a full validated SheetConfig; sliders coalesce into one undo gesture.
 import { RANGES } from "../lib/svgBuilder/ranges";
+import { PAD_SIDES, padOf, withPadSide } from "../lib/svgBuilder/padsides";
 import type { SheetConfig } from "../lib/svgBuilder/types";
 import { ColorChip, Field, NumBox, Section, Segmented, Slider, Stepper, Swatches, Toggle } from "./SvgBuilderFields";
 import { BannerSection, IconStyleSection } from "./SvgBuilderCustomizeStyle";
@@ -37,10 +38,22 @@ function ArtboardSection({ c, edit }: { c: SheetConfig; edit: Edit }) {
     </div>
     <Swatches label="Canvas" value={a.background} testid="builder-canvas" onChange={(background) => edit("artboard", { background })} />
     <div className="bld-two">
-      <NumBox label="Pad" unit="px" value={a.padding} range={RANGES.padding} testid="builder-padding" onCommit={(padding, g) => edit("artboard", { padding }, g)} />
+      <NumBox label="Pad" unit="px" value={a.padding} range={RANGES.padding} testid="builder-padding" onCommit={(padding, g) => edit("artboard", { padding, padSides: null }, g)} />
       <NumBox label="Radius" unit="px" value={a.radius} range={RANGES.radius} testid="builder-radius" onCommit={(radius, g) => edit("artboard", { radius }, g)} />
     </div>
+    <PadSidesRow a={a} edit={edit} />
   </Section>;
+}
+
+const SIDE_LABEL = { top: "T", right: "R", bottom: "B", left: "L" } as const;
+
+/** Padding per side (2026-11-24): the same values the artboard's padding grips drag; Pad above sets all four. */
+function PadSidesRow({ a, edit }: { a: SheetConfig["artboard"]; edit: Edit }) {
+  const pad = padOf(a);
+  return <div className="bld-four" data-testid="builder-pad-sides" title="Padding per side — or drag the grips on the artboard (Shift = all four)">
+    {PAD_SIDES.map((side) => <NumBox key={side} label={SIDE_LABEL[side]} unit="px" value={pad[side]} range={RANGES.padding} testid={`builder-pad-${side}`}
+      onCommit={(v, g) => edit("artboard", withPadSide(a, side, v, false), g)} />)}
+  </div>;
 }
 
 function GridSection({ c, edit }: { c: SheetConfig; edit: Edit }) {

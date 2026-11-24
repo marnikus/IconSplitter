@@ -92,6 +92,7 @@ import { cleanHex, smartSwatches } from "../src/lib/svgBuilder/swatches";
 import { quickTargetOf } from "../src/svgBuilder/quickedit";
 import { toolbarSize } from "../src/svgBuilder/quickplace";
 import { freeSpot } from "../src/lib/svgBuilder/freespot";
+import { padOf } from "../src/lib/svgBuilder/padsides";
 
 // Quick editing on the artboard (2026-11-14): hover → toolbar → colour, stroke,
 // font and size panels; smart swatches near the current colour.
@@ -374,30 +375,61 @@ describe("number boxes apply as you type", () => {
     } finally { if (had) proto.getBBox = old; else delete proto.getBBox; }
   });
 
-  it("drags the banner edge to resize the banner and a padding edge to change the icon padding; each drag is one undo step (2026-11-14)", async () => {
+  it("drags the banner edge to resize the banner and a padding edge to change THAT side's padding; Shift sets all four; each drag is one undo step (2026-11-14, per side 2026-11-24)", async () => {
     await openLibrary();
-    const drag = async (id: string, dx: number, dy: number) => {
+    const move = (x: number, y: number, shift: boolean) => {
+      const ev = new PointerEvent("pointermove", { clientX: x, clientY: y });
+      Object.defineProperty(ev, "shiftKey", { value: shift }); // happy-dom drops modifier keys
+      return ev;
+    };
+    const drag = async (id: string, dx: number, dy: number, shift = false) => {
       const handle = q(id)!;
       await act(async () => { handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100, clientY: 100 })); });
-      await act(async () => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 100 + dx / 2, clientY: 100 + dy / 2 })); });
-      await act(async () => { window.dispatchEvent(new PointerEvent("pointermove", { clientX: 100 + dx, clientY: 100 + dy })); });
+      await act(async () => { window.dispatchEvent(move(100 + dx / 2, 100 + dy / 2, shift)); });
+      await act(async () => { window.dispatchEvent(move(100 + dx, 100 + dy, shift)); });
       await act(async () => { window.dispatchEvent(new PointerEvent("pointerup", {})); });
     };
+    const sides = () => padOf(config().artboard);
     const zoom = Number(q("builder-artboard")!.dataset.zoom);
     const start = config();
+    const p0 = start.artboard.padding;
     expect(start.banner.position).toBe("left");
     await drag("builder-edge-banner", 40 * zoom, 0); // the inner (right) edge of a left banner, 40 px outward
     expect(config().banner.size).toBe(start.banner.size + 40);
     expect(q("builder-edge-pad-left")).toBeNull(); // the side next to the banner has no padding handle
-    await drag("builder-edge-pad-right", -12 * zoom, 0); // inward from the right
-    expect(config().artboard.padding).toBe(start.artboard.padding + 12);
-    await drag("builder-edge-pad-top", 0, 400 * zoom); // clamped to the padding range
-    expect(config().artboard.padding).toBe(160);
+    await drag("builder-edge-pad-right", -12 * zoom, 0); // inward from the right: only the right side
+    expect(sides()).toEqual({ top: p0, right: p0 + 12, bottom: p0, left: p0 });
+    await drag("builder-edge-pad-top", 0, 400 * zoom); // clamped to the padding range, only the top
+    expect(sides()).toEqual({ top: 160, right: p0 + 12, bottom: p0, left: p0 });
+    await drag("builder-edge-pad-bottom", 0, -10 * zoom, true); // Shift: every side takes the dragged side's value
+    expect(sides()).toEqual({ top: p0 + 10, right: p0 + 10, bottom: p0 + 10, left: p0 + 10 });
+    expect(config().artboard).toMatchObject({ padding: p0 + 10, padSides: null });
     await click("builder-undo");
-    expect(config().artboard.padding).toBe(start.artboard.padding + 12);
+    expect(sides()).toEqual({ top: 160, right: p0 + 12, bottom: p0, left: p0 });
     await click("builder-undo");
-    expect(config().artboard.padding).toBe(start.artboard.padding);
+    await click("builder-undo");
+    expect(sides()).toEqual({ top: p0, right: p0, bottom: p0, left: p0 });
     expect(config().banner.size).toBe(start.banner.size + 40);
+  });
+
+  it("Customize → Artboard: T / R / B / L set one side each; Pad sets all four again (2026-11-24)", async () => {
+    await openLibrary();
+    const section = q("builder-section-artboard")!;
+    if (q("builder-pad-left") === null) await act(async () => { section.querySelector("button")!.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    const type = async (id: string, value: string) => {
+      const field = q(id) as HTMLInputElement;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => { field.dispatchEvent(new FocusEvent("focusout", { bubbles: true })); });
+    };
+    const p0 = config().artboard.padding;
+    await type("builder-pad-bottom", "70");
+    expect(padOf(config().artboard)).toEqual({ top: p0, right: p0, bottom: 70, left: p0 });
+    await type("builder-padding", "12");
+    expect(config().artboard).toMatchObject({ padding: 12, padSides: null });
+    expect((q("builder-pad-bottom") as HTMLInputElement).value).toBe("12");
   });
 
   it("drags the artboard's right / bottom edge and corner to change its width, height or both (2026-11-14)", async () => {

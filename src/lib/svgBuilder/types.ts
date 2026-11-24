@@ -77,6 +77,8 @@ export interface SelectionResult {
 export interface SheetConfig {
   artboard: {
     width: number; height: number; background: string; padding: number; radius: number;
+    /** Padding per side once one side was dragged on its own (2026-11-24, padsides.ts); null = `padding` on all four. */
+    padSides: { top: number; right: number; bottom: number; left: number } | null;
   };
   grid: {
     columns: number; rows: number; gapX: number; gapY: number; captions: boolean;
