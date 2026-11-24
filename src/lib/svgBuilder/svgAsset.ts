@@ -10,6 +10,7 @@ import { fmt1 } from "../upload/svgdirectpath";
 import { isStyledIcon } from "./iconstyles";
 import { markPaints, paintsOf } from "./stylepaint";
 import { compilePreparedNodes, renderPreparedNodes, type DirectPlacement, type PreparedNode } from "./svgAssetNodes";
+import { inkBoxOf } from "./inkbox";
 import type { BuilderIconAsset, CellFrame, SheetConfig } from "./types";
 
 export interface CellSvgArgs {
@@ -64,7 +65,34 @@ function sanitize(code: string, assetId: string, index: number): Sanitized {
   if (box === null) return { ok: false, error: "approved SVG has no usable viewBox" };
   if (hasIds) scopeLocalIds(root, `b${fnv1a32(`${assetId}:${index}`).toString(16)}`);
   if (styled) markPaints(root);
-  return { ok: true, nodes: compilePreparedNodes(root, styled), box, rendered: new Map() };
+  const nodes = compilePreparedNodes(root, styled);
+  return { ok: true, nodes, box: fitBoxOf(nodes, box, styled ? ownStrokeOf(root) : 0), rendered: new Map() };
+}
+
+/**
+ * The box a cell fits (2026-11-24): the icon's REAL drawn bounds, not the
+ * generator's viewBox / artboard frame, so every icon uses its cell fully.
+ * A colored icon's own strokes scale with it, so half its widest pen is added;
+ * a line icon's sheet pen is already reserved by the glyph (box − 2.2 × pen).
+ * Nothing measurable drawn → the viewBox, as before.
+ */
+function fitBoxOf(nodes: readonly PreparedNode[], viewBox: [number, number, number, number], pen: number): [number, number, number, number] {
+  const ink = inkBoxOf(nodes);
+  if (ink === null || (ink[2] <= 0 && ink[3] <= 0)) return viewBox;
+  const h = pen / 2;
+  return [ink[0] - h, ink[1] - h, ink[2] + pen, ink[3] + pen];
+}
+
+/** The widest own stroke of a colored icon, in its viewBox units (a stroke with no width paints 1). */
+function ownStrokeOf(root: Element): number {
+  let widest = 0;
+  for (const el of [root, ...allElements(root)]) {
+    const stroke = el.getAttribute("stroke");
+    const width = Number.parseFloat(el.getAttribute("stroke-width") ?? "");
+    if (Number.isFinite(width)) widest = Math.max(widest, width);
+    else if (stroke !== null && stroke !== "none") widest = Math.max(widest, 1);
+  }
+  return widest;
 }
 
 function renderedChildren(s: Extract<Sanitized, { ok: true }>, placed: DirectPlacement): string {
@@ -136,11 +164,11 @@ function rewriteRefs(el: Element, ids: ReadonlyMap<string, string>): void {
   }
 }
 
-/** Fits `box` inside `frame.glyph`, centred in `frame.size`, in direct artboard px. */
+/** Fits the ink `box` inside `frame.glyph`, centred in `frame.size`, in direct artboard px. */
 function placementOf(frame: CellFrame, box: readonly number[]): DirectPlacement {
   const [, , width, height] = box;
   const glyph = frame.glyph > 0 ? Math.min(frame.glyph, frame.size) : frame.size;
-  const scale = Math.min(glyph / width, glyph / height);
+  const scale = glyph / Math.max(width, height); // a zero-width ink (one straight line) scales by its length
   const dx = frame.x + (frame.size - width * scale) / 2 - box[0] * scale;
   const dy = frame.y + (frame.size - height * scale) / 2 - box[1] * scale;
   return { scale, dx, dy };

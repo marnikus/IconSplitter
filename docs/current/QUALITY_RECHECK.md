@@ -6171,3 +6171,7 @@ strictly inside).
 ## 2026-11-24 — SVG builder stage: Ctrl + wheel zoom, middle-button pan, layout buttons keep an open template's design
 
 quality:changed PASS (stagezoom.ts 7 fns/51 lines, useStageNavigation.ts 16 fns/106 lines, config.ts 33 fns/220 lines); tsc PASS; lint 0 new warnings; build 3,769.82 kB; focused tests 13 + 27 + 1 new green; full vitest 5130/5155 on Windows, the 25 failures are the pre-existing bridge/Getty/verify-runner/flag-viewport/docs-budget set, none in svg_builder_*.
+
+## 2026-11-24 — SVG builder: icons fitted by their real ink box, not their viewBox
+
+quality:changed PASS (inkbox.ts 24 fns/≈180 lines, params ≤ 4); tsc PASS; lint clean on changed files; cold sanitise of a 400-curve icon 2.69 → 2.80 ms, warm unchanged; svg_builder perf/export-speed budgets 8/8; full vitest 5137/5162 on Windows, the 25 failures are the same pre-existing set as the previous entry.

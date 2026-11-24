@@ -42,13 +42,20 @@ describe("colored icons keep their own paints (2026-11-23)", () => {
     const c = cell(doc, "1");
     expect([c.getAttribute("fill"), c.getAttribute("stroke")]).toEqual([null, null]); // no stroke-only wrapper
     expect(c.getAttribute("transform")).toBeNull();
-    const cellScale = computeLayout(parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, position: "none" } })).cells[1].glyph / 24;
-    const expected = (w: number) => String(Math.round(w * cellScale * 10) / 10);
+    // 2026-11-24: the cell fits the icon's ink, not its 24-unit frame, so it scales at least glyph / 24
+    const frameScale = computeLayout(parseSheetConfig({ ...DEFAULT_CONFIG, banner: { ...DEFAULT_CONFIG.banner, position: "none" } })).cells[1].glyph / 24;
+    const cellScale = Number(paints(part(doc, "1", "outline"))[2]) / 2;
+    expect(cellScale).toBeGreaterThan(frameScale);
+    const own = (id: string, w: number, stroke: string) => {
+      const [fill, paint, width] = paints(part(doc, "1", id));
+      expect([fill, paint]).toEqual(["none", stroke]);
+      expect(Math.abs(Number(width) - w * cellScale)).toBeLessThanOrEqual(0.11); // 1-decimal px, scale read back from a rounded width
+    };
     expect(paints(part(doc, "1", "blob"))).toEqual(["#F5A623", "none", null]);
-    expect(paints(part(doc, "1", "outline"))).toEqual(["none", "#1F2937", expected(2)]);
+    own("outline", 2, "#1F2937");
     expect(paints(part(doc, "1", "inherited"))).toEqual(["#112233", "none", null]);
-    expect(paints(part(doc, "1", "styled"))).toEqual(["none", "#AABBCC", expected(3)]);
-    expect(paints(part(doc, "1", "nested"))).toEqual(["none", "#FF0080", expected(1.5)]);
+    own("styled", 3, "#AABBCC");
+    own("nested", 1.5, "#FF0080");
   });
 
   it("stroke colour and width change only the strokes; fill colour only the fills", () => {

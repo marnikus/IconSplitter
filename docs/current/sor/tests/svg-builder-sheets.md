@@ -23,3 +23,4 @@ Back to the [builder test index](svg-builder.md) and the contracts: [templates &
 | `tests/svg_builder_grid_limits.test.ts` | 100 × 100 grid, one-pass empty cells, big artboards / presets |
 | `tests/svg_builder_sheet_folders.test.ts` | template and artboard folder names, homes, variants and export stems |
 | `tests/svg_builder_export_progress.test.tsx` | artboard export `ProcessProgressBar` in `builder-progress-mount`: live `completed / total`, `remaining` (how many left), `%`, current artboard name, header button `left` count, mid-run Cancel keeping real partial counts with no cue, failed vs completed terminal states, Review results tab return, ✕ dismiss |
+| `tests/svg_builder_inkbox.test.ts` | icon fit by its ink, not its viewBox: shape/path/curve/arc tight bounds, nested transforms, empty → viewBox, centred fill of the glyph, zero-width line ([icon fit](../svg-builder-icon-fit.md)) |
