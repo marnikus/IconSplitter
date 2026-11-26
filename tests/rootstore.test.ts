@@ -96,3 +96,42 @@ describe("rootstore — a path survives with the folder it was captured for", ()
     expect(await lookupRootPath(mine)).toEqual({ path: "", how: null });
   });
 });
+
+// A path is never lost across reloads (2026-11-26, the report "after refresh:
+// full path not found yet"): every reload hands out FRESH handle objects, so a
+// record must be replaced by folder identity, not object identity; saves made
+// at the same moment (every tab restores at boot) must all land; and the newest
+// record for a folder is the one that counts.
+describe("rootstore — reloads never lose a path", () => {
+  const P = (n: number) => `F:\\work\\folder_${n}`;
+
+  it("re-saving a folder through a fresh handle replaces its record instead of piling up", async () => {
+    const first = dir("_split_output");
+    await persistRootPath(first, { path: P(1), how: "derived" });
+    await persistRootPath(dir("_split_output", first), { path: P(1), how: "derived" });
+    expect((store.data.get("all") as unknown[]).length).toBe(1);
+  });
+
+  it("a folder's path survives many reloads of another folder (no eviction by duplicates)", async () => {
+    const svg = dir("_split_output");
+    await persistRootPath(svg, { path: P(0), how: "derived" });
+    // every reload: a fresh handle object for the SAME folder (identity by folder id, as the platform's)
+    const reloaded = () => ({ kind: "directory", name: "selection", folder: 7,
+      isSameEntry: async (o: unknown) => (o as { folder?: number }).folder === 7 }) as unknown as DirHandleLike;
+    for (let i = 0; i < 30; i++) await persistRootPath(reloaded(), { path: P(99), how: "derived" });
+    expect((store.data.get("all") as unknown[]).length).toBe(2);
+    expect((await lookupRootPath(dir("_split_output", svg))).path).toBe(P(0));
+  });
+
+  it("saves made at the same moment all land", async () => {
+    const hs = Array.from({ length: 5 }, (_, i) => dir(`f${i}`));
+    await Promise.all(hs.map((h, i) => persistRootPath(h, { path: P(i), how: "derived" })));
+    for (const [i, h] of hs.entries()) expect((await lookupRootPath(h)).path).toBe(P(i));
+  });
+
+  it("the newest record for a folder wins", async () => {
+    const h = dir("_split_output");
+    store.data.set("all", [{ handle: h, path: P(1), how: "derived" }, { handle: dir("_split_output", h), path: P(2), how: "copied" }]);
+    expect((await lookupRootPath(h)).path).toBe(P(2));
+  });
+});

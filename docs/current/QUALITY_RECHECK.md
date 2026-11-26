@@ -6187,3 +6187,5 @@ quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trac
 - 2026-11-26 — path editor 2-point curved rings are areas: model.isAreaRing used by boolean/curvecut/fill/region/planarface; quality:changed PASS; pathedit 36 files / 323 tests green; new pathedit_two_point_ring 4 tests (3 red before).
 
 - 2026-11-26 — folder pick remembered before the path capture (ui/pickroot.ts 116 lines, batch useBatch, svg scan boot hardened); quality:changed PASS; affected suites 312 files, only upload_flag_viewport (pre-existing baseline) fails; 2 new tests red then green.
+
+- 2026-11-26 — full path survives reload: rootstore serial writes + folder-identity dedupe + newest wins (91 lines); knownroots shares a path across same-folder handles (170 lines); quality:changed PASS; full suite 25 failures in 8 files = baseline; 6 new tests red then green.

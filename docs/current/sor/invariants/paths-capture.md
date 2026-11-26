@@ -17,6 +17,11 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   which remembers it) the moment the dialog closes, BEFORE the capture: a
   reload while the capture waits on a clipboard prompt keeps the pick
   (2026-11-26, `tests/pickroot.test.ts`, `tests/svg_boot_restore.test.ts`).
+  A saved path survives reloads (2026-11-26, `lib/rootstore`): saves run one
+  at a time, a folder's record is replaced by FOLDER identity (`isSameEntry`,
+  not the handle object a reload renews), the newest record wins, and a path
+  bound to one tab's handle reaches every other handle of the same folder
+  (`knownroots.restoreKnownRoot`; tests `rootstore`, `knownroots`).
 
 <a id="i-52"></a>
 * **I-52 (a capture is a conversation, RULE 4/12/13 — amended 2026-10-09):** the

@@ -20,9 +20,24 @@ interface RootRecord {
   how: RootPathInfo["how"];
 }
 
+/**
+ * One save at a time (2026-11-26): every tab restores — and may save — at boot,
+ * and two read-modify-writes of the one list at once lost one of them.
+ */
+let writes: Promise<unknown> = Promise.resolve();
+
 /** Persists (or, with no path, forgets) the folder's captured path. */
-export async function persistRootPath(handle: DirHandleLike, info: RootPathInfo): Promise<void> {
-  const records = (await loadRecords()).filter((r) => r.handle !== handle);
+export function persistRootPath(handle: DirHandleLike, info: RootPathInfo): Promise<void> {
+  const run = writes.then(() => persistNow(handle, info), () => persistNow(handle, info));
+  writes = run.catch(() => undefined);
+  return run;
+}
+
+async function persistNow(handle: DirHandleLike, info: RootPathInfo): Promise<void> {
+  // the folder's older records go by FOLDER identity: a reload hands out fresh
+  // handle objects, and duplicates used to push other folders off the list
+  const records: RootRecord[] = [];
+  for (const r of await loadRecords()) if (!(await isSameFolder(r.handle, handle))) records.push(r);
   const path = normalizeRootPath(info.path);
   if (path !== "" && isFolderPathText(path) && info.how !== null) {
     records.push({ handle, path, how: info.how });
@@ -30,9 +45,9 @@ export async function persistRootPath(handle: DirHandleLike, info: RootPathInfo)
   await idbPut(ROOTPATHS_STORE, KEY, records.slice(-KEEP));
 }
 
-/** The path captured FOR this very folder — or `{ "", null }` (never a name's). */
+/** The path captured FOR this very folder — the newest record — or `{ "", null }` (never a name's). */
 export async function lookupRootPath(handle: DirHandleLike): Promise<RootPathInfo> {
-  for (const record of await loadRecords()) {
+  for (const record of (await loadRecords()).reverse()) {
     if (await isSameFolder(record.handle, handle)) return valid(record);
   }
   return NO_ROOT_PATH;

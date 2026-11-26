@@ -39,6 +39,35 @@ export function rememberKnownRoot(handle: DirHandleLike, path: string, how: Path
   if (at >= 0) known.splice(at, 1);
   known.push(entry);
   notify();
+  shareWithTwins(entry);
+}
+
+/** The platform's folder identity (never a name); false for a handle that cannot say. */
+async function sameEntry(a: DirHandleLike, b: DirHandleLike): Promise<boolean> {
+  if (a === b) return true;
+  try { return (await a.isSameEntry?.(b)) === true; } catch { return false; }
+}
+
+/**
+ * One folder, several handle objects (2026-11-26): every tab restores its OWN
+ * handle, so a path bound to one is handed to the others of the same folder
+ * still waiting for theirs — a reload no longer shows "full path not found".
+ */
+function shareWithTwins(entry: KnownRoot): void {
+  if (entry.path === "") return;
+  for (const k of known.filter((x) => x.path === "" && x.handle !== entry.handle)) {
+    void sameEntry(k.handle, entry.handle).then((same) => {
+      if (same && boundRootPathInfo(k.handle).path === "") rememberKnownRoot(k.handle, entry.path, entry.how ?? "derived");
+    });
+  }
+}
+
+/** A path another handle of this same folder already holds, or null. */
+async function twinPath(handle: DirHandleLike): Promise<KnownRoot | null> {
+  for (const k of known.filter((x) => x.path !== "" && x.handle !== handle)) {
+    if (await sameEntry(k.handle, handle)) return k;
+  }
+  return null;
 }
 
 /** The path bound to THIS folder — never a same-named folder's (I-63). */
@@ -91,8 +120,12 @@ async function deriveFrom(root: KnownRoot, handle: DirHandleLike): Promise<strin
  */
 export async function restoreKnownRoot(handle: DirHandleLike): Promise<void> {
   const info = await lookupRootPath(handle);
-  if (info.path !== "") rememberKnownRoot(handle, info.path, info.how);
-  else if (resolver !== null) void resolver(handle).catch(() => null); // the local helper finds it in the background (2026-11-16); the rows update when bound
+  if (info.path !== "") return rememberKnownRoot(handle, info.path, info.how);
+  const twin = await twinPath(handle); // another tab already holds this folder's path (2026-11-26)
+  if (twin !== null) return rememberKnownRoot(handle, twin.path, twin.how ?? "derived");
+  if (boundRootPathInfo(handle).path !== "") return; // a session capture stays as it is
+  if (!known.some((k) => k.handle === handle)) rememberKnownRoot(handle, ""); // waits: a path found later reaches it
+  if (resolver !== null) void resolver(handle).catch(() => null); // the local helper finds it in the background (2026-11-16); the rows update when bound
 }
 
 /** Who finds a folder's full path when none was saved (ui/bridgeroot.ts registers the local helper). */

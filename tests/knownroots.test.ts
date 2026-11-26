@@ -149,3 +149,32 @@ describe("boundRootPathInfo — the path is bound to the folder, not the name", 
     expect(knownRoots()).toEqual([{ handle: mine, path: "D:\\two\\main", how: "derived" }]);
   });
 });
+
+// One folder, several handle objects (2026-11-26): each tab restores its own
+// handle for the same folder; a path bound to one is the path of all of them.
+describe("knownroots — the same folder through another tab's handle", () => {
+  const twin = (folder: number) => ({ kind: "directory", name: "_split_output", folder,
+    isSameEntry: async (o: unknown) => (o as { folder?: number }).folder === folder }) as unknown as DirHandleLike;
+  const PATH = "F:\\work\\_split_output";
+
+  it("a restored handle takes the path another tab's handle of the same folder already has", async () => {
+    const { restoreKnownRoot } = await import("../src/lib/knownroots");
+    clearKnownRoots();
+    rememberKnownRoot(twin(1), PATH, "copied");
+    const mine = twin(1);
+    await restoreKnownRoot(mine);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(boundRootPathInfo(mine).path).toBe(PATH);
+    expect(boundRootPathInfo(twin(2)).path).toBe("");
+  });
+
+  it("a path found later for one handle reaches the waiting handles of the same folder", async () => {
+    const { restoreKnownRoot } = await import("../src/lib/knownroots");
+    clearKnownRoots();
+    const mine = twin(3);
+    await restoreKnownRoot(mine); // nothing stored yet
+    rememberKnownRoot(twin(3), PATH, "derived"); // another tab finds it
+    await new Promise((r) => setTimeout(r, 0));
+    expect(boundRootPathInfo(mine).path).toBe(PATH);
+  });
+});
