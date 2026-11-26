@@ -6191,3 +6191,5 @@ quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trac
 - 2026-11-26 — full path survives reload: rootstore serial writes + folder-identity dedupe + newest wins (91 lines); knownroots shares a path across same-folder handles (170 lines); quality:changed PASS; full suite 25 failures in 8 files = baseline; 6 new tests red then green.
 
 - 2026-11-26 — Generate SVG restore asks for folder access (svg/scan.ts 242 lines, actions.ts 300, SourceLine.tsx 85); quality:changed PASS; svg+pickroot 143 files green; new svg_restore_access test red then green.
+
+- 2026-11-26 — scans no longer wait for the helper path search (svg/scan, selection/rootsource, svgBuilder folder; ui/bridgeroot 62 lines queued + timeout); quality:changed PASS; 161 related test files green; new svg_scan_not_blocked test red then green.

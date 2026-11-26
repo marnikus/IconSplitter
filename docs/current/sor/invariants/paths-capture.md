@@ -26,6 +26,9 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   browser rule): it scans only when access is granted, else Rescan reads
   **🔓 Restore access** and that click asks first (`svg/scan.grantRoot`,
   `tests/svg_restore_access.test.tsx`).
+  A scan never waits for the helper's path search (2026-11-26): `retryCapture`
+  runs beside it; searches run one at a time, with a timeout, and a miss is not
+  repeated until reload (`ui/bridgeroot`, `tests/svg_scan_not_blocked.test.tsx`).
 
 <a id="i-52"></a>
 * **I-52 (a capture is a conversation, RULE 4/12/13 — amended 2026-10-09):** the

@@ -72,8 +72,8 @@ export async function rescan(ctx: Ctx, setS: Setter, say: Say, audible = false):
   const root = ctx.root.current;
   if (!root) return;
   const finish = audible ? startCompletionSound() : () => undefined;
-  const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
-  if (captured !== null) say(captured);
+  // never awaited (2026-11-26): the helper's path search may take long — the scan must not wait for it
+  void retryCapture(root).then((captured) => { if (captured !== null) say(captured); }).catch(() => undefined);
   const ticket = beginScan(ctx.seq.current);
   ctx.seq.current = ticket.seq;
   setS((p) => ({ ...p, busy: "Scanning folders…" }));

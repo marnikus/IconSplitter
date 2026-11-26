@@ -27,8 +27,8 @@ async function open(ctx: BuilderActionContext): Promise<void> {
 async function rescan(ctx: BuilderActionContext): Promise<void> {
   const root = ctx.model.root;
   if (root === null) return ctx.say("No folder is open — nothing to rescan", true);
-  const captured = await retryCapture(root);
-  if (captured !== null) ctx.say(captured);
+  // never awaited (2026-11-26): the helper's path search may take long — the scan must not wait for it
+  void retryCapture(root).then((captured) => { if (captured !== null) ctx.say(captured); }).catch(() => undefined);
   await scanBuilderRoot(ctx.scanRefs, root, setters(ctx));
 }
 

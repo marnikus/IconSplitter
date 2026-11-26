@@ -53,8 +53,8 @@ export async function scanSources(refs: SvgRefs, s: ScanSetters, audible = false
   const root = refs.root.current as DirHandleLike | null;
   if (!root) return;
   const finish = audible ? startCompletionSound() : () => undefined;
-  const captured = await retryCapture(root); // before any await: the click's own gesture (I-52)
-  if (captured !== null) s.say(captured);
+  // never awaited (2026-11-26): the helper's path search may take long — the scan must not wait for it
+  void retryCapture(root).then((captured) => { if (captured !== null) s.say(captured); }).catch(() => undefined);
   const ticket = beginScan(refs.seq.current);
   refs.seq.current = ticket.seq;
   s.setBusy("Scanning approved sources…");
