@@ -26,6 +26,25 @@ export function visibleArtboards(m: View): FinalArtboard[] {
   return artboardGroups(m).flatMap((g) => g.artboards);
 }
 
+type StageView = Pick<BuilderModel, "editingTemplateId" | "editingArtboardId" | "artboards">;
+
+/** The template the stage works on now (the edited one, else the open artboard's), if any. */
+export function stageTemplateId(m: StageView): string | null {
+  return m.editingTemplateId ?? m.artboards.find((a) => a.id === m.editingArtboardId)?.templateId ?? null;
+}
+
+/**
+ * Every artboard a picture is drawn for (2026-11-26): the list's and the stage
+ * strip's. A folder change empties the loaded icon texts and only these are read
+ * again — a strip thumbnail missing here waited for its icons forever.
+ */
+export function previewedArtboards(m: View & StageView): FinalArtboard[] {
+  const shown = visibleArtboards(m);
+  const stage = stageTemplateId(m);
+  const listed = new Set(shown.map((a) => a.id));
+  return [...shown, ...m.artboards.filter((a) => a.templateId === stage && !listed.has(a.id))];
+}
+
 /**
  * What ✕ Remove in the Saved templates header takes (2026-11-22): the checked
  * templates (each with every artboard of it), else the checked artboards in view.

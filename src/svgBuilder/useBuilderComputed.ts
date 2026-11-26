@@ -12,7 +12,7 @@ import { createAssetRepository, type AssetRepository } from "./repository";
 import { useIconIndex, type IconIndexView } from "./useIconIndex";
 import { placedOnly } from "../lib/svgBuilder/slots";
 import type { BuilderModel } from "./model";
-import { visibleArtboards } from "./artboardview";
+import { previewedArtboards } from "./artboardview";
 import { useTextSubset } from "./textsubset";
 
 /** How many library icons the template pictures draw from. */
@@ -89,7 +89,8 @@ interface StageArgs {
  */
 function useStageDocument({ model, placedIds, patch, assets, sample, layout, repository }: StageArgs) {
   const realIds = useMemo(() => placedOnly(placedIds), [placedIds]);
-  const shownIcons = useMemo(() => visibleArtboards(model).flatMap(artboardIcons), [model.templates, model.templateSel, model.artboards]); // eslint-disable-line react-hooks/exhaustive-deps
+  // the list's AND the stage strip's pictures (2026-11-26): after a folder change only these icons are read again
+  const shownIcons = useMemo(() => previewedArtboards(model).flatMap(artboardIcons), [model.templates, model.templateSel, model.artboards, model.editingTemplateId, model.editingArtboardId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Template pictures draw a STABLE sample of the (style-allowed) library: changing the stage's icons never redraws them all.
   const templateSampleIds = useMemo(() => (model.templates.length === 0 ? [] : sample.slice(0, TEMPLATE_SAMPLE).map((a) => a.id)), [sample, model.templates.length]);
   const stageIds = useMemo(() => withHero(realIds, model.config.banner.heroIconId), [realIds, model.config.banner.heroIconId]);
@@ -117,7 +118,8 @@ function useLoadSvgTexts(
     const missing = placedIds.filter((id) => texts[id] === undefined);
     if (missing.length === 0) return;
     let alive = true;
-    void Promise.all(missing.map(async (id) => [id, await repository.readSvg(id) ?? ""] as const))
+    // one failing read never stalls every picture: it counts as an unreadable icon ("")
+    void Promise.all(missing.map(async (id) => [id, await repository.readSvg(id).catch(() => null) ?? ""] as const))
       .then((entries) => {
         if (!alive) return;
         patch({ svgTexts: { ...texts, ...Object.fromEntries(entries) } });

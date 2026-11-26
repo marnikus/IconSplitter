@@ -10,6 +10,7 @@ Parent: [SVG builder](svg-builder.md) · sibling: [artboard export speed](svg-bu
 2. **Pictures recompose only for their own icons** (`textsubset.ts`, `useTextSubset`). The stage and each picture compose from a record of just the icon texts they draw, and it keeps its identity while those texts are unchanged. One icon loading or changing no longer recomposes every picture.
 3. **Template pictures draw a stable library sample** (`templateSampleIds`, the first 64 icons). Changing, toggling or reshuffling the stage's icons never redraws all the template pictures.
 4. **Pictures are composed once at start** (`pictureReady`, model `booting`). With a folder open, a picture waits for the remembered folder, the scan and its own icon texts. It is not composed empty, then half-loaded, then complete.
+5. **Every drawn picture's icons are (re)loaded** (2026-11-26, `previewedArtboards` in `artboardview.ts`, test `tests/svg_builder_preview_texts.test.ts`). A folder change empties the loaded icon texts; the texts read again cover the artboard list's pictures AND the stage strip's (the edited template's artboards). One failing read counts as an unreadable icon, so it never stalls every picture.
 
 ## Measured (tests, 12 templates + 20 artboards, happy-dom)
 

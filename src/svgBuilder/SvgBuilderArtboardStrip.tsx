@@ -6,12 +6,10 @@
 // the artboard list's pictures (each composed once, for its own icons).
 import { useRef } from "react";
 import { ArtboardPreview } from "./SvgBuilderArtboards";
+import { stageTemplateId } from "./artboardview";
 import type { BuilderApi } from "./useSvgBuilder";
 
-/** The template the stage works on now, if any. */
-export function stageTemplateId(b: Pick<BuilderApi, "editingTemplateId" | "editingArtboardId" | "artboards">): string | null {
-  return b.editingTemplateId ?? b.artboards.find((a) => a.id === b.editingArtboardId)?.templateId ?? null;
-}
+export { stageTemplateId };
 
 const STEP = 132;
 

@@ -6179,3 +6179,5 @@ quality:changed PASS (inkbox.ts 24 fns/≈180 lines, params ≤ 4); tsc PASS; li
 ## 2026-11-24 — SVG builder: padding per side (artboard grips, Shift = all four, T/R/B/L boxes)
 
 quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trackdrag within gates); tsc PASS; lint clean on changed files; build PASS; full vitest 5142/5167 on Windows, the same 25 pre-existing failures, none in svg_builder_*.
+
+- 2026-11-26 — SVG builder strip previews after a folder change: `previewedArtboards` (artboardview.ts 57 lines, useBuilderComputed.ts 130 lines); quality:changed PASS; 3 new tests green; full suite 25 failures in 8 files = pre-existing Windows baseline, none in svg_builder.
