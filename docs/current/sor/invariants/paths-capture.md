@@ -22,6 +22,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   not the handle object a reload renews), the newest record wins, and a path
   bound to one tab's handle reaches every other handle of the same folder
   (`knownroots.restoreKnownRoot`; tests `rootstore`, `knownroots`).
+  Generate SVG restores its folder WITHOUT read access until a click (the
+  browser rule): it scans only when access is granted, else Rescan reads
+  **🔓 Restore access** and that click asks first (`svg/scan.grantRoot`,
+  `tests/svg_restore_access.test.tsx`).
 
 <a id="i-52"></a>
 * **I-52 (a capture is a conversation, RULE 4/12/13 — amended 2026-10-09):** the

@@ -13,6 +13,7 @@ import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent } from "../lib/scanseq";
 import { loadHandles, saveHandles } from "../batch/store";
+import { ensurePermission, peekPermission } from "../batch/picker";
 import { discoverApprovedSources, type Discovery, type SvgSource } from "./sources";
 import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
@@ -202,8 +203,24 @@ export async function bootSources(refs: SvgRefs, s: BootArgs): Promise<void> {
   s.setRootName(stored.name); // the folder shows at once, even if its path lookup fails (2026-11-26)
   // its persisted path binds to THIS handle (I-51/I-63); a failed lookup only leaves the path unknown
   await restoreKnownRoot(stored).catch(() => undefined);
-  s.loadAll();
   s.refreshKey();
+  // a reload hands the folder back WITHOUT read access until the user clicks
+  // (2026-11-26): scanning now only failed silently ("0 sources", no full path)
+  // — the tab offers 🔓 Restore access instead (SourceLine, `grantRoot`)
+  if ((await peekPermission(stored)) === "granted") s.loadAll();
+}
+
+/** Rescan is a click: the one moment the browser may be asked to re-open a restored folder (2026-11-26). */
+export async function rescanByClick(refs: SvgRefs, s: ScanSetters): Promise<void> {
+  if (await grantRoot(refs.root.current as DirHandleLike | null, s.say)) await scanSources(refs, s, true);
+}
+
+/** The click that re-opens a restored folder: asks the browser when it must. False = refused (and said). */
+export async function grantRoot(root: DirHandleLike | null, say: (msg: string, err?: boolean) => void): Promise<boolean> {
+  if (root === null) return false;
+  if (await ensurePermission(root)) return true;
+  say(`Access to "${root.name}" was refused — the browser must allow it before the folder can be read`, true);
+  return false;
 }
 
 /** Remembers the folder the user picked for this tab. */

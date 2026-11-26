@@ -23,7 +23,7 @@ import { useStyleActions, type StyleActions } from "./styles";
 import { refreshCatalog } from "./catalog";
 import { loadParamMap, saveParamMap, withParams } from "./paramstore";
 import { sanitizeParams, type SamplingParams } from "../lib/modelcaps";
-import { rememberRoot, scanSources } from "./scan";
+import { rememberRoot, rescanByClick, scanSources } from "./scan";
 import { decideReview, useReviewApplier } from "./reviewact";
 import { useSvgEditBinding } from "./svgedit";
 import { useTailCutActions } from "./tailcut/usetailcut";
@@ -122,7 +122,7 @@ function useSourceActions(ctx: SvgCtx): Slice<"chooseRoot" | "rescan"> {
       c.say(picked.message ?? `Approved sources scanned from ${picked.handle.name}`);
     })();
   }, []);
-  const rescan = useCallback(() => { void scanSources(latest.current.refs, latest.current, true); }, []);
+  const rescan = useCallback(() => { void rescanByClick(latest.current.refs, latest.current); }, []);
   return { chooseRoot, rescan };
 }
 function useViewActions(ctx: SvgCtx): Slice<"setThumb" | "setPreviewBg" | "setPreviewStroke" | "setProviderOpen" | "setFilter" | "setSort" | "setSortDir"> {

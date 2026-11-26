@@ -4,6 +4,8 @@
 // found — and, in its own read-only row below, the picked folder's full path
 // (I-44/I-46). Extracted from SvgControls so both stay inside the RULE 18 budget.
 
+import { useEffect, useState } from "react";
+import { peekPermission } from "../batch/picker";
 import { auditText } from "./sourcelist";
 import type { DirHandleLike } from "../lib/fs";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
@@ -27,12 +29,13 @@ export interface SourceLineProps {
 }
 
 export default function SourceLine({ rootName, root, discovery, busy, counts, onChooseRoot, onRescan }: SourceLineProps) {
+  const locked = useLocked(root, busy, discovery);
   return (
     <>
       <div className="svg-toolbar">
         <div className="svg-source">
           <OpenFolderButton testid="svg-open-folder" onClick={onChooseRoot} />
-          {rootName !== "" && <RescanButton busy={busy} onClick={onRescan} />}
+          {rootName !== "" && <RescanButton busy={busy} locked={locked} onClick={onRescan} />}
           <span className="svg-recursive" data-testid="svg-scope-copy">
             Approved Selection images only · recursive · {discovery?.sources.length ?? 0} sources
           </span>
@@ -51,10 +54,27 @@ export default function SourceLine({ rootName, root, discovery, busy, counts, on
   );
 }
 
-function RescanButton({ busy, onClick }: { busy: string | null; onClick: () => void }) {
+/**
+ * Is the folder waiting for the browser's OK (2026-11-26)? A reload restores it
+ * without read access; only a click may ask — re-checked after every scan.
+ */
+function useLocked(root: DirHandleLike | null, busy: string | null, discovery: Discovery | null): boolean {
+  const [locked, setLocked] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    if (root === null) { setLocked(false); return; }
+    void peekPermission(root).then((p) => { if (alive) setLocked(p !== "granted"); });
+    return () => { alive = false; };
+  }, [root, busy, discovery]);
+  return locked;
+}
+
+function RescanButton({ busy, locked, onClick }: { busy: string | null; locked: boolean; onClick: () => void }) {
+  const label = busy !== null ? busy : locked ? "🔓 Restore access" : "↻ Rescan approved";
   return (
-    <button type="button" className="svg-btn" data-testid="svg-rescan" disabled={busy !== null} onClick={onClick}>
-      {busy === null ? "↻ Rescan approved" : busy}
+    <button type="button" className={`svg-btn${locked ? " primary" : ""}`} data-testid="svg-rescan" disabled={busy !== null} onClick={onClick}
+      title={locked ? "The browser re-opens a remembered folder only after a click — this asks it, then scans" : undefined}>
+      {label}
     </button>
   );
 }
