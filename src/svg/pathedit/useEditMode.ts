@@ -4,6 +4,7 @@
 // working model (without re-serializing the full SVG document on pointermove),
 // and owns edit hotkeys + neighbour navigation.
 
+import { OVERLAY_STROKE_CSS } from "./overlaymarks";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { editorState, type EditorState } from "../../lib/pathedit/gesture";
 import { IDENTITY, invertAffine, multiplyAffine, type Affine, type PathModel } from "../../lib/pathedit/model";
@@ -33,7 +34,7 @@ export interface EditNav {
 
 export type StrokeView = "preset" | "thin";
 
-const THIN_CSS = "<style>svg :is(path,circle,ellipse,rect,line,polyline,polygon){stroke-width:1px !important;vector-effect:non-scaling-stroke !important}</style>";
+const THIN_CSS = `<style>svg :is(path,circle,ellipse,rect,line,polyline,polygon){stroke-width:${OVERLAY_STROKE_CSS("1px")} !important;vector-effect:non-scaling-stroke !important}</style>`;
 const FREE_CSS = "<style>svg{overflow:visible}</style>";
 
 type ScreenCtm = { getScreenCTM?: () => Affine | null };

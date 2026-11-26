@@ -93,7 +93,7 @@ function Board({ host, board, margin, box, testid, label, mode }: BoardProps) {
   return (
     <div ref={board} className={`svg-edit-board${frame.outline ? " contrast" : ""}`} style={{ width: box.width, height: box.height, background: frame.color }}>
       <div ref={margin} className="svg-edit-pasteboard" data-testid={`${testid}-pasteboard`} aria-hidden="true" />
-      <div ref={host} className="svg-preview editing" style={{ width: box.width, height: box.height, transform: mode.zoom.transform, transformOrigin: "0 0" }}
+      <div ref={host} className="svg-preview editing" style={{ width: box.width, height: box.height, transform: mode.zoom.transform, transformOrigin: "0 0", ["--ov-z" as string]: mode.zoom.view.scale }}
         role="img" aria-label={`${label} — editing`} data-testid={testid} data-stroke={mode.view} />
       <ZoomReset testid={testid} zoom={mode.zoom} />
       {picking && <p className="svg-edit-hint" data-testid={`${testid}-pick`}>Click a shape to edit · Shift+click adds · drag a box over anchors</p>}

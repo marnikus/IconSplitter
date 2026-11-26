@@ -6195,3 +6195,5 @@ quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trac
 - 2026-11-26 — scans no longer wait for the helper path search (svg/scan, selection/rootsource, svgBuilder folder; ui/bridgeroot 62 lines queued + timeout); quality:changed PASS; 161 related test files green; new svg_scan_not_blocked test red then green.
 
 - 2026-11-26 — restoring a saved folder path never holds a tab start: knownroots.restoreKnownRoot bounded 1.5 s + never throws (184 lines), rootstore isSameEntry bounded (92 lines), svg boot permission peek bounded; quality:changed PASS; 317 related files, only upload_flag_viewport (baseline) fails; 2 new tests red then green.
+
+- 2026-11-26 — edit overlay lines stay screen-sized under board zoom (overlaymarks.ts 202 lines, useEditMode 222, SvgPathEditor 184); quality:changed PASS; 39 editor test files green; new pathedit_overlay_zoom 2 tests red then green.

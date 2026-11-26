@@ -110,3 +110,10 @@ corner, past its scale handle (≤ 20 px), the cursor turns into a rotate cursor
 and a drag rotates the same way; scale handles show resize cursors
 (`boxtarget.boxTargetAt` / `boxCursorAt`, shared by press and hover). Handles: `[data-rotate-handle]`,
 `[data-rotate-stem]` in the overlay. Tests: `pathedit_rotate.test.ts`, `pathedit_rotate_zones.test.tsx`.
+
+## Overlay under the board zoom
+
+The board zooms by a CSS transform on the preview frame, which `non-scaling-stroke`
+does not undo. The frame sets `--ov-z` (the zoom) and every overlay line width and
+dash, plus the thin view outline, is `calc(… / var(--ov-z))` (`overlaymarks.overlayCss`,
+2026-11-26), so marks stay screen-sized at any zoom. Test: `pathedit_overlay_zoom.test.ts`.

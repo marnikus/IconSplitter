@@ -19,8 +19,25 @@ export interface OverlayLook {
   guide?: boolean;
 }
 
-const important = (css: string): string =>
-  `${css.split(";").filter(Boolean).map((d) => `${d.trim()} !important`).join(";")};vector-effect:non-scaling-stroke !important;opacity:1 !important`;
+/**
+ * One overlay line length at the board's zoom (2026-11-26): the board zooms by a
+ * CSS transform on the preview frame, which `non-scaling-stroke` does not undo —
+ * so widths and dashes are divided by the frame's zoom (`--ov-z`, SvgPathEditor).
+ */
+export const OVERLAY_STROKE_CSS = (len: string): string => `calc(${len} / var(--ov-z, 1))`;
+
+/** A px width or a dash list, kept at its screen size under the zoom. */
+function unzoomed(decl: string): string {
+  const [name, value] = decl.split(":").map((x) => x.trim());
+  if (name === "stroke-width") return `${name}:${OVERLAY_STROKE_CSS(value)}`;
+  if (name === "stroke-dasharray") return `${name}:${value.split(/\s+/).map((v) => OVERLAY_STROKE_CSS(/px$/.test(v) ? v : `${v}px`)).join(" ")}`;
+  return `${name}:${value}`;
+}
+
+/** An overlay mark's style: screen-sized lines that no icon style can override. */
+export const overlayCss = (css: string): string =>
+  `${css.split(";").filter(Boolean).map((d) => `${unzoomed(d)} !important`).join(";")};vector-effect:non-scaling-stroke !important;opacity:1 !important`;
+const important = overlayCss;
 
 export const STYLE_GUIDE = important("fill:none;stroke:#c8d2e0;stroke-width:1px");
 export const STYLE_ANCHOR = important(`fill:#fff;stroke:${BLUE};stroke-width:1.4px`);
