@@ -8,18 +8,17 @@
 // mirror, Shift snaps the grabbed anchor, Alt+click on a line removes that one
 // segment (the rest stays), double-click selects a whole line (Shift adds it, Alt excludes it), Ctrl+A selects everything, dragging a box edge along itself skews the group by angle about its centre, Alt+Shift+click removes the part between the two
 // crossings around the click (hover shows it). Draw: empty click adds (a drag pulls
-// a smooth pair), segment click inserts, first anchor closes, another open
-// end joins. Keys: Delete, Esc, Enter (= Finish), Ctrl+Z / Ctrl+Y.
+// a smooth pair), segment click inserts; with no line active a line END is
+// picked up and drawn on (either end), the active line's other end closes it,
+// another open end joins (drawgesture.ts, 2026-11-26). Keys: Delete, Esc, Enter (= Finish), Ctrl+Z / Ctrl+Y.
 
 import { paintedPieceAt } from "./fill";
 import { anchorsInRect, objectAt, snapPoint, type Hit, type Snap } from "./hit";
 import { hitOf } from "./hitof";
 import { cutRegionAt, cutStretchAt, lineStretchHit, removeAt } from "./linegesture";
 import { nextIndex, type AnchorRef, type PathModel, type Pt } from "./model";
-import {
-  addAnchor, breakSmooth, closeSubpath, insertOnSegment, joinSubpaths,
-  moveAnchors, moveHandle, pullHandles, toggleSmooth,
-} from "./ops";
+import { breakSmooth, insertOnSegment, moveAnchors, moveHandle, pullHandles, toggleSmooth } from "./ops";
+import { drawDown, type DrawDrag } from "./drawgesture";
 import { commit, preview, type EditSession } from "./session";
 import { rotateAnchors, rotateAngle, scaleAnchors, scaleFor, type Box, type BoxHandleId } from "./scale";
 import { boxCursorAt, boxTargetAt } from "./boxtarget";
@@ -46,7 +45,7 @@ type Drag =
   | { kind: "anchors"; before: PathModel; refs: AnchorRef[]; grab: AnchorRef; start: Pt; grabStart: Pt; minMove?: number }
   | { kind: "handle"; before: PathModel; base: PathModel; ref: AnchorRef; side: "in" | "out" }
   | { kind: "marquee"; start: Pt; objects: number[]; base: AnchorRef[]; mode: SelectMode }
-  | { kind: "draw"; before: PathModel; base: PathModel; ref: AnchorRef }
+  | DrawDrag
   | { kind: "scale"; before: PathModel; refs: AnchorRef[]; handle: BoxHandleId; box: Box; start: Pt }
   | { kind: "rotate"; before: PathModel; refs: AnchorRef[]; center: Pt; start: Pt }
   | { kind: "skew"; before: PathModel; refs: AnchorRef[]; edge: SkewEdge; box: Box; start: Pt };
@@ -229,32 +228,6 @@ function anchorDrag(model: PathModel, refs: AnchorRef[], grab: AnchorRef, start:
   return { kind: "anchors", before: model, refs, grab, start, grabStart: { x: g.x, y: g.y } };
 }
 
-/** Draw on an anchor: close the active path, join another open end, or just select it. */
-function drawOnAnchor(s: EditSession, ref: AnchorRef): EditSession {
-  const active = s.active === null ? undefined : s.model.subs[s.active];
-  if (active !== undefined && ref.sub === s.active && ref.i === 0 && active.anchors.length >= 2) {
-    return { ...commit(s, closeSubpath(s.model, ref.sub)), active: null, selection: [ref] };
-  }
-  if (s.active !== null && ref.sub !== s.active) {
-    const joined = joinSubpaths(s.model, s.active, ref);
-    if (joined !== null) return { ...commit(s, joined.model), active: joined.active, selection: [] };
-  }
-  return { ...s, selection: [ref] };
-}
-
-function drawDown(st: EditorState, input: PointerInput, hit: Hit): EditorState {
-  const s = st.session;
-  if (hit.kind === "anchor") return withSession(st, drawOnAnchor(s, hit.ref));
-  if (hit.kind === "segment") {
-    const ins = insertOnSegment(s.model, hit.sub, hit.i, hit.t);
-    return ins === null ? st : withSession(st, { ...commit(s, ins.model), selection: [ins.ref] });
-  }
-  const owner = s.active === null ? s.objects[0] : s.model.subs[s.active]?.owner;
-  const added = addAnchor(s.model, s.active, input.p, owner);
-  const session = { ...preview(s, added.model), active: added.ref.sub, selection: [added.ref] };
-  return { ...st, session, drag: { kind: "draw", before: s.model, base: added.model, ref: added.ref } };
-}
-
 /** Shift: the grabbed anchor snaps (to the drag-start model); every selected anchor moves by the same delta. */
 function anchorMove(st: EditorState, d: Extract<Drag, { kind: "anchors" }>, input: PointerInput): EditorState {
   let dx = input.p.x - d.start.x;
@@ -279,7 +252,7 @@ export function pointerMove(st: EditorState, input: PointerInput): EditorState {
   if (d.kind === "marquee") return marqueeMove(st, d, input.p);
   const a = at(d.base, d.ref);
   const far = Math.hypot(input.p.x - a.x, input.p.y - a.y) > HIT_PX.pull * input.unitsPerPx;
-  return withSession(st, preview(st.session, far ? pullHandles(d.base, d.ref, input.p) : d.base));
+  return withSession(st, preview(st.session, far ? pullHandles(d.base, d.ref, input.p, d.back) : d.base));
 }
 
 /** Release: the gesture becomes one undo step (a plain click changed nothing and records nothing). */

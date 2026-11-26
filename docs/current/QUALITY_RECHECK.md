@@ -6181,3 +6181,5 @@ quality:changed PASS (inkbox.ts 24 fns/≈180 lines, params ≤ 4); tsc PASS; li
 quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trackdrag within gates); tsc PASS; lint clean on changed files; build PASS; full vitest 5142/5167 on Windows, the same 25 pre-existing failures, none in svg_builder_*.
 
 - 2026-11-26 — SVG builder strip previews after a folder change: `previewedArtboards` (artboardview.ts 57 lines, useBuilderComputed.ts 130 lines); quality:changed PASS; 3 new tests green; full suite 25 failures in 8 files = pre-existing Windows baseline, none in svg_builder.
+
+- 2026-11-26 — path editor Draw on line ends: new src/lib/pathedit/drawgesture.ts 111 lines (gesture.ts 299→273); quality:changed PASS; pathedit suites 35 files / 319 tests green; new pathedit_draw_ends 9 tests (7 red before).

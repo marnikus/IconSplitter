@@ -117,11 +117,30 @@ export function addAnchor(m: PathModel, active: number | null, p: Pt, owner?: nu
   return { model: out, ref: { sub: active as number, i: sub.anchors.length - 1 } };
 }
 
-/** Draw's mouse-down drag: pulls a smooth pair out of the anchor just placed. */
-export function pullHandles(m: PathModel, ref: AnchorRef, to: Pt): PathModel {
-  return mapSelectedAnchors(m, [ref], (a) => ({
-    ...a, out: { x: to.x, y: to.y }, in: mirror(a, to), mode: "smooth",
-  }));
+/** Draw from a line's FIRST anchor (2026-11-26): the new anchor goes before it. */
+export function prependAnchor(m: PathModel, sub: number, p: Pt): { model: PathModel; ref: AnchorRef } {
+  const out = cloneModel(m);
+  out.subs[sub].anchors.unshift({ x: p.x, y: p.y, in: null, out: null, mode: "corner" });
+  return { model: out, ref: { sub, i: 0 } };
+}
+
+/** The same line walked the other way (handles swap sides). */
+export function reverseSub(m: PathModel, sub: number): PathModel {
+  const out = cloneModel(m);
+  out.subs[sub] = { ...out.subs[sub], anchors: reversed(out.subs[sub].anchors) };
+  return out;
+}
+
+/**
+ * Draw's mouse-down drag: pulls a smooth pair out of the anchor. The dragged
+ * handle points where the line goes next — `out`, or `in` when the line is
+ * drawn backwards from its first anchor (`back`, 2026-11-26).
+ */
+export function pullHandles(m: PathModel, ref: AnchorRef, to: Pt, back = false): PathModel {
+  return mapSelectedAnchors(m, [ref], (a) => {
+    const ahead = { x: to.x, y: to.y }, behind = mirror(a, to);
+    return { ...a, out: back ? behind : ahead, in: back ? ahead : behind, mode: "smooth" };
+  });
 }
 
 /** Clicking the first anchor of the open path closes it. */

@@ -20,6 +20,8 @@ export interface EditSession {
   tool: Tool;
   /** Draw's open subpath that new clicks extend; null = the next click starts one. */
   active: number | null;
+  /** The active line grows at its FIRST anchor when this equals `active` (Draw picked up its start, 2026-11-26). */
+  activeStart?: number | null;
   /** The selected objects (icon paths): only their anchors are drawn and editable; all paths snap. */
   objects: number[];
 }

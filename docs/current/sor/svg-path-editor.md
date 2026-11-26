@@ -68,9 +68,14 @@ Two tools: **Select** (default) and **Draw**; switching keeps anchors and the se
 - Select: click selects / empty click deselects; drag moves an anchor, a handle
   or a segment (its two anchors); empty drag = marquee; **double-click a line**
   selects all its anchors; **Ctrl + click a line** inserts an anchor.
-- Draw: empty click adds a corner (drag pulls a smooth pair), click a segment
-  inserts, the first anchor closes the open path, another path's endpoint
-  joins; Esc ends it.
+- Draw (`drawgesture.ts`, 2026-11-26): empty click adds a corner (a held drag
+  pulls a smooth pair; the dragged handle points the way the line goes), click
+  a segment inserts. With no line active, a press on an open line's **end**
+  (either end, any path — its path becomes selected) picks it up and the line
+  goes on from there. While drawing, the active line's **other end closes** it
+  and **another open line's end joins** the two. A held drag on the picked-up,
+  closing or joined end pulls a smooth pair there too; each press + drag is one
+  undo step. Esc ends it. Tests: `tests/pathedit_draw_ends.test.ts`.
 - **Ctrl + click** an anchor: corner → smooth pair (⅓ of the shorter
   neighbouring segment, along the neighbours; endpoints along their segment);
   smooth/broken → corner. Never moves it.
