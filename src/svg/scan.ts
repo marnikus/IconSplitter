@@ -199,8 +199,9 @@ export async function bootSources(refs: SvgRefs, s: BootArgs): Promise<void> {
   const stored = (await loadHandles(SVG_HANDLE_KEY))?.source ?? (await loadHandles("__selection__"))?.source ?? null;
   if (!stored) return;
   refs.root.current = stored;
-  await restoreKnownRoot(stored); // its persisted path binds to THIS handle (I-51/I-63)
-  s.setRootName(stored.name);
+  s.setRootName(stored.name); // the folder shows at once, even if its path lookup fails (2026-11-26)
+  // its persisted path binds to THIS handle (I-51/I-63); a failed lookup only leaves the path unknown
+  await restoreKnownRoot(stored).catch(() => undefined);
   s.loadAll();
   s.refreshKey();
 }

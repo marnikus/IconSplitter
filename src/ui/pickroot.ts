@@ -36,11 +36,15 @@ interface PickCapture extends RootPathInfo {
  * Picks a folder and captures its real path from the clipboard. Returns null
  * when the user cancels (or the API is missing) — and stores nothing then.
  */
-export async function pickRootWithPath(): Promise<PickedRoot | null> {
+export async function pickRootWithPath(onPicked?: (handle: DirHandleLike) => void | Promise<void>): Promise<PickedRoot | null> {
   const before = await readClipboardText();
   const handle = await pickDirectory();
   if (!handle) return null;
+  // kept the moment the dialog closes (2026-11-26): the capture below may wait on a
+  // clipboard permission prompt, and a reload during that wait lost the user's pick
+  const taken = onPicked?.(handle);
   const capture = await pathForPick(handle, before);
+  await taken;
   return { handle, path: capture.path, how: capture.how, clip: capture.clip };
 }
 
@@ -75,17 +79,16 @@ async function derivedOrNothing(handle: DirHandleLike): Promise<RootPathInfo> {
 }
 
 /**
- * The whole pick step every caller needs: pick, adopt the copied path, hand the
- * handle to `take` (which stores what its feature keeps), and return the handle
+ * The whole pick step every caller needs: pick, hand the handle to `take` (which
+ * stores what its feature keeps) AT ONCE, adopt the copied path, and return the handle
  * plus the one line to say about the capture — null when the user cancelled.
  * `take` runs before the caller scans, so the feature's own state is set first.
  */
 export async function pickFolderFor(
   take: (handle: DirHandleLike) => void | Promise<void>,
 ): Promise<{ handle: DirHandleLike; message: string | null } | null> {
-  const picked = await pickRootWithPath();
+  const picked = await pickRootWithPath(take); // `take` stores the folder before the path capture
   if (!picked) return null;
-  await take(picked.handle);
   return { handle: picked.handle, message: pickMessage(picked) };
 }
 

@@ -60,10 +60,13 @@ function useCtx(s: BatchState): Ctx {
 
 function makeChooseRoot(ctx: Ctx, setS: Setter, say: (m: string, e?: boolean) => void) {
   return async () => {
-    const picked = await pickFolderFor((h) => { ctx.root.current = h; });
+    // remembered the moment the dialog closes, before the path capture (2026-11-26)
+    const picked = await pickFolderFor(async (h) => {
+      ctx.root.current = h;
+      await saveHandles(ctx.state.current.preset.name, { source: h, dest: ctx.dest.current ?? undefined });
+    });
     if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
     setS((p) => ({ ...p, needsGrant: false })); // a fresh pick carries its own grant
-    await saveHandles(ctx.state.current.preset.name, { source: picked.handle, dest: ctx.dest.current ?? undefined });
     await scanOp(ctx, setS, say, true);
     if (picked.message !== null) say(picked.message);
   };

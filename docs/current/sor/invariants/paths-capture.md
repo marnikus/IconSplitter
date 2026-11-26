@@ -13,6 +13,10 @@ Stable IDs belong here; [all IDs](README.md) route to one canonical definition. 
   completed from a parent or an unrelated folder (I-59). The app never invents
   a path: text that does not name the folder is not stored, and what was
   captured is stated to the user.
+  The picked folder itself is handed to the tab (`pickFolderFor`'s `take`,
+  which remembers it) the moment the dialog closes, BEFORE the capture: a
+  reload while the capture waits on a clipboard prompt keeps the pick
+  (2026-11-26, `tests/pickroot.test.ts`, `tests/svg_boot_restore.test.ts`).
 
 <a id="i-52"></a>
 * **I-52 (a capture is a conversation, RULE 4/12/13 — amended 2026-10-09):** the

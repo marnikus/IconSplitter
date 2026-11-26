@@ -286,3 +286,24 @@ describe("pickroot and clipboardpath agree", () => {
     expect(boundRootPathInfo(root).path).toBe(FULL);
   });
 });
+
+// The picked folder is handed over (and so remembered) the moment the dialog
+// closes (2026-11-26): the path capture after it may wait on a clipboard
+// permission prompt, and a reload during that wait lost the user's choice.
+describe("the pick is kept before the path capture", () => {
+  it("take() runs while the after-dialog clipboard read is still pending", async () => {
+    const picked = handle(ROOT);
+    usePicker(async () => picked);
+    let reads = 0;
+    let release: (text: string) => void = () => undefined;
+    stubClipboard(() => (++reads === 1 ? Promise.resolve("") : new Promise<string>((r) => { release = r; })));
+    const taken: DirHandleLike[] = [];
+    const { pickFolderFor } = await import("../src/ui/pickroot");
+    const done = pickFolderFor((h) => { taken.push(h); });
+    await vi.waitFor(() => expect(reads).toBe(2));
+    expect(taken).toEqual([picked]);
+    release("");
+    expect((await done)?.handle).toBe(picked);
+    expect(taken).toHaveLength(1);
+  });
+});
