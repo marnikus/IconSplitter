@@ -7,6 +7,7 @@
 // (such as outlined letters) independent, and open / `fill="none"` lines as
 // single lines. Pure.
 
+import { isAreaRing } from "./model";
 import type { AnchorRef, PathModel, Pt, SubPath } from "./model";
 import { insidePolygon, paintedSubAt, pointOnSegment, regionPoints } from "./region";
 import type { EditSession } from "./session";
@@ -16,7 +17,7 @@ const EPS = 1e-9;
 interface RingPoly { sub: number; poly: Pt[]; x0: number; y0: number; x1: number; y1: number }
 
 function ringPoly(sub: number, s: SubPath): RingPoly | null {
-  if (!s.closed || s.paints === false || s.anchors.length < 3) return null;
+  if (s.paints === false || !isAreaRing(s)) return null;
   const poly = regionPoints(s);
   if (poly.length < 3) return null;
   const xs = poly.map((p) => p.x), ys = poly.map((p) => p.y);

@@ -3,7 +3,7 @@
 // crossing and shared-edge transition while keeping true cubic handles intact.
 
 import { assembleGraph, type PtLink } from "./curvegraph";
-import { cubicAt, isLineSegment, segmentCubic, splitCubic, type Pt, type SubPath } from "./model";
+import { cubicAt, isLineSegment, segmentCubic, splitCubic, type Pt, type SubPath, isAreaRing } from "./model";
 
 export type Cubic = [Pt, Pt, Pt, Pt];
 export interface CurveSeg { c: Cubic; line: boolean }
@@ -35,7 +35,7 @@ function segsUpTo(s: SubPath, limit: number): CurveSeg[] {
 }
 
 export const subToSegs = (s: SubPath): CurveSeg[] =>
-  s.closed && s.anchors.length >= 3 ? segsUpTo(s, s.anchors.length) : [];
+  isAreaRing(s) ? segsUpTo(s, s.anchors.length) : [];
 
 export const anySubSegs = (s: SubPath): CurveSeg[] =>
   s.closed ? subToSegs(s) : s.anchors.length >= 2 ? segsUpTo(s, s.anchors.length - 1) : [];

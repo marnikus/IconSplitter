@@ -23,7 +23,7 @@
 // offered twice.
 
 import { clipLayerIfPartial, clippedRegionAt } from "./boolean";
-import { cloneModel, cubicAt, isLineSegment, segmentCubic, type Anchor, type PathModel, type Pt, type SubPath } from "./model";
+import { cloneModel, cubicAt, isLineSegment, segmentCubic, type Anchor, type PathModel, type Pt, type SubPath, isAreaRing } from "./model";
 
 /** A curve is flattened in this many straight pieces per segment (the mark is a hint, not geometry). */
 const STEPS = 24;
@@ -89,7 +89,7 @@ const fills = (s: SubPath): boolean => s.paints !== false;
 function ringsAt(m: PathModel, p: Pt): Ring[] {
   const rings: Ring[] = [];
   m.subs.forEach((s, sub) => {
-    if (!s.closed || s.anchors.length < 3) return;
+    if (!isAreaRing(s)) return;
     const poly = regionPoints(s);
     if (poly.length < 3 || !insidePolygon(poly, p)) return;
     rings.push({ sub, dir: signedArea(poly) < 0 ? -1 : 1, area: regionArea(poly) });
@@ -178,7 +178,7 @@ interface Knockout { owner: number | undefined; rule: "evenodd" | "nonzero"; cou
 export function cutRegion(m: PathModel, sub: number, p: Pt): PathModel | null {
   const cutter = m.subs[sub];
   const atP = ringsAt(m, p);
-  if (cutter === undefined || !cutter.closed || cutter.anchors.length < 3 || layersAt(m, atP).length === 0) return null;
+  if (cutter === undefined || !isAreaRing(cutter) || layersAt(m, atP).length === 0) return null;
   const inside = regionPoints(cutter);
   const dropped = drawnInside(m, sub, inside);
   const plans = knockouts(m, atP.filter((r) => !dropped.has(r.sub)), { sub, dropped }, inside);
@@ -194,7 +194,7 @@ export function cutRegion(m: PathModel, sub: number, p: Pt): PathModel | null {
 function drawnInside(m: PathModel, sub: number, cutter: readonly Pt[]): Set<number> {
   const dropped = new Set<number>();
   m.subs.forEach((s, i) => {
-    if (i === sub || !fills(s) || !s.closed || s.anchors.length < 3) return;
+    if (i === sub || !fills(s) || !isAreaRing(s)) return;
     const poly = regionPoints(s);
     if (poly.length >= 3 && poly.every((q) => insidePolygon(cutter, q))) dropped.add(i);
   });
@@ -234,7 +234,7 @@ function replaceClipped(subs: SubPath[], plans: readonly Knockout[]): SubPath[] 
   const placed = new Set<number | undefined>();
   return subs.flatMap((s) => {
     const rep = byOwner.get(s.owner);
-    if (rep === undefined || !fills(s) || !s.closed || s.anchors.length < 3) return [s];
+    if (rep === undefined || !fills(s) || !isAreaRing(s)) return [s];
     if (placed.has(s.owner)) return [];
     placed.add(s.owner);
     return rep;

@@ -7,7 +7,7 @@ import {
   cubicNearBox, hasAnyCrossing, reverseSeg, ringsPaint, segAt, segsWinding, splitArrangement, splitCubic4, subToSegs,
   type CurveSeg, type GraphEdge,
 } from "./curvecut";
-import { modeOf, type Anchor, type PathModel, type Pt, type SubPath } from "./model";
+import { modeOf, type Anchor, type PathModel, type Pt, type SubPath, isAreaRing } from "./model";
 
 const TAU = Math.PI * 2;
 const HINT_STEPS = 20;
@@ -185,7 +185,7 @@ export function clipLayerIfPartial(
 ): SubPath[] | null {
   const cutter = m.subs[cut.sub];
   const segB = cutter === undefined ? [] : subToSegs(cutter);
-  const ownerSubs = m.subs.filter((s, i) => !cut.dropped.has(i) && s.owner === owner && s.paints !== false && s.closed && s.anchors.length >= 3);
+  const ownerSubs = m.subs.filter((s, i) => !cut.dropped.has(i) && s.owner === owner && s.paints !== false && isAreaRing(s));
   const ringsA = ownerSubs.map(subToSegs).filter((r) => r.length > 0);
   if (segB.length === 0 || ringsA.length === 0 || unclippedRing(cutter, owner, ownerSubs, segB) || strictlyInside(ringsA, rule, segB)) return null;
   const style: Pick<SubPath, "owner" | "fillRule"> = {
@@ -220,7 +220,7 @@ export function subtractFaceFromGroup(
 export function paintingGroupsAt(m: PathModel, p: Pt): OwnerGroup[] {
   const byOwner = new Map<number | undefined, SubPath[]>();
   for (const s of m.subs) {
-    if (s.paints === false || !s.closed || s.anchors.length < 3) continue;
+    if (s.paints === false || !isAreaRing(s)) continue;
     byOwner.set(s.owner, [...(byOwner.get(s.owner) ?? []), s]);
   }
   const out: OwnerGroup[] = [];

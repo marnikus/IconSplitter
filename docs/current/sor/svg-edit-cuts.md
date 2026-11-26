@@ -119,6 +119,7 @@ model, so the hole is visible at once — no Finish needed to see it.
 | the gesture rules (pure) | `lib/pathedit/linegesture.ts`, `lib/pathedit/gesture.ts` (`cutRegionHint`, `pressPaint`) |
 | compound fill + hole piece | `lib/pathedit/fill.ts` (`pieceAnchors`, `paintedPieceAt`) |
 | planar cell & Bezier boolean | `lib/pathedit/planarface.ts`, `lib/pathedit/boolean.ts`, `lib/pathedit/curvecut.ts` |
+| what is an area (2026-11-26) | `model.isAreaRing`: closed with 3+ points, or 2 points with a curved segment (a 2-point circle fills, cuts and is cut); test `tests/pathedit_two_point_ring.test.ts` |
 | the stretch maths (pure) | `lib/pathedit/stretch.ts` |
 | the region maths (pure) | `lib/pathedit/region.ts` (`ringsAt`/`paintedSubAt`/`cutRegion`) |
 | what paints where | `lib/pathedit/svgdoc.ts` (`fill`/`fill-rule`, `<g>` inheritance) → `SubPath.paints`/`fillRule` in `model.ts`, set by `objects.ts` |

@@ -6183,3 +6183,5 @@ quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trac
 - 2026-11-26 — SVG builder strip previews after a folder change: `previewedArtboards` (artboardview.ts 57 lines, useBuilderComputed.ts 130 lines); quality:changed PASS; 3 new tests green; full suite 25 failures in 8 files = pre-existing Windows baseline, none in svg_builder.
 
 - 2026-11-26 — path editor Draw on line ends: new src/lib/pathedit/drawgesture.ts 111 lines (gesture.ts 299→273); quality:changed PASS; pathedit suites 35 files / 319 tests green; new pathedit_draw_ends 9 tests (7 red before).
+
+- 2026-11-26 — path editor 2-point curved rings are areas: model.isAreaRing used by boolean/curvecut/fill/region/planarface; quality:changed PASS; pathedit 36 files / 323 tests green; new pathedit_two_point_ring 4 tests (3 red before).

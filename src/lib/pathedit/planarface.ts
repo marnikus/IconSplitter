@@ -9,7 +9,7 @@ import {
   anySubSegs, hasAnyCrossing, reverseSeg, ringsPaint, segAt, segsWinding, splitArrangement, subToSegs,
   type CurveSeg, type GraphEdge,
 } from "./curvecut";
-import { cloneModel, type PathModel, type Pt, type SubPath } from "./model";
+import { cloneModel, type PathModel, type Pt, type SubPath, isAreaRing } from "./model";
 import { cutRegion, regionPoints } from "./region";
 
 const TAU = Math.PI * 2;
@@ -118,7 +118,7 @@ function interiorFaces(bridgeless: readonly GraphEdge[]): CurveSeg[][] {
 function buildGroups(m: PathModel): CachedGroup[] {
   const byOwner = new Map<number | undefined, SubPath[]>();
   for (const s of m.subs) {
-    if (s.paints === false || !s.closed || s.anchors.length < 3) continue;
+    if (s.paints === false || !isAreaRing(s)) continue;
     byOwner.set(s.owner, [...(byOwner.get(s.owner) ?? []), s]);
   }
   const out: CachedGroup[] = [];
@@ -183,7 +183,7 @@ function replaceGroupSubs(subs: SubPath[], byOwner: ReadonlyMap<number | undefin
   const out: SubPath[] = [];
   for (const s of subs) {
     const rep = byOwner.get(s.owner);
-    if (rep === undefined || s.paints === false || !s.closed || s.anchors.length < 3) {
+    if (rep === undefined || s.paints === false || !isAreaRing(s)) {
       out.push(s);
     } else if (!placed.has(s.owner)) {
       placed.add(s.owner);

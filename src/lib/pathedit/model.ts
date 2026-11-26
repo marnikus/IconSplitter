@@ -151,6 +151,17 @@ export function isLineSegment(sub: SubPath, i: number): boolean {
   return j !== null && sub.anchors[i].out === null && sub.anchors[j].in === null;
 }
 
+/**
+ * Does this closed subpath enclose an area (2026-11-26)? Three or more points
+ * do; TWO do when a segment between them is curved (a circle drawn with two
+ * anchors) — fills, regions and cuts take it like any shape, no extra dot needed.
+ */
+export function isAreaRing(sub: SubPath): boolean {
+  if (!sub.closed) return false;
+  const n = sub.anchors.length;
+  return n >= 3 || (n === 2 && (!isLineSegment(sub, 0) || !isLineSegment(sub, 1)));
+}
+
 const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
 
 /** The point at `t` on a cubic. */
