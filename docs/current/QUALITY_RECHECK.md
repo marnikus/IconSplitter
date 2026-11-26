@@ -6193,3 +6193,5 @@ quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trac
 - 2026-11-26 — Generate SVG restore asks for folder access (svg/scan.ts 242 lines, actions.ts 300, SourceLine.tsx 85); quality:changed PASS; svg+pickroot 143 files green; new svg_restore_access test red then green.
 
 - 2026-11-26 — scans no longer wait for the helper path search (svg/scan, selection/rootsource, svgBuilder folder; ui/bridgeroot 62 lines queued + timeout); quality:changed PASS; 161 related test files green; new svg_scan_not_blocked test red then green.
+
+- 2026-11-26 — restoring a saved folder path never holds a tab start: knownroots.restoreKnownRoot bounded 1.5 s + never throws (184 lines), rootstore isSameEntry bounded (92 lines), svg boot permission peek bounded; quality:changed PASS; 317 related files, only upload_flag_viewport (baseline) fails; 2 new tests red then green.

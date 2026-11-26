@@ -45,7 +45,15 @@ export function rememberKnownRoot(handle: DirHandleLike, path: string, how: Path
 /** The platform's folder identity (never a name); false for a handle that cannot say. */
 async function sameEntry(a: DirHandleLike, b: DirHandleLike): Promise<boolean> {
   if (a === b) return true;
-  try { return (await a.isSameEntry?.(b)) === true; } catch { return false; }
+  try { return (await withinMs(Promise.resolve(a.isSameEntry?.(b)), ANSWER_MS)) === true; } catch { return false; }
+}
+
+/** How long a browser answer about a stored folder is waited for (a handle of a gone drive may never answer). */
+export const ANSWER_MS = 1500;
+
+/** `work`, or undefined when it has not answered in time (it goes on by itself). */
+export function withinMs<T>(work: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([work, new Promise<undefined>((r) => setTimeout(() => r(undefined), ms))]);
 }
 
 /**
@@ -119,6 +127,12 @@ async function deriveFrom(root: KnownRoot, handle: DirHandleLike): Promise<strin
  * nothing — a session capture (or a first run) stays as it is.
  */
 export async function restoreKnownRoot(handle: DirHandleLike): Promise<void> {
+  // never holds a tab's start and never throws (2026-11-26): a stuck or failed
+  // lookup left the restored folder unscanned — it goes on and binds when it lands
+  await withinMs(restoreNow(handle).catch(() => undefined), ANSWER_MS);
+}
+
+async function restoreNow(handle: DirHandleLike): Promise<void> {
   const info = await lookupRootPath(handle);
   if (info.path !== "") return rememberKnownRoot(handle, info.path, info.how);
   const twin = await twinPath(handle); // another tab already holds this folder's path (2026-11-26)

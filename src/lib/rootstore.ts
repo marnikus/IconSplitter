@@ -63,7 +63,8 @@ async function isSameFolder(a: DirHandleLike, b: DirHandleLike): Promise<boolean
   if (a === b) return true;
   if (typeof a.isSameEntry !== "function") return false;
   try {
-    return await a.isSameEntry(b);
+    // bounded (2026-11-26): a stored handle of a gone drive may never answer, and one stuck record held every lookup
+    return (await Promise.race([a.isSameEntry(b), new Promise<boolean>((r) => setTimeout(() => r(false), 1500))])) === true;
   } catch {
     return false; // a lost handle: no record, never a name match
   }

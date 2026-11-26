@@ -7,7 +7,7 @@ import { hasJobs } from "./jobstate";
 // snapshot commits nothing, only the newest scan may commit, and the cache
 // write can no longer half-commit a scan (design D6/D7).
 
-import { restoreKnownRoot } from "../lib/knownroots";
+import { ANSWER_MS, restoreKnownRoot, withinMs } from "../lib/knownroots";
 import { retryCapture } from "../ui/rootcapture";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
@@ -207,7 +207,8 @@ export async function bootSources(refs: SvgRefs, s: BootArgs): Promise<void> {
   // a reload hands the folder back WITHOUT read access until the user clicks
   // (2026-11-26): scanning now only failed silently ("0 sources", no full path)
   // — the tab offers 🔓 Restore access instead (SourceLine, `grantRoot`)
-  if ((await peekPermission(stored)) === "granted") s.loadAll();
+  const access = await withinMs(peekPermission(stored), ANSWER_MS);
+  if (access === "granted" || access === undefined) s.loadAll(); // no answer in time: try the scan
 }
 
 /** Rescan is a click: the one moment the browser may be asked to re-open a restored folder (2026-11-26). */
