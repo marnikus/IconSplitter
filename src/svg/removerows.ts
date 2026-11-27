@@ -159,7 +159,7 @@ async function declineRows(c: RemoveCtx, rows: readonly SvgRow[], root: DirHandl
 function nothingWritten(stalled: string | null): string {
   return stalled === null
     ? "The decline could not be written — the folder is not available; nothing was removed"
-    : `Remove stopped: ${stalled} — nothing was removed. Check that the folder's drive is reachable, then try again`;
+    : `Remove stopped: ${stalled} — it may still finish; Rescan in a moment to check, then try again`;
 }
 
 function removedText(n: number, styleCount: number, stalled: string | null): string {

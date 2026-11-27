@@ -130,3 +130,18 @@ describe("the Remove button", () => {
     expect(said.some((s) => /already/i.test(s.msg))).toBe(true);
   });
 });
+
+describe("Undo of a Remove never runs endless", () => {
+  it("settles even when the stored folder handles never answer", async () => {
+    const { applyEntry } = await import("../src/state/apply");
+    const { root } = await makeRoot();
+    const { c, pushed } = ctx(root);
+    await removeFromList(c, [ID]);
+    handlesSpy.mockImplementation(never);
+    vi.useFakeTimers();
+    let settled = false;
+    void applyEntry(pushed[0], pushed[0].before).finally(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(settled).toBe(true);
+  });
+});

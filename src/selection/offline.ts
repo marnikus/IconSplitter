@@ -21,7 +21,7 @@ import { loadMetaAt, saveMetaAt } from "./pairstore";
 import { metaFromRecord, metaPathOf } from "./pairrecord";
 import { SVG_HANDLE_KEY } from "../state/handlekeys";
 import type { Decision } from "../lib/reviewfilter";
-import { bounded, StallError } from "../lib/bounded";
+import { bounded, orNull, StallError } from "../lib/bounded";
 
 export const SELECTION_HANDLE_KEY = "__selection__";
 
@@ -96,7 +96,7 @@ export function onDecisionsWritten(listener: (written: WrittenDecision[]) => voi
 async function decisionRoots(): Promise<DirHandleLike[]> {
   const roots: DirHandleLike[] = [];
   for (const key of [SELECTION_HANDLE_KEY, SVG_HANDLE_KEY]) {
-    const root = (await loadHandles(key))?.source ?? null;
+    const root = (await orNull(loadHandles(key), FILE_STEP_MS))?.source ?? null; // a store that never answers must not hold an undo
     if (root !== null && !roots.includes(root)) roots.push(root);
   }
   return roots;

@@ -46,6 +46,7 @@ handles read back from IndexedDB, and a thrown error was swallowed.
 | Write access is asked on the click, before any other wait | `ensurePermission` |
 | Every disk step has a 10 s limit (`FILE_STEP_MS`); a stalled write is named ("writing the pair file did not answer…"), records no undo entry, and the bar closes; reads that stall count as unknown | `lib/bounded.ts`, `selection/offline.ts` `writeDecisions` |
 | One removal at a time; a second click says so; any thrown error reaches the status line | `makeRemoveRunner` |
+| Undo/redo's stored-handle reads have the same 10 s limit; a stalled write may still land later, so the message says Rescan | `offline.ts` `decisionRoots` |
 
 Tests: `svg_remove_row_never_hangs.test.ts`.
 
