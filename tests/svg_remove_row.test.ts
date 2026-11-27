@@ -132,7 +132,8 @@ describe("removeFromList", () => {
   });
 
   it("records nothing when the decision could not be written", async () => {
-    const root = await makeRoot(); // no folder remembered at all
+    const root = await makeRoot();
+    root.children.delete("a"); // the pair's folder is gone from disk (2026-11-27: Remove writes under its own folder, not a stored handle)
     const { c, pushed, said } = ctx([rowA()], root);
     expect(await removeFromList(c, [ID])).toBe(false);
     expect(pushed).toHaveLength(0);

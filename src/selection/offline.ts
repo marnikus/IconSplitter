@@ -21,6 +21,7 @@ import { loadMetaAt, saveMetaAt } from "./pairstore";
 import { metaFromRecord, metaPathOf } from "./pairrecord";
 import { SVG_HANDLE_KEY } from "../state/handlekeys";
 import type { Decision } from "../lib/reviewfilter";
+import { bounded, StallError } from "../lib/bounded";
 
 export const SELECTION_HANDLE_KEY = "__selection__";
 
@@ -104,17 +105,45 @@ async function decisionRoots(): Promise<DirHandleLike[]> {
 async function applyToFiles(touched: readonly string[], patch: DecisionPatch): Promise<boolean> {
   const roots = await decisionRoots();
   if (roots.length === 0 || touched.length === 0) return false;
+  return (await writeDecisions(roots, touched, patch)).written.length > 0;
+}
+
+/** What one decision write did: the pairs that reached their files, and the step that stalled (or null). */
+export interface DecisionWrite {
+  written: WrittenDecision[];
+  stalled: string | null;
+}
+
+/** How long one disk step may take before the write gives up on it (2026-11-27). */
+export const FILE_STEP_MS = 10_000;
+
+/**
+ * Writes the touched pairs' decisions under the given folders and announces
+ * what landed. The one writer behind every decision change made without a
+ * mounted panel (RULE 12). A disk step that never answers stops the write
+ * and is named in `stalled` — it never spins without end.
+ */
+export async function writeDecisions(roots: readonly DirHandleLike[], touched: readonly string[], patch: DecisionPatch): Promise<DecisionWrite> {
   const named = new Map(patch.recs.map((r) => [r.pair_id, r]));
   const written: WrittenDecision[] = [];
-  for (const id of touched) {
-    const rec = named.get(id) ?? pendingRecord(id);
-    if (rec !== null && (await writeUnderAny(roots, rec))) written.push({ id, decision: rec.decision });
+  let stalled: string | null = null;
+  try {
+    for (const id of touched) {
+      const rec = named.get(id) ?? pendingRecord(id);
+      if (rec !== null && (await writeUnderAny(roots, rec))) written.push({ id, decision: rec.decision });
+    }
+  } catch (error) {
+    if (!(error instanceof StallError)) throw error;
+    stalled = error.message;
   }
-  if (written.length > 0) {
-    for (const w of written) writtenSinceScan.set(w.id, w.decision);
-    for (const listener of writtenListeners) listener(written);
-  }
-  return written.length > 0;
+  announce(written);
+  return { written, stalled };
+}
+
+function announce(written: readonly WrittenDecision[]): void {
+  if (written.length === 0) return;
+  for (const w of written) writtenSinceScan.set(w.id, w.decision);
+  for (const listener of writtenListeners) listener([...written]);
 }
 
 /** The first folder that holds the pair takes the write. */
@@ -134,13 +163,14 @@ async function writeOne(root: DirHandleLike, rec: ReviewRecord): Promise<boolean
   const relPath = metaPathOf(rec);
   if (relPath === "") return false;
   try {
-    const read = await loadMetaAt(root, relPath);
+    const read = await bounded("reading the pair file", loadMetaAt(root, relPath), FILE_STEP_MS);
     // No pair file yet: only write one where the images really are.
-    if (read.meta === null && !(await imagesHere(root, rec))) return false;
+    if (read.meta === null && !(await bounded("finding the images", imagesHere(root, rec), FILE_STEP_MS))) return false;
     const base = read.meta ?? metaFromRecord(rec);
-    await saveMetaAt(root, relPath, withDecision(base, rec.decision, rec.reviewed_at));
+    await bounded("writing the pair file", saveMetaAt(root, relPath, withDecision(base, rec.decision, rec.reviewed_at)), FILE_STEP_MS);
     return true;
-  } catch {
+  } catch (error) {
+    if (error instanceof StallError) throw error; // the caller names it
     return false; // a failed apply must not move the history cursor
   }
 }

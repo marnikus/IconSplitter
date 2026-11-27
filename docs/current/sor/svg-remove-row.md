@@ -34,6 +34,21 @@ the list's reaction, and the wiring.
 
 <a id="upload"></a>
 
+## Never runs endless (2026-11-27)
+
+Report: "Removing 1 image — marking declined…" spun forever and nothing left.
+The decline waited on browser folder calls with no limit, behind two stored
+handles read back from IndexedDB, and a thrown error was swallowed.
+
+| Rule | Where |
+|---|---|
+| The decline is written under Generate SVG's OWN folder (`refs.root`); no folder → refused, nothing written | `svg/removerows.ts` `removeFromList` |
+| Write access is asked on the click, before any other wait | `ensurePermission` |
+| Every disk step has a 10 s limit (`FILE_STEP_MS`); a stalled write is named ("writing the pair file did not answer…"), records no undo entry, and the bar closes; reads that stall count as unknown | `lib/bounded.ts`, `selection/offline.ts` `writeDecisions` |
+| One removal at a time; a second click says so; any thrown error reaches the status line | `makeRemoveRunner` |
+
+Tests: `svg_remove_row_never_hangs.test.ts`.
+
 ## SVG to upload and Upload (2026-11-06)
 
 Same idea one step later: a row leaves a list by being **declined one step

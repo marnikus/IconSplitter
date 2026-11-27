@@ -1,13 +1,13 @@
 // removerows.ts — "Remove" in Generate SVG (2026-11-04). The list shows only
 // images approved in Selection V2, so taking a row out of it IS declining that
 // image: the same pair decision, written through the same path a Selection V2
-// decline uses (selection/offline applyDecisionPatch), recorded as the same
+// decline uses (selection/offline writeDecisions), recorded as the same
 // "decisions" history entry — undo restores "approved" and the row returns.
 // Nothing here edits the list directly: the list follows every decision that
 // reaches a file (`reactToDecisions`), so a click, an undo and a redo all
 // update it the same way.
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { metaPathForAi, toRecord, withDecision, type PairMeta } from "../lib/pairmeta";
 import { svgStem } from "../lib/svgfile";
 import { baseRowId, styleRowId } from "../lib/svgstyles";
@@ -17,7 +17,9 @@ import type { DirHandleLike } from "../lib/fs";
 import type { ReviewPair } from "../lib/pairing";
 import type { ReviewRecord } from "../lib/reviewfile";
 import { withActivity } from "../lib/activity";
-import { applyDecisionPatch, onDecisionsWritten, type WrittenDecision } from "../selection/offline";
+import { FILE_STEP_MS, onDecisionsWritten, writeDecisions, type WrittenDecision } from "../selection/offline";
+import { orNull } from "../lib/bounded";
+import { ensurePermission } from "../batch/picker";
 import { getAppState, patchSvg } from "../state/appstore";
 import type { HistoryActions } from "../state/HistoryProvider";
 import type { SvgRefs, SvgRow } from "./types";
@@ -31,6 +33,9 @@ export interface RemoveCtx {
 
 const plural = (n: number) => `${n} image${n === 1 ? "" : "s"}`;
 
+/** A pair file read that may be skipped: a failure or a read that never answers is "unknown". */
+const readMeta = (root: DirHandleLike, path: string) => orNull(loadMetaAt(root, path), FILE_STEP_MS);
+
 /**
  * The pair's decision record before and after the decline (pending owns none,
  * I-13). "Before" is read from the pair file itself — Selection V2 may have
@@ -38,7 +43,7 @@ const plural = (n: number) => `${n} image${n === 1 ? "" : "s"}`;
  */
 async function recordsOf(c: RemoveCtx, metaPath: string, known: PairMeta | null, nowIso: string): Promise<{ before: ReviewRecord | null; after: ReviewRecord | null }> {
   const root = c.refs.root.current as DirHandleLike | null;
-  const onDisk = root === null ? null : (await loadMetaAt(root, metaPath).catch(() => null))?.meta ?? null;
+  const onDisk = root === null ? null : (await readMeta(root, metaPath))?.meta ?? null;
   const meta = onDisk ?? known;
   if (meta === null) return { before: null, after: null };
   const pair = pairRefOf(meta);
@@ -73,8 +78,13 @@ async function baseMember(c: RemoveCtx, rows: readonly SvgRow[], baseId: string,
   const listed = rows.find((r) => r.source.id === baseId);
   const known = (c.refs.metas.get(baseId) as PairMeta | undefined) ?? listed?.meta ?? null;
   const metaPath = listed?.source.metaPath ?? (known === null ? "" : metaPathForAi(known.ai.relPath));
-  const meta = known ?? (root === null || metaPath === "" ? null : (await loadMetaAt(root, metaPath).catch(() => null))?.meta ?? null);
+  const meta = known ?? (await metaOnDisk(root, metaPath));
   return meta === null ? null : { meta, metaPath };
+}
+
+async function metaOnDisk(root: DirHandleLike | null, metaPath: string): Promise<PairMeta | null> {
+  if (root === null || metaPath === "") return null;
+  return (await readMeta(root, metaPath))?.meta ?? null;
 }
 
 /** One registered style pair the row's folder holds: the scan's records, else the disk by the registration's naming rule. */
@@ -83,9 +93,9 @@ async function styleMember(c: RemoveCtx, root: DirHandleLike | null, at: { id: s
   const known = (c.refs.metas.get(id) as PairMeta | undefined) ?? null;
   if (known !== null) return { meta: known, metaPath: metaPathForAi(known.ai.relPath) };
   if (root === null) return null;
-  const path = await styleMetaPathAt(root, at.meta.dirPath, svgStem(at.meta.ai.name), style);
+  const path = await orNull(styleMetaPathAt(root, at.meta.dirPath, svgStem(at.meta.ai.name), style), FILE_STEP_MS);
   if (path === null) return null;
-  const read = await loadMetaAt(root, path).catch(() => null);
+  const read = await readMeta(root, path);
   return read?.meta?.id === id ? { meta: read.meta, metaPath: path } : null;
 }
 
@@ -111,30 +121,51 @@ function refusal(rows: readonly SvgRow[]): string | null {
   return `${plural(busy.length)} ${busy.length === 1 ? "is" : "are"} generating or waiting in the queue — wait or drop it from the queue first; nothing was removed`;
 }
 
-/** Declines the images in Selection V2 — base pair and every style pair — which takes their rows out of Generate SVG, in every mode. */
+/**
+ * Declines the images in Selection V2 — base pair and every style pair — which
+ * takes their rows out of Generate SVG, in every mode (2026-11-27 rewrite: the
+ * decline is written under Generate SVG's OWN folder, access is asked on the
+ * click, and every disk step has a time limit — it never runs endless).
+ */
 export async function removeFromList(c: RemoveCtx, ids: readonly string[]): Promise<boolean> {
   const rows = c.rows.filter((r) => ids.includes(r.source.id));
   const why = refusal(rows);
   if (why !== null) { c.say(why, true); return false; }
   const root = c.refs.root.current as DirHandleLike | null;
+  if (root === null) { c.say("Generate SVG has no folder — pick one first; nothing was removed", true); return false; }
+  if (!(await ensurePermission(root))) { c.say("Folder access was not given — click Remove again and allow it; nothing was removed", true); return false; }
+  return withActivity("svg", `Removing ${plural(rows.length)} — marking declined…`, () => declineRows(c, rows, root));
+}
+
+async function declineRows(c: RemoveCtx, rows: readonly SvgRow[], root: DirHandleLike): Promise<boolean> {
   const family = await familyOf(c, rows, root);
   if (family.size === 0) { c.say("Nothing to remove — no pair file behind these rows", true); return false; }
   const now = new Date().toISOString();
   const entries = [...family.entries()];
   const recs = await Promise.all(entries.map(([, f]) => recordsOf(c, f.metaPath, f.meta, now)));
-  const touched = entries.map(([id]) => id);
   const after = recs.flatMap((r) => (r.after === null ? [] : [r.after]));
-  const ok = await withActivity("svg", `Removing ${plural(rows.length)} — marking declined…`,
-    () => applyDecisionPatch(touched, { recs: after }));
-  if (!ok) { c.say("The decline could not be written — the folder is not available; nothing was removed", true); return false; }
-  const styleCount = touched.length - rows.length;
+  const out = await writeDecisions([root], entries.map(([id]) => id), { recs: after });
+  const done = new Set(out.written.map((w) => w.id));
+  if (done.size === 0) { c.say(nothingWritten(out.stalled), true); return false; }
+  const keep = (r: { pair_id: string }) => done.has(r.pair_id);
   c.hist.push({
-    type: "decisions", label: `Remove ${plural(rows.length)} from Generate SVG`, origin: getAppState().tab, ids: touched,
-    before: { recs: recs.flatMap((r) => (r.before === null ? [] : [r.before])) }, after: { recs: after },
+    type: "decisions", label: `Remove ${plural(rows.length)} from Generate SVG`, origin: getAppState().tab, ids: [...done],
+    before: { recs: recs.flatMap((r) => (r.before === null ? [] : [r.before])).filter(keep) }, after: { recs: after.filter(keep) },
   });
-  const styles = styleCount > 0 ? `, with ${styleCount} style pair${styleCount === 1 ? "" : "s"}` : "";
-  c.say(`Removed ${plural(rows.length)} — declined in Selection V2${styles} (Undo brings ${rows.length === 1 ? "it" : "them"} back)`);
+  c.say(removedText(rows.length, done.size - rows.length, out.stalled), out.stalled !== null);
   return true;
+}
+
+function nothingWritten(stalled: string | null): string {
+  return stalled === null
+    ? "The decline could not be written — the folder is not available; nothing was removed"
+    : `Remove stopped: ${stalled} — nothing was removed. Check that the folder's drive is reachable, then try again`;
+}
+
+function removedText(n: number, styleCount: number, stalled: string | null): string {
+  const styles = styleCount > 0 ? `, with ${styleCount} style pair${styleCount === 1 ? "" : "s"}` : "";
+  const base = `Removed ${plural(n)} — declined in Selection V2${styles} (Undo brings ${n === 1 ? "it" : "them"} back)`;
+  return stalled === null ? base : `${base}; then ${stalled} — Rescan to see the rest`;
 }
 
 /**
@@ -180,9 +211,30 @@ export function useDecisionFollower(c: FollowCtx): void {
   }), []);
 }
 
+/**
+ * The Remove button's runner: one removal at a time (a second click while one
+ * runs says so and starts nothing), and any failure reaches the status line —
+ * never a silent dead click.
+ */
+export function makeRemoveRunner(get: () => RemoveCtx): (ids: string[]) => Promise<void> {
+  let busy = false;
+  return async (ids) => {
+    if (busy) { get().say("A removal is already running — wait for it to finish", true); return; }
+    busy = true;
+    try {
+      await removeFromList(get(), ids);
+    } catch (error) {
+      get().say(`Remove failed: ${error instanceof Error ? error.message : String(error)}`, true);
+    } finally {
+      busy = false;
+    }
+  };
+}
+
 /** The Remove button's handler: one callback that always reads the latest context. */
 export function useRemoveAction(c: RemoveCtx): (ids: string[]) => void {
   const latest = useRef(c);
   latest.current = c;
-  return useCallback((ids: string[]) => { void removeFromList(latest.current, ids); }, []);
+  const run = useMemo(() => makeRemoveRunner(() => latest.current), []);
+  return useCallback((ids: string[]) => { void run(ids); }, [run]);
 }
