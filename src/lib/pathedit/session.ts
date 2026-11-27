@@ -5,7 +5,7 @@
 
 import { cloneModel, toPathData, type AnchorRef, type PathModel } from "./model";
 
-export type Tool = "select" | "draw";
+export type Tool = "select" | "draw" | "fill";
 
 /** The session's own undo / redo depth: local to the session, gone on Finish or Cancel. */
 export const MAX_SESSION_HISTORY = 50;
@@ -39,13 +39,21 @@ export function editableSub(s: EditSession, sub: number): boolean {
 /** A finished step: `before` goes on the undo stack (the model when the gesture began). */
 export function commit(s: EditSession, next: PathModel, before: PathModel = s.model): EditSession {
   const model = keepOrder(s.model, next);
-  if (toPathData(model, 4) === toPathData(before, 4) && sameOrder(model, before)) return { ...s, model };
+  if (toPathData(model, 4) === toPathData(before, 4) && sameOrder(model, before) && paintKey(model) === paintKey(before)) return { ...s, model };
   return { ...s, model, undo: capped([...s.undo, before]), redo: [] };
 }
 
 /** An edit builds its model from the subpaths alone: the layer order the session had stays (2026-11-27). */
 export function keepOrder(prev: PathModel, next: PathModel): PathModel {
-  return next.order === undefined && prev.order !== undefined ? { ...next, order: prev.order } : next;
+  const keep: Partial<PathModel> = {};
+  for (const k of ["order", "paint", "adds"] as const) if (next[k] === undefined && prev[k] !== undefined) Object.assign(keep, { [k]: prev[k] });
+  return Object.keys(keep).length === 0 ? next : { ...next, ...keep };
+}
+
+/** The fills a model carries (colours set and shapes added), as one comparable text. */
+export function paintKey(m: PathModel): string {
+  const paint = Object.entries(m.paint ?? {}).sort(([a], [b]) => Number(a) - Number(b));
+  return paint.length === 0 && (m.adds ?? []).length === 0 ? "" : JSON.stringify([paint, m.adds ?? []]);
 }
 
 function sameOrder(a: PathModel, b: PathModel): boolean {
@@ -79,5 +87,5 @@ export function setTool(s: EditSession, tool: Tool): EditSession {
 
 /** Finish is offered only when the written path would change. */
 export function isDirty(s: EditSession): boolean {
-  return toPathData(s.model) !== toPathData(s.original) || !sameOrder(s.model, s.original);
+  return toPathData(s.model) !== toPathData(s.original) || !sameOrder(s.model, s.original) || paintKey(s.model) !== paintKey(s.original);
 }

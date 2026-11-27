@@ -6,7 +6,8 @@
 // field. Every change goes through setConfig (one undo entry; sliders coalesce).
 // The toolbar sits outside the scaled artboard, so it never scales with zoom.
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { cleanHex, smartSwatches } from "../lib/svgBuilder/swatches";
+import { cleanHex } from "../lib/svgBuilder/swatches";
+import SmartSwatches from "../ui/SmartSwatches";
 import { bothScale, withBothScale } from "../lib/svgBuilder/herosize";
 import { RANGES } from "../lib/svgBuilder/ranges";
 import type { TitleFace , TextCase } from "../lib/svgBuilder/types";
@@ -236,12 +237,7 @@ function ColorPanel({ b, slot, onDone }: { b: BuilderApi; slot: ColorSlot; onDon
     <b className="bld-quick-title">{slot.label}</b>
     {slot.own !== undefined && <OwnRow own={own} label={slot.own} testid="builder-quick-own" onOwn={() => set("")} />}
     <div className="bld-quick-swatches">
-      {smartSwatches(current).map((c) => <button type="button" key={c} className="bld-quick-dot" data-testid={`builder-quick-swatch-${c.slice(1)}`}
-        style={{ background: c }} title={c} aria-label={`Use ${c}`} onClick={() => set(c)} />)}
-      <label className="bld-quick-dot bld-quick-custom" title="Custom color">
-        <input type="color" data-testid="builder-quick-custom" aria-label="Custom color" value={current.toLowerCase()}
-          onChange={(e) => set(e.target.value.toUpperCase(), true)} />
-      </label>
+      <SmartSwatches current={current} onPick={set} prefix="builder-quick" dotClass="bld-quick-dot" customClass="bld-quick-custom" />
     </div>
     <div className="bld-quick-row">
       <input className="svg-input bld-quick-hex" data-testid="builder-quick-hex" value={hex} maxLength={7} aria-label="Hex color"

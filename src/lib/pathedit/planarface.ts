@@ -196,6 +196,19 @@ function replaceGroupSubs(subs: SubPath[], byOwner: ReadonlyMap<number | undefin
 const anyPaintsAt = (groups: readonly OwnerGroup[], q: Pt): boolean =>
   groups.some((g) => ringsPaint(g.rings, g.rule, q));
 
+/** One closed cell of the drawing: its boundary, the cells lying inside it (outermost only) and the uncrossed subpath that IS it, if any. */
+export interface Cell { segs: CurveSeg[]; area: number; islands: { segs: CurveSeg[]; sample: Pt }[]; intactSub: number | null }
+
+/** The smallest closed cell holding `p` among ALL lines and fills — painted or not (the Fill tool, 2026-11-27). */
+export function cellAt(m: PathModel, p: Pt): Cell | null {
+  const faces = cachedPlanar(m).faces;
+  const face = faces.find((c) => inBox(c.box, p) && segsWinding(c.segs, p) > 0);
+  if (face === undefined) return null;
+  const inside = faces.filter((c) => c !== face && c.area < face.area - 1e-5 && inBox(face.box, c.sample) && segsWinding(face.segs, c.sample) > 0);
+  const islands = inside.filter((c) => !inside.some((o) => o !== c && o.area > c.area && segsWinding(o.segs, c.sample) > 0));
+  return { segs: face.segs, area: face.area, islands: islands.map((c) => ({ segs: c.segs, sample: c.sample })), intactSub: findIntactSub(m, face, p) };
+}
+
 /** Flattened polygon of the bounded painted cell holding `p`, or null. */
 export function cellHintAt(m: PathModel, p: Pt): Pt[] | null {
   const hit = minimalPaintedFace(m, p);

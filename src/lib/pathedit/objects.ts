@@ -8,7 +8,8 @@
 
 import { IDENTITY, invertAffine, isIdentityAffine, toPathData, transformModel, type Affine, type PathModel, type SubPath } from "./model";
 import { fromPathData } from "./model";
-import type { EditSession } from "./session";
+import { paintKey, type EditSession } from "./session";
+import { withPaint } from "./paintwrite";
 import { cachedPathTags, withPathDs, type PathTag } from "./svgdoc";
 import { drawOrder, orderChanged, withOrder } from "./layers";
 
@@ -75,7 +76,7 @@ export function loadObjects(source: string, matrices: readonly Affine[]): PathMo
 }
 
 /** One object's path data in its own units. */
-function objectData(model: PathModel, owner: number, m: Affine, precision?: number): string {
+export function objectData(model: PathModel, owner: number, m: Affine, precision?: number): string {
   const subs = subsByOwner(model).get(owner) ?? [];
   return toPathData(isIdentityAffine(m) ? { subs } : transformModel({ subs }, invertAffine(m)), precision);
 }
@@ -100,21 +101,22 @@ export function dirtyObjects(s: EditSession): number[] {
 
 /** Fast O(1)-cached dirty check for the Finish button without serializing SVG markup. */
 export function hasDirtyObjects(s: EditSession): boolean {
-  return dirtyObjects(s).length > 0 || orderChanged(s.model);
+  return dirtyObjects(s).length > 0 || orderChanged(s.model) || paintKey(s.model) !== paintKey(s.original);
 }
 
 /** The file with every changed object's `d` rewritten in a single pass; null when nothing changed. */
 export function writeObjects(source: string, s: EditSession, matrices: readonly Affine[]): string | null {
-  const dirty = dirtyObjects(s);
-  if (dirty.length === 0 && !orderChanged(s.model)) return null;
+  if (!hasDirtyObjects(s)) return null;
   const tags = cachedPathTags(source);
   const ds = new Map<number, string>();
-  for (const o of dirty) {
-    if (tags[o] === undefined) return null;
-    ds.set(o, objectData(s.model, o, matrices[o] ?? IDENTITY));
+  for (const o of dirtyObjects(s)) {
+    if (tags[o] !== undefined) ds.set(o, objectData(s.model, o, matrices[o] ?? IDENTITY));
+    else if (!(s.model.adds ?? []).some((a) => a.owner === o)) return null;
   }
   const drawn = ds.size === 0 ? source : withPathDs(source, ds);
-  return withOrder(drawn, drawOrder(s.model, tags.length)); // the layer order last: slots are the drawn file's
+  const order = drawOrder(s.model, tags.length);
+  // the layer order, then the fills: both work on the drawn file's slots
+  return withPaint(withOrder(drawn, order), s.model, order, (o) => objectData(s.model, o, IDENTITY));
 }
 
 /** The d the preview shows for object `o`: the working copy when it changed, else the file's own. */

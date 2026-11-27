@@ -17,6 +17,7 @@ import { previewFrame } from "../../lib/svgbackground";
 import { setEditSettings, useEditSettings } from "../editsettings";
 import { CutterSettingsButton, HideMarksButton } from "../tailcut/TailCutBar";
 import { useEditMode, type EditMode, type EditNav } from "./useEditMode";
+import EditColorBar from "./EditColorBar";
 import type { EditorTailCut } from "./useEditorTailCut";
 
 export type { EditNav } from "./useEditMode";
@@ -94,7 +95,7 @@ function Board({ host, board, margin, box, testid, label, mode }: BoardProps) {
     <div ref={board} className={`svg-edit-board${frame.outline ? " contrast" : ""}`} style={{ width: box.width, height: box.height, background: frame.color }}>
       <div ref={margin} className="svg-edit-pasteboard" data-testid={`${testid}-pasteboard`} aria-hidden="true" />
       <div ref={host} className="svg-preview editing" style={{ width: box.width, height: box.height, transform: mode.zoom.transform, transformOrigin: "0 0", ["--ov-z" as string]: mode.zoom.view.scale }}
-        role="img" aria-label={`${label} — editing`} data-testid={testid} data-stroke={mode.view} />
+        role="img" aria-label={`${label} — editing`} data-testid={testid} data-stroke={mode.view} data-tool={mode.st?.session.tool ?? "select"} />
       <ZoomReset testid={testid} zoom={mode.zoom} />
       {picking && <p className="svg-edit-hint" data-testid={`${testid}-pick`}>Click a shape to edit · Shift+click adds · drag a box over anchors</p>}
     </div>
@@ -110,6 +111,7 @@ function TopBar({ testid, mode, position, onCancel }: { testid: string; mode: Ed
   return (
     <div className="svg-edit-toolbar" data-testid={`${testid}-toolbar`}>
       <ToolButtons testid={testid} st={st} onTool={(t) => st && mode.setSt({ ...st, session: setTool(st.session, t) })} />
+      <EditColorBar testid={testid} selected={st?.session.objects.length ?? 0} onFillSelected={mode.fillSelected} />
       <button type="button" role="switch" aria-checked={mode.view === "thin"} className={`svg-btn tiny${mode.view === "thin" ? " primary" : ""}`}
         data-testid={`${testid}-stroke`} title="Thin lines / the preset stroke (I)" onClick={mode.toggleView}>
         {mode.view === "thin" ? "◫ Thin lines" : "◼ Preset stroke"}
@@ -157,7 +159,7 @@ function ToolButtons({ testid, st, onTool }: { testid: string; st: EditorState |
     <button type="button" className={`svg-btn tiny${tool === t ? " primary" : ""}`} data-testid={`${testid}-tool-${t}`}
       aria-pressed={tool === t} disabled={st === null} title={title} onClick={() => onTool(t)}>{glyph}</button>
   );
-  return <>{btn("select", "⬉", "Select (V)")}{btn("draw", "✒", "Draw (P)")}</>;
+  return <>{btn("select", "⬉", "Select (V)")}{btn("draw", "✒", "Draw (P)")}{btn("fill", "🪣", "Fill a closed area with the current colour (K) · Alt+click picks a colour, with Shift also saves it")}</>;
 }
 
 /** Every key the edit mode has, each with a small icon and a short description. */

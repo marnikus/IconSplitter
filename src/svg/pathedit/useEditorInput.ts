@@ -54,6 +54,8 @@ export interface EditorInputCtx {
   onFinish: () => void;
   /** Edit settings' click tolerance for picking a shape, in screen px. */
   pickPx?: number;
+  /** A press asked first (the Fill tool, 2026-11-27); true = used, the editor's own gesture does not start. */
+  onPress?: (input: PointerInput, e: PointerEvent) => boolean;
   /** The edit mode's own keys (rows, stroke view, tools), asked first; true = used. */
   onKey?: (e: KeyboardEvent) => boolean;
 }
@@ -87,6 +89,15 @@ function applyPointer(c: { current: EditorInputCtx }, e: PointerEvent | MouseEve
   if (input !== null && state !== null) setState(step(state, input));
 }
 
+/** Offers the press to `onPress` first; true when it used it. */
+function pressTaken(c: { current: EditorInputCtx }, e: PointerEvent): boolean {
+  const { state, pathEl, onPress } = c.current;
+  const path = pathEl();
+  if (onPress === undefined || path === null || state === null) return false;
+  const input = inputOf(path, e, c.current.pickPx);
+  return input !== null && onPress(input, e);
+}
+
 /** The preview's event handlers: down starts (or picks a path), move/up keep going while the button is held. */
 function pointerHandlers(c: { current: EditorInputCtx }, node: HTMLElement): Record<string, (e: Event) => void> {
   const up = () => { const st = c.current.state; if (st?.drag) c.current.setState(pointerUp(st)); };
@@ -96,14 +107,14 @@ function pointerHandlers(c: { current: EditorInputCtx }, node: HTMLElement): Rec
       if (e.button !== 0) return;
       e.stopPropagation();
       e.preventDefault();
-      if (c.current.state === null) return;
+      if (c.current.state === null || pressTaken(c, e)) return;
       node.setPointerCapture?.(e.pointerId);
       applyPointer(c, e, pointerDown);
     },
     pointermove: (e) => { if (c.current.state?.drag) applyPointer(c, e as PointerEvent, pointerMove); else { hoverCursor(node, c, e as PointerEvent); hoverHint(c, e as PointerEvent); } },
     pointerup: up,
     pointercancel: up,
-    dblclick: (e) => { e.stopPropagation(); applyPointer(c, e as MouseEvent, doubleClick); },
+    dblclick: (e) => { e.stopPropagation(); if (c.current.state?.session.tool !== "fill") applyPointer(c, e as MouseEvent, doubleClick); },
     click: (e) => e.stopPropagation(),
   };
 }

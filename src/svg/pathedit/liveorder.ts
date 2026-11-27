@@ -12,7 +12,8 @@ export function liveOrder(root: ShadowRoot, count: number, model: PathModel): vo
   const rank = new Map(order.map((o, k) => [o, k]));
   const groups = new Map<Node, Element[]>();
   for (const el of Array.from(root.querySelectorAll("[data-edit-path]"))) {
-    if (el.closest("[data-edit-overlay]") !== null || el.parentNode === null) continue;
+    // a shape the Fill tool added has its own place (livepaint.ts)
+    if (el.closest("[data-edit-overlay]") !== null || el.parentNode === null || el.hasAttribute("data-edit-new")) continue;
     const list = groups.get(el.parentNode) ?? [];
     list.push(el);
     groups.set(el.parentNode, list);

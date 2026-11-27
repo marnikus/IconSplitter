@@ -26,7 +26,10 @@ export interface Anchor {
  */
 export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number; /** The object's `fill-rule="evenodd"` — absent means nonzero (2026-11-20). */ fillRule?: "evenodd"; /** `false` when the object does not fill (stroked only): absent means it fills (2026-11-20). */ paints?: boolean; /** Half the drawn pen width in model units — a press that far from the line is on it (2026-11-23); absent = no stroke. */ halfStroke?: number }
 /** `order` (2026-11-27): slot k of the file draws object order[k] — absent = the file's own order (layers.ts). */
-export interface PathModel { subs: SubPath[]; order?: number[] }
+/** A shape the Fill tool added (2026-11-27): object `owner`, drawn just above object `above` (null = under everything). */
+export interface AddedFill { owner: number; above: number | null }
+/** `paint`: fill colours set in this session, by object. `adds`: the filled shapes it added (bucket.ts). */
+export interface PathModel { subs: SubPath[]; order?: number[]; paint?: Record<number, string>; adds?: AddedFill[] }
 
 /** How high an object is drawn: its slot in the model's draw order (-1 for no object). */
 export function drawRank(m: PathModel, owner: number | undefined): number {
@@ -198,6 +201,8 @@ export function cloneModel(m: PathModel): PathModel {
       anchors: s.anchors.map((a) => ({ ...a, in: a.in && { ...a.in }, out: a.out && { ...a.out } })),
     })),
     ...(m.order === undefined ? {} : { order: [...m.order] }),
+    ...(m.paint === undefined ? {} : { paint: { ...m.paint } }),
+    ...(m.adds === undefined ? {} : { adds: m.adds.map((a) => ({ ...a })) }),
   };
 }
 

@@ -6203,3 +6203,5 @@ quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trac
 - 2026-11-27 — undo of a Remove never waits on the handle store (offline.ts decisionRoots bounded 10 s); quality:changed PASS; new undo test red then green; 233 remove/selection/history tests green.
 
 - 2026-11-27 — edit-mode layer order Ctrl+]/[ (new layers.ts 107 lines, liveorder.ts 37; hotkeys 88, useEditMode 236, session 85); quality:changed PASS; pathedit_layer_order 8 tests; 38 editor files (333 tests) green.
+
+- 2026-11-27 — edit-mode Fill tool + colour bar: new bucket.ts 96, paintwrite.ts 89, palette.ts 51, livepaint.ts 84, useEditFill.ts 55, EditColorBar.tsx 97, editcolors.ts 45, ui/SmartSwatches.tsx 33; useEditMode 251, planarface 235, model 274; quality:changed PASS; pathedit_fill_bucket 13 + svg_edit_fill_ui 6 tests; full vitest 25 failures in 8 files = Windows baseline.

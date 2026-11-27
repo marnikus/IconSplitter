@@ -1,6 +1,6 @@
 # In-preview SVG path editor (2026-11-06)
 
-[Generate SVG owner](svg-generation.md) · [regen marks](svg-regen-statuses.md) · [state history](topics/state-history.md) · [Alt+Shift cuts](svg-edit-cuts.md)
+[Generate SVG owner](svg-generation.md) · [regen marks](svg-regen-statuses.md) · [state history](topics/state-history.md) · [Alt+Shift cuts](svg-edit-cuts.md) · [fill](svg-edit-fill.md)
 
 **✎ Edit** beside a row's SVG version — or **Enter** on the active row, or a
 **double-click on the SVG thumbnail** (`editnav.editableRow`: a drawn SVG, no

@@ -149,7 +149,7 @@ export function polyArea(poly: readonly Pt[]): number {
   return Math.abs(sum) / 2;
 }
 
-function segsToSubPath(cycle: readonly CurveSeg[], style: Pick<SubPath, "owner" | "fillRule">): SubPath | null {
+export function segsToSubPath(cycle: readonly CurveSeg[], style: Pick<SubPath, "owner" | "fillRule">): SubPath | null {
   const segs = ensureThreeSegs(cycle);
   if (segs.length < 3 || polyArea(flattenCycle(segs)) < 1e-5) return null;
   const anchors: Anchor[] = segs.map((curr, i) => {

@@ -39,6 +39,9 @@ export const EDIT_HOTKEYS: readonly HotkeyHelp[] = [
   { keys: "Ctrl+Shift+Z", icon: "↷", text: "Redo (also Ctrl+Y)" },
   { keys: "V", icon: "⬉", text: "Select tool" },
   { keys: "P", icon: "✒", text: "Draw tool" },
+  { keys: "K", icon: "🪣", text: "Fill tool: click a closed area to fill it with the current colour" },
+  { keys: "Alt+Click (Fill)", icon: "⌖", text: "Pick the colour under the pointer · with Shift also save it as a swatch" },
+  { keys: "X", icon: "⇄", text: "Swap the current and the second colour" },
   { keys: "I", icon: "◫", text: "Thin / preset stroke" },
   { keys: "Ctrl+Scroll", icon: "🔍", text: "Zoom 10–400% · 100% button resets" },
   { keys: "Middle-drag", icon: "✋", text: "Move the zoomed artboard" },
@@ -53,9 +56,9 @@ export const EDIT_HOTKEYS: readonly HotkeyHelp[] = [
 ];
 
 export type ModalAction = "prev" | "next" | "save-next" | "decline-next" | "toggle-stroke" | "tool-select" | "tool-draw" | "cut-highlight" | "cut-apply"
-  | "layer-forward" | "layer-backward" | "layer-front" | "layer-back";
+  | "layer-forward" | "layer-backward" | "layer-front" | "layer-back" | "tool-fill" | "swap-colors";
 
-const PLAIN: Record<string, ModalAction> = { arrowleft: "prev", arrowright: "next", i: "toggle-stroke", v: "tool-select", p: "tool-draw" };
+const PLAIN: Record<string, ModalAction> = { arrowleft: "prev", arrowright: "next", i: "toggle-stroke", v: "tool-select", p: "tool-draw", k: "tool-fill", x: "swap-colors" };
 const CTRL_SHIFT: Record<string, ModalAction> = { s: "save-next", x: "decline-next" };
 /** The tail cutter: Ctrl+J highlights, Ctrl+L applies (Ctrl+Z, C, V … stay the session's own). */
 const CTRL: Record<string, ModalAction> = { j: "cut-highlight", l: "cut-apply" };

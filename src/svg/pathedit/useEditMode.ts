@@ -8,10 +8,14 @@ import { OVERLAY_STROKE_CSS } from "./overlaymarks";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { editorState, type EditorState } from "../../lib/pathedit/gesture";
 import { IDENTITY, invertAffine, multiplyAffine, type Affine, type PathModel } from "../../lib/pathedit/model";
-import { changedPreviewData, hasDirtyObjects, loadObjects, writeObjects } from "../../lib/pathedit/objects";
+import { changedPreviewData, hasDirtyObjects, loadObjects, objectData, writeObjects } from "../../lib/pathedit/objects";
 import { newSession, setTool, type Tool } from "../../lib/pathedit/session";
 import { arrangeSession, type Arrange } from "../../lib/pathedit/layers";
 import { liveOrder } from "./liveorder";
+import { livePaint } from "./livepaint";
+import { useEditFill } from "./useEditFill";
+import { changePalette } from "./editcolors";
+import { swapColors } from "../../lib/pathedit/palette";
 import { cachedPathTags, GEOMETRY, pathTagCount, type PathTag } from "../../lib/pathedit/svgdoc";
 import { PREVIEW_CSS } from "../../lib/svgpreview";
 import { useEditSettings } from "../editsettings";
@@ -86,8 +90,10 @@ interface PaintSync {
   painted: number;
   source: string;
   model: PathModel | null;
-  /** The layer order the drawn elements stand in (2026-11-27). */
+  /** The layer order and the fills the drawn elements show (2026-11-27). */
   order?: number[];
+  paint?: PathModel["paint"];
+  adds?: PathModel["adds"];
 }
 
 interface PaintParams {
@@ -113,14 +119,17 @@ function flushLiveArtboard(root: ShadowRoot, sync: { current: PaintSync }, tags:
     const t = tags[index];
     if (t !== undefined) liveShape(root, t, d);
   }
-  sync.current = { painted: p.painted, source: p.source, model: p.st.session.model, order: syncOrder(root, tags.length, p.st.session.model, prev === null ? undefined : sync.current.order) };
+  const model = p.st.session.model;
+  syncLook(root, tags.length, model, prev === null ? null : sync.current);
+  sync.current = { painted: p.painted, source: p.source, model, order: model.order, paint: model.paint, adds: model.adds };
   drawEditOverlay(svg, p.st, { u: toPathSpace(svg, 0, 0)?.unitsPerPx ?? 1, anchorPx: p.anchorPx, guide: p.view === "thin" });
 }
 
-/** Puts the drawn shapes into the model's layer order when it changed since the last paint; returns the order now shown. */
-function syncOrder(root: ShadowRoot, count: number, model: PathModel, shown: number[] | undefined): number[] | undefined {
-  if (model.order !== shown) liveOrder(root, count, model);
-  return model.order;
+/** Puts the drawn shapes into the model's layer order and fills when they changed since the last paint. */
+function syncLook(root: ShadowRoot, count: number, model: PathModel, shown: PaintSync | null): void {
+  if (model.order !== shown?.order) liveOrder(root, count, model);
+  const full = model.paint !== shown?.paint || model.adds !== shown?.adds;
+  if (full || (model.adds ?? []).length > 0) livePaint(root, model, (o) => objectData(model, o, IDENTITY), full);
 }
 
 /** Updates ONLY shapes whose SubPath references changed, then incrementally updates the overlay. */
@@ -166,6 +175,8 @@ export interface EditMode {
   dirty: boolean;
   zoom: PreviewZoom;
   cut: EditorTailCut;
+  /** Fills the selected shapes with the current colour (the colour bar). */
+  fillSelected: () => void;
 }
 
 export function useEditMode(a: EditModeArgs): EditMode {
@@ -186,8 +197,9 @@ export function useEditMode(a: EditModeArgs): EditMode {
   const toggleView = useCallback(() => setView((v) => (v === "thin" ? "preset" : "thin")), []);
   const arrange = useCallback((how: Arrange) => { if (st !== null) setSt({ ...st, session: arrangeSession(a.source, st.session, how) }); }, [st, setSt, a.source]);
   const onKey = useModeKeys({ leave, resolveLeave, go, toggleView, st, setSt, cut, arrange });
-  useEditorInput({ host: a.host, margin: a.margin, pathEl: () => a.host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish, pickPx, onKey });
-  return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty, zoom, cut };
+  const fill = useEditFill(a.source, st, setSt);
+  useEditorInput({ onPress: fill.onPress, host: a.host, margin: a.margin, pathEl: () => a.host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish, pickPx, onKey });
+  return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty, zoom, cut, fillSelected: fill.fillSelected };
 }
 
 interface KeyParts {
@@ -226,6 +238,8 @@ function runAction(action: ModalAction, k: KeyParts): void {
     "toggle-stroke": k.toggleView,
     "tool-select": () => tool("select"),
     "tool-draw": () => tool("draw"),
+    "tool-fill": () => tool("fill"),
+    "swap-colors": () => changePalette(swapColors),
     "cut-highlight": k.cut.highlight,
     "cut-apply": k.cut.apply,
     "layer-forward": () => k.arrange("forward"),
