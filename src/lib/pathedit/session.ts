@@ -3,7 +3,7 @@
 // away by Cancel), the selection, the tool and Draw's open subpath. Finish is
 // allowed only when the working copy differs from the original. Pure.
 
-import { cloneModel, toPathData, type AnchorRef, type PathModel } from "./model";
+import { cloneModel, MODEL_EXTRAS, toPathData, type AnchorRef, type PathModel } from "./model";
 
 export type Tool = "select" | "draw" | "fill";
 
@@ -46,14 +46,15 @@ export function commit(s: EditSession, next: PathModel, before: PathModel = s.mo
 /** An edit builds its model from the subpaths alone: the layer order the session had stays (2026-11-27). */
 export function keepOrder(prev: PathModel, next: PathModel): PathModel {
   const keep: Partial<PathModel> = {};
-  for (const k of ["order", "paint", "adds"] as const) if (next[k] === undefined && prev[k] !== undefined) Object.assign(keep, { [k]: prev[k] });
+  for (const k of MODEL_EXTRAS) if (next[k] === undefined && prev[k] !== undefined) Object.assign(keep, { [k]: prev[k] });
   return Object.keys(keep).length === 0 ? next : { ...next, ...keep };
 }
 
 /** The fills a model carries (colours set and shapes added), as one comparable text. */
 export function paintKey(m: PathModel): string {
-  const paint = Object.entries(m.paint ?? {}).sort(([a], [b]) => Number(a) - Number(b));
-  return paint.length === 0 && (m.adds ?? []).length === 0 ? "" : JSON.stringify([paint, m.adds ?? []]);
+  const sorted = (r: Record<number, string> | undefined) => Object.entries(r ?? {}).sort(([a], [b]) => Number(a) - Number(b));
+  const parts = [sorted(m.paint), m.adds ?? [], sorted(m.rules), [...(m.nostroke ?? [])].sort((a, b) => a - b)];
+  return parts.every((p) => p.length === 0) ? "" : JSON.stringify(parts);
 }
 
 function sameOrder(a: PathModel, b: PathModel): boolean {

@@ -7,13 +7,14 @@
 import { OVERLAY_STROKE_CSS } from "./overlaymarks";
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { editorState, type EditorState } from "../../lib/pathedit/gesture";
-import { IDENTITY, invertAffine, multiplyAffine, type Affine, type PathModel } from "../../lib/pathedit/model";
+import { IDENTITY, invertAffine, MODEL_EXTRAS, multiplyAffine, type Affine, type PathModel } from "../../lib/pathedit/model";
 import { changedPreviewData, hasDirtyObjects, loadObjects, objectData, writeObjects } from "../../lib/pathedit/objects";
 import { newSession, setTool, type Tool } from "../../lib/pathedit/session";
 import { arrangeSession, type Arrange } from "../../lib/pathedit/layers";
 import { liveOrder } from "./liveorder";
 import { livePaint } from "./livepaint";
 import { useEditFill } from "./useEditFill";
+import { useEditShapes, type EditShapes } from "./useEditShapes";
 import { changePalette } from "./editcolors";
 import { swapColors } from "../../lib/pathedit/palette";
 import { cachedPathTags, GEOMETRY, pathTagCount, type PathTag } from "../../lib/pathedit/svgdoc";
@@ -90,10 +91,6 @@ interface PaintSync {
   painted: number;
   source: string;
   model: PathModel | null;
-  /** The layer order and the fills the drawn elements show (2026-11-27). */
-  order?: number[];
-  paint?: PathModel["paint"];
-  adds?: PathModel["adds"];
 }
 
 interface PaintParams {
@@ -120,15 +117,15 @@ function flushLiveArtboard(root: ShadowRoot, sync: { current: PaintSync }, tags:
     if (t !== undefined) liveShape(root, t, d);
   }
   const model = p.st.session.model;
-  syncLook(root, tags.length, model, prev === null ? null : sync.current);
-  sync.current = { painted: p.painted, source: p.source, model, order: model.order, paint: model.paint, adds: model.adds };
+  syncLook(root, tags.length, model, prev);
+  sync.current = { painted: p.painted, source: p.source, model };
   drawEditOverlay(svg, p.st, { u: toPathSpace(svg, 0, 0)?.unitsPerPx ?? 1, anchorPx: p.anchorPx, guide: p.view === "thin" });
 }
 
 /** Puts the drawn shapes into the model's layer order and fills when they changed since the last paint. */
-function syncLook(root: ShadowRoot, count: number, model: PathModel, shown: PaintSync | null): void {
+function syncLook(root: ShadowRoot, count: number, model: PathModel, shown: PathModel | null): void {
   if (model.order !== shown?.order) liveOrder(root, count, model);
-  const full = model.paint !== shown?.paint || model.adds !== shown?.adds;
+  const full = MODEL_EXTRAS.some((k) => k !== "order" && model[k] !== shown?.[k]);
   if (full || (model.adds ?? []).length > 0) livePaint(root, model, (o) => objectData(model, o, IDENTITY), full);
 }
 
@@ -177,6 +174,8 @@ export interface EditMode {
   cut: EditorTailCut;
   /** Fills the selected shapes with the current colour (the colour bar). */
   fillSelected: () => void;
+  /** Expand stroke and Divide on the selected shapes. */
+  shapes: EditShapes;
 }
 
 export function useEditMode(a: EditModeArgs): EditMode {
@@ -196,10 +195,11 @@ export function useEditMode(a: EditModeArgs): EditMode {
   const { leave, resolveLeave, go, finish } = useRowMoves(a, markup);
   const toggleView = useCallback(() => setView((v) => (v === "thin" ? "preset" : "thin")), []);
   const arrange = useCallback((how: Arrange) => { if (st !== null) setSt({ ...st, session: arrangeSession(a.source, st.session, how) }); }, [st, setSt, a.source]);
-  const onKey = useModeKeys({ leave, resolveLeave, go, toggleView, st, setSt, cut, arrange });
   const fill = useEditFill(a.source, st, setSt);
+  const shapes = useEditShapes(a.source, a.host, st, setSt);
+  const onKey = useModeKeys({ leave, resolveLeave, go, toggleView, st, setSt, cut, arrange, shapes });
   useEditorInput({ onPress: fill.onPress, host: a.host, margin: a.margin, pathEl: () => a.host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish, pickPx, onKey });
-  return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty, zoom, cut, fillSelected: fill.fillSelected };
+  return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty, zoom, cut, fillSelected: fill.fillSelected, shapes };
 }
 
 interface KeyParts {
@@ -211,6 +211,7 @@ interface KeyParts {
   st: EditorState | null;
   setSt: (st: EditorState) => void;
   arrange: (how: Arrange) => void;
+  shapes: EditShapes;
 }
 
 function useModeKeys(k: KeyParts): (e: KeyboardEvent) => boolean {
@@ -240,6 +241,8 @@ function runAction(action: ModalAction, k: KeyParts): void {
     "tool-draw": () => tool("draw"),
     "tool-fill": () => tool("fill"),
     "swap-colors": () => changePalette(swapColors),
+    "expand-stroke": k.shapes.expand,
+    divide: k.shapes.divide,
     "cut-highlight": k.cut.highlight,
     "cut-apply": k.cut.apply,
     "layer-forward": () => k.arrange("forward"),

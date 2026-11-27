@@ -24,6 +24,8 @@ export interface PathTag {
   paints: boolean;
   /** The drawn pen width in the shape's own units (`stroke-width`, own or inherited); 0 when no stroke is drawn (2026-11-23). */
   strokeWidth: number;
+  /** The fill and line as the file states them (own or inherited), and the line's ends and corners (2026-11-27). */
+  pen: { fill: string; stroke: string; cap: "butt" | "round" | "square"; join: "miter" | "round" | "bevel"; miter: number };
 }
 
 const D_ATTR = /\sd\s*=\s*("([^"]*)"|'([^']*)')/;
@@ -84,7 +86,14 @@ function shapeD(kind: ShapeKind, tag: string): string | null {
 }
 
 /** What paints a shape: the fill that reaches it, the rule it fills by and its pen (a group's or the root's, inherited). */
-interface Paint { fill: string; fillRule: "evenodd" | "nonzero"; stroke: string; strokeWidth: number }
+interface Paint { fill: string; fillRule: "evenodd" | "nonzero"; stroke: string; strokeWidth: number; cap: string; join: string; miter: number }
+
+const oneOf = <T extends string>(v: string, all: readonly T[], fallback: T): T => (all.includes(v as T) ? (v as T) : fallback);
+
+/** The fill, the line and its ends / corners a shape is drawn with. */
+function penLook(p: Paint): PathTag["pen"] {
+  return { fill: p.fill, stroke: p.stroke, cap: oneOf(p.cap, ["butt", "round", "square"], "butt"), join: oneOf(p.join, ["miter", "round", "bevel"], "miter"), miter: p.miter };
+}
 
 /** Every tag, so `<g>` nesting can be followed while the shapes are collected. */
 const ANY_TAG = /<(\/?)([a-zA-Z][\w:.-]*)([^>]*)>/g;
@@ -97,6 +106,12 @@ function prop(tag: string, name: string): string | null {
   return (attr(tag, name) ?? inline)?.trim() ?? null;
 }
 
+/** The line's ends, corners and miter limit a tag starts, given what it inherits. */
+function endsOf(attrs: string, inherited: Paint): Pick<Paint, "cap" | "join" | "miter"> {
+  const miter = Number.parseFloat(prop(attrs, "stroke-miterlimit") ?? "");
+  return { cap: prop(attrs, "stroke-linecap") ?? inherited.cap, join: prop(attrs, "stroke-linejoin") ?? inherited.join, miter: miter >= 1 ? miter : inherited.miter };
+}
+
 /** The paint a tag starts, given what it inherits. */
 function paintOf(attrs: string, inherited: Paint): Paint {
   const fill = prop(attrs, "fill") ?? inherited.fill;
@@ -104,6 +119,7 @@ function paintOf(attrs: string, inherited: Paint): Paint {
   const stroke = prop(attrs, "stroke") ?? inherited.stroke;
   const width = Number.parseFloat(prop(attrs, "stroke-width") ?? "");
   return {
+    ...endsOf(attrs, inherited),
     fill: fill === "inherit" ? inherited.fill : fill, fillRule: rule === "evenodd" ? "evenodd" : "nonzero",
     stroke: stroke === "inherit" ? inherited.stroke : stroke, strokeWidth: Number.isFinite(width) && width >= 0 ? width : inherited.strokeWidth,
   };
@@ -126,7 +142,7 @@ const tagCache = new Map<string, readonly PathTag[]>();
 function scanPathTags(markup: string): readonly PathTag[] {
   const out: PathTag[] = [];
   const text = blanked(markup);
-  const stack: Paint[] = [{ fill: "#000000", fillRule: "nonzero", stroke: "none", strokeWidth: 1 }];
+  const stack: Paint[] = [{ fill: "#000000", fillRule: "nonzero", stroke: "none", strokeWidth: 1, cap: "butt", join: "miter", miter: 4 }];
   ANY_TAG.lastIndex = 0;
   for (let m = ANY_TAG.exec(text); m !== null; m = ANY_TAG.exec(text)) {
     const name = m[2].toLowerCase();
@@ -144,7 +160,7 @@ function scanPathTags(markup: string): readonly PathTag[] {
     const kind = name as ShapeKind;
     const paint = paintOf(m[3], stack[stack.length - 1]);
     out.push({ index: out.length, kind, start: m.index, end: m.index + head.length, d: shapeD(kind, tag),
-      selfClosing: /\/\s*>$/.test(head), fillRule: paint.fillRule, paints: paint.fill !== "none", strokeWidth: penOf(paint) });
+      selfClosing: /\/\s*>$/.test(head), fillRule: paint.fillRule, paints: paint.fill !== "none", strokeWidth: penOf(paint), pen: penLook(paint) });
   }
   return Object.freeze(out);
 }

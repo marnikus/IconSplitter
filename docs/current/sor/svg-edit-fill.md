@@ -16,11 +16,26 @@
 | Top bar: current colour over the second, swap (`X`), hex, six close colours (the SAME component as SVG builder's quick colour menu), saved swatches (`+` saves, right-click / Alt+click removes), ⌖ screen picker where the browser has `EyeDropper`, "Fill selected" | `EditColorBar.tsx`, `ui/SmartSwatches.tsx` |
 | Colours and swatches are remembered on this device, validated on read (max 32) | `editcolors.ts`, `lib/pathedit/palette.ts` |
 
+## Expand stroke and Divide (2026-11-27)
+
+Both work on the selected shapes, are one undo step, show live and are written by Finish.
+
+| Rule | Where |
+|---|---|
+| Expand stroke (`Ctrl+Shift+E`, ◎): each line becomes a filled outline of its pen — the FILE's width, caps (butt / round / square), joins (round, miter within its limit, else bevel); curves stay curves (cut where they turn over 30°) | `lib/pathedit/strokering.ts`, `outline.ts` |
+| A shape with no fill is rewritten in place (`fill` = the line's colour, `stroke="none"`, `fill-rule="nonzero"`); a shape that also fills keeps it and gets the outline as a new shape above | `outline.ts` `expandOne`, `PathModel.nostroke`, `.rules` |
+| A closed line gives two rings wound opposite ways (the middle stays empty); a tight inner corner may loop over itself — the nonzero rule still paints exactly the pen | `strokering.ts` |
+| Divide (`Ctrl+Shift+D`, ◩): selected fills that overlap are cut along each other into pieces, none overlapping, each with the colour that showed there; the largest piece of a colour replaces the old shape, the others are new shapes above it; no overlap = no change | `divide.ts`, `planarface.ts` `cellsOf` |
+| Colours come from what the browser draws, else the file's attributes | `useEditShapes.ts` `drawnLooks`, `looks.ts` |
+
+Handles: `<id>-expand`, `<id>-divide`. Tests: `pathedit_expand_divide.test.ts`.
+
 ## Limits
 
 - Shapes the tool adds are compared against the drawing WITHOUT them (their
   edges repeat existing ones); after a save they are ordinary shapes.
 - A new shape cannot be reordered with Ctrl+] / [ until the edit is saved.
+- Expand uses the file's own line width, not a preview stroke preset.
 - Only fills are set; a line's colour is not changed by the tool.
 
 ## Handles and tests

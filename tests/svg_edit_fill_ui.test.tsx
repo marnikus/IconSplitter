@@ -53,6 +53,17 @@ describe("the artboard shows the fills", () => {
     expect(el.style.getPropertyValue("fill")).toBe("");
   });
 
+  it("an expanded line shows no stroke and its fill rule, and its own look again after undo", () => {
+    const { root, model } = board();
+    const el = root.querySelector('[data-edit-path="1"]') as SVGElement;
+    paint(root, { ...model, nostroke: [1], rules: { 1: "nonzero" }, paint: { 1: "#000000" } });
+    expect(el.style.getPropertyValue("stroke")).toBe("none");
+    expect(el.style.getPropertyValue("fill-rule")).toBe("nonzero");
+    paint(root, model);
+    expect(el.style.getPropertyValue("stroke")).toBe("");
+    expect(el.style.getPropertyValue("fill-rule")).toBe("");
+  });
+
   it("the picker reads the session's colour of the shape under the pointer", () => {
     const { root, model } = board();
     const el = root.querySelector('[data-edit-path="0"]') as Element;

@@ -112,6 +112,7 @@ function TopBar({ testid, mode, position, onCancel }: { testid: string; mode: Ed
     <div className="svg-edit-toolbar" data-testid={`${testid}-toolbar`}>
       <ToolButtons testid={testid} st={st} onTool={(t) => st && mode.setSt({ ...st, session: setTool(st.session, t) })} />
       <EditColorBar testid={testid} selected={st?.session.objects.length ?? 0} onFillSelected={mode.fillSelected} />
+      <ShapeTools testid={testid} none={(st?.session.objects.length ?? 0) === 0} mode={mode} />
       <button type="button" role="switch" aria-checked={mode.view === "thin"} className={`svg-btn tiny${mode.view === "thin" ? " primary" : ""}`}
         data-testid={`${testid}-stroke`} title="Thin lines / the preset stroke (I)" onClick={mode.toggleView}>
         {mode.view === "thin" ? "◫ Thin lines" : "◼ Preset stroke"}
@@ -124,6 +125,18 @@ function TopBar({ testid, mode, position, onCancel }: { testid: string; mode: Ed
         title="Write the edited shapes into the SVG (Enter) — one undo step" onClick={mode.finish}>Finish edit</button>
       <button type="button" className="svg-edit-cancel" data-testid={`${testid}-cancel`} onClick={onCancel}>Cancel</button>
     </div>
+  );
+}
+
+/** Operations on the selected shapes: lines into filled outlines, overlapping fills into pieces. */
+function ShapeTools({ testid, none, mode }: { testid: string; none: boolean; mode: EditMode }) {
+  return (
+    <>
+      <button type="button" className="svg-btn tiny" data-testid={`${testid}-expand`} disabled={none} onClick={mode.shapes.expand}
+        title="Turn the selected shapes' lines into filled outlines (Ctrl+Shift+E)">◎ Expand stroke</button>
+      <button type="button" className="svg-btn tiny" data-testid={`${testid}-divide`} disabled={none} onClick={mode.shapes.divide}
+        title="Cut the selected overlapping fills into separate pieces (Ctrl+Shift+D)">◩ Divide</button>
+    </>
   );
 }
 

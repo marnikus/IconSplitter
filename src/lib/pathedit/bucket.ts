@@ -16,7 +16,7 @@ const linesCache = new WeakMap<PathModel, PathModel>();
 
 /** The drawing without the shapes the Fill tool added: their edges repeat existing ones and must not split cells again. */
 function linesOf(m: PathModel): PathModel {
-  const added = new Set((m.adds ?? []).map((a) => a.owner));
+  const added = new Set((m.adds ?? []).filter((a) => a.own !== true).map((a) => a.owner));
   if (added.size === 0) return m;
   const hit = linesCache.get(m);
   if (hit !== undefined) return hit;

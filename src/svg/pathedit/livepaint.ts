@@ -7,23 +7,34 @@
 import type { AddedFill, PathModel } from "../../lib/pathedit/model";
 
 const NEW = "data-edit-new";
-const KEPT = "data-edit-fill0";
+const KEPT = "data-edit-keep";
 const SVG_NS = "http://www.w3.org/2000/svg";
 type Styled = Element & { style: CSSStyleDeclaration };
 
-/** Each existing shape: the session's colour on it, or its own back. */
+/** What the session set on object `o`: a property is absent when the shape keeps its own. */
+function looksOf(model: PathModel, o: number): [string, string | undefined][] {
+  return [["fill", model.paint?.[o]], ["stroke", model.nostroke?.includes(o) ? "none" : undefined], ["fill-rule", model.rules?.[o]]];
+}
+
+/** One property of a drawn shape: the session's value on it, or its own back. */
+function setLook(el: Styled, name: string, value: string | undefined): void {
+  const kept = `${KEPT}-${name}`;
+  if (value !== undefined) {
+    if (!el.hasAttribute(kept)) el.setAttribute(kept, el.style.getPropertyValue(name));
+    el.style.setProperty(name, value, "important");
+    return;
+  }
+  if (!el.hasAttribute(kept)) return;
+  const own = el.getAttribute(kept) ?? "";
+  if (own === "") el.style.removeProperty(name); else el.style.setProperty(name, own);
+  el.removeAttribute(kept);
+}
+
+/** Each existing shape: the session's colour, "no line" and fill rule on it, or its own back. */
 function recolour(root: ShadowRoot, model: PathModel): void {
   for (const el of Array.from(root.querySelectorAll(`[data-edit-path]:not([${NEW}])`)) as Styled[]) {
     if (el.closest("[data-edit-overlay]") !== null) continue;
-    const color = model.paint?.[Number(el.getAttribute("data-edit-path"))];
-    if (color !== undefined) {
-      if (!el.hasAttribute(KEPT)) el.setAttribute(KEPT, el.style.getPropertyValue("fill"));
-      el.style.setProperty("fill", color, "important");
-    } else if (el.hasAttribute(KEPT)) {
-      const own = el.getAttribute(KEPT) ?? "";
-      if (own === "") el.style.removeProperty("fill"); else el.style.setProperty("fill", own);
-      el.removeAttribute(KEPT);
-    }
+    for (const [name, value] of looksOf(model, Number(el.getAttribute("data-edit-path")))) setLook(el, name, value);
   }
 }
 

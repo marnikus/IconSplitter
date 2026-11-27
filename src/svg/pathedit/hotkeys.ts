@@ -51,15 +51,17 @@ export const EDIT_HOTKEYS: readonly HotkeyHelp[] = [
   { keys: "Ctrl+L", icon: "✓", text: "Apply the highlighted cut" },
   { keys: "Ctrl+]  Ctrl+[", icon: "⧉", text: "Selected shapes one layer forward / back" },
   { keys: "Ctrl+Shift+]  [", icon: "⇅", text: "Selected shapes to the front / to the back" },
+  { keys: "Ctrl+Shift+E", icon: "◎", text: "Expand stroke: the selected lines become filled outlines" },
+  { keys: "Ctrl+Shift+D", icon: "◩", text: "Divide: cut the selected overlapping fills into pieces" },
   { keys: "Ctrl+Shift+S", icon: "💾", text: "Save, approve & next SVG" },
   { keys: "Ctrl+Shift+X", icon: "✕", text: "Discard, decline & next SVG" },
 ];
 
 export type ModalAction = "prev" | "next" | "save-next" | "decline-next" | "toggle-stroke" | "tool-select" | "tool-draw" | "cut-highlight" | "cut-apply"
-  | "layer-forward" | "layer-backward" | "layer-front" | "layer-back" | "tool-fill" | "swap-colors";
+  | "layer-forward" | "layer-backward" | "layer-front" | "layer-back" | "tool-fill" | "swap-colors" | "expand-stroke" | "divide";
 
 const PLAIN: Record<string, ModalAction> = { arrowleft: "prev", arrowright: "next", i: "toggle-stroke", v: "tool-select", p: "tool-draw", k: "tool-fill", x: "swap-colors" };
-const CTRL_SHIFT: Record<string, ModalAction> = { s: "save-next", x: "decline-next" };
+const CTRL_SHIFT: Record<string, ModalAction> = { s: "save-next", x: "decline-next", e: "expand-stroke", d: "divide" };
 /** The tail cutter: Ctrl+J highlights, Ctrl+L applies (Ctrl+Z, C, V … stay the session's own). */
 const CTRL: Record<string, ModalAction> = { j: "cut-highlight", l: "cut-apply" };
 

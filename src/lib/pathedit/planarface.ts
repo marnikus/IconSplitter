@@ -197,16 +197,25 @@ const anyPaintsAt = (groups: readonly OwnerGroup[], q: Pt): boolean =>
   groups.some((g) => ringsPaint(g.rings, g.rule, q));
 
 /** One closed cell of the drawing: its boundary, the cells lying inside it (outermost only) and the uncrossed subpath that IS it, if any. */
-export interface Cell { segs: CurveSeg[]; area: number; islands: { segs: CurveSeg[]; sample: Pt }[]; intactSub: number | null }
+export interface Cell { segs: CurveSeg[]; area: number; islands: { segs: CurveSeg[]; sample: Pt }[]; intactSub: number | null; /** A point just inside the cell's outline. */ sample: Pt }
+
+function toCell(m: PathModel, faces: readonly CachedFace[], face: CachedFace, p: Pt): Cell {
+  const inside = faces.filter((c) => c !== face && c.area < face.area - 1e-5 && inBox(face.box, c.sample) && segsWinding(face.segs, c.sample) > 0);
+  const islands = inside.filter((c) => !inside.some((o) => o !== c && o.area > c.area && segsWinding(o.segs, c.sample) > 0));
+  return { segs: face.segs, area: face.area, sample: face.sample, islands: islands.map((c) => ({ segs: c.segs, sample: c.sample })), intactSub: findIntactSub(m, face, p) };
+}
+
+/** Every closed cell of the drawing (Divide, 2026-11-27). */
+export function cellsOf(m: PathModel): Cell[] {
+  const faces = cachedPlanar(m).faces;
+  return faces.map((face) => toCell(m, faces, face, face.sample));
+}
 
 /** The smallest closed cell holding `p` among ALL lines and fills — painted or not (the Fill tool, 2026-11-27). */
 export function cellAt(m: PathModel, p: Pt): Cell | null {
   const faces = cachedPlanar(m).faces;
   const face = faces.find((c) => inBox(c.box, p) && segsWinding(c.segs, p) > 0);
-  if (face === undefined) return null;
-  const inside = faces.filter((c) => c !== face && c.area < face.area - 1e-5 && inBox(face.box, c.sample) && segsWinding(face.segs, c.sample) > 0);
-  const islands = inside.filter((c) => !inside.some((o) => o !== c && o.area > c.area && segsWinding(o.segs, c.sample) > 0));
-  return { segs: face.segs, area: face.area, islands: islands.map((c) => ({ segs: c.segs, sample: c.sample })), intactSub: findIntactSub(m, face, p) };
+  return face === undefined ? null : toCell(m, faces, face, p);
 }
 
 /** Flattened polygon of the bounded painted cell holding `p`, or null. */
