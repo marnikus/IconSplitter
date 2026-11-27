@@ -23,7 +23,7 @@
 // offered twice.
 
 import { clipLayerIfPartial, clippedRegionAt } from "./boolean";
-import { cloneModel, cubicAt, isLineSegment, segmentCubic, type Anchor, type PathModel, type Pt, type SubPath, isAreaRing } from "./model";
+import { cloneModel, cubicAt, drawRank, isLineSegment, segmentCubic, type Anchor, type PathModel, type Pt, type SubPath, isAreaRing } from "./model";
 
 /** A curve is flattened in this many straight pieces per segment (the mark is a hint, not geometry). */
 const STEPS = 24;
@@ -155,7 +155,7 @@ export function regionAt(m: PathModel, p: Pt): number | null {
 export function paintedSubAt(m: PathModel, p: Pt, can: (owner: number | undefined) => boolean = () => true): number | null {
   const hits = layersAt(m, ringsAt(m, p)).filter((l) => can(l.owner));
   if (hits.length === 0) return null;
-  const rank = (l: Layer) => (l.owner ?? -1) * 1e6 + Math.max(...l.rings.map((r) => r.sub));
+  const rank = (l: Layer) => drawRank(m, l.owner) * 1e6 + Math.max(...l.rings.map((r) => r.sub));
   const top = hits.reduce((a, b) => (rank(b) >= rank(a) ? b : a));
   return top.rings[0].sub;
 }

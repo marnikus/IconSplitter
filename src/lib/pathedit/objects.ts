@@ -10,6 +10,7 @@ import { IDENTITY, invertAffine, isIdentityAffine, toPathData, transformModel, t
 import { fromPathData } from "./model";
 import type { EditSession } from "./session";
 import { cachedPathTags, withPathDs, type PathTag } from "./svgdoc";
+import { drawOrder, orderChanged, withOrder } from "./layers";
 
 const ownerGroupsCache = new WeakMap<PathModel, Map<number, SubPath[]>>();
 const ownerDataCache = new WeakMap<PathModel, Map<number, string>>();
@@ -99,20 +100,21 @@ export function dirtyObjects(s: EditSession): number[] {
 
 /** Fast O(1)-cached dirty check for the Finish button without serializing SVG markup. */
 export function hasDirtyObjects(s: EditSession): boolean {
-  return dirtyObjects(s).length > 0;
+  return dirtyObjects(s).length > 0 || orderChanged(s.model);
 }
 
 /** The file with every changed object's `d` rewritten in a single pass; null when nothing changed. */
 export function writeObjects(source: string, s: EditSession, matrices: readonly Affine[]): string | null {
   const dirty = dirtyObjects(s);
-  if (dirty.length === 0) return null;
+  if (dirty.length === 0 && !orderChanged(s.model)) return null;
   const tags = cachedPathTags(source);
   const ds = new Map<number, string>();
   for (const o of dirty) {
     if (tags[o] === undefined) return null;
     ds.set(o, objectData(s.model, o, matrices[o] ?? IDENTITY));
   }
-  return withPathDs(source, ds);
+  const drawn = ds.size === 0 ? source : withPathDs(source, ds);
+  return withOrder(drawn, drawOrder(s.model, tags.length)); // the layer order last: slots are the drawn file's
 }
 
 /** The d the preview shows for object `o`: the working copy when it changed, else the file's own. */

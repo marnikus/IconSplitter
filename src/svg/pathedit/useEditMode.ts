@@ -10,6 +10,8 @@ import { editorState, type EditorState } from "../../lib/pathedit/gesture";
 import { IDENTITY, invertAffine, multiplyAffine, type Affine, type PathModel } from "../../lib/pathedit/model";
 import { changedPreviewData, hasDirtyObjects, loadObjects, writeObjects } from "../../lib/pathedit/objects";
 import { newSession, setTool, type Tool } from "../../lib/pathedit/session";
+import { arrangeSession, type Arrange } from "../../lib/pathedit/layers";
+import { liveOrder } from "./liveorder";
 import { cachedPathTags, GEOMETRY, pathTagCount, type PathTag } from "../../lib/pathedit/svgdoc";
 import { PREVIEW_CSS } from "../../lib/svgpreview";
 import { useEditSettings } from "../editsettings";
@@ -84,6 +86,8 @@ interface PaintSync {
   painted: number;
   source: string;
   model: PathModel | null;
+  /** The layer order the drawn elements stand in (2026-11-27). */
+  order?: number[];
 }
 
 interface PaintParams {
@@ -109,8 +113,14 @@ function flushLiveArtboard(root: ShadowRoot, sync: { current: PaintSync }, tags:
     const t = tags[index];
     if (t !== undefined) liveShape(root, t, d);
   }
-  sync.current = { painted: p.painted, source: p.source, model: p.st.session.model };
+  sync.current = { painted: p.painted, source: p.source, model: p.st.session.model, order: syncOrder(root, tags.length, p.st.session.model, prev === null ? undefined : sync.current.order) };
   drawEditOverlay(svg, p.st, { u: toPathSpace(svg, 0, 0)?.unitsPerPx ?? 1, anchorPx: p.anchorPx, guide: p.view === "thin" });
+}
+
+/** Puts the drawn shapes into the model's layer order when it changed since the last paint; returns the order now shown. */
+function syncOrder(root: ShadowRoot, count: number, model: PathModel, shown: number[] | undefined): number[] | undefined {
+  if (model.order !== shown) liveOrder(root, count, model);
+  return model.order;
 }
 
 /** Updates ONLY shapes whose SubPath references changed, then incrementally updates the overlay. */
@@ -174,7 +184,8 @@ export function useEditMode(a: EditModeArgs): EditMode {
   const cut = useEditorTailCut({ host: a.host, getCurrent, model: st?.session.model ?? null, html: a.html, view, applyCut });
   const { leave, resolveLeave, go, finish } = useRowMoves(a, markup);
   const toggleView = useCallback(() => setView((v) => (v === "thin" ? "preset" : "thin")), []);
-  const onKey = useModeKeys({ leave, resolveLeave, go, toggleView, st, setSt, cut });
+  const arrange = useCallback((how: Arrange) => { if (st !== null) setSt({ ...st, session: arrangeSession(a.source, st.session, how) }); }, [st, setSt, a.source]);
+  const onKey = useModeKeys({ leave, resolveLeave, go, toggleView, st, setSt, cut, arrange });
   useEditorInput({ host: a.host, margin: a.margin, pathEl: () => a.host.current?.shadowRoot?.querySelector("svg") ?? null, state: st, setState: setSt, onFinish: finish, pickPx, onKey });
   return { st, setSt, view, toggleView, leave, resolveLeave, go, finish, dirty, zoom, cut };
 }
@@ -187,6 +198,7 @@ interface KeyParts {
   toggleView: () => void;
   st: EditorState | null;
   setSt: (st: EditorState) => void;
+  arrange: (how: Arrange) => void;
 }
 
 function useModeKeys(k: KeyParts): (e: KeyboardEvent) => boolean {
@@ -216,6 +228,10 @@ function runAction(action: ModalAction, k: KeyParts): void {
     "tool-draw": () => tool("draw"),
     "cut-highlight": k.cut.highlight,
     "cut-apply": k.cut.apply,
+    "layer-forward": () => k.arrange("forward"),
+    "layer-backward": () => k.arrange("backward"),
+    "layer-front": () => k.arrange("front"),
+    "layer-back": () => k.arrange("back"),
   };
   run[action]();
 }

@@ -6201,3 +6201,5 @@ quality:changed PASS (padsides.ts new; layout/config/edge handles/customize/trac
 - 2026-11-27 — Generate SVG Remove never runs endless: removerows.ts 240 lines, offline.ts 184, new lib/bounded.ts 31; quality:changed PASS; svg_remove_row_never_hangs 5 tests red then green; 23 remove/selection/history files green.
 
 - 2026-11-27 — undo of a Remove never waits on the handle store (offline.ts decisionRoots bounded 10 s); quality:changed PASS; new undo test red then green; 233 remove/selection/history tests green.
+
+- 2026-11-27 — edit-mode layer order Ctrl+]/[ (new layers.ts 107 lines, liveorder.ts 37; hotkeys 88, useEditMode 236, session 85); quality:changed PASS; pathedit_layer_order 8 tests; 38 editor files (333 tests) green.

@@ -46,20 +46,38 @@ export const EDIT_HOTKEYS: readonly HotkeyHelp[] = [
   { keys: "←  →", icon: "⇆", text: "Previous / next SVG (nothing selected)" },
   { keys: "Ctrl+J", icon: "✂", text: "Highlight every tail to cut in this artwork" },
   { keys: "Ctrl+L", icon: "✓", text: "Apply the highlighted cut" },
+  { keys: "Ctrl+]  Ctrl+[", icon: "⧉", text: "Selected shapes one layer forward / back" },
+  { keys: "Ctrl+Shift+]  [", icon: "⇅", text: "Selected shapes to the front / to the back" },
   { keys: "Ctrl+Shift+S", icon: "💾", text: "Save, approve & next SVG" },
   { keys: "Ctrl+Shift+X", icon: "✕", text: "Discard, decline & next SVG" },
 ];
 
-export type ModalAction = "prev" | "next" | "save-next" | "decline-next" | "toggle-stroke" | "tool-select" | "tool-draw" | "cut-highlight" | "cut-apply";
+export type ModalAction = "prev" | "next" | "save-next" | "decline-next" | "toggle-stroke" | "tool-select" | "tool-draw" | "cut-highlight" | "cut-apply"
+  | "layer-forward" | "layer-backward" | "layer-front" | "layer-back";
 
 const PLAIN: Record<string, ModalAction> = { arrowleft: "prev", arrowright: "next", i: "toggle-stroke", v: "tool-select", p: "tool-draw" };
 const CTRL_SHIFT: Record<string, ModalAction> = { s: "save-next", x: "decline-next" };
 /** The tail cutter: Ctrl+J highlights, Ctrl+L applies (Ctrl+Z, C, V … stay the session's own). */
 const CTRL: Record<string, ModalAction> = { j: "cut-highlight", l: "cut-apply" };
 
+type KeyLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey"> & { code?: string };
+
 /** The edit-mode action a key asks for, or null (the session's own keys are not here). */
-export function modalKeyAction(e: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">): ModalAction | null {
-  return tableFor(e.ctrlKey || e.metaKey, e)[e.key.toLowerCase()] ?? null;
+export function modalKeyAction(e: KeyLike): ModalAction | null {
+  return layerKey(e) ?? tableFor(e.ctrlKey || e.metaKey, e)[e.key.toLowerCase()] ?? null;
+}
+
+/**
+ * Ctrl+] / Ctrl+[ (Shift: front / back, 2026-11-27). Read by the physical key
+ * (`code`), so a keyboard layout whose bracket keys type other letters works.
+ */
+const LAYER_SIDE: Record<string, 1 | -1> = { BracketRight: 1, "]": 1, "}": 1, BracketLeft: -1, "[": -1, "{": -1 };
+const LAYER_ACTION: Record<string, ModalAction> = { "1": "layer-forward", "-1": "layer-backward", "1s": "layer-front", "-1s": "layer-back" };
+
+function layerKey(e: KeyLike): ModalAction | null {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return null;
+  const side = LAYER_SIDE[e.code ?? ""] ?? LAYER_SIDE[e.key];
+  return side === undefined ? null : LAYER_ACTION[`${side}${e.shiftKey ? "s" : ""}`];
 }
 
 const NONE: Record<string, ModalAction> = {};

@@ -8,7 +8,7 @@ import { copyPieces, pasteOffset, pastePieces } from "./clipboard";
 import type { EditorState } from "./gesture";
 import { ownersOf, type SubPath } from "./model";
 import { breakAtAnchors, deleteAnchors, moveAnchors } from "./ops";
-import { commit, redoSession, undoSession, type EditSession } from "./session";
+import { commit, keepOrder, redoSession, undoSession, type EditSession } from "./session";
 
 const withSession = (st: EditorState, session: EditSession): EditorState => ({ ...st, session });
 
@@ -71,7 +71,7 @@ function nudge(st: EditorState, [dx, dy]: [number, number], step: number): Edito
   const now = Date.now();
   const moved = moveAnchors(s.model, s.selection, dx * step, dy * step);
   const inBurst = st.nudgeAt !== undefined && now - st.nudgeAt < NUDGE_BURST_MS && s.undo.length > 0;
-  return { ...st, nudgeAt: now, session: inBurst ? { ...s, model: moved, redo: [] } : commit(s, moved) };
+  return { ...st, nudgeAt: now, session: inBurst ? { ...s, model: keepOrder(s.model, moved), redo: [] } : commit(s, moved) };
 }
 
 /** One entry per key (with Ctrl, without): adding a key never deepens a branch chain. */

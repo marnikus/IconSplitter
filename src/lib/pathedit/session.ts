@@ -37,14 +37,27 @@ export function editableSub(s: EditSession, sub: number): boolean {
 }
 
 /** A finished step: `before` goes on the undo stack (the model when the gesture began). */
-export function commit(s: EditSession, model: PathModel, before: PathModel = s.model): EditSession {
-  if (toPathData(model, 4) === toPathData(before, 4)) return { ...s, model };
+export function commit(s: EditSession, next: PathModel, before: PathModel = s.model): EditSession {
+  const model = keepOrder(s.model, next);
+  if (toPathData(model, 4) === toPathData(before, 4) && sameOrder(model, before)) return { ...s, model };
   return { ...s, model, undo: capped([...s.undo, before]), redo: [] };
+}
+
+/** An edit builds its model from the subpaths alone: the layer order the session had stays (2026-11-27). */
+export function keepOrder(prev: PathModel, next: PathModel): PathModel {
+  return next.order === undefined && prev.order !== undefined ? { ...next, order: prev.order } : next;
+}
+
+function sameOrder(a: PathModel, b: PathModel): boolean {
+  const x = a.order ?? [], y = b.order ?? [];
+  const n = Math.max(x.length, y.length);
+  for (let k = 0; k < n; k++) if ((x[k] ?? k) !== (y[k] ?? k)) return false;
+  return true;
 }
 
 /** A step still in progress (a drag): shown, not yet on the undo stack. */
 export function preview(s: EditSession, model: PathModel): EditSession {
-  return { ...s, model };
+  return { ...s, model: keepOrder(s.model, model) };
 }
 
 export function undoSession(s: EditSession): EditSession {
@@ -66,5 +79,5 @@ export function setTool(s: EditSession, tool: Tool): EditSession {
 
 /** Finish is offered only when the written path would change. */
 export function isDirty(s: EditSession): boolean {
-  return toPathData(s.model) !== toPathData(s.original);
+  return toPathData(s.model) !== toPathData(s.original) || !sameOrder(s.model, s.original);
 }

@@ -25,7 +25,15 @@ export interface Anchor {
  * objects and snaps against all of them; Finish writes each changed object back.
  */
 export interface SubPath { anchors: Anchor[]; closed: boolean; owner?: number; /** The object's `fill-rule="evenodd"` — absent means nonzero (2026-11-20). */ fillRule?: "evenodd"; /** `false` when the object does not fill (stroked only): absent means it fills (2026-11-20). */ paints?: boolean; /** Half the drawn pen width in model units — a press that far from the line is on it (2026-11-23); absent = no stroke. */ halfStroke?: number }
-export interface PathModel { subs: SubPath[] }
+/** `order` (2026-11-27): slot k of the file draws object order[k] — absent = the file's own order (layers.ts). */
+export interface PathModel { subs: SubPath[]; order?: number[] }
+
+/** How high an object is drawn: its slot in the model's draw order (-1 for no object). */
+export function drawRank(m: PathModel, owner: number | undefined): number {
+  if (owner === undefined) return -1;
+  const at = m.order?.indexOf(owner) ?? -1;
+  return at < 0 ? owner : at;
+}
 /** One anchor: its subpath and its index there. */
 export interface AnchorRef { sub: number; i: number }
 
@@ -189,6 +197,7 @@ export function cloneModel(m: PathModel): PathModel {
       ...(s.halfStroke === undefined ? {} : { halfStroke: s.halfStroke }),
       anchors: s.anchors.map((a) => ({ ...a, in: a.in && { ...a.in }, out: a.out && { ...a.out } })),
     })),
+    ...(m.order === undefined ? {} : { order: [...m.order] }),
   };
 }
 

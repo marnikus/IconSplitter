@@ -35,7 +35,7 @@ export const GEOMETRY: Record<ShapeKind, string[]> = {
 };
 
 /** Comments, CDATA and never-drawn containers blanked (same length) so their shapes are not counted. */
-function blanked(markup: string): string {
+export function blanked(markup: string): string {
   const blank = (m: string) => " ".repeat(m.length);
   return markup.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, blank).replace(NOT_DRAWN, blank);
 }

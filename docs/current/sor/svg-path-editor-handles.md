@@ -117,3 +117,12 @@ The board zooms by a CSS transform on the preview frame, which `non-scaling-stro
 does not undo. The frame sets `--ov-z` (the zoom) and every overlay line width and
 dash, plus the thin view outline, is `calc(… / var(--ov-z))` (`overlaymarks.overlayCss`,
 2026-11-26), so marks stay screen-sized at any zoom. Test: `pathedit_overlay_zoom.test.ts`.
+
+## Layer order (2026-11-27)
+
+Ctrl+] / Ctrl+[ move the selected shapes one layer forward / back; with Shift,
+to the front / back (read by physical key, any layout). A shape trades slots only
+with sibling shapes; groups stay put. `PathModel.order` holds it (undoable, kept
+across edits by `keepOrder`); the artboard follows (`liveorder.ts`), clicks pick
+the top shape (`drawRank`), Finish writes the slots (`layers.ts` `withOrder`).
+Tests: `pathedit_layer_order.test.ts`.
