@@ -2,6 +2,8 @@
 // (`imagePreferred` in `_<style>/<stem>.svg.json`) persists across style
 // switches, restarts, review actions, rescans, Get data, and SVG generation so
 // this app and external tools always know which AI source variant is selected.
+// first: this helper installs the in-memory folder store before any app module binds the real one
+import { FOG, click, installSvgPanelHooks, mount, q, settle, unmountPanel } from "./helpers/svgpanel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
 import { compositeLayout } from "../src/lib/svgcomposite";
@@ -14,7 +16,6 @@ import type { Discovery } from "../src/svg/sources";
 import { resetStylePrefs } from "../src/svg/styles";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { waitUntil } from "./helpers/quiet";
-import { FOG, click, installSvgPanelHooks, mount, q, settle, unmountPanel } from "./helpers/svgpanel";
 import { transport, type Transport } from "./helpers/svgtransport";
 
 const sheets: string[][] = [];

@@ -17,14 +17,12 @@ import { directoryNames, inSplitFolder, isSplitPiece, scopeOf, scopeText, splitP
 import { log } from "../log/logstore";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import type { ViewPair } from "../lib/reviewfilter";
-import { loadHandles, saveHandles } from "../batch/store";
 import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
-import { restoreKnownRoot } from "../lib/knownroots";
 import { getAppState, patchV2, patchView } from "../state/appstore";
 import type { HistoryActions } from "../state/HistoryProvider";
 import { loadPairDecisions, type PairLoad } from "./pairstore";
-import { SELECTION_HANDLE_KEY } from "./offline";
+import { bootTabRoot, rememberTabRoot, rescanTabRoot } from "../state/tabroot";
 import { applyScan, type SelState } from "./state";
 import { saveSourceIndex } from "../state/sourceindex";
 
@@ -42,20 +40,21 @@ export interface Ctx {
 type Say = (m: string, e?: boolean) => void;
 
 /** Restores the remembered folder on mount, if the user ever picked one. */
-export async function boot(ctx: Ctx, setS: Setter): Promise<void> {
-  const stored = await loadHandles(SELECTION_HANDLE_KEY);
-  const h = stored?.source ?? null;
-  if (!h) return;
-  setRoot(ctx, setS, h);
-  await restoreKnownRoot(h); // its persisted path binds to THIS handle (I-63)
-  await rescan(ctx, setS, () => undefined);
+export async function boot(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
+  // the one start every folder tab shares (state/tabroot): shown at once, scanned only when readable
+  await bootTabRoot("selection", { show: (h) => setRoot(ctx, setS, h), scan: () => rescan(ctx, setS, () => undefined), say });
+}
+
+/** Rescan is a click: the one moment the browser may be asked to re-open a restored folder. */
+export async function rescanByClick(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
+  await rescanTabRoot(ctx.root.current, say, () => rescan(ctx, setS, say, true));
 }
 
 /** The picker Selection V2 uses: pick, capture the path, scan (I-35). */
 export async function chooseRoot(ctx: Ctx, setS: Setter, say: Say): Promise<void> {
   const picked = await pickFolderFor((h: DirHandleLike) => {
     setRoot(ctx, setS, h);
-    void saveHandles(SELECTION_HANDLE_KEY, { source: h });
+    void rememberTabRoot("selection", h);
   });
   if (!picked) return say("Folder picking needs Chrome or Edge — or was cancelled", true);
   await rescan(ctx, setS, say, true);

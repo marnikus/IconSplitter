@@ -5,6 +5,8 @@
 // regeneration the tab wrote. Also pins the honest edges: the pair's own image is
 // never re-registered and a folder with only it says so, a file that is not a PNG
 // is not recorded, a second click adds nothing, a busy pair is refused.
+// first: this helper installs the in-memory folder store before any app module binds the real one
+import { FOG, click, input, installSvgPanelHooks, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
@@ -16,7 +18,6 @@ import { runRegisterImagesFor } from "../src/svg/registerimages";
 import { toListRow, toRow } from "../src/svg/rowmodel";
 import { svgSource, pairMetaFor } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
-import { FOG, click, input, installSvgPanelHooks, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
 import { completionAudio, flushCompletionAudio, recordCompletionAudio, settleCompletionAudio } from "./helpers/completionAudio";
 
 installSvgPanelHooks();

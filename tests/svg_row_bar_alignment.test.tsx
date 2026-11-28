@@ -7,6 +7,8 @@
 // two-cell strip shifted every chip set one slot to the left. The style chips
 // keep their meaning: the picked version IS the image the next SVG generation
 // vectorizes (`mainImageOf`, the run's own rule), as before.
+// first: this helper installs the in-memory folder store before any app module binds the real one
+import { FOG, click, host, installSvgPanelHooks, mount, q, settle, unmountPanel } from "./helpers/svgpanel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
@@ -16,7 +18,6 @@ import { resetStylePrefs } from "../src/svg/styles";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
 import { svgVersion } from "./helpers/svgpair";
-import { FOG, click, host, installSvgPanelHooks, mount, q, settle, unmountPanel } from "./helpers/svgpanel";
 
 installSvgPanelHooks();
 beforeEach(() => {

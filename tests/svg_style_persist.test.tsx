@@ -8,6 +8,8 @@
 // workspaces and the registration rule produce), so registered styles lost
 // their rows until re-registered; the scan now asks the folder for the name
 // the registration rule itself computes.
+// first: this helper installs the in-memory folder store before any app module binds the real one
+import { FOG, click, host, installSvgPanelHooks, mount, q, settle, unmountPanel } from "./helpers/svgpanel";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parsePairMeta } from "../src/lib/pairmeta";
 import { styleRowId } from "../src/lib/svgstyles";
@@ -15,7 +17,6 @@ import { baseFaceOf, rebuiltRow, resetStylePrefs } from "../src/svg/styles";
 import type { SvgRow } from "../src/svg/types";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
 import { pairFile } from "./helpers/pairfile";
-import { FOG, click, host, installSvgPanelHooks, mount, q, settle, unmountPanel } from "./helpers/svgpanel";
 
 installSvgPanelHooks();
 beforeEach(() => {

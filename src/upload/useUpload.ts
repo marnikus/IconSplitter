@@ -20,7 +20,8 @@ import { log } from "../log/logstore";
 import { interruptedIds, takeRestoreNote } from "./jobstore";
 import { restoredSpec } from "./uploadlog";
 import { createStoredJournal } from "./journal";
-import { bootRoot, scanUpload, type UploadScanSetters } from "./scan";
+import { scanUpload, type UploadScanSetters } from "./scan";
+import { bootTabRoot } from "../state/tabroot";
 import { loadUploadPrefs, saveUploadPrefs } from "./prefsstore";
 import { assembleRows, countsOf, pruneChecked, type UploadCounts } from "./rowmodel";
 import { headerState, visibleRows } from "./rowlist";
@@ -66,7 +67,7 @@ export function useUpload(): UploadApi {
     say, loadAll, setRootName, setDiscovery, setBusy,
   });
   const actions = useUploadActions(ctx);
-  useBoot(refs, dispatch, loadAll);
+  useBoot({ refs, dispatch, loadAll, say });
   usePersist(model);
   useUndoBinding(dispatch);
   const supported = fsSupported();
@@ -146,7 +147,8 @@ async function assembleAndCommit(
 }
 
 /** Once per mount: the stored key, then the remembered root (this tab's, else svg's, else selection's). */
-function useBoot(refs: UploadRefs, dispatch: Dispatch<UploadAction>, loadAll: () => void): void {
+function useBoot(b: { refs: UploadRefs; dispatch: Dispatch<UploadAction>; loadAll: () => void; say: (msg: string, err?: boolean) => void }): void {
+  const { refs, dispatch, loadAll, say } = b;
   useEffect(() => {
     void (async () => {
       reportRestore(dispatch);
@@ -156,13 +158,14 @@ function useBoot(refs: UploadRefs, dispatch: Dispatch<UploadAction>, loadAll: ()
       const read = await readGeminiKey();
       refs.key.current = read.key;
       dispatch({ type: "key", key: read.key, source: read.source });
-      const stored = await bootRoot();
-      if (stored === null) return;
-      refs.root.current = stored;
-      dispatch({ type: "root", name: stored.name });
-      loadAll();
+      // the start every folder tab shares (state/tabroot): shown at once, scanned only when readable
+      await bootTabRoot("upload", {
+        show: (h) => { refs.root.current = h; dispatch({ type: "root", name: h.name }); },
+        scan: () => loadAll(),
+        say,
+      });
     })();
-  }, [refs, dispatch, loadAll]);
+  }, [refs, dispatch, loadAll, say]);
 }
 
 /**

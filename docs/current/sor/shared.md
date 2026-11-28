@@ -57,3 +57,5 @@ the 100 checks picked before come back after every reload"):
 - Tests: `session_selection_persist.test.tsx` (same-task write through the real
   panel, the 100-→-new replacement, the other-page snapshot, the empty scan, the
   refused write), `session.test.ts`, `workbench_ui.test.tsx`.
+
+- [A tab's folder: remembered, restored, re-opened](folder-restore.md) — `state/tabroot.ts`, the one folder system of every tab (2026-11-28).

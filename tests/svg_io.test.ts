@@ -14,7 +14,8 @@ import { readSvgText, listSvgFiles } from "../src/svg/svgfiles";
 import { loadMetaAt, saveMetaAt, LEGACY_FILE } from "../src/selection/pairstore";
 import { discoverApprovedSources, toBatchSource, type SvgSource } from "../src/svg/sources";
 import { SCAN_IDLE } from "../src/lib/scanseq";
-import { bootSources, rememberRoot, scanSources } from "../src/svg/scan";
+import { bootSources, scanSources } from "../src/svg/scan";
+import { rememberTabRoot } from "../src/state/tabroot";
 import { scanKey } from "../src/svg/scankey";
 import type { Discovery } from "../src/svg/sources";
 import { headerState, idsWithGeneratedSvg, previewTargetOf, pruneChecked, shownVersion, sortedIds, toListRow, toRow, visibleRows } from "../src/svg/rowmodel";
@@ -337,7 +338,7 @@ describe("scanSources", () => {
     const root = makeRoot();
     root.children.set("2026-10", new FakeDir("2026-10")); // a folder inside it, not yet picked
     await persistRootPath(root, { path: "F:\\work\\split_root", how: "copied" }); // captured last session
-    await rememberRoot(root);
+    await rememberTabRoot("svg", root);
     const r = refs();
     await bootSources(r, { setRootName: () => {}, loadAll: () => {}, refreshKey: () => {} });
     // the folder that was just restored reports where a pick inside it lives —
@@ -349,7 +350,7 @@ describe("scanSources", () => {
 
   it("remembers and restores the picked folder", async () => {
     const root = makeRoot();
-    await rememberRoot(root);
+    await rememberTabRoot("svg", root);
     const r = refs();
     const s = setters();
     await bootSources(r, { setRootName: (n) => { s.out.name = n; }, loadAll: () => {}, refreshKey: () => {} });

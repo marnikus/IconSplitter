@@ -6,7 +6,7 @@
 // The timeline (localStorage) holds only paths and the pair file, never bytes.
 // The panel lends its folder, history push and row update (`useVersionRemoveBinding`).
 import { useEffect, useRef } from "react";
-import { loadHandles } from "../batch/store";
+import { storedRoot } from "../state/tabroot";
 import { ensureDirPath, probePath, readBytesAt, TRASH_DIR, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { isRecord } from "../lib/isrecord";
 import type { PairMeta } from "../lib/pairmeta";
@@ -124,7 +124,7 @@ function sideOf(value: unknown): Side | null {
 export async function applyVersionRemove(value: unknown): Promise<boolean> {
   const side = sideOf(value);
   if (side === null) return false;
-  const root = live?.root() ?? (await loadHandles(SVG_HANDLE_KEY))?.source ?? null;
+  const root = live?.root() ?? await storedRoot(SVG_HANDLE_KEY);
   if (root === null) return false;
   try { await applySide(root, side); return true; } catch { return false; }
 }

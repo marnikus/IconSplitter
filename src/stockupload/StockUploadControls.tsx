@@ -3,6 +3,7 @@
 
 
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import RescanButton from "../ui/RescanButton";
 import StockFtpPanel from "./StockFtpPanel";
 import type { StockListFilter, StockUploadSort } from "./rowlist";
 import { stockAuditLine } from "./scan";
@@ -43,12 +44,7 @@ function SourceBar({ g }: { g: StockUploadApi }) {
       <div className="svg-toolbar">
         <div className="svg-source">
           <OpenFolderButton testid="stock-open-folder" onClick={g.chooseRoot} />
-          {g.model.rootName !== "" && (
-            <button type="button" className="svg-btn" data-testid="stock-rescan"
-              disabled={g.model.busy !== null} onClick={g.rescan}>
-              {g.model.busy ?? "↻ Rescan"}
-            </button>
-          )}
+          {g.model.rootName !== "" && <RescanButton root={g.rootRef.current} busy={g.model.busy} signal={disc} onClick={g.rescan} testid="stock-rescan" />}
           <span className="svg-recursive" data-testid="stock-scope-copy">
             Exported packages only (`export/` + `export.json`) · {total} items
           </span>

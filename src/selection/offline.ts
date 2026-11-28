@@ -11,7 +11,7 @@
 // mounted it binds itself here first, which keeps one canonical mutation path
 // either way (RULE 12).
 
-import { loadHandles } from "../batch/store";
+import { ROOT_KEYS, storedRoot } from "../state/tabroot";
 import { resolveFile } from "./handles";
 import { withDecision } from "../lib/pairmeta";
 import type { ReviewRecord } from "../lib/reviewfile";
@@ -21,9 +21,9 @@ import { loadMetaAt, saveMetaAt } from "./pairstore";
 import { metaFromRecord, metaPathOf } from "./pairrecord";
 import { SVG_HANDLE_KEY } from "../state/handlekeys";
 import type { Decision } from "../lib/reviewfilter";
-import { bounded, orNull, StallError } from "../lib/bounded";
+import { bounded, StallError } from "../lib/bounded";
 
-export const SELECTION_HANDLE_KEY = "__selection__";
+export const SELECTION_HANDLE_KEY = ROOT_KEYS.selection;
 
 /**
  * What a history entry carries for a decision change: the records for exactly
@@ -96,7 +96,7 @@ export function onDecisionsWritten(listener: (written: WrittenDecision[]) => voi
 async function decisionRoots(): Promise<DirHandleLike[]> {
   const roots: DirHandleLike[] = [];
   for (const key of [SELECTION_HANDLE_KEY, SVG_HANDLE_KEY]) {
-    const root = (await orNull(loadHandles(key), FILE_STEP_MS))?.source ?? null; // a store that never answers must not hold an undo
+    const root = await storedRoot(key); // bounded: a store that never answers must not hold an undo
     if (root !== null && !roots.includes(root)) roots.push(root);
   }
   return roots;

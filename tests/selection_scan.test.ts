@@ -386,7 +386,7 @@ describe("the restored folder is remembered at boot (I-51)", () => {
     await persistRootPath(root, { path: "F:\\work\\test_processing", how: "copied" }); // captured last session
     await saveHandles(SELECTION_HANDLE_KEY, { source: root });
     const h = harness(root);
-    await boot(h.ctx, h.set);
+    await boot(h.ctx, h.set, () => undefined);
     const out = root.children.get("_split_output") as FakeDir;
     // the folder the app already has a path for answers where the next pick lives
     expect(await deriveRootPath(out)).toBe("F:\\work\\test_processing\\_split_output");

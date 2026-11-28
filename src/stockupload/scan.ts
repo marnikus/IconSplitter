@@ -1,15 +1,14 @@
 // scan.ts — root handle persistence & strict export/+export.json scan (RULE 4/10).
 
-import { loadHandles, saveHandles } from "../batch/store";
 import type { DirHandleLike } from "../lib/fs";
-import { restoreKnownRoot } from "../lib/knownroots";
+import { ROOT_KEYS } from "../state/tabroot";
 import { fnv1a32 } from "../lib/pairing";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import { discoverExportedItems, type StockDiscovery } from "../lib/stockupload/discovery";
 import { sourcePairsOf } from "./sourcepairs";
 import { startCompletionSound } from "../ui/completionSound";
 
-export const STOCK_UPLOAD_HANDLE_KEY = "__stock_upload__";
+export const STOCK_UPLOAD_HANDLE_KEY = ROOT_KEYS.stock;
 
 export interface StockScanRefs {
   seq: ScanSeq;
@@ -21,20 +20,6 @@ export interface StockScanSetters {
   setDiscovery: (d: StockDiscovery) => void;
   setBusy: (b: string | null) => void;
   say: (msg: string, err?: boolean) => void;
-}
-
-export async function rememberStockRoot(handle: DirHandleLike): Promise<void> {
-  await saveHandles(STOCK_UPLOAD_HANDLE_KEY, { source: handle });
-}
-
-export async function bootStockRoot(): Promise<DirHandleLike | null> {
-  const stored = (await loadHandles(STOCK_UPLOAD_HANDLE_KEY))?.source
-    ?? (await loadHandles("__upload__"))?.source
-    ?? (await loadHandles("__svg__"))?.source
-    ?? (await loadHandles("__selection__"))?.source
-    ?? null;
-  if (stored !== null) await restoreKnownRoot(stored);
-  return stored;
 }
 
 function scanFingerprint(rootName: string, found: StockDiscovery): string {

@@ -11,7 +11,7 @@
 // it. Every applied change is announced (`onSvgReviewsWritten`) so each list
 // follows a click, an undo and a redo the same way.
 
-import { loadHandles } from "../batch/store";
+import { storedRoot } from "../state/tabroot";
 import { withReview, type PairMeta } from "../lib/pairmeta";
 import type { ReviewStatus } from "../lib/svgmodel";
 import type { DirHandleLike } from "../lib/fs";
@@ -93,10 +93,10 @@ interface Place { root: DirHandleLike; relPath: string; rebuild: PairMeta | null
 /** The record's own place first; else Generate SVG's folder through the source index. */
 async function placeOf(rec: SvgReviewRec): Promise<Place | null> {
   if (isAt(rec.at)) {
-    const root = (await loadHandles(rec.at.handleKey))?.source ?? null;
+    const root = await storedRoot(rec.at.handleKey);
     return root === null ? null : { root, relPath: rec.at.metaPath, rebuild: null };
   }
-  const root = (await loadHandles(SVG_HANDLE_KEY))?.source ?? null;
+  const root = await storedRoot(SVG_HANDLE_KEY);
   const entry = loadSourceIndex().get(rec.id);
   if (root === null || entry === undefined) return null;
   const relPath = metaPathOfEntry(entry);

@@ -9,7 +9,7 @@
 // checkbox click must not re-render every row.
 
 import { useEffect } from "react";
-import { loadHandles } from "../batch/store";
+import { storedRoot } from "../state/tabroot";
 import { probePath, writeFileOverwrite, type DirHandleLike } from "../lib/fs";
 import { isRecord } from "../lib/isrecord";
 import { getAppState } from "../state/appstore";
@@ -59,7 +59,7 @@ function sidesOf(value: unknown): SvgEditSide[] | null {
 export async function applySvgEdit(value: unknown): Promise<boolean> {
   const sides = sidesOf(value);
   if (sides === null) return false;
-  const root = live?.root() ?? (await loadHandles(SVG_HANDLE_KEY))?.source ?? null;
+  const root = live?.root() ?? await storedRoot(SVG_HANDLE_KEY);
   if (root === null) return false;
   try {
     for (const side of sides) await writeSvgMarkup(root, side.svgPath, side.markup);

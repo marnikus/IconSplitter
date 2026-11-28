@@ -2,6 +2,7 @@
 // tabs): Open folder, Rescan, scope copy, approved count, audit line and path.
 // The indexing controls live in the header row (SvgBuilderHeader).
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import RescanButton from "../ui/RescanButton";
 import MultiSelect from "../ui/MultiSelect";
 import type { BuilderApi } from "./useSvgBuilder";
 
@@ -9,7 +10,7 @@ export default function SvgBuilderControls({ b }: { b: BuilderApi }) {
   return <section className="bld-folder" data-testid="builder-folder-widget" aria-label="Approved SVG folder">
     <div className="bld-folder-row">
       <OpenFolderButton testid="builder-open-folder" onClick={b.actions.openFolder} />
-      <button type="button" className="svg-btn" data-testid="builder-rescan" onClick={b.actions.rescan}>↻ Rescan</button>
+      <RescanButton root={b.root} busy={null} signal={b.auditLine} onClick={b.actions.rescan} testid="builder-rescan" />
       <span className="v2-chip" data-testid="builder-scope-copy">Approved SVGs only · all folders · read-only</span>
       <span className="v2-chip approved" data-testid="builder-approved-count"><strong>{b.assets.length}</strong> approved</span>
       <span className="bld-audit" data-testid="builder-audit">{b.auditLine}</span>

@@ -8,10 +8,13 @@ import type { DirHandleLike } from "../lib/fs";
 import { counters, type Counters } from "../selection/state";
 import { scopeText, type ScanScope } from "../lib/splitscope";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import RescanButton from "../ui/RescanButton";
 import SegButton from "./SegButton";
 
 export interface SourceBarProps {
   rootName: string;
+  /** The running scan's text: the Rescan button re-checks the folder's access around it. */
+  busy: string | null;
   root: DirHandleLike | null;
   scope: ScanScope;
   pairs: ViewPair[];
@@ -27,7 +30,7 @@ export default function SourceBar(p: SourceBarProps) {
       <div className="v2-toolbar">
         <div className="v2-source">
           <OpenFolderButton testid="v2-open-folder" onClick={p.chooseRoot} />
-          <button className="v2-btn primary" data-testid="v2-rescan" onClick={p.rescan}>↻ Rescan</button>
+          <RescanButton root={p.root} busy={null} signal={p.busy} onClick={p.rescan} testid="v2-rescan" className="v2-btn primary" />
           {p.rootName !== "" && (
             <span className="v2-recursive" data-testid="v2-scan-scope">{scopeText(p.scope)}</span>
           )}

@@ -35,19 +35,19 @@ const VIEW_TOGGLES: Record<string, string> = {
   zoom: "Detail zoom", sync: "Sync selection", autoNext: "Auto-advance",
 };
 
-import { boot, chooseRoot, rescan, type Ctx, type Setter } from "./rootsource";
+import { boot, chooseRoot, rescanByClick, type Ctx, type Setter } from "./rootsource";
 
 export function useSelection() {
   const view = useAppView();
   const [core, setCore] = useState(initialSelState);
   const hist = useHistoryActions();
   const ctx = useCtx(useMerged(core, view), hist);
-  useEffect(() => { void boot(ctx, setCore); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const say = useCallback((msg: string, err = false) => setCore((p) => ({ ...p, toast: { msg, err } })), []);
+  useEffect(() => { void boot(ctx, setCore, say); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useToastClear(ctx.state.current.toast, setCore);
   useDecisionApplier(ctx, setCore);
   const s = ctx.state.current;
   const visible = useVisiblePairs(s);
-  const say = useCallback((msg: string, err = false) => setCore((p) => ({ ...p, toast: { msg, err } })), []);
   const actions = useSelectionActions(ctx, setCore, say);
   const supported = fsSupported();
   return useMemo(() => ({
@@ -58,7 +58,7 @@ export function useSelection() {
 /** Stable action identities: consumers memoize on this bag (D7). */
 function useSelectionActions(ctx: Ctx, setCore: Setter, say: (m: string, e?: boolean) => void) {
   const onChooseRoot = useCallback(() => chooseRoot(ctx, setCore, say), [ctx, say, setCore]);
-  const onRescan = useCallback(() => rescan(ctx, setCore, say, true), [ctx, say, setCore]);
+  const onRescan = useCallback(() => rescanByClick(ctx, setCore, say), [ctx, say, setCore]);
   const onDecide = useCallback((id: string, d: Decision) => decide(ctx, setCore, id, d), [ctx, setCore]);
   const onDecideBulk = useCallback((ids: string[], d: Decision) => decideBulk(ctx, setCore, ids, d), [ctx, setCore]);
   const onResetBulk = useCallback((ids: string[]) => resetBulk(ctx, setCore, ids), [ctx, setCore]);

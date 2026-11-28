@@ -19,7 +19,7 @@ import {
 import { getUploadName, setUploadName } from "../../upload/uploadnamestore";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 import { saveArtboards } from "../artboardstore";
-import { bootBuilderRoot } from "../scan";
+import { ROOT_KEYS, storedRoot } from "../../state/tabroot";
 import { isSplitOutput, sheetsRoot } from "./sheetsroot";
 
 type RenameSlice = Pick<BuilderActions, "setArtboardUploadName" | "renameArtboardsForUpload">;
@@ -59,7 +59,7 @@ async function resolveRoot(ctx: BuilderActionContext, silent: boolean): Promise<
   const cur = sheetsRoot(ctx, silent);
   if (cur !== null) return cur;
   if (ctx.model.root !== null) return null;
-  const booted = await bootBuilderRoot().catch(() => null);
+  const booted = await storedRoot(ROOT_KEYS.builder);
   return booted !== null && !isSplitOutput(booted) ? booted : null;
 }
 

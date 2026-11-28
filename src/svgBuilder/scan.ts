@@ -1,18 +1,17 @@
 // scan.ts — this tab's remembered root and all-folder approved scan. One
 // monotonically increasing ticket means an older scan can never replace a newer
 // one; the snapshot key avoids committing an unchanged folder twice.
-import { loadHandles, saveHandles } from "../batch/store";
 import type { DirHandleLike } from "../lib/fs";
 import { fnv1a32 } from "../lib/pairing";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
-import { restoreKnownRoot } from "../lib/knownroots";
+import { ROOT_KEYS } from "../state/tabroot";
 import { rememberListTargets } from "../state/listtargets";
 import { ALL_EMPTY_SLOTS } from "../lib/svgBuilder/slots";
 import { builderAuditLine, discoverBuilderAssets, type BuilderDiscovery } from "./discovery";
 import { findSheetsParent, isSplitOutput, SHEETS_BESIDE_SPLIT } from "./actions/sheetsroot";
 import { refreshIconMap, type IconMapState } from "./iconmapstore";
 
-export const BUILDER_HANDLE_KEY = "__svgBuilder__";
+export const BUILDER_HANDLE_KEY = ROOT_KEYS.builder;
 
 export interface BuilderScanRefs {
   seq: ScanSeq;
@@ -26,31 +25,6 @@ export interface BuilderScanSetters {
   say: (message: string, error?: boolean) => void;
   /** icon-map.json was (re)written after the scan (2026-11-13). */
   setIconMap?: (state: IconMapState) => void;
-}
-
-export async function rememberBuilderRoot(handle: DirHandleLike): Promise<void> {
-  await saveHandles(BUILDER_HANDLE_KEY, { source: handle });
-}
-
-/** The other tabs' remembered folders, in the order the builder may borrow one. */
-const BORROWED_KEYS = ["__upload__", "__svg__", "__selection__"] as const;
-
-async function borrowedRoot(): Promise<DirHandleLike | null> {
-  for (const key of BORROWED_KEYS) {
-    const handle = (await loadHandles(key))?.source ?? null;
-    if (handle !== null) return handle;
-  }
-  return null;
-}
-
-export async function bootBuilderRoot(): Promise<DirHandleLike | null> {
-  const own = (await loadHandles(BUILDER_HANDLE_KEY))?.source ?? null;
-  const stored = own ?? await borrowedRoot();
-  if (stored !== null) await restoreKnownRoot(stored);
-  // A folder borrowed from another tab becomes the builder's own: a decline (🗑)
-  // finds its pair files through this key (2026-11-13).
-  if (own === null && stored !== null) await rememberBuilderRoot(stored).catch(() => undefined);
-  return stored;
 }
 
 export async function scanBuilderRoot(

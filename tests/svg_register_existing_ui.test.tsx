@@ -4,6 +4,8 @@
 // newest made the shown version — and the row thereafter behaves like a generated
 // one. Also pins the honest edges: an invalid file is not recorded, a second click
 // adds nothing, a busy pair is refused.
+// first: this helper installs the in-memory folder store before any app module binds the real one
+import { FOG, click, input, installSvgPanelHooks, makeRoot, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
 import { act } from "react";
 import { describe, expect, it } from "vitest";
 import { parsePairMeta, serializePairMeta } from "../src/lib/pairmeta";
@@ -12,7 +14,6 @@ import { runRegisterFor } from "../src/svg/registerexisting";
 import { toListRow, toRow } from "../src/svg/rowmodel";
 import { svgSource, pairMetaFor, svgVersion } from "./helpers/svgpair";
 import { FakeDir, FakeFile } from "./helpers/fakefs";
-import { FOG, click, input, installSvgPanelHooks, makeRoot, mount, q, settle, text, unmountPanel } from "./helpers/svgpanel";
 import { reserveSources, SOURCE_BUSY } from "../src/svg/jobstate";
 import { armCompletionSound } from "../src/ui/completionSound";
 import { clearCompletionAudio, completionAudio, flushCompletionAudio, recordCompletionAudio } from "./helpers/completionAudio";

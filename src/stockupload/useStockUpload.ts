@@ -24,7 +24,8 @@ import { useStockPanelOps, type StockPanelOps } from "./panelops";
 import { useStockRenameOps, type StockRenameOps } from "./renameops";
 import { getStockPresetState, subscribeStockPresets } from "./presetstore";
 import { filterAndSortItems, stockHeaderState } from "./rowlist";
-import { bootStockRoot, scanStockUpload } from "./scan";
+import { scanStockUpload } from "./scan";
+import { bootTabRoot } from "../state/tabroot";
 import { useStockRemoveAction, useStockReviewFollower } from "./removerows";
 import {
   useStockRowBadgeActions, useStockSelectionActions,
@@ -75,23 +76,30 @@ function syncPresetsBadges(presets: StockPresetState["presets"]): void {
   if (next !== start) setRowBadgeState(next);
 }
 
-function useBootEffects(
-  r: StockRefs,
-  presets: StockPresetState["presets"],
-  dispatch: (a: StockModelAction) => void,
-  runScan: (audible?: boolean) => void,
-): void {
+interface BootIo { runScan: (audible?: boolean) => void; say: (m: string, err?: boolean) => void }
+
+/** The remembered folder at start — the start every folder tab shares (state/tabroot). */
+function useRestoredRoot(r: StockRefs, dispatch: (a: StockModelAction) => void, io: BootIo): void {
+  const { runScan, say } = io;
   useEffect(() => {
     let alive = true;
-    void bootStockRoot().then((root) => {
-      if (!alive || !root) return;
-      r.root.current = root;
-      r.scan.scanKey.current = null;
-      dispatch({ type: "patch", patch: { rootName: root.name } });
-      runScan(false);
+    // the start every folder tab shares (state/tabroot): shown at once, scanned only when readable
+    void bootTabRoot("stock", {
+      show: (root) => {
+        if (!alive) return;
+        r.root.current = root;
+        r.scan.scanKey.current = null;
+        dispatch({ type: "patch", patch: { rootName: root.name } });
+      },
+      scan: () => { if (alive) runScan(false); },
+      say: (m, err) => { if (alive) say(m, err); },
     });
     return () => { alive = false; };
-  }, [r, dispatch, runScan]);
+  }, [r, dispatch, runScan, say]);
+}
+
+function useBootEffects(r: StockRefs, presets: StockPresetState["presets"], dispatch: (a: StockModelAction) => void, io: BootIo): void {
+  useRestoredRoot(r, dispatch, io);
 
   useEffect(() => {
     syncPresetsBadges(presets);
@@ -156,7 +164,7 @@ export function useStockUpload(): StockUploadApi {
   const rowBadges = useSyncExternalStore(subscribeRowBadges, getRowBadgeState);
   const say = useToast(r, dispatch);
   const runScan = useScanTrigger(r, dispatch, say);
-  useBootEffects(r, presetState.presets, dispatch, runScan);
+  useBootEffects(r, presetState.presets, dispatch, { runScan, say });
   const { items, visible, header } = useDerivedList(model, selSlice.checked, rowBadges);
   const selection = useStockSelectionActions(items, visible, hist, say);
   const badges = useStockRowBadgeActions(hist, say, (id) => dropBadgeFromFilter(model, dispatch, id));

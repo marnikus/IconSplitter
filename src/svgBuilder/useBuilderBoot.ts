@@ -7,7 +7,8 @@ import type { KeyRead } from "../lib/keyvault";
 import { readGeminiKey } from "../upload/keystore";
 import { keyInfoOf } from "./model";
 import type { BuilderModel } from "./model";
-import { bootBuilderRoot, scanBuilderRoot, type BuilderScanRefs } from "./scan";
+import { scanBuilderRoot, type BuilderScanRefs } from "./scan";
+import { bootTabRoot } from "../state/tabroot";
 import type { BuilderDiscovery } from "./discovery";
 
 export interface BuilderBoot {
@@ -32,9 +33,13 @@ function useRestoredRoot({ scanRefs, setters, patch, supported }: RestoreArgs): 
     let alive = true;
     void (async () => {
       try {
-        const root = await bootBuilderRoot();
-        if (!alive || root === null) return;
-        await scanBuilderRoot(scanRefs.current, root, { ...setters, setIconMap: (iconMap) => patch({ iconMap }) });
+        // the start every folder tab shares (state/tabroot): the folder shows at once — also when the
+        // browser still wants a click before it can be read (it used to stay empty, 2026-11-28)
+        await bootTabRoot("builder", {
+          show: (root) => { if (alive) setters.setRoot(root); },
+          scan: async (root) => { if (alive) await scanBuilderRoot(scanRefs.current, root, { ...setters, setIconMap: (iconMap) => patch({ iconMap }) }); },
+          say: (message, error) => { if (alive) setters.say(message, error); },
+        });
       } catch {
         if (alive) setters.say("Saved folder could not be restored — open it again", true);
       } finally {

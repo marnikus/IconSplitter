@@ -7,13 +7,11 @@ import { hasJobs } from "./jobstate";
 // snapshot commits nothing, only the newest scan may commit, and the cache
 // write can no longer half-commit a scan (design D6/D7).
 
-import { ANSWER_MS, restoreKnownRoot, withinMs } from "../lib/knownroots";
 import { retryCapture } from "../ui/rootcapture";
 import { log } from "../log/logstore";
 import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent } from "../lib/scanseq";
-import { loadHandles, saveHandles } from "../batch/store";
-import { ensurePermission, peekPermission } from "../batch/picker";
+import { bootTabRoot, rememberTabRoot, rescanTabRoot } from "../state/tabroot";
 import { discoverApprovedSources, type Discovery, type SvgSource } from "./sources";
 import { auditText, exclusionSummary } from "./sourcelist";
 import { scanKey } from "./scankey";
@@ -26,7 +24,6 @@ import { saveSourceIndex, type IndexEntry } from "../state/sourceindex";
 import { pruneChecked, toRow } from "./rowmodel";
 import type { PairMeta } from "../lib/pairmeta";
 import { loadMetaAt } from "../selection/pairstore";
-import { SVG_HANDLE_KEY } from "./reviewundo";
 import type { SvgRefs, SvgRow } from "./types";
 
 /** The setters a scan writes through: whole-array rows are correct here,
@@ -45,6 +42,7 @@ export interface BootArgs {
   setRootName: (name: string) => void;
   loadAll: () => void;
   refreshKey: () => void;
+  say?: (msg: string, err?: boolean) => void;
 }
 
 /** Scans the root, loads every pair file and commits one complete snapshot. */
@@ -195,39 +193,24 @@ function scanWarnings(found: Discovery): string[] {
   ];
 }
 
-/** Restores the remembered root: this tab's handle, else the Selection tab's. */
+/** Restores the remembered root — the start every folder tab shares (state/tabroot). */
 export async function bootSources(refs: SvgRefs, s: BootArgs): Promise<void> {
-  const stored = (await loadHandles(SVG_HANDLE_KEY))?.source ?? (await loadHandles("__selection__"))?.source ?? null;
-  if (!stored) return;
-  refs.root.current = stored;
-  s.setRootName(stored.name); // the folder shows at once, even if its path lookup fails (2026-11-26)
-  // its persisted path binds to THIS handle (I-51/I-63); a failed lookup only leaves the path unknown
-  await restoreKnownRoot(stored).catch(() => undefined);
-  s.refreshKey();
-  // a reload hands the folder back WITHOUT read access until the user clicks
-  // (2026-11-26): scanning now only failed silently ("0 sources", no full path)
-  // — the tab offers 🔓 Restore access instead (SourceLine, `grantRoot`)
-  const access = await withinMs(peekPermission(stored), ANSWER_MS);
-  if (access === "granted" || access === undefined) s.loadAll(); // no answer in time: try the scan
+  const got = await bootTabRoot("svg", {
+    // the folder shows at once, even if its path lookup fails or the browser still wants a click (2026-11-26)
+    show: (h) => { refs.root.current = h; s.setRootName(h.name); },
+    scan: () => { s.refreshKey(); s.loadAll(); },
+    say: s.say,
+  });
+  if (got?.access === "locked") s.refreshKey(); // the stored key loads either way — after the path lookup, as before
 }
 
 /** Rescan is a click: the one moment the browser may be asked to re-open a restored folder (2026-11-26). */
 export async function rescanByClick(refs: SvgRefs, s: ScanSetters): Promise<void> {
-  if (await grantRoot(refs.root.current as DirHandleLike | null, s.say)) await scanSources(refs, s, true);
-}
-
-/** The click that re-opens a restored folder: asks the browser when it must. False = refused (and said). */
-export async function grantRoot(root: DirHandleLike | null, say: (msg: string, err?: boolean) => void): Promise<boolean> {
-  if (root === null) return false;
-  if (await ensurePermission(root)) return true;
-  say(`Access to "${root.name}" was refused — the browser must allow it before the folder can be read`, true);
-  return false;
+  await rescanTabRoot(refs.root.current as DirHandleLike | null, s.say, () => scanSources(refs, s, true));
 }
 
 /** Remembers the folder the user picked for this tab. */
-export async function rememberRoot(handle: DirHandleLike): Promise<void> {
-  await saveHandles(SVG_HANDLE_KEY, { source: handle });
-}
+export const rememberRoot = (handle: DirHandleLike): Promise<boolean> => rememberTabRoot("svg", handle);
 
 function toIndexEntry(source: SvgSource): IndexEntry {
   return { id: source.id, relPath: source.relPath, name: source.name, fingerprint: source.fingerprint };

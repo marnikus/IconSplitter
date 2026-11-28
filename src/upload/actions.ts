@@ -24,7 +24,7 @@ import { pickFolderFor } from "../ui/pickroot";
 import { retryCapture } from "../ui/rootcapture";
 import { clearGeminiKey, saveGeminiKey } from "./keystore";
 import type { UploadDiscovery } from "./discovery";
-import { rememberRoot } from "./scan";
+import { rememberTabRoot, rescanTabRoot } from "../state/tabroot";
 import type { UploadCounts } from "./rowmodel";
 import { useMetaActions } from "./metaactions";
 import { usePromptActions, type PromptActions } from "./promptactions";
@@ -200,7 +200,7 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
       const picked = await pickFolderFor((h) => {
         c.refs.root.current = h;
         c.dispatch({ type: "root", name: h.name });
-        void rememberRoot(h);
+        void rememberTabRoot("upload", h);
       });
       if (!picked) return c.say("Folder picking needs Chrome or Edge — or was cancelled", true);
       c.loadAll(true);
@@ -211,8 +211,9 @@ function useSourceActions(ctx: UploadCtx): Slice<"chooseRoot" | "rescan"> {
     const c = latest.current;
     // before any await: the click's own gesture is what allows the read (I-52)
     const root = c.refs.root.current as DirHandleLike | null;
-    void retryCapture(root).then((captured) => { if (captured !== null) c.say(captured); });
-    c.loadAll(true);
+    void retryCapture(root).then((captured) => { if (captured !== null) c.say(captured); }).catch(() => undefined);
+    // the click is the one moment the browser may be asked to re-open a restored folder
+    void rescanTabRoot(root, c.say, () => c.loadAll(true));
   }, []);
   return { chooseRoot, rescan };
 }

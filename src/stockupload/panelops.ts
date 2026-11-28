@@ -24,7 +24,7 @@ import type { StockUploadPrefs } from "./prefsstore";
 import { ALL_STOCK_FILTER, initialMetaDraft, type StockListFilter, type StockMetaDraft, type StockUploadSort } from "./rowlist";
 import { log } from "../log/logstore";
 import { executeStockUploadBatch, type UploadBatchSummary, type UploadProgressStep } from "./runupload";
-import { rememberStockRoot } from "./scan";
+import { rememberTabRoot, rescanTabRoot } from "../state/tabroot";
 import { summarizeUploadRun } from "./uploadsummary";
 
 export interface OpsCtx {
@@ -68,7 +68,7 @@ async function performChooseRoot(c: OpsCtx): Promise<void> {
     c.r.root.current = h;
     c.r.scan.scanKey.current = null;
     c.dispatch({ type: "patch", patch: { rootName: h.name } });
-    void rememberStockRoot(h);
+    void rememberTabRoot("stock", h);
   });
   if (!picked) { c.say("Folder picking needs Chrome or Edge — or was cancelled", true); return; }
   c.runScan(true);
@@ -266,9 +266,9 @@ export function useStockPanelOps(ctx: OpsCtx): StockPanelOps {
     chooseRoot: () => { void performChooseRoot(ref.current); },
     rescan: () => {
       const c = ref.current;
-      void retryCapture(c.r.root.current).then((cap) => { if (cap) c.say(cap); });
-      c.r.scan.scanKey.current = null;
-      c.runScan(true);
+      void retryCapture(c.r.root.current).then((cap) => { if (cap) c.say(cap); }).catch(() => undefined);
+      // the click is the one moment the browser may be asked to re-open a restored folder
+      void rescanTabRoot(c.r.root.current, c.say, () => { c.r.scan.scanKey.current = null; c.runScan(true); });
     },
     openLocation: (id) => {
       const item = ref.current.items.find((it) => it.id === id);

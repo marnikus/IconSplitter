@@ -27,6 +27,7 @@ import type { UploadDiscovery } from "./discovery";
 import type { UploadCounts } from "./rowmodel";
 import { auditLine } from "./scan";
 import { FolderPathRow, OpenFolderButton } from "../ui/FolderBar";
+import RescanButton from "../ui/RescanButton";
 import SearchField from "../ui/SearchField";
 import MultiSelect from "../ui/MultiSelect";
 
@@ -83,11 +84,7 @@ function SourceLine({ p }: { p: UploadControlsProps }) {
       <div className="svg-toolbar">
         <div className="svg-source">
           <OpenFolderButton testid="upload-open-folder" onClick={p.onChooseRoot} />
-          {p.rootName !== "" && (
-            <button type="button" className="svg-btn" data-testid="upload-rescan" disabled={p.busy !== null} onClick={p.onRescan}>
-              {p.busy === null ? "↻ Rescan" : p.busy}
-            </button>
-          )}
+          {p.rootName !== "" && <RescanButton root={p.root} busy={p.busy} signal={p.discovery} onClick={p.onRescan} testid="upload-rescan" />}
           <span className="svg-recursive" data-testid="upload-scope-copy">
             Approved SVGs only · recursive · {p.discovery?.rows.length ?? 0} icons
           </span>

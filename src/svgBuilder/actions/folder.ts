@@ -1,7 +1,8 @@
 // actions/folder.ts — the one picker and the one honest rescan path.
 import { pickFolderFor } from "../../ui/pickroot";
 import { retryCapture } from "../../ui/rootcapture";
-import { scanBuilderRoot, rememberBuilderRoot, type BuilderScanSetters } from "../scan";
+import { scanBuilderRoot, type BuilderScanSetters } from "../scan";
+import { rememberTabRoot, rescanTabRoot } from "../../state/tabroot";
 import type { BuilderActionContext, BuilderActions } from "../actiontypes";
 
 export function folderActions(get: () => BuilderActionContext): Pick<BuilderActions, "openFolder" | "rescan"> {
@@ -14,7 +15,7 @@ export function folderActions(get: () => BuilderActionContext): Pick<BuilderActi
 async function open(ctx: BuilderActionContext): Promise<void> {
   try {
     const picked = await pickFolderFor(async (handle) => {
-      await rememberBuilderRoot(handle);
+      await rememberTabRoot("builder", handle);
       ctx.setRoot(handle);
       await scanBuilderRoot(ctx.scanRefs, handle, setters(ctx));
     });
@@ -29,7 +30,8 @@ async function rescan(ctx: BuilderActionContext): Promise<void> {
   if (root === null) return ctx.say("No folder is open — nothing to rescan", true);
   // never awaited (2026-11-26): the helper's path search may take long — the scan must not wait for it
   void retryCapture(root).then((captured) => { if (captured !== null) ctx.say(captured); }).catch(() => undefined);
-  await scanBuilderRoot(ctx.scanRefs, root, setters(ctx));
+  // the click is the one moment the browser may be asked to re-open a restored folder
+  await rescanTabRoot(root, ctx.say, () => scanBuilderRoot(ctx.scanRefs, root, setters(ctx)));
 }
 
 function setters(ctx: BuilderActionContext): BuilderScanSetters {

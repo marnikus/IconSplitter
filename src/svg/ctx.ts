@@ -114,9 +114,9 @@ function useScanBridge(refs: SvgRefs, dispatch: Dispatch<SvgAction>, say: SvgCtx
  * for the network, and a failed refresh leaves the family rules in charge.
  */
 function useSvgBoot(refs: SvgRefs, bridge: BootBridge): void {
-  const { loadAll, refreshKey, setRootName, setCatalog, baseUrl } = bridge;
+  const { loadAll, refreshKey, setRootName, setCatalog, baseUrl, say } = bridge;
   useEffect(() => {
-    void bootSources(refs, { setRootName, loadAll, refreshKey });
+    void bootSources(refs, { setRootName, loadAll, refreshKey, say });
     const cached = loadCatalog();
     if (cached !== null) setCatalog(cached.models);
     if (cached === null || isStale(cached)) {
@@ -131,6 +131,7 @@ interface BootBridge {
   loadAll: () => void;
   refreshKey: () => void;
   setRootName: (name: string) => void;
+  say: (msg: string, err?: boolean) => void;
   setCatalog: (catalog: CatalogModel[] | null) => void;
   baseUrl: string;
 }

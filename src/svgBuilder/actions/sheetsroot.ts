@@ -7,7 +7,8 @@
 import { OUTPUT_DIR } from "../../lib/batchlayout";
 import type { DirHandleLike } from "../../lib/fs";
 import { boundRootPathInfo, rememberKnownRoot } from "../../lib/knownroots";
-import { idbGetAll, loadHandles, saveHandles, type StoredHandles } from "../../batch/store";
+import { idbGetAll, type StoredHandles } from "../../batch/store";
+import { keepRoot, storedRoot } from "../../state/tabroot";
 import { ensurePermission, pickDirectory } from "../../batch/picker";
 import type { BuilderActionContext } from "../actiontypes";
 
@@ -54,11 +55,11 @@ function adopt(root: DirHandleLike, parent: DirHandleLike): void {
 /** At scan time: the parent among the folders already held (no prompt). True when found. */
 export async function findSheetsParent(root: DirHandleLike): Promise<boolean> {
   if (known?.root === root) return true;
-  const own = (await loadHandles(PARENT_KEY))?.source;
+  const own = await storedRoot(PARENT_KEY);
   const all = await idbGetAll<StoredHandles>("handles").catch(() => [] as StoredHandles[]);
   const candidates = [own, ...all.flatMap((h) => [h?.source, h?.dest])].filter((h): h is DirHandleLike => h != null && h !== root);
   for (const c of candidates) {
-    if (await holds(c, root)) { adopt(root, c); await saveHandles(PARENT_KEY, { source: c }).catch(() => undefined); return true; }
+    if (await holds(c, root)) { adopt(root, c); await keepRoot(PARENT_KEY, c); return true; }
   }
   return false;
 }
@@ -73,6 +74,6 @@ export async function ensureSheetsParent(ctx: BuilderActionContext): Promise<boo
   if (picked === null) return false;
   if (!(await holds(picked, root))) { ctx.say(`That folder has no ${OUTPUT_DIR} matching the open one`, true); return false; }
   adopt(root, picked);
-  await saveHandles(PARENT_KEY, { source: picked }).catch(() => undefined);
+  await keepRoot(PARENT_KEY, picked);
   return true;
 }

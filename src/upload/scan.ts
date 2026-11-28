@@ -8,12 +8,11 @@ import { startCompletionSound } from "../ui/completionSound";
 import type { DirHandleLike } from "../lib/fs";
 import { beginScan, isCurrent, type ScanSeq } from "../lib/scanseq";
 import { fnv1a32 } from "../lib/pairing";
-import { loadHandles, saveHandles } from "../batch/store";
-import { restoreKnownRoot } from "../lib/knownroots";
+import { ROOT_KEYS } from "../state/tabroot";
 import { discoverUploadSources, type UploadDiscovery, type UploadRowSource } from "./discovery";
 
 /** This tab's remembered root handle (its own slot, like `__svg__`). */
-export const UPLOAD_HANDLE_KEY = "__upload__";
+export const UPLOAD_HANDLE_KEY = ROOT_KEYS.upload;
 
 export interface UploadScanSetters {
   setRootName: (name: string) => void;
@@ -66,21 +65,6 @@ export async function scanUpload(refs: UploadScanRefs, root: DirHandleLike, sett
 /** The one audit line the source bar shows and the scan logs (RULE 10). */
 export function auditLine(found: UploadDiscovery): string {
   return `${found.rows.length} approved SVG(s) · ${found.audit.svgFiles} SVG file(s) · ${found.excluded.length} pair(s) not listed · ${found.corruptFiles.length} corrupt pair file(s)`;
-}
-
-/** Remembers the folder the user picked for this tab. */
-export async function rememberRoot(handle: DirHandleLike): Promise<void> {
-  await saveHandles(UPLOAD_HANDLE_KEY, { source: handle });
-}
-
-/** Restores the remembered root: this tab's handle, else Generate SVG's, else Selection's. */
-export async function bootRoot(): Promise<DirHandleLike | null> {
-  const stored = (await loadHandles(UPLOAD_HANDLE_KEY))?.source
-    ?? (await loadHandles("__svg__"))?.source
-    ?? (await loadHandles("__selection__"))?.source
-    ?? null;
-  if (stored !== null) await restoreKnownRoot(stored); // its persisted path binds to THIS handle (I-51/I-63)
-  return stored;
 }
 
 /** The snapshot key: a stable fingerprint of what the scan found. */
